@@ -3,6 +3,7 @@
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio;
+using Prowl.Runtime.Audio.Effects;
 using Prowl.Runtime.Audio.Native;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -11,9 +12,107 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-/// <summary>Tests for audio buffer/data handling (no native device required).</summary>
-public class AudioTests
+/// <summary>
+/// Everything audio that can be checked without an output device: buffers, clip data, serialization,
+/// the mixer tree, the effect DSP, and how the components behave when there is no device at all.
+/// </summary>
+/// <remarks>
+/// Two things are worth knowing before adding to this. The native library loads in the test process,
+/// so anything that only decodes (clip introspection, import conversion) runs for real rather than
+/// against a stub. Anything that needs a device does not: no context is ever initialized here, which
+/// is exactly the headless case the components have to survive, so those tests assert inertness.
+///
+/// Derives from RuntimeTestBase for the scene and play mode setup the component tests need. The pure
+/// data tests do not care either way.
+/// </remarks>
+public class AudioTests : RuntimeTestBase
 {
+    private const int Channels = 2;
+    private const int Frames = 512;
+    private const int TestSampleRate = 44100;
+
+    #region Helpers
+
+    /// <summary>An effect that only records whether its owner destroyed it.</summary>
+    private sealed class CountingEffect : AudioEffect
+    {
+        public int Destroyed;
+
+        public override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels) { }
+        public override void OnDestroy() => Destroyed++;
+    }
+
+    private AudioSource CreateSource()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject("Speaker");
+        var source = go.AddComponent<AudioSource>();
+        scene.Add(go);
+        return source;
+    }
+
+    /// <summary>Binds an effect to a stereo chain and runs it over interleaved frames.</summary>
+    private static unsafe float[] Run(AudioEffect effect, float[] input, int channels = Channels)
+    {
+        if (!effect.IsInitialized)
+            effect.Initialize(TestSampleRate, channels);
+
+        float[] output = new float[input.Length];
+
+        fixed (float* pIn = input, pOut = output)
+        {
+            var framesIn = new NativeArray<float>(pIn, input.Length);
+            var framesOut = new NativeArray<float>(pOut, output.Length);
+            uint frameCount = (uint)(input.Length / channels);
+            uint frameCountOut = frameCount;
+            effect.OnProcess(framesIn, frameCount, framesOut, ref frameCountOut, (uint)channels);
+        }
+
+        return output;
+    }
+
+    private static float[] Interleave(float left, float right, int frames = Frames)
+    {
+        float[] buffer = new float[frames * Channels];
+
+        for (int i = 0; i < frames; i++)
+        {
+            buffer[i * Channels] = left;
+            buffer[i * Channels + 1] = right;
+        }
+
+        return buffer;
+    }
+
+    /// <summary>Alternating full scale samples, which is a signal at exactly the Nyquist frequency.</summary>
+    private static float[] Nyquist(int frames = Frames)
+    {
+        float[] buffer = new float[frames * Channels];
+
+        for (int i = 0; i < frames; i++)
+        {
+            float value = (i % 2 == 0) ? 1.0f : -1.0f;
+            buffer[i * Channels] = value;
+            buffer[i * Channels + 1] = value;
+        }
+
+        return buffer;
+    }
+
+    private static float[] Ramp(int frames, int channels)
+    {
+        var samples = new float[frames * channels];
+
+        for (int i = 0; i < samples.Length; i++)
+            samples[i] = i / (float)samples.Length;
+
+        return samples;
+    }
+
+    #endregion
+
+    #region AudioBuffer and NativeArray
+
     // Read(ref output) must allocate the output buffer when it is null instead of dereferencing null.
     [Fact]
     public void AudioBuffer_Read_AllocatesWhenOutputNull()
@@ -72,80 +171,73 @@ public class AudioTests
         Assert.True(threw);
     }
 
-    // AudioSource keeps its settings in private fields, so they only persist because they carry
-    // [SerializeField]. Dropping one is invisible until a scene reloads without its audio settings.
+    #endregion
+
+    #region AudioClip data and format
+
     [Fact]
-    public void AudioSource_RoundTripsItsSettings()
+    public void Create_ReportsTheFormatItWasGiven()
     {
-        var source = new AudioSource
-        {
-            PlayOnStart = true,
-            Loop = true,
-            Volume = 0.25f,
-            Pitch = 1.5f,
-            Pan = -0.5f,
-            PanMode = PanMode.Pan,
-            Spatial = false,
-            DopplerFactor = 2f,
-            MinDistance = 3f,
-            MaxDistance = 40f,
-            AttenuationModel = AttenuationModel.Exponential,
-        };
+        using var clip = AudioClip.Create("Tone", Ramp(480, 2), channels: 2, sampleRate: 48000);
 
-        var restored = Serializer.Deserialize<AudioSource>(Serializer.Serialize(source));
-
-        Assert.NotNull(restored);
-        Assert.True(restored!.PlayOnStart);
-        Assert.True(restored.Loop);
-        Assert.Equal(0.25f, restored.Volume);
-        Assert.Equal(1.5f, restored.Pitch);
-        Assert.Equal(-0.5f, restored.Pan);
-        Assert.Equal(PanMode.Pan, restored.PanMode);
-        Assert.False(restored.Spatial);
-        Assert.Equal(2f, restored.DopplerFactor);
-        Assert.Equal(3f, restored.MinDistance);
-        Assert.Equal(40f, restored.MaxDistance);
-        Assert.Equal(AttenuationModel.Exponential, restored.AttenuationModel);
+        Assert.Equal(2, clip.Channels);
+        Assert.Equal(48000, clip.SampleRate);
+        Assert.Equal(480ul, clip.SampleCount);
+        Assert.Equal(0.01f, clip.LengthInSeconds, 5);
     }
 
-    // Live playback position used to be written into the serialized form, so saving a scene while
-    // play mode was running baked whatever sample the music was on into the asset, and every later
-    // load started there. On a prefab every instance spawned mid clip.
+    // SampleCount is in frames while the decoder counts total samples, so a stereo clip would read as
+    // twice its real length if that conversion were missed.
     [Fact]
-    public void AudioSource_DoesNotSerializePlaybackPosition()
+    public void SampleCount_IsFramesNotSamples()
     {
-        EchoObject echo = Serializer.Serialize(new AudioSource());
+        using var mono = AudioClip.Create("Mono", Ramp(100, 1), channels: 1, sampleRate: TestSampleRate);
+        using var stereo = AudioClip.Create("Stereo", Ramp(100, 2), channels: 2, sampleRate: TestSampleRate);
 
-        Assert.Null(echo.Get("_savedCursor"));
-        Assert.Null(echo.Get("_wasPlaying"));
+        Assert.Equal(100ul, mono.SampleCount);
+        Assert.Equal(100ul, stereo.SampleCount);
+        Assert.Equal(mono.LengthInSeconds, stereo.LengthInSeconds, 5);
     }
 
-    // Effects used to be script-only and unserialized, so a chain built at runtime was gone the next
-    // time the scene loaded and could never be authored in the first place.
     [Fact]
-    public void AudioSource_RoundTripsItsEffectChain()
+    public void GetSampleData_RoundTripsWhatWasCreated()
     {
-        var source = new AudioSource();
-        source.AddEffect(new Audio.Effects.FilterEffect { Type = Audio.Effects.FilterType.Highpass, Frequency = 800f, Q = 1.5f });
-        source.AddEffect(new Audio.Effects.DistortionEffect { Drive = 3f, Blend = 0.25f });
+        float[] samples = Ramp(64, 2);
 
-        var restored = Serializer.Deserialize<AudioSource>(Serializer.Serialize(source))!;
+        using var clip = AudioClip.Create("Round Trip", samples, channels: 2, sampleRate: TestSampleRate);
+        float[] decoded = clip.GetSampleData();
 
-        Assert.Equal(2, restored.EffectCount);
+        Assert.Equal(samples.Length, decoded.Length);
 
-        var filter = Assert.IsType<Audio.Effects.FilterEffect>(restored.Effects[0]);
-        Assert.Equal(Audio.Effects.FilterType.Highpass, filter.Type);
-        Assert.Equal(800f, filter.Frequency);
-        Assert.Equal(1.5f, filter.Q);
-
-        var distortion = Assert.IsType<Audio.Effects.DistortionEffect>(restored.Effects[1]);
-        Assert.Equal(3f, distortion.Drive);
-        Assert.Equal(0.25f, distortion.Blend);
-
-        // Parameters alone are not enough, the DSP state has to be rebuilt on the way in or the
-        // effect is inert until something else happens to touch it.
-        Assert.True(filter.IsInitialized);
+        for (int i = 0; i < samples.Length; i++)
+            Assert.Equal(samples[i], decoded[i], 5);
     }
+
+    // A clip with nothing in it must answer rather than throw, since a missing file or a failed
+    // import both land here.
+    [Fact]
+    public void EmptyClip_ReportsNothingRatherThanThrowing()
+    {
+        using var clip = new AudioClip([1, 2, 3, 4]);
+
+        Assert.Equal(0, clip.Channels);
+        Assert.Equal(0, clip.SampleRate);
+        Assert.Equal(0ul, clip.SampleCount);
+        Assert.Equal(0f, clip.LengthInSeconds);
+        Assert.Empty(clip.GetSampleData());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Create_RejectsAnImpossibleFormat(int channels)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => AudioClip.Create("Bad", [0f], channels, TestSampleRate));
+    }
+
+    #endregion
+
+    #region AudioClip shared buffers
 
     // Clips with identical data share one native buffer. A deserialized clip used to adopt that
     // buffer without counting the reference, so disposing any other holder freed it underneath the
@@ -169,6 +261,65 @@ public class AudioTests
         Assert.Equal(1, AudioContext.GetClipRefCount(hash));
 
         deserialized.Dispose();
+        Assert.Equal(0, AudioContext.GetClipRefCount(hash));
+    }
+
+    // The reference count has to hold whichever order holders arrive and leave in, since nothing
+    // constrains a scene to dispose its clips in the order it loaded them.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AudioClip_SharedBuffer_CountsHoldersInEitherDisposalOrder(bool disposeFirstLast)
+    {
+        byte[] data = [90, 91, 92, 93, 94, 95];
+
+        var first = new AudioClip(data);
+        var second = new AudioClip(data);
+        var third = Serializer.Deserialize<AudioClip>(Serializer.Serialize(first))!;
+
+        ulong hash = first.Hash;
+
+        Assert.Equal(3, AudioContext.GetClipRefCount(hash));
+        Assert.Equal(first.Handle, second.Handle);
+        Assert.Equal(first.Handle, third.Handle);
+
+        if (disposeFirstLast)
+        {
+            third.Dispose();
+            second.Dispose();
+            Assert.Equal(1, AudioContext.GetClipRefCount(hash));
+            first.Dispose();
+        }
+        else
+        {
+            first.Dispose();
+            third.Dispose();
+            Assert.Equal(1, AudioContext.GetClipRefCount(hash));
+            second.Dispose();
+        }
+
+        Assert.Equal(0, AudioContext.GetClipRefCount(hash));
+    }
+
+    // Disposing twice must not take a second reference off a buffer someone else is still holding.
+    [Fact]
+    public void AudioClip_DisposingTwice_OnlyReleasesOnce()
+    {
+        byte[] data = [70, 71, 72];
+
+        var holder = new AudioClip(data);
+        var extra = new AudioClip(data);
+        ulong hash = holder.Hash;
+
+        Assert.Equal(2, AudioContext.GetClipRefCount(hash));
+
+        extra.Dispose();
+        extra.Dispose();
+
+        Assert.Equal(1, AudioContext.GetClipRefCount(hash));
+        Assert.NotEqual(IntPtr.Zero, holder.Handle);
+
+        holder.Dispose();
         Assert.Equal(0, AudioContext.GetClipRefCount(hash));
     }
 
@@ -248,28 +399,419 @@ public class AudioTests
         source.Dispose();
         restored.Dispose();
     }
-}
 
-/// <summary>Audio components in a scene with no audio device, which is every headless run.</summary>
-public class AudioComponentTests : RuntimeTestBase
-{
-    /// <summary>An effect that only records whether the source destroyed it.</summary>
-    private sealed class CountingEffect : Audio.Effects.AudioEffect
+    #endregion
+
+    #region AudioSource serialization
+
+    // AudioSource keeps its settings in private fields, so they only persist because they carry
+    // [SerializeField]. Dropping one is invisible until a scene reloads without its audio settings.
+    [Fact]
+    public void AudioSource_RoundTripsItsSettings()
     {
-        public int Destroyed;
+        var source = new AudioSource
+        {
+            PlayOnStart = true,
+            Loop = true,
+            Volume = 0.25f,
+            Pitch = 1.5f,
+            Pan = -0.5f,
+            PanMode = PanMode.Pan,
+            Spatial = false,
+            DopplerFactor = 2f,
+            MinDistance = 3f,
+            MaxDistance = 40f,
+            AttenuationModel = AttenuationModel.Exponential,
+        };
 
-        public override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels) { }
-        public override void OnDestroy() => Destroyed++;
+        var restored = Serializer.Deserialize<AudioSource>(Serializer.Serialize(source));
+
+        Assert.NotNull(restored);
+        Assert.True(restored!.PlayOnStart);
+        Assert.True(restored.Loop);
+        Assert.Equal(0.25f, restored.Volume);
+        Assert.Equal(1.5f, restored.Pitch);
+        Assert.Equal(-0.5f, restored.Pan);
+        Assert.Equal(PanMode.Pan, restored.PanMode);
+        Assert.False(restored.Spatial);
+        Assert.Equal(2f, restored.DopplerFactor);
+        Assert.Equal(3f, restored.MinDistance);
+        Assert.Equal(40f, restored.MaxDistance);
+        Assert.Equal(AttenuationModel.Exponential, restored.AttenuationModel);
     }
 
-    private AudioSource CreateSource()
+    // A scene written before a field existed has no key for it. Field deserialization leaves the
+    // constructor's value alone, which is what keeps an old scene at full volume rather than silent.
+    [Fact]
+    public void AudioSource_Deserialize_KeepsDefaultsForMissingKeys()
     {
-        var scene = CreateScene(enable: true);
-        var go = CreateGameObject("Speaker");
-        var source = go.AddComponent<AudioSource>();
-        scene.Add(go);
-        return source;
+        var restored = Serializer.Deserialize(EchoObject.NewCompound(), typeof(AudioSource)) as AudioSource;
+
+        Assert.NotNull(restored);
+        Assert.Equal(1f, restored!.Volume);
+        Assert.Equal(1f, restored.Pitch);
+        Assert.Equal(0f, restored.Pan);
+        Assert.True(restored.Spatial);
+        Assert.Equal(1f, restored.MinDistance);
+        Assert.Equal(10f, restored.MaxDistance);
+        Assert.False(restored.Loop);
+        Assert.False(restored.PlayOnStart);
     }
+
+    // Live playback position used to be written into the serialized form, so saving a scene while
+    // play mode was running baked whatever sample the music was on into the asset, and every later
+    // load started there. On a prefab every instance spawned mid clip.
+    [Fact]
+    public void AudioSource_DoesNotSerializePlaybackPosition()
+    {
+        EchoObject echo = Serializer.Serialize(new AudioSource());
+
+        Assert.Null(echo.Get("_savedCursor"));
+        Assert.Null(echo.Get("_wasPlaying"));
+    }
+
+    // Effects used to be script-only and unserialized, so a chain built at runtime was gone the next
+    // time the scene loaded and could never be authored in the first place.
+    [Fact]
+    public void AudioSource_RoundTripsItsEffectChain()
+    {
+        var source = new AudioSource();
+        source.AddEffect(new FilterEffect { Type = FilterType.Highpass, Frequency = 800f, Q = 1.5f });
+        source.AddEffect(new DistortionEffect { Drive = 3f, Blend = 0.25f });
+
+        var restored = Serializer.Deserialize<AudioSource>(Serializer.Serialize(source))!;
+
+        Assert.Equal(2, restored.EffectCount);
+
+        var filter = Assert.IsType<FilterEffect>(restored.Effects[0]);
+        Assert.Equal(FilterType.Highpass, filter.Type);
+        Assert.Equal(800f, filter.Frequency);
+        Assert.Equal(1.5f, filter.Q);
+
+        var distortion = Assert.IsType<DistortionEffect>(restored.Effects[1]);
+        Assert.Equal(3f, distortion.Drive);
+        Assert.Equal(0.25f, distortion.Blend);
+
+        // Parameters alone are not enough, the DSP state has to be rebuilt on the way in or the
+        // effect is inert until something else happens to touch it.
+        Assert.True(filter.IsInitialized);
+    }
+
+    #endregion
+
+    #region Effect DSP
+
+    // Filter.Process declared its output first and FilterEffect passed the input first, so the filter
+    // read the output buffer and wrote the input one. The effect was audibly a no-op.
+    [Fact]
+    public void FilterEffect_WritesItsOutput()
+    {
+        var effect = new FilterEffect { Type = FilterType.Lowpass, Frequency = 500f, Q = 0.707f };
+
+        float[] output = Run(effect, Interleave(1f, 1f));
+
+        // A lowpass passes DC, so a constant input settles at the same constant.
+        Assert.Equal(1f, output[^1], 3);
+        Assert.Equal(1f, output[^2], 3);
+    }
+
+    // One biquad state pair shared by every channel is not a stereo filter, it is one filter fed two
+    // interleaved signals. A silent channel is the clearest way to see the other one bleeding in.
+    [Fact]
+    public void FilterEffect_KeepsChannelsIndependent()
+    {
+        var effect = new FilterEffect { Type = FilterType.Lowpass, Frequency = 500f, Q = 0.707f };
+
+        float[] output = Run(effect, Interleave(1f, 0f));
+
+        for (int i = 0; i < Frames; i++)
+            Assert.Equal(0f, output[i * Channels + 1]);
+
+        // The driven channel still has to be doing something, or the assertion above is vacuous.
+        Assert.True(output[^2] > 0.5f);
+    }
+
+    // Each filter type has a response at DC that follows from its coefficients, so this catches a
+    // coefficient set being wired to the wrong type as well as an outright arithmetic mistake.
+    [Theory]
+    [InlineData(FilterType.Lowpass, 1f)]
+    [InlineData(FilterType.Highpass, 0f)]
+    [InlineData(FilterType.Bandpass, 0f)]
+    [InlineData(FilterType.Notch, 1f)]
+    [InlineData(FilterType.Peak, 1f)]
+    [InlineData(FilterType.Lowshelf, 1f)]
+    [InlineData(FilterType.Highshelf, 1f)]
+    public void Filter_HasTheExpectedGainAtDC(FilterType type, float expected)
+    {
+        // The shelf and peak types are flat at 0 dB, which is what makes them 1 here.
+        var effect = new FilterEffect { Type = type, Frequency = 500f, Q = 0.707f, GainDB = 0f };
+
+        float[] output = Run(effect, Interleave(1f, 1f, 2048));
+
+        Assert.Equal(expected, output[^2], 2);
+    }
+
+    // The other end of the spectrum, where a lowpass and a bandpass have to reach zero and a highpass
+    // has to reach unity. Alternating full scale samples are a signal exactly at Nyquist.
+    [Theory]
+    [InlineData(FilterType.Lowpass, 0f)]
+    [InlineData(FilterType.Highpass, 1f)]
+    [InlineData(FilterType.Bandpass, 0f)]
+    [InlineData(FilterType.Notch, 1f)]
+    [InlineData(FilterType.Peak, 1f)]
+    [InlineData(FilterType.Lowshelf, 1f)]
+    [InlineData(FilterType.Highshelf, 1f)]
+    public void Filter_HasTheExpectedGainAtNyquist(FilterType type, float expected)
+    {
+        var effect = new FilterEffect { Type = type, Frequency = 500f, Q = 0.707f, GainDB = 0f };
+
+        float[] output = Run(effect, Nyquist(2048));
+
+        Assert.Equal(expected, Math.Abs(output[^2]), 2);
+    }
+
+    // A delay line's whole job: an impulse comes back out one delay length later, and nowhere else.
+    [Fact]
+    public void DelayEffect_ReturnsAnImpulseOneDelayLater()
+    {
+        const int delayFrames = 8;
+        var effect = new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f };
+
+        float[] input = new float[64 * Channels];
+        input[0] = 1f;
+        input[1] = 1f;
+
+        float[] output = Run(effect, input);
+
+        Assert.Equal((uint)delayFrames, effect.DelayInFrames);
+        Assert.Equal(1f, output[delayFrames * Channels], 4);
+        Assert.Equal(1f, output[delayFrames * Channels + 1], 4);
+
+        for (int frame = 0; frame < 64; frame++)
+        {
+            if (frame == delayFrames) continue;
+            Assert.Equal(0f, output[frame * Channels], 4);
+        }
+    }
+
+    // A zero length delay allocated a zero length buffer and then took the cursor modulo zero on the
+    // audio thread. One frame is the floor.
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(-1f)]
+    [InlineData(1f / TestSampleRate)]
+    public void DelayEffect_ZeroLengthDelay_ClampsToOneFrame(float seconds)
+    {
+        var effect = new DelayEffect { DelayInSeconds = seconds, Decay = 0f };
+
+        float[] output = Run(effect, Interleave(1f, 1f));
+
+        Assert.Equal(1u, effect.DelayInFrames);
+        Assert.Equal(0f, output[0]);
+        Assert.Equal(1f, output[^1], 4);
+    }
+
+    // The blend is a crossfade against the untouched signal, so at fully dry the effect has to be
+    // unity gain. A halving outside the blend took 6 dB off just for having the effect in the chain.
+    [Fact]
+    public void DistortionEffect_FullyDry_IsUnityGain()
+    {
+        var effect = new DistortionEffect { Blend = 0f };
+
+        float[] output = Run(effect, Interleave(0.5f, -0.25f));
+
+        Assert.Equal(0.5f, output[0], 5);
+        Assert.Equal(-0.25f, output[1], 5);
+    }
+
+    // Same channel smearing as the filter, and the phaser additionally advanced its sweep once per
+    // sample per channel, so a stereo source swept at double the configured rate.
+    [Fact]
+    public void PhaserEffect_KeepsChannelsIndependent()
+    {
+        var effect = new PhaserEffect();
+
+        float[] output = Run(effect, Interleave(1f, 0f));
+
+        for (int i = 0; i < Frames; i++)
+            Assert.True(Math.Abs(output[i * Channels + 1]) < 1e-6f,
+                $"silent channel picked up {output[i * Channels + 1]} at frame {i}");
+
+        Assert.True(Math.Abs(output[^2]) > 0.1f);
+    }
+
+    // The reverb only supports one or two channels, so on anything else it has to pass audio through
+    // rather than throwing out of a constructor on the audio setup path.
+    [Fact]
+    public void ReverbEffect_OnAnUnsupportedChannelCount_PassesThrough()
+    {
+        var effect = new ReverbEffect();
+        effect.Initialize(TestSampleRate, 6);
+
+        float[] input = new float[6 * 4];
+        for (int i = 0; i < input.Length; i++) input[i] = 0.25f;
+
+        float[] output = Run(effect, input, channels: 6);
+
+        // Untouched output means the previous stage's signal carries on unchanged.
+        foreach (float sample in output)
+            Assert.Equal(0f, sample);
+    }
+
+    #endregion
+
+    #region Mixer
+
+    [Fact]
+    public void NewMixer_StartsWithAMasterGroup()
+    {
+        var mixer = new AudioMixer();
+
+        Assert.Single(mixer.Groups);
+        Assert.NotNull(mixer.Master);
+        Assert.Equal("Master", mixer.Master.GroupName);
+        Assert.Null(mixer.Master.Parent);
+    }
+
+    [Fact]
+    public void AddGroup_DefaultsToFeedingTheMaster()
+    {
+        var mixer = new AudioMixer();
+
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        AudioMixerGroup footsteps = mixer.AddGroup("Footsteps", music);
+
+        Assert.Same(mixer.Master, music.Parent);
+        Assert.Same(music, footsteps.Parent);
+        Assert.Same(music, mixer.FindGroup("Music"));
+    }
+
+    // Removing a bus must not orphan what fed into it, or those sources go silent rather than moving
+    // up to the parent bus.
+    [Fact]
+    public void RemoveGroup_RepointsChildrenAtTheirGrandparent()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        AudioMixerGroup stingers = mixer.AddGroup("Stingers", music);
+
+        Assert.True(mixer.RemoveGroup(music));
+
+        Assert.Same(mixer.Master, stingers.Parent);
+        Assert.Null(mixer.FindGroup("Music"));
+    }
+
+    // Everything eventually feeds the root, so removing it would leave the tree with no outlet.
+    [Fact]
+    public void RemoveGroup_WillNotRemoveTheMaster()
+    {
+        var mixer = new AudioMixer();
+
+        Assert.False(mixer.RemoveGroup(mixer.Master));
+        Assert.Single(mixer.Groups);
+    }
+
+    // A slider works in linear gain and a mixer works in decibels, so the pair has to round trip.
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(-6f)]
+    [InlineData(-20f)]
+    [InlineData(6f)]
+    public void VolumeConversion_RoundTrips(float decibels)
+    {
+        float linear = AudioMixerGroup.DecibelsToLinear(decibels);
+
+        Assert.Equal(decibels, AudioMixerGroup.LinearToDecibels(linear), 3);
+    }
+
+    [Fact]
+    public void VolumeConversion_TreatsTheFloorAsSilence()
+    {
+        Assert.Equal(0f, AudioMixerGroup.DecibelsToLinear(AudioMixerGroup.MinVolumeDB));
+        Assert.Equal(0f, AudioMixerGroup.DecibelsToLinear(-200f));
+        Assert.Equal(AudioMixerGroup.MinVolumeDB, AudioMixerGroup.LinearToDecibels(0f));
+    }
+
+    // Group identities key every saved reference. If they moved with a group's position, inserting a
+    // bus would silently repoint sources at whichever group took its index.
+    [Fact]
+    public void GroupIdentities_AreStableAcrossInsertionAndRename()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        string identity = music.Identity;
+
+        mixer.AddGroup("SFX");
+        music.GroupName = "Soundtrack";
+
+        Assert.Equal(identity, music.Identity);
+        Assert.NotEqual(mixer.Master.Identity, music.Identity);
+    }
+
+    // A bus carries its own effect chain, so a reverb can sit on the whole SFX bus rather than being
+    // duplicated onto every source feeding it.
+    [Fact]
+    public void GroupEffects_RoundTripWithTheMixer()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup sfx = mixer.AddGroup("SFX");
+        sfx.AddEffect(new FilterEffect { Type = FilterType.Lowpass, Frequency = 3000f });
+
+        var restored = Serializer.Deserialize<AudioMixer>(Serializer.Serialize(mixer))!;
+
+        AudioMixerGroup restoredSfx = restored.FindGroup("SFX");
+        Assert.Single(restoredSfx.Effects);
+
+        var filter = Assert.IsType<FilterEffect>(restoredSfx.Effects[0]);
+        Assert.Equal(3000f, filter.Frequency);
+
+        // Bound to the audio format on the way in, or the effect is inert until something else runs.
+        restoredSfx.RefreshEffects();
+        Assert.True(filter.IsInitialized);
+    }
+
+    [Fact]
+    public void GroupEffects_AreDestroyedWhenRemoved()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup sfx = mixer.AddGroup("SFX");
+        var effect = new CountingEffect();
+
+        sfx.AddEffect(effect);
+        Assert.Single(sfx.Effects);
+
+        sfx.RemoveEffect(effect);
+
+        Assert.Empty(sfx.Effects);
+        Assert.Equal(1, effect.Destroyed);
+    }
+
+    [Fact]
+    public void Mixer_RoundTripsItsTree()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        music.VolumeDB = -12f;
+        music.Mute = true;
+        mixer.AddGroup("Stingers", music);
+
+        var restored = Serializer.Deserialize<AudioMixer>(Serializer.Serialize(mixer))!;
+
+        Assert.Equal(3, restored.Groups.Count);
+
+        AudioMixerGroup restoredMusic = restored.FindGroup("Music");
+        Assert.NotNull(restoredMusic);
+        Assert.Equal(-12f, restoredMusic.VolumeDB);
+        Assert.True(restoredMusic.Mute);
+        Assert.Same(restored.Master, restoredMusic.Parent);
+
+        // Bound on the way in, or Parent would answer null on everything.
+        Assert.Same(restoredMusic, restored.FindGroup("Stingers").Parent);
+    }
+
+    #endregion
+
+    #region Components without a device
 
     // OnDisable used to destroy every effect and leave them in the list, so toggling a component ran
     // the same effects again after they had been told they were finished.
@@ -320,6 +862,19 @@ public class AudioComponentTests : RuntimeTestBase
         source.RemoveEffect(stranger);
 
         Assert.Equal(0, stranger.Destroyed);
+    }
+
+    [Fact]
+    public void Effects_AreDestroyedWithTheSource()
+    {
+        var source = CreateSource();
+        var effect = new CountingEffect();
+        source.AddEffect(effect);
+
+        source.Destroy();
+        EngineObject.ProcessDestroyed();
+
+        Assert.Equal(1, effect.Destroyed);
     }
 
     [Fact]
@@ -403,19 +958,6 @@ public class AudioComponentTests : RuntimeTestBase
         clip.Dispose();
     }
 
-    [Fact]
-    public void Effects_AreDestroyedWithTheSource()
-    {
-        var source = CreateSource();
-        var effect = new CountingEffect();
-        source.AddEffect(effect);
-
-        source.Destroy();
-        EngineObject.ProcessDestroyed();
-
-        Assert.Equal(1, effect.Destroyed);
-    }
-
     // A headless run never initializes the context, and neither does a failed device open. Handing
     // that null context to the native layer is what the guards exist to stop, so the components have
     // to come up inert and every entry point has to stay callable.
@@ -446,6 +988,10 @@ public class AudioComponentTests : RuntimeTestBase
 
         source.Clip!.Dispose();
     }
+
+    #endregion
+
+    #region AudioContext
 
     // Prowl is left handed with +Z forward, the audio engine is right handed with -Z forward. Both
     // components have to mirror on the same axis, and only that axis, or one of left/right and
@@ -493,4 +1039,6 @@ public class AudioComponentTests : RuntimeTestBase
             AudioContext.MasterVolume = previous;
         }
     }
+
+    #endregion
 }
