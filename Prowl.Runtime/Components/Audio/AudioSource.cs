@@ -133,18 +133,35 @@ public sealed class AudioSource : MonoBehaviour
     #region Properties
 
     /// <summary>
-    /// The AudioClip to play.
+    /// The clip this source plays. Assigning a different one stops playback, since what was playing
+    /// was the previous clip. Starting the new one is <see cref="Play"/>'s job.
     /// </summary>
+    /// <remarks>
+    /// Reading this resolves the reference, which loads the clip if it has not been already. Use
+    /// <see cref="ClipRef"/> to read or assign without triggering that.
+    /// </remarks>
     public AudioClip? Clip
     {
         get => _clip.Res;
+        set => ClipRef = value;
+    }
+
+    /// <summary>
+    /// The clip reference, without resolving it. Assigning through here neither loads the outgoing
+    /// clip nor the incoming one.
+    /// </summary>
+    public AssetRef<AudioClip> ClipRef
+    {
+        get => _clip;
         set
         {
+            // Assigning what is already there is not a reason to interrupt anything.
+            if (_clip == value)
+                return;
+
+            // Whatever is sounding belongs to the clip being replaced.
+            Stop();
             _clip = value;
-            if (_mainSource != null && _clip.Res != null && _playOnStart)
-            {
-                Play();
-            }
         }
     }
 

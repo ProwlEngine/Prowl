@@ -1044,6 +1044,43 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0f, source.NormalizedTime);
     }
 
+    // Assigning a clip used to start playing it, but only when PlayOnStart happened to be set, which
+    // is a flag documented as controlling OnEnable. Swapping a clip mid playback also left the old one
+    // sounding whenever that flag was false.
+    [Fact]
+    public void AssigningAClip_DoesNotDependOnPlayOnStart()
+    {
+        var source = CreateSource();
+        var first = new AudioClip([1, 2, 3, 4]);
+        var second = new AudioClip([5, 6, 7, 8]);
+
+        source.PlayOnStart = true;
+        source.Clip = first;
+
+        Assert.Same(first, source.Clip);
+        Assert.False(source.IsPlaying);
+
+        source.PlayOnStart = false;
+        source.Clip = second;
+
+        Assert.Same(second, source.Clip);
+
+        first.Dispose();
+        second.Dispose();
+    }
+
+    // Reading Clip resolves the reference, which loads the asset. Assigning one should not have to.
+    [Fact]
+    public void ClipRef_RoundTripsWithoutResolving()
+    {
+        var source = CreateSource();
+        var reference = new AssetRef<AudioClip>(Guid.NewGuid());
+
+        source.ClipRef = reference;
+
+        Assert.Equal(reference.AssetID, source.ClipRef.AssetID);
+    }
+
     // Seeking a source with nothing loaded has no length to seek within, so it must answer zero
     // rather than dividing by one.
     [Fact]
