@@ -51,10 +51,15 @@ public abstract class AudioEffect
     public bool IsInitialized { get; private set; }
 
     /// <summary>
-    /// Binds the effect to an audio format and builds its DSP state. Called when the effect joins a
-    /// source and again if the format changes, so it has to be safe to call more than once.
+    /// Binds the effect to an audio format and builds its DSP state. Safe to call more than once: it
+    /// is what a source or bus calls when the effect joins it, and again whenever the format changes.
     /// </summary>
-    internal void Initialize(int sampleRate, int channels)
+    /// <remarks>
+    /// Public so an effect can be driven outside a chain, for an offline render or a test of its own
+    /// DSP. Until this runs there is no state for <see cref="Process"/> to work with, so an effect
+    /// used that way does nothing at all.
+    /// </remarks>
+    public void Initialize(int sampleRate, int channels)
     {
         SampleRate = Math.Max(1, sampleRate);
         Channels = Math.Max(1, channels);

@@ -787,6 +787,56 @@ public class AudioTests : RuntimeTestBase
         return output;
     }
 
+    /// <summary>Reports the format it was bound to, and how many times.</summary>
+    private sealed class FormatProbeEffect : AudioEffect
+    {
+        public int ObservedRate;
+        public int ObservedChannels;
+        public int Initializations;
+
+        protected override void OnInitialize()
+        {
+            ObservedRate = SampleRate;
+            ObservedChannels = Channels;
+            Initializations++;
+        }
+
+        protected override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels) { }
+    }
+
+    // Initialize is documented as safe to call again, which is what a device change relies on: every
+    // effect gets rebound to the new format rather than being left sized for the old one.
+    [Fact]
+    public void Effect_Initialize_RebindsToANewFormat()
+    {
+        var effect = new FormatProbeEffect();
+
+        effect.Initialize(44100, 2);
+
+        Assert.True(effect.IsInitialized);
+        Assert.Equal(44100, effect.ObservedRate);
+        Assert.Equal(2, effect.ObservedChannels);
+
+        effect.Initialize(22050, 1);
+
+        Assert.Equal(22050, effect.ObservedRate);
+        Assert.Equal(1, effect.ObservedChannels);
+        Assert.Equal(2, effect.Initializations);
+    }
+
+    // A format that makes no sense would size the DSP state to nothing, so it is floored rather than
+    // taken at face value.
+    [Fact]
+    public void Effect_Initialize_FloorsAnImpossibleFormat()
+    {
+        var effect = new FormatProbeEffect();
+
+        effect.Initialize(0, 0);
+
+        Assert.True(effect.ObservedRate >= 1);
+        Assert.True(effect.ObservedChannels >= 1);
+    }
+
     /// <summary>An effect that claims it produced more frames than it was given room for.</summary>
     private sealed class GreedyEffect : AudioEffect
     {
