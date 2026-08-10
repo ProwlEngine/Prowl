@@ -472,6 +472,14 @@ public sealed class AudioSource : MonoBehaviour
         // Update spatial audio properties based on transform
         if (_spatial)
         {
+            // Checked here rather than at Play, so scene setup order cannot make this fire spuriously
+            // for a source that starts before its listener exists.
+            if (AudioListener.ActiveCount == 0 && IsPlaying)
+            {
+                Debug.LogWarningOnce("Audio.NoListener",
+                    "A spatial AudioSource is playing with no enabled AudioListener in the scene, so it is positioned relative to the world origin.");
+            }
+
             Float3 pos = Transform.Position;
             Float3 audioPos = AudioContext.ToAudioSpace(pos);
             MiniAudioNative.ma_sound_group_set_position(_soundGroup, audioPos.X, audioPos.Y, audioPos.Z);
@@ -505,6 +513,23 @@ public sealed class AudioSource : MonoBehaviour
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// The attenuation range, so the falloff can be placed against the scene rather than guessed at
+    /// from two numbers in the inspector. Only while selected: a scene full of emitters would be
+    /// unreadable otherwise.
+    /// </summary>
+    public override void DrawGizmosSelected()
+    {
+        if (!_spatial) return;
+
+        Float3 position = Transform.Position;
+
+        // Inside the inner sphere the source is at full volume, past the outer one it is at its
+        // quietest, and the falloff curve runs between them.
+        Debug.DrawWireSphere(position, Maths.Max(_minDistance, 0.001f), new Color(0.4f, 1.0f, 0.5f, 1.0f));
+        Debug.DrawWireSphere(position, Maths.Max(_maxDistance, _minDistance), new Color(0.2f, 0.5f, 1.0f, 1.0f));
     }
 
     private void RebuildForNewDevice()

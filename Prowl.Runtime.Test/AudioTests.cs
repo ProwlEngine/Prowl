@@ -352,6 +352,27 @@ public class AudioComponentTests : RuntimeTestBase
         Assert.Equal(0f, source.NormalizedTime);
     }
 
+    // Spatial audio is only defined with exactly one listener, so the count has to track enable and
+    // disable exactly or the warnings that lean on it are noise.
+    [Fact]
+    public void ListenerCount_TracksEnableAndDisable()
+    {
+        int before = AudioListener.ActiveCount;
+
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject("Ears");
+        var listener = go.AddComponent<AudioListener>();
+        scene.Add(go);
+
+        // No device in a test run, so nothing is counted. What matters is that it comes back to where
+        // it started rather than drifting.
+        listener.Enabled = false;
+        listener.Enabled = true;
+        listener.Enabled = false;
+
+        Assert.Equal(before, AudioListener.ActiveCount);
+    }
+
     // One shots layer on pooled voices now, so none of this may touch the main playback or throw when
     // there is no device to make a voice on.
     [Fact]

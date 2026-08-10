@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
@@ -9,6 +10,7 @@ using Prowl.Editor.Importers;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -31,6 +33,8 @@ public class AudioClipAssetEditor : ImportSettingsEditor
         Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
 
         DrawClipInfo(paper, id, asset as AudioClip);
+        DrawWaveform(paper, id, asset as AudioClip);
+        DrawTransport(paper, id, asset as AudioClip);
 
         EchoObject settings = Settings(entry);
 
@@ -77,6 +81,91 @@ public class AudioClipAssetEditor : ImportSettingsEditor
 
         Origami.Label(paper, $"{id}_format", $"{layout}  |  {clip.SampleRate} Hz  |  {FormatDuration(clip.LengthInSeconds)}").Show();
         Origami.Label(paper, $"{id}_size", $"Stored: {FormatBytes(clip.DataSize)}").Show();
+    }
+
+    /// <summary>
+    /// Peak envelope of the clip, as one column per horizontal slot. Cached per asset because it has
+    /// to decode the whole clip to build it, which is far too much to redo every frame.
+    /// </summary>
+    private static readonly Dictionary<Guid, float[]> s_waveforms = new();
+
+    private const int WaveformColumns = 160;
+    private const float WaveformHeight = 64.0f;
+
+    private static void DrawWaveform(Paper paper, string id, AudioClip? clip)
+    {
+        if (clip.IsNotValid()) return;
+
+        float[] peaks = Waveform(clip!);
+
+        if (peaks.Length == 0) return;
+
+        Origami.Header(paper, $"{id}_wave_hdr", "Waveform").Underline().Show();
+
+        using (paper.Row($"{id}_wave").Height(WaveformHeight).Enter())
+        {
+            for (int i = 0; i < peaks.Length; i++)
+            {
+                // Drawn from the middle out, so the column reads as an envelope rather than a bar chart.
+                float height = Math.Max(1.0f, peaks[i] * WaveformHeight);
+
+                using (paper.Column($"{id}_wc{i}").Width(UnitValue.Stretch()).Enter())
+                {
+                    paper.Box($"{id}_wt{i}").Height(UnitValue.Stretch());
+                    paper.Box($"{id}_wb{i}").Height(height).BackgroundColor(EditorTheme.Purple400);
+                    paper.Box($"{id}_wf{i}").Height(UnitValue.Stretch());
+                }
+            }
+        }
+    }
+
+    private static float[] Waveform(AudioClip clip)
+    {
+        Guid key = clip.AssetID;
+
+        if (key != Guid.Empty && s_waveforms.TryGetValue(key, out float[]? cached))
+            return cached;
+
+        float[] samples = clip.GetSampleData();
+        int channels = Math.Max(1, clip.Channels);
+        int frames = samples.Length / channels;
+
+        float[] peaks = new float[frames > 0 ? WaveformColumns : 0];
+
+        for (int column = 0; column < peaks.Length; column++)
+        {
+            int start = (int)((long)column * frames / WaveformColumns);
+            int end = (int)((long)(column + 1) * frames / WaveformColumns);
+            float peak = 0.0f;
+
+            for (int frame = start; frame < end && frame < frames; frame++)
+            {
+                for (int channel = 0; channel < channels; channel++)
+                    peak = Math.Max(peak, Math.Abs(samples[frame * channels + channel]));
+            }
+
+            peaks[column] = Math.Min(1.0f, peak);
+        }
+
+        if (key != Guid.Empty)
+            s_waveforms[key] = peaks;
+
+        return peaks;
+    }
+
+    private static void DrawTransport(Paper paper, string id, AudioClip? clip)
+    {
+        if (clip.IsNotValid()) return;
+
+        using (paper.Row($"{id}_transport").Height(26).RowBetween(4).Enter())
+        {
+            bool playing = AudioPreview.PlayingClip == clip!.AssetID && AudioPreview.IsPlaying;
+
+            if (playing)
+                Origami.Button(paper, $"{id}_stop", $"{EditorIcons.Stop}  Stop", AudioPreview.Stop).Show();
+            else
+                Origami.Button(paper, $"{id}_play", $"{EditorIcons.Play}  Play", () => AudioPreview.Play(clip)).Show();
+        }
     }
 
     private static string FormatDuration(float seconds)

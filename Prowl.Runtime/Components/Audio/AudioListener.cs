@@ -21,8 +21,17 @@ public sealed class AudioListener : MonoBehaviour
     private Float3 previousPosition;
     private int _deviceGeneration = -1;
 
+    private static int s_activeCount;
+
     /// <summary> A handle to the native ma_audio_listener instance. </summary>
     public IntPtr Handle => handle;
+
+    /// <summary>
+    /// How many listeners are currently enabled. Spatial audio is only well defined with exactly one:
+    /// none leaves every source positioned relative to the world origin, and more than one leaves it
+    /// undefined which of them sources are heard from.
+    /// </summary>
+    public static int ActiveCount => s_activeCount;
 
     public override void OnEnable()
     {
@@ -37,6 +46,14 @@ public sealed class AudioListener : MonoBehaviour
 
         if (handle != IntPtr.Zero)
         {
+            s_activeCount++;
+
+            if (s_activeCount > 1)
+            {
+                Debug.LogWarning($"[{GameObject.Name}] There are now {s_activeCount} enabled AudioListeners. " +
+                                 "Spatial audio is only defined for one, so which of them sources are heard from is arbitrary.");
+            }
+
             previousPosition = Transform.Position;
 
             // Set Initial Values
@@ -93,6 +110,7 @@ public sealed class AudioListener : MonoBehaviour
         {
             MiniAudioExNative.ma_ex_audio_listener_uninit(handle);
             handle = IntPtr.Zero;
+            s_activeCount = Math.Max(0, s_activeCount - 1);
         }
     }
 }
