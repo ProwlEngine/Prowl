@@ -1108,12 +1108,7 @@ public class HierarchyPanel : DockPanel
     /// would undo it. Told apart by where the object came from, not by its position, so reordering
     /// cannot reclassify it.
     /// </summary>
-    private static bool IsPrefabStructuralChild(GameObject go)
-    {
-        var parent = go.Parent;
-        if (!parent.IsValid() || !parent!.IsPrefabInstance) return false;
-        return go.SourceIdentifier != Guid.Empty;
-    }
+    private static bool IsPrefabStructuralChild(GameObject go) => Prefabs.PrefabUtility.IsProvidedByPrefab(go);
 
     private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
     {

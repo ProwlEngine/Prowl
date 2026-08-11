@@ -247,6 +247,10 @@ public static class PrefabUtility
         var cleanCopy = CloneWithoutPrefabData(instanceRoot);
         if (cleanCopy == null) return;
 
+        // What the instance added is the instance's, not the prefab's. Writing it into the asset would
+        // hand it to every other instance, and it was never listed as an override for the user to see.
+        StripInstanceAdditions(cleanCopy, instanceRoot, instanceRoot.PrefabAssetId);
+
         // Name and root transform are per-instance, not prefab content, so keep the asset's own.
         PreserveSourceIdentity(cleanCopy, instanceRoot.PrefabAssetId);
         StabilizeSourceIdentifiers(cleanCopy);
@@ -1039,6 +1043,20 @@ public static class PrefabUtility
         return root;
     }
 
+    /// <summary>
+    /// True when this child is part of what its parent's prefab provides, rather than something added
+    /// to the instance afterwards. Both halves matter: an object with no source came from the
+    /// instance, and one belonging to a different prefab is a nested instance that answers to that
+    /// prefab, so neither is the parent prefab's structure.
+    /// </summary>
+    public static bool IsProvidedByPrefab(GameObject child)
+    {
+        var parent = child.Parent;
+        if (!parent.IsValid() || !parent!.IsPrefabInstance) return false;
+
+        return child.SourceIdentifier != Guid.Empty && child.PrefabAssetId == parent.PrefabAssetId;
+    }
+
     /// <summary>True if this GO is a prefab instance root (not just a child within a prefab).</summary>
     public static bool IsInstanceRoot(GameObject go)
     {
@@ -1513,6 +1531,43 @@ public static class PrefabUtility
         {
             Runtime.Debug.LogError($"[Prefab] Failed to write '{absolutePath}': {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Drop everything the instance added from a copy about to be written back as the prefab. The
+    /// copy mirrors the instance one for one, so the live instance is walked alongside it to say
+    /// which objects the prefab provided and which the instance introduced.
+    /// </summary>
+    private static void StripInstanceAdditions(GameObject copy, GameObject instance, Guid boundaryId)
+    {
+        // A nested instance of another prefab answers to that one, so its contents are not ours to trim.
+        if (instance.IsPrefabInstance && instance.PrefabAssetId != boundaryId) return;
+
+        var instanceComponents = instance.GetComponents<MonoBehaviour>().ToList();
+        var copyComponents = copy.GetComponents<MonoBehaviour>().ToList();
+
+        for (int i = instanceComponents.Count - 1; i >= 0; i--)
+        {
+            if (i >= copyComponents.Count) continue;
+            if (instance.GetComponentSourceIdentifier(instanceComponents[i]) != Guid.Empty) continue;
+
+            copy.RemoveComponent(copyComponents[i]);
+        }
+
+        for (int i = instance.Children.Count - 1; i >= 0; i--)
+        {
+            if (i >= copy.Children.Count) continue;
+
+            GameObject copyChild = copy.Children[i];
+            if (!IsProvidedByPrefab(instance.Children[i]))
+            {
+                copyChild.SetParent(null!);
+                copyChild.Dispose();
+                continue;
+            }
+
+            StripInstanceAdditions(copyChild, instance.Children[i], boundaryId);
         }
     }
 
