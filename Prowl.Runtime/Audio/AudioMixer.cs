@@ -171,8 +171,10 @@ public sealed class AudioMixerGroup : EngineObject
         {
             if (!AudioContext.IsInitialized)
             {
-                _nativeGroup.pointer = IntPtr.Zero;
-                _builtForDevice = -1;
+                // ReleaseNative rather than clearing the pointer by hand: the effect node holds a
+                // plain allocation that no device owns and that nothing else would ever free, and it
+                // already knows not to uninitialize anything belonging to a device that has gone.
+                ReleaseNative();
                 return IntPtr.Zero;
             }
 
