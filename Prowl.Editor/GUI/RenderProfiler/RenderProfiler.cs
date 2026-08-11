@@ -35,6 +35,13 @@ public partial class RenderProfilerPanel : DockPanel
         _profiler.CaptureFinalizeHandler = _profiler.SnapshotCapturer.Finalize;
         _profiler.SnapshotCaptured += OpenSnapshot;
 
+        FlameNodeClicked += t => PingHierarchy(t.View, t.Pass, t.CommandBuffer);
+        ViewViewerPassSelected += (view, pass) =>
+        {
+            SelectPass(view, pass);
+            PingHierarchy(view, pass, null);
+        };
+
         _profiler.Resume();
     }
 

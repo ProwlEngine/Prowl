@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Profiling;
@@ -26,6 +27,9 @@ public partial class RenderProfilerPanel
     private const float PipelineResourceOffsetY = -170f;
     private const float PipelineGraphHeight = 480f;
     private const float PipelineGraphPadding = 16f;
+
+    // Raised instead of calling SelectPass/PingHierarchy directly - see FlameNodeClicked.
+    public event Action<ProfiledView, ProfiledPass>? ViewViewerPassSelected;
 
 
     private void DrawViewViewer(Paper paper, float width)
@@ -225,10 +229,7 @@ public partial class RenderProfilerPanel
             .OnNodeDoubleClick(node =>
             {
                 if (node.UserData is ProfiledPass pass)
-                {
-                    SelectPass(view, pass);
-                    PingHierarchy(view, pass, null);
-                }
+                    ViewViewerPassSelected?.Invoke(view, pass);
             })
             .Show();
     }

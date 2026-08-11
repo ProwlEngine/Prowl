@@ -11,6 +11,8 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.RenderProfiler;
 
+public readonly record struct FlameTarget(ProfiledView? View, ProfiledPass? Pass, ProfiledCommandBuffer? CommandBuffer);
+
 public partial class RenderProfilerPanel
 {
     private const float FlameGraphHeight = 100f;
@@ -19,6 +21,10 @@ public partial class RenderProfilerPanel
 
     // Root id this widget derives every element id from.
     private const string FlameGraphId = "rdp_flame";
+
+    // Raised instead of calling PingHierarchy directly - the host subscribes and decides what a
+    // click does, rather than the flame graph reaching into the hierarchy's state itself.
+    public event Action<FlameTarget>? FlameNodeClicked;
 
     // Frame is the sole root; passes and command buffers (free or nested under a pass) are its
     // descendants. Views aren't represented as their own node - they only tag a pass so a click can
@@ -61,7 +67,7 @@ public partial class RenderProfilerPanel
                 .Name(n => n.Label)
                 .Value(n => n.GpuMilliseconds)
                 .Children(n => n.Children)
-                .OnNodeClick(n => PingHierarchy(n.View, n.Pass, n.CommandBuffer))
+                .OnNodeClick(n => FlameNodeClicked?.Invoke(new FlameTarget(n.View, n.Pass, n.CommandBuffer)))
                 .Zoomable()
                 .Pannable()
                 .Show();
