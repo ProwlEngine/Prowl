@@ -35,6 +35,21 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void OnEnable()
     {
+        AudioContext.DeviceClosing += OnDeviceClosing;
+        CreateNative();
+    }
+
+    /// <summary>
+    /// True while the listener this holds belongs to the device that is open now. One from an older
+    /// device died with it, and uninitializing it would be a use after free.
+    /// </summary>
+    private bool NativeIsLive => AudioContext.IsInitialized && _deviceGeneration == AudioContext.DeviceGeneration;
+
+    /// <summary>Let go while the calls still mean something, rather than after the context has gone.</summary>
+    private void OnDeviceClosing() => DestroyNative();
+
+    private void CreateNative()
+    {
         if (!AudioContext.IsInitialized)
         {
             Debug.LogWarningOnce("Audio.NoContext", "No audio device is initialized, audio components stay inactive.");
@@ -66,11 +81,13 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void Update()
     {
-        // The device was reopened, so the old listener is gone with it.
+        // The device was reopened, so the old listener is gone with it. Rebuilt directly rather than
+        // by calling the lifecycle callbacks by hand, which dragged the subscription and the active
+        // count along for the ride.
         if (_deviceGeneration != AudioContext.DeviceGeneration)
         {
-            OnDisable();
-            OnEnable();
+            DestroyNative();
+            CreateNative();
             _deviceGeneration = AudioContext.DeviceGeneration;
         }
 
@@ -106,11 +123,21 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void OnDisable()
     {
-        if (handle != IntPtr.Zero)
-        {
+        AudioContext.DeviceClosing -= OnDeviceClosing;
+        DestroyNative();
+    }
+
+    private void DestroyNative()
+    {
+        if (handle == IntPtr.Zero)
+            return;
+
+        // A listener from a device that has already closed went with it, so this only releases one
+        // the current device still owns.
+        if (NativeIsLive)
             MiniAudioExNative.ma_ex_audio_listener_uninit(handle);
-            handle = IntPtr.Zero;
-            s_activeCount = Math.Max(0, s_activeCount - 1);
-        }
+
+        handle = IntPtr.Zero;
+        s_activeCount = Math.Max(0, s_activeCount - 1);
     }
 }

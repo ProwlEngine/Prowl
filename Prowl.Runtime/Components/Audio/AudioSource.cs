@@ -108,6 +108,11 @@ public sealed class AudioSource : MonoBehaviour
     private bool _isPaused;
     private ulong _pausedCursor;
     private int _deviceGeneration = -1;
+
+    // Captured while the outgoing device could still answer, so a restart picks playback up where it
+    // left off rather than reading a handle that has already gone.
+    private bool _resumePlaying;
+    private ulong _resumeCursor;
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
     private bool _effectNodeReady;
@@ -426,7 +431,29 @@ public sealed class AudioSource : MonoBehaviour
 
     #region MonoBehaviour Lifecycle
 
-    public override void OnEnable() => CreateNativeResources();
+    public override void OnEnable()
+    {
+        AudioContext.DeviceClosing += OnDeviceClosing;
+        CreateNativeResources();
+    }
+
+    /// <summary>
+    /// True while the native objects this source holds belong to the device that is open now. Anything
+    /// held from an older one has to be dropped rather than uninitialized.
+    /// </summary>
+    private bool NativeIsLive => AudioContext.IsInitialized && _deviceGeneration == AudioContext.DeviceGeneration;
+
+    /// <summary>
+    /// The device is closing. This is the last point at which its objects can be read or released, so
+    /// capture what is needed to pick playback up again and then let them go.
+    /// </summary>
+    private void OnDeviceClosing()
+    {
+        _resumePlaying = IsPlaying;
+        _resumeCursor = _resumePlaying ? Cursor : 0;
+
+        DestroyNativeResources();
+    }
 
     private void CreateNativeResources()
     {
@@ -585,17 +612,21 @@ public sealed class AudioSource : MonoBehaviour
 
     private void RebuildForNewDevice()
     {
-        bool wasPlaying = IsPlaying;
-        ulong resumeFrom = wasPlaying ? Cursor : 0;
-
+        // Whatever is left belongs to a device that has already gone, and DestroyNativeResources knows
+        // not to uninitialize those. The state worth resuming was captured by OnDeviceClosing, while
+        // the handles still answered.
         DestroyNativeResources();
         CreateNativeResources();
 
-        // Still no device, so there is nothing to resume onto. The generation was recorded either way,
-        // so this does not retry every frame.
+        // Recorded whether or not a device came back, so this does not retry every frame.
         _deviceGeneration = AudioContext.DeviceGeneration;
 
-        if (!wasPlaying || _clip.Res == null) return;
+        bool resume = _resumePlaying;
+        ulong resumeFrom = _resumeCursor;
+        _resumePlaying = false;
+        _resumeCursor = 0;
+
+        if (!resume || _clip.Res == null) return;
 
         Play();
         Cursor = resumeFrom;
@@ -610,17 +641,28 @@ public sealed class AudioSource : MonoBehaviour
         RouteToOutputGroup();
     }
 
-    public override void OnDisable() => DestroyNativeResources();
+    public override void OnDisable()
+    {
+        AudioContext.DeviceClosing -= OnDeviceClosing;
+        DestroyNativeResources();
+    }
 
     private void DestroyNativeResources()
     {
-        DestroyOneShotVoices();
+        // Handles from a device that has already closed are released by the context going away, and
+        // uninitializing them would be detaching from a node graph that no longer exists.
+        bool live = NativeIsLive;
+
+        DestroyOneShotVoices(live);
 
         if (_mainSource != null && _mainSource.handle != IntPtr.Zero)
         {
-            // Stop playback
-            MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
-            MiniAudioExNative.ma_ex_audio_source_uninit(_mainSource.handle);
+            if (live)
+            {
+                MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
+                MiniAudioExNative.ma_ex_audio_source_uninit(_mainSource.handle);
+            }
+
             _mainSource = null;
         }
 
@@ -631,9 +673,10 @@ public sealed class AudioSource : MonoBehaviour
         // the allocation alone, so uninit on a failed init would be running over uninitialized memory.
         if (_effectNode.pointer != IntPtr.Zero)
         {
-            if (_effectNodeReady)
+            if (live && _effectNodeReady)
                 MiniAudioNative.ma_effect_node_uninit(_effectNode);
 
+            // Freed either way: this one is a plain allocation, not something the device owns.
             _effectNode.Free();
             _effectNodeReady = false;
         }
@@ -643,7 +686,9 @@ public sealed class AudioSource : MonoBehaviour
         // Cleanup sound group
         if (_soundGroup.pointer != IntPtr.Zero)
         {
-            MiniAudioExNative.ma_ex_sound_group_uninit(_soundGroup.pointer);
+            if (live)
+                MiniAudioExNative.ma_ex_sound_group_uninit(_soundGroup.pointer);
+
             _soundGroup.pointer = IntPtr.Zero;
         }
 
@@ -789,6 +834,9 @@ public sealed class AudioSource : MonoBehaviour
     {
         get
         {
+            // Voices from a closed device cannot be asked anything, and none of them are sounding.
+            if (!NativeIsLive) return 0;
+
             int count = 0;
 
             foreach (SourceInfo voice in _oneShots)
@@ -851,6 +899,10 @@ public sealed class AudioSource : MonoBehaviour
     {
         _maxOneShotVoices = Maths.Max(1, _maxOneShotVoices);
 
+        // Reachable from ApplySettings, so an inspector edit can land between a device closing and the
+        // rebuild noticing. Those voices are already gone; the rebuild clears the list.
+        if (!NativeIsLive) return;
+
         while (_oneShots.Count > _maxOneShotVoices)
         {
             SourceInfo victim = null;
@@ -879,11 +931,11 @@ public sealed class AudioSource : MonoBehaviour
         }
     }
 
-    private void DestroyOneShotVoices()
+    private void DestroyOneShotVoices(bool live)
     {
         foreach (SourceInfo voice in _oneShots)
         {
-            if (voice.handle == IntPtr.Zero)
+            if (voice.handle == IntPtr.Zero || !live)
                 continue;
 
             MiniAudioExNative.ma_ex_audio_source_stop(voice.handle);

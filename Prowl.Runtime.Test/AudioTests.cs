@@ -1471,6 +1471,36 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0, AudioContext.GetClipRefCount(hash));
     }
 
+    // Components subscribe to the device closing so they can let their native objects go while those
+    // objects still answer. A missed unsubscribe would keep every AudioSource that has ever been
+    // enabled alive on a static event for the life of the process.
+    [Fact]
+    public void Components_DoNotOutliveThemselvesOnTheDeviceClosingEvent()
+    {
+        int before = DeviceClosingSubscribers();
+
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject("Speaker");
+        go.AddComponent<AudioSource>();
+        go.AddComponent<AudioListener>();
+        scene.Add(go);
+
+        Assert.Equal(before + 2, DeviceClosingSubscribers());
+
+        go.Destroy();
+        EngineObject.ProcessDestroyed();
+
+        Assert.Equal(before, DeviceClosingSubscribers());
+    }
+
+    private static int DeviceClosingSubscribers()
+    {
+        var field = typeof(AudioContext).GetField("DeviceClosing",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+
+        return (field?.GetValue(null) as Action)?.GetInvocationList().Length ?? 0;
+    }
+
     // Project settings are applied from paths that never wanted audio: a headless build, a dedicated
     // server. Restart used to fall straight through to Initialize when nothing was open, so applying
     // settings in any of them opened a device on a machine that might not have one.

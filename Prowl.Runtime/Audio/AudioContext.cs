@@ -41,6 +41,13 @@ public static class AudioContext
 
     public static event DeviceDataEvent DataProcess;
 
+    /// <summary>
+    /// Raised immediately before the device is closed, while everything built from it is still valid.
+    /// Release native objects here rather than after the fact: once the context is gone, so is the node
+    /// graph they are attached to, and uninitializing them then is a use after free.
+    /// </summary>
+    public static event Action DeviceClosing;
+
     internal static IntPtr NativeContext
     {
         get
@@ -220,6 +227,18 @@ public static class AudioContext
     {
         if (audioContext == IntPtr.Zero)
             return;
+
+        // Last moment anything built from this context can be touched, so holders get to let go while
+        // their calls still mean something. After the uninit below, every one of those handles points
+        // into a graph that no longer exists.
+        try
+        {
+            DeviceClosing?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"A handler threw while the audio device was closing: {ex}");
+        }
 
         MiniAudioExNative.ma_ex_context_uninit(audioContext);
         audioContext = IntPtr.Zero;
