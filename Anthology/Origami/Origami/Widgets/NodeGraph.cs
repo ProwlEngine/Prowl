@@ -219,6 +219,7 @@ public sealed class NodeGraphBuilder
     private IReadOnlyList<GraphGroup> _groups = Array.Empty<GraphGroup>();
     private IReadOnlyList<GraphSticky> _stickies = Array.Empty<GraphSticky>();
     private bool _showGrid = true;
+    private bool _readOnly;
     private Float2? _initPan;
     private float? _initZoom;
     private NodeGraphController? _controller;
@@ -259,6 +260,9 @@ public sealed class NodeGraphBuilder
     public NodeGraphBuilder Groups(IReadOnlyList<GraphGroup> groups) { _groups = groups ?? throw new ArgumentNullException(nameof(groups)); return this; }
     public NodeGraphBuilder Stickies(IReadOnlyList<GraphSticky> stickies) { _stickies = stickies ?? throw new ArgumentNullException(nameof(stickies)); return this; }
     public NodeGraphBuilder Grid(bool show = true) { _showGrid = show; return this; }
+    /// <summary>Disable node/group/sticky/wire editing (move, resize, connect, delete, rename) while
+    /// keeping pan, zoom, and selection active — a view-only inspection mode.</summary>
+    public NodeGraphBuilder ReadOnly(bool readOnly = true) { _readOnly = readOnly; return this; }
     /// <summary>Initial pan (graph-space origin offset, in pixels) and zoom, applied only on the first
     /// frame; the user's pan/zoom persists afterward. Use to frame the graph when it opens.</summary>
     public NodeGraphBuilder InitialView(Float2 pan, float zoom) { _initPan = pan; _initZoom = zoom; return this; }
@@ -809,6 +813,7 @@ public sealed class NodeGraphBuilder
         note.OnClick(st, (s, e) => ClickSelectSticky(s, sk));
         note.OnDragStart(st, (s, e) =>
         {
+            if (_readOnly) return;
             if (s.RenamingGroup != null || (s.EditingSticky != null && s.EditingSticky != sid)) CommitTextEdit(s);
             if (!s.SelStickies.Contains(sid)) SelectOnly(s, s.SelStickies, sid);
             s.Mode = DragMode.MoveSticky; s.ActiveSticky = sid; s.DragOffset = Float2.Zero;
@@ -819,7 +824,7 @@ public sealed class NodeGraphBuilder
             if (s.Mode == DragMode.MoveSticky && (s.DragOffset.X != 0 || s.DragOffset.Y != 0)) _onStickyMoved?.Invoke(sk, s.DragOffset);
             s.Mode = DragMode.None; s.ActiveSticky = null; s.DragOffset = Float2.Zero;
         });
-        note.OnDoubleClick(st, (s, e) => { s.RenamingGroup = null; s.EditingSticky = sid; s.RenameBuffer = sk.Text; });
+        note.OnDoubleClick(st, (s, e) => { if (_readOnly) return; s.RenamingGroup = null; s.EditingSticky = sid; s.RenameBuffer = sk.Text; });
         note.OnRightClick(st, (s, e) =>
         {
             if (!s.SelStickies.Contains(sid)) SelectOnlySticky(s, sk);
@@ -843,7 +848,7 @@ public sealed class NodeGraphBuilder
         var grip = _paper.Box($"{_id}_skz_{sid}")
             .PositionType(PositionType.SelfDirected).Left(sx + w - hs).Top(sy + h - hs).Width(hs).Height(hs)
             .Cursor(PaperCursor.ResizeNWSE);
-        grip.OnDragStart(st, (s, e) => { s.Mode = DragMode.ResizeSticky; s.ActiveSticky = sid; s.ResizeSize = sk.Size; });
+        grip.OnDragStart(st, (s, e) => { if (_readOnly) return; s.Mode = DragMode.ResizeSticky; s.ActiveSticky = sid; s.ResizeSize = sk.Size; });
         grip.OnDragging(st, (s, e) =>
         {
             if (s.Mode == DragMode.ResizeSticky)
@@ -891,6 +896,7 @@ public sealed class NodeGraphBuilder
         title.OnClick(st, (s, e) => ClickSelectGroup(s, g));
         title.OnDragStart(st, (s, e) =>
         {
+            if (_readOnly) return;
             if (s.RenamingGroup != null || s.EditingSticky != null) CommitTextEdit(s);
             if (!s.SelGroups.Contains(gid)) SelectOnlyGroup(s, g);
             s.Mode = DragMode.MoveGroup; s.ActiveGroup = gid; s.DragOffset = Float2.Zero;
@@ -902,7 +908,7 @@ public sealed class NodeGraphBuilder
                 _onGroupMoved?.Invoke(g, MembersOf(g), s.DragOffset);
             s.Mode = DragMode.None; s.ActiveGroup = null; s.DragOffset = Float2.Zero;
         });
-        title.OnDoubleClick(st, (s, e) => { s.RenamingGroup = gid; s.RenameBuffer = g.Title; });
+        title.OnDoubleClick(st, (s, e) => { if (_readOnly) return; s.RenamingGroup = gid; s.RenameBuffer = g.Title; });
         title.OnRightClick(st, (s, e) =>
         {
             if (!s.SelGroups.Contains(gid)) SelectOnlyGroup(s, g);
@@ -926,7 +932,7 @@ public sealed class NodeGraphBuilder
         var grip = _paper.Box($"{_id}_grz_{gid}")
             .PositionType(PositionType.SelfDirected).Left(sx + w - hs).Top(sy + h - hs).Width(hs).Height(hs)
             .Cursor(PaperCursor.ResizeNWSE);
-        grip.OnDragStart(st, (s, e) => { s.Mode = DragMode.ResizeGroup; s.ActiveGroup = gid; s.ResizeSize = g.Size; });
+        grip.OnDragStart(st, (s, e) => { if (_readOnly) return; s.Mode = DragMode.ResizeGroup; s.ActiveGroup = gid; s.ResizeSize = g.Size; });
         grip.OnDragging(st, (s, e) =>
         {
             if (s.Mode == DragMode.ResizeGroup)
@@ -970,6 +976,7 @@ public sealed class NodeGraphBuilder
                 .Width(hit * 2).Height(hit * 2).Cursor(PaperCursor.Crosshair);
             pb.OnDragStart(st, (state, e) =>
             {
+                if (_readOnly) return;
                 state.Mode = DragMode.Connect;
                 state.ConnNode = nodeId; state.ConnPort = s.Port.Id; state.ConnFromOutput = s.IsOutput;
             });
@@ -1009,7 +1016,7 @@ public sealed class NodeGraphBuilder
             var box = _paper.Box($"{_id}_cp_{key}_{idx}")
                 .PositionType(PositionType.SelfDirected).Left(lx - hit).Top(ly - hit).Width(hit * 2).Height(hit * 2)
                 .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
-            box.OnDragStart(st, (s, e) => { s.Mode = DragMode.MovePoint; s.ActiveWire = key; s.ActivePoint = idx; s.PointOffset = Float2.Zero; });
+            box.OnDragStart(st, (s, e) => { if (_readOnly) return; s.Mode = DragMode.MovePoint; s.ActiveWire = key; s.ActivePoint = idx; s.PointOffset = Float2.Zero; });
             box.OnDragging(st, (s, e) => { if (s.Mode == DragMode.MovePoint) s.PointOffset += new Float2(e.Delta.X / s.Zoom, e.Delta.Y / s.Zoom); });
             box.OnDragEnd(st, (s, e) =>
             {
@@ -1017,7 +1024,7 @@ public sealed class NodeGraphBuilder
                     _onWirePointMoved?.Invoke(c, idx, c.ControlPoints[idx] + s.PointOffset);
                 s.Mode = DragMode.None; s.ActiveWire = null;
             });
-            box.OnRightClick(st, (s, e) => _onWireRemovePoint?.Invoke(c, idx));
+            box.OnRightClick(st, (s, e) => { if (!_readOnly) _onWireRemovePoint?.Invoke(c, idx); });
 
             bool hov = _paper.IsElementHovered(box._handle.Data.ID);
             using (box.Enter())
@@ -1040,6 +1047,7 @@ public sealed class NodeGraphBuilder
         card.OnClick(st, (state, e) => ClickSelectNode(state, node));
         card.OnDragStart(st, (state, e) =>
         {
+            if (_readOnly) return;
             if (!state.SelNodes.Contains(node.Id)) SelectOnlyNode(state, node);
             state.Mode = DragMode.MoveNodes;
             state.DragOffset = Float2.Zero;
@@ -1092,9 +1100,9 @@ public sealed class NodeGraphBuilder
         {
             Float2 gp = ScreenToGraph(state, e.PointerPosition);
             // Right-click on a wire drops a reroute point there; on empty canvas opens the create menu.
-            if (_onWireAddPoint != null && HitTestWire(state, layouts, gp, out var wire, out int seg))
+            if (!_readOnly && _onWireAddPoint != null && HitTestWire(state, layouts, gp, out var wire, out int seg))
                 _onWireAddPoint(wire!, seg, gp);
-            else
+            else if (!_readOnly)
                 _onBackgroundContext?.Invoke(gp);
         });
     }
@@ -1151,7 +1159,7 @@ public sealed class NodeGraphBuilder
     {
         if (_paper.IsKeyPressed(PaperKey.Delete) || _paper.IsKeyPressed(PaperKey.Backspace))
         {
-            if (!SelectionEmpty(st)) _onDelete?.Invoke(BuildSelection(st));
+            if (!_readOnly && !SelectionEmpty(st)) _onDelete?.Invoke(BuildSelection(st));
         }
         else if (_paper.IsKeyPressed(PaperKey.Escape))
         {
