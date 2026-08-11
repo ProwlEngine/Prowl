@@ -52,12 +52,13 @@ Pass "Gizmos"
 		    // If fragmentDepth > sceneDepth, it's occluded
 		    float occluded = step(sceneDepth, fragmentDepth - 0.00001); // Small epsilon to avoid z-fighting
 
-		    // Occluded fragments keep their hue and only fade, so a translucent overlay behind
-		    // geometry reads as faint rather than torn.
+		    // When occluded: darken significantly and make transparent
+		    // When visible: use original color
 		    vec4 color = vColor;
 		    if (occluded > 0.5)
 		    {
-		        color.a *= 0.35;
+		        color.rgb *= 0.5; // Darken to 50% of original brightness
+		        color.a *= 0.3;   // Make 70% transparent
 		    }
 
 			finalColor = color;
