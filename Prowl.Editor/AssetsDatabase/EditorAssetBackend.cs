@@ -90,6 +90,11 @@ public class EditorAssetBackend : AssetBackendBase
         OnAssetsImported -= PrefabUtility.OnAssetsImported;
         OnAssetsImported += PrefabUtility.OnAssetsImported;
 
+        // The notification above only reaches the scene that was open when the import happened, so a
+        // scene opened afterwards has to catch up on whatever changed while it was closed.
+        Runtime.Resources.Scene.OnSceneLoaded -= PrefabUtility.OnSceneLoaded;
+        Runtime.Resources.Scene.OnSceneLoaded += PrefabUtility.OnSceneLoaded;
+
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.
         CleanupOrphanedMetaTempFiles();

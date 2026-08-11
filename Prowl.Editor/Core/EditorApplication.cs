@@ -1539,6 +1539,11 @@ public class EditorApplication : Game
         // Save active tab (to restore on stop)
         SaveActiveTab();
 
+        // An edit the inspector never saw is only a raw value on the objects, and stopping restores
+        // this snapshot and brings its instances back into line with their prefabs. Record it as an
+        // override first or the round trip through play mode is what drops it.
+        PrefabUtility.ReconcileOpenScene();
+
         // Serialize the current editor scene
         _savedEditorScene = Echo.Serializer.Serialize(scene);
         if (_savedEditorScene == null)

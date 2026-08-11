@@ -731,6 +731,84 @@ public class PrefabTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // A prefab that changed while the scene was closed
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds an instance of <paramref name="path"/> in a saved scene, changes the prefab while a
+    /// different scene is current, and opens the saved scene again.
+    /// </summary>
+    private GameObject ReopenAfterPrefabChangedWhileClosed(Guid prefabGuid, string path, int newValue)
+    {
+        var instance = Inst(prefabGuid);
+        SetSceneCurrent(instance);
+        Guid sceneGuid = CreateSceneAsset(Scene.Current!, "Closed.scene");
+
+        SetSceneCurrent();
+        EditPrefabSource(prefabGuid, path, s => s.GetComponent<OverrideComp>()!.A = newValue);
+
+        Scene.Load((Scene)AssetDatabase.Get(sceneGuid)!);
+        Scene.ProcessPendingLoad();
+        return Scene.Current!.RootObjects.First();
+    }
+
+    [Fact]
+    public void PrefabChangedWhileTheSceneWasClosed_ReachesTheInstanceOnLoad()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "Closed.prefab");
+
+        var live = ReopenAfterPrefabChangedWhileClosed(g, "Closed.prefab", 77);
+
+        // The import notification only reaches the scene that was open at the time, so opening a
+        // scene has to catch it up on whatever changed while it was closed.
+        Assert.Equal(77, live.GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void PrefabChangedWhileTheSceneWasClosed_IsNotRecordedAsAnOverride()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "ClosedOv.prefab");
+
+        var live = ReopenAfterPrefabChangedWhileClosed(g, "ClosedOv.prefab", 77);
+
+        // What a scene save does before writing. Comparison cannot tell a stale instance from an
+        // edited one, so a stale instance here would pin the prefab's own change as an override and
+        // freeze every instance against the prefab from then on.
+        PrefabUtility.ReconcileInstance(live);
+        Assert.Empty(live.PrefabOverrides);
+    }
+
+    [Fact]
+    public void PrefabChangedWhileTheSceneWasClosed_KeepsTheInstancesOwnOverride()
+    {
+        var root = new GameObject("Root");
+        var comp = root.AddComponent<OverrideComp>();
+        comp.A = 1; comp.B = 1;
+        Guid g = CreatePrefabAsset(root, "ClosedKeep.prefab");
+
+        var instance = Inst(g);
+        var instanceComp = instance.GetComponent<OverrideComp>()!;
+        instanceComp.B = 99;
+        PrefabUtility.RecordComponentOverrides(instance, instanceComp);
+        SetSceneCurrent(instance);
+        Guid sceneGuid = CreateSceneAsset(Scene.Current!, "ClosedKeep.scene");
+
+        SetSceneCurrent();
+        EditPrefabSource(g, "ClosedKeep.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
+
+        Scene.Load((Scene)AssetDatabase.Get(sceneGuid)!);
+        Scene.ProcessPendingLoad();
+
+        var live = Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!;
+        Assert.Equal(77, live.A);   // followed the prefab
+        Assert.Equal(99, live.B);   // kept what the instance overrode
+    }
+
+    // ---------------------------------------------------------------------
     // A component added to an instance belongs to that instance
     // ---------------------------------------------------------------------
 
@@ -2479,7 +2557,10 @@ public class PrefabTests : EditorTestHarness
 
     private Guid Author(GameObject source, string relativePath)
     {
-        LoadSceneWith(source);
+        // Only when it is not already in one. A test that builds its tree in the open scene first is
+        // modelling the real order of events, and loading a scene around it here would swap the scene
+        // out from under objects it is still holding.
+        if (source.Scene == null) LoadSceneWith(source);
         Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(source, relativePath));
         Assets.Refresh();
 
@@ -2612,6 +2693,8 @@ public class PrefabTests : EditorTestHarness
         Guid inner = Author(innerRoot, "Ref_Inner.prefab");
 
         var outerRoot = new GameObject("Ref_Outer");
+        LoadSceneWith(outerRoot);
+
         var marker = new GameObject("Marker");
         marker.SetParent(outerRoot);
 
@@ -2651,6 +2734,8 @@ public class PrefabTests : EditorTestHarness
         Guid inner = AuthorLeaf("Val_Inner", 1);
 
         var outerRoot = new GameObject("Val_Outer");
+        LoadSceneWith(outerRoot);
+
         GameObject placed = Inst(inner);
         placed.SetParent(outerRoot);
         placed.GetComponent<OverrideComp>()!.A = 55;

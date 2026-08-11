@@ -792,6 +792,44 @@ public static partial class PrefabUtility
     }
 
     /// <summary>
+    /// Bring the instances in a freshly loaded scene up to date with their prefabs.
+    /// <para/>
+    /// A prefab can change while a scene is closed - authored in prefab mode, pulled from source
+    /// control, reimported because a model's settings changed - and the import notification above only
+    /// reaches the scene that was open at the time. Without this the instances keep the contents the
+    /// prefab used to have, and <see cref="ReconcileInstance"/>, which every scene save runs, then
+    /// reads each of those differences as an edit the instance made and pins it as an override.
+    /// </summary>
+    internal static void OnSceneLoaded()
+    {
+        if (Application.IsPlaying) return;
+        // The prefab editing scene holds the prefab itself, not instances of it.
+        if (PrefabEditingMode.IsEditing) return;
+
+        Scene? scene = Scene.Current;
+        if (scene == null) return;
+
+        // Collected before anything is refreshed, since a refresh adds and removes objects.
+        var prefabs = new HashSet<Guid>();
+        foreach (GameObject go in scene.AllObjects)
+            if (go.IsPrefabInstance && IsInstanceRoot(go))
+                prefabs.Add(go.PrefabAssetId);
+
+        foreach (Guid prefabGuid in prefabs)
+        {
+            try
+            {
+                RefreshAllInstances(prefabGuid);
+            }
+            catch (Exception ex)
+            {
+                // One prefab that cannot be rebuilt must not stop the rest of the scene from updating.
+                Runtime.Debug.LogError($"[Prefab] Failed to refresh instances of {prefabGuid} on scene load: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
     /// Bring every instance of a prefab in the current scene up to date with the asset.
     /// <para/>
     /// The instances are updated in place rather than rebuilt. A rebuild left every reference to the
@@ -1180,6 +1218,22 @@ public static partial class PrefabUtility
                 Reconcile(child, boundaryPrefabId);
             }
         }
+    }
+
+    /// <summary>
+    /// Reconcile every prefab instance in the open scene. Belongs before anything that writes the
+    /// scene out or snapshots it to come back to later: an edit the inspector never saw is a raw
+    /// value on the objects and nothing else, so a round trip through serialized data would keep the
+    /// value but lose the fact that it differs from the prefab, and the next refresh would drop it.
+    /// </summary>
+    public static void ReconcileOpenScene()
+    {
+        Scene? scene = Scene.Current;
+        if (scene == null) return;
+
+        foreach (GameObject go in scene.AllObjects.ToList())
+            if (IsInstanceRoot(go))
+                ReconcileInstance(go);
     }
 
     /// <summary>

@@ -87,10 +87,12 @@ public static class PrefabEditingMode
         var entry = db?.GetEntry(prefabGuid);
         EditingPrefabPath = entry?.Path;
 
-        // Save current scene
+        // Save current scene. Reconciled first: the session ends by restoring this snapshot and
+        // refreshing its instances, which would otherwise drop any edit nothing had recorded yet.
         var currentScene = Scene.Current;
         if (currentScene != null)
         {
+            PrefabUtility.ReconcileOpenScene();
             OriginalSceneName = currentScene.Name;
             _savedSceneState = Serializer.Serialize(currentScene);
             _savedScenePath = EditorSceneManager.CurrentScenePath;
