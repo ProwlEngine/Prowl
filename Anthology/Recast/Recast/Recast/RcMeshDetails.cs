@@ -714,8 +714,16 @@ namespace Prowl.Recast
             float sampleDist, float sampleMaxError,
             int heightSearchRadius, RcCompactHeightfield chf,
             RcHeightPatch hp, float[] verts,
-            ref List<int> tris, ref List<int> edges, ref List<int> samples)
+            ref List<int> tris, ref List<int> edges, ref List<int> samples,
+            RcSeamProfileSet seams = null, float interiorSampleDist = 0)
         {
+            // Outline and interior vertices get their own spacing: an outline vertex is shared
+            // with the neighbouring polygon and mints a steep facet on anything near a sliver,
+            // while an interior vertex is the polygon's own and costs only itself. Defaults to
+            // the outline spacing, which is the single-spacing behaviour.
+            if (interiorSampleDist <= 0)
+                interiorSampleDist = sampleDist;
+
             const int MAX_VERTS = 127;
             const int MAX_TRIS = 255; // Max tris for delaunay is 2n-2-k (n=num verts, k=num hull verts).
             const int MAX_VERTS_PER_EDGE = 32;
@@ -748,6 +756,37 @@ namespace Prowl.Recast
                 {
                     int vj = j * 3;
                     int vi = i * 3;
+
+                    // An edge along a seam line that the line's profile claims is not
+                    // sampled: both tiles at the seam emit the profile's canonical knots
+                    // instead, so the two sides render the same polyline. Knots land where
+                    // the profile says, so the caller's later one-cell-height lift is
+                    // cancelled here. An unclaimed edge — another layer's, or across a
+                    // profile gap — tessellates normally below.
+                    if (seams != null && seams.TryGetSeam(@in[vj + 0], @in[vj + 2], @in[vi + 0], @in[vi + 2], out int seamLine))
+                    {
+                        int jPrev = ((j + nin - 1) % nin) * 3;
+                        int iNext = ((i + 1) % nin) * 3;
+                        int emitted = seams.EmitKnots(seamLine,
+                            @in[vj + 0], @in[vj + 1], @in[vj + 2],
+                            @in[vi + 0], @in[vi + 1], @in[vi + 2],
+                            chf.walkableClimb * chf.ch,
+                            seams.PinSafe(seamLine, @in[vj + 0], @in[vj + 2], @in[jPrev + 0], @in[jPrev + 2]),
+                            seams.PinSafe(seamLine, @in[vi + 0], @in[vi + 2], @in[iNext + 0], @in[iNext + 2]),
+                            -chf.ch, verts, nverts, MAX_VERTS - 1 - nverts);
+                        if (emitted >= 0)
+                        {
+                            hull[nhull++] = j;
+                            for (int k = 0; k < emitted; ++k)
+                            {
+                                hull[nhull++] = nverts;
+                                nverts++;
+                            }
+
+                            continue;
+                        }
+                    }
+
                     bool swapped = false;
                     // Make sure the segments are always handled in same order
                     // using lexological sort or else there will be seams.
@@ -861,7 +900,7 @@ namespace Prowl.Recast
             }
 
             // If the polygon minimum extent is small (sliver or small triangle), do not try to add internal points.
-            if (minExtent < sampleDist * 2)
+            if (minExtent < interiorSampleDist * 2)
             {
                 TriangulateHull(nverts, verts, nhull, hull, nin, tris);
                 SetTriFlags(tris, nhull, hull);
@@ -891,21 +930,21 @@ namespace Prowl.Recast
                     bmax = RcVec3f.Max(bmax, @in.ToVec3(i * 3));
                 }
 
-                int x0 = (int)MathF.Floor(bmin.X / sampleDist);
-                int x1 = (int)MathF.Ceiling(bmax.X / sampleDist);
-                int z0 = (int)MathF.Floor(bmin.Z / sampleDist);
-                int z1 = (int)MathF.Ceiling(bmax.Z / sampleDist);
+                int x0 = (int)MathF.Floor(bmin.X / interiorSampleDist);
+                int x1 = (int)MathF.Ceiling(bmax.X / interiorSampleDist);
+                int z0 = (int)MathF.Floor(bmin.Z / interiorSampleDist);
+                int z1 = (int)MathF.Ceiling(bmax.Z / interiorSampleDist);
                 samples.Clear();
                 for (int z = z0; z < z1; ++z)
                 {
                     for (int x = x0; x < x1; ++x)
                     {
                         RcVec3f pt = new RcVec3f();
-                        pt.X = x * sampleDist;
+                        pt.X = x * interiorSampleDist;
                         pt.Y = (bmax.Y + bmin.Y) * 0.5f;
-                        pt.Z = z * sampleDist;
+                        pt.Z = z * interiorSampleDist;
                         // Make sure the samples are not too close to the edges.
-                        if (DistToPoly(nin, @in, pt) > -sampleDist / 2)
+                        if (DistToPoly(nin, @in, pt) > -interiorSampleDist / 2)
                         {
                             continue;
                         }
@@ -943,9 +982,9 @@ namespace Prowl.Recast
                         RcVec3f pt = new RcVec3f();
                         // The sample location is jittered to get rid of some bad triangulations
                         // which are cause by symmetrical data from the grid structure.
-                        pt.X = samples[s + 0] * sampleDist + GetJitterX(i) * cs * 0.1f;
+                        pt.X = samples[s + 0] * interiorSampleDist + GetJitterX(i) * cs * 0.1f;
                         pt.Y = samples[s + 1] * chf.ch;
-                        pt.Z = samples[s + 2] * sampleDist + GetJitterY(i) * cs * 0.1f;
+                        pt.Z = samples[s + 2] * interiorSampleDist + GetJitterY(i) * cs * 0.1f;
                         
                         if (tris.Count == 0) 
                             continue;
@@ -1319,7 +1358,7 @@ namespace Prowl.Recast
         ///
         /// @see rcAllocPolyMeshDetail, rcPolyMesh, rcCompactHeightfield, rcPolyMeshDetail, rcConfig
         public static RcPolyMeshDetail BuildPolyMeshDetail(RcContext ctx, RcPolyMesh mesh, RcCompactHeightfield chf,
-            float sampleDist, float sampleMaxError)
+            float sampleDist, float sampleMaxError, RcSeamProfileSet seams = null, float interiorSampleDist = 0)
         {
             using var timer = ctx.ScopedTimer(RcTimerLabel.RC_TIMER_BUILD_POLYMESHDETAIL);
             if (mesh.nverts == 0 || mesh.npolys == 0)
@@ -1430,7 +1469,7 @@ namespace Prowl.Recast
                     sampleDist, sampleMaxError,
                     heightSearchRadius, chf, hp,
                     verts, ref tris,
-                    ref edges, ref samples);
+                    ref edges, ref samples, seams, interiorSampleDist);
 
                 // Move detail verts to world space.
                 for (int j = 0; j < nverts; ++j)

@@ -48,6 +48,16 @@ namespace Prowl.Recast.Detour.TileCache
         private readonly IRcCompressor m_tcomp;
         private readonly IDtTileCacheMeshProcess m_tmproc;
 
+        /// Held for the life of the cache rather than made per tile: a context allocates
+        /// thread-local timer state, and tile builds run one at a time on a cache.
+        private readonly RcContext m_ctx = new RcContext();
+
+        /// Neighbour layers a tile's border reads, by tile ref (#BorderLayer). Dropped whenever a
+        /// tile or an obstacle changes, since both change what the layers say.
+        private readonly Dictionary<long, DtTileCacheLayer> m_borderLayers = new Dictionary<long, DtTileCacheLayer>();
+        private const int MaxCachedBorderLayers = 256;
+        private readonly List<long> m_neighbourRefs = new List<long>();
+
         private readonly List<DtTileCacheObstacle> m_obstacles = new List<DtTileCacheObstacle>();
         private DtTileCacheObstacle m_nextFreeObstacle;
 
@@ -167,7 +177,14 @@ namespace Prowl.Recast.Detour.TileCache
         public List<long> GetTilesAt(int tx, int ty)
         {
             List<long> tiles = new List<long>();
+            GetTilesAt(tx, ty, tiles);
+            return tiles;
+        }
 
+        /// The refs at a tile column, appended to @p tiles. Callers on the tile build path use
+        /// this rather than the allocating overload: it runs eight times per tile built.
+        public void GetTilesAt(int tx, int ty, List<long> tiles)
+        {
             // Find tile based on hash.
             int h = ComputeTileHash(tx, ty, m_tileLutMask);
             DtCompressedTile tile = m_posLookup[h];
@@ -180,8 +197,6 @@ namespace Prowl.Recast.Detour.TileCache
 
                 tile = tile.next;
             }
-
-            return tiles;
         }
 
         DtCompressedTile GetTileAt(int tx, int ty, int tlayer)
@@ -249,6 +264,8 @@ namespace Prowl.Recast.Detour.TileCache
 
         public long AddTile(byte[] data, int flags)
         {
+            m_borderLayers.Clear();
+
             // Make sure the data is in right format.
             RcByteBuffer buf = new RcByteBuffer(data);
             buf.Order(m_storageParams.Order);
@@ -295,6 +312,8 @@ namespace Prowl.Recast.Detour.TileCache
 
         public void RemoveTile(long refs)
         {
+            m_borderLayers.Clear();
+
             if (refs == 0)
             {
                 throw new Exception("Invalid tile ref");
@@ -509,6 +528,13 @@ namespace Prowl.Recast.Detour.TileCache
 
             if (0 == m_update.Count)
             {
+                // Cached neighbour layers carry the obstacles cut into them, which these
+                // requests are about to change.
+                if (m_reqs.Count > 0)
+                {
+                    m_borderLayers.Clear();
+                }
+
                 // Process requests.
                 foreach (DtObstacleRequest req in m_reqs)
                 {
@@ -527,10 +553,18 @@ namespace Prowl.Recast.Detour.TileCache
 
                     if (req.action == DtObstacleRequestAction.REQUEST_ADD)
                     {
-                        // Find touched tiles.
+                        // Find touched tiles. Widened by the seam border, because a tile reads
+                        // that far into its neighbours: a tile the obstacle only reaches through
+                        // its border still has to rebuild, or its seam keeps describing ground
+                        // the neighbour has already cut away.
                         RcVec3f bmin = new RcVec3f();
                         RcVec3f bmax = new RcVec3f();
                         GetObstacleBounds(ob, ref bmin, ref bmax);
+                        float reach = DtTileCacheBuilder.SeamBorder * m_params.cs;
+                        bmin.X -= reach;
+                        bmin.Z -= reach;
+                        bmax.X += reach;
+                        bmax.Z += reach;
 
                         int ntouched = 0;
                         QueryTiles(bmin, bmax, ob.touched, ref ntouched);
@@ -635,34 +669,31 @@ namespace Prowl.Recast.Detour.TileCache
             DtTileCacheLayer layer = DecompressTile(tile);
 
             // Rasterize obstacles.
-            for (int i = 0; i < m_obstacles.Count; ++i)
-            {
-                DtTileCacheObstacle ob = m_obstacles[i];
-                if (ob.state == DtObstacleState.DT_OBSTACLE_EMPTY || ob.state == DtObstacleState.DT_OBSTACLE_REMOVING)
-                {
-                    continue;
-                }
+            MarkObstacles(layer, tile.header.bmin, refs);
 
-                if (Contains(ob.touched, refs))
-                {
-                    if (ob.type == DtTileCacheObstacleType.DT_OBSTACLE_CYLINDER)
-                    {
-                        DtTileCacheBuilder.MarkCylinderArea(layer, tile.header.bmin, m_params.cs, m_params.ch, ob.cylinder.pos, ob.cylinder.radius, ob.cylinder.height, 0);
-                    }
-                    else if (ob.type == DtTileCacheObstacleType.DT_OBSTACLE_BOX)
-                    {
-                        DtTileCacheBuilder.MarkBoxArea(layer, tile.header.bmin, m_params.cs, m_params.ch, ob.box.bmin, ob.box.bmax, 0);
-                    }
-                    else if (ob.type == DtTileCacheObstacleType.DT_OBSTACLE_ORIENTED_BOX)
-                    {
-                        DtTileCacheBuilder.MarkBoxArea(layer, tile.header.bmin, m_params.cs, m_params.ch, ob.orientedBox.center, ob.orientedBox.extents, ob.orientedBox.rotAux, 0);
-                    }
-                }
+            // Build navmesh. Both new stages read a bordered compact heightfield whose border
+            // cells come from the neighbouring tiles' layers, so each computes the seam from the
+            // same world cells the neighbour computes it from — how the standard tiled pipeline
+            // keeps seams closed, and what the compressed layer format discards. Neither stage
+            // asked for means neither the border nor the heightfield is worth building.
+            // Watershed partitioning declines multi-layer tiles and degenerate region sets
+            // (null), which fall back to the classic monotone path.
+            RcCompactHeightfield chf = null;
+            if (m_params.watershedPartition || m_params.detailSampleDist > 0)
+            {
+                DtTileCacheBuilder.DtTileBorderGrid grid = BuildBorderGrid(tile, layer, DtTileCacheBuilder.SeamBorder);
+                chf = DtTileCacheBuilder.ToCompactHeightfield(grid, m_params);
             }
 
-            // Build navmesh
-            DtTileCacheBuilder.BuildTileCacheRegions(layer, walkableClimbVx);
-            DtTileCacheContourSet lcset = DtTileCacheBuilder.BuildTileCacheContours(m_talloc, layer, walkableClimbVx, m_params.maxSimplificationError);
+            DtTileCacheContourSet lcset = m_params.watershedPartition
+                ? DtTileCacheBuilder.BuildTileCacheContoursWatershed(m_ctx, layer, chf, m_params)
+                : null;
+            if (lcset == null)
+            {
+                DtTileCacheBuilder.BuildTileCacheRegions(layer, walkableClimbVx);
+                lcset = DtTileCacheBuilder.BuildTileCacheContours(m_talloc, layer, walkableClimbVx, m_params.maxSimplificationError);
+            }
+
             DtTileCachePolyMesh polyMesh = DtTileCacheBuilder.BuildTileCachePolyMesh(lcset, m_navmesh.GetMaxVertsPerPoly());
 
             // Early out if the mesh tile is empty.
@@ -691,6 +722,8 @@ namespace Prowl.Recast.Detour.TileCache
             option.buildBvTree = false;
             option.bmin = tile.header.bmin;
             option.bmax = tile.header.bmax;
+            if (chf != null)
+                DtTileCacheBuilder.BuildTileCacheDetailMesh(m_ctx, layer, chf, option, m_params);
             if (m_tmproc != null)
             {
                 m_tmproc.Process(option);
@@ -704,6 +737,144 @@ namespace Prowl.Recast.Detour.TileCache
             {
                 m_navmesh.AddTile(meshData, 0, 0, out var result);
             }
+        }
+
+        /// Cuts every obstacle that reaches @p refs out of that tile's layer. Kept separate from
+        /// the tile build because a tile's border reads its neighbours' layers, which must carry
+        /// the same obstacles the neighbour itself will cut when it rebuilds.
+        private void MarkObstacles(DtTileCacheLayer layer, RcVec3f bmin, long refs)
+        {
+            for (int i = 0; i < m_obstacles.Count; ++i)
+            {
+                DtTileCacheObstacle ob = m_obstacles[i];
+                if (ob.state == DtObstacleState.DT_OBSTACLE_EMPTY || ob.state == DtObstacleState.DT_OBSTACLE_REMOVING)
+                {
+                    continue;
+                }
+
+                if (!Contains(ob.touched, refs))
+                {
+                    continue;
+                }
+
+                if (ob.type == DtTileCacheObstacleType.DT_OBSTACLE_CYLINDER)
+                {
+                    DtTileCacheBuilder.MarkCylinderArea(layer, bmin, m_params.cs, m_params.ch, ob.cylinder.pos, ob.cylinder.radius, ob.cylinder.height, 0);
+                }
+                else if (ob.type == DtTileCacheObstacleType.DT_OBSTACLE_BOX)
+                {
+                    DtTileCacheBuilder.MarkBoxArea(layer, bmin, m_params.cs, m_params.ch, ob.box.bmin, ob.box.bmax, 0);
+                }
+                else if (ob.type == DtTileCacheObstacleType.DT_OBSTACLE_ORIENTED_BOX)
+                {
+                    DtTileCacheBuilder.MarkBoxArea(layer, bmin, m_params.cs, m_params.ch, ob.orientedBox.center, ob.orientedBox.extents, ob.orientedBox.rotAux, 0);
+                }
+            }
+        }
+
+        /// A neighbour's layer as a tile's border reads it: decompressed, with the obstacles that
+        /// reach it already cut out, and kept until the tiles or obstacles change. A bake meshes
+        /// every tile, and each of those reads its eight neighbours, so without this every layer
+        /// is decompressed nine times over.
+        private DtTileCacheLayer BorderLayer(long refs, DtCompressedTile tile)
+        {
+            if (m_borderLayers.TryGetValue(refs, out DtTileCacheLayer cached))
+                return cached;
+
+            DtTileCacheLayer layer = DecompressTile(tile);
+            MarkObstacles(layer, tile.header.bmin, refs);
+            // Bounded rather than grown without limit: a world of thousands of tiles would
+            // otherwise hold every one of them decompressed for the life of the cache.
+            if (m_borderLayers.Count >= MaxCachedBorderLayers)
+                m_borderLayers.Clear();
+
+            m_borderLayers[refs] = layer;
+            return layer;
+        }
+
+        /// This tile's layer widened by a border of the neighbouring tiles' cells — the data the
+        /// standard tiled pipeline gets by rasterizing past the tile edge, and the compressed
+        /// layer format discards. With it, corner heights, contours and height detail at a seam
+        /// are computed from the same world cells on both sides, and the seam closes by
+        /// construction. Border cells with no neighbour stay empty, which is exactly a map
+        /// perimeter. A neighbour stacking several vertical layers contributes, per cell, the
+        /// layer nearest this tile's own surface at the adjacent edge.
+        private DtTileCacheBuilder.DtTileBorderGrid BuildBorderGrid(DtCompressedTile tile, DtTileCacheLayer layer, int border)
+        {
+            int w = layer.header.width, h = layer.header.height;
+            var grid = new DtTileCacheBuilder.DtTileBorderGrid(w, h, border);
+
+            for (int z = 0; z < h; ++z)
+            {
+                for (int x = 0; x < w; ++x)
+                {
+                    int src = x + z * w;
+                    int dst = grid.Index(x, z);
+                    grid.heights[dst] = layer.heights[src] == DtTileCacheBuilder.NoSurface ? -1 : layer.heights[src];
+                    grid.areas[dst] = layer.areas[src];
+                }
+            }
+
+            // Our reference height beside each border cell, for choosing between a neighbour's
+            // vertical layers: the own-side edge cell nearest it.
+            int OwnRef(int gx, int gz)
+            {
+                int cx = Math.Clamp(gx, 0, w - 1);
+                int cz = Math.Clamp(gz, 0, h - 1);
+                int v = layer.heights[cx + cz * w];
+                return v == DtTileCacheBuilder.NoSurface ? -1 : v;
+            }
+
+            for (int dtx = -1; dtx <= 1; ++dtx)
+            {
+                for (int dty = -1; dty <= 1; ++dty)
+                {
+                    if (dtx == 0 && dty == 0)
+                        continue;
+
+                    m_neighbourRefs.Clear();
+                    GetTilesAt(tile.header.tx + dtx, tile.header.ty + dty, m_neighbourRefs);
+                    foreach (long r in m_neighbourRefs)
+                    {
+                        DtCompressedTile nt = GetTileByRef(r);
+                        if (nt?.header == null || nt.header.width != w || nt.header.height != h)
+                            continue;
+                        DtTileCacheLayer nl = BorderLayer(r, nt);
+                        // Layer heights are relative to their own layer's base; rebase into ours.
+                        int off = (int)Math.Round((nl.header.bmin.Y - layer.header.bmin.Y) / m_params.ch);
+
+                        // The strip of our border this neighbour covers, in our cell coordinates.
+                        int gx0 = dtx < 0 ? -border : dtx > 0 ? w : 0;
+                        int gx1 = dtx < 0 ? 0 : dtx > 0 ? w + border : w;
+                        int gz0 = dty < 0 ? -border : dty > 0 ? h : 0;
+                        int gz1 = dty < 0 ? 0 : dty > 0 ? h + border : h;
+
+                        for (int gz = gz0; gz < gz1; ++gz)
+                        {
+                            for (int gx = gx0; gx < gx1; ++gx)
+                            {
+                                int nx = gx - dtx * w;
+                                int nz = gz - dty * h;
+                                int raw = nl.heights[nx + nz * w];
+                                if (raw == DtTileCacheBuilder.NoSurface)
+                                    continue;
+
+                                int cand = raw + off;
+                                int dst = grid.Index(gx, gz);
+                                int ownRef = OwnRef(gx, gz);
+                                if (grid.heights[dst] < 0
+                                    || (ownRef >= 0 && Math.Abs(cand - ownRef) < Math.Abs(grid.heights[dst] - ownRef)))
+                                {
+                                    grid.heights[dst] = cand;
+                                    grid.areas[dst] = nl.areas[nx + nz * w];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return grid;
         }
 
         public DtTileCacheLayer DecompressTile(DtCompressedTile tile)
