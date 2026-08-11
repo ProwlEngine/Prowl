@@ -145,10 +145,15 @@ public class PrefabTests : RuntimeTestBase
         Assert.Equal(id, instance!.Children[0].PrefabAssetId);
     }
 
+    /// <summary>
+    /// Stamping stops at a child that already belongs to a different prefab, rather than overwriting
+    /// every descendant. The editor flattens prefabs on import, so data reaching this is not something
+    /// it writes any more, but the guard is what keeps stamping from running past a boundary it was
+    /// handed and is worth pinning on its own.
+    /// </summary>
     [Fact]
-    public void Instantiate_PreservesNestedPrefabId()
+    public void Instantiate_StampingStopsAtAForeignPrefabId()
     {
-        // A child that is itself a different prefab instance must keep its own PrefabAssetId.
         var outerId = Guid.NewGuid();
         var nestedId = Guid.NewGuid();
 
@@ -167,7 +172,7 @@ public class PrefabTests : RuntimeTestBase
 
         Assert.Equal(outerId, instance.PrefabAssetId);
         Assert.Equal(outerId, normalClone.PrefabAssetId);
-        Assert.Equal(nestedId, nestedClone.PrefabAssetId); // boundary respected
+        Assert.Equal(nestedId, nestedClone.PrefabAssetId);
     }
 
     [Fact]
@@ -201,6 +206,30 @@ public class PrefabTests : RuntimeTestBase
     }
 
     [Fact]
+    public void AnOrdinaryGameObjectCarriesNoPrefabLink()
+    {
+        var go = CreateGameObject();
+
+        // The whole reason the data sits behind a reference: the overwhelming majority of objects in a
+        // scene are not prefab instances and should cost one null field.
+        Assert.Null(go.PrefabLink);
+        Assert.False(go.IsPrefabInstance);
+        Assert.False(go.HasPrefabOverrides);
+    }
+
+    [Fact]
+    public void AskingWhetherThereAreOverridesDoesNotAllocateALink()
+    {
+        var go = CreateGameObject();
+
+        // PrefabOverrides itself is the mutable accessor, so reading it does create the link. The
+        // cheap query is what callers sweeping a scene are meant to use, and it has to stay cheap or
+        // every object in the scene grows one.
+        Assert.False(go.HasPrefabOverrides);
+        Assert.Null(go.PrefabLink);
+    }
+
+    [Fact]
     public void PrefabOverrides_IsNeverNull()
     {
         var go = CreateGameObject();
@@ -213,7 +242,7 @@ public class PrefabTests : RuntimeTestBase
     {
         var go = CreateGameObject();
         go.PrefabAssetId = Guid.NewGuid();
-        go.PrefabOverrides.Add(new PropertyOverride { Path = "$.X" });
+        go.PrefabOverrides.Add(new PropertyOverride { Path = $"{Guid.NewGuid()}/$/TagIndex" });
 
         go.ClearPrefabData();
 
@@ -265,15 +294,23 @@ public class PrefabTests : RuntimeTestBase
     public void PrefabInstance_RoundTrip_PreservesPrefabData()
     {
         var id = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
         var go = CreateGameObject("Instance");
         go.PrefabAssetId = id;
-        go.PrefabOverrides.Add(new PropertyOverride { Path = "$.TagIndex", Value = Serializer.Serialize(5) });
+        go.PrefabOverrides.Add(new PropertyOverride
+        {
+            Path = $"{sourceId}/$/TagIndex",
+            Value = Serializer.Serialize(5)
+        });
 
         var clone = RoundTrip(go);
 
         Assert.Equal(id, clone.PrefabAssetId);
         Assert.Single(clone.PrefabOverrides);
-        Assert.Equal("$.TagIndex", clone.PrefabOverrides[0].Path);
+        Assert.Equal($"{sourceId}/$/TagIndex", clone.PrefabOverrides[0].Path);
+
+        // The value has to survive too. A path with nothing behind it applies nothing.
+        Assert.Equal(5, Serializer.Deserialize<int>(clone.PrefabOverrides[0].Value));
     }
 
     [Fact]
