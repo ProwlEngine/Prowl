@@ -23,7 +23,7 @@ public partial class RenderProfilerPanel
                             DrawFrameViewer(paper);
                             break;
                         case ProfilerSelectionType.View:
-                            DrawViewViewer(paper);
+                            DrawViewViewer(paper, width);
                             break;
                         case ProfilerSelectionType.Pass:
                             DrawPassViewer(paper);
@@ -49,9 +49,13 @@ public partial class RenderProfilerPanel
     // DrawFrameViewer lives in Viewers/RenderProfiler.FrameViewer.cs.
 
 
+    // DrawViewViewer lives in Viewers/RenderProfiler.ViewViewer.cs.
+
+
+    // DrawPassViewer lives in Viewers/RenderProfiler.PassViewer.cs.
+
+
     // Placeholder sub-viewers - filled in as each selection kind's viewer is implemented.
-    private void DrawViewViewer(Paper paper) { }
-    private void DrawPassViewer(Paper paper) { }
     private void DrawCommandBufferViewer(Paper paper) { }
     private void DrawPipelineViewer(Paper paper) { }
     private void DrawObjectViewer(Paper paper) { }

@@ -294,7 +294,7 @@ public partial class RenderProfilerPanel
 
     // Called when a flame graph node is clicked - highlights and scrolls to the matching hierarchy
     // row, expanding whatever ancestors are needed to make it visible.
-    private void PingHierarchyForFlameSelection(ProfiledView? view, ProfiledPass? pass, ProfiledCommandBuffer? commandBuffer)
+    private void PingHierarchy(ProfiledView? view, ProfiledPass? pass, ProfiledCommandBuffer? commandBuffer)
     {
         string targetId;
         var forceExpandIds = new HashSet<string>();

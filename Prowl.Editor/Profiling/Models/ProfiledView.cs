@@ -85,27 +85,12 @@ public sealed class ProfiledView
         }
     }
 
-    public int DrawCallCount
-    {
-        get
-        {
-            int sum = 0;
-            foreach (ProfiledPass pass in _activePasses)
-                sum += pass.DrawCallCount;
-            return sum;
-        }
-    }
+    /// <summary>Directly accumulated (not summed from Passes on read) so it stays correct for history
+    /// frames the same way RegisteredObjects/CulledObjects do - see AddDrawCalls.</summary>
+    public int DrawCallCount { get; internal set; }
 
-    public int DispatchCallCount
-    {
-        get
-        {
-            int sum = 0;
-            foreach (ProfiledPass pass in _activePasses)
-                sum += pass.DispatchCallCount;
-            return sum;
-        }
-    }
+    /// <summary>Directly accumulated - see DrawCallCount.</summary>
+    public int DispatchCallCount { get; internal set; }
 
     /// <summary>Overdraw/depth-complexity estimate: FragmentShaderInvocations divided by this view's
     /// pixel count. 1.0 means every pixel was shaded exactly once; higher means shading ran more than
@@ -151,6 +136,8 @@ public sealed class ProfiledView
         _edges.Clear();
         RegisteredObjects = 0;
         CulledObjects = 0;
+        DrawCallCount = 0;
+        DispatchCallCount = 0;
         foreach (ProfiledPass pass in _passes.Values)
             pass.Reset();
     }
@@ -191,12 +178,25 @@ public sealed class ProfiledView
         CulledObjects = culled;
     }
 
+    internal void AddDrawCalls(int count) => DrawCallCount += count;
+    internal void AddDispatchCount() => DispatchCallCount++;
+
+    /// <summary>Overwrites the call counts wholesale - see SetObjectCounts, used the same way by
+    /// SnapshotSerializer.</summary>
+    internal void SetCallCounts(int drawCallCount, int dispatchCallCount)
+    {
+        DrawCallCount = drawCallCount;
+        DispatchCallCount = dispatchCallCount;
+    }
+
     internal ProfiledView Clone()
     {
         var clone = new ProfiledView(Name)
         {
             RegisteredObjects = RegisteredObjects,
             CulledObjects = CulledObjects,
+            DrawCallCount = DrawCallCount,
+            DispatchCallCount = DispatchCallCount,
             PixelWidth = PixelWidth,
             PixelHeight = PixelHeight,
         };

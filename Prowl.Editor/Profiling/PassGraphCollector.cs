@@ -173,8 +173,11 @@ public sealed class PassGraphCollector
 
         _touchedViews.Add(currentView);
         ProfiledView view = _frame.View(currentView);
-        ProfiledCommandBuffer node = view.Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+        ProfiledPass passObj = view.Pass(pass.Index, pass.Name);
+        ProfiledCommandBuffer node = passObj.CommandBuffer(cb.Id, cb.Name);
         node.AddDispatchCount();
+        passObj.AddDispatchCount();
+        view.AddDispatchCount();
         _timing.Track(cb.Id, _frame.FrameIndex, node);
     }
 

@@ -42,6 +42,8 @@ public sealed class DrawHierarchyCollector
             ProfiledPass? passObj = view?.Pass(pass.Index, pass.Name);
             passObj?.AddObjectCounts(r.Culled);
             passObj?.CommandBuffer(commandBuffer.Id, commandBuffer.Name).AddDrawCalls(r.DrawCallCount);
+            passObj?.AddDrawCalls(r.DrawCallCount);
+            view?.AddDrawCalls(r.DrawCallCount);
         }
 
         if (state.Pending.Count == state.Boundary || state.CurrentSwitch == null)

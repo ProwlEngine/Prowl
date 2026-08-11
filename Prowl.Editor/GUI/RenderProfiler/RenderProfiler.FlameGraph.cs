@@ -58,7 +58,7 @@ public partial class RenderProfilerPanel
                 .Name(n => n.Label)
                 .Value(n => n.GpuMilliseconds)
                 .Children(n => n.Children)
-                .OnNodeClick(n => PingHierarchyForFlameSelection(n.View, n.Pass, n.CommandBuffer))
+                .OnNodeClick(n => PingHierarchy(n.View, n.Pass, n.CommandBuffer))
                 .Zoomable()
                 .Pannable()
                 .Show();
