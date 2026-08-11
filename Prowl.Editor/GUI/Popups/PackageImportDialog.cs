@@ -621,6 +621,7 @@ public static class PackageImportDialog
         if (db != null)
         {
             // Reinitialize to pick up all changes
+            db.Dispose();
             var freshDb = new EditorAssetBackend(project);
             freshDb.Initialize();
         }
