@@ -70,6 +70,8 @@ public static partial class PrefabUtility
         var meta = MetaFile.EnsureMeta(absolutePath, nameof(Importers.PrefabImporter));
         if (meta.Guid == Guid.Empty) return false;
 
+        RaisePrefabSaved(meta.Guid);
+
         // Stamp the source GO as an instance of the new prefab. Undo restores the previous prefab
         // links; the created asset itself is left on disk.
         var boundary = source.PrefabAssetId;
@@ -201,7 +203,10 @@ public static partial class PrefabUtility
             Runtime.Debug.LogWarning($"[Prefab] Failed to load prefab asset {prefabGuid}");
             return null;
         }
-        return GameObject.InstantiateDetached(prefab);
+
+        var instance = GameObject.InstantiateDetached(prefab);
+        if (instance != null) RaiseInstantiated(instance);
+        return instance;
     }
 
     // ================================================================
@@ -308,6 +313,8 @@ public static partial class PrefabUtility
 
         // Write to the .prefab file
         if (!TryWriteFile(absolutePath, echo.WriteToString())) return;
+
+        RaisePrefabSaved(prefabGuid);
 
         // Clear overrides on this instance
         ClearOverridesWithinBoundary(instanceRoot, instanceRoot.PrefabAssetId);
@@ -782,12 +789,7 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshAllInstances(Guid prefabGuid)
     {
-        var scene = Scene.Current;
-        if (scene == null) return;
-
-        var roots = scene.AllObjects
-            .Where(go => go.PrefabAssetId == prefabGuid && IsInstanceRoot(go))
-            .ToList();
+        List<GameObject> roots = FindInstancesOf(prefabGuid);
         if (roots.Count == 0) return;
 
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
@@ -811,6 +813,8 @@ public static partial class PrefabUtility
             foreach (var nestedRoot in nested)
                 if (nestedRoot.IsValid())
                     ApplyPropertyOverridesToInstance(nestedRoot, nestedRoot.PrefabOverrides);
+
+            RaiseInstanceUpdated(root);
         }
     }
 
