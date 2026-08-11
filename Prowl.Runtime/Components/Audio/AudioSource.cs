@@ -474,8 +474,15 @@ public sealed class AudioSource : MonoBehaviour
             if (_effectNodeReady)
             {
                 MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_soundGroup.pointer), 0, new ma_node_ptr(_effectNode.pointer), 0);
-                RouteToOutputGroup();
             }
+            else
+            {
+                Debug.LogError($"[{Name}] Could not create the audio effect node. This source will be heard, but its effects will not be applied.");
+            }
+
+            // Either way: routing is what decides which bus this source feeds, and losing the effect
+            // node should not quietly cost it that as well.
+            RouteToOutputGroup();
 
             // Apply all serialized settings
             ApplySettings();
@@ -1055,8 +1062,14 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     private void RouteToOutputGroup()
     {
-        if (!_effectNodeReady || _effectNode.pointer == IntPtr.Zero || !AudioContext.IsInitialized)
+        if (!AudioContext.IsInitialized || _soundGroup.pointer == IntPtr.Zero)
             return;
+
+        // Whatever runs last in this source is what feeds the bus: the effect node when it came up,
+        // the sound group itself otherwise. A failed effect node costs the effects, not the routing.
+        IntPtr tail = _effectNodeReady && _effectNode.pointer != IntPtr.Zero
+            ? _effectNode.pointer
+            : _soundGroup.pointer;
 
         AudioMixerGroup group = _outputGroup.Res;
         IntPtr target = group.IsValid() ? group.NativeNode : IntPtr.Zero;
@@ -1068,11 +1081,11 @@ public sealed class AudioSource : MonoBehaviour
         }
 
         // OnValidate runs for every field, so without this a volume drag re-attaches the node graph
-        // once per frame for no reason.
+        // once per frame for no reason. The tail only changes across a teardown, which clears this.
         if (target == _routedTo)
             return;
 
-        MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_effectNode.pointer), 0, new ma_node_ptr(target), 0);
+        MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(tail), 0, new ma_node_ptr(target), 0);
         _routedTo = target;
     }
 
