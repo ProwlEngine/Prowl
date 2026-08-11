@@ -178,6 +178,24 @@ public class AudioAssetTests : EditorTestHarness
         Assert.Equal(512ul, clip.SampleCount);
     }
 
+    // Decompressing stores 16 bit rather than the decoder's own float output, which would double the
+    // size of every decompressed clip for a difference below anything a game source gets near.
+    [Fact]
+    public void DecompressOnLoad_StoresSixteenBit()
+    {
+        byte[] source = StereoWav();
+        Guid guid = ImportBytes("Sized.wav", source);
+
+        AudioClip clip = Reimport(guid, "Sized.wav",
+            s => s[AudioImportKeys.LoadType] = new EchoObject((int)AudioLoadType.DecompressOnLoad));
+
+        // 512 stereo frames at two bytes a sample, plus a 44 byte header.
+        Assert.Equal(512ul * 2 * 2 + 44, clip.DataSize);
+
+        // And the source it came from was the float equivalent, so this really is smaller.
+        Assert.True(clip.DataSize < (ulong)source.Length);
+    }
+
     // A file the decoder cannot read must still import as a clip rather than failing the whole scan.
     [Fact]
     public void AnUndecodableFile_StillImports()

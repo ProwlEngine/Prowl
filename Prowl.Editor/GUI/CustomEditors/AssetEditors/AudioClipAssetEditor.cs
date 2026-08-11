@@ -58,7 +58,7 @@ public class AudioClipAssetEditor : ImportSettingsEditor
         // Either conversion forces a decode, and there is no encoder to put the result back into the
         // source format, so the stored asset becomes uncompressed either way.
         if (Bool(settings, AudioImportKeys.ForceMono) || Int(settings, AudioImportKeys.SampleRateOverride) > 0)
-            Origami.Label(paper, $"{id}_convnote", "Converting stores the clip uncompressed.").Show();
+            Origami.Label(paper, $"{id}_convnote", "Converting stores the clip as uncompressed 16 bit.").Show();
 
         DrawApplyRevertBar(paper, id, entry, asset);
     }

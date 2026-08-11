@@ -266,13 +266,22 @@ public sealed class AudioClip : EngineObject, ISerializable
         return clip;
     }
 
-    /// <summary>Wraps interleaved float samples in a minimal WAVE container.</summary>
-    internal static byte[] WriteWave(float[] samples, int channels, int sampleRate)
+    /// <summary>
+    /// Wraps interleaved float samples in a minimal WAVE container.
+    /// </summary>
+    /// <param name="sixteenBit">
+    /// Store as 16 bit PCM rather than 32 bit float, halving the size for a noise floor no game source
+    /// material gets near. Float keeps a procedurally built clip bit exact through a round trip, which
+    /// is why it is the default.
+    /// </param>
+    internal static byte[] WriteWave(float[] samples, int channels, int sampleRate, bool sixteenBit = false)
     {
+        const int formatPcm = 1;
         const int formatIeeeFloat = 3;
-        const int bitsPerSample = 32;
-        int blockAlign = channels * (bitsPerSample / 8);
-        int dataBytes = samples.Length * sizeof(float);
+
+        int bytesPerSample = sixteenBit ? 2 : 4;
+        int blockAlign = channels * bytesPerSample;
+        int dataBytes = samples.Length * bytesPerSample;
 
         using var stream = new MemoryStream(44 + dataBytes);
         using var writer = new BinaryWriter(stream);
@@ -283,18 +292,31 @@ public sealed class AudioClip : EngineObject, ISerializable
 
         writer.Write("fmt "u8);
         writer.Write(16);
-        writer.Write((short)formatIeeeFloat);
+        writer.Write((short)(sixteenBit ? formatPcm : formatIeeeFloat));
         writer.Write((short)channels);
         writer.Write(sampleRate);
         writer.Write(sampleRate * blockAlign);
         writer.Write((short)blockAlign);
-        writer.Write((short)bitsPerSample);
+        writer.Write((short)(bytesPerSample * 8));
 
         writer.Write("data"u8);
         writer.Write(dataBytes);
 
-        foreach (float sample in samples)
-            writer.Write(sample);
+        if (sixteenBit)
+        {
+            foreach (float sample in samples)
+            {
+                // Rounded rather than truncated, and clamped so a sample over full scale wraps to the
+                // opposite polarity instead of the loudest possible click.
+                float scaled = MathF.Round(Math.Clamp(sample, -1.0f, 1.0f) * short.MaxValue);
+                writer.Write((short)scaled);
+            }
+        }
+        else
+        {
+            foreach (float sample in samples)
+                writer.Write(sample);
+        }
 
         writer.Flush();
         return stream.ToArray();
@@ -351,7 +373,10 @@ public sealed class AudioClip : EngineObject, ISerializable
         {
             var samples = new float[sampleCount];
             Marshal.Copy(decoded, samples, 0, samples.Length);
-            return WriteWave(samples, (int)decodedChannels, (int)decodedRate);
+
+            // 16 bit, because this is the asset that ships. Storing the decoder's own float output
+            // would double the size of every decompressed clip for a difference nobody can hear.
+            return WriteWave(samples, (int)decodedChannels, (int)decodedRate, sixteenBit: true);
         }
         finally
         {
