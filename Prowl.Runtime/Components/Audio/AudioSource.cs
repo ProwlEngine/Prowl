@@ -87,11 +87,18 @@ public sealed class AudioSource : MonoBehaviour
     [SerializeField, Tooltip("How many one shot voices this source can sound at once before the longest running one is taken over.")]
     private int _maxOneShotVoices = 8;
 
-    /// <summary>How many one shot voices this source can sound at once before stealing the oldest.</summary>
+    /// <summary>
+    /// How many one shot voices this source can sound at once before stealing the oldest. Lowering it
+    /// takes voices away immediately rather than waiting for them to finish.
+    /// </summary>
     public int MaxOneShotVoices
     {
         get => _maxOneShotVoices;
-        set => _maxOneShotVoices = value;
+        set
+        {
+            _maxOneShotVoices = value;
+            TrimOneShotVoices();
+        }
     }
 
     // Native handles
@@ -828,6 +835,43 @@ public sealed class AudioSource : MonoBehaviour
         return oldest;
     }
 
+    /// <summary>
+    /// Brings the pool down to the cap, quietest first: an idle voice costs nothing to take, so those
+    /// go before anything still sounding, and only then the longest running, which is the order
+    /// <see cref="AcquireOneShotVoice"/> steals in.
+    /// </summary>
+    private void TrimOneShotVoices()
+    {
+        _maxOneShotVoices = Maths.Max(1, _maxOneShotVoices);
+
+        while (_oneShots.Count > _maxOneShotVoices)
+        {
+            SourceInfo victim = null;
+
+            foreach (SourceInfo voice in _oneShots)
+            {
+                if (voice.handle == IntPtr.Zero || MiniAudioExNative.ma_ex_audio_source_get_is_playing(voice.handle) == 0)
+                {
+                    victim = voice;
+                    break;
+                }
+
+                if (victim == null || voice.startOrder < victim.startOrder)
+                    victim = voice;
+            }
+
+            if (victim == null) break;
+
+            if (victim.handle != IntPtr.Zero)
+            {
+                MiniAudioExNative.ma_ex_audio_source_stop(victim.handle);
+                MiniAudioExNative.ma_ex_audio_source_uninit(victim.handle);
+            }
+
+            _oneShots.Remove(victim);
+        }
+    }
+
     private void DestroyOneShotVoices()
     {
         foreach (SourceInfo voice in _oneShots)
@@ -1034,9 +1078,10 @@ public sealed class AudioSource : MonoBehaviour
 
     private void ApplySettings()
     {
-        // First, and outside the guard below: the inspector writes the distances directly, so this is
-        // where an inverted range gets straightened out whether or not there is a device to push to.
+        // First, and outside the guard below: the inspector writes these directly, so this is where an
+        // inverted distance range or a lowered voice cap takes effect, device or no device.
         ApplyDistances();
+        TrimOneShotVoices();
 
         if (_soundGroup.pointer == IntPtr.Zero) return;
 

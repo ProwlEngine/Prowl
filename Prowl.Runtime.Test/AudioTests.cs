@@ -1325,6 +1325,20 @@ public class AudioTests : RuntimeTestBase
         clip.Dispose();
     }
 
+    // A cap of zero would mean a source that can never play a one shot, and the acquire path would
+    // have to guess what was meant. One is the floor.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-4)]
+    public void MaxOneShotVoices_NeverDropsBelowOne(int requested)
+    {
+        var source = CreateSource();
+
+        source.MaxOneShotVoices = requested;
+
+        Assert.Equal(1, source.MaxOneShotVoices);
+    }
+
     // The temporary object PlayClipAtPoint spawns is cleaned up by the End event, which never fires
     // without a device, so it must not spawn one at all rather than leaking it every call.
     [Fact]
