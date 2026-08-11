@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GUI.RenderProfiler.Data;
 using Prowl.Editor.Profiling;
 using Prowl.Editor.Theming;
 using Prowl.Graphite;
@@ -137,17 +138,14 @@ public partial class RenderProfilerPanel
 
     // ── History series helpers ────────────────────────────────────
 
+    private IProfilerHistory History => new LiveHistory(EditorProfiler.Instance!, SelectedFrame?.FrameIndex);
+
     private List<double> FrameSeries(Func<ProfiledFrame, double> selector)
     {
-        IReadOnlyList<ProfiledFrame> history = EditorProfiler.Instance!.History;
-        long? cutoff = SelectedFrame?.FrameIndex;
-        var values = new List<double>(history.Count);
-        foreach (ProfiledFrame frame in history)
-        {
-            if (cutoff.HasValue && frame.FrameIndex > cutoff.Value)
-                break;
+        IReadOnlyList<ProfiledFrame> frames = History.Frames;
+        var values = new List<double>(frames.Count);
+        foreach (ProfiledFrame frame in frames)
             values.Add(selector(frame));
-        }
         return values;
     }
 
@@ -157,13 +155,10 @@ public partial class RenderProfilerPanel
     /// touched contribute 0.</summary>
     private List<double> ViewSeries(string viewName, Func<ProfiledView, double> selector)
     {
-        IReadOnlyList<ProfiledFrame> history = EditorProfiler.Instance!.History;
-        long? cutoff = SelectedFrame?.FrameIndex;
-        var values = new List<double>(history.Count);
-        foreach (ProfiledFrame frame in history)
+        IReadOnlyList<ProfiledFrame> frames = History.Frames;
+        var values = new List<double>(frames.Count);
+        foreach (ProfiledFrame frame in frames)
         {
-            if (cutoff.HasValue && frame.FrameIndex > cutoff.Value)
-                break;
             double value = 0d;
             foreach (ProfiledView view in frame.Views)
             {
@@ -184,13 +179,10 @@ public partial class RenderProfilerPanel
     /// contribute 0.</summary>
     private List<double> PassSeries(string viewName, int passIndex, Func<ProfiledPass, double> selector)
     {
-        IReadOnlyList<ProfiledFrame> history = EditorProfiler.Instance!.History;
-        long? cutoff = SelectedFrame?.FrameIndex;
-        var values = new List<double>(history.Count);
-        foreach (ProfiledFrame frame in history)
+        IReadOnlyList<ProfiledFrame> frames = History.Frames;
+        var values = new List<double>(frames.Count);
+        foreach (ProfiledFrame frame in frames)
         {
-            if (cutoff.HasValue && frame.FrameIndex > cutoff.Value)
-                break;
             double value = 0d;
             foreach (ProfiledView view in frame.Views)
             {
@@ -211,34 +203,7 @@ public partial class RenderProfilerPanel
         return values;
     }
 
-    // CounterHistory() is indexed in lockstep with History() (both walk the same [start, sealedCount)
-    // range), so the selected frame's position within History gives us the cutoff count for the counter
-    // series too.
-    private IReadOnlyList<double> CounterSeries(string name)
-    {
-        IReadOnlyList<double> full = EditorProfiler.Instance!.CounterHistory(name);
-        long? cutoff = SelectedFrame?.FrameIndex;
-        if (!cutoff.HasValue)
-            return full;
-
-        IReadOnlyList<ProfiledFrame> history = EditorProfiler.Instance!.History;
-        int count = 0;
-        foreach (ProfiledFrame frame in history)
-        {
-            if (frame.FrameIndex > cutoff.Value)
-                break;
-            count++;
-        }
-
-        count = Math.Min(count, full.Count);
-        if (count >= full.Count)
-            return full;
-
-        var truncated = new List<double>(count);
-        for (int i = 0; i < count; i++)
-            truncated.Add(full[i]);
-        return truncated;
-    }
+    private IReadOnlyList<double> CounterSeries(string name) => History.Counter(name);
 
     private static double CounterValue(ProfiledFrame? frame, string name)
     {
