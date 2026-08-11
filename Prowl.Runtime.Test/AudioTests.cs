@@ -939,6 +939,56 @@ public class AudioTests : RuntimeTestBase
         Assert.Null(mixer.FindGroup("Music"));
     }
 
+    // Only a hand edited or corrupted asset can contain routing that never reaches the root, and a
+    // loop would be attached as a loop in the native node graph.
+    [Fact]
+    public void Mixer_StraightensOutARoutingLoopOnLoad()
+    {
+        var mixer = new AudioMixer();
+        mixer.AddGroup("Music");
+        mixer.AddGroup("SFX");
+
+        EchoObject echo = Serializer.Serialize(mixer);
+        EchoObject groups = echo.Get("_groups")!.Get("$values")!;
+
+        // Point the two at each other, so neither reaches the master.
+        groups[1]["_parentIndex"] = new EchoObject(2);
+        groups[2]["_parentIndex"] = new EchoObject(1);
+
+        var restored = Serializer.Deserialize<AudioMixer>(echo)!;
+
+        foreach (AudioMixerGroup group in restored.Groups)
+            Assert.True(ReachesRoot(group), $"'{group.GroupName}' never reaches the master");
+    }
+
+    [Fact]
+    public void Mixer_DropsRoutingToAGroupThatIsNotThere()
+    {
+        var mixer = new AudioMixer();
+        mixer.AddGroup("Music");
+
+        EchoObject echo = Serializer.Serialize(mixer);
+        echo.Get("_groups")!.Get("$values")![1]["_parentIndex"] = new EchoObject(97);
+
+        var restored = Serializer.Deserialize<AudioMixer>(echo)!;
+
+        Assert.Null(restored.FindGroup("Music").Parent);
+    }
+
+    /// <summary>Walks up from a group, giving up once it has taken more steps than there are groups.</summary>
+    private static bool ReachesRoot(AudioMixerGroup group)
+    {
+        int steps = 0;
+
+        while (group.Parent.IsValid())
+        {
+            if (++steps > 16) return false;
+            group = group.Parent;
+        }
+
+        return true;
+    }
+
     // Groups are sub-assets, so an AudioSource can hold a reference straight to one. Destroying the
     // object on removal left those sources pointing at a destroyed asset instead of at nothing.
     [Fact]

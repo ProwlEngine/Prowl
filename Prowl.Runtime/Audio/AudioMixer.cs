@@ -474,7 +474,55 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
     public void OnBeforeSerialize() { }
 
     /// <summary>Groups arrive knowing their parent's index but not which mixer they belong to.</summary>
-    public void OnAfterDeserialize() => EnsureBound();
+    public void OnAfterDeserialize()
+    {
+        EnsureBound();
+        ValidateHierarchy();
+    }
+
+    /// <summary>
+    /// Straightens out routing that does not lead anywhere, which only a hand edited or corrupted
+    /// asset can contain: the public API cannot build one, since a new group is always appended below
+    /// the parent it is given.
+    /// </summary>
+    /// <remarks>
+    /// A loop would be attached as a loop in the native node graph, where each bus feeds the next and
+    /// the last feeds the first. What the audio backend does with that is not something to find out at
+    /// runtime. Groups in a loop also never appear in the mixer inspector, because nothing reaches
+    /// them walking down from the root.
+    /// </remarks>
+    private void ValidateHierarchy()
+    {
+        for (int i = 0; i < _groups.Count; i++)
+        {
+            AudioMixerGroup group = _groups[i];
+
+            if (group.IsNotValid()) continue;
+
+            if (group.ParentIndex >= _groups.Count || group.ParentIndex < -1)
+            {
+                Debug.LogWarning($"Audio mixer '{Name}' has group '{group.GroupName}' routed to a bus that does not exist. It now feeds the master output.");
+                group.ParentIndex = -1;
+                continue;
+            }
+
+            // Walk up to the root. Taking more steps than there are groups means it never gets there.
+            int at = group.ParentIndex;
+            int steps = 0;
+
+            while (at >= 0 && at < _groups.Count)
+            {
+                if (++steps > _groups.Count)
+                {
+                    Debug.LogWarning($"Audio mixer '{Name}' has a routing loop through group '{group.GroupName}'. It now feeds the master output.");
+                    group.ParentIndex = -1;
+                    break;
+                }
+
+                at = _groups[at].IsValid() ? _groups[at].ParentIndex : -1;
+            }
+        }
+    }
 
     private void EnsureBound()
     {
