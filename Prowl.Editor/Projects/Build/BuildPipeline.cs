@@ -137,7 +137,14 @@ public abstract class BuildPipeline
         try
         {
             var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
-            if (echo == null || !StripEditorOnlyPrefabData(echo)) return null;
+            if (echo == null) return null;
+
+            bool changed = StripEditorOnlyPrefabData(echo);
+            // Inside a prefab asset every link is nested by definition, since the asset's own root
+            // carries none. Inside a scene the top-level instances are not.
+            changed |= Importers.ImportHelper.FlattenNestedPrefabLinks(
+                echo, insideInstance: entry.ImporterType == "PrefabImporter");
+            if (!changed) return null;
 
             var buffer = new MemoryStream();
             using (var writer = new BinaryWriter(buffer, System.Text.Encoding.UTF8, leaveOpen: true))

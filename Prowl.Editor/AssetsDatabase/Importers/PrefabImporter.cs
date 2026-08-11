@@ -32,6 +32,11 @@ public class PrefabImporter : AssetImporter
                 return false;
             }
 
+            // Prefabs do not nest. An asset written before that was enforced still carries the link,
+            // so it is dropped here and those objects load as ordinary content of this prefab. Every
+            // link in a prefab file is nested by definition: the asset's own root carries none.
+            ImportHelper.FlattenNestedPrefabLinks(goEcho, insideInstance: true);
+
             var dependencies = new HashSet<Guid>();
             ImportHelper.CollectAssetDependencies(goEcho, dependencies);
 

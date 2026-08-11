@@ -163,24 +163,25 @@ public class PrefabEdgeCaseTests : EditorTestHarness
     }
 
     [Fact]
-    public void NestedPrefab_ThreeLevels_RespectsBoundaries()
+    public void NestedPrefab_IsFlattenedIntoTheOuterOnImport()
     {
         var nestedId = Guid.NewGuid();
         var root = new GameObject("Root");
         var nested = new GameObject("Nested");
         var nestedChild = new GameObject("NestedChild");
         nested.PrefabAssetId = nestedId;
-        nestedChild.PrefabAssetId = nestedId; // part of the nested prefab
+        nestedChild.PrefabAssetId = nestedId;
         nested.SetParent(root);
         nestedChild.SetParent(nested);
 
         Guid outerId = WritePrefabRaw(root, "Outer.prefab");
         var instance = Instantiate(outerId);
 
+        // An asset written before flattening was enforced loads as one tree: the whole hierarchy is
+        // the outer prefab's, with nothing pointing back at the prefab it was nested from.
         Assert.Equal(outerId, instance.PrefabAssetId);
-        var instNested = instance.Children[0];
-        Assert.Equal(nestedId, instNested.PrefabAssetId);          // boundary preserved
-        Assert.Equal(nestedId, instNested.Children[0].PrefabAssetId); // not overwritten by outer
+        Assert.Equal(outerId, instance.Children[0].PrefabAssetId);
+        Assert.Equal(outerId, instance.Children[0].Children[0].PrefabAssetId);
     }
 
     // ---------------------------------------------------------------------

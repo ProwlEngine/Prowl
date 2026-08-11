@@ -114,7 +114,7 @@ public class PrefabSafetyTests : EditorTestHarness
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void CreatePrefab_PreservesNestedPrefabLinks()
+    public void CreatePrefab_FlattensNestedPrefabLinks()
     {
         var innerSource = new GameObject("Inner");
         innerSource.AddComponent<OverrideComp>().A = 1;
@@ -126,14 +126,15 @@ public class PrefabSafetyTests : EditorTestHarness
 
         Assert.True(PrefabUtility.CreatePrefab(parent, "Parent.prefab"));
 
-        // The link survives both in the scene and in the written asset.
-        Assert.Equal(inner, parent.Children[0].PrefabAssetId);
-        Assert.Contains(inner.ToString(), File.ReadAllText(AssetAbsolutePath("Parent.prefab")));
+        // Prefabs do not nest. The inner prefab's objects became content of the new one, so the
+        // written asset holds no reference back to it.
         Assert.True(parent.IsPrefabInstance);
+        Assert.DoesNotContain(inner.ToString(), File.ReadAllText(AssetAbsolutePath("Parent.prefab")));
+        Assert.Equal(1, parent.Children[0].GetComponent<OverrideComp>()!.A);
     }
 
     [Fact]
-    public void BreakPrefabInstance_KeepsNestedInstancesLinked()
+    public void BreakPrefabInstance_LeavesFlattenedContentInPlace()
     {
         Guid inner = CreatePrefabAsset(new GameObject("Inner"), "Inner.prefab");
 
@@ -146,8 +147,11 @@ public class PrefabSafetyTests : EditorTestHarness
 
         PrefabUtility.BreakPrefabInstance(instance);
 
+        // Prefabs do not nest, so what was once a nested instance is ordinary content by now. Breaking
+        // unpacks the whole thing and leaves that content where it is.
         Assert.False(instance.IsPrefabInstance);
-        Assert.Equal(inner, instance.Children[0].PrefabAssetId);
+        Assert.Single(instance.Children);
+        Assert.False(instance.Children[0].IsPrefabInstance);
     }
 
     // ---------------------------------------------------------------------

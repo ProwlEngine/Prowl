@@ -629,6 +629,10 @@ public class HierarchyPanel : DockPanel
                     break;
             }
 
+            // Prefabs do not nest: one dropped inside another instance becomes that instance's own
+            // content instead of staying a linked prefab.
+            Prefabs.PrefabUtility.FlattenIfPlacedInsideAnInstance(dragged);
+
             // Register undo for reparent/reorder
             var newParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
             var newSiblingIdx = dragged.GetSiblingIndex() ?? -1;

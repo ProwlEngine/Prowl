@@ -370,11 +370,11 @@ public class PrefabReconcileTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
-    // Nesting
+    // Content that came from a flattened prefab
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void ANestedInstanceKeepsItsOwnOverrides()
+    public void AnOverrideOnFlattenedContentSurvivesARefresh()
     {
         var innerSource = new GameObject("Inner");
         innerSource.AddComponent<OverrideComp>().A = 1;
@@ -389,19 +389,16 @@ public class PrefabReconcileTests : EditorTestHarness
         var instance = Inst(outer);
         LoadSceneWith(instance);
 
-        var nested = instance.Children[0];
-        Assert.Equal(inner, nested.PrefabAssetId);
+        // Prefabs do not nest, so the once-nested object is ordinary content of the outer prefab and
+        // an edit to it is an ordinary override on this instance.
+        var child = instance.Children[0];
+        var childComp = child.GetComponent<OverrideComp>()!;
+        childComp.A = 77;
+        PrefabUtility.DetectComponentOverrides(child, childComp);
 
-        var nestedComp = nested.GetComponent<OverrideComp>()!;
-        nestedComp.A = 77;
-        PrefabUtility.DetectComponentOverrides(nested, nestedComp);
-
-        // Refreshing the OUTER prefab used to rebuild the whole tree, taking the nested instance's
-        // own overrides with it.
         PrefabUtility.RefreshAllInstances(outer);
 
-        Assert.Same(nested, instance.Children[0]);
-        Assert.Equal(inner, instance.Children[0].PrefabAssetId);
+        Assert.Same(child, instance.Children[0]);
         Assert.Equal(77, instance.Children[0].GetComponent<OverrideComp>()!.A);
     }
 
