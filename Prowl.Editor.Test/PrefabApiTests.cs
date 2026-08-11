@@ -244,7 +244,7 @@ public class PrefabApiTests : EditorTestHarness
         GameObject instance = Inst(guid);
         LoadSceneWith(instance);
 
-        PrefabUtility.BreakPrefabInstance(instance);
+        PrefabUtility.UnpackPrefabInstance(instance);
         Assert.False(instance.IsPrefabInstance);
 
         Assert.True(PrefabUtility.ConnectGameObjectToPrefab(instance, guid));
@@ -261,7 +261,7 @@ public class PrefabApiTests : EditorTestHarness
         GameObject instance = Inst(guid);
         LoadSceneWith(instance);
 
-        PrefabUtility.BreakPrefabInstance(instance);
+        PrefabUtility.UnpackPrefabInstance(instance);
         PrefabUtility.ConnectGameObjectToPrefab(instance, guid);
 
         EditPrefabSource(guid, "Api_ConnectFollow.prefab", src => src.GetComponent<OverrideComp>()!.A = 9);
@@ -310,7 +310,7 @@ public class PrefabApiTests : EditorTestHarness
         source.AddComponent<OverrideComp>().A = 5;
         LoadSceneWith(source);
 
-        Assert.True(PrefabUtility.CreatePrefab(source, "Api_Create.prefab"));
+        Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(source, "Api_Create.prefab"));
 
         Assert.True(source.IsPrefabInstance);
     }
@@ -330,7 +330,7 @@ public class PrefabApiTests : EditorTestHarness
             source.AddComponent<OverrideComp>().A = 1;
             LoadSceneWith(source);
 
-            Assert.True(PrefabUtility.CreatePrefab(source, "Api_Evt.prefab"));
+            Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(source, "Api_Evt.prefab"));
 
             Assert.Single(seen);
             Assert.Equal(source.PrefabAssetId, seen[0]);

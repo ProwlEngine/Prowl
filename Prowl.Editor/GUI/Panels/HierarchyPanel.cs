@@ -17,6 +17,7 @@ using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -631,7 +632,7 @@ public class HierarchyPanel : DockPanel
 
             // Prefabs do not nest: one dropped inside another instance becomes that instance's own
             // content instead of staying a linked prefab.
-            Prefabs.PrefabUtility.FlattenIfPlacedInsideAnInstance(dragged);
+            PrefabUtility.FlattenIfPlacedInsideAnInstance(dragged);
 
             // Register undo for reparent/reorder
             var newParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
@@ -859,27 +860,27 @@ public class HierarchyPanel : DockPanel
                     builder.Item(Loc.Get("hierarchy.select_prefab_asset"),
                         () => Selection.Ping(prefabRoots[0].PrefabAssetId), icon: EditorIcons.Cubes);
 
-                bool anyOverrides = prefabRoots.Any(Prefabs.PrefabUtility.HasAnyOverrides);
+                bool anyOverrides = prefabRoots.Any(PrefabUtility.HasAnyOverrides);
                 // A generated prefab (a model) is rebuilt from its source on every import, so there
                 // is nothing to apply to. Reverting still works.
                 bool anyApplyable = prefabRoots.Any(r =>
-                    Prefabs.PrefabUtility.HasAnyOverrides(r) && Prefabs.PrefabUtility.IsEditablePrefab(r.PrefabAssetId));
+                    PrefabUtility.HasAnyOverrides(r) && PrefabUtility.IsEditablePrefab(r.PrefabAssetId));
 
                 builder.Item(Loc.Get("hierarchy.apply_prefab_overrides") + suffix, () =>
                 {
                     foreach (var root in prefabRoots)
-                        if (Prefabs.PrefabUtility.IsEditablePrefab(root.PrefabAssetId))
-                            Prefabs.PrefabUtility.ApplyOverrides(root);
+                        if (PrefabUtility.IsEditablePrefab(root.PrefabAssetId))
+                            PrefabUtility.ApplyOverrides(root);
                 }, enabled: anyApplyable, icon: EditorIcons.Check);
 
                 builder.Item(Loc.Get("hierarchy.revert_to_prefab") + suffix, () =>
                 {
-                    foreach (var root in prefabRoots) Prefabs.PrefabUtility.RevertOverrides(root);
+                    foreach (var root in prefabRoots) PrefabUtility.RevertOverrides(root);
                 }, enabled: anyOverrides, icon: EditorIcons.ArrowsRotate);
 
                 builder.Item(Loc.Get("hierarchy.break_prefab_instance") + suffix, () =>
                 {
-                    foreach (var root in prefabRoots) Prefabs.PrefabUtility.BreakPrefabInstance(root);
+                    foreach (var root in prefabRoots) PrefabUtility.UnpackPrefabInstance(root);
                 }, icon: EditorIcons.LinkSlash);
 
                 builder.Separator();
@@ -1080,7 +1081,7 @@ public class HierarchyPanel : DockPanel
         {
             if (go.IsNotValid() || !go.IsPrefabInstance) continue;
 
-            var instanceRoot = Prefabs.PrefabUtility.GetPrefabInstanceRoot(go);
+            var instanceRoot = PrefabUtility.GetPrefabInstanceRoot(go);
             var target = instanceRoot.IsValid() ? instanceRoot! : go;
             if (!roots.Any(r => ReferenceEquals(r, target)))
                 roots.Add(target);
@@ -1102,7 +1103,7 @@ public class HierarchyPanel : DockPanel
 
             string name = AssetCreateMenu.FindUniqueName(absoluteFolder, go.Name, ".prefab");
             string relativePath = string.IsNullOrEmpty(folder) ? name : $"{folder}/{name}";
-            Prefabs.PrefabUtility.CreatePrefab(go, relativePath);
+            PrefabUtility.SaveAsPrefabAssetAndConnect(go, relativePath);
         }
     }
 
@@ -1112,7 +1113,7 @@ public class HierarchyPanel : DockPanel
     /// would undo it. Told apart by where the object came from, not by its position, so reordering
     /// cannot reclassify it.
     /// </summary>
-    private static bool IsPrefabStructuralChild(GameObject go) => Prefabs.PrefabUtility.IsProvidedByPrefab(go);
+    private static bool IsPrefabStructuralChild(GameObject go) => PrefabUtility.IsProvidedByPrefab(go);
 
     private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
     {
@@ -1311,7 +1312,7 @@ public class HierarchyPanel : DockPanel
         }
         else if (asset is PrefabAsset)
         {
-            var instance = Prefabs.PrefabUtility.InstantiatePrefab(payload.AssetGuid);
+            var instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
             if (instance != null)
             {
                 instance.Transform.Position = position;

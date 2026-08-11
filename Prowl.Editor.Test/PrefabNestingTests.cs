@@ -38,7 +38,7 @@ public class PrefabNestingTests : EditorTestHarness
     private Guid Author(GameObject source, string relativePath)
     {
         LoadSceneWith(source);
-        Assert.True(PrefabUtility.CreatePrefab(source, relativePath));
+        Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(source, relativePath));
         Assets.Refresh();
 
         var entry = EditorAssetBackend.Instance!.GetEntry(relativePath);

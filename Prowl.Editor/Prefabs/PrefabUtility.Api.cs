@@ -211,7 +211,7 @@ public static partial class PrefabUtility
     {
         var previous = source.IsValid() ? CapturePrefabState(source, source.PrefabAssetId) : null;
 
-        if (!CreatePrefab(source, relativeSavePath, overwrite)) return false;
+        if (!SaveAsPrefabAssetAndConnect(source, relativeSavePath, overwrite)) return false;
 
         // CreatePrefab links its argument to the asset it wrote; put it back the way it was.
         if (previous != null) RestorePrefabState(previous);

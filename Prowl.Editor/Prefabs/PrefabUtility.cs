@@ -34,7 +34,7 @@ public static partial class PrefabUtility
     /// <param name="overwrite">Allow replacing an existing file. Off by default replacing a prefab
     /// keeps its GUID, so every instance in every scene would silently adopt the new contents.</param>
     /// <returns>True if successful.</returns>
-    public static bool CreatePrefab(GameObject source, string relativeSavePath, bool overwrite = false)
+    public static bool SaveAsPrefabAssetAndConnect(GameObject source, string relativeSavePath, bool overwrite = false)
     {
         if (source == null || Project.Current == null) return false;
         if (!GuardNotPlaying("create a prefab")) return false;
@@ -218,7 +218,7 @@ public static partial class PrefabUtility
     /// The GameObject becomes a plain non-prefab object, but nested prefab instances inside it keep
     /// their own links (breaking the outermost instance only).
     /// </summary>
-    public static void BreakPrefabInstance(GameObject go)
+    public static void UnpackPrefabInstance(GameObject go)
     {
         if (!go.IsPrefabInstance) return;
         if (!GuardNotPlaying("break a prefab instance")) return;
@@ -464,14 +464,26 @@ public static partial class PrefabUtility
     // ================================================================
 
     /// <summary>
-    /// Apply a single override from an instance to the prefab source.
+    /// Push one of an instance's overrides into the prefab, addressed the same way
+    /// <see cref="RevertSingleOverride"/> addresses it.
     /// </summary>
-    public static void ApplySingleOverride(GameObject instanceGO, PropertyOverride ov)
+    public static void ApplySingleOverride(GameObject instanceGO, string overridePath)
     {
         if (!instanceGO.IsPrefabInstance) return;
         if (!GuardNotPlaying("apply a prefab override")) return;
 
         if (!GuardEditablePrefab(instanceGO.PrefabAssetId, "apply a prefab override")) return;
+
+        GameObject? instanceRoot = GetPrefabInstanceRoot(instanceGO);
+        GameObject overrideHost = instanceRoot.IsValid() ? instanceRoot! : instanceGO;
+
+        PropertyOverride? ov = overrideHost.PrefabOverrides.FirstOrDefault(o => o.Path == overridePath);
+
+        if (ov == null)
+        {
+            Runtime.Debug.LogWarning($"[Prefab] No override '{overridePath}' on this instance to apply.");
+            return;
+        }
 
         ApplySingleOverrideCore(instanceGO, ov, recordUndo: true);
     }
@@ -1105,7 +1117,7 @@ public static partial class PrefabUtility
     /// Compare a component's current state against its prefab source and update overrides.
     /// Uses index-based paths. Called after each component is drawn in the inspector.
     /// </summary>
-    public static void DetectComponentOverrides(GameObject instanceGO, MonoBehaviour instanceComp)
+    public static void RecordComponentOverrides(GameObject instanceGO, MonoBehaviour instanceComp)
     {
         if (!instanceGO.IsPrefabInstance) return;
 
@@ -1157,9 +1169,9 @@ public static partial class PrefabUtility
 
         static void Reconcile(GameObject go, Guid boundaryPrefabId)
         {
-            DetectGOOverrides(go);
+            RecordGameObjectOverrides(go);
             foreach (var component in go.GetComponents<MonoBehaviour>())
-                DetectComponentOverrides(go, component);
+                RecordComponentOverrides(go, component);
 
             foreach (var child in go.Children)
             {
@@ -1180,10 +1192,10 @@ public static partial class PrefabUtility
         switch (target)
         {
             case MonoBehaviour component when component.GameObject.IsValid():
-                DetectComponentOverrides(component.GameObject, component);
+                RecordComponentOverrides(component.GameObject, component);
                 break;
             case GameObject go:
-                DetectGOOverrides(go);
+                RecordGameObjectOverrides(go);
                 break;
         }
     }
@@ -1191,7 +1203,7 @@ public static partial class PrefabUtility
     /// <summary>
     /// Detect GO-level overrides (Name, Tag, Layer, Enabled, Transform).
     /// </summary>
-    public static void DetectGOOverrides(GameObject instanceGO)
+    public static void RecordGameObjectOverrides(GameObject instanceGO)
     {
         if (!instanceGO.IsPrefabInstance) return;
 

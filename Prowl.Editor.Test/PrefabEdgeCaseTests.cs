@@ -224,7 +224,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var comp = instance.GetComponent<VecComp>()!;
         comp.V = new Float3(9, 9, 9);
 
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "V")));
 
         PrefabUtility.ApplyOverrides(instance);
@@ -248,7 +248,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var vec = instance.GetComponents<MonoBehaviour>().ToList()[1] as VecComp;
         vec!.V = new Float3(5, 0, 0);
 
-        PrefabUtility.DetectComponentOverrides(instance, vec);
+        PrefabUtility.RecordComponentOverrides(instance, vec);
 
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, vec, "V")));
     }
@@ -272,7 +272,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var instance = Instantiate(g);
         var instGrandComp = instance.Children[0].Children[0].GetComponent<OverrideComp>()!;
         instGrandComp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance.Children[0].Children[0], instGrandComp);
+        PrefabUtility.RecordComponentOverrides(instance.Children[0].Children[0], instGrandComp);
         SetSceneCurrent(instance);
 
         // Change the deep child's B in the source.
@@ -300,8 +300,8 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var i2 = Instantiate(g);
         i1.GetComponent<OverrideComp>()!.A = 10;
         i2.GetComponent<OverrideComp>()!.A = 20;
-        PrefabUtility.DetectComponentOverrides(i1, i1.GetComponent<OverrideComp>()!);
-        PrefabUtility.DetectComponentOverrides(i2, i2.GetComponent<OverrideComp>()!);
+        PrefabUtility.RecordComponentOverrides(i1, i1.GetComponent<OverrideComp>()!);
+        PrefabUtility.RecordComponentOverrides(i2, i2.GetComponent<OverrideComp>()!);
         SetSceneCurrent(i1, i2);
 
         EditPrefabSource(g, "P.prefab", src => src.GetComponent<OverrideComp>()!.B = 2);
@@ -366,7 +366,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var comp = childGo.GetComponent<OverrideComp>()!;
         comp.A = 99;
 
-        PrefabUtility.DetectComponentOverrides(childGo, comp);
+        PrefabUtility.RecordComponentOverrides(childGo, comp);
 
         Assert.Single(instance.PrefabOverrides);   // stored on the root...
         Assert.Empty(childGo.PrefabOverrides);      // ...not on the child
@@ -385,7 +385,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var instance = Instantiate(g);
         var comp = instance.Children[0].GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance.Children[0], comp);
+        PrefabUtility.RecordComponentOverrides(instance.Children[0], comp);
 
         PrefabUtility.RevertSingleOverride(instance, PrefabUtility.GetOverridePath(instance.Children[0], comp, "A"));
 
@@ -405,7 +405,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var instance = Instantiate(g);
         var vec = instance.GetComponent<VecComp>()!;
         vec.V = new Float3(7, 0, 0);
-        PrefabUtility.DetectComponentOverrides(instance, vec); // records an override on the VecComp
+        PrefabUtility.RecordComponentOverrides(instance, vec); // records an override on the VecComp
         SetSceneCurrent(instance);
 
         // Source structure changes: the VecComp is removed, so the override has nothing to land on.
@@ -433,7 +433,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var original = instance.GetComponent<OverrideComp>()!;
         original.A = 42;
 
-        PrefabUtility.DetectComponentOverrides(instance, original);
+        PrefabUtility.RecordComponentOverrides(instance, original);
 
         // Reordering used to shift every component's index and stop detection working at all. Paths
         // name the source component, so the override lands on the right one regardless.

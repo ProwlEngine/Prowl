@@ -11,6 +11,7 @@ using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor;
 
@@ -86,8 +87,8 @@ public class EditorAssetBackend : AssetBackendBase
         // Hooked here rather than at each construction site so every backend, including the ones
         // tests build, behaves the same. Detached first: Initialize is documented as idempotent, and
         // subscribing twice would refresh every instance twice per import.
-        OnAssetsImported -= Prefabs.PrefabUtility.OnAssetsImported;
-        OnAssetsImported += Prefabs.PrefabUtility.OnAssetsImported;
+        OnAssetsImported -= PrefabUtility.OnAssetsImported;
+        OnAssetsImported += PrefabUtility.OnAssetsImported;
 
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.

@@ -14,9 +14,12 @@ namespace Prowl.Runtime;
 public class PropertyOverride
 {
     /// <summary>
-    /// Path to the overridden field.
-    /// Format: "{componentIdentifier}.{fieldPath}" for component fields,
-    /// or "$.{fieldName}" for GameObject-level fields.
+    /// Which member of which object this overrides, relative to the instance root.
+    /// <para/>
+    /// Format: <c>{objectSourceId}/{componentSourceId}/{memberPath}</c>, or
+    /// <c>{objectSourceId}/$/{memberPath}</c> for a member of the GameObject itself. The source
+    /// identifiers say which prefab object each part addresses, so the path survives objects being
+    /// added, removed or reordered on either side.
     /// </summary>
     [SerializeField]
     public string Path = "";

@@ -289,7 +289,7 @@ public class PrefabReconcileTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         LoadSceneWith(instance);
 
         EditPrefabSource(g, "Ovr.prefab", src =>
@@ -359,8 +359,8 @@ public class PrefabReconcileTests : EditorTestHarness
 
         var ca = a.GetComponent<OverrideComp>()!;
         var cb = b.GetComponent<OverrideComp>()!;
-        ca.A = 10; PrefabUtility.DetectComponentOverrides(a, ca);
-        cb.A = 20; PrefabUtility.DetectComponentOverrides(b, cb);
+        ca.A = 10; PrefabUtility.RecordComponentOverrides(a, ca);
+        cb.A = 20; PrefabUtility.RecordComponentOverrides(b, cb);
 
         EditPrefabSource(g, "Many.prefab", src => src.GetComponent<OverrideComp>()!.B = 6);
         PrefabUtility.RefreshAllInstances(g);
@@ -394,7 +394,7 @@ public class PrefabReconcileTests : EditorTestHarness
         var child = instance.Children[0];
         var childComp = child.GetComponent<OverrideComp>()!;
         childComp.A = 77;
-        PrefabUtility.DetectComponentOverrides(child, childComp);
+        PrefabUtility.RecordComponentOverrides(child, childComp);
 
         PrefabUtility.RefreshAllInstances(outer);
 

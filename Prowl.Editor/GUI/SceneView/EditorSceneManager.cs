@@ -12,6 +12,7 @@ using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Core;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.SceneView;
 
@@ -227,8 +228,8 @@ public static class EditorSceneManager
             // override list yet. Saving without it would write a scene whose instances silently lose
             // those edits the next time they are refreshed.
             foreach (var go in Scene.Current.AllObjects.ToList())
-                if (Prefabs.PrefabUtility.IsInstanceRoot(go))
-                    Prefabs.PrefabUtility.ReconcileInstance(go);
+                if (PrefabUtility.IsInstanceRoot(go))
+                    PrefabUtility.ReconcileInstance(go);
 
             var echo = Serializer.Serialize(typeof(object), Scene.Current);
             if (echo == null)

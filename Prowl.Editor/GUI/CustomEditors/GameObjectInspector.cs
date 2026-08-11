@@ -53,7 +53,7 @@ public static class GameObjectInspector
 
         // Detect GO-level overrides (Name, Tag, Transform, etc.)
         if (go.IsPrefabInstance)
-            PrefabUtility.DetectGOOverrides(go);
+            PrefabUtility.RecordGameObjectOverrides(go);
 
         paper.Box("gi_bottom_pad").Height(20);
     }
@@ -922,7 +922,7 @@ public static class GameObjectInspector
 
             // Auto-detect overrides by comparing against prefab source (index-based)
             if (go.IsPrefabInstance)
-                PrefabUtility.DetectComponentOverrides(go, comp);
+                PrefabUtility.RecordComponentOverrides(go, comp);
 
             EditorGUI.Divider(paper, $"{compId}_sep", 6f);
         }
@@ -983,7 +983,7 @@ public static class GameObjectInspector
         builder.Item(Loc.Get("inspector.paste_component_as_new"), () => ComponentClipboard.PasteAsNew(go),
             icon: EditorIcons.Paste, enabled: ComponentClipboard.CanPasteAsNew());
 
-        // Values-only paste is fine on a prefab instance - DetectComponentOverrides picks the
+        // Values-only paste is fine on a prefab instance - RecordComponentOverrides picks the
         // changed fields up as overrides on the next frame.
         builder.Item(Loc.Get("inspector.paste_component_values"), () => ComponentClipboard.PasteValues(comp),
             icon: EditorIcons.ClipboardCheck, enabled: ComponentClipboard.CanPasteValues(comp.GetType()));
@@ -1131,7 +1131,7 @@ public static class GameObjectInspector
                     // The asset is gone, so there is nothing to select, revert to or apply against.
                     // Unpacking is the only way out, and it was previously offered nowhere.
                     Origami.Button(paper, "gi_prefab_unpack", Loc.Get("inspector.unpack_prefab"),
-                        () => { if (root != null) PrefabUtility.BreakPrefabInstance(root); }).Width(80).Show();
+                        () => { if (root != null) PrefabUtility.UnpackPrefabInstance(root); }).Width(80).Show();
                 }
                 else
                 {
@@ -1225,10 +1225,7 @@ public static class GameObjectInspector
                                 .OnClick((go, idx), (cap, _) =>
                                 {
                                     if (cap.idx < cap.go.PrefabOverrides.Count)
-                                    {
-                                        var singleOv = cap.go.PrefabOverrides[cap.idx];
-                                        PrefabUtility.ApplySingleOverride(cap.go, singleOv);
-                                    }
+                                        PrefabUtility.ApplySingleOverride(cap.go, cap.go.PrefabOverrides[cap.idx].Path);
                                 });
                     }
                     else

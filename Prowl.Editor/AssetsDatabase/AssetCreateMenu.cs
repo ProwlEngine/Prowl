@@ -46,7 +46,7 @@ public static class AssetCreateMenu
         foreach (var go in GameObjectClipboard.FilterToRoots(selected))
         {
             string name = FindUniqueName(absFolder, go.Name, ".prefab");
-            PrefabUtility.CreatePrefab(go, string.IsNullOrEmpty(folder) ? name : $"{folder}/{name}");
+            PrefabUtility.SaveAsPrefabAssetAndConnect(go, string.IsNullOrEmpty(folder) ? name : $"{folder}/{name}");
         }
     }
 

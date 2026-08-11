@@ -20,6 +20,7 @@ using Prowl.Editor.Utils;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -471,7 +472,7 @@ public class ProjectPanel : DockPanel
 
         string uniqueName = AssetCreateMenu.FindUniqueName(absFolder, go.Name, ".prefab");
         string relPath = string.IsNullOrEmpty(destRelFolder) ? uniqueName : destRelFolder + "/" + uniqueName;
-        Prefabs.PrefabUtility.CreatePrefab(go, relPath);
+        PrefabUtility.SaveAsPrefabAssetAndConnect(go, relPath);
     }
 
     /// <summary>

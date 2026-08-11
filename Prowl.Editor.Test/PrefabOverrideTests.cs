@@ -82,62 +82,62 @@ public class PrefabOverrideTests : EditorTestHarness
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void DetectComponentOverrides_RecordsChangedField()
+    public void RecordComponentOverrides_RecordsChangedField()
     {
         var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
 
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
 
         Assert.True(PrefabUtility.HasAnyOverrides(instance));
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "A")));
     }
 
     [Fact]
-    public void DetectComponentOverrides_NoChange_NoOverride()
+    public void RecordComponentOverrides_NoChange_NoOverride()
     {
         var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
         var comp = instance.GetComponent<OverrideComp>()!;
 
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
 
         Assert.False(PrefabUtility.HasAnyOverrides(instance));
     }
 
     [Fact]
-    public void DetectComponentOverrides_RevertingValue_RemovesOverride()
+    public void RecordComponentOverrides_RevertingValue_RemovesOverride()
     {
         var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
         var comp = instance.GetComponent<OverrideComp>()!;
 
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "A")));
 
         comp.A = 5; // back to source value
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         Assert.False(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "A")));
     }
 
     [Fact]
-    public void DetectGOOverrides_TracksTagIndex()
+    public void RecordGameObjectOverrides_TracksTagIndex()
     {
         var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
         instance.TagIndex = 3;
 
-        PrefabUtility.DetectGOOverrides(instance);
+        PrefabUtility.RecordGameObjectOverrides(instance);
 
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, "TagIndex")));
     }
 
     [Fact]
-    public void DetectGOOverrides_IgnoresName()
+    public void RecordGameObjectOverrides_IgnoresName()
     {
         var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
         instance.Name = "Renamed";
 
-        PrefabUtility.DetectGOOverrides(instance);
+        PrefabUtility.RecordGameObjectOverrides(instance);
 
         Assert.False(PrefabUtility.HasAnyOverrides(instance)); // name is per-instance, not an override
     }
@@ -153,7 +153,7 @@ public class PrefabOverrideTests : EditorTestHarness
         var instance = Instantiate(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
 
         PrefabUtility.ApplyOverrides(instance);
 
@@ -184,7 +184,7 @@ public class PrefabOverrideTests : EditorTestHarness
         var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
 
         PrefabUtility.RevertSingleOverride(instance, PrefabUtility.GetOverridePath(instance, comp, "A"));
 
@@ -199,10 +199,10 @@ public class PrefabOverrideTests : EditorTestHarness
         var instance = Instantiate(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         var ov = instance.PrefabOverrides.First(o => o.Path == PrefabUtility.GetOverridePath(instance, comp, "A"));
 
-        PrefabUtility.ApplySingleOverride(instance, ov);
+        PrefabUtility.ApplySingleOverride(instance, ov.Path);
 
         var fresh = GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!;
         Assert.Equal(99, fresh.GetComponent<OverrideComp>()!.A);
@@ -219,7 +219,7 @@ public class PrefabOverrideTests : EditorTestHarness
         var instance = Instantiate(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;                                   // local override on A
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
         // Change the prefab source's B (a non-overridden field) and reimport.
@@ -237,12 +237,12 @@ public class PrefabOverrideTests : EditorTestHarness
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void BreakPrefabInstance_ClearsPrefabData()
+    public void UnpackPrefabInstance_ClearsPrefabData()
     {
         var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
         Assert.True(instance.IsPrefabInstance);
 
-        PrefabUtility.BreakPrefabInstance(instance);
+        PrefabUtility.UnpackPrefabInstance(instance);
 
         Assert.False(instance.IsPrefabInstance);
     }

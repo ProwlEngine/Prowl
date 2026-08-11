@@ -72,7 +72,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.Children[0].GetComponent<OverrideComp>()!;
         comp.A = 42;
-        PrefabUtility.DetectComponentOverrides(instance.Children[0], comp);
+        PrefabUtility.RecordComponentOverrides(instance.Children[0], comp);
         SetSceneCurrent(instance);
 
         PrefabUtility.ApplyOverrides(Scene.Current!.RootObjects.First().Children[0]);
@@ -96,7 +96,7 @@ public class PrefabSafetyTests : EditorTestHarness
         instance.Transform.LocalScale = new Float3(3, 3, 3);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
         PrefabUtility.ApplyOverrides(Scene.Current!.RootObjects.First());
@@ -124,7 +124,7 @@ public class PrefabSafetyTests : EditorTestHarness
         Inst(inner).SetParent(parent);
         SetSceneCurrent(parent);
 
-        Assert.True(PrefabUtility.CreatePrefab(parent, "Parent.prefab"));
+        Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(parent, "Parent.prefab"));
 
         // Prefabs do not nest. The inner prefab's objects became content of the new one, so the
         // written asset holds no reference back to it.
@@ -134,7 +134,7 @@ public class PrefabSafetyTests : EditorTestHarness
     }
 
     [Fact]
-    public void BreakPrefabInstance_LeavesFlattenedContentInPlace()
+    public void UnpackPrefabInstance_LeavesFlattenedContentInPlace()
     {
         Guid inner = CreatePrefabAsset(new GameObject("Inner"), "Inner.prefab");
 
@@ -145,7 +145,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(outer);
         SetSceneCurrent(instance);
 
-        PrefabUtility.BreakPrefabInstance(instance);
+        PrefabUtility.UnpackPrefabInstance(instance);
 
         // Prefabs do not nest, so what was once a nested instance is ordinary content by now. Breaking
         // unpacks the whole thing and leaves that content where it is.
@@ -159,7 +159,7 @@ public class PrefabSafetyTests : EditorTestHarness
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void BreakPrefabInstance_OnChild_UnpacksWholeInstanceAndSurvivesRefresh()
+    public void UnpackPrefabInstance_OnChild_UnpacksWholeInstanceAndSurvivesRefresh()
     {
         var root = new GameObject("Root");
         new GameObject("Child").SetParent(root);
@@ -168,7 +168,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         SetSceneCurrent(instance);
 
-        PrefabUtility.BreakPrefabInstance(instance.Children[0]);
+        PrefabUtility.UnpackPrefabInstance(instance.Children[0]);
 
         Assert.False(instance.IsPrefabInstance);
         Assert.False(instance.Children[0].IsPrefabInstance);
@@ -191,7 +191,7 @@ public class PrefabSafetyTests : EditorTestHarness
 
         var instance = Inst(g);
         instance.Enabled = false;
-        PrefabUtility.DetectGOOverrides(instance);
+        PrefabUtility.RecordGameObjectOverrides(instance);
         SetSceneCurrent(instance);
 
         PrefabUtility.RefreshAllInstances(g);
@@ -217,7 +217,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.Enabled = false;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "_enabled")));
         SetSceneCurrent(instance);
 
@@ -240,7 +240,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var comp = instance.GetComponent<OverrideComp>()!;
 
         // Identifiers are regenerated per deserialization, so instance and source always differ.
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
 
         Assert.Empty(instance.PrefabOverrides);
     }
@@ -262,7 +262,7 @@ public class PrefabSafetyTests : EditorTestHarness
 
         var comp = instance.GetComponent<RefHolderComp>()!;
         comp.Target = target;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "Target")));
 
         PrefabUtility.RefreshAllInstances(g);
@@ -284,10 +284,10 @@ public class PrefabSafetyTests : EditorTestHarness
 
         var comp = instance.GetComponent<RefHolderComp>()!;
         comp.Target = target;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         var ov = instance.PrefabOverrides.First(o => o.Path == PrefabUtility.GetOverridePath(instance, comp, "Target"));
 
-        PrefabUtility.ApplySingleOverride(instance, ov);
+        PrefabUtility.ApplySingleOverride(instance, ov.Path);
 
         // A prefab asset cannot hold a scene reference; it must be dropped, not embedded as a copy.
         string text = File.ReadAllText(AssetAbsolutePath("RefApply.prefab"));
@@ -303,7 +303,7 @@ public class PrefabSafetyTests : EditorTestHarness
         source.AddComponent<RefHolderComp>().Target = target;
         SetSceneCurrent(source, target);
 
-        Assert.True(PrefabUtility.CreatePrefab(source, "Embed.prefab"));
+        Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(source, "Embed.prefab"));
 
         // The referenced object is not part of the prefab, so it must be linked, not copied in.
         string text = File.ReadAllText(AssetAbsolutePath("Embed.prefab"));
@@ -323,7 +323,7 @@ public class PrefabSafetyTests : EditorTestHarness
 
         var comp = instance.GetComponent<RefHolderComp>()!;
         comp.Target = target;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
 
         PrefabUtility.ApplyOverrides(Scene.Current!.RootObjects.First(o => o.Name == "Root"));
 
@@ -344,7 +344,7 @@ public class PrefabSafetyTests : EditorTestHarness
         instance = Inst(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
         Undo.Clear();
         return g;
@@ -416,7 +416,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<DerivedStateComp>()!;
         comp.Source = 21;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
         PrefabUtility.RefreshAllInstances(g);
@@ -436,7 +436,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<DerivedStateComp>()!;
         comp.Source = 21;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
         PrefabUtility.RevertSingleOverride(instance, PrefabUtility.GetOverridePath(instance, comp, "Source"));
@@ -461,11 +461,11 @@ public class PrefabSafetyTests : EditorTestHarness
 
         // Equal contents in a different list instance must not read as an override.
         comp.Values = [1, 2, 3];
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         Assert.Empty(instance.PrefabOverrides);
 
         comp.Values = [1, 2, 4];
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "Values")));
     }
 
@@ -484,7 +484,7 @@ public class PrefabSafetyTests : EditorTestHarness
         instance.HideFlags = HideFlags.NoGizmos;
         instance.Children[0].HideFlags = HideFlags.NoGizmos;
         instance.IsStatic = true;
-        PrefabUtility.DetectGOOverrides(instance);
+        PrefabUtility.RecordGameObjectOverrides(instance);
         SetSceneCurrent(instance);
 
         PrefabUtility.RefreshAllInstances(g);
@@ -542,7 +542,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.Children[0].GetComponent<OverrideComp>()!;
         comp.A = 50;
-        PrefabUtility.DetectComponentOverrides(instance.Children[0], comp);
+        PrefabUtility.RecordComponentOverrides(instance.Children[0], comp);
         // Captured now: once the source drops the child there is nothing left to build it from.
         string childPath = PrefabUtility.GetOverridePath(instance.Children[0], comp, "A");
         Assert.True(PrefabUtility.IsOverrideResolvable(instance, childPath));
@@ -574,7 +574,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
         Undo.Clear();
 
@@ -601,7 +601,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 12345;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
 
         var scene = new Scene();
         scene.Add(instance);
@@ -662,12 +662,12 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
         var live = Scene.Current!.RootObjects.First();
         PrefabUtility.ApplyOverrides(live);
-        PrefabUtility.ApplySingleOverride(live, live.PrefabOverrides.First());
+        PrefabUtility.ApplySingleOverride(live, live.PrefabOverrides.First().Path);
 
         // Neither the asset nor its file moved, and the override is still there.
         Assert.Equal(original, File.ReadAllText(AssetAbsolutePath("Generated.prefab")));
@@ -838,15 +838,15 @@ public class PrefabSafetyTests : EditorTestHarness
         var instance = Inst(g);
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.A = 77;
-        PrefabUtility.DetectComponentOverrides(instance, comp);
+        PrefabUtility.RecordComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
         Application.IsPlaying = true;
         try
         {
             PrefabUtility.ApplyOverrides(Scene.Current!.RootObjects.First());
-            PrefabUtility.BreakPrefabInstance(Scene.Current!.RootObjects.First());
-            Assert.False(PrefabUtility.CreatePrefab(new GameObject("X"), "X.prefab"));
+            PrefabUtility.UnpackPrefabInstance(Scene.Current!.RootObjects.First());
+            Assert.False(PrefabUtility.SaveAsPrefabAssetAndConnect(new GameObject("X"), "X.prefab"));
         }
         finally
         {
@@ -865,12 +865,12 @@ public class PrefabSafetyTests : EditorTestHarness
     [Fact]
     public void CreatePrefab_RefusesToClobberAndRejectsNonPrefabPath()
     {
-        Assert.True(PrefabUtility.CreatePrefab(new GameObject("A"), "P.prefab"));
+        Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(new GameObject("A"), "P.prefab"));
 
         var b = new GameObject("B");
-        Assert.False(PrefabUtility.CreatePrefab(b, "P.prefab"));
-        Assert.True(PrefabUtility.CreatePrefab(b, "P.prefab", overwrite: true));
-        Assert.False(PrefabUtility.CreatePrefab(b, "NotAPrefab"));
+        Assert.False(PrefabUtility.SaveAsPrefabAssetAndConnect(b, "P.prefab"));
+        Assert.True(PrefabUtility.SaveAsPrefabAssetAndConnect(b, "P.prefab", overwrite: true));
+        Assert.False(PrefabUtility.SaveAsPrefabAssetAndConnect(b, "NotAPrefab"));
     }
 
     // ---------------------------------------------------------------------
