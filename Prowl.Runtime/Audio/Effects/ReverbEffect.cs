@@ -5,6 +5,7 @@ using System;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio.Native;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Audio.Effects;
 
@@ -31,37 +32,37 @@ public sealed class ReverbEffect : AudioEffect
     public float RoomSize
     {
         get => _roomSize;
-        set { _roomSize = value; if (_reverb != null) _reverb.RoomSize = value; }
+        set { _roomSize = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.RoomSize = _roomSize; }
     }
 
     public float Damping
     {
         get => _damping;
-        set { _damping = value; if (_reverb != null) _reverb.Damping = value; }
+        set { _damping = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Damping = _damping; }
     }
 
     public float Wet
     {
         get => _wet;
-        set { _wet = value; if (_reverb != null) _reverb.Wet = value; }
+        set { _wet = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Wet = _wet; }
     }
 
     public float Dry
     {
         get => _dry;
-        set { _dry = value; if (_reverb != null) _reverb.Dry = value; }
+        set { _dry = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Dry = _dry; }
     }
 
     public float Width
     {
         get => _width;
-        set { _width = value; if (_reverb != null) _reverb.Width = value; }
+        set { _width = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Width = _width; }
     }
 
     public float InputWidth
     {
         get => _inputWidth;
-        set { _inputWidth = value; if (_reverb != null) _reverb.InputWidth = value; }
+        set { _inputWidth = Maths.Max(0.0f, value); if (_reverb != null) _reverb.InputWidth = _inputWidth; }
     }
 
     /// <summary>Holds the tail forever instead of letting it decay.</summary>

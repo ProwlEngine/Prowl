@@ -105,7 +105,7 @@ public class Reverb
         }
         set
         {
-            damp = value * SCALE_DAMP;
+            damp = Maths.Clamp(value, 0.0f, 1.0f) * SCALE_DAMP;
             Update();
         }
     }
@@ -118,7 +118,7 @@ public class Reverb
         }
         set
         {
-            wet = value * SCALE_WET;
+            wet = Maths.Clamp(value, 0.0f, 1.0f) * SCALE_WET;
             Update();
         }
     }
@@ -131,7 +131,7 @@ public class Reverb
         }
         set
         {
-            dry = value * SCALE_DRY;
+            dry = Maths.Clamp(value, 0.0f, 1.0f) * SCALE_DRY;
         }
     }
 
@@ -143,7 +143,7 @@ public class Reverb
         }
         set
         {
-            width = value;
+            width = Maths.Clamp(value, 0.0f, 1.0f);
             Update();
         }
     }
@@ -156,7 +156,7 @@ public class Reverb
         }
         set
         {
-            input_width = value;
+            input_width = Maths.Max(0.0f, value);
         }
     }
 

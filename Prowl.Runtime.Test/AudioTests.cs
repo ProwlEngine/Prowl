@@ -886,6 +886,46 @@ public class AudioTests : RuntimeTestBase
             Assert.Equal(i < expected * Channels ? 0.5f : 0f, output[i], 4);
     }
 
+    // A block with nowhere to write leaves the working buffers empty, and a fixed statement over an
+    // empty array yields a null pointer, which is not something an effect should ever be handed.
+    [Fact]
+    public unsafe void EffectChain_WithAnEmptyBlock_DoesNothing()
+    {
+        var chain = new AudioEffectChain();
+        chain.Publish([new DistortionEffect()]);
+
+        float[] nothing = [];
+        uint written;
+
+        fixed (float* pointer = nothing)
+            written = chain.Process(pointer, 0, pointer, 0, (uint)Channels);
+
+        Assert.Equal(0u, written);
+    }
+
+    // Every parameter carries a 0 to 1 range in the inspector, and the properties are the script path
+    // to the same values, so they cannot be the one way in that ignores it.
+    [Fact]
+    public void ReverbEffect_ParametersClamp()
+    {
+        var effect = new ReverbEffect
+        {
+            RoomSize = 5f,
+            Damping = -2f,
+            Wet = 9f,
+            Dry = -1f,
+            Width = 3f,
+            InputWidth = -4f,
+        };
+
+        Assert.Equal(1f, effect.RoomSize);
+        Assert.Equal(0f, effect.Damping);
+        Assert.Equal(1f, effect.Wet);
+        Assert.Equal(0f, effect.Dry);
+        Assert.Equal(1f, effect.Width);
+        Assert.Equal(0f, effect.InputWidth);
+    }
+
     // An effect is free to write nothing, and several built-in ones do exactly that when handed a
     // format they are not configured for. The chain promoted the buffer it had not written, so the
     // stage after it read whatever was in there from a previous block.
