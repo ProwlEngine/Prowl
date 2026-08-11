@@ -327,6 +327,32 @@ public static class AudioContext
         }
     }
 
+    /// <summary>
+    /// Takes another reference on a buffer that is already cached, without needing the bytes it was
+    /// built from. Returns false when nothing is cached under <paramref name="hash"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is what lets a buffer outlive the <see cref="AudioClip"/> that loaded it. Playback hands
+    /// the raw pointer to the native decoder, which reads it on the audio thread for as long as the
+    /// voice sounds, and the clip is free to be disposed in the meantime: an asset reimport does
+    /// exactly that, and so does a clip nothing kept a reference to being collected. Freeing the
+    /// buffer while a voice is reading it is a use after free with no useful stack.
+    /// </remarks>
+    internal static bool RetainClipHandle(UInt64 hash)
+    {
+        if (hash == 0)
+            return false;
+
+        lock (clipTableLock)
+        {
+            if (!audioClipHandles.TryGetValue(hash, out IntPtr handle) || handle == IntPtr.Zero)
+                return false;
+
+            audioClipRefCounts[hash] = audioClipRefCounts.TryGetValue(hash, out int count) ? count + 1 : 1;
+            return true;
+        }
+    }
+
     /// <summary>How many clips currently hold the shared buffer for this hash, 0 if it is not cached.</summary>
     internal static int GetClipRefCount(UInt64 hash)
     {

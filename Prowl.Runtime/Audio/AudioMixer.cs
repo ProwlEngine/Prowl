@@ -76,6 +76,26 @@ public sealed class AudioMixerGroup : EngineObject
     [SerializeIgnore]
     private int _builtForDevice = -1;
 
+    [SerializeIgnore]
+    private int _nodeGeneration;
+
+    [SerializeIgnore]
+    private bool _releasing;
+
+    /// <summary>
+    /// Bumped every time this bus builds or tears down its native node. Anything attached to the bus
+    /// compares it to know whether what it attached to is still there, because a rebuilt node can
+    /// land on the address the old one had and the pointer alone cannot answer that.
+    /// </summary>
+    internal int NodeGeneration => _nodeGeneration;
+
+    /// <summary>
+    /// Raised while the native node is still valid, immediately before it is torn down. Everything
+    /// feeding this bus has to let go here: afterwards it is attached to a node that no longer
+    /// exists, which is silence at best.
+    /// </summary>
+    internal event Action NativeReleasing;
+
     // Effect hosting. Mirrors AudioSource: the bus feeds a node that runs the managed chain, and that
     // node is what feeds the parent.
     [SerializeIgnore]
@@ -190,6 +210,7 @@ public sealed class AudioMixerGroup : EngineObject
     private void Build()
     {
         _builtForDevice = AudioContext.DeviceGeneration;
+        _nodeGeneration++;
         _nativeGroup.pointer = MiniAudioExNative.ma_ex_sound_group_init(AudioContext.NativeContext);
 
         if (_nativeGroup.pointer == IntPtr.Zero)
@@ -327,19 +348,67 @@ public sealed class AudioMixerGroup : EngineObject
 
     internal void ReleaseNative()
     {
-        if (_builtForDevice == AudioContext.DeviceGeneration)
+        // Nothing built means nothing to tear down and nothing that could be attached to it. This is
+        // also what keeps the walk below from doing the same work twice over a tree.
+        if (_builtForDevice == -1 && _nativeGroup.pointer == IntPtr.Zero && _effectNode.pointer == IntPtr.Zero)
+            return;
+
+        // A group that reaches back into this one while it is releasing, which a hand edited asset
+        // with a routing loop can produce, has to stop here rather than recurse.
+        if (_releasing)
+            return;
+
+        _releasing = true;
+
+        try
         {
-            if (_effectNodeReady)
-                MiniAudioNative.ma_effect_node_uninit(_effectNode);
+            // Both a child bus and a source attach their output to this group's node, and neither
+            // has any other way to find out it is going. Told while the node is still valid, so what
+            // they do about it still means something.
+            ReleaseChildren();
+            NativeReleasing?.Invoke();
 
-            if (_nativeGroup.pointer != IntPtr.Zero)
-                MiniAudioExNative.ma_ex_sound_group_uninit(_nativeGroup.pointer);
+            if (_builtForDevice == AudioContext.DeviceGeneration)
+            {
+                if (_effectNodeReady)
+                    MiniAudioNative.ma_effect_node_uninit(_effectNode);
+
+                if (_nativeGroup.pointer != IntPtr.Zero)
+                    MiniAudioExNative.ma_ex_sound_group_uninit(_nativeGroup.pointer);
+            }
+
+            _effectNode.Free();
+            _effectNodeReady = false;
+            _nativeGroup.pointer = IntPtr.Zero;
+            _builtForDevice = -1;
+            _nodeGeneration++;
         }
+        finally
+        {
+            _releasing = false;
+        }
+    }
 
-        _effectNode.Free();
-        _effectNodeReady = false;
-        _nativeGroup.pointer = IntPtr.Zero;
-        _builtForDevice = -1;
+    /// <summary>
+    /// Releases every bus feeding this one, which rebuilds from whatever asks for it next.
+    /// </summary>
+    /// <remarks>
+    /// Read from the already bound mixer rather than through <see cref="Mixer"/>, which resolves the
+    /// owning asset. Teardown is the wrong moment to load one, and anything that got as far as
+    /// building a node has a bound mixer already, since that is where its parent came from.
+    /// </remarks>
+    private void ReleaseChildren()
+    {
+        AudioMixer owner = _mixer;
+
+        if (owner.IsNotValid())
+            return;
+
+        foreach (AudioMixerGroup group in owner.Groups)
+        {
+            if (group.IsValid() && !ReferenceEquals(group, this) && ReferenceEquals(group.Parent, this))
+                group.ReleaseNative();
+        }
     }
 
     public override void OnValidate()

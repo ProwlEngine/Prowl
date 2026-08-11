@@ -30,6 +30,9 @@ public sealed class AudioSource : MonoBehaviour
         public IntPtr handle;
         public bool atEnd;
         public long startOrder;
+
+        /// <summary>Shared clip buffer this voice holds a reference on, 0 if it holds none.</summary>
+        public ulong clipHash;
     }
 
     // Audio clip and playback settings
@@ -117,6 +120,12 @@ public sealed class AudioSource : MonoBehaviour
     private ma_effect_node_ptr _effectNode;
     private bool _effectNodeReady;
     private IntPtr _routedTo;
+
+    // The bus this source is attached to, and the node generation it was attached at. Kept so a bus
+    // that rebuilds or disappears under a running source can be noticed and followed.
+    private AudioMixerGroup _routedGroup;
+    private int _routedGeneration;
+
     private Float3 _previousPosition;
     private Float3 _velocity;
     private ma_effect_node_process_proc _onEffectNodeProcess;
@@ -543,6 +552,12 @@ public sealed class AudioSource : MonoBehaviour
 
         if (_soundGroup.pointer == IntPtr.Zero) return;
 
+        // The bus this source feeds rebuilds its node when the device changes, and is replaced
+        // outright when the mixer is reimported. Either way this source is attached to something that
+        // is no longer the bus it was told to feed.
+        if (RoutingIsStale())
+            RouteToOutputGroup();
+
         // Deferred auto-play: the clip was still streaming in at OnEnable; play once it arrives.
         if (_pendingAutoPlay && TryAutoPlay())
             _pendingAutoPlay = false;
@@ -655,14 +670,17 @@ public sealed class AudioSource : MonoBehaviour
 
         DestroyOneShotVoices(live);
 
-        if (_mainSource != null && _mainSource.handle != IntPtr.Zero)
+        if (_mainSource != null)
         {
-            if (live)
+            if (live && _mainSource.handle != IntPtr.Zero)
             {
                 MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
                 MiniAudioExNative.ma_ex_audio_source_uninit(_mainSource.handle);
             }
 
+            // Whether or not the voice could be uninitialized, the reference it held on its clip's
+            // buffer is this component's to give back.
+            ReleaseVoiceClip(_mainSource);
             _mainSource = null;
         }
 
@@ -681,7 +699,7 @@ public sealed class AudioSource : MonoBehaviour
             _effectNodeReady = false;
         }
 
-        _routedTo = IntPtr.Zero;
+        ClearRouting();
 
         // Cleanup sound group
         if (_soundGroup.pointer != IntPtr.Zero)
@@ -719,10 +737,58 @@ public sealed class AudioSource : MonoBehaviour
         _isPaused = false;
         MiniAudioExNative.ma_ex_audio_source_set_loop(_mainSource.handle, _loop ? (uint)1 : 0);
 
-        if (_clip.Res.Handle != IntPtr.Zero)
-            MiniAudioExNative.ma_ex_audio_source_play_from_memory(_mainSource.handle, _clip.Res.Handle, _clip.Res.DataSize);
+        StartVoice(_mainSource, _clip.Res);
+    }
+
+    /// <summary>
+    /// Starts a clip on a voice, holding a reference on the clip's shared buffer for as long as that
+    /// voice can read from it.
+    /// </summary>
+    /// <remarks>
+    /// The native decoder reads straight out of that buffer on the audio thread, and the
+    /// <see cref="AudioClip"/> that loaded it is free to go in the meantime: an asset reimport
+    /// disposes the cached instance, and a clip nothing holds a reference to is collected. Either one
+    /// used to free the buffer out from under a sounding voice.
+    ///
+    /// The new reference is taken before the old one is dropped, so replaying the same clip cannot
+    /// pass through zero holders and free the buffer it is about to play from.
+    /// </remarks>
+    private static void StartVoice(SourceInfo voice, AudioClip clip)
+    {
+        ulong retained = AudioContext.RetainClipHandle(clip.Hash) ? clip.Hash : 0;
+
+        ReleaseVoiceClip(voice);
+        voice.clipHash = retained;
+
+        // A clip whose buffer could not be referenced has no memory to play from, whether it never
+        // had any or it has just been released, so it falls back to the file the same way one that
+        // was never loaded into memory does.
+        if (retained != 0)
+            MiniAudioExNative.ma_ex_audio_source_play_from_memory(voice.handle, clip.Handle, clip.DataSize);
         else
-            MiniAudioExNative.ma_ex_audio_source_play_from_file(_mainSource.handle, _clip.Res.FilePath, _clip.Res.StreamFromDisk ? (uint)1 : 0);
+            MiniAudioExNative.ma_ex_audio_source_play_from_file(voice.handle, clip.FilePath, clip.StreamFromDisk ? (uint)1 : 0);
+
+        // The only reference to the clip may be the argument, and the native side now holds a raw
+        // pointer into its data, so the finalizer must not be allowed to run before this point.
+        GC.KeepAlive(clip);
+    }
+
+    /// <summary>
+    /// Drops the reference a voice holds on its clip's buffer.
+    /// </summary>
+    /// <remarks>
+    /// Called when the voice is torn down or pointed at something else, not when it is stopped.
+    /// Stopping only clears a flag, and the audio thread can still be part way through a block, so
+    /// the buffer has to outlive that. Anything holding a clip past its last sound is bounded by the
+    /// voices a source owns, which is bounded by <see cref="MaxOneShotVoices"/>.
+    /// </remarks>
+    private static void ReleaseVoiceClip(SourceInfo voice)
+    {
+        if (voice.clipHash == 0)
+            return;
+
+        AudioContext.ReleaseClipHandle(voice.clipHash);
+        voice.clipHash = 0;
     }
 
     /// <summary>
@@ -735,6 +801,9 @@ public sealed class AudioSource : MonoBehaviour
 
         _mainSource.atEnd = false;
         MiniAudioExNative.ma_ex_audio_source_play_from_callback(_mainSource.handle, _proceduralProcessCallback, IntPtr.Zero);
+
+        // The callback has replaced whatever clip was feeding this voice.
+        ReleaseVoiceClip(_mainSource);
     }
 
     /// <summary>
@@ -813,10 +882,7 @@ public sealed class AudioSource : MonoBehaviour
         MiniAudioExNative.ma_ex_audio_source_set_loop(voice.handle, 0);
         MiniAudioExNative.ma_ex_audio_source_set_volume(voice.handle, volumeScale);
 
-        if (clip.Handle != IntPtr.Zero)
-            MiniAudioExNative.ma_ex_audio_source_play_from_memory(voice.handle, clip.Handle, clip.DataSize);
-        else
-            MiniAudioExNative.ma_ex_audio_source_play_from_file(voice.handle, clip.FilePath, clip.StreamFromDisk ? (uint)1 : 0);
+        StartVoice(voice, clip);
     }
 
     /// <summary>Stops every one shot voice this source is sounding. Leaves the main playback alone.</summary>
@@ -927,6 +993,7 @@ public sealed class AudioSource : MonoBehaviour
                 MiniAudioExNative.ma_ex_audio_source_uninit(victim.handle);
             }
 
+            ReleaseVoiceClip(victim);
             _oneShots.Remove(victim);
         }
     }
@@ -935,11 +1002,13 @@ public sealed class AudioSource : MonoBehaviour
     {
         foreach (SourceInfo voice in _oneShots)
         {
-            if (voice.handle == IntPtr.Zero || !live)
-                continue;
+            if (live && voice.handle != IntPtr.Zero)
+            {
+                MiniAudioExNative.ma_ex_audio_source_stop(voice.handle);
+                MiniAudioExNative.ma_ex_audio_source_uninit(voice.handle);
+            }
 
-            MiniAudioExNative.ma_ex_audio_source_stop(voice.handle);
-            MiniAudioExNative.ma_ex_audio_source_uninit(voice.handle);
+            ReleaseVoiceClip(voice);
         }
 
         _oneShots.Clear();
@@ -1112,33 +1181,106 @@ public sealed class AudioSource : MonoBehaviour
     /// The group builds its own native node on demand, so this works whether the group has been used
     /// before or not.
     /// </summary>
+    /// <summary>Whatever runs last in this source is what feeds the bus: the effect node when it came
+    /// up, the sound group itself otherwise. A failed effect node costs the effects, not the routing.</summary>
+    private IntPtr OutputTail => _effectNodeReady && _effectNode.pointer != IntPtr.Zero
+        ? _effectNode.pointer
+        : _soundGroup.pointer;
+
     private void RouteToOutputGroup()
     {
         if (!AudioContext.IsInitialized || _soundGroup.pointer == IntPtr.Zero)
             return;
 
-        // Whatever runs last in this source is what feeds the bus: the effect node when it came up,
-        // the sound group itself otherwise. A failed effect node costs the effects, not the routing.
-        IntPtr tail = _effectNodeReady && _effectNode.pointer != IntPtr.Zero
-            ? _effectNode.pointer
-            : _soundGroup.pointer;
-
         AudioMixerGroup group = _outputGroup.Res;
         IntPtr target = group.IsValid() ? group.NativeNode : IntPtr.Zero;
+        int generation = group.IsValid() ? group.NodeGeneration : 0;
 
         if (target == IntPtr.Zero)
         {
             var engine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(AudioContext.NativeContext));
             target = MiniAudioNative.ma_engine_get_endpoint(engine).pointer;
+
+            // Straight to the endpoint, so there is no bus to follow. A group that exists but could
+            // not build a node is in the same position as no group at all.
+            group = null;
+            generation = 0;
         }
 
         // OnValidate runs for every field, so without this a volume drag re-attaches the node graph
-        // once per frame for no reason. The tail only changes across a teardown, which clears this.
-        if (target == _routedTo)
+        // once per frame for no reason. The generation is part of the test because a bus that has
+        // been torn down and rebuilt can land on the address its old node had.
+        if (target == _routedTo && ReferenceEquals(group, _routedGroup) && generation == _routedGeneration)
             return;
 
-        MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(tail), 0, new ma_node_ptr(target), 0);
+        FollowGroup(group);
+
+        MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(OutputTail), 0, new ma_node_ptr(target), 0);
         _routedTo = target;
+        _routedGeneration = generation;
+    }
+
+    /// <summary>
+    /// True when what this source is attached to is no longer what it was told to feed, which is the
+    /// one thing nothing else reports.
+    /// </summary>
+    /// <remarks>
+    /// A bus rebuilds its node when the device changes, and its whole object is replaced when the
+    /// mixer is reimported. Neither is something a source can see from the pointer it attached to.
+    /// </remarks>
+    private bool RoutingIsStale()
+    {
+        // Attached straight to the engine endpoint, which only moves when the device does, and that
+        // is handled by the rebuild in Update.
+        if (_routedGroup is null)
+            return false;
+
+        // The group object itself has gone, which is what a mixer reimport does to every one of them.
+        if (_routedGroup.IsNotValid())
+            return true;
+
+        return _routedGroup.NodeGeneration != _routedGeneration;
+    }
+
+    /// <summary>Subscribes to the bus this source now feeds, and stops following the previous one.</summary>
+    private void FollowGroup(AudioMixerGroup group)
+    {
+        if (ReferenceEquals(group, _routedGroup))
+            return;
+
+        // Not guarded on validity: a disposed group can still be holding this handler, and leaving it
+        // there keeps the source alive behind it.
+        if (_routedGroup is not null)
+            _routedGroup.NativeReleasing -= OnOutputGroupReleasing;
+
+        _routedGroup = group;
+
+        if (_routedGroup is not null)
+            _routedGroup.NativeReleasing += OnOutputGroupReleasing;
+    }
+
+    /// <summary>
+    /// The bus this source feeds is tearing its node down. Let go now, while the call still lands on
+    /// a node that exists, and let <see cref="Update"/> put this source on the rebuilt one.
+    /// </summary>
+    private void OnOutputGroupReleasing()
+    {
+        if (_soundGroup.pointer == IntPtr.Zero)
+            return;
+
+        MiniAudioNative.ma_node_detach_output_bus(new ma_node_ptr(OutputTail), 0);
+
+        // Detached rather than moved to the endpoint on purpose: a source whose bus is muted or
+        // quiet must not jump to full volume on the master for the frame it takes to be re-routed.
+        _routedTo = IntPtr.Zero;
+    }
+
+    /// <summary>Stops following whatever bus this source was attached to.</summary>
+    private void ClearRouting()
+    {
+        FollowGroup(null);
+        _routedTo = IntPtr.Zero;
+        _routedGeneration = 0;
     }
 
     private void ApplySettings()

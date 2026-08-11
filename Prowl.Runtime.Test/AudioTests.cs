@@ -462,6 +462,47 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0, AudioContext.GetClipRefCount(hash));
     }
 
+    // Playback hands the raw pointer to a native decoder that reads it on the audio thread for as
+    // long as the voice sounds, and the clip that loaded it can be disposed in the meantime: an asset
+    // reimport does exactly that, and so does a clip nothing kept a reference to being collected.
+    // Whatever is playing has to be able to hold the buffer up on its own.
+    [Fact]
+    public void RetainedBuffer_OutlivesTheClipThatLoadedIt()
+    {
+        var clip = new AudioClip([80, 81, 82, 83]);
+        ulong hash = clip.Hash;
+        IntPtr handle = clip.Handle;
+
+        Assert.True(AudioContext.RetainClipHandle(hash));
+        Assert.Equal(2, AudioContext.GetClipRefCount(hash));
+
+        // The clip goes, the way a reimport takes it away from under a playing source.
+        clip.Dispose();
+
+        Assert.Equal(1, AudioContext.GetClipRefCount(hash));
+
+        // Still cached, so the pointer the native side is reading is still the same allocation.
+        Assert.True(AudioContext.RetainClipHandle(hash));
+        AudioContext.ReleaseClipHandle(hash);
+
+        AudioContext.ReleaseClipHandle(hash);
+        Assert.Equal(0, AudioContext.GetClipRefCount(hash));
+
+        // Nothing holds it now, so there is nothing left to take a reference on.
+        Assert.False(AudioContext.RetainClipHandle(hash));
+        Assert.NotEqual(IntPtr.Zero, handle);
+    }
+
+    // A buffer nothing loaded cannot be referenced into existence, and a file backed clip has no
+    // hash at all. Both have to answer rather than throw, since playback asks before it decides
+    // whether it is playing from memory or from disk.
+    [Fact]
+    public void RetainingAnUncachedBuffer_ReportsFailure()
+    {
+        Assert.False(AudioContext.RetainClipHandle(0));
+        Assert.False(AudioContext.RetainClipHandle(0xDEADBEEFDEADBEEF));
+    }
+
     // Deserializing into a clip that already held a buffer used to overwrite the handle, orphaning
     // the previous one with a reference that nothing could ever drop.
     [Fact]

@@ -24,6 +24,7 @@ public static class AudioPreview
     private static IntPtr s_group;
     private static int s_deviceGeneration = -1;
     private static Guid s_playing;
+    private static ulong s_clipHash;
 
     /// <summary>The clip currently being auditioned, or Guid.Empty.</summary>
     public static Guid PlayingClip => IsPlaying ? s_playing : Guid.Empty;
@@ -43,7 +44,14 @@ public static class AudioPreview
         MiniAudioExNative.ma_ex_audio_source_stop(s_source);
         MiniAudioExNative.ma_ex_audio_source_set_loop(s_source, 0);
 
-        if (clip.Handle != IntPtr.Zero)
+        // Held for as long as the voice can read it, because auditioning a clip and then reimporting
+        // it is an ordinary thing to do and disposing the clip frees the buffer the decoder is on.
+        // Taken before the previous one is dropped, so re-auditioning the same clip cannot free it.
+        ulong retained = AudioContext.RetainClipHandle(clip.Hash) ? clip.Hash : 0;
+        ReleaseClip();
+        s_clipHash = retained;
+
+        if (retained != 0)
             MiniAudioExNative.ma_ex_audio_source_play_from_memory(s_source, clip.Handle, clip.DataSize);
         else if (!string.IsNullOrEmpty(clip.FilePath))
             MiniAudioExNative.ma_ex_audio_source_play_from_file(s_source, clip.FilePath, 0);
@@ -51,6 +59,14 @@ public static class AudioPreview
             return;
 
         s_playing = clip.AssetID;
+    }
+
+    private static void ReleaseClip()
+    {
+        if (s_clipHash == 0) return;
+
+        AudioContext.ReleaseClipHandle(s_clipHash);
+        s_clipHash = 0;
     }
 
     public static void Stop()
@@ -103,6 +119,8 @@ public static class AudioPreview
             if (s_group != IntPtr.Zero)
                 MiniAudioExNative.ma_ex_sound_group_uninit(s_group);
         }
+
+        ReleaseClip();
 
         s_source = IntPtr.Zero;
         s_group = IntPtr.Zero;
