@@ -763,28 +763,40 @@ public class AudioTests : RuntimeTestBase
         var effect = new ReverbEffect();
         effect.Initialize(TestSampleRate, 6);
 
+        // Through a chain, which is the only place "passes through" means anything. Calling the effect
+        // directly just shows that it did not write, which is not the same claim.
+        var chain = new AudioEffectChain();
+        chain.Publish([effect]);
+
         float[] input = new float[6 * 4];
         for (int i = 0; i < input.Length; i++) input[i] = 0.25f;
 
-        float[] output = Run(effect, input, channels: 6);
+        float[] output = RunChain(chain, input, 4, channels: 6);
 
-        // Untouched output means the previous stage's signal carries on unchanged.
         foreach (float sample in output)
-            Assert.Equal(0f, sample);
+            Assert.Equal(0.25f, sample, 5);
     }
 
     /// <summary>Runs a chain over one block, the way the audio callback does.</summary>
-    private static unsafe float[] RunChain(AudioEffectChain chain, float[] input, int outFrames, int channels = Channels)
+    private static unsafe float[] RunChain(AudioEffectChain chain, float[] input, int outFrames, out uint written, int channels = Channels)
     {
         float[] output = new float[outFrames * channels];
 
         fixed (float* pIn = input, pOut = output)
-        {
-            uint written = chain.Process(pIn, (uint)(input.Length / channels), pOut, (uint)outFrames, (uint)channels);
-            Assert.True(written <= outFrames, $"chain reported {written} frames into a {outFrames} frame buffer");
-        }
+            written = chain.Process(pIn, (uint)(input.Length / channels), pOut, (uint)outFrames, (uint)channels);
 
+        Assert.True(written <= outFrames, $"chain reported {written} frames into a {outFrames} frame buffer");
         return output;
+    }
+
+    private static float[] RunChain(AudioEffectChain chain, float[] input, int outFrames, int channels = Channels)
+        => RunChain(chain, input, outFrames, out _, channels);
+
+    /// <summary>An effect that runs but writes nothing, which is what every built-in one does when it
+    /// is handed a format it is not configured for.</summary>
+    private sealed class InertEffect : AudioEffect
+    {
+        protected override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels) { }
     }
 
     /// <summary>Reports the format it was bound to, and how many times.</summary>
@@ -861,12 +873,54 @@ public class AudioTests : RuntimeTestBase
         var chain = new AudioEffectChain();
         chain.Publish([new DistortionEffect { Blend = 0f }]);
 
-        float[] output = RunChain(chain, Interleave(0.5f, 0.5f, inFrames), outFrames);
+        float[] output = RunChain(chain, Interleave(0.5f, 0.5f, inFrames), outFrames, out uint written);
 
-        // Fully dry distortion is unity gain, so every frame the chain could fit carries the input.
+        // A one to one chain cannot produce more than it was given, and must not claim to.
         int expected = Math.Min(inFrames, outFrames);
-        for (int i = 0; i < expected * Channels; i++)
-            Assert.Equal(0.5f, output[i], 4);
+        Assert.Equal((uint)expected, written);
+
+        // Fully dry distortion is unity gain, so every frame it reported carries the input. Asserting
+        // the whole buffer, not just the frames it reported: anything past them has to be left alone
+        // rather than filled with whatever the chain happened to have lying around.
+        for (int i = 0; i < output.Length; i++)
+            Assert.Equal(i < expected * Channels ? 0.5f : 0f, output[i], 4);
+    }
+
+    // An effect is free to write nothing, and several built-in ones do exactly that when handed a
+    // format they are not configured for. The chain promoted the buffer it had not written, so the
+    // stage after it read whatever was in there from a previous block.
+    [Fact]
+    public void EffectChain_AnEffectThatWritesNothing_PassesAudioThrough()
+    {
+        var chain = new AudioEffectChain();
+        chain.Publish([new InertEffect()]);
+
+        float[] first = RunChain(chain, Interleave(0.5f, 0.5f, 16), 16);
+
+        foreach (float sample in first)
+            Assert.Equal(0.5f, sample, 5);
+
+        // The second block is the one that catches a stale buffer: it would carry the first block's
+        // audio rather than its own.
+        float[] second = RunChain(chain, Interleave(-0.25f, -0.25f, 16), 16);
+
+        foreach (float sample in second)
+            Assert.Equal(-0.25f, sample, 5);
+    }
+
+    // Same again with a real stage after the inert one, since that is what actually reads the buffer
+    // the inert effect left behind.
+    [Fact]
+    public void EffectChain_AnInertStage_DoesNotPoisonTheNextOne()
+    {
+        var chain = new AudioEffectChain();
+        chain.Publish([new InertEffect(), new DistortionEffect { Blend = 0f }]);
+
+        RunChain(chain, Interleave(0.75f, 0.75f, 16), 16);
+        float[] output = RunChain(chain, Interleave(-0.5f, -0.5f, 16), 16);
+
+        foreach (float sample in output)
+            Assert.Equal(-0.5f, sample, 5);
     }
 
     // With nothing in it the block still has to reach the output, or a source with no effects goes

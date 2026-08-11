@@ -54,6 +54,11 @@ internal sealed class AudioEffectChain
     /// Runs every effect over one block and writes the result to <paramref name="framesOut"/>.
     /// Returns how many frames were written, which is what the caller should report to the graph.
     /// </summary>
+    /// <remarks>
+    /// With no effect changing the count that is the smaller of the two frame counts, because a one to
+    /// one chain cannot produce more audio than it was given. Reporting the requested count instead
+    /// would mean claiming frames that were never written.
+    /// </remarks>
     public unsafe uint Process(float* framesIn, uint frameCountIn, float* framesOut, uint frameCountOut, uint channels)
     {
         int channelCount = (int)Math.Max(1u, channels);
@@ -77,28 +82,39 @@ internal sealed class AudioEffectChain
             float* destination = pB;
 
             uint countIn = frameCountIn;
-            uint countOut = frameCountOut;
 
             for (int i = 0; i < chain.Length; i++)
             {
-                var input = new NativeArray<float>(source, (int)countIn * channelCount);
-                var output = new NativeArray<float>(destination, (int)countOut * channelCount);
+                int stageSamples = (int)countIn * channelCount;
+
+                // Seeded from the stage before it. An effect is free to write nothing, or to write
+                // only part of the block, and several built-in ones do exactly that when they are not
+                // configured for the format they were handed. Without this they would promote a buffer
+                // holding whatever was in it two blocks ago instead of passing audio through.
+                Copy(source, destination, stageSamples, capacity);
+
+                var input = new NativeArray<float>(source, stageSamples);
+                var output = new NativeArray<float>(destination, capacity);
+
+                // What a one to one stage produces, which is what every built-in effect is. Anything
+                // that resamples or pads writes its own answer here.
+                uint produced = countIn;
 
                 // A bypassed effect leaves both buffers as the previous stage left them, so there is
                 // nothing to carry forward either.
-                if (!chain[i].Process(input, countIn, output, ref countOut, channels))
+                if (!chain[i].Process(input, countIn, output, ref produced, channels))
                     continue;
 
                 // An effect is allowed to change the count, but not past what the scratch can hold.
-                if ((int)countOut * channelCount > capacity)
-                    countOut = (uint)(capacity / channelCount);
+                if ((int)produced * channelCount > capacity)
+                    produced = (uint)(capacity / channelCount);
 
                 // Plain swap rather than a tuple: a pointer cannot be a type argument.
                 float* previous = source;
                 source = destination;
                 destination = previous;
 
-                countIn = countOut;
+                countIn = produced;
             }
 
             return (uint)(Copy(source, framesOut, (int)countIn * channelCount, outSamples) / channelCount);
