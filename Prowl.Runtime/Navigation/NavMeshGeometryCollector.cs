@@ -79,10 +79,19 @@ public static class NavMeshGeometryCollector
                     CollectCollider(collider, area, results, bounds);
             }
 
-            // Terrain contributes in both modes: its render surface and heightfield collider
-            // are the same heightmap.
-            foreach (TerrainCollider terrain in go.GetComponents<TerrainCollider>())
+            // Terrain contributes in both modes, read from its heightmap asset either way — the
+            // collider builds its heightfield from that same asset, and reading the asset is what
+            // lets a bake with the editor open, where nothing has had a gameplay callback, see
+            // terrain at all. Collider mode still requires the collider to be there, so terrain
+            // that is scenery rather than ground is left out of a physics bake as any other
+            // collider-less object is.
+            foreach (TerrainComponent terrain in go.GetComponents<TerrainComponent>())
+            {
+                if (geometry != NavMeshCollectGeometry.RenderMeshes && go.GetComponent<TerrainCollider>().IsNotValid())
+                    continue;
+
                 CollectTerrain(terrain, voxelSize, area, results, bounds);
+            }
         }
     }
 
@@ -353,31 +362,36 @@ public static class NavMeshGeometryCollector
     /// Collect a terrain as a decimated height grid. Samples are spaced no finer than the bake
     /// voxel size — Recast re-voxelizes at that resolution anyway, so finer triangles are pure
     /// waste (a 1k heightmap would otherwise contribute ~2M triangles). Holes are skipped.
+    /// <para/>
+    /// Heights come off <see cref="TerrainData"/> in terrain-local space and the object's transform
+    /// places them, exactly as <see cref="TerrainCollider"/> places the physics heightfield, so a
+    /// moved, rotated or scaled terrain is walkable where it is drawn and where it collides.
+    /// Reading the asset rather than the collider is also what lets a bake with the editor open —
+    /// where nothing has had a gameplay callback — see the terrain at all.
     /// </summary>
-    public static void CollectTerrain(TerrainCollider terrain, float voxelSize, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
+    public static void CollectTerrain(TerrainComponent terrain, float voxelSize, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
     {
         if (terrain.IsNotValid() || !terrain.EnabledInHierarchy) return;
 
-        int res = terrain.Width;
-        if (res < 2) return;
-
-        var terrainComponent = terrain.GetComponent<TerrainComponent>();
-        if (terrainComponent.IsNotValid()) return;
-        TerrainData? data = terrainComponent.Data.Res;
+        terrain.Data.EnsureLoaded();
+        TerrainData? data = terrain.Data.Res;
         if (data.IsNotValid()) return;
 
-        if (bounds is AABB filter)
-        {
-            // Terrain is axis-aligned (see the origin note below): position + size is its AABB.
-            Float3 tMin = terrain.Transform.Position;
-            var tMax = new Float3(tMin.X + data!.Size, tMin.Y + data.Height, tMin.Z + data.Size);
-            if (tMin.X > filter.Max.X || tMax.X < filter.Min.X
-                || tMin.Z > filter.Max.Z || tMax.Z < filter.Min.Z)
-                return;
-        }
+        int res = data!.HeightmapResolution;
+        if (res < 2) return;
 
+        // The stored heights span the full 0..Height band, so sculpting can never leave these bounds.
+        Float4x4 localToWorld = terrain.Transform.LocalToWorldMatrix;
+        if (bounds is AABB filter
+            && !TransformedBoundsIntersect(Float3.Zero, new Float3(data.Size, data.Height, data.Size), localToWorld, filter))
+            return;
+
+        // The sample budget is a world-space distance, so it converts to grid steps through the
+        // scale the terrain is drawn at.
         float cellSize = data.Size / (res - 1);
-        int stride = Math.Max(1, (int)MathF.Floor(Math.Max(voxelSize, cellSize) / cellSize));
+        Float3 scale = terrain.Transform.LossyScale;
+        float localVoxelSize = voxelSize / Math.Max(1e-4f, Math.Max(MathF.Abs(scale.X), MathF.Abs(scale.Z)));
+        int stride = Math.Max(1, (int)MathF.Floor(Math.Max(localVoxelSize, cellSize) / cellSize));
 
         // Sampled grid dimensions (always include the far edge).
         List<int> steps = [];
@@ -385,21 +399,13 @@ public static class NavMeshGeometryCollector
         steps.Add(res - 1);
         int n = steps.Count;
 
-        // Terrain is axis-aligned by engine convention: the physics heightfield proxy also
-        // registers with position only (see TerrainCollider), so rotation/scale on a terrain
-        // object is ignored consistently across physics and navigation.
-        Float3 origin = terrain.Transform.Position;
         var vertices = new Float3[n * n];
         for (int zi = 0; zi < n; zi++)
         {
             for (int xi = 0; xi < n; xi++)
             {
                 int x = steps[xi], z = steps[zi];
-                terrain.TryGetHeight(x, z, out float height); // world-space Y (includes terrain position)
-                vertices[zi * n + xi] = new Float3(
-                    origin.X + x * cellSize,
-                    height,
-                    origin.Z + z * cellSize);
+                vertices[zi * n + xi] = new Float3(x * cellSize, data.GetHeight(x, z) * data.Height, z * cellSize);
             }
         }
 
@@ -409,7 +415,7 @@ public static class NavMeshGeometryCollector
             for (int xi = 0; xi < n - 1; xi++)
             {
                 // A cell is a hole if any source cell under the decimated quad is a hole.
-                if (AnyHole(terrain, steps[xi], steps[zi], steps[xi + 1], steps[zi + 1])) continue;
+                if (AnyHole(data, steps[xi], steps[zi], steps[xi + 1], steps[zi + 1])) continue;
 
                 int v00 = zi * n + xi;
                 int v01 = (zi + 1) * n + xi;
@@ -422,15 +428,14 @@ public static class NavMeshGeometryCollector
         }
         if (indices.Count == 0) return;
 
-        // Vertices are already world-space (heights include the terrain's Y).
-        results.Add(new NavMeshGeometrySource(vertices, [.. indices], Float4x4.Identity, area));
+        results.Add(new NavMeshGeometrySource(vertices, [.. indices], localToWorld, area));
     }
 
-    private static bool AnyHole(TerrainCollider terrain, int x0, int z0, int x1, int z1)
+    private static bool AnyHole(TerrainData data, int x0, int z0, int x1, int z1)
     {
         for (int z = z0; z < z1; z++)
             for (int x = x0; x < x1; x++)
-                if (terrain.IsCellHole(x, z))
+                if (data.IsCellHole(x, z))
                     return true;
         return false;
     }

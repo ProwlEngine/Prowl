@@ -613,6 +613,8 @@ public class NavMeshSurface : MonoBehaviour
     // or the surface gains/loses a live registration (entering or leaving play mode).
     private Runtime.NavMeshData? _debugSource;
     private bool _debugFromLive;
+    private List<(Float3 Position, bool Corner)>? _debugVertexMarkers;
+    private List<(Float3 A, Float3 B)>? _debugDetailEdges;
 
     private void InvalidateDebugTriangulation() => _debugTriangulation = null;
 
@@ -665,11 +667,16 @@ public class NavMeshSurface : MonoBehaviour
             _debugTriangulation = live ? world!.CalculateTriangulation(AgentTypeId) : data.CalculateTriangulation();
             _debugFromLive = live;
             _debugSource = data;
+            _debugVertexMarkers = BuildVertexMarkers(_debugTriangulation.Value);
+            _debugDetailEdges = BuildDetailEdges(_debugTriangulation.Value);
         }
 
         NavMeshTriangulation tri = _debugTriangulation.Value;
-        // Lift slightly off the surface so the overlay doesn't z-fight the floor.
-        var lift = new Float3(0, 0.03f, 0);
+        // Lift off the surface so the overlay doesn't z-fight the floor. Sized past the mesh's
+        // own error band: quantized heights interpolated between samples can dip a few
+        // centimetres below finely-tessellated ground, and fragments under the ground take the
+        // gizmo shader's faded occluded styling in patches.
+        var lift = new Float3(0, 0.08f, 0);
         for (int t = 0; t < tri.Areas.Length; t++)
         {
             Color color = AreaColor(tri.Areas[t]);
@@ -680,8 +687,111 @@ public class NavMeshSurface : MonoBehaviour
                 color);
         }
 
+        // Polygon outlines over the fill, the way Unity draws its navmesh: the walkable border
+        // dark and solid, inner polygon edges light, tile seams warm — so the mesh's structure
+        // reads at a glance and a wrong edge points at itself.
+        foreach (NavMeshEdge edge in tri.Edges)
+        {
+            Color c = edge.Kind switch
+            {
+                NavMeshEdgeKind.Border => new Color(0.05f, 0.12f, 0.35f, 1f),
+                NavMeshEdgeKind.TilePortal => new Color(0.9f, 0.55f, 0.15f, 1f),
+                _ => new Color(0.65f, 0.85f, 1f, 0.9f),
+            };
+            Debug.DrawLine(edge.A + lift, edge.B + lift, c);
+        }
+
+        DrawDetailWireframe(_debugDetailEdges, lift);
+        DrawVertexMarkers(_debugVertexMarkers, lift);
+
         foreach (NavMeshConnection con in tri.Connections)
             DrawConnection(con, lift);
+    }
+
+    /// <summary>Each height-detail edge once. Neighbouring triangles share two thirds of their
+    /// edges, so drawing three per triangle submits most of them twice and doubles the alpha
+    /// where they overlap. Built with the markers, once per triangulation.</summary>
+    private static List<(Float3 A, Float3 B)> BuildDetailEdges(NavMeshTriangulation tri)
+    {
+        var seen = new HashSet<(int, int)>(tri.Areas.Length * 2);
+        var edges = new List<(Float3, Float3)>(tri.Areas.Length * 2);
+        for (int t = 0; t < tri.Areas.Length; t++)
+        {
+            for (int e = 0; e < 3; e++)
+            {
+                int i = tri.Indices[t * 3 + e];
+                int j = tri.Indices[t * 3 + (e + 1) % 3];
+                if (seen.Add((Math.Min(i, j), Math.Max(i, j))))
+                    edges.Add((tri.Vertices[i], tri.Vertices[j]));
+            }
+        }
+
+        return edges;
+    }
+
+    /// <summary>The height-detail triangle edges, faint: the carpet inside each polygon,
+    /// distinct from the polygon outlines drawn on top of it.</summary>
+    private static void DrawDetailWireframe(List<(Float3 A, Float3 B)>? edges, Float3 lift)
+    {
+        if (edges == null) return;
+
+        var c = new Color(1f, 1f, 1f, 0.18f);
+        foreach ((Float3 a, Float3 b) in edges)
+            Debug.DrawLine(a + lift, b + lift, c);
+    }
+
+    /// <summary>
+    /// One solid dot per distinct vertex position: white for polygon corners — the welded,
+    /// tile-stitched structure — orange for vertices the height detail added. The triangulation
+    /// repeats shared corners once per polygon, so markers dedupe by position; a corner and a
+    /// detail vertex landing on the same spot counts as the corner, the stronger claim. Built
+    /// once per triangulation rebuild — this draws every frame.
+    /// </summary>
+    private static List<(Float3 Position, bool Corner)> BuildVertexMarkers(NavMeshTriangulation tri)
+    {
+        var seen = new Dictionary<(int, int, int), bool>(tri.Vertices.Length);
+        for (int v = 0; v < tri.Vertices.Length; v++)
+        {
+            Float3 p = tri.Vertices[v];
+            var key = ((int)Math.Round(p.X * 128), (int)Math.Round(p.Y * 128), (int)Math.Round(p.Z * 128));
+            bool corner = tri.IsPolygonCorner[v];
+            if (seen.TryGetValue(key, out bool wasCorner) && (wasCorner || !corner))
+                continue;
+            seen[key] = corner;
+        }
+
+        var markers = new List<(Float3, bool)>(seen.Count);
+        foreach (KeyValuePair<(int, int, int), bool> m in seen)
+            markers.Add((new Float3(m.Key.Item1 / 128f, m.Key.Item2 / 128f, m.Key.Item3 / 128f), m.Value));
+        return markers;
+    }
+
+    private static void DrawVertexMarkers(List<(Float3 Position, bool Corner)>? markers, Float3 lift)
+    {
+        if (markers == null) return;
+
+        var cornerColor = new Color(1f, 1f, 1f, 1f);
+        var detailColor = new Color(1f, 0.6f, 0.1f, 1f);
+        // One size for both: colour already says which is which, and a corner drawn larger
+        // reads as more important than the detail vertex beside it when they are the same
+        // thing to everything downstream.
+        foreach ((Float3 position, bool corner) in markers)
+            DrawSolidDot(position + lift, 0.03f, corner ? cornerColor : detailColor);
+    }
+
+    /// <summary>A tiny solid octahedron: reads as a dot from any angle, unlike a wire sphere,
+    /// and costs eight small triangles.</summary>
+    private static void DrawSolidDot(Float3 p, float r, Color color)
+    {
+        var xp = new Float3(r, 0, 0); var yp = new Float3(0, r, 0); var zp = new Float3(0, 0, r);
+        Debug.DrawTriangle(p + yp, p + xp, p + zp, color);
+        Debug.DrawTriangle(p + yp, p + zp, p - xp, color);
+        Debug.DrawTriangle(p + yp, p - xp, p - zp, color);
+        Debug.DrawTriangle(p + yp, p - zp, p + xp, color);
+        Debug.DrawTriangle(p - yp, p + zp, p + xp, color);
+        Debug.DrawTriangle(p - yp, p - xp, p + zp, color);
+        Debug.DrawTriangle(p - yp, p - zp, p - xp, color);
+        Debug.DrawTriangle(p - yp, p + xp, p - zp, color);
     }
 
     /// <summary>Endpoint marker size, shared so a link's own gizmo matches the overlay.</summary>

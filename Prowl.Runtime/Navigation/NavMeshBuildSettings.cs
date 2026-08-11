@@ -62,6 +62,11 @@ public sealed class NavMeshBuildSettings
     /// <summary>Remove walkable spans with too little clearance above them.</summary>
     public bool FilterWalkableLowHeightSpans = true;
 
+    /// <summary>Sample heights across each polygon so agents follow the surface it covers rather
+    /// than a plane through its corners. Turn off only where the ground is flat or planar, which
+    /// is where the detail costs build time and describes nothing the corners do not.</summary>
+    public bool BuildHeightDetail = true;
+
     /// <summary>The XZ voxel size actually used for the build.</summary>
     public float EffectiveVoxelSize => OverrideVoxelSize ? Math.Max(0.01f, VoxelSize) : Math.Max(0.01f, AgentRadius / 3f);
 
@@ -101,6 +106,7 @@ public sealed class NavMeshBuildSettings
         FilterLowHangingObstacles = FilterLowHangingObstacles,
         FilterLedgeSpans = FilterLedgeSpans,
         FilterWalkableLowHeightSpans = FilterWalkableLowHeightSpans,
+        BuildHeightDetail = BuildHeightDetail,
     };
 }
 
@@ -141,4 +147,7 @@ public sealed class NavMeshBuildOverrides
 
     [Tooltip("Remove walkable voxels with too little clearance above them for the agent to stand.")]
     public bool FilterWalkableLowHeightSpans = true;
+
+    [Tooltip("Sample heights across each polygon so agents follow the ground it covers. Without it a polygon is flat between its corners, which is exact on floors and ramps but stretches across curved ground like terrain. Costs build time on every tile, including each obstacle carve, so turn it off for scenes built entirely from flat and planar surfaces.")]
+    public bool BuildHeightDetail = true;
 }

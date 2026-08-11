@@ -169,6 +169,7 @@ public static class NavMeshAgentTypes
             FilterLowHangingObstacles = overrides.FilterLowHangingObstacles,
             FilterLedgeSpans = overrides.FilterLedgeSpans,
             FilterWalkableLowHeightSpans = overrides.FilterWalkableLowHeightSpans,
+            BuildHeightDetail = overrides.BuildHeightDetail,
         };
     }
 

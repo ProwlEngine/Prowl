@@ -242,6 +242,12 @@ public sealed class NavMeshData : EngineObject
         DtNavMesh navMesh = CreateEmptyNavMesh();
         Prowl.Recast.Detour.TileCache.DtTileCache cache = NavMeshTileBuilder.CreateTileCache(this, navMesh, maxObstacles, out meshProcess);
 
+        // Every layer goes in before any of them is meshed. A tile's seam with its neighbour is
+        // built from both sides' cells, so a tile meshed while its neighbours are still missing
+        // reads its own side only and describes the seam differently than the neighbour later
+        // does — the two surfaces then meet a fraction of a voxel apart along an edge they
+        // should share exactly.
+        var tileRefs = new List<long>(CacheLayers.Count);
         foreach (NavMeshTile layer in CacheLayers)
         {
             if (layer?.Data == null || layer.Data.Length == 0) continue;
@@ -251,8 +257,11 @@ public sealed class NavMeshData : EngineObject
                 Debug.LogWarning($"[Navigation] NavMeshData '{Name}': failed to add cache layer for tile ({layer.X}, {layer.Z}).");
                 continue;
             }
-            cache.BuildNavMeshTile(tileRef);
+            tileRefs.Add(tileRef);
         }
+
+        foreach (long tileRef in tileRefs)
+            cache.BuildNavMeshTile(tileRef);
 
         return cache;
     }

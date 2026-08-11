@@ -333,6 +333,26 @@ internal static class NavMeshTileBuilder
             walkableRadius = settings.AgentRadius,
             walkableClimb = settings.AgentMaxClimb,
             maxSimplificationError = settings.EdgeMaxError,
+            // Height detail, so polygons follow the surface instead of spanning flat between their
+            // corners. Recast recommends sampling every six voxels, given here in world units as
+            // the cache expects; zero is how it is told to skip detail, which is what the setting
+            // turns off.
+            detailSampleDist = settings.BuildHeightDetail ? settings.EffectiveVoxelSize * 6 : 0,
+            detailSampleMaxError = settings.EffectiveVoxelHeight,
+            // Watershed partitioning with standard contouring, in place of the cache's monotone
+            // sweep: regions stop coming out as sub-voxel ribbons on slopes, regions enclosing
+            // holes keep their holes, and long contour edges are split so open ground
+            // polygonizes into compact polygons rather than tile-spanning fans. The edge cap is
+            // deliberately loose — over-splitting floods flat floors with polygons, and every
+            // extra portal is a corner the crowd steers around. Both area thresholds are cell
+            // counts converted from world units squared, so they cover the same ground at any
+            // voxel size. Recast's own merge default is a flat cell count (20², from RecastDemo's
+            // region size), which at a finer voxel merges a smaller patch of ground; converting
+            // keeps a rebake at a different voxel size from also changing the mesh's character.
+            watershedPartition = true,
+            minRegionArea = (int)(settings.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
+            mergeRegionArea = (int)(20f / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
+            maxEdgeLen = 24,
             // Layer capacity: tiles can stack several vertical layers each, and the baked
             // layer count is a hard floor.
             maxTiles = Math.Max(Math.Max(1, data.MaxTiles) * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE, data.CacheLayers.Count),
