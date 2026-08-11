@@ -2,33 +2,29 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Profiling;
-using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.Charts;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Vector;
 
-namespace Prowl.Editor.GUI.RenderProfiler;
+namespace Prowl.Editor.GUI.RenderProfiler.Widgets;
 
 public readonly record struct FlameTarget(ProfiledView? View, ProfiledPass? Pass, ProfiledCommandBuffer? CommandBuffer);
 
-public partial class RenderProfilerPanel
+public sealed class ProfilerFlameGraphView
 {
-    private const float FlameGraphHeight = 100f;
-    private const float FlameGraphRowHeight = 18f;
+    private const float RowHeight = 18f;
     private const double MinNodeDurationFraction = 0.004;
 
-    // Root id this widget derives every element id from.
-    private const string FlameGraphId = "rdp_flame";
+    private readonly string _id;
 
-    // Raised instead of calling PingHierarchy directly - the host subscribes and decides what a
-    // click does, rather than the flame graph reaching into the hierarchy's state itself.
-    public event Action<FlameTarget>? FlameNodeClicked;
+    // Raised instead of pinging a hierarchy directly - the host subscribes and decides what a click
+    // does, rather than the flame graph reaching into another widget's state itself.
+    public event Action<FlameTarget>? NodeClicked;
 
     // Frame is the sole root; passes and command buffers (free or nested under a pass) are its
     // descendants. Views aren't represented as their own node - they only tag a pass so a click can
-    // still ping the right hierarchy row.
+    // still identify the right target.
     private sealed class FlameNode
     {
         public string Label = "";
@@ -39,16 +35,19 @@ public partial class RenderProfilerPanel
         public readonly List<FlameNode> Children = new();
     }
 
-
-    private void DrawFlameGraph(Paper paper)
+    public ProfilerFlameGraphView(string id)
     {
-        ProfiledFrame? frame = SelectedFrame;
+        _id = id;
+    }
 
-        using (paper.Box($"{FlameGraphId}_graph").Width(UnitValue.Stretch()).Height(FlameGraphHeight).Enter())
+
+    public void Draw(Paper paper, ProfiledFrame? frame, float height)
+    {
+        using (paper.Box($"{_id}_graph").Width(UnitValue.Stretch()).Height(height).Enter())
         {
             if (frame == null)
             {
-                Origami.Label(paper, $"{FlameGraphId}_empty", "No frame selected")
+                Origami.Label(paper, $"{_id}_empty", "No frame selected")
                     .Muted()
                     .AlignCenter()
                     .Show();
@@ -57,17 +56,17 @@ public partial class RenderProfilerPanel
 
             FlameNode root = BuildFlameTree(frame);
 
-            Chart.FlameGraph(paper, $"{FlameGraphId}_chart", new List<FlameNode> { root })
+            Chart.FlameGraph(paper, $"{_id}_chart", new List<FlameNode> { root })
                 .Title("Frame Timeline")
                 .Width(UnitValue.Stretch())
-                .Height(FlameGraphHeight)
-                .RowHeight(FlameGraphRowHeight)
+                .Height(height)
+                .RowHeight(RowHeight)
                 .Legend(false)
                 .Padding(2f)
                 .Name(n => n.Label)
                 .Value(n => n.GpuMilliseconds)
                 .Children(n => n.Children)
-                .OnNodeClick(n => FlameNodeClicked?.Invoke(new FlameTarget(n.View, n.Pass, n.CommandBuffer)))
+                .OnNodeClick(n => NodeClicked?.Invoke(new FlameTarget(n.View, n.Pass, n.CommandBuffer)))
                 .Zoomable()
                 .Pannable()
                 .Show();

@@ -12,20 +12,21 @@ using Prowl.PaperUI.LayoutEngine;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.GUI.RenderProfiler;
+namespace Prowl.Editor.GUI.RenderProfiler.Viewers;
 
-// Normalized card/chart drawer shared by every RenderProfilerPanel sub-viewer (FrameViewer,
-// ViewViewer, ...) so each one doesn't reinvent section cards, line charts, and value formatting.
-public partial class RenderProfilerPanel
+// Normalized card/chart drawer shared by every sub-viewer (FrameViewer, ViewViewer, PassViewer, ...)
+// so each one doesn't reinvent section cards, line charts, value formatting, or history projection.
+public static class ViewerKit
 {
-    private const float ChartHeight = 170f;
-    private const float ChartTitleHeight = 18f;
-    private const float ChartRowGap = 4f;
-    private const float ChartRowHeight = ChartHeight + ChartTitleHeight + ChartRowGap;
-    private const float SectionGap = 6f;
-    private const float SectionCardWidth = 320f;
-    private const float VramColumnWidth = 160f;
-    private const float DenseLegendFontSize = 12f;
+    public const float ChartHeight = 170f;
+    public const float ChartTitleHeight = 18f;
+    public const float ChartRowGap = 4f;
+    public const float ChartRowHeight = ChartHeight + ChartTitleHeight + ChartRowGap;
+    public const float SectionGap = 6f;
+    public const float SectionCardWidth = 320f;
+    public const float VramColumnWidth = 160f;
+    public const float DenseLegendFontSize = 12f;
+    public const float SelectionViewerHeaderHeight = 24f;
 
     private const double BytesPerKb = 1024d;
     private const double BytesPerMb = 1024d * 1024d;
@@ -33,7 +34,7 @@ public partial class RenderProfilerPanel
 
     // Bold, high-contrast colours cycled across a chart's series when a chart has more series than a
     // deliberate per-series colour assignment covers (Live/Alloc/Free bins, buffer roles, ...).
-    private static readonly Color[] SeriesPalette =
+    public static readonly Color[] SeriesPalette =
     {
         EditorTheme.Blue500, EditorTheme.Green500, EditorTheme.Amber500, EditorTheme.Red500, EditorTheme.Purple500,
         EditorTheme.Blue300, EditorTheme.Green300, EditorTheme.Amber300, EditorTheme.Red300, EditorTheme.Purple300,
@@ -54,7 +55,7 @@ public partial class RenderProfilerPanel
 
     // ── Card drawer ────────────────────────────────────────────────
 
-    private static void SectionHeading(Paper paper, string id, string title)
+    public static void SectionHeading(Paper paper, string id, string title)
     {
         Origami.Label(paper, id, title)
             .Subheading()
@@ -64,7 +65,7 @@ public partial class RenderProfilerPanel
     }
 
 
-    private static void SectionCard(Paper paper, string id, string title, Action drawContent)
+    public static void SectionCard(Paper paper, string id, string title, Action drawContent)
     {
         using (paper.Column(id + "_card")
             .Height(UnitValue.Auto)
@@ -81,7 +82,7 @@ public partial class RenderProfilerPanel
     }
 
 
-    private static void DrawLineChart(Paper paper, string id, string title, string yLabel, Func<double, string> valueFormatter,
+    public static void DrawLineChart(Paper paper, string id, string title, string yLabel, Func<double, string> valueFormatter,
         UnitValue width, float height, bool legend,
         params (string Label, Color Color, IReadOnlyList<double> Values)[] series)
     {
@@ -111,7 +112,7 @@ public partial class RenderProfilerPanel
 
     // ── Value formatting ──────────────────────────────────────────
 
-    private static string FormatBytesAuto(double bytes)
+    public static string FormatBytesAuto(double bytes)
     {
         double abs = Math.Abs(bytes);
         if (abs >= BytesPerGb)
@@ -123,7 +124,7 @@ public partial class RenderProfilerPanel
         return bytes.ToString("0") + " B";
     }
 
-    private static string FormatCountCompact(double value)
+    public static string FormatCountCompact(double value)
     {
         double abs = Math.Abs(value);
         if (abs >= 1_000_000d)
@@ -133,29 +134,27 @@ public partial class RenderProfilerPanel
         return value.ToString("0.#");
     }
 
-    private static string FormatCountCompact(int value) => FormatCountCompact((double)value);
+    public static string FormatCountCompact(int value) => FormatCountCompact((double)value);
 
 
     // ── History series helpers ────────────────────────────────────
 
-    private IProfilerHistory History => new LiveHistory(EditorProfiler.Instance!, SelectedFrame?.FrameIndex);
-
-    private List<double> FrameSeries(Func<ProfiledFrame, double> selector)
+    public static List<double> FrameSeries(IProfilerHistory history, Func<ProfiledFrame, double> selector)
     {
-        IReadOnlyList<ProfiledFrame> frames = History.Frames;
+        IReadOnlyList<ProfiledFrame> frames = history.Frames;
         var values = new List<double>(frames.Count);
         foreach (ProfiledFrame frame in frames)
             values.Add(selector(frame));
         return values;
     }
 
-    /// <summary>Per-frame history for one named view. Matches by ProfiledView.Name rather than by
-    /// reference - each retained ProfiledFrame owns its own ProfiledView instances, so the same logical
-    /// view (e.g. "Game") is a different object in every history entry. Frames where the view wasn't
-    /// touched contribute 0.</summary>
-    private List<double> ViewSeries(string viewName, Func<ProfiledView, double> selector)
+    // Per-frame history for one named view. Matches by ProfiledView.Name rather than by reference -
+    // each retained ProfiledFrame owns its own ProfiledView instances, so the same logical view
+    // (e.g. "Game") is a different object in every history entry. Frames where the view wasn't
+    // touched contribute 0.
+    public static List<double> ViewSeries(IProfilerHistory history, string viewName, Func<ProfiledView, double> selector)
     {
-        IReadOnlyList<ProfiledFrame> frames = History.Frames;
+        IReadOnlyList<ProfiledFrame> frames = history.Frames;
         var values = new List<double>(frames.Count);
         foreach (ProfiledFrame frame in frames)
         {
@@ -173,13 +172,12 @@ public partial class RenderProfilerPanel
         return values;
     }
 
-    /// <summary>Per-frame history for one named pass within one named view - see ViewSeries for why
-    /// matching is by name/index rather than reference. Matched by ProfiledPass.Index (stable across
-    /// frames), not by position in ProfiledView.Passes. Frames where the view/pass wasn't touched
-    /// contribute 0.</summary>
-    private List<double> PassSeries(string viewName, int passIndex, Func<ProfiledPass, double> selector)
+    // Per-frame history for one named pass within one named view - see ViewSeries for why matching
+    // is by name/index rather than reference. Matched by ProfiledPass.Index (stable across frames),
+    // not by position in ProfiledView.Passes. Frames where the view/pass wasn't touched contribute 0.
+    public static List<double> PassSeries(IProfilerHistory history, string viewName, int passIndex, Func<ProfiledPass, double> selector)
     {
-        IReadOnlyList<ProfiledFrame> frames = History.Frames;
+        IReadOnlyList<ProfiledFrame> frames = history.Frames;
         var values = new List<double>(frames.Count);
         foreach (ProfiledFrame frame in frames)
         {
@@ -203,9 +201,9 @@ public partial class RenderProfilerPanel
         return values;
     }
 
-    private IReadOnlyList<double> CounterSeries(string name) => History.Counter(name);
+    public static IReadOnlyList<double> CounterSeries(IProfilerHistory history, string name) => history.Counter(name);
 
-    private static double CounterValue(ProfiledFrame? frame, string name)
+    public static double CounterValue(ProfiledFrame? frame, string name)
     {
         if (frame == null || !CounterIndex.TryGetValue(name, out int index))
             return 0d;

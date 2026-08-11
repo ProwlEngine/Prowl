@@ -1,6 +1,9 @@
 using System;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI.RenderProfiler.Data;
+using Prowl.Editor.GUI.RenderProfiler.Viewers;
+using Prowl.Editor.GUI.RenderProfiler.Widgets;
 using Prowl.Editor.Profiling;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -15,6 +18,8 @@ public partial class RenderProfilerPanel : DockPanel
 {
     private const float ToolbarHeight = 32f;
     private const float DividerHeight = 1f;
+    private const float FlameGraphHeight = 100f;
+    private const float HierarchyPanelWidth = 340f;
 
     [MenuItem("Window/Debug/Render Profiler", priority: 102)]
     static void Open() => EditorApplication.Instance?.OpenPanel(typeof(RenderProfilerPanel));
@@ -25,7 +30,14 @@ public partial class RenderProfilerPanel : DockPanel
     private readonly EditorProfiler _profiler;
     private long? _selectedFrameIndex;
 
+    private readonly ProfilerHierarchyView _hierarchy = new("rdp_hier_tree");
+    private readonly ProfilerFlameGraphView _flame = new("rdp_flame");
+    private readonly ProfilerViewViewer _viewViewer = new();
+    private readonly ProfilerPassViewer _passViewer = new();
+
     public ProfiledFrame? SelectedFrame => _profiler.FrameAgo((int)(_selectedFrameIndex ?? 0));
+
+    private IProfilerHistory History => new LiveHistory(EditorProfiler.Instance!, SelectedFrame?.FrameIndex);
 
 
     public RenderProfilerPanel()
@@ -35,11 +47,13 @@ public partial class RenderProfilerPanel : DockPanel
         _profiler.CaptureFinalizeHandler = _profiler.SnapshotCapturer.Finalize;
         _profiler.SnapshotCaptured += OpenSnapshot;
 
-        FlameNodeClicked += t => PingHierarchy(t.View, t.Pass, t.CommandBuffer);
-        ViewViewerPassSelected += (view, pass) =>
+        _hierarchy.IsSelected = IsHierarchyNodeSelected;
+        _hierarchy.Selected += OnHierarchyNodeSelected;
+        _flame.NodeClicked += t => _hierarchy.Ping(t.View, t.Pass, t.CommandBuffer);
+        _viewViewer.PassSelected += (view, pass) =>
         {
             SelectPass(view, pass);
-            PingHierarchy(view, pass, null);
+            _hierarchy.Ping(view, pass, null);
         };
 
         _profiler.Resume();
@@ -76,7 +90,7 @@ public partial class RenderProfilerPanel : DockPanel
                 .IsNotInteractable()
                 .BackgroundColor(EditorTheme.BorderStrong);
 
-            DrawFlameGraph(paper);
+            _flame.Draw(paper, SelectedFrame, FlameGraphHeight);
 
             paper.Box("rdp_flame_div")
                 .Height((UnitValue)1)
@@ -86,7 +100,7 @@ public partial class RenderProfilerPanel : DockPanel
             using (paper.Row("rdp_contents").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
             {
                 float contentsHeight = height - ToolbarHeight - FramePickerHeight - FlameGraphHeight - DividerHeight * 3f;
-                DrawHierarchy(paper, HierarchyPanelWidth, contentsHeight);
+                _hierarchy.Draw(paper, SelectedFrame, HierarchyPanelWidth, contentsHeight);
 
                 paper.Box("rdp_contents_vdiv")
                     .Width(1)
@@ -157,4 +171,46 @@ public partial class RenderProfilerPanel : DockPanel
         Debug.Log("Snapshot captured. Opening");
         SnapshotViewerPanel.Open(snapshot);
     }
+
+
+    private void OnHierarchyNodeSelected(HierarchyNode d)
+    {
+        switch (d.Kind)
+        {
+            case HierarchyNodeKind.Frame:
+                ClearSubFrameSelection();
+                break;
+            case HierarchyNodeKind.View:
+                SelectView(d.View!);
+                break;
+            case HierarchyNodeKind.Pass:
+                SelectPass(d.View!, d.Pass!);
+                break;
+            case HierarchyNodeKind.CommandBuffer:
+                SelectCommandBuffer(d.View, d.Pass, d.CommandBuffer!);
+                break;
+            case HierarchyNodeKind.Pipeline:
+                SelectPipeline(d.View, d.Pass, d.CommandBuffer, d.Pipeline!);
+                break;
+            case HierarchyNodeKind.Object:
+                SelectObject(d.View, d.Pass, d.CommandBuffer, d.Pipeline!, d.Object!);
+                break;
+            case HierarchyNodeKind.DrawCall:
+                SelectDrawCall(d.View, d.Pass, d.CommandBuffer, d.Pipeline!, d.Object, d.DrawIndex);
+                break;
+        }
+    }
+
+
+    private bool IsHierarchyNodeSelected(HierarchyNode d) => d.Kind switch
+    {
+        HierarchyNodeKind.Frame => SelectionType == ProfilerSelectionType.Frame,
+        HierarchyNodeKind.View => SelectionType == ProfilerSelectionType.View && ReferenceEquals(SelectedView, d.View),
+        HierarchyNodeKind.Pass => SelectionType == ProfilerSelectionType.Pass && ReferenceEquals(SelectedPass, d.Pass),
+        HierarchyNodeKind.CommandBuffer => SelectionType == ProfilerSelectionType.CommandBuffer && ReferenceEquals(SelectedCommandBuffer, d.CommandBuffer),
+        HierarchyNodeKind.Pipeline => SelectionType == ProfilerSelectionType.Pipeline && ReferenceEquals(SelectedPipeline, d.Pipeline),
+        HierarchyNodeKind.Object => SelectionType == ProfilerSelectionType.Object && ReferenceEquals(SelectedObject, d.Object),
+        HierarchyNodeKind.DrawCall => SelectionType == ProfilerSelectionType.DrawCall && SelectedDrawCallIndex == d.DrawIndex && ReferenceEquals(SelectedPipeline, d.Pipeline),
+        _ => false,
+    };
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GUI.RenderProfiler.Data;
 using Prowl.Editor.Profiling;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -8,17 +9,12 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 
-namespace Prowl.Editor.GUI.RenderProfiler;
+namespace Prowl.Editor.GUI.RenderProfiler.Viewers;
 
-public partial class RenderProfilerPanel
+public sealed class ProfilerViewViewer
 {
-    private const int ViewViewerModeStats = 0;
-    private const int ViewViewerModePipeline = 1;
-
-    private int _viewViewerMode = ViewViewerModeStats;
-
-    private readonly NodeGraphController _viewPipelineGraphController = new();
-    private ProfiledView? _viewPipelineGraphFramedFor;
+    private const int ModeStats = 0;
+    private const int ModePipeline = 1;
 
     private const float PipelinePassWidth = 190f;
     private const float PipelinePassSpacingX = 260f;
@@ -28,13 +24,17 @@ public partial class RenderProfilerPanel
     private const float PipelineGraphHeight = 480f;
     private const float PipelineGraphPadding = 16f;
 
-    // Raised instead of calling SelectPass/PingHierarchy directly - see FlameNodeClicked.
-    public event Action<ProfiledView, ProfiledPass>? ViewViewerPassSelected;
+    private int _mode = ModeStats;
+    private readonly NodeGraphController _pipelineGraphController = new();
+    private ProfiledView? _pipelineGraphFramedFor;
+
+    // Raised instead of selecting the pass/pinging the hierarchy directly - see FlameGraph's
+    // NodeClicked for why the host owns this wiring.
+    public event Action<ProfiledView, ProfiledPass>? PassSelected;
 
 
-    private void DrawViewViewer(Paper paper, float width)
+    public void Draw(Paper paper, ProfiledView? view, IProfilerHistory history, float width)
     {
-        ProfiledView? view = SelectedView;
         if (view == null)
         {
             Origami.Label(paper, "rdp_view_empty", "No view selected")
@@ -43,9 +43,9 @@ public partial class RenderProfilerPanel
             return;
         }
 
-        using (paper.Column("rdp_view_viewer").Height(UnitValue.Auto).ColBetween(SectionGap).Enter())
+        using (paper.Column("rdp_view_viewer").Height(UnitValue.Auto).ColBetween(ViewerKit.SectionGap).Enter())
         {
-            using (paper.Row("rdp_view_header").Height(SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+            using (paper.Row("rdp_view_header").Height(ViewerKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
             {
                 Origami.Label(paper, "rdp_view_title", view.Name)
                     .Heading()
@@ -59,70 +59,70 @@ public partial class RenderProfilerPanel
 
                 paper.Box("rdp_view_header_spacer");
 
-                Origami.ButtonGroup(paper, "rdp_view_mode", _viewViewerMode, i => _viewViewerMode = i)
+                Origami.ButtonGroup(paper, "rdp_view_mode", _mode, i => _mode = i)
                     .Item("Stats")
                     .Item("Pipeline")
                     .Small()
                     .Show();
             }
 
-            if (_viewViewerMode == ViewViewerModePipeline)
+            if (_mode == ModePipeline)
                 DrawViewPipeline(paper, view, width);
             else
-                DrawViewStats(paper, view);
+                DrawViewStats(paper, view, history);
         }
     }
 
 
     // ── Stats view ──────────────────────────────────────────────────
 
-    private void DrawViewStats(Paper paper, ProfiledView view)
+    private static void DrawViewStats(Paper paper, ProfiledView view, IProfilerHistory history)
     {
-        SectionCard(paper, "rdp_vv_objects", "Objects", () => DrawViewObjectsChart(paper, view.Name));
-        SectionCard(paper, "rdp_vv_renderops", "Render Operations", () => DrawViewRenderOperationsSection(paper, view));
+        ViewerKit.SectionCard(paper, "rdp_vv_objects", "Objects", () => DrawViewObjectsChart(paper, view.Name, history));
+        ViewerKit.SectionCard(paper, "rdp_vv_renderops", "Render Operations", () => DrawViewRenderOperationsSection(paper, view, history));
     }
 
 
-    private void DrawViewObjectsChart(Paper paper, string viewName)
+    private static void DrawViewObjectsChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        DrawLineChart(paper, "rdp_vv_objects_chart", "Objects", "Count", FormatCountCompact, UnitValue.Stretch(), ChartHeight, true,
-            ("Total", EditorTheme.Blue500, ViewSeries(viewName, v => v.RegisteredObjects)),
-            ("Drawn", EditorTheme.Green500, ViewSeries(viewName, v => v.RenderedObjects)),
-            ("Culled", EditorTheme.Red500, ViewSeries(viewName, v => v.CulledObjects)));
+        ViewerKit.DrawLineChart(paper, "rdp_vv_objects_chart", "Objects", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
+            ("Total", EditorTheme.Blue500, ViewerKit.ViewSeries(history, viewName, v => v.RegisteredObjects)),
+            ("Drawn", EditorTheme.Green500, ViewerKit.ViewSeries(history, viewName, v => v.RenderedObjects)),
+            ("Culled", EditorTheme.Red500, ViewerKit.ViewSeries(history, viewName, v => v.CulledObjects)));
     }
 
 
-    private void DrawViewRenderOperationsSection(Paper paper, ProfiledView view)
+    private static void DrawViewRenderOperationsSection(Paper paper, ProfiledView view, IProfilerHistory history)
     {
-        using (paper.Column("rdp_vv_renderops_col").Height(UnitValue.Auto).ColBetween(ChartRowGap).Enter())
+        using (paper.Column("rdp_vv_renderops_col").Height(UnitValue.Auto).ColBetween(ViewerKit.ChartRowGap).Enter())
         {
-            DrawViewGeometryChart(paper, view.Name);
-            DrawViewRenderingChart(paper, view.Name);
-            DrawViewPixelProcessingChart(paper, view);
-            DrawViewPipelineStateChart(paper, view.Name);
+            DrawViewGeometryChart(paper, view.Name, history);
+            DrawViewRenderingChart(paper, view.Name, history);
+            DrawViewPixelProcessingChart(paper, view, history);
+            DrawViewPipelineStateChart(paper, view.Name, history);
         }
     }
 
 
-    private void DrawViewGeometryChart(Paper paper, string viewName)
+    private static void DrawViewGeometryChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        DrawLineChart(paper, "rdp_vv_geometry_chart", "Geometry", "Count", FormatCountCompact, UnitValue.Stretch(), ChartHeight, true,
-            ("Triangles", EditorTheme.Blue500, ViewSeries(viewName, v => v.TrianglesDrawn)),
-            ("Vertices", EditorTheme.Purple500, ViewSeries(viewName, v => v.InputAssemblyVertices)));
+        ViewerKit.DrawLineChart(paper, "rdp_vv_geometry_chart", "Geometry", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
+            ("Triangles", EditorTheme.Blue500, ViewerKit.ViewSeries(history, viewName, v => v.TrianglesDrawn)),
+            ("Vertices", EditorTheme.Purple500, ViewerKit.ViewSeries(history, viewName, v => v.InputAssemblyVertices)));
     }
 
 
-    private void DrawViewRenderingChart(Paper paper, string viewName)
+    private static void DrawViewRenderingChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        DrawLineChart(paper, "rdp_vv_rendering_chart", "Rendering", "Count", FormatCountCompact, UnitValue.Stretch(), ChartHeight, true,
-            ("Draw Calls", EditorTheme.Green500, ViewSeries(viewName, v => v.DrawCallCount)),
-            ("Dispatches", EditorTheme.Red500, ViewSeries(viewName, v => v.DispatchCallCount)));
+        ViewerKit.DrawLineChart(paper, "rdp_vv_rendering_chart", "Rendering", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
+            ("Draw Calls", EditorTheme.Green500, ViewerKit.ViewSeries(history, viewName, v => v.DrawCallCount)),
+            ("Dispatches", EditorTheme.Red500, ViewerKit.ViewSeries(history, viewName, v => v.DispatchCallCount)));
     }
 
 
     // Overdraw has no history worth charting (it's a ratio, not a count that meaningfully sums), so it
     // rides along as a stat readout next to the chart title instead of its own series.
-    private void DrawViewPixelProcessingChart(Paper paper, ProfiledView view)
+    private static void DrawViewPixelProcessingChart(Paper paper, ProfiledView view, IProfilerHistory history)
     {
         using (paper.Column("rdp_vv_pixelproc").Height(UnitValue.Auto).ColBetween(2f).Enter())
         {
@@ -138,19 +138,19 @@ public partial class RenderProfilerPanel
                     .Show();
             }
 
-            DrawLineChart(paper, "rdp_vv_pixelproc_chart", "Pixel Processing", "Count", FormatCountCompact, UnitValue.Stretch(), ChartHeight, false,
-                ("Fragment Invocations", EditorTheme.Amber500, ViewSeries(view.Name, v => v.FragmentShaderInvocations)));
+            ViewerKit.DrawLineChart(paper, "rdp_vv_pixelproc_chart", "Pixel Processing", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, false,
+                ("Fragment Invocations", EditorTheme.Amber500, ViewerKit.ViewSeries(history, view.Name, v => v.FragmentShaderInvocations)));
         }
     }
 
 
     // Transfer Submits (Submit/Transfer) has no per-view attribution - transfers are frame-global free
     // command buffers, never tied to a view - so this chart only carries what's actually per-view.
-    private void DrawViewPipelineStateChart(Paper paper, string viewName)
+    private static void DrawViewPipelineStateChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        DrawLineChart(paper, "rdp_vv_pipelinestate_chart", "Pipeline State", "Count", FormatCountCompact, UnitValue.Stretch(), ChartHeight, true,
-            ("Switches", EditorTheme.Purple500, ViewSeries(viewName, v => v.PipelineSwitchCount)),
-            ("Command Submits", EditorTheme.Blue500, ViewSeries(viewName, ViewCommandBufferCount)));
+        ViewerKit.DrawLineChart(paper, "rdp_vv_pipelinestate_chart", "Pipeline State", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
+            ("Switches", EditorTheme.Purple500, ViewerKit.ViewSeries(history, viewName, v => v.PipelineSwitchCount)),
+            ("Command Submits", EditorTheme.Blue500, ViewerKit.ViewSeries(history, viewName, ViewCommandBufferCount)));
     }
 
 
@@ -169,7 +169,7 @@ public partial class RenderProfilerPanel
 
     private void DrawViewPipeline(Paper paper, ProfiledView view, float width)
     {
-        SectionCard(paper, "rdp_vv_pipeline", "Pass Graph", () => DrawPipelineGraph(paper, view, width));
+        ViewerKit.SectionCard(paper, "rdp_vv_pipeline", "Pass Graph", () => DrawPipelineGraph(paper, view, width));
     }
 
 
@@ -215,21 +215,21 @@ public partial class RenderProfilerPanel
 
         // Re-frame whenever the selected view changes, so the graph centers on all its nodes
         // instead of defaulting to zoom=1/pan=0 (which sits on the first node in the top-left).
-        if (!ReferenceEquals(_viewPipelineGraphFramedFor, view))
+        if (!ReferenceEquals(_pipelineGraphFramedFor, view))
         {
-            _viewPipelineGraphController.FrameAll();
-            _viewPipelineGraphFramedFor = view;
+            _pipelineGraphController.FrameAll();
+            _pipelineGraphFramedFor = view;
         }
 
         Origami.NodeGraph(paper, "rdp_vv_pipeline_graph", width - PipelineGraphPadding, PipelineGraphHeight)
             .Nodes(nodes)
             .ReadOnly()
             .Connections(connections)
-            .Controller(_viewPipelineGraphController)
+            .Controller(_pipelineGraphController)
             .OnNodeDoubleClick(node =>
             {
                 if (node.UserData is ProfiledPass pass)
-                    ViewViewerPassSelected?.Invoke(view, pass);
+                    PassSelected?.Invoke(view, pass);
             })
             .Show();
     }

@@ -1,3 +1,4 @@
+using Prowl.Editor.GUI.RenderProfiler.Viewers;
 using Prowl.Editor.Profiling;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -6,8 +7,6 @@ namespace Prowl.Editor.GUI.RenderProfiler;
 
 public partial class RenderProfilerPanel
 {
-    private const float SelectionViewerHeaderHeight = 24f;
-
     private void DrawSelectionViewer(Paper paper, float width, float height)
     {
         using (paper.Box("rdp_detail_panel").Enter())
@@ -20,13 +19,13 @@ public partial class RenderProfilerPanel
                     switch (SelectionType)
                     {
                         case ProfilerSelectionType.Frame:
-                            DrawFrameViewer(paper);
+                            ProfilerFrameViewer.Draw(paper, SelectedFrame, History);
                             break;
                         case ProfilerSelectionType.View:
-                            DrawViewViewer(paper, width);
+                            _viewViewer.Draw(paper, SelectedView, History, width);
                             break;
                         case ProfilerSelectionType.Pass:
-                            DrawPassViewer(paper);
+                            _passViewer.Draw(paper, SelectedView, SelectedPass, History, SelectedFrame?.HasCaptureDepth ?? false);
                             break;
                         case ProfilerSelectionType.CommandBuffer:
                             DrawCommandBufferViewer(paper);
@@ -44,15 +43,6 @@ public partial class RenderProfilerPanel
                 });
         }
     }
-
-
-    // DrawFrameViewer lives in Viewers/RenderProfiler.FrameViewer.cs.
-
-
-    // DrawViewViewer lives in Viewers/RenderProfiler.ViewViewer.cs.
-
-
-    // DrawPassViewer lives in Viewers/RenderProfiler.PassViewer.cs.
 
 
     // Placeholder sub-viewers - filled in as each selection kind's viewer is implemented.
