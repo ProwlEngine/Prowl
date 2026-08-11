@@ -1657,6 +1657,126 @@ public class PrefabTests : EditorTestHarness
         Assert.Equal(10.0, current.Transform.Position.X, 3);      // transform preserved
     }
 
+    // ---------------------------------------------------------------------
+    // Below the root, where an object sits and what it is called is the prefab's
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void MovingAChild_IsRecordedAndSurvivesARefresh()
+    {
+        Guid g = MakeNestedPrefab("ChildMove.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.Children[0].Transform.LocalPosition = new Float3(5, 0, 0);
+        PrefabUtility.ReconcileInstance(instance);
+
+        Assert.Contains(instance.PrefabOverrides, o => o.Path.EndsWith("/$/Transform.LocalPosition"));
+
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Equal(5.0, instance.Children[0].Transform.LocalPosition.X, 3);
+    }
+
+    [Fact]
+    public void MovingAChild_CanBeReverted()
+    {
+        Guid g = MakeNestedPrefab("ChildRevert.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.Children[0].Transform.LocalPosition = new Float3(5, 0, 0);
+        PrefabUtility.ReconcileInstance(instance);
+        PrefabUtility.RevertOverrides(instance);
+
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Equal(0.0, live.Children[0].Transform.LocalPosition.X, 3);
+        Assert.Empty(live.PrefabOverrides);
+    }
+
+    [Fact]
+    public void ThePrefabCanMoveItsOwnChild()
+    {
+        Guid g = MakeNestedPrefab("ChildLayout.prefab");
+        LoadSceneWith(Inst(g));
+
+        EditPrefabSource(g, "ChildLayout.prefab",
+            s => s.Children[0].Transform.LocalPosition = new Float3(0, 3, 0));
+
+        // A prefab that could not change its own layout could not be changed at all.
+        Assert.Equal(3.0, Scene.Current!.RootObjects.First().Children[0].Transform.LocalPosition.Y, 3);
+    }
+
+    [Fact]
+    public void AChildTheInstanceMoved_KeepsItsPlaceWhileTheRestFollowsThePrefab()
+    {
+        Guid g = MakeNestedPrefab("ChildMix.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.Children[0].Transform.LocalPosition = new Float3(5, 0, 0);
+        PrefabUtility.ReconcileInstance(instance);
+
+        EditPrefabSource(g, "ChildMix.prefab", s =>
+        {
+            s.Children[0].Transform.LocalPosition = new Float3(0, 9, 0);
+            s.Children[0].Transform.LocalScale = new Float3(2, 2, 2);
+        });
+
+        var child = Scene.Current!.RootObjects.First().Children[0];
+        Assert.Equal(5.0, child.Transform.LocalPosition.X, 3);  // what the instance said
+        Assert.Equal(2.0, child.Transform.LocalScale.X, 3);     // what the prefab said
+    }
+
+    [Fact]
+    public void OneInstanceMovingAChild_LeavesTheOtherAlone()
+    {
+        Guid g = MakeNestedPrefab("ChildAlone.prefab");
+        var a = Inst(g);
+        var b = Inst(g);
+        LoadSceneWith(a, b);
+
+        a.Children[0].Transform.LocalPosition = new Float3(5, 0, 0);
+        PrefabUtility.ReconcileInstance(a);
+        PrefabUtility.RefreshAllInstances(g);
+
+        Assert.Equal(5.0, a.Children[0].Transform.LocalPosition.X, 3);
+        Assert.Equal(0.0, b.Children[0].Transform.LocalPosition.X, 3);
+
+        // The move belongs to the instance that made it, and to no other.
+        Assert.Contains(a.PrefabOverrides, o => o.Path.EndsWith("/$/Transform.LocalPosition"));
+        Assert.Empty(b.PrefabOverrides);
+    }
+
+    [Fact]
+    public void RenamingAChild_IsRecorded_WhileTheRootsOwnNameIsNot()
+    {
+        Guid g = MakeNestedPrefab("ChildName.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.Name = "Placed";
+        instance.Children[0].Name = "Renamed";
+        PrefabUtility.ReconcileInstance(instance);
+
+        // One name override, the child's. Naming the instance is placing it, not editing the prefab.
+        Assert.Single(instance.PrefabOverrides.Where(o => o.Path.EndsWith("/$/Name")));
+
+        PrefabUtility.RefreshAllInstances(g);
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Equal("Placed", live.Name);
+        Assert.Equal("Renamed", live.Children[0].Name);
+    }
+
+    [Fact]
+    public void ThePrefabCanRenameItsOwnChild()
+    {
+        Guid g = MakeNestedPrefab("ChildRename.prefab");
+        LoadSceneWith(Inst(g));
+
+        EditPrefabSource(g, "ChildRename.prefab", s => s.Children[0].Name = "NewName");
+
+        Assert.Equal("NewName", Scene.Current!.RootObjects.First().Children[0].Name);
+    }
 
     // ---------------------------------------------------------------------
     // Child overrides are stored on the instance root (regression lock for the

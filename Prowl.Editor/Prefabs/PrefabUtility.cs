@@ -895,14 +895,15 @@ public static partial class PrefabUtility
     /// <para/>
     /// Objects are paired by source identifier first, so the copy lands on the instance's own objects
     /// and every reference to them stays valid. Anything the instance added, which has no source
-    /// identifier, is left alone. Name and transform are per-instance and are put back afterwards.
+    /// identifier, is left alone. What belongs to the instance rather than the prefab is put back
+    /// afterwards - see <see cref="PlacementState"/> for what that is.
     /// </summary>
     private static void ReconcileToSource(GameObject instance, GameObject source, Guid boundaryPrefabId)
     {
         var context = new CloneContext();
         var placement = new List<PlacementState>();
 
-        PairToSource(instance, source, boundaryPrefabId, context, placement);
+        PairToSource(instance, source, boundaryPrefabId, context, placement, isInstanceRoot: true);
         DropWhatTheSourceNoLongerHas(instance, source, boundaryPrefabId);
 
         Cloner.CopyTo(source, instance, context);
@@ -914,14 +915,20 @@ public static partial class PrefabUtility
     }
 
     /// <summary>
-    /// What an object is called, where it sits and how the editor treats it. All of it belongs to the
-    /// instance rather than to the prefab, and none of it is tracked as an override.
+    /// What the instance decides for one of its objects rather than the prefab, put back after the
+    /// copy because nothing tracks it as an override.
+    /// <para/>
+    /// Where the instance root sits and what it is called is the placement of the instance itself, so
+    /// it is never the prefab's to set. Below the root those are prefab content like any other value,
+    /// tracked and reverted as overrides - a prefab that could not move or rename its own children
+    /// could not change its layout at all. Hide flags are editor presentation at every depth.
     /// </summary>
-    private readonly struct PlacementState(GameObject go)
+    private readonly struct PlacementState(GameObject go, bool isInstanceRoot)
     {
         private readonly GameObject _go = go;
-        private readonly string _name = go.Name;
+        private readonly bool _isInstanceRoot = isInstanceRoot;
         private readonly HideFlags _hideFlags = go.HideFlags;
+        private readonly string _name = go.Name;
         private readonly Float3 _position = go.Transform.LocalPosition;
         private readonly Quaternion _rotation = go.Transform.LocalRotation;
         private readonly Float3 _scale = go.Transform.LocalScale;
@@ -930,8 +937,10 @@ public static partial class PrefabUtility
         {
             if (_go.IsNotValid()) return;
 
-            _go.Name = _name;
             _go.HideFlags = _hideFlags;
+            if (!_isInstanceRoot) return;
+
+            _go.Name = _name;
             _go.Transform.LocalPosition = _position;
             _go.Transform.LocalRotation = _rotation;
             _go.Transform.LocalScale = _scale;
@@ -944,7 +953,7 @@ public static partial class PrefabUtility
     /// sits is this prefab's business, what is inside it is not.
     /// </summary>
     private static void PairToSource(GameObject instance, GameObject source, Guid boundaryPrefabId,
-        CloneContext context, List<PlacementState> placement)
+        CloneContext context, List<PlacementState> placement, bool isInstanceRoot)
     {
         if (instance.IsPrefabInstance && instance.PrefabAssetId != boundaryPrefabId)
         {
@@ -953,7 +962,7 @@ public static partial class PrefabUtility
         }
 
         context.AddTarget(source, instance);
-        placement.Add(new PlacementState(instance));
+        placement.Add(new PlacementState(instance, isInstanceRoot));
 
         // What ties the instance to its prefab, overrides and all, is the instance's own record. The
         // source carries a link too, and copying that one over would throw the overrides away.
@@ -981,7 +990,7 @@ public static partial class PrefabUtility
 
             GameObject? match = instance.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
             if (match.IsValid())
-                PairToSource(match!, sourceChild, boundaryPrefabId, context, placement);
+                PairToSource(match!, sourceChild, boundaryPrefabId, context, placement, isInstanceRoot: false);
         }
     }
 
@@ -1256,7 +1265,7 @@ public static partial class PrefabUtility
     }
 
     /// <summary>
-    /// Detect GO-level overrides (Name, Tag, Layer, Enabled, Transform).
+    /// Detect the overrides that live on the GameObject itself rather than on one of its components.
     /// </summary>
     public static void RecordGameObjectOverrides(GameObject instanceGO)
     {
@@ -1273,13 +1282,23 @@ public static partial class PrefabUtility
         var prefabRoot = GetPrefabInstanceRoot(instanceGO);
         var overrides = (prefabRoot.IsValid() ? prefabRoot : instanceGO).PrefabOverrides;
 
-        // Compare GO-level fields (excluding Name and Transform those are per-instance)
         CompareField(pathPrefix, "TagIndex", instanceGO.TagIndex, sourceGO.TagIndex, overrides);
         CompareField(pathPrefix, "LayerIndex", instanceGO.LayerIndex, sourceGO.LayerIndex, overrides);
         CompareField(pathPrefix, "Enabled", instanceGO.Enabled, sourceGO.Enabled, overrides);
         CompareField(pathPrefix, "IsStatic", instanceGO.IsStatic, sourceGO.IsStatic, overrides);
-        // Name and Transform (Position/Rotation/Scale) are intentionally NOT tracked -
-        // they are per-instance values that don't constitute overrides.
+
+        // Where the instance root sits and what it is called is the placement of the instance itself,
+        // which the prefab has no say in. Below the root it is the prefab's layout, so it is compared
+        // like anything else and the instance can move a child, see that it did, and put it back.
+        if (IsInstanceRoot(instanceGO)) return;
+
+        Transform instanceTransform = instanceGO.Transform;
+        Transform sourceTransform = sourceGO.Transform;
+
+        CompareField(pathPrefix, "Name", instanceGO.Name, sourceGO.Name, overrides);
+        CompareField(pathPrefix, "Transform.LocalPosition", instanceTransform.LocalPosition, sourceTransform.LocalPosition, overrides);
+        CompareField(pathPrefix, "Transform.LocalRotation", instanceTransform.LocalRotation, sourceTransform.LocalRotation, overrides);
+        CompareField(pathPrefix, "Transform.LocalScale", instanceTransform.LocalScale, sourceTransform.LocalScale, overrides);
     }
 
     // Serialized state that must never become a per-instance override.
