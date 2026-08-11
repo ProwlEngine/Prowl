@@ -86,12 +86,6 @@ public class PrefabTests : EditorTestHarness
         Scene.ProcessPendingLoad();
     }
 
-    private Guid WritePrefabRaw(GameObject source, string path)
-    {
-        File.WriteAllText(AssetAbsolutePath(path), Serializer.Serialize(typeof(object), source).WriteToString());
-        return Assets.ImportFile(path);
-    }
-
     // ---------------------------------------------------------------------
     // Apply acts on the instance root, not on whatever object it was handed
     // ---------------------------------------------------------------------
@@ -176,7 +170,7 @@ public class PrefabTests : EditorTestHarness
 
         var outerSource = new GameObject("Outer");
         Inst(inner).SetParent(outerSource);
-        Guid outer = WritePrefabRaw(outerSource, "Outer.prefab");
+        Guid outer = WritePrefabFileRaw(outerSource, "Outer.prefab");
 
         var instance = Inst(outer);
         SetSceneCurrent(instance);
@@ -939,14 +933,6 @@ public class PrefabTests : EditorTestHarness
 
     private GameObject Instantiate(Guid guid) => GameObject.InstantiateDetached(GetPrefab(guid)!)!;
 
-    private void SetSceneCurrent(GameObject instance)
-    {
-        var scene = new Scene();
-        scene.Add(instance);
-        Scene.Load(scene);
-        Scene.ProcessPendingLoad();
-    }
-
     // ---------------------------------------------------------------------
     // ---------------------------------------------------------------------
     // Nesting roots
@@ -1026,25 +1012,39 @@ public class PrefabTests : EditorTestHarness
     }
 
     [Fact]
-    public void RecordGameObjectOverrides_TracksTagIndex()
+    public void RecordGameObjectOverrides_TagIndexSurvivesARefresh()
     {
-        var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
-        instance.TagIndex = 3;
+        Guid g = MakePrefab(5, 5, "P.prefab");
+        var instance = Instantiate(g);
+        SetSceneCurrent(instance);
 
+        instance.TagIndex = 3;
         PrefabUtility.RecordGameObjectOverrides(instance);
 
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, "TagIndex")));
+
+        // Recording it is only half of it. A GameObject-level override that is written down and then
+        // dropped on the next refresh is how the Enabled override went unnoticed.
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Equal(3, instance.TagIndex);
     }
 
     [Fact]
     public void RecordGameObjectOverrides_IgnoresName()
     {
-        var instance = Instantiate(MakePrefab(5, 5, "P.prefab"));
-        instance.Name = "Renamed";
+        Guid g = MakePrefab(5, 5, "P.prefab");
+        var instance = Instantiate(g);
+        SetSceneCurrent(instance);
 
+        instance.Name = "Renamed";
         PrefabUtility.RecordGameObjectOverrides(instance);
 
-        Assert.False(PrefabUtility.HasAnyOverrides(instance)); // name is per-instance, not an override
+        // A name is per-instance rather than an override, so nothing is recorded and nothing takes it
+        // away again either.
+        Assert.False(PrefabUtility.HasAnyOverrides(instance));
+
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Equal("Renamed", instance.Name);
     }
 
     // ---------------------------------------------------------------------
@@ -1282,7 +1282,7 @@ public class PrefabTests : EditorTestHarness
         nested.SetParent(root);
         nestedChild.SetParent(nested);
 
-        Guid outerId = WritePrefabRaw(root, "Outer.prefab");
+        Guid outerId = WritePrefabFileRaw(root, "Outer.prefab");
         var instance = Instantiate(outerId);
 
         // An asset written before flattening was enforced loads as one tree: the whole hierarchy is
@@ -1345,20 +1345,26 @@ public class PrefabTests : EditorTestHarness
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void SecondComponent_OverrideByIndex()
+    public void OverrideOnOneOfSeveralComponents_AppliesToThatOneOnly()
     {
         var root = new GameObject("Root");
-        root.AddComponent<OverrideComp>().A = 1;   // c0
-        root.AddComponent<VecComp>().V = Float3.Zero; // c1
+        root.AddComponent<OverrideComp>().A = 1;
+        root.AddComponent<VecComp>().V = Float3.Zero;
         Guid g = CreatePrefabAsset(root, "Multi.prefab");
 
         var instance = Instantiate(g);
-        var vec = instance.GetComponents<MonoBehaviour>().ToList()[1] as VecComp;
-        vec!.V = new Float3(5, 0, 0);
+        SetSceneCurrent(instance);
 
+        var vec = instance.GetComponent<VecComp>()!;
+        vec.V = new Float3(5, 0, 0);
         PrefabUtility.RecordComponentOverrides(instance, vec);
 
-        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, vec, "V")));
+        PrefabUtility.RefreshAllInstances(g);
+
+        // The override has to survive and land on the component it was recorded against, leaving the
+        // other one following the prefab.
+        Assert.Equal(new Float3(5, 0, 0), instance.GetComponent<VecComp>()!.V);
+        Assert.Equal(1, instance.GetComponent<OverrideComp>()!.A);
     }
 
     // ---------------------------------------------------------------------

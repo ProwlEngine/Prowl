@@ -59,13 +59,38 @@ public abstract class EditorTestHarness : IDisposable
     protected string AssetAbsolutePath(string relativePath) => Path.Combine(Project.AssetsPath, relativePath);
 
     /// <summary>
-    /// Writes a GameObject hierarchy to disk as a .prefab asset and imports it. Returns the asset GUID.
-    /// The file is serialized as a GameObject; the PrefabImporter wraps it into a PrefabAsset.
+    /// Creates a .prefab asset the way the editor does and returns its GUID. Goes through the
+    /// production path, so what a test builds on is what a user would have: the source becomes an
+    /// instance of the asset, identifiers are stabilised, and anything nested is flattened.
+    /// <para/>
+    /// Use <see cref="WritePrefabFileRaw"/> instead when a test needs an asset the creation path
+    /// would never produce.
     /// </summary>
     protected Guid CreatePrefabAsset(GameObject source, string relativePath = "Prefab.prefab")
     {
-        source.ClearPrefabDataRecursive();
+        if (source.Scene == null)
+        {
+            var scene = new Scene();
+            scene.Add(source);
+            Scene.Load(scene);
+            Scene.ProcessPendingLoad();
+        }
 
+        if (!Prefabs.PrefabUtility.SaveAsPrefabAssetAndConnect(source, relativePath, overwrite: true))
+            throw new InvalidOperationException($"Failed to create prefab '{relativePath}'.");
+
+        Assets.Refresh();
+        var entry = EditorAssetBackend.Instance!.GetEntry(relativePath)
+            ?? throw new InvalidOperationException($"Prefab '{relativePath}' was written but not imported.");
+        return entry.Guid;
+    }
+
+    /// <summary>
+    /// Writes a prefab file directly, bypassing the creation path. For tests that need an asset in a
+    /// shape the editor would not write, such as one authored before a rule was enforced.
+    /// </summary>
+    protected Guid WritePrefabFileRaw(GameObject source, string relativePath)
+    {
         Guid savedId = source.AssetID;
         source.AssetID = Guid.Empty;
         EchoObject echo = Serializer.Serialize(typeof(object), source);

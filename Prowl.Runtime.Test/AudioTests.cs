@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Reflection;
+
 using Prowl.Echo;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.Audio.Effects;
@@ -52,12 +54,17 @@ public class AudioTests : RuntimeTestBase
     }
 
     /// <summary>Binds an effect to a stereo chain and runs it over interleaved frames.</summary>
-    private static unsafe float[] Run(AudioEffect effect, float[] input, int channels = Channels)
+    private static float[] Run(AudioEffect effect, float[] input, int channels = Channels)
+        => Run(effect, input, new float[input.Length], channels);
+
+    /// <summary>
+    /// Same, writing into a buffer the caller supplies. Handing in something other than silence is the
+    /// only way to tell "wrote zeroes" apart from "wrote nothing".
+    /// </summary>
+    private static unsafe float[] Run(AudioEffect effect, float[] input, float[] output, int channels = Channels)
     {
         if (!effect.IsInitialized)
             effect.Initialize(TestSampleRate, channels);
-
-        float[] output = new float[input.Length];
 
         fixed (float* pIn = input, pOut = output)
         {
@@ -111,22 +118,136 @@ public class AudioTests : RuntimeTestBase
         return samples;
     }
 
+    /// <summary>A full scale sine at a given frequency, the same in every channel.</summary>
+    private static float[] Sine(float hertz, int frames)
+    {
+        float[] buffer = new float[frames * Channels];
+        float step = 2f * MathF.PI * hertz / TestSampleRate;
+
+        for (int i = 0; i < frames; i++)
+        {
+            float value = MathF.Sin(step * i);
+            buffer[i * Channels] = value;
+            buffer[i * Channels + 1] = value;
+        }
+
+        return buffer;
+    }
+
+    /// <summary>
+    /// RMS of one channel over the tail of a block. For a sine this is the amplitude over root two, so
+    /// the ratio of two of them is the gain the filter applied.
+    /// </summary>
+    private static float TailRms(float[] interleaved, int channel)
+    {
+        int frames = interleaved.Length / Channels;
+        int from = frames / 2;
+        double sum = 0.0;
+
+        for (int frame = from; frame < frames; frame++)
+        {
+            float sample = interleaved[frame * Channels + channel];
+            sum += sample * sample;
+        }
+
+        return MathF.Sqrt((float)(sum / (frames - from)));
+    }
+
     #endregion
 
     #region AudioBuffer and NativeArray
 
-    // Read(ref output) must allocate the output buffer when it is null instead of dereferencing null.
+    // Read copies the whole written span, so a null or undersized destination has to be replaced before
+    // the copy rather than being written past the end of.
     [Fact]
-    public void AudioBuffer_Read_AllocatesWhenOutputNull()
+    public unsafe void AudioBuffer_Read_ProvidesADestinationBigEnoughForTheCapacity()
     {
-        var buffer = new AudioBuffer(8192);
+        var buffer = new AudioBuffer(8);
+        float[] source = new float[8];
+        for (int i = 0; i < source.Length; i++)
+            source[i] = i + 1;
+
+        fixed (float* pSource = source)
+            buffer.Write(new NativeArray<float>(pSource, source.Length));
+
         float[] output = null!;
+        Assert.Equal(8, buffer.Read(ref output));
+        Assert.Equal(8, output.Length);
+        Assert.Equal(source, output);
 
-        var ex = Record.Exception(() => buffer.Read(ref output));
+        // An array from a smaller capacity, or from before the block size grew.
+        float[] undersized = new float[2];
+        Assert.Equal(8, buffer.Read(ref undersized));
+        Assert.Equal(8, undersized.Length);
+        Assert.Equal(source, undersized);
+    }
 
-        Assert.Null(ex);
-        Assert.NotNull(output);
-        Assert.Equal(8192, output.Length);
+    // One writer on the audio thread and one reader on the game thread, with no lock between them. A
+    // block written all of one value has to read back all of one value: anything else is two halves of
+    // two different blocks, which is a visualiser drawing audio that was never played.
+    [Fact]
+    public unsafe void AudioBuffer_UnderAConcurrentWriter_NeverReturnsATornBlock()
+    {
+        const int Capacity = 4096;
+        var buffer = new AudioBuffer(Capacity);
+        using var stop = new CancellationTokenSource();
+
+        // A thread rather than a task, so nothing here waits on the pool and the test does not have to
+        // block on a Task to shut it down.
+        var writer = new Thread(() =>
+        {
+            float[] block = new float[Capacity];
+            float value = 1f;
+
+            fixed (float* pBlock = block)
+            {
+                var native = new NativeArray<float>(pBlock, block.Length);
+
+                while (!stop.IsCancellationRequested)
+                {
+                    // Every sample of a block is the same, so a torn read is one that is not uniform.
+                    for (int i = 0; i < block.Length; i++)
+                        block[i] = value;
+
+                    buffer.Write(native);
+                    value = value >= 64f ? 1f : value + 1f;
+                }
+            }
+        });
+
+        writer.Start();
+
+        try
+        {
+            const int Wanted = 2000;
+
+            float[] output = null!;
+            int consistentReads = 0;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            // Counted rather than attempted, so the reader is still going while the writer is, however
+            // long the thread took to get started.
+            while (consistentReads < Wanted && clock.ElapsedMilliseconds < 10000)
+            {
+                int length = buffer.Read(ref output);
+
+                if (length == 0)
+                    continue;
+
+                consistentReads++;
+
+                for (int i = 1; i < length; i++)
+                    Assert.True(output[i] == output[0],
+                        $"torn block: sample {i} was {output[i]} where sample 0 was {output[0]}");
+            }
+
+            Assert.Equal(Wanted, consistentReads);
+        }
+        finally
+        {
+            stop.Cancel();
+            writer.Join(TimeSpan.FromSeconds(5));
+        }
     }
 
     // Write sized its destination from the source, so the bounds check compared the source against
@@ -155,22 +276,34 @@ public class AudioTests : RuntimeTestBase
     }
 
     // The indexer built an IndexOutOfRangeException and dropped it on the floor, so a user effect
-    // reading past its buffer silently touched whatever native memory came next.
+    // reading past its buffer silently touched whatever native memory came next. The setter is the
+    // half that matters most: past the end it is a write into memory that belongs to something else.
     [Fact]
     public unsafe void NativeArray_OutOfRangeIndex_Throws()
     {
-        float[] data = new float[4];
-        bool threw = false;
+        // Padding either side, so a write that does get through lands here rather than in the heap.
+        float[] data = new float[12];
 
         fixed (float* pData = data)
         {
-            var array = new NativeArray<float>(pData, data.Length);
+            var array = new NativeArray<float>(pData + 4, 4);
 
-            try { _ = array[4]; }
-            catch (IndexOutOfRangeException) { threw = true; }
+            // Written out rather than run through Assert.Throws, which needs a lambda, and a ref struct
+            // cannot be captured by one.
+            bool readPastEnd = false, readBeforeStart = false, writePastEnd = false;
+
+            try { _ = array[4]; } catch (IndexOutOfRangeException) { readPastEnd = true; }
+            try { _ = array[-1]; } catch (IndexOutOfRangeException) { readBeforeStart = true; }
+            try { array[4] = 1f; } catch (IndexOutOfRangeException) { writePastEnd = true; }
+
+            Assert.True(readPastEnd, "reading past the end was allowed");
+            Assert.True(readBeforeStart, "reading before the start was allowed");
+            Assert.True(writePastEnd, "writing past the end was allowed");
         }
 
-        Assert.True(threw);
+        // Nothing outside the window was touched.
+        foreach (float sample in data)
+            Assert.Equal(0f, sample);
     }
 
     #endregion
@@ -229,12 +362,16 @@ public class AudioTests : RuntimeTestBase
         Assert.Empty(clip.GetSampleData());
     }
 
+    // A format that cannot exist would be written into the wave header and handed to the decoder, which
+    // is a worse place to find out about it than the call that made the clip.
     [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void Create_RejectsAnImpossibleFormat(int channels)
+    [InlineData(0, TestSampleRate)]
+    [InlineData(-1, TestSampleRate)]
+    [InlineData(2, 0)]
+    [InlineData(2, -44100)]
+    public void Create_RejectsAnImpossibleFormat(int channels, int sampleRate)
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => AudioClip.Create("Bad", [0f], channels, TestSampleRate));
+        Assert.Throws<ArgumentOutOfRangeException>(() => AudioClip.Create("Bad", [0f], channels, sampleRate));
     }
 
     #endregion
@@ -424,6 +561,7 @@ public class AudioTests : RuntimeTestBase
             MinDistance = 3f,
             MaxDistance = 40f,
             AttenuationModel = AttenuationModel.Exponential,
+            MaxOneShotVoices = 3,
         };
 
         var restored = Serializer.Deserialize<AudioSource>(Serializer.Serialize(source));
@@ -440,6 +578,7 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(3f, restored.MinDistance);
         Assert.Equal(40f, restored.MaxDistance);
         Assert.Equal(AttenuationModel.Exponential, restored.AttenuationModel);
+        Assert.Equal(3, restored.MaxOneShotVoices);
     }
 
     // A scene written before a field existed has no key for it. Field deserialization leaves the
@@ -460,16 +599,33 @@ public class AudioTests : RuntimeTestBase
         Assert.False(restored.PlayOnStart);
     }
 
-    // Live playback position used to be written into the serialized form, so saving a scene while
-    // play mode was running baked whatever sample the music was on into the asset, and every later
-    // load started there. On a prefab every instance spawned mid clip.
+    // Two ways to get this wrong, and both are silent. A setting that is not marked persists in the
+    // scene the editor has open and is gone the next time it loads. Live playback state that is marked
+    // gets baked into the asset, which is what made saving a scene mid playback spawn every later
+    // instance part way through its clip.
+    //
+    // Driven off the fields rather than a list written out here, so a field added later is covered by
+    // whichever half of this it belongs to instead of by nothing.
     [Fact]
-    public void AudioSource_DoesNotSerializePlaybackPosition()
+    public void AudioSource_Serializes_ItsSettingsAndNoLiveState()
     {
         EchoObject echo = Serializer.Serialize(new AudioSource());
 
-        Assert.Null(echo.Get("_savedCursor"));
-        Assert.Null(echo.Get("_wasPlaying"));
+        FieldInfo[] fields = typeof(AudioSource).GetFields(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+
+        Assert.NotEmpty(fields);
+
+        foreach (FieldInfo field in fields)
+        {
+            bool persisted = (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null)
+                && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null;
+
+            if (persisted)
+                Assert.True(echo.Get(field.Name) is not null, $"'{field.Name}' is a saved setting but was not written");
+            else
+                Assert.True(echo.Get(field.Name) is null, $"'{field.Name}' is runtime state but was written into the asset");
+        }
     }
 
     // Effects used to be script-only and unserialized, so a chain built at runtime was gone the next
@@ -572,6 +728,45 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(expected, Math.Abs(output[^2]), 2);
     }
 
+    // DC and Nyquist are the same for every cutoff, so a filter that ignored Frequency and Q entirely
+    // would pass both of the theories above. This is the part that says where the corner actually is:
+    // a two pole lowpass is down to Q at its own cutoff, near unity well below it, and falls at twelve
+    // decibels an octave above it.
+    [Theory]
+    [InlineData(1000f, 0.707f, 250f, 0.998f)]
+    [InlineData(1000f, 0.707f, 1000f, 0.707f)]
+    [InlineData(1000f, 0.707f, 4000f, 0.059f)]
+    [InlineData(1000f, 4.0f, 1000f, 4.0f)]
+    [InlineData(4000f, 0.707f, 1000f, 0.998f)]
+    public void Filter_Lowpass_MatchesItsMagnitudeResponse(float cutoff, float q, float hertz, float expectedGain)
+    {
+        var effect = new FilterEffect { Type = FilterType.Lowpass, Frequency = cutoff, Q = q };
+
+        float[] input = Sine(hertz, 8192);
+        float[] output = Run(effect, input);
+
+        // Measured over the tail of the block, so the filter's start up is not in the average.
+        float gain = TailRms(output, 0) / TailRms(input, 0);
+
+        Assert.Equal(expectedGain, gain, 0.02f * MathF.Max(expectedGain, 0.5f));
+    }
+
+    // The one parameter with no effect at all on a lowpass, and the type that exists to use it. A peak
+    // sits at its gain in the middle and at unity either side of it.
+    [Theory]
+    [InlineData(12f, 3.981f)]
+    [InlineData(-12f, 0.251f)]
+    [InlineData(0f, 1f)]
+    public void Filter_Peak_AppliesItsGainAtTheCentre(float gainDB, float expectedGain)
+    {
+        var effect = new FilterEffect { Type = FilterType.Peak, Frequency = 1000f, Q = 1f, GainDB = gainDB };
+
+        float[] input = Sine(1000f, 8192);
+        float gain = TailRms(Run(effect, input), 0) / TailRms(input, 0);
+
+        Assert.Equal(expectedGain, gain, 0.02f * expectedGain);
+    }
+
     // A delay line's whole job: an impulse comes back out one delay length later, and nowhere else.
     [Fact]
     public void DelayEffect_ReturnsAnImpulseOneDelayLater()
@@ -647,11 +842,35 @@ public class AudioTests : RuntimeTestBase
 
         // Set after the effect has already run once, the way a gameplay toggle would.
         effect.Bypass = true;
-        float[] bypassed = Run(effect, input);
 
-        // Untouched means the previous stage's output carries on unchanged, which here is silence.
-        foreach (float sample in bypassed)
-            Assert.Equal(0f, sample);
+        // Filled with something that is not silence first: writing zeroes and writing nothing look the
+        // same in a buffer that started empty, and only one of them is what bypassing means.
+        float[] destination = Interleave(-0.75f, 0.125f, 16);
+        Run(effect, input, destination);
+
+        for (int frame = 0; frame < 16; frame++)
+        {
+            Assert.Equal(-0.75f, destination[frame * Channels]);
+            Assert.Equal(0.125f, destination[frame * Channels + 1]);
+        }
+    }
+
+    // What bypassing is for, seen from where it matters: the block reaches the output as it went in,
+    // rather than the chain promoting a buffer the bypassed stage never wrote.
+    [Fact]
+    public void EffectChain_ABypassedStage_PassesAudioThrough()
+    {
+        var effect = new DistortionEffect { Drive = 10f, Blend = 1f };
+        var chain = new AudioEffectChain();
+        chain.Publish([effect, new DistortionEffect { Blend = 0f }]);
+
+        Assert.NotEqual(0.5f, RunChain(chain, Interleave(0.5f, 0.5f, 16), 16)[0], 3);
+
+        effect.Bypass = true;
+        float[] output = RunChain(chain, Interleave(0.5f, 0.5f, 16), 16);
+
+        foreach (float sample in output)
+            Assert.Equal(0.5f, sample, 5);
     }
 
     // OnValidate runs for every field on the owning source, so replacing the delay line whenever it is
@@ -690,6 +909,17 @@ public class AudioTests : RuntimeTestBase
         effect.DelayInSeconds = 16f / TestSampleRate;
 
         Assert.Equal(16u, effect.DelayInFrames);
+
+        // What the reported number is supposed to mean. An impulse now comes back at sixteen frames,
+        // and the old line's eight is silent.
+        float[] impulse = new float[32 * Channels];
+        impulse[0] = 1f;
+        impulse[1] = 1f;
+
+        float[] output = Run(effect, impulse);
+
+        Assert.Equal(0f, output[8 * Channels], 4);
+        Assert.Equal(1f, output[16 * Channels], 4);
     }
 
     // The blend is a crossfade against the untouched signal, so at fully dry the effect has to be
@@ -703,6 +933,42 @@ public class AudioTests : RuntimeTestBase
 
         Assert.Equal(0.5f, output[0], 5);
         Assert.Equal(-0.25f, output[1], 5);
+    }
+
+    // A waveshaper is only a waveshaper if it is odd symmetric. One that is not adds a DC offset to
+    // everything it touches, which is inaudible on its own and eats headroom off everything after it.
+    [Fact]
+    public void DistortionEffect_IsOddSymmetric()
+    {
+        var effect = new DistortionEffect { Drive = 6f, Blend = 1f };
+
+        float[] positive = Run(effect, Interleave(0.3f, 0.7f, 4));
+        float[] negative = Run(effect, Interleave(-0.3f, -0.7f, 4));
+
+        Assert.Equal(positive[0], -negative[0], 5);
+        Assert.Equal(positive[1], -negative[1], 5);
+    }
+
+    // Soft clipping means the output stays inside full scale however hard it is driven. Anything that
+    // overshoots here is a hard clip further down the chain, or in the device.
+    [Theory]
+    [InlineData(1f, 1f)]
+    [InlineData(4f, 100f)]
+    [InlineData(200f, 1000f)]
+    public void DistortionEffect_FullyWet_StaysWithinFullScale(float drive, float amplitude)
+    {
+        var effect = new DistortionEffect { Drive = drive, Blend = 1f };
+
+        float[] output = Run(effect, Interleave(amplitude, -amplitude, 8));
+
+        foreach (float sample in output)
+        {
+            Assert.True(float.IsFinite(sample), $"shaper produced {sample}");
+            Assert.InRange(Math.Abs(sample), 0f, 1f);
+        }
+
+        // And the ceiling is not being reached by simply muting it.
+        Assert.True(Math.Abs(output[0]) > 0.4f, $"shaper answered {output[0]} for an input of {amplitude}");
     }
 
     // Same channel smearing as the filter, and the phaser additionally advanced its sweep once per
@@ -970,10 +1236,36 @@ public class AudioTests : RuntimeTestBase
     {
         var chain = new AudioEffectChain();
 
-        float[] output = RunChain(chain, Interleave(0.25f, -0.25f, 32), 32);
+        float[] output = RunChain(chain, Interleave(0.25f, -0.25f, 32), 32, out uint written);
 
-        Assert.Equal(0.25f, output[0], 5);
-        Assert.Equal(-0.25f, output[1], 5);
+        Assert.Equal(32u, written);
+
+        for (int frame = 0; frame < 32; frame++)
+        {
+            Assert.Equal(0.25f, output[frame * Channels], 5);
+            Assert.Equal(-0.25f, output[frame * Channels + 1], 5);
+        }
+    }
+
+    // Stages run in the order they were published. A chain that ran them backwards would still sound
+    // like something, which is why nothing else here would notice.
+    [Fact]
+    public void EffectChain_RunsItsStagesInOrder()
+    {
+        // A gain either side of a shaper. Shaping full scale and then halving is a quarter, halving and
+        // then shaping is not, because a waveshaper is not linear. Two linear stages would commute and
+        // could not tell the two orders apart at all.
+        AudioEffect Shaper() => new DistortionEffect { Drive = 1f, Blend = 1f };
+        AudioEffect Halve() => new DistortionEffect { Blend = 0f, Volume = 0.5f };
+
+        var shapeFirst = new AudioEffectChain();
+        shapeFirst.Publish([Shaper(), Halve()]);
+
+        var halveFirst = new AudioEffectChain();
+        halveFirst.Publish([Halve(), Shaper()]);
+
+        Assert.Equal(0.25f, RunChain(shapeFirst, Interleave(1f, 1f, 8), 8)[0], 3);
+        Assert.Equal(0.295f, RunChain(halveFirst, Interleave(1f, 1f, 8), 8)[0], 3);
     }
 
     // An effect is allowed to change the frame count, but not to talk the chain into writing past the
@@ -984,9 +1276,9 @@ public class AudioTests : RuntimeTestBase
         var chain = new AudioEffectChain();
         chain.Publish([new GreedyEffect()]);
 
-        // The assertion that the reported count fits lives in RunChain.
-        float[] output = RunChain(chain, Interleave(1f, 1f, 16), 16);
+        float[] output = RunChain(chain, Interleave(1f, 1f, 16), 16, out uint written);
 
+        Assert.Equal(16u, written);
         Assert.Equal(1f, output[^1], 5);
     }
 
@@ -1110,16 +1402,18 @@ public class AudioTests : RuntimeTestBase
         Assert.Single(mixer.Groups);
     }
 
-    // A slider works in linear gain and a mixer works in decibels, so the pair has to round trip.
+    // A slider works in linear gain and a mixer works in decibels, so the pair has to round trip. On
+    // its own that proves very little: the two are inverses of each other whatever constant they use,
+    // so a level meter built on 10 log10 would round trip perfectly and read every level wrong. The
+    // anchors are what pin it to the amplitude definition, where -6 dB is half.
     [Theory]
-    [InlineData(0f)]
-    [InlineData(-6f)]
-    [InlineData(-20f)]
-    [InlineData(6f)]
-    public void VolumeConversion_RoundTrips(float decibels)
+    [InlineData(0f, 1f)]
+    [InlineData(-6.0206f, 0.5f)]
+    [InlineData(-20f, 0.1f)]
+    [InlineData(6.0206f, 2f)]
+    public void VolumeConversion_MatchesTheDecibelDefinition(float decibels, float linear)
     {
-        float linear = AudioMixerGroup.DecibelsToLinear(decibels);
-
+        Assert.Equal(linear, AudioMixerGroup.DecibelsToLinear(decibels), 4);
         Assert.Equal(decibels, AudioMixerGroup.LinearToDecibels(linear), 3);
     }
 
@@ -1293,26 +1587,29 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0f, source.NormalizedTime);
     }
 
-    // Assigning a clip used to start playing it, but only when PlayOnStart happened to be set, which
-    // is a flag documented as controlling OnEnable. Swapping a clip mid playback also left the old one
-    // sounding whenever that flag was false.
-    [Fact]
-    public void AssigningAClip_DoesNotDependOnPlayOnStart()
+    // Assigning a clip used to start playing it, but only when PlayOnStart happened to be set, which is
+    // a flag documented as controlling OnEnable. What that flag is worth here is limited: without a
+    // device nothing sounds either way, so this covers the half that is observable, that the assignment
+    // lands whatever the flag says and that assigning the same clip again is not an event.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AssigningAClip_SwapsIt_WhicheverWayPlayOnStartIsSet(bool playOnStart)
     {
         var source = CreateSource();
         var first = new AudioClip([1, 2, 3, 4]);
         var second = new AudioClip([5, 6, 7, 8]);
 
-        source.PlayOnStart = true;
+        source.PlayOnStart = playOnStart;
+
         source.Clip = first;
-
         Assert.Same(first, source.Clip);
-        Assert.False(source.IsPlaying);
 
-        source.PlayOnStart = false;
         source.Clip = second;
-
         Assert.Same(second, source.Clip);
+
+        source.Clip = null;
+        Assert.Null(source.Clip);
 
         first.Dispose();
         second.Dispose();
@@ -1356,7 +1653,8 @@ public class AudioTests : RuntimeTestBase
             $"min {restored.MinDistance} exceeded max {restored.MaxDistance}");
     }
 
-    // Reading Clip resolves the reference, which loads the asset. Assigning one should not have to.
+    // Reading Clip resolves the reference, which loads the asset. Assigning and reading through ClipRef
+    // is the way past that, so nothing on this path may end up holding a loaded instance.
     [Fact]
     public void ClipRef_RoundTripsWithoutResolving()
     {
@@ -1366,6 +1664,10 @@ public class AudioTests : RuntimeTestBase
         source.ClipRef = reference;
 
         Assert.Equal(reference.AssetID, source.ClipRef.AssetID);
+
+        // ResWeak is whatever the reference already has in hand. Anything here means the assignment or
+        // the read went to the database for a guid that belongs to no asset.
+        Assert.Null(source.ClipRef.ResWeak);
     }
 
     // Seeking a source with nothing loaded has no length to seek within, so it must answer zero
@@ -1382,7 +1684,8 @@ public class AudioTests : RuntimeTestBase
     }
 
     // Spatial audio is only defined with exactly one listener, so the count has to track enable and
-    // disable exactly or the warnings that lean on it are noise.
+    // disable exactly or the warnings that lean on it are noise. It counts enabled components, not
+    // native listeners, which is what makes it answerable in a run with no device at all.
     [Fact]
     public void ListenerCount_TracksEnableAndDisable()
     {
@@ -1393,11 +1696,17 @@ public class AudioTests : RuntimeTestBase
         var listener = go.AddComponent<AudioListener>();
         scene.Add(go);
 
-        // No device in a test run, so nothing is counted. What matters is that it comes back to where
-        // it started rather than drifting.
+        Assert.Equal(before + 1, AudioListener.ActiveCount);
+
         listener.Enabled = false;
+        Assert.Equal(before, AudioListener.ActiveCount);
+
         listener.Enabled = true;
-        listener.Enabled = false;
+        Assert.Equal(before + 1, AudioListener.ActiveCount);
+
+        // Destroying an enabled listener has to give its count back the same way disabling one does.
+        go.Destroy();
+        EngineObject.ProcessDestroyed();
 
         Assert.Equal(before, AudioListener.ActiveCount);
     }

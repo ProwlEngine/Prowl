@@ -26,15 +26,22 @@ public class AudioAssetTests : EditorTestHarness
 
     #region Helpers
 
-    /// <summary>A real stereo WAV so the importer has something it can decode.</summary>
+    private const float Left = 0.5f;
+    private const float Right = 0.25f;
+
+    /// <summary>
+    /// A real stereo WAV so the importer has something it can decode. The two channels hold different
+    /// constants, which is what lets a conversion be checked for having kept the audio and kept it the
+    /// right way round rather than only for having the expected shape.
+    /// </summary>
     private static byte[] StereoWav(int frames = 512, int sampleRate = SourceRate)
     {
         var samples = new float[frames * 2];
 
         for (int i = 0; i < frames; i++)
         {
-            samples[i * 2] = 0.5f;
-            samples[i * 2 + 1] = -0.5f;
+            samples[i * 2] = Left;
+            samples[i * 2 + 1] = Right;
         }
 
         using var source = AudioClip.Create("Source", samples, 2, sampleRate);
@@ -147,6 +154,15 @@ public class AudioAssetTests : EditorTestHarness
 
         // Same amount of time, half the samples.
         Assert.Equal(512ul, clip.SampleCount);
+
+        // The channels are mixed together rather than one of them being thrown away. Only the audio
+        // says which of those happened, and dropping a channel is silence for anything panned away
+        // from the one that was kept.
+        float[] samples = clip.GetSampleData();
+
+        Assert.Equal(512, samples.Length);
+        foreach (float sample in samples)
+            Assert.Equal((Left + Right) / 2f, sample, 3);
     }
 
     [Fact]
@@ -176,6 +192,16 @@ public class AudioAssetTests : EditorTestHarness
         Assert.Equal(2, clip.Channels);
         Assert.Equal(SourceRate, clip.SampleRate);
         Assert.Equal(512ul, clip.SampleCount);
+
+        // Decode and re-encode is where a channel swap or a scaling mistake would land, and the format
+        // alone cannot see either.
+        float[] samples = clip.GetSampleData();
+
+        for (int frame = 0; frame < 512; frame++)
+        {
+            Assert.Equal(Left, samples[frame * 2], 3);
+            Assert.Equal(Right, samples[frame * 2 + 1], 3);
+        }
     }
 
     // Decompressing stores 16 bit rather than the decoder's own float output, which would double the
