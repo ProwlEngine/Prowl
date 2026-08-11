@@ -17,6 +17,10 @@ public partial class RenderProfilerPanel
     private const float HierarchyPingDuration = 1.5f;
     private const float HierarchyPingFadeStart = 0.5f;
 
+    // Root id this widget derives every element id from - keeps ScrollTo's manual "_scroll" suffix
+    // in lockstep with Origami.Tree's own derivation instead of a second hand-typed literal.
+    private const string HierarchyId = "rdp_hier_tree";
+
     // Sentinel id for the frame's root tree node.
     private const string FrameHierarchyNodeId = "__frame__";
 
@@ -48,7 +52,7 @@ public partial class RenderProfilerPanel
 
         TickHierarchyPing();
 
-        Origami.Tree(paper, "rdp_hier_tree", width, height)
+        Origami.Tree(paper, HierarchyId, width, height)
             .Nodes(nodes)
             .RowHeight(HierarchyRowHeight)
             .IndentSize(10f)
@@ -73,7 +77,7 @@ public partial class RenderProfilerPanel
             {
                 float rowTotal = HierarchyRowHeight + 2f;
                 float targetY = pingIndex * rowTotal - (height * 0.5f) + rowTotal * 0.5f;
-                Origami.ScrollTo("rdp_hier_tree_scroll", new Float2(0, targetY));
+                Origami.ScrollTo($"{HierarchyId}_scroll", new Float2(0, targetY));
             }
             _hierarchyScrollPending = false;
         }

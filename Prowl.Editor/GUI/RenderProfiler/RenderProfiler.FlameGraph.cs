@@ -17,6 +17,9 @@ public partial class RenderProfilerPanel
     private const float FlameGraphRowHeight = 18f;
     private const double MinNodeDurationFraction = 0.004;
 
+    // Root id this widget derives every element id from.
+    private const string FlameGraphId = "rdp_flame";
+
     // Frame is the sole root; passes and command buffers (free or nested under a pass) are its
     // descendants. Views aren't represented as their own node - they only tag a pass so a click can
     // still ping the right hierarchy row.
@@ -35,11 +38,11 @@ public partial class RenderProfilerPanel
     {
         ProfiledFrame? frame = SelectedFrame;
 
-        using (paper.Box("rdp_flame_graph").Width(UnitValue.Stretch()).Height(FlameGraphHeight).Enter())
+        using (paper.Box($"{FlameGraphId}_graph").Width(UnitValue.Stretch()).Height(FlameGraphHeight).Enter())
         {
             if (frame == null)
             {
-                Origami.Label(paper, "rdp_flame_empty", "No frame selected")
+                Origami.Label(paper, $"{FlameGraphId}_empty", "No frame selected")
                     .Muted()
                     .AlignCenter()
                     .Show();
@@ -48,7 +51,7 @@ public partial class RenderProfilerPanel
 
             FlameNode root = BuildFlameTree(frame);
 
-            Chart.FlameGraph(paper, "rdp_flame_chart", new List<FlameNode> { root })
+            Chart.FlameGraph(paper, $"{FlameGraphId}_chart", new List<FlameNode> { root })
                 .Title("Frame Timeline")
                 .Width(UnitValue.Stretch())
                 .Height(FlameGraphHeight)
