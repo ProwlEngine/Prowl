@@ -6,8 +6,9 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Runtime;
 
-namespace Prowl.Runtime;
+namespace Prowl.Editor.Prefabs;
 
 /// <summary>
 /// Addressing and writing the values a prefab instance overrides.
@@ -15,15 +16,11 @@ namespace Prowl.Runtime;
 /// An override path names the object by the identifier of the prefab object it came from, then the
 /// component the same way, then the member. Both an instance and the prefab source resolve the same
 /// path, because both record where each of their objects came from.
-/// <para/>
-/// This lives in the runtime rather than the editor because a prefab that contains another stores
-/// the outer's overrides on the inner, and resolving that happens wherever the prefab is
-/// instantiated, which includes a built game.
 /// </summary>
-public static class PrefabOverrides
+public static partial class PrefabUtility
 {
-    public const char PathSeparator = '/';
-    public const string GameObjectMarker = "$";
+    private const char PathSeparator = '/';
+    private const string GameObjectMarker = "$";
 
     private const BindingFlags InstanceMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
@@ -32,7 +29,7 @@ public static class PrefabOverrides
     /// (Enabled) while component overrides name fields, and writing through a property setter is what
     /// keeps side effects like enable/disable propagation working.
     /// </summary>
-    public readonly struct Member
+    private readonly struct Member
     {
         private readonly FieldInfo? _field;
         private readonly PropertyInfo? _property;
@@ -60,7 +57,7 @@ public static class PrefabOverrides
         }
     }
 
-    public static bool TraverseToParent(object target, string[] parts, out object parent)
+    private static bool TraverseToParent(object target, string[] parts, out object parent)
     {
         parent = target;
         for (int i = 0; i < parts.Length - 1; i++)
@@ -76,7 +73,7 @@ public static class PrefabOverrides
         return true;
     }
 
-    public static Member GetMemberByPath(object target, string memberPath)
+    private static Member GetMemberByPath(object target, string memberPath)
     {
         string[] parts = memberPath.Split('.');
         if (!TraverseToParent(target, parts, out var parent)) return default;
@@ -87,7 +84,7 @@ public static class PrefabOverrides
     /// Resolve a path against a tree, giving the object holding the member and the remaining member
     /// path.
     /// </summary>
-    public static void ParseOverridePath(GameObject root, string path, out object? target, out string memberPath)
+    private static void ParseOverridePath(GameObject root, string path, out object? target, out string memberPath)
     {
         target = null;
         memberPath = "";
@@ -122,7 +119,7 @@ public static class PrefabOverrides
     /// The object within one prefab instance that came from a given source object. The search stops at
     /// nested instances of other prefabs, which own their objects and their own overrides.
     /// </summary>
-    public static GameObject? FindBySourceIdentifier(GameObject root, Guid sourceId, Guid boundaryPrefabId)
+    private static GameObject? FindBySourceIdentifier(GameObject root, Guid sourceId, Guid boundaryPrefabId)
     {
         if (root.SourceIdentifier == sourceId) return root;
 
@@ -137,7 +134,7 @@ public static class PrefabOverrides
         return null;
     }
 
-    public static void ApplyFieldValue(object target, string memberPath, EchoObject value)
+    private static void ApplyFieldValue(object target, string memberPath, EchoObject value)
     {
         string[] parts = memberPath.Split('.');
         if (!TraverseToParent(target, parts, out var parent)) return;
@@ -165,7 +162,7 @@ public static class PrefabOverrides
     }
 
     /// <summary>Write a set of overrides onto an instance tree.</summary>
-    public static void ApplyTo(GameObject root, List<PropertyOverride> overrides)
+    private static void ApplyPropertyOverridesToInstance(GameObject root, List<PropertyOverride> overrides)
     {
         // Collected rather than validated per member, so a component with several overridden members
         // rebuilds its derived state once, after all of them have been written.
@@ -179,7 +176,7 @@ public static class PrefabOverrides
                 if (target == null || string.IsNullOrEmpty(memberPath))
                 {
                     // Once per path: every instance of the prefab reports the same broken path.
-                    Debug.LogWarningOnce($"prefab.path.{ov.Path}",
+                    Runtime.Debug.LogWarningOnce($"prefab.path.{ov.Path}",
                         $"[Prefab] Override path '{ov.Path}' no longer resolves on the instance; skipping.");
                     continue;
                 }
@@ -188,7 +185,7 @@ public static class PrefabOverrides
                 // not silently land on the wrong member.
                 if (!GetMemberByPath(target, memberPath).IsValid)
                 {
-                    Debug.LogWarningOnce($"prefab.member.{ov.Path}",
+                    Runtime.Debug.LogWarningOnce($"prefab.member.{ov.Path}",
                         $"[Prefab] Override '{ov.Path}' has no matching field on the current instance; skipping.");
                     continue;
                 }
@@ -199,7 +196,7 @@ public static class PrefabOverrides
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Prefab] Failed to apply override '{ov.Path}': {ex.Message}");
+                Runtime.Debug.LogWarning($"[Prefab] Failed to apply override '{ov.Path}': {ex.Message}");
             }
         }
 
@@ -213,7 +210,7 @@ public static class PrefabOverrides
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Prefab] OnValidate threw on {behaviour.GetType().Name}: {ex.Message}");
+                Runtime.Debug.LogWarning($"[Prefab] OnValidate threw on {behaviour.GetType().Name}: {ex.Message}");
             }
         }
     }

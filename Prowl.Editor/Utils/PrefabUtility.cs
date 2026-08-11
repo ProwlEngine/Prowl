@@ -14,14 +14,12 @@ using Prowl.Editor.Projects;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
-using static Prowl.Runtime.PrefabOverrides;
-
 namespace Prowl.Editor.Prefabs;
 
 /// <summary>
 /// Editor-side prefab operations: create, instantiate, break, apply, revert.
 /// </summary>
-public static class PrefabUtility
+public static partial class PrefabUtility
 {
     // ================================================================
     //  Creation
@@ -809,10 +807,10 @@ public static class PrefabUtility
 
             ReconcileToSource(root, source, prefabGuid);
 
-            PrefabOverrides.ApplyTo(root, savedOverrides);
+            ApplyPropertyOverridesToInstance(root, savedOverrides);
             foreach (var nestedRoot in nested)
                 if (nestedRoot.IsValid())
-                    PrefabOverrides.ApplyTo(nestedRoot, nestedRoot.PrefabOverrides);
+                    ApplyPropertyOverridesToInstance(nestedRoot, nestedRoot.PrefabOverrides);
         }
     }
 
