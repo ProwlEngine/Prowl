@@ -1779,6 +1779,63 @@ public class PrefabTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // What the prefab provides is not the instance's to take away
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void AComponentThePrefabProvides_CannotBeRemovedFromAnInstance()
+    {
+        Guid g = MakeNestedPrefab("Locked.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.RemoveComponent(instance.GetComponent<OverrideComp>()!);
+
+        // Refused rather than undone later: nothing records that it went, so a refresh would put it
+        // back and the edit would read as having silently failed some time after the fact.
+        Assert.NotNull(instance.GetComponent<OverrideComp>());
+    }
+
+    [Fact]
+    public void AComponentTheInstanceAdded_CanBeRemovedFromIt()
+    {
+        Guid g = MakeNestedPrefab("LockedAdd.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.AddComponent<VecComp>();
+        instance.RemoveComponent(instance.GetComponent<VecComp>()!);
+
+        Assert.Null(instance.GetComponent<VecComp>());
+    }
+
+    [Fact]
+    public void UnpackingAnInstance_LetsItsComponentsBeRemoved()
+    {
+        Guid g = MakeNestedPrefab("LockedUnpack.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        PrefabUtility.UnpackPrefabInstance(instance);
+        instance.RemoveComponent(instance.GetComponent<OverrideComp>()!);
+
+        Assert.Null(instance.GetComponent<OverrideComp>());
+    }
+
+    [Fact]
+    public void ThePrefabDroppingAComponent_StillRemovesItFromInstances()
+    {
+        Guid g = MakeNestedPrefab("LockedDrop.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        // The guard is about what the instance may do, not about what the prefab may do to it.
+        EditPrefabSource(g, "LockedDrop.prefab", s => s.RemoveComponent(s.GetComponent<OverrideComp>()!));
+
+        Assert.Null(Scene.Current!.RootObjects.First().GetComponent<OverrideComp>());
+    }
+
+    // ---------------------------------------------------------------------
     // Child overrides are stored on the instance root (regression lock for the
     // "child/grandchild overrides lost on refresh" bug).
     // ---------------------------------------------------------------------
@@ -2991,8 +3048,12 @@ public class PrefabTests : EditorTestHarness
 
     #region Placing one instance inside another
 
+    // Flattening is what writing an asset does, not what moving something in a scene does. An
+    // instance placed inside another keeps answering to its own prefab for as long as it is in the
+    // scene, and only becomes flat content when the thing around it is written out.
+
     [Fact]
-    public void PlacingAnInstanceInsideAnotherBreaksItsLink()
+    public void PlacingAnInstanceInsideAnotherKeepsItsLink()
     {
         Guid inner = AuthorLeaf("Place_Inner", 7);
         Guid outer = AuthorLeaf("Place_Outer", 1);
@@ -3002,48 +3063,62 @@ public class PrefabTests : EditorTestHarness
 
         GameObject placed = Inst(inner);
         placed.SetParent(instance);
-        PrefabUtility.FlattenIfPlacedInsideAnInstance(placed);
 
-        Assert.False(placed.IsPrefabInstance);
-        Assert.Equal(Guid.Empty, placed.PrefabAssetId);
+        Assert.True(placed.IsPrefabInstance);
+        Assert.Equal(inner, placed.PrefabAssetId);
+
+        // Its own prefab gives it a source identity, but it is not the outer prefab's structure.
+        Assert.False(PrefabUtility.IsProvidedByPrefab(placed));
+    }
+
+    [Fact]
+    public void ANestedInstanceIsUntouchedByTheOuterRefreshing()
+    {
+        Guid inner = AuthorLeaf("Ref_NestInner", 7);
+        Guid outer = AuthorLeaf("Ref_NestOuter", 1);
+
+        GameObject instance = Inst(outer);
+        LoadSceneWith(instance);
+        Inst(inner).SetParent(instance);
+
+        PrefabUtility.RefreshAllInstances(outer);
+
+        GameObject placed = Assert.Single(instance.Children);
+        Assert.Equal(inner, placed.PrefabAssetId);
         Assert.Equal(7, placed.GetComponent<OverrideComp>()!.A);
     }
 
     [Fact]
-    public void PlacingAnInstanceUnderAPlainObjectLeavesItAlone()
+    public void ANestedInstanceStillFollowsItsOwnPrefab()
     {
-        Guid inner = AuthorLeaf("Keep_Inner", 7);
-
-        var plain = new GameObject("Plain");
-        LoadSceneWith(plain);
-
-        GameObject placed = Inst(inner);
-        placed.SetParent(plain);
-        PrefabUtility.FlattenIfPlacedInsideAnInstance(placed);
-
-        Assert.True(placed.IsPrefabInstance);
-        Assert.Equal(inner, placed.PrefabAssetId);
-    }
-
-    [Fact]
-    public void AFlattenedInstanceBecomesTheOutersOwnAddition()
-    {
-        Guid inner = AuthorLeaf("Add_Inner", 7);
-        Guid outer = AuthorLeaf("Add_Outer", 1);
+        Guid inner = AuthorLeaf("Own_Inner", 7);
+        Guid outer = AuthorLeaf("Own_Outer", 1);
 
         GameObject instance = Inst(outer);
         LoadSceneWith(instance);
+        Inst(inner).SetParent(instance);
 
-        GameObject placed = Inst(inner);
-        placed.SetParent(instance);
-        PrefabUtility.FlattenIfPlacedInsideAnInstance(placed);
+        EditPrefabSource(inner, "Own_Inner.prefab", s => s.GetComponent<OverrideComp>()!.A = 99);
 
-        // No source identity means the instance added it, so a refresh leaves it alone.
-        Assert.False(PrefabUtility.IsProvidedByPrefab(placed));
+        Assert.Equal(99, instance.Children[0].GetComponent<OverrideComp>()!.A);
+    }
 
-        PrefabUtility.RefreshAllInstances(outer);
+    [Fact]
+    public void ANestedInstanceIsFlattenedWhenTheOuterIsWrittenOut()
+    {
+        Guid inner = AuthorLeaf("Write_Inner", 7);
 
-        Assert.Contains(instance.Children, c => c.Name == "Add_Inner");
+        var outerRoot = new GameObject("Write_Outer");
+        LoadSceneWith(outerRoot);
+        Inst(inner).SetParent(outerRoot);
+
+        Guid outer = Author(outerRoot, "Write_Outer.prefab");
+
+        // The asset is one self-contained tree, so the content is there and the link is not.
+        GameObject fresh = Inst(outer);
+        GameObject child = Assert.Single(fresh.Children);
+        Assert.Equal(7, child.GetComponent<OverrideComp>()!.A);
+        Assert.NotEqual(inner, child.PrefabAssetId);
     }
 
     #endregion

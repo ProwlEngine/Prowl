@@ -630,10 +630,6 @@ public class HierarchyPanel : DockPanel
                     break;
             }
 
-            // Prefabs do not nest: one dropped inside another instance becomes that instance's own
-            // content instead of staying a linked prefab.
-            PrefabUtility.FlattenIfPlacedInsideAnInstance(dragged);
-
             // Register undo for reparent/reorder
             var newParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
             var newSiblingIdx = dragged.GetSiblingIndex() ?? -1;
@@ -1109,9 +1105,9 @@ public class HierarchyPanel : DockPanel
 
     /// <summary>
     /// True when this GameObject is one the prefab provides, rather than one added to the instance.
-    /// Those cannot be deleted or reparented yet, because nothing records the change and a refresh
-    /// would undo it. Told apart by where the object came from, not by its position, so reordering
-    /// cannot reclassify it.
+    /// Those cannot be deleted or reparented, because nothing records the change and a refresh would
+    /// undo it. Told apart by where the object came from, not by its position, so reordering cannot
+    /// reclassify it.
     /// </summary>
     private static bool IsPrefabStructuralChild(GameObject go) => PrefabUtility.IsProvidedByPrefab(go);
 

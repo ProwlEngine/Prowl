@@ -111,10 +111,14 @@ public abstract class EditorTestHarness : IDisposable
     protected void EditPrefabSource(Guid guid, string relativePath, Action<GameObject> edit)
     {
         var source = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
-        edit(source);
 
+        // Stripped and pinned before the edit, the way prefab editing mode hands the tree over: what
+        // is being edited is the prefab, not an instance of it, and the two are not subject to the
+        // same rules.
         Prefabs.PrefabUtility.StripInstanceDataForEditing(source, guid);
         Prefabs.PrefabUtility.StabilizeSourceIdentifiers(source);
+
+        edit(source);
 
         File.WriteAllText(AssetAbsolutePath(relativePath),
             Serializer.Serialize(typeof(object), source).WriteToString());

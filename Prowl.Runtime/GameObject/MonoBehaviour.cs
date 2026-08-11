@@ -529,8 +529,9 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// </summary>
     protected override void OnDispose()
     {
+        // Teardown, not an edit, so it goes through regardless of whether a prefab provided this.
         if (GameObject.IsValid())
-            GameObject.RemoveComponent(this);
+            GameObject.RemoveComponentInternal(this);
     }
 
     #endregion

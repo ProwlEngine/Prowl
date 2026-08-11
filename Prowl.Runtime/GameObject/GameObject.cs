@@ -679,9 +679,33 @@ public partial class GameObject : EngineObject, ISerializable
 
     /// <summary>
     /// Removes a specific component from the GameObject.
+    /// <para/>
+    /// A component the prefab provides is not the instance's to remove while the editor is the thing
+    /// holding it: nothing records that it went, so the next time the instance is brought back into
+    /// line with its prefab it would simply reappear. Unpack the instance, or take the component off
+    /// the prefab. In play mode and in a player nothing refreshes an instance, so nothing stands in
+    /// the way there.
     /// </summary>
     /// <param name="component">The component instance to remove.</param>
     public void RemoveComponent(MonoBehaviour component)
+    {
+        ArgumentNullException.ThrowIfNull(component, nameof(component));
+
+        if (!Application.IsPlaying && IsPrefabInstance && GetComponentSourceIdentifier(component) != Guid.Empty)
+        {
+            Debug.LogWarning($"[Prefab] '{component.GetType().Name}' on '{Name}' comes from a prefab, " +
+                "so it cannot be removed from this instance. Unpack the instance, or remove it from the prefab.");
+            return;
+        }
+
+        RemoveComponentInternal(component);
+    }
+
+    /// <summary>
+    /// Removes a component without asking where it came from. For teardown, and for the prefab
+    /// machinery taking one away precisely because the prefab stopped providing it.
+    /// </summary>
+    internal void RemoveComponentInternal(MonoBehaviour component)
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
         if (component.CanDestroy() == false) return;

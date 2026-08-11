@@ -90,27 +90,6 @@ public static partial class PrefabUtility
     }
 
     /// <summary>
-    /// Break a prefab instance's link if it now sits inside another prefab instance. Its objects
-    /// become content of the instance it was placed into, carried as that instance's own addition.
-    /// </summary>
-    public static void FlattenIfPlacedInsideAnInstance(GameObject go)
-    {
-        if (go.IsNotValid() || !go.IsPrefabInstance) return;
-
-        GameObject? ancestor = go.Parent;
-        while (ancestor.IsValid())
-        {
-            if (ancestor!.IsPrefabInstance)
-            {
-                go.ClearPrefabDataRecursive();
-                return;
-            }
-
-            ancestor = ancestor.Parent;
-        }
-    }
-
-    /// <summary>
     /// Break the link on every prefab instance inside a tree that is about to become a prefab asset,
     /// so its objects become ordinary content of that asset.
     /// <para/>
@@ -1016,7 +995,7 @@ public static partial class PrefabUtility
             if (sourceId == Guid.Empty || sourceComponentIds.Contains(sourceId)) continue;
 
             link.ComponentSources.Remove(component.Identifier);
-            instance.RemoveComponent(component);
+            instance.RemoveComponentInternal(component);
         }
 
         foreach (GameObject child in instance.Children.ToList())
@@ -1532,7 +1511,7 @@ public static partial class PrefabUtility
                 && sourceComponents.Any(c => source.GetComponentSourceIdentifier(c) == sourceId);
 
             if (!provided)
-                copy.RemoveComponent(copyComponents[i]);
+                copy.RemoveComponentInternal(copyComponents[i]);
         }
 
         for (int i = instance.Children.Count - 1; i >= 0; i--)
