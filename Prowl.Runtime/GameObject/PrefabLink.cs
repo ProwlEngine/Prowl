@@ -50,4 +50,15 @@ public sealed class PrefabLink
         Overrides = new List<PropertyOverride>(Overrides),
         ComponentSources = new Dictionary<Guid, Guid>(ComponentSources)
     };
+
+    /// <summary>
+    /// Take on another link's state without becoming it, so whatever holds this one keeps holding it.
+    /// </summary>
+    public void CopyFrom(PrefabLink other)
+    {
+        AssetId = other.AssetId;
+        SourceIdentifier = other.SourceIdentifier;
+        Overrides = new List<PropertyOverride>(other.Overrides);
+        ComponentSources = new Dictionary<Guid, Guid>(other.ComponentSources);
+    }
 }

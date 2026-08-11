@@ -982,6 +982,128 @@ public class PrefabTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // The object left behind by Create Prefab is a working instance of it
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void CreatedInstance_CarriesTheIdentitiesItWasWrittenUnder()
+    {
+        var root = new GameObject("Root");
+        var comp = root.AddComponent<OverrideComp>();
+        var child = new GameObject("Child");
+        child.SetParent(root);
+
+        CreatePrefabAsset(root, "Made.prefab");
+
+        // An override path names its object and its component by these, so an instance without them
+        // addresses nothing in the prefab it was just made from.
+        Assert.NotEqual(Guid.Empty, root.SourceIdentifier);
+        Assert.NotEqual(Guid.Empty, root.GetComponentSourceIdentifier(comp));
+        Assert.NotEqual(Guid.Empty, child.SourceIdentifier);
+    }
+
+    [Fact]
+    public void CreatedInstance_RecordsAnOverrideOnItsRoot()
+    {
+        var root = new GameObject("Root");
+        var comp = root.AddComponent<OverrideComp>();
+        comp.A = 1;
+        Guid g = CreatePrefabAsset(root, "MadeOv.prefab");
+
+        comp.A = 42;
+        PrefabUtility.RecordComponentOverrides(root, comp);
+        root.Enabled = false;
+        PrefabUtility.RecordGameObjectOverrides(root);
+
+        Assert.Equal(2, root.PrefabOverrides.Count);
+
+        // And it holds up: the refresh replays recorded overrides and drops everything else.
+        PrefabUtility.RefreshAllInstances(g);
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Equal(42, live.GetComponent<OverrideComp>()!.A);
+        Assert.False(live.Enabled);
+    }
+
+    [Fact]
+    public void CreatedInstance_CanApplyARootEditBackToThePrefab()
+    {
+        var root = new GameObject("Root");
+        var comp = root.AddComponent<OverrideComp>();
+        comp.A = 1;
+        Guid g = CreatePrefabAsset(root, "MadeApply.prefab");
+
+        comp.A = 42;
+        PrefabUtility.RecordComponentOverrides(root, comp);
+        Assert.Single(root.PrefabOverrides);
+
+        // Through the single-override path, which has nothing to work from but the entry itself.
+        PrefabUtility.ApplySingleOverride(root, root.PrefabOverrides[0].Path);
+
+        Assert.Equal(42, Inst(g).GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void CreatedInstance_CanRevertARootEdit()
+    {
+        var root = new GameObject("Root");
+        var comp = root.AddComponent<OverrideComp>();
+        comp.A = 1;
+        Guid g = CreatePrefabAsset(root, "MadeRevert.prefab");
+
+        comp.A = 42;
+        PrefabUtility.RecordComponentOverrides(root, comp);
+        Assert.Single(root.PrefabOverrides);
+
+        PrefabUtility.RevertSingleOverride(root, root.PrefabOverrides[0].Path);
+
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Equal(1, live.GetComponent<OverrideComp>()!.A);
+        Assert.Empty(live.PrefabOverrides);
+    }
+
+    [Fact]
+    public void UndoingCreatePrefab_LeavesAPlainObject_AndRedoBringsTheInstanceBack()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>();
+        CreatePrefabAsset(root, "MadeUndo.prefab");
+        Guid stampedSource = root.SourceIdentifier;
+        Assert.NotEqual(Guid.Empty, stampedSource);
+
+        Undo.PerformUndo();
+        Assert.False(root.IsPrefabInstance);
+
+        Undo.PerformRedo();
+        Assert.True(root.IsPrefabInstance);
+        Assert.Equal(stampedSource, root.SourceIdentifier);
+    }
+
+    [Fact]
+    public void UndoingAnUnpack_RestoresAnInstanceThatStillAddressesItsPrefab()
+    {
+        var root = new GameObject("Root");
+        var comp = root.AddComponent<OverrideComp>();
+        comp.A = 1;
+        Guid g = CreatePrefabAsset(root, "MadeUnpack.prefab");
+        Guid stampedSource = root.SourceIdentifier;
+
+        PrefabUtility.UnpackPrefabInstance(root);
+        Assert.False(root.IsPrefabInstance);
+
+        Undo.PerformUndo();
+
+        // Restoring the asset id alone would give back something that reads as an instance but can
+        // no longer say which prefab object any of it came from.
+        Assert.True(root.IsPrefabInstance);
+        Assert.Equal(stampedSource, root.SourceIdentifier);
+        Assert.NotEqual(Guid.Empty, root.GetComponentSourceIdentifier(comp));
+
+        comp.A = 42;
+        PrefabUtility.RecordComponentOverrides(root, comp);
+        Assert.Single(root.PrefabOverrides);
+    }
+
+    // ---------------------------------------------------------------------
     // Import rejects files that are not GameObject hierarchies
     // ---------------------------------------------------------------------
 

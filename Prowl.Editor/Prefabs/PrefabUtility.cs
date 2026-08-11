@@ -72,15 +72,16 @@ public static partial class PrefabUtility
 
         RaisePrefabSaved(meta.Guid);
 
-        // Stamp the source GO as an instance of the new prefab. Undo restores the previous prefab
-        // links; the created asset itself is left on disk.
+        // Stamp the source GO as an instance of the new prefab, with the identities it was written
+        // out under. Undo restores the previous prefab links; the created asset is left on disk.
         var boundary = source.PrefabAssetId;
         var previous = CapturePrefabState(source, boundary);
-        StampAsPrefabInstance(source, meta.Guid, boundary);
+        StampAsPrefabInstance(source, cleanCopy, meta.Guid, boundary);
+        var stamped = CapturePrefabState(source, meta.Guid);
 
         Undo.RegisterAction("Create Prefab",
             undo: () => RestorePrefabState(previous),
-            redo: () => StampAsPrefabInstance(source, meta.Guid, boundary));
+            redo: () => RestorePrefabState(stamped));
 
         EditorSceneManager.MarkDirty();
         Runtime.Debug.Log($"[Prefab] Created prefab: {relativeSavePath}");
@@ -1391,45 +1392,66 @@ public static partial class PrefabUtility
 
 
     /// <summary>
-    /// Convert every object that belonged to <paramref name="boundaryId"/> into an instance of
-    /// <paramref name="prefabGuid"/>. Nested instances of other prefabs are left alone.
+    /// Convert every object that belonged to <paramref name="boundaryId"/> into an instance of the
+    /// prefab just written, taking each one's identity from the object in <paramref name="written"/>
+    /// it was written out as. Nested instances of other prefabs are left alone.
+    /// <para/>
+    /// The identities are the point. An override path names its object and component by the identity
+    /// the prefab holds them under, so a tree marked as an instance without them addresses nothing
+    /// and can never record an override against the asset it was just made from. The two trees are
+    /// the same tree moments apart, so position is what pairs them.
     /// </summary>
-    private static void StampAsPrefabInstance(GameObject go, Guid prefabGuid, Guid boundaryId)
+    private static void StampAsPrefabInstance(GameObject go, GameObject written, Guid prefabGuid, Guid boundaryId)
     {
         if (go.PrefabAssetId != boundaryId) return;
 
-        go.PrefabAssetId = prefabGuid;
-        go.PrefabOverrides.Clear();
+        // StabilizeSourceIdentifiers left every identifier in the written tree equal to the source
+        // identity it will be read back under, so the identifiers are what to take.
+        PrefabLink link = go.EnsurePrefabLink();
+        link.AssetId = prefabGuid;
+        link.SourceIdentifier = written.Identifier;
+        link.Overrides.Clear();
+        link.ComponentSources.Clear();
 
-        foreach (var child in go.Children)
-            StampAsPrefabInstance(child, prefabGuid, boundaryId);
+        var components = go.GetComponents<MonoBehaviour>().ToList();
+        var writtenComponents = written.GetComponents<MonoBehaviour>().ToList();
+        for (int i = 0; i < Math.Min(components.Count, writtenComponents.Count); i++)
+            link.ComponentSources[components[i].Identifier] = writtenComponents[i].Identifier;
+
+        for (int i = 0; i < Math.Min(go.Children.Count, written.Children.Count); i++)
+            StampAsPrefabInstance(go.Children[i], written.Children[i], prefabGuid, boundaryId);
     }
 
-    /// <summary>Snapshot the prefab tracking data of every object within a boundary, for undo.</summary>
-    private static List<(GameObject go, Guid assetId, List<PropertyOverride> overrides)>
-        CapturePrefabState(GameObject root, Guid boundaryId)
+    /// <summary>
+    /// Snapshot what ties every object within a boundary to its prefab, for undo. The whole link, not
+    /// the asset id and overrides alone: an object restored without its source identities is linked
+    /// to a prefab it can no longer address, which is indistinguishable from a broken instance.
+    /// </summary>
+    private static List<(GameObject go, PrefabLink? link)> CapturePrefabState(GameObject root, Guid boundaryId)
     {
-        var captured = new List<(GameObject, Guid, List<PropertyOverride>)>();
+        var captured = new List<(GameObject, PrefabLink?)>();
         Walk(root);
         return captured;
 
         void Walk(GameObject go)
         {
             if (go.PrefabAssetId != boundaryId) return;
-            captured.Add((go, go.PrefabAssetId, go.PrefabOverrides.ToList()));
+            captured.Add((go, go.PrefabLink?.Clone()));
             foreach (var child in go.Children)
                 Walk(child);
         }
     }
 
-    private static void RestorePrefabState(
-        List<(GameObject go, Guid assetId, List<PropertyOverride> overrides)> captured)
+    private static void RestorePrefabState(List<(GameObject go, PrefabLink? link)> captured)
     {
-        foreach (var (go, assetId, overrides) in captured)
+        foreach (var (go, link) in captured)
         {
             if (go.IsNotValid()) continue;
-            go.PrefabAssetId = assetId;
-            go.PrefabOverrides = overrides.ToList();
+
+            if (link == null)
+                go.ClearPrefabData();
+            else
+                go.EnsurePrefabLink().CopyFrom(link);
         }
     }
 
