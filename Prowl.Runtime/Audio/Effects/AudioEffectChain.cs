@@ -65,6 +65,12 @@ internal sealed class AudioEffectChain
         int inSamples = (int)frameCountIn * channelCount;
         int outSamples = (int)frameCountOut * channelCount;
 
+        // Nowhere to write, so there is nothing for any of this to do. Worth its own exit: a zero
+        // capacity leaves the scratch empty, and a fixed statement over an empty array yields a null
+        // pointer, which is not something an effect should ever be handed.
+        if (outSamples <= 0)
+            return 0;
+
         AudioEffect[] chain = _chain;
 
         // Nothing to run, so the block passes through untouched.
