@@ -31,10 +31,23 @@ public sealed class AudioListener : MonoBehaviour
     /// none leaves every source positioned relative to the world origin, and more than one leaves it
     /// undefined which of them sources are heard from.
     /// </summary>
+    /// <remarks>
+    /// Counts enabled components rather than native listeners. Two of them in a scene is an authoring
+    /// mistake whether or not the machine running it happened to open a device, and counting the native
+    /// side meant a device restart passed through zero on the way back up.
+    /// </remarks>
     public static int ActiveCount => s_activeCount;
 
     public override void OnEnable()
     {
+        s_activeCount++;
+
+        if (s_activeCount > 1)
+        {
+            Debug.LogWarning($"[{GameObject.Name}] There are now {s_activeCount} enabled AudioListeners. " +
+                             "Spatial audio is only defined for one, so which of them sources are heard from is arbitrary.");
+        }
+
         AudioContext.DeviceClosing += OnDeviceClosing;
         CreateNative();
     }
@@ -61,14 +74,6 @@ public sealed class AudioListener : MonoBehaviour
 
         if (handle != IntPtr.Zero)
         {
-            s_activeCount++;
-
-            if (s_activeCount > 1)
-            {
-                Debug.LogWarning($"[{GameObject.Name}] There are now {s_activeCount} enabled AudioListeners. " +
-                                 "Spatial audio is only defined for one, so which of them sources are heard from is arbitrary.");
-            }
-
             previousPosition = Transform.Position;
 
             // Set Initial Values
@@ -81,9 +86,8 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void Update()
     {
-        // The device was reopened, so the old listener is gone with it. Rebuilt directly rather than
-        // by calling the lifecycle callbacks by hand, which dragged the subscription and the active
-        // count along for the ride.
+        // The device was reopened, so the old listener is gone with it. Rebuilt directly rather than by
+        // calling the lifecycle callbacks by hand, which dragged the subscription along for the ride.
         if (_deviceGeneration != AudioContext.DeviceGeneration)
         {
             DestroyNative();
@@ -123,6 +127,8 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void OnDisable()
     {
+        s_activeCount = Math.Max(0, s_activeCount - 1);
+
         AudioContext.DeviceClosing -= OnDeviceClosing;
         DestroyNative();
     }
@@ -138,6 +144,5 @@ public sealed class AudioListener : MonoBehaviour
             MiniAudioExNative.ma_ex_audio_listener_uninit(handle);
 
         handle = IntPtr.Zero;
-        s_activeCount = Math.Max(0, s_activeCount - 1);
     }
 }
