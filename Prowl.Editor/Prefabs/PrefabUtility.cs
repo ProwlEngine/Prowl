@@ -60,8 +60,11 @@ public static partial class PrefabUtility
         FlattenNestedPrefabs(cleanCopy);
         StabilizeSourceIdentifiers(cleanCopy);
 
-        var echo = Serializer.Serialize(typeof(object), cleanCopy, TreeValueContext(cleanCopy));
+        var writeContext = TreeValueContext(cleanCopy);
+        var echo = Serializer.Serialize(typeof(object), cleanCopy, writeContext);
         if (echo == null) return false;
+
+        ReportDroppedSceneReferences(writeContext, "Creating this prefab");
 
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         if (!TryWriteFile(absolutePath, echo.WriteToString())) return false;
@@ -288,8 +291,11 @@ public static partial class PrefabUtility
         PreserveSourceIdentity(cleanCopy, instanceRoot.PrefabAssetId);
         StabilizeSourceIdentifiers(cleanCopy);
 
-        var echo = Serializer.Serialize(typeof(object), cleanCopy, TreeValueContext(cleanCopy));
+        var writeContext = TreeValueContext(cleanCopy);
+        var echo = Serializer.Serialize(typeof(object), cleanCopy, writeContext);
         if (echo == null) return;
+
+        ReportDroppedSceneReferences(writeContext, "Applying these overrides");
 
         // Write to the .prefab file
         if (!TryWriteFile(absolutePath, echo.WriteToString())) return;
@@ -383,9 +389,10 @@ public static partial class PrefabUtility
                     var live = Undo.FindGO(rootId);
                     if (live.IsNotValid()) return;
 
-                    var restored = Serializer.Deserialize<GameObject>(oldSerialized, InstanceValueContext());
+                    // Preserving identifiers: this replaces the instance, so it has to come back as
+                    // the same object or every record addressing it stops resolving.
+                    var restored = GameObject.DeserializePreservingIdentifiers(oldSerialized, InstanceValueContext());
                     if (restored == null) return;
-                    Undo.RestoreIdentifiers(restored, oldSerialized);
 
                     SwapInPlace(live!, restored);
                     Selection.Select(restored);
@@ -513,7 +520,10 @@ public static partial class PrefabUtility
         // Save back to the .prefab file
         StripInstanceDataForEditing(source, prefabGuid);
         StabilizeSourceIdentifiers(source);
-        var echo = Serializer.Serialize(typeof(object), source, TreeValueContext(source));
+        var writeContext = TreeValueContext(source);
+        var echo = Serializer.Serialize(typeof(object), source, writeContext);
+        ReportDroppedSceneReferences(writeContext, "Applying this override");
+
         if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
         {
             _sourceCache.Remove(instanceGO.PrefabAssetId);
@@ -559,6 +569,11 @@ public static partial class PrefabUtility
         if (!instanceGO.IsPrefabInstance) return;
         if (!GuardNotPlaying("revert a prefab override")) return;
 
+        RevertSingleOverrideCore(instanceGO, overridePath, recordUndo: true);
+    }
+
+    private static void RevertSingleOverrideCore(GameObject instanceGO, string overridePath, bool recordUndo)
+    {
         var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
         if (source == null) return;
 
@@ -599,24 +614,28 @@ public static partial class PrefabUtility
         // Remove the override entry
         root.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
 
-        Undo.RegisterAction("Revert Single Override",
-            undo: () =>
-            {
-                var live = Undo.FindGO(rootId);
-                if (live.IsNotValid()) return;
+        if (recordUndo)
+        {
+            Undo.RegisterAction("Revert Single Override",
+                undo: () =>
+                {
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsNotValid()) return;
 
-                // Restore old instance value
-                ParseOverridePath(live!, path, out var undoTarget, out string undoFieldPath);
-                if (undoTarget != null && oldInstanceEcho != null)
-                    ApplyFieldValue(undoTarget, undoFieldPath, oldInstanceEcho);
-                // Re-add removed overrides
-                live!.PrefabOverrides.AddRange(removedOverrides);
-            },
-            redo: () =>
-            {
-                var live = Undo.FindGO(rootId);
-                if (live.IsValid()) RevertSingleOverride(live!, path);
-            });
+                    // Restore old instance value
+                    ParseOverridePath(live!, path, out var undoTarget, out string undoFieldPath);
+                    if (undoTarget != null && oldInstanceEcho != null)
+                        ApplyFieldValue(undoTarget, undoFieldPath, oldInstanceEcho);
+                    // Re-add removed overrides
+                    live!.PrefabOverrides.AddRange(removedOverrides);
+                },
+                redo: () =>
+                {
+                    // Through the core, or redoing would push a fresh undo entry every time.
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsValid()) RevertSingleOverrideCore(live!, path, recordUndo: false);
+                });
+        }
 
         EditorSceneManager.MarkDirty();
     }
@@ -644,8 +663,31 @@ public static partial class PrefabUtility
     internal static SerializationContext TreeValueContext(GameObject treeRoot)
         => new() { ExternalReferences = SceneReferenceResolver.ForTree(treeRoot) };
 
+    /// <summary>
+    /// Say what a write to a prefab asset just dropped. A prefab cannot hold a reference to a scene
+    /// object, so one gets written as a link that reads back as null. That is the right thing to
+    /// store and the wrong thing to do quietly: the author wired a reference up, pressed a button
+    /// named Apply, and got a field that is empty in every instance from then on.
+    /// </summary>
+    internal static void ReportDroppedSceneReferences(SerializationContext context, string operation)
+    {
+        if (context.ExternalReferences is not SceneReferenceResolver resolver || resolver.LinkedOut.Count == 0)
+            return;
 
+        var names = resolver.LinkedOut
+            .Select(o => o switch
+            {
+                GameObject go => go.Name,
+                MonoBehaviour mb => $"{mb.GameObject.Name} > {mb.GetType().Name}",
+                Transform t => t.GameObject.IsValid() ? $"{t.GameObject.Name} > Transform" : "Transform",
+                _ => o.GetType().Name
+            })
+            .Distinct()
+            .ToList();
 
+        Runtime.Debug.LogWarning($"[Prefab] {operation} dropped {names.Count} reference(s) to objects outside the prefab, " +
+            $"which a prefab cannot hold and which will read back as empty: {string.Join(", ", names)}");
+    }
 
 
     private static object? GetMemberValue(object target, string memberPath)
@@ -1472,16 +1514,28 @@ public static partial class PrefabUtility
         return false;
     }
 
-    private static bool TryWriteFile(string absolutePath, string contents)
+    /// <summary>
+    /// Write a prefab file, in one step as far as anything reading it is concerned.
+    /// <para/>
+    /// Every scene in the project can depend on one of these, and the copy of what it used to hold
+    /// lives only in the undo stack. Writing in place leaves a truncated file if the process dies,
+    /// the disk fills, or a scanner has the file open mid-write; writing beside it and moving it into
+    /// place leaves either the old contents or the new ones.
+    /// </summary>
+    internal static bool TryWriteFile(string absolutePath, string contents)
     {
+        string temporaryPath = absolutePath + ".tmp";
         try
         {
-            File.WriteAllText(absolutePath, contents);
+            // Same directory, so the move is a rename rather than a copy across volumes.
+            File.WriteAllText(temporaryPath, contents);
+            File.Move(temporaryPath, absolutePath, overwrite: true);
             return true;
         }
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"[Prefab] Failed to write '{absolutePath}': {ex.Message}");
+            try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
             return false;
         }
     }

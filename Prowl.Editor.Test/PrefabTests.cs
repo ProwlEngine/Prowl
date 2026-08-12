@@ -1779,6 +1779,144 @@ public class PrefabTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // Redo replays an operation without recording it a second time
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void RedoingASingleRevert_DoesNotPushAnotherUndoStep()
+    {
+        Guid g = MakeNestedPrefab("RedoRevert.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        var comp = instance.GetComponent<OverrideComp>()!;
+        comp.A = 42;
+        PrefabUtility.RecordComponentOverrides(instance, comp);
+        string path = PrefabUtility.GetOverridePath(instance, comp, "A");
+
+        Undo.Clear();
+        PrefabUtility.RevertSingleOverride(instance, path);
+
+        Undo.PerformUndo();
+        Undo.PerformRedo();
+
+        // Stepping back over the redo has to leave the history empty. A redo that registers as it
+        // replays leaves a second copy of itself behind, so undo keeps having something to do.
+        Undo.PerformUndo();
+        Assert.Equal(42, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
+        Assert.False(Undo.CanUndo);
+    }
+
+    // ---------------------------------------------------------------------
+    // Source identities are read off the objects, not paired up by position
+    // ---------------------------------------------------------------------
+
+    /// <summary>Collects warnings and errors raised while <paramref name="act"/> runs.</summary>
+    private static List<string> CaptureWarnings(Action act)
+    {
+        var logs = new List<string>();
+        void Capture(string m, DebugStackTrace? _, LogSeverity s)
+        {
+            if (s is LogSeverity.Error or LogSeverity.Warning)
+                lock (logs) logs.Add(m);
+        }
+
+        Debug.OnLog += Capture;
+        try { act(); }
+        finally { Debug.OnLog -= Capture; }
+        return logs;
+    }
+
+    [Fact]
+    public void AComponentThatFailsToLoad_DoesNotShiftTheIdentitiesOfTheOnesAfterIt()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 7;
+        root.AddComponent<VecComp>().V = new Float3(1, 2, 3);
+
+        // A component entry nothing can be made of, ahead of the real ones. Deserialization drops it
+        // outright rather than leaving a placeholder, so the live list is one shorter than the data.
+        EchoObject echo = Serializer.Serialize(typeof(object), root);
+        echo.Get("Components")!.List.Insert(0, EchoObject.NewCompound());
+        File.WriteAllText(AssetAbsolutePath("Shift.prefab"), echo.WriteToString());
+        Guid g = Assets.ImportFile("Shift.prefab");
+
+        var instance = GameObject.InstantiateDetached(GetPrefab(g)!)!;
+        Assert.Equal(2, instance.GetComponents<MonoBehaviour>().Count());
+
+        // Each component's source identity is its own, not the one belonging to the entry before it.
+        var written = EchoObject.ReadFromString(File.ReadAllText(AssetAbsolutePath("Shift.prefab")))
+            .Get("Components")!.List;
+
+        foreach (MonoBehaviour live in instance.GetComponents<MonoBehaviour>())
+        {
+            EchoObject entry = written.First(e => e.Get("$type")?.StringValue?.Contains(live.GetType().Name) == true);
+            Assert.Equal(Guid.Parse(entry.Get("_identifier")!.StringValue),
+                instance.GetComponentSourceIdentifier(live));
+        }
+    }
+
+    [Fact]
+    public void InstantiatingTwice_GivesEachInstanceItsOwnIdentifiers()
+    {
+        Guid g = MakeNestedPrefab("Ident.prefab");
+
+        var a = Inst(g);
+        var b = Inst(g);
+
+        // Preserving identifiers through the load is an internal step, not something the caller sees.
+        Assert.NotEqual(a.Identifier, b.Identifier);
+        Assert.NotEqual(a.Children[0].Identifier, b.Children[0].Identifier);
+        Assert.NotEqual(a.GetComponent<OverrideComp>()!.Identifier, b.GetComponent<OverrideComp>()!.Identifier);
+
+        // While the source identities, which say where each came from, are shared.
+        Assert.Equal(a.SourceIdentifier, b.SourceIdentifier);
+        Assert.Equal(a.Children[0].SourceIdentifier, b.Children[0].SourceIdentifier);
+    }
+
+    // ---------------------------------------------------------------------
+    // Writing a prefab
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void ApplyingLeavesNoTemporaryFileBehind()
+    {
+        Guid g = MakeNestedPrefab("Atomic.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.GetComponent<OverrideComp>()!.A = 42;
+        PrefabUtility.ReconcileInstance(instance);
+        PrefabUtility.ApplyOverrides(instance);
+
+        Assert.Empty(Directory.GetFiles(Project.AssetsPath, "*.tmp", SearchOption.AllDirectories));
+        Assert.Equal(42, Inst(g).GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void ApplyingAReferenceToASceneObject_SaysItWasDropped()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<RefHolderComp>();
+        Guid g = CreatePrefabAsset(root, "Dropped.prefab");
+
+        var instance = Inst(g);
+        var target = new GameObject("SceneTarget");
+        SetSceneCurrent(instance, target);
+
+        var comp = instance.GetComponent<RefHolderComp>()!;
+        comp.Target = target;
+        PrefabUtility.RecordComponentOverrides(instance, comp);
+
+        var warnings = CaptureWarnings(() =>
+            PrefabUtility.ApplySingleOverride(instance, PrefabUtility.GetOverridePath(instance, comp, "Target")));
+
+        // The reference cannot go into the asset, and the author has to be told rather than finding
+        // an empty field in every instance later.
+        Assert.Contains(warnings, w => w.Contains("SceneTarget"));
+    }
+
+    // ---------------------------------------------------------------------
     // What the prefab provides is not the instance's to take away
     // ---------------------------------------------------------------------
 

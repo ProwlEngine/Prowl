@@ -177,20 +177,21 @@ public class EditorAssetBackend : AssetBackendBase
     }
 
     /// <summary>
-    /// Delete leftover ".meta.tmp" files from a previous session's write that never got
-    /// renamed into place (e.g. the editor crashed mid-write). These are always incomplete
-    /// data never valid on their own so ScanAssets must not pick them up as real asset files.
+    /// Delete leftover temp files from a previous session's write that never got renamed into place
+    /// (e.g. the editor crashed mid-write). These are always incomplete data never valid on their
+    /// own so ScanAssets must not pick them up as real asset files.
     /// </summary>
     private void CleanupOrphanedMetaTempFiles()
     {
         var assetsPath = _project.AssetsPath;
         if (!Directory.Exists(assetsPath)) return;
 
-        foreach (var tmp in Directory.EnumerateFiles(assetsPath, "*.meta.tmp", SearchOption.AllDirectories))
-        {
-            try { File.Delete(tmp); }
-            catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to delete orphaned meta temp file '{tmp}': {ex.Message}"); }
-        }
+        foreach (string pattern in new[] { "*.meta.tmp", "*.prefab.tmp" })
+            foreach (var tmp in Directory.EnumerateFiles(assetsPath, pattern, SearchOption.AllDirectories))
+            {
+                try { File.Delete(tmp); }
+                catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to delete orphaned temp file '{tmp}': {ex.Message}"); }
+            }
     }
 
     /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>

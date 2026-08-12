@@ -31,6 +31,9 @@ public static class PrefabEditingMode
     // The scene's own dirty flag, parked while the prefab session borrows it. Without this the
     // prefab and the scene share one flag, so each makes the other look unsaved.
     private static bool _savedSceneDirty;
+    // The scene's undo history, parked the same way. The session's own steps address objects that
+    // stop existing when it ends, so the two histories cannot be one.
+    private static object? _savedSceneUndo;
     // Tracked so Save() can serialize the prefab root specifically, skipping the
     // editor-only camera/light/etc. that we add for visibility.
     private static GameObject? _editingRoot;
@@ -143,7 +146,7 @@ public static class PrefabEditingMode
         editScene.Add(lightGo);
 
         Scene.Load(editScene);
-        Undo.Clear();
+        _savedSceneUndo = Undo.PushContext();
 
         EditingPrefabGuid = prefabGuid;
         IsEditing = true;
@@ -192,21 +195,18 @@ public static class PrefabEditingMode
 
         // Serialize to .prefab file. The editor-only camera and light live in this scene too, so
         // anything the prefab references outside itself is linked rather than copied into the asset.
-        var echo = Serializer.Serialize(typeof(object), root, PrefabUtility.TreeValueContext(root));
+        var writeContext = PrefabUtility.TreeValueContext(root);
+        var echo = Serializer.Serialize(typeof(object), root, writeContext);
         if (echo == null) return false;
+
+        PrefabUtility.ReportDroppedSceneReferences(writeContext, "Saving this prefab");
 
         if (EditingPrefabPath != null && Project.Current != null)
         {
             string absolutePath = Path.Combine(Project.Current.AssetsPath, EditingPrefabPath);
-            try
-            {
-                File.WriteAllText(absolutePath, echo.WriteToString());
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[Prefab] Failed to write '{absolutePath}': {ex.Message}");
+            if (!PrefabUtility.TryWriteFile(absolutePath, echo.WriteToString()))
                 return false;
-            }
+
             EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
             EditorSceneManager.IsDirty = false;
@@ -234,7 +234,7 @@ public static class PrefabEditingMode
         var prefabGuid = EditingPrefabGuid;
 
         // Restore original scene
-        RestoreScene();
+        bool restored = RestoreScene();
 
         // The restore only queues the swap, so refresh instances once that scene is actually current.
         Action? onLoaded = null;
@@ -245,7 +245,7 @@ public static class PrefabEditingMode
         };
         Scene.OnSceneLoaded += onLoaded;
 
-        Cleanup();
+        Cleanup(restored);
         Debug.Log("[Prefab] Saved and exited editing mode.");
     }
 
@@ -279,13 +279,13 @@ public static class PrefabEditingMode
     {
         if (!IsEditing) return;
 
-        RestoreScene();
-        Cleanup();
+        Cleanup(RestoreScene());
 
         Debug.Log("[Prefab] Exited editing mode.");
     }
 
-    private static void RestoreScene()
+    /// <summary>Puts the scene back, reporting whether it is the one that was there before.</summary>
+    private static bool RestoreScene()
     {
         if (_savedSceneState != null)
         {
@@ -293,22 +293,18 @@ public static class PrefabEditingMode
             if (restoredScene != null)
             {
                 Scene.Load(restoredScene);
-                Undo.Clear();
                 EditorSceneManager.CurrentScenePath = _savedScenePath;
+                return true;
             }
-            else
-            {
-                Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
-                EditorSceneManager.CreateAndLoadDefaultScene();
-            }
+
+            Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
         }
-        else
-        {
-            EditorSceneManager.CreateAndLoadDefaultScene();
-        }
+
+        EditorSceneManager.CreateAndLoadDefaultScene();
+        return false;
     }
 
-    private static void Cleanup()
+    private static void Cleanup(bool sceneRestored)
     {
         IsEditing = false;
         EditingPrefabGuid = Guid.Empty;
@@ -317,6 +313,15 @@ public static class PrefabEditingMode
         _savedSceneState = null;
         _savedScenePath = null;
         _editingRoot = null;
+
+        // The scene's own history addresses its objects by identifier, and the restore brings those
+        // back, so the steps still resolve. If the scene could not be restored they address nothing.
+        if (sceneRestored)
+            Undo.PopContext(_savedSceneUndo);
+        else
+            Undo.Clear();
+        _savedSceneUndo = null;
+
         EditorSceneManager.IsDirty = _savedSceneDirty;
         _savedSceneDirty = false;
     }

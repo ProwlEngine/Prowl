@@ -80,11 +80,23 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         public object? ResolveReference(object key, Type targetType) => null;
     }
 
+    /// <summary>
+    /// The objects this resolver linked out rather than serialized, in the order it met them.
+    /// <para/>
+    /// Linking out is right for a copy, which lands back in the same scene. It is a loss for a prefab
+    /// asset, which cannot hold a scene reference at all and will read the link back as null. The
+    /// resolver is the only place that knows it happened, so it records it and lets the caller decide
+    /// whether that is worth saying anything about.
+    /// </summary>
+    public IReadOnlyList<object> LinkedOut => _linkedOut;
+
+    private readonly List<object> _linkedOut = [];
+
     public object? GetReferenceKey(object value)
     {
         if (_copied.Contains(value)) return null; // part of the copy - serialize it by value
 
-        return value switch
+        object? key = value switch
         {
             GameObject go => go.Identifier,
             MonoBehaviour mb => mb.Identifier,
@@ -94,6 +106,9 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
             Transform t => t.GameObject.IsValid() ? t.GameObject.Identifier : Guid.Empty,
             _ => null
         };
+
+        if (key != null) _linkedOut.Add(value);
+        return key;
     }
 
     public object? ResolveReference(object key, Type targetType)
