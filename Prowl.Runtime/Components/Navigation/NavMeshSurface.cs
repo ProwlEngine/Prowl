@@ -137,22 +137,20 @@ public class NavMeshSurface : MonoBehaviour
         NavMeshWorld? world = World;
         if (world == null) return;
 
-        // The navmesh has to be present now: registration happens once, on enable, and nothing
+        // The navmesh has to be present now: registration happens once on enable and nothing
         // retries it — a transient null from async streaming would leave the scene permanently
-        // without a navmesh, which reads as obstacles that never carve and agents that never
-        // move. Block-load it, as the mesh and terrain colliders do for the same reason.
+        // without one. Block-load it, as the mesh and terrain colliders do for the same reason.
         NavMeshData.EnsureLoaded();
 
         Runtime.NavMeshData? data = NavMeshData.Res;
         if (data.IsNotValid() || !data!.HasTiles) return;
 
-        // Copy only what the asset database owns. An asset is shared with every other surface
-        // pointing at that .navmesh and with the next scene that loads it, so runtime tile and
-        // link rewrites must not land on it. One built at runtime and handed over through
-        // ApplyNavMeshData has no other owner: copying it would cost a list per registration
-        // and, worse, mean re-registering rebuilt from the original bake and threw away every
-        // rebuild since — which is the whole navmesh, for a game that generates its map.
-        // (Handing one runtime navmesh to two surfaces shares it, as it always has.)
+        // Copy only what the asset database owns. A .navmesh asset is shared with every other
+        // surface pointing at it and with the next scene that loads it, so runtime tile and link
+        // rewrites must not land on it. One built at runtime and handed over through
+        // ApplyNavMeshData has no other owner — copying it would just cost a list per
+        // registration and throw away every rebuild since the original bake on re-registering.
+        // (Handing one runtime navmesh to two surfaces still shares it, as it always has.)
         _runtimeData = NavMeshData.AssetID == Guid.Empty ? data : data.Clone();
         _instance = world.AddNavMeshData(_runtimeData);
         if (_instance == null) _runtimeData = null;
@@ -408,10 +406,9 @@ public class NavMeshSurface : MonoBehaviour
     /// Swap rebuilt tiles (from <see cref="RebuildTilesAsync"/> or
     /// <see cref="NavMeshBuilder.BuildTilesInBounds"/>) into the live TileCache and mirror them
     /// into the asset. Main thread only. The swap quiesces pending obstacle work, replaces each
-    /// affected tile's layers (removing the paired navmesh tiles — the cache's RemoveTile does
-    /// not), refreshes every obstacle's touched-tile list (tile replacement bumps salts, so
-    /// captured refs go stale — without the refresh, regenerated tiles would rebuild WITHOUT
-    /// their carves), then rebuilds the new tiles with carves re-applied.
+    /// tile's layers (the cache's RemoveTile doesn't remove the paired navmesh tile, so that's
+    /// done explicitly), refreshes every obstacle's touched-tile list (stale after a tile
+    /// replacement bumps its salt), then rebuilds the new tiles with carves re-applied.
     /// </summary>
     public bool ApplyRebuiltTiles(List<(int X, int Z, List<byte[]> Layers)> rebuilt, out int rebuiltTiles)
     {
@@ -500,12 +497,11 @@ public class NavMeshSurface : MonoBehaviour
     /// <summary>
     /// Collect this surface's bake geometry, restricted to objects whose bounds intersect
     /// <paramref name="filterBounds"/> (conservative test against transformed local bounds) —
-    /// partial rebuilds pass their affected-tile rect so collection cost scales with the
-    /// changed region like the rest of the rebuild path. Volume mode composes: the volume is
-    /// intersected with the filter. <paramref name="terrainVoxelSize"/> sets terrain
-    /// decimation granularity — pass the voxel size of the settings the geometry will be
-    /// voxelized with (bakes: the freshly resolved settings; partial rebuilds: the asset's
-    /// snapshot settings).
+    /// partial rebuilds pass their affected-tile rect so collection cost scales with the changed
+    /// region. Volume mode composes: the volume intersects with the filter.
+    /// <paramref name="terrainVoxelSize"/> sets terrain decimation granularity — pass whatever
+    /// settings the geometry will be voxelized with (bakes: freshly resolved; partial rebuilds:
+    /// the asset's snapshot).
     /// </summary>
     public List<NavMeshGeometrySource> CollectSources(AABB? filterBounds, float terrainVoxelSize)
     {

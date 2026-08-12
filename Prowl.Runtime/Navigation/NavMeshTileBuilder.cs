@@ -160,17 +160,16 @@ internal static class NavMeshTileBuilder
         foreach (RcConvexVolume vol in geom.ConvexVolumes())
             RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
 
-        // Cull islands too small to stand on (Unity's Min Region Area). The layers themselves
-        // are partitioned at runtime by the TileCache, so regions are built here only to find
-        // the spans to erase: BuildRegions zeroes the region id of anything it culled, and
-        // erasing those spans' areas keeps them out of the compressed layer for good. Regions
-        // reaching a tile border are exempt, so an island spanning two tiles survives in both.
+        // Cull islands too small to stand on (Unity's Min Region Area). Regions are built here
+        // only to find the spans to erase — BuildRegions zeroes the region id of anything it
+        // culled, and erasing those spans' areas keeps them out of the compressed layer for
+        // good. Regions reaching a tile border are exempt, so an island spanning two tiles
+        // survives in both.
         if (cfg.MinRegionArea > 0)
         {
-            // BuildLayerRegions, not the watershed pair: it is the partitioning Recast intends
-            // for layer builds — which is what these tiles become — needs no distance field
-            // (the expensive half of watershed, and this runs on every tile of every bake), and
-            // zeroes culled region ids the same way, which is all the sweep below reads.
+            // BuildLayerRegions, not the watershed pair: it's what Recast intends for layer
+            // builds, skips watershed's expensive distance-field step, and zeroes culled region
+            // ids the same way — all the sweep below reads.
             RcRegions.BuildLayerRegions(ctx, chf, cfg.MinRegionArea);
             for (int i = 0; i < chf.spanCount; i++)
                 if (chf.spans[i].reg == 0)
@@ -260,13 +259,10 @@ internal static class NavMeshTileBuilder
 
             if (_connections.Count == 0) return;
 
-            // Detour keeps only the connections whose START point lies in the tile (an XZ test),
-            // so do that first: handing over every link on the map would allocate six arrays
-            // sized by the whole set for a tile that usually contains none of them. The tile box
-            // is widened by each connection's radius so this can never be stricter than the
-            // classification it front-runs. Counted before filling, and so tested twice, because
-            // the six arrays have to be sized exactly — the second test is a handful of float
-            // compares, where collecting the matches first would mean a list allocation per tile.
+            // Detour keeps only connections whose start point lies in the tile (an XZ test,
+            // widened by each connection's radius). Counted first so the six output arrays can
+            // be sized exactly, then filled in a second pass — cheaper than collecting matches
+            // into a list first.
             int count = 0;
             for (int i = 0; i < _connections.Count; i++)
                 if (StartsInTile(_connections[i], option)) count++;
@@ -339,16 +335,12 @@ internal static class NavMeshTileBuilder
             // turns off.
             detailSampleDist = settings.BuildHeightDetail ? settings.EffectiveVoxelSize * 6 : 0,
             detailSampleMaxError = settings.EffectiveVoxelHeight,
-            // Watershed partitioning with standard contouring, in place of the cache's monotone
-            // sweep: regions stop coming out as sub-voxel ribbons on slopes, regions enclosing
-            // holes keep their holes, and long contour edges are split so open ground
-            // polygonizes into compact polygons rather than tile-spanning fans. The edge cap is
-            // deliberately loose — over-splitting floods flat floors with polygons, and every
-            // extra portal is a corner the crowd steers around. Both area thresholds are cell
-            // counts converted from world units squared, so they cover the same ground at any
-            // voxel size. Recast's own merge default is a flat cell count (20², from RecastDemo's
-            // region size), which at a finer voxel merges a smaller patch of ground; converting
-            // keeps a rebake at a different voxel size from also changing the mesh's character.
+            // Watershed partitioning with standard contouring, not the cache's monotone sweep:
+            // avoids sub-voxel ribbon slivers on slopes and keeps holes in regions that enclose
+            // them. The edge cap is loose on purpose — over-splitting floods flat floors with
+            // polygons and gives the crowd extra portal corners to steer around. Area thresholds
+            // are cell counts converted from world units (not Recast's flat default), so voxel
+            // size doesn't change the mesh's character between rebakes.
             watershedPartition = true,
             minRegionArea = (int)(settings.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
             mergeRegionArea = (int)(20f / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
@@ -371,12 +363,11 @@ internal static class NavMeshTileBuilder
     }
 
     /// <summary>
-    /// Recompute every obstacle's touched-tile list from the cache's CURRENT tiles. Replacing
-    /// a compressed tile bumps its salt, so refs captured when the obstacle was added go
-    /// stale — without this, a regenerated tile would rebuild WITHOUT its carves (the rebuild
-    /// checks membership in each obstacle's touched list). Call with the cache quiescent
-    /// (Update() reporting up-to-date) so every obstacle is in its settled state.
-    /// Replicates the private QueryTiles/CalcTightTileBounds pair from public API.
+    /// Recompute every obstacle's touched-tile list from the cache's CURRENT tiles. Replacing a
+    /// compressed tile bumps its salt, so refs captured when the obstacle was added go stale —
+    /// without this, a regenerated tile would rebuild WITHOUT its carves. Call with the cache
+    /// quiescent (Update() reporting up-to-date). Replicates the private
+    /// QueryTiles/CalcTightTileBounds pair from public API.
     /// </summary>
     public static void RefreshObstacleTouchedTiles(DtTileCache cache, NavMeshData data)
     {

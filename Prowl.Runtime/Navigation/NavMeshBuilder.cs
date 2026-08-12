@@ -33,11 +33,10 @@ public static class NavMeshBuilder
     /// <param name="threads">Worker threads for tile building. 0 or 1 builds single-threaded (deterministic tile order).</param>
     /// <param name="cancellation">Cancels between tiles; a cancelled build returns null.</param>
     /// <param name="worldBounds">Explicit XZ extent for the tile grid. Supply this when the
-    /// walkable world will GROW after baking (destructible/streamed maps): the grid, tile
-    /// capacity, and the bounds later rebuilds anchor to are sized from it instead of from the
-    /// initial geometry, so <c>RebuildTiles</c> can add tiles anywhere inside it. The vertical
-    /// range still unions with the geometry — callers know their footprint, not their height,
-    /// and Recast clips spans to the heightfield's vertical range.</param>
+    /// walkable world will GROW after baking (destructible/streamed maps): the grid and tile
+    /// capacity size from it instead of the initial geometry, so <c>RebuildTiles</c> can add
+    /// tiles anywhere inside it. Vertical range still unions with the geometry, since callers
+    /// know their footprint but not their height.</param>
     /// <param name="volumes">Convex area volumes stamped over the rasterized geometry (from
     /// <see cref="NavMeshModifierVolume"/>s, or built directly). Volumes never create
     /// walkable surface; a Not Walkable volume erases it.</param>
@@ -160,12 +159,10 @@ public static class NavMeshBuilder
     /// <summary>
     /// Rebuild the compressed layers of the tiles intersecting
     /// <paramref name="worldMin"/>..<paramref name="worldMax"/> against fresh geometry, keeping
-    /// the original bake's tile grid (XZ anchored to the bake, Y unioned with current geometry)
-    /// and expanding by the erosion border. A region entirely outside the baked bounds is a
-    /// no-op — growing the bounds needs a full rebuild. Returns one entry per affected tile; an
-    /// empty layer list means the tile is now empty. Apply with
-    /// <c>NavMeshSurface.ApplyRebuiltTiles</c> — the swap refreshes obstacle state so existing
-    /// carves re-apply to the regenerated tiles.
+    /// the original bake's tile grid. A region entirely outside the baked bounds is a no-op —
+    /// growing the bounds needs a full rebuild. Returns one entry per affected tile; an empty
+    /// layer list means the tile is now empty. Apply with <c>NavMeshSurface.ApplyRebuiltTiles</c>,
+    /// which refreshes obstacle state so existing carves re-apply to the regenerated tiles.
     /// </summary>
     public static List<(int X, int Z, List<byte[]> Layers)> BuildTilesInBounds(NavMeshData data,
         IReadOnlyList<NavMeshGeometrySource> sources, Float3 worldMin, Float3 worldMax,
@@ -198,17 +195,16 @@ public static class NavMeshBuilder
 
     /// <summary>
     /// Prologue of the partial-rebuild path: builds the geometry provider, applies volumes, and
-    /// derives the affected tile range. The grid-anchoring invariant lives HERE and only here:
+    /// derives the affected tile range. The grid-anchoring invariant lives here:
     /// <para/>
-    /// Empty sources are legitimate (a region walled in completely) — the provider is null and the
-    /// affected tiles are EMPTIED, since "no geometry" is not "no change". XZ anchors to the
-    /// ORIGINAL bake bounds, or tile (0,0) shifts and every tile misaligns against the live
-    /// navmesh. Y follows the CURRENT geometry, because Recast clips spans to the heightfield's
-    /// vertical range and a wall dropped on a flat floor would otherwise vanish — but is skipped
-    /// when there is no geometry, since an empty provider reports (0,0,0) and would widen bakes
-    /// that don't straddle Y=0. The range expands by the erosion border. A region entirely OUTSIDE
-    /// the baked bounds returns false rather than clamping, which would drag the range onto the
-    /// nearest edge column and rebuild healthy tiles against sources that don't cover them.
+    /// XZ always anchors to the ORIGINAL bake bounds, never the current geometry, or tile (0,0)
+    /// shifts and every tile misaligns against the live navmesh. Y follows the CURRENT geometry
+    /// since Recast clips spans to the heightfield's vertical range — skipped when there's no
+    /// geometry, since an empty provider reports (0,0,0) and would widen bakes off Y=0. Empty
+    /// sources are still legitimate (a region walled in completely): the affected tiles are
+    /// emptied rather than skipped, since "no geometry" is not "no change". The range expands by
+    /// the erosion border, and a region entirely outside the baked bounds returns false rather
+    /// than clamping onto the nearest edge column.
     /// </summary>
     private static bool TryPrepareRebuild(NavMeshData data, IReadOnlyList<NavMeshGeometrySource> sources,
         int defaultArea, IReadOnlyList<NavMeshAreaVolume>? volumes, Float3 worldMin, Float3 worldMax,
@@ -313,15 +309,13 @@ public static class NavMeshBuilder
     }
 
     /// <summary>
-    /// Pin the tile size the bake will actually use into <paramref name="settings"/>, so the
-    /// bake, the serialized asset, the TileCache instantiated from it, and later tile rebuilds
-    /// all read one agreed value.
+    /// Pin the resolved tile size into <paramref name="settings"/> so the bake, the serialized
+    /// asset, its TileCache, and later rebuilds all agree on one value.
     /// <para/>
-    /// A compressed layer header stores the layer's grid dimensions as BYTES, so a tile wider
-    /// than <see cref="NavMeshBuildSettings.MaxTileSize"/> voxels wraps and decompresses as an
-    /// empty layer: the bake reports success and the navmesh comes out with no polygons at all.
-    /// <see cref="NavMeshBuildSettings.EffectiveTileSize"/> clamps to keep that unreachable;
-    /// this reports it when the clamp actually moved a value the user asked for.
+    /// A compressed layer header stores tile dimensions as BYTES: a tile wider than
+    /// <see cref="NavMeshBuildSettings.MaxTileSize"/> voxels wraps and decompresses as an empty
+    /// layer, so the bake "succeeds" with no polygons. <see cref="NavMeshBuildSettings.EffectiveTileSize"/>
+    /// clamps to prevent that; this just warns when the clamp actually moved the user's value.
     /// </summary>
     private static void ResolveTileSize(NavMeshBuildSettings settings)
     {

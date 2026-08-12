@@ -31,11 +31,9 @@ public sealed class NavMeshInstance
     internal readonly ConcurrentBag<DtNavMeshQuery> QueryPool = new();
 
     // Set when work is queued into the cache (an obstacle request, a tile swap), cleared once
-    // the pump drains it. Doubles as the "this instance changed" signal: only a flagged
-    // instance is pumped, so being pumped is itself proof there was something to report.
-    // Registration seeds every tile synchronously, so a freshly registered instance starts
-    // clean and a surface nothing ever carves costs nothing per frame. Main-thread only, like
-    // registration itself.
+    // the pump drains it. Only flagged instances are pumped, so a freshly registered instance
+    // (every tile seeded synchronously) starts clean, and a surface nothing ever carves costs
+    // nothing per frame. Main-thread only, like registration itself.
     internal bool CachePending;
 
     internal NavMeshInstance(NavMeshData data, Prowl.Recast.Detour.TileCache.DtTileCache tileCache,
@@ -160,11 +158,10 @@ public sealed class NavMeshInstance
 /// <summary>
 /// One agent type's crowd: the Detour crowd, the navmesh instance it steers against, and the
 /// 16 query-filter slots it was constructed over. Slot 0 is the shared default (all areas, no
-/// cost overrides); slots 1..15 are allocated per distinct (AreaMask, cost-overrides) agent
-/// configuration and refcounted, so agents with identical steering filters share a slot.
-/// Slot numbers are NOT stable across release/re-acquire (a config can land on a different
-/// free slot) — nothing outside this entry may key state on them. Main-thread only, like all
-/// crowd state.
+/// cost overrides); slots 1..15 are refcounted and allocated per distinct (AreaMask,
+/// cost-overrides) configuration, so agents with identical filters share a slot. Slot numbers
+/// are NOT stable across release/re-acquire — nothing outside this entry may key state on
+/// them. Main-thread only, like all crowd state.
 /// </summary>
 internal sealed class NavMeshCrowdEntry
 {
@@ -363,11 +360,11 @@ public sealed class NavMeshWorld
 
     /// <summary>
     /// Bumped whenever the SET of registered navmeshes changes — a surface registering,
-    /// unregistering, or being replaced by a rebake. <see cref="NavMeshChanged"/> cannot stand
-    /// in for this: it also fires for tile-content changes, which means every frame a carve is
-    /// converging. Components that only care about instances appearing
-    /// or dying (link catch-up, obstacle re-attachment) compare this instead, so gameplay-rate
-    /// carving stops waking work that has nothing to do.
+    /// unregistering, or being replaced by a rebake. <see cref="NavMeshChanged"/> can't stand in
+    /// for this: it also fires for tile-content changes, i.e. every frame a carve is converging.
+    /// Components that only care about instances appearing or dying (link catch-up, obstacle
+    /// re-attachment) should compare this instead, so gameplay-rate carving doesn't wake work
+    /// that has nothing to do.
     /// </summary>
     public int StructureGeneration { get; private set; }
 
@@ -592,10 +589,9 @@ public sealed class NavMeshWorld
     /// <summary>
     /// Run a mutation against an instance's TileCache under the write lock (layer
     /// regeneration, bulk obstacle edits). In-flight queries finish first. Pooled queries
-    /// survive the mutation: verified against Prowl.Recast, DtNavMeshQuery holds only the
-    /// mesh reference (the same object we mutate) plus node pools and an open list that every
-    /// query method clears on entry — there is no cached tile state, so discarding the pool
-    /// here would only churn tens-of-KB query objects on every rebuild for nothing.
+    /// survive the mutation — verified against Prowl.Recast, a DtNavMeshQuery holds only the
+    /// mesh reference plus node pools it clears on entry, no cached tile state, so discarding
+    /// the pool here would only churn tens-of-KB objects for nothing.
     /// <para/>
     /// Threading: fires <see cref="NavMeshChanged"/> synchronously on the calling thread (see
     /// <see cref="AddNavMeshData"/> — same main-thread contract).
@@ -667,10 +663,9 @@ public sealed class NavMeshWorld
     }
 
     // Link tiles waiting to re-contour, per surface. A link edit dirties the tiles around both
-    // its endpoints, and one event edits many links at once — a building coming down takes its
-    // ladders with it. Applied as they arrive, each edit would re-collect the scene's links,
-    // replace the whole link set again, and re-contour tiles the edit before it had just done.
-    // Held until the frame's edits are all in, then applied as one pass per surface.
+    // its endpoints, and one event can edit many at once (a building coming down takes its
+    // ladders with it). Applying each edit as it arrives would re-collect and re-contour
+    // redundantly, so edits are held until the frame's are all in, then applied as one pass.
     private Dictionary<NavMeshSurface, List<AABB>> _pendingLinkTiles = [];
 
     // The batch being drained, swapped with the one above rather than enumerated in place. The
@@ -690,11 +685,10 @@ public sealed class NavMeshWorld
     {
         if (_pendingLinkTiles.Count == 0) return;
 
-        // Swapped out before draining, because a rebuild raises NavMeshChanged synchronously and a
-        // handler is free to disable a link or a surface from it. Marking or unregistering during
-        // the drain would then mutate the collection being enumerated, and anything marked would
-        // be lost to the clear afterwards. Against the swapped-in batch it simply joins the next
-        // frame's, which is where a change made mid-drain belongs anyway.
+        // Swapped out before draining: a rebuild raises NavMeshChanged synchronously, and a
+        // handler is free to disable a link or surface from it. Mutating the collection being
+        // enumerated would lose anything marked mid-drain; against the swapped-in batch it
+        // simply joins next frame's instead, which is where it belongs anyway.
         (_pendingLinkTiles, _drainingLinkTiles) = (_drainingLinkTiles, _pendingLinkTiles);
 
         foreach ((NavMeshSurface surface, List<AABB> regions) in _drainingLinkTiles)
@@ -1014,14 +1008,13 @@ public sealed class NavMeshWorld
         DrainLinkTiles();
 
         // Carving is not: an obstacle queues its carve from OnEnable, which runs in the editor
-        // too, and without a pump that request would sit unprocessed forever — the mesh looking
-        // untouched while the component looks configured. Pumping outside play is also what
-        // makes the scene view's overlay show a carve as you position a building.
-        // Only the live navmesh changes; obstacles never touch the baked asset.
+        // too, and without a pump that request would sit unprocessed forever. Pumping outside
+        // play is also what makes the scene view's overlay show a carve as you position a
+        // building. Only the live navmesh changes; obstacles never touch the baked asset.
         //
-        // Only instances with queued work are pumped. An idle cache would report up-to-date
-        // immediately anyway, but skipping it entirely means a navmesh nothing ever carves
-        // costs nothing at all per frame — its tiles are finished Detour tiles and stay that way.
+        // Only instances with queued work are pumped — an idle cache would report up-to-date
+        // immediately anyway, but skipping it means a navmesh nothing ever carves costs nothing
+        // per frame at all.
         _cachePumpScratch.Clear();
         lock (_instancesLock)
         {
@@ -1047,12 +1040,11 @@ public sealed class NavMeshWorld
             }
 
             // Reaching here means work was queued, so report unconditionally — idle instances
-            // never enter the scratch list. Changed must NOT be gated on the converged edge: a
-            // carve small enough to finish inside one Update reports up-to-date on its first
-            // call, so gating would leave it with no notification at all. Settled is the gated
-            // one, for listeners that want the finished mesh rather than each step toward it.
-            // Pooled queries deliberately survive the tile swaps — same verified invariant as
-            // MutateTileCache; only instance death poisons.
+            // never enter the scratch list. Changed must NOT be gated on convergence: a carve
+            // small enough to finish inside one Update would otherwise get no notification at
+            // all. Settled is the gated one, for listeners that want the finished mesh rather
+            // than each step toward it. (Pooled queries survive the tile swap — same invariant
+            // as MutateTileCache.)
             instance.InvalidateLinkIds();
             NavMeshChanged?.Invoke();
             if (upToDate)

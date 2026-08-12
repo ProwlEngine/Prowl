@@ -266,10 +266,9 @@ public class NavMeshAgent : MonoBehaviour
             if (_arrived) return 0f;
             if (!HasPath) return float.PositiveInfinity;
             // Mid-hop the corner window is empty and would read 0 — falsely "arrived" for the
-            // Unity idiom. The honest lower bound is the remaining hop PLUS the path after
-            // landing: the hop distance alone also collapses to ~0 as the animation lands,
-            // which makes waypoint scripts issue their next destination mid-hop and ping-pong
-            // the agent across the link forever.
+            // Unity idiom. The honest lower bound is remaining hop distance PLUS the path after
+            // landing: the hop distance alone collapses to ~0 as the animation lands, which
+            // would make waypoint scripts issue their next destination mid-hop and ping-pong.
             if (IsOnOffMeshLink && _agent.animation is { active: true } anim)
             {
                 Float3 landing = ToFloat3(anim.endPos);
@@ -347,14 +346,13 @@ public class NavMeshAgent : MonoBehaviour
 
     private void OnNavMeshChanged()
     {
-        // Our crowd may have been dropped with its navmesh (rebake/regenerate); our crowd
-        // agent and filter slot died with it, so forget both and fall through to
-        // re-registration (which re-requests the remembered destination). MUST compare
-        // against _registeredAgentTypeId, not the AgentTypeId field: if gameplay rewrote the
-        // field and a navmesh event fires before the LateUpdate drift check runs, the
-        // registered type's crowd is still alive and still contains our agent — forgetting it
-        // here would strand a permanent ghost agent (and leak its filter-slot refcount).
-        // Type changes are handled only by the drift check, which Unregisters properly.
+        // Our crowd may have been dropped with its navmesh (rebake/regenerate); our crowd agent
+        // and filter slot died with it, so forget both and fall through to re-registration
+        // (which re-requests the remembered destination). MUST compare against
+        // _registeredAgentTypeId, not AgentTypeId: if gameplay rewrote the field before the
+        // LateUpdate drift check runs, the registered type's crowd is still alive and still
+        // contains our agent — forgetting it here would strand a ghost agent and leak its
+        // filter-slot refcount. Type changes are handled only by the drift check.
         if (_agent != null && _world != null && !ReferenceEquals(_world.GetNativeCrowd(_registeredAgentTypeId), _crowd))
         {
             _agent = null;
@@ -657,11 +655,10 @@ public class NavMeshAgent : MonoBehaviour
 
         // Velocity-obstacle sampling is the expensive half of a crowd step, and it picks from a
         // DISCRETE set of candidate velocities, so running it with nothing in range still rounds
-        // the result and walks the agent centimetres sideways off a straight line. Skip it only
-        // when nothing is in range at all: the query consumes navmesh boundary segments as well as
-        // neighbouring agents, so an agent alone beside a wall still has the wall to keep off.
-        // Both come from the last crowd step, so engaging lags a frame — they are gathered from
-        // metres out, which is many frames of approach.
+        // the result and walks the agent sideways off a straight line. Skip it only when nothing
+        // is in range at all — that includes navmesh boundary segments, so an agent alone beside
+        // a wall still has the wall to keep off. Both are read from the last crowd step, so
+        // engaging lags a frame, which is fine at the metres-out range they're gathered from.
         if (ObstacleAvoidanceQuality != ObstacleAvoidanceType.NoObstacleAvoidance)
         {
             bool engage = _agent.nneis > 0 || _agent.boundary.GetSegmentCount() > 0;
@@ -677,12 +674,12 @@ public class NavMeshAgent : MonoBehaviour
 
         if (UpdateRotation)
         {
-            // Face where the agent STEERS, not where it moves: the actual velocity carries
-            // avoidance corrections that do not shrink with speed, so braking into a goal they
-            // take over its direction and the agent shivers along a dead straight path. The two
-            // gates below stop the heading chasing a vector that has stopped meaning anything —
-            // one too slow to have a direction, one pointing at a target already underfoot,
-            // where what is left is drift and following it spins the agent on the spot.
+            // Face where the agent STEERS, not where it moves: actual velocity carries avoidance
+            // corrections that don't shrink with speed, so braking into a goal lets them take
+            // over its direction and the agent shivers along a dead-straight path. The two gates
+            // below stop the heading chasing a vector that no longer means anything — one too
+            // slow to have a direction, one pointing at a target already underfoot, where
+            // following it would just spin the agent in place.
             const double MinFacingSpeedSq = 0.01; // 0.1 m/s
             Float3 face = ToFloat3(_agent.dvel);
             double speedSq = face.X * face.X + face.Z * face.Z;
@@ -722,14 +719,11 @@ public class NavMeshAgent : MonoBehaviour
         // strands the agent at the link mouth.
         if (_agent == null || _arrived || _isStopped || !HasPath || PathPending || IsOnOffMeshLink) return;
 
-        // The corner window is a LOWER bound (it holds at most the crowd's few visible
-        // corners), so its distance only means "arrived" when the window actually reaches the
-        // path end. Without this gate, a tight switchback whose visible corners total less
-        // than StoppingDistance would falsely latch mid-path, and a congestion-jammed agent
-        // could trip the braked latch far from its goal. An EMPTY window is untrustworthy:
-        // it happens both when standing on the target and transiently right after an
-        // off-mesh hop lands (corners recompute on the next crowd update) — so measure
-        // straight to the target instead of trusting a 0-length window.
+        // The corner window is a LOWER bound (at most the crowd's few visible corners), so its
+        // distance only means "arrived" once the window reaches the path end — otherwise a tight
+        // switchback under StoppingDistance, or a congestion-jammed agent, could falsely latch.
+        // An EMPTY window is also untrustworthy: it happens both standing on the target and
+        // transiently right after a hop lands, so measure straight to the target instead.
         float remaining;
         if (_agent.ncorners == 0)
         {

@@ -24,19 +24,17 @@ public enum NavMeshObstacleShape
 /// Blocks agents while enabled — a parked vehicle, a dropped crate, a placed building. Mirrors
 /// Unity's NavMeshObstacle, including both of its modes:
 /// <para/>
-/// <see cref="Carve"/> on cuts a hole in the navmesh, so pathfinding itself routes around the
-/// obstacle. The affected tiles rebuild incrementally over the following frames, and with
-/// <see cref="CarveOnlyStationary"/> the hole lifts while the obstacle moves and re-applies
-/// once it has been still for <see cref="CarvingTimeToStationary"/>.
+/// <see cref="Carve"/> on cuts a hole in the navmesh, so pathfinding routes around it. Affected
+/// tiles rebuild incrementally over the following frames; with <see cref="CarveOnlyStationary"/>
+/// the hole lifts while moving and re-applies once still for <see cref="CarvingTimeToStationary"/>.
 /// <para/>
-/// <see cref="Carve"/> off is Unity's velocity-obstacle mode: the mesh is untouched and the
-/// obstacle instead joins each crowd as an immovable neighbour, so agents steer around it
-/// locally. That costs nothing per move, which makes it the right mode for something that moves
-/// often — but paths are computed as if it weren't there, so an agent whose only route is
-/// blocked will press against it rather than reroute.
+/// <see cref="Carve"/> off is Unity's velocity-obstacle mode: the mesh stays untouched and the
+/// obstacle joins each crowd as an immovable neighbour instead, so agents steer around it
+/// locally. Costs nothing per move — the right mode for something that moves often — but paths
+/// are computed as if it weren't there, so an agent with no other route presses against it.
 /// <para/>
-/// Either way the object's own geometry stays out of bakes: an obstacle is a runtime thing,
-/// and voxelizing it would freeze a hole where it happened to be standing.
+/// Either way the object's own geometry stays out of bakes: it's a runtime thing, and
+/// voxelizing it would freeze a hole where it happened to be standing.
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Obstacle")]
 [ComponentIcon("")] // road barrier
@@ -147,11 +145,10 @@ public class NavMeshObstacle : MonoBehaviour
 
     private void OnNavMeshChanged()
     {
-        // An instance may have been replaced (rebake) or registered late; dead entries
-        // are dropped (their cache died with the instance) and the carve re-applies to any
-        // new instance on the next LateUpdate. Gated on the structural counter because the
-        // event also fires every frame a carve is converging — including this obstacle's own —
-        // and re-attaching per frame would make each carve pay for itself repeatedly.
+        // An instance may have been replaced (rebake) or registered late; dead entries are
+        // dropped and the carve re-applies to any new instance on the next LateUpdate. Gated on
+        // the structural counter because the event also fires every frame a carve is converging
+        // — including this obstacle's own — which would make each carve pay for itself repeatedly.
         if (_world == null || _world.StructureGeneration == _seenStructureGeneration) return;
         _seenStructureGeneration = _world.StructureGeneration;
         _refsPruneNeeded = true;
@@ -244,11 +241,10 @@ public class NavMeshObstacle : MonoBehaviour
             RefreshBlockers(radius, height);
         }
 
-        // Write the position straight onto the crowd agent every frame. A crowd agent is
-        // normally moved by its own steering, which a blocker has none of, so this is what
-        // makes it follow the Transform — the mode for things that move. It also absorbs any
-        // displacement the crowd's collision-resolution pass applies (measured at under a
-        // centimetre even under sustained pressure, but it costs nothing to be exact).
+        // Write the position straight onto the crowd agent every frame: a crowd agent is
+        // normally moved by its own steering, which a blocker has none of, so this is what makes
+        // it follow the Transform. It also absorbs the crowd's collision-resolution displacement
+        // (measured under a centimetre even under pressure, but costs nothing to be exact).
         Float3 position = BlockerPosition(height);
         var pinned = new RcVec3f((float)position.X, (float)position.Y, (float)position.Z);
         foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker in _blockers.Values)
@@ -304,10 +300,9 @@ public class NavMeshObstacle : MonoBehaviour
 
     /// <summary>
     /// A blocker that failed to place is an invisible failure: the component looks configured
-    /// and nothing avoids it. The crowd's placement
-    /// probe searches only a few units vertically (sized from
-    /// <see cref="NavMeshWorld.CrowdMaxAgentRadius"/>), so an obstacle floating well above the
-    /// walkable surface — a tall Center offset, spawned mid-air — lands invalid.
+    /// and nothing avoids it. The crowd's placement probe searches only a few units vertically
+    /// (sized from <see cref="NavMeshWorld.CrowdMaxAgentRadius"/>), so an obstacle floating well
+    /// above the walkable surface — a tall Center offset, spawned mid-air — lands invalid.
     /// </summary>
     private void WarnIfUnplaced(Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker)
     {

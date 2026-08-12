@@ -211,13 +211,11 @@ public class NavMeshLink : MonoBehaviour
             _world.NavMeshChanged -= OnNavMeshChanged;
             _world.UnregisterLink(this);
 
-            // Unregistered first, so the rebuild collects the links WITHOUT this one and the
-            // tiles come back without its connection — but before the world reference is
-            // released, since that is what reaches the surfaces.
+            // Unregistered first, so the rebuild collects the links WITHOUT this one — but
+            // before the world reference is released, since that's what reaches the surfaces.
             // Scene teardown costs nothing here: Scene.OnDispose clears the navigation world
             // before GameObjects dispose, so every instance is already retired and the rebuild
-            // finds nothing to do. A gameplay disable (pooling, a destroyed building) keeps its
-            // rebuild — the world really changed.
+            // finds nothing to do; a gameplay disable (pooling, a destroyed building) keeps it.
             if (_appliedActive) RequestRebuild(_appliedStart, _appliedEnd);
 
             _world = null;

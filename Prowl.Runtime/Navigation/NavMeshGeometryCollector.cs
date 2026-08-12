@@ -97,11 +97,9 @@ public static class NavMeshGeometryCollector
 
     /// <summary>
     /// True when this object moves on the navmesh rather than forming it — an agent or an
-    /// obstacle — or sits under one. Baking such an object's collider or renderer stamps a hole
-    /// into the mesh wherever it happened to be at bake time, and that hole never moves again;
-    /// both components block agents at runtime instead, wherever the object actually is. Whole
-    /// subtrees are excluded because visuals and colliders usually hang off child objects.
-    /// Memoized like the modifier walk.
+    /// obstacle — or sits under one. Baking such an object would stamp a permanent hole where it
+    /// happened to sit at bake time; both components block agents at runtime instead, wherever
+    /// they actually are. Whole subtrees are excluded since visuals/colliders hang off children.
     /// </summary>
     private static bool BelongsToActor(GameObject go, Dictionary<GameObject, bool> cache)
     {
@@ -109,11 +107,10 @@ public static class NavMeshGeometryCollector
 
         GameObject? parent = go.Parent;
         // Both exclude by PRESENCE, never by enabled state, so bake output can't depend on when
-        // a component was last toggled: an obstacle disabled at bake time would otherwise
-        // voxelize a hole that stays put forever once it is enabled and moves — the same frozen
-        // hole this rule exists to prevent, just harder to spot. The cost of the stricter rule
-        // is that an obstacle disabled for the whole session leaves its object out of the mesh;
-        // an object meant to be permanent geometry should not carry the component at all.
+        // a component was last toggled — an obstacle disabled at bake time would otherwise
+        // voxelize a permanent hole once it later enables and moves. The tradeoff: an obstacle
+        // disabled for the whole session leaves its object out of the mesh entirely; permanent
+        // geometry should not carry the component at all.
         bool result = go.GetComponent<NavMeshAgent>().IsValid()
             || go.GetComponent<NavMeshObstacle>().IsValid()
             || (parent.IsValid() && BelongsToActor(parent!, cache));
@@ -363,11 +360,10 @@ public static class NavMeshGeometryCollector
     /// voxel size — Recast re-voxelizes at that resolution anyway, so finer triangles are pure
     /// waste (a 1k heightmap would otherwise contribute ~2M triangles). Holes are skipped.
     /// <para/>
-    /// Heights come off <see cref="TerrainData"/> in terrain-local space and the object's transform
-    /// places them, exactly as <see cref="TerrainCollider"/> places the physics heightfield, so a
-    /// moved, rotated or scaled terrain is walkable where it is drawn and where it collides.
-    /// Reading the asset rather than the collider is also what lets a bake with the editor open —
-    /// where nothing has had a gameplay callback — see the terrain at all.
+    /// Heights come from <see cref="TerrainData"/> in terrain-local space, placed by the object's
+    /// transform exactly as <see cref="TerrainCollider"/> places the physics heightfield — so a
+    /// moved, rotated or scaled terrain walks where it's drawn and where it collides. Reading the
+    /// asset (not the collider) is also what lets a bake with the editor open see terrain at all.
     /// </summary>
     public static void CollectTerrain(TerrainComponent terrain, float voxelSize, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
     {
