@@ -1779,6 +1779,169 @@ public class PrefabTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // Overrides read as something a person can act on
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void DescribeOverrides_NamesTheObjectComponentAndMember()
+    {
+        Guid g = MakeNestedPrefab("Describe.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.Children[0].GetComponent<OverrideComp>()!.A = 42;
+        PrefabUtility.ReconcileInstance(instance);
+
+        var described = Assert.Single(PrefabUtility.DescribeOverrides(instance));
+        Assert.Equal("Child", described.ObjectName);
+        Assert.Equal(nameof(OverrideComp), described.ComponentName);
+        Assert.Equal("A", described.MemberName);
+        Assert.Equal("Child > OverrideComp", described.Group);
+        Assert.True(described.Resolvable);
+
+        // What the prefab says beside what the instance says, which is the question being asked.
+        Assert.Equal("2", described.SourceValue);
+        Assert.Equal("42", described.InstanceValue);
+    }
+
+    [Fact]
+    public void DescribeOverrides_MarksAnEntryThatAddressesNothing()
+    {
+        Guid g = MakeNestedPrefab("DescribeBroken.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.PrefabOverrides.Add(new PropertyOverride
+        {
+            Path = $"{Guid.NewGuid()}/{Guid.NewGuid()}/A",
+            Value = Serializer.Serialize(typeof(int), 1)
+        });
+
+        var described = Assert.Single(PrefabUtility.DescribeOverrides(instance));
+        Assert.False(described.Resolvable);
+    }
+
+    [Fact]
+    public void DescribeOverrides_GroupsAGameObjectLevelOverrideUnderTheObject()
+    {
+        Guid g = MakeNestedPrefab("DescribeGo.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.Children[0].Enabled = false;
+        PrefabUtility.ReconcileInstance(instance);
+
+        var described = Assert.Single(PrefabUtility.DescribeOverrides(instance));
+        Assert.Equal("Child", described.Group);   // no component, so the object is the whole heading
+        Assert.Equal("Enabled", described.MemberName);
+    }
+
+    // ---------------------------------------------------------------------
+    // Acting on one component rather than the whole instance
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void RevertComponentOverrides_TakesBackThatComponentAndLeavesTheRest()
+    {
+        Guid g = MakeNestedPrefab("RevertComp.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        var rootComp = instance.GetComponent<OverrideComp>()!;
+        rootComp.A = 42;
+        rootComp.B = 43;
+        instance.Children[0].GetComponent<OverrideComp>()!.A = 99;
+        PrefabUtility.ReconcileInstance(instance);
+        Assert.Equal(3, instance.PrefabOverrides.Count);
+
+        PrefabUtility.RevertComponentOverrides(instance, rootComp);
+
+        Assert.Equal(1, rootComp.A);
+        Assert.Equal(1, rootComp.B);
+        Assert.Equal(99, instance.Children[0].GetComponent<OverrideComp>()!.A);   // not its business
+        Assert.Single(instance.PrefabOverrides);
+    }
+
+    [Fact]
+    public void RevertComponentOverrides_IsOneUndoStep()
+    {
+        Guid g = MakeNestedPrefab("RevertCompUndo.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        var comp = instance.GetComponent<OverrideComp>()!;
+        comp.A = 42;
+        comp.B = 43;
+        PrefabUtility.ReconcileInstance(instance);
+
+        Undo.Clear();
+        PrefabUtility.RevertComponentOverrides(instance, comp);
+        Undo.PerformUndo();
+
+        var live = Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!;
+        Assert.Equal(42, live.A);
+        Assert.Equal(43, live.B);
+        Assert.Equal(2, Scene.Current!.RootObjects.First().PrefabOverrides.Count);
+        Assert.False(Undo.CanUndo);   // two members reverted, one step
+    }
+
+    [Fact]
+    public void ApplyComponentOverrides_PushesOnlyThatComponentToThePrefab()
+    {
+        Guid g = MakeNestedPrefab("ApplyComp.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        var rootComp = instance.GetComponent<OverrideComp>()!;
+        rootComp.A = 42;
+        instance.Children[0].GetComponent<OverrideComp>()!.A = 99;
+        PrefabUtility.ReconcileInstance(instance);
+
+        PrefabUtility.ApplyComponentOverrides(instance, rootComp);
+
+        var fresh = Inst(g);
+        Assert.Equal(42, fresh.GetComponent<OverrideComp>()!.A);
+        Assert.Equal(2, fresh.Children[0].GetComponent<OverrideComp>()!.A);   // still the prefab's
+    }
+
+    [Fact]
+    public void ResetComponentToDefaults_PutsBackWhatANewOneWouldHold()
+    {
+        var go = new GameObject("Plain");
+        var comp = go.AddComponent<OverrideComp>();
+        comp.A = 42;
+        comp.B = 43;
+        LoadSceneWith(go);
+
+        Undo.Clear();
+        PrefabUtility.ResetComponentToDefaults(go, comp);
+
+        Assert.Equal(0, comp.A);
+        Assert.Equal(0, comp.B);
+
+        Undo.PerformUndo();
+        Assert.Equal(42, comp.A);
+        Assert.Equal(43, comp.B);
+    }
+
+    [Fact]
+    public void ResetComponentToDefaults_KeepsTheComponentsIdentity()
+    {
+        var go = new GameObject("Plain");
+        var comp = go.AddComponent<OverrideComp>();
+        comp.A = 42;
+        LoadSceneWith(go);
+
+        Guid identity = comp.Identifier;
+        PrefabUtility.ResetComponentToDefaults(go, comp);
+
+        // The same component with different values, not a new one; anything addressing it by
+        // identifier, an undo record above all, still finds it.
+        Assert.Equal(identity, comp.Identifier);
+        Assert.Same(comp, go.GetComponentByIdentifier(identity));
+    }
+
+    // ---------------------------------------------------------------------
     // Odds and ends
     // ---------------------------------------------------------------------
 

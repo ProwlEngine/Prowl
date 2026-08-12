@@ -127,22 +127,23 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// What ties this object to a prefab, or null when it is not a prefab instance. Read-only view;
-    /// use the properties below, or <see cref="EnsurePrefabLink"/>, to change it.
+    /// What ties this object to a prefab, or null when it is not a prefab instance. Internal, along
+    /// with everything below that writes to it: these values only mean anything as a set, and
+    /// nothing here can check one against another. Read them through the properties below.
     /// </summary>
-    public PrefabLink? PrefabLink => _prefabLink;
+    internal PrefabLink? PrefabLink => _prefabLink;
 
     /// <summary>Is this GameObject a prefab instance?</summary>
     public bool IsPrefabInstance => _prefabLink != null && _prefabLink.AssetId != Guid.Empty;
 
     /// <summary>Creates the prefab link if this object does not have one yet.</summary>
-    public PrefabLink EnsurePrefabLink() => _prefabLink ??= new PrefabLink();
+    internal PrefabLink EnsurePrefabLink() => _prefabLink ??= new PrefabLink();
 
     /// <summary>The prefab asset GUID, or Guid.Empty if not a prefab instance.</summary>
     public Guid PrefabAssetId
     {
         get => _prefabLink?.AssetId ?? Guid.Empty;
-        set { if (value != Guid.Empty || _prefabLink != null) EnsurePrefabLink().AssetId = value; }
+        internal set { if (value != Guid.Empty || _prefabLink != null) EnsurePrefabLink().AssetId = value; }
     }
 
     /// <summary>
@@ -155,8 +156,12 @@ public partial class GameObject : EngineObject, ISerializable
         internal set { if (value != Guid.Empty || _prefabLink != null) EnsurePrefabLink().SourceIdentifier = value; }
     }
 
-    /// <summary>Per-instance property overrides for this prefab instance.</summary>
-    public List<PropertyOverride> PrefabOverrides
+    /// <summary>
+    /// Per-instance property overrides for this prefab instance. The list is handed out live, so this
+    /// is internal in both directions; <c>PrefabUtility.GetPropertyModifications</c> is how anything
+    /// else reads them.
+    /// </summary>
+    internal List<PropertyOverride> PrefabOverrides
     {
         get => EnsurePrefabLink().Overrides;
         set => EnsurePrefabLink().Overrides = value;
@@ -172,10 +177,10 @@ public partial class GameObject : EngineObject, ISerializable
             ? id : Guid.Empty;
 
     /// <summary>Clear all prefab tracking data on this GameObject.</summary>
-    public void ClearPrefabData() => _prefabLink = null;
+    internal void ClearPrefabData() => _prefabLink = null;
 
     /// <summary>Clear all prefab data on this GameObject and all descendants.</summary>
-    public void ClearPrefabDataRecursive()
+    internal void ClearPrefabDataRecursive()
     {
         ClearPrefabData();
         foreach (var child in Children)

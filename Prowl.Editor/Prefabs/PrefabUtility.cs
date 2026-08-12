@@ -653,6 +653,16 @@ public static partial class PrefabUtility
         => new() { ExternalReferences = new SceneReferenceResolver() };
 
     /// <summary>
+    /// Context for serializing a whole component: it is listed as copied-by-value, so what it holds
+    /// is written out and what it points at elsewhere in the scene is linked.
+    /// <para/>
+    /// Not <see cref="InstanceValueContext"/>, which lists nothing as copied and would write the
+    /// component itself out as a link to itself - an echo that restores nothing at all.
+    /// </summary>
+    private static SerializationContext ComponentValueContext(MonoBehaviour component)
+        => new() { ExternalReferences = new SceneReferenceResolver(component) };
+
+    /// <summary>
     /// Context for serializing a whole GameObject tree: everything in the tree is listed as
     /// copied-by-value, so anything else it references is external and gets linked by identifier
     /// rather than deep-copied in. Used for writing .prefab files and for undo snapshots.
@@ -710,6 +720,220 @@ public static partial class PrefabUtility
     /// resolving when the structure drifts (a component or child added, removed or reordered), and
     /// such an entry can no longer be applied or reverted - only removed.
     /// </summary>
+    /// <summary>The override paths on one component of an instance, as they are stored on its root.</summary>
+    private static List<string> PathsFor(GameObject instanceGO, MonoBehaviour component, out GameObject root)
+    {
+        GameObject? prefabRoot = GetPrefabInstanceRoot(instanceGO);
+        root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
+
+        string prefix = GetOverridePath(instanceGO, component, "");
+        return root.PrefabOverrides
+            .Where(o => o.Path.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(o => o.Path)
+            .ToList();
+    }
+
+    /// <summary>Whether this component of an instance has anything overridden on it.</summary>
+    public static bool HasComponentOverrides(GameObject instanceGO, MonoBehaviour component)
+        => instanceGO.IsPrefabInstance && PathsFor(instanceGO, component, out _).Count > 0;
+
+    /// <summary>
+    /// Put one component back to what the prefab says, in a single step. The whole instance can
+    /// already be reverted from the prefab bar; this is the same thing at the scale the user is
+    /// usually working at, which is the component they are looking at.
+    /// </summary>
+    public static void RevertComponentOverrides(GameObject instanceGO, MonoBehaviour component)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+        if (!GuardNotPlaying("revert a component")) return;
+
+        List<string> paths = PathsFor(instanceGO, component, out GameObject root);
+        if (paths.Count == 0) return;
+
+        // Captured either side and restored wholesale, so one undo step covers every member reverted
+        // and the order the records run in does not matter.
+        List<PropertyOverride> before = root.PrefabOverrides.ToList();
+        EchoObject? beforeState = Serializer.Serialize(component.GetType(), component, ComponentValueContext(component));
+
+        foreach (string path in paths)
+            RevertSingleOverrideCore(instanceGO, path, recordUndo: false);
+
+        List<PropertyOverride> after = root.PrefabOverrides.ToList();
+        EchoObject? afterState = Serializer.Serialize(component.GetType(), component, ComponentValueContext(component));
+
+        Guid rootId = root.Identifier;
+        Guid componentId = component.Identifier;
+
+        Undo.RegisterAction("Revert Component",
+            undo: () => Restore(before, beforeState),
+            redo: () => Restore(after, afterState));
+
+        EditorSceneManager.MarkDirty();
+
+        void Restore(List<PropertyOverride> overrides, EchoObject? state)
+        {
+            GameObject? live = Undo.FindGO(rootId);
+            if (live.IsNotValid()) return;
+
+            live!.PrefabOverrides = overrides.ToList();
+
+            MonoBehaviour? target = live.GetComponentInChildrenByIdentifier(componentId);
+            if (target.IsNotValid() || state == null) return;
+
+            Serializer.DeserializeInto(state, target!, InstanceValueContext());
+            target!.HierarchyStateChanged();
+            target.OnValidate();
+        }
+    }
+
+    /// <summary>Push everything overridden on one component into the prefab.</summary>
+    public static void ApplyComponentOverrides(GameObject instanceGO, MonoBehaviour component)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+        if (!GuardNotPlaying("apply a component")) return;
+        if (!GuardEditablePrefab(instanceGO.PrefabAssetId, "apply a component")) return;
+
+        List<string> paths = PathsFor(instanceGO, component, out GameObject root);
+        foreach (string path in paths)
+            ApplySingleOverride(instanceGO, path);
+    }
+
+    /// <summary>
+    /// Put a component back to the values a new one of its type would have. What Reset means where
+    /// there is no prefab to answer to; on an instance <see cref="RevertComponentOverrides"/> does.
+    /// </summary>
+    public static void ResetComponentToDefaults(GameObject go, MonoBehaviour component)
+    {
+        if (Application.IsPlaying)
+        {
+            Runtime.Debug.LogWarning("[Inspector] Cannot reset a component during play mode.");
+            return;
+        }
+
+        object? fresh = Activator.CreateInstance(component.GetType(), nonPublic: true);
+        if (fresh == null) return;
+
+        EchoObject? defaults = Serializer.Serialize(component.GetType(), fresh, ComponentValueContext((MonoBehaviour)fresh));
+        EchoObject? before = Serializer.Serialize(component.GetType(), component, ComponentValueContext(component));
+        if (defaults == null || before == null) return;
+
+        Guid goId = go.Identifier;
+        Guid componentId = component.Identifier;
+
+        Restore(defaults);
+
+        Undo.RegisterAction("Reset Component",
+            undo: () => Restore(before),
+            redo: () => Restore(defaults));
+
+        EditorSceneManager.MarkDirty();
+
+        void Restore(EchoObject state)
+        {
+            GameObject? live = Undo.FindGO(goId);
+            MonoBehaviour? target = live.IsValid() ? live!.GetComponentByIdentifier(componentId) : null;
+            if (target.IsNotValid()) return;
+
+            // Through the component's own Deserialize, and keeping its identity: it is the same
+            // component with different values, not a new one.
+            Guid identity = target!.Identifier;
+            Serializer.DeserializeInto(state, target, InstanceValueContext());
+            target.Identifier = identity;
+            target.HierarchyStateChanged();
+            target.OnValidate();
+        }
+    }
+
+    /// <summary>
+    /// One override, resolved against the objects it addresses so it can be read. The path itself is
+    /// three source identifiers and a member name, which is the right thing to store and says nothing
+    /// at all to the person looking at it.
+    /// </summary>
+    public sealed class OverrideDescription
+    {
+        public string Path = "";
+        /// <summary>The object the override is on, named as the scene names it.</summary>
+        public string ObjectName = "";
+        /// <summary>The component it is on, or empty when the override is on the GameObject itself.</summary>
+        public string ComponentName = "";
+        public string MemberName = "";
+        public string InstanceValue = "";
+        public string SourceValue = "";
+        /// <summary>False when the path no longer addresses anything, so it can only be removed.</summary>
+        public bool Resolvable;
+
+        /// <summary>What to group this under: one heading per object, or per component of one.</summary>
+        public string Group => string.IsNullOrEmpty(ComponentName) ? ObjectName : $"{ObjectName} > {ComponentName}";
+    }
+
+    /// <summary>
+    /// Everything this instance overrides, resolved for display and in a stable order: by the object
+    /// it is on, then the component, then the member.
+    /// </summary>
+    public static List<OverrideDescription> DescribeOverrides(GameObject go)
+    {
+        GameObject? prefabRoot = GetPrefabInstanceRoot(go);
+        if (prefabRoot.IsNotValid()) return [];
+
+        GameObject root = prefabRoot!;
+        GameObject? source = GetCachedPrefabSource(root.PrefabAssetId);
+
+        var described = new List<OverrideDescription>();
+        foreach (PropertyOverride ov in root.PrefabOverrides)
+            described.Add(Describe(root, source, ov));
+
+        return described
+            .OrderBy(d => d.ObjectName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(d => d.ComponentName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(d => d.MemberName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static OverrideDescription Describe(GameObject root, GameObject? source, PropertyOverride ov)
+    {
+        var described = new OverrideDescription { Path = ov.Path };
+
+        ParseOverridePath(root, ov.Path, out object? target, out string memberPath);
+        described.MemberName = memberPath;
+
+        switch (target)
+        {
+            case MonoBehaviour component:
+                described.ObjectName = component.GameObject.IsValid() ? component.GameObject.Name : "";
+                described.ComponentName = component.GetType().Name;
+                break;
+            case GameObject owner:
+                described.ObjectName = owner.Name;
+                break;
+            default:
+                // Nothing on the instance answers to it, so there is no name to give it beyond its own.
+                described.ObjectName = ov.Path;
+                described.MemberName = "";
+                return described;
+        }
+
+        described.Resolvable = GetMemberByPath(target, memberPath).IsValid;
+        if (!described.Resolvable) return described;
+
+        described.InstanceValue = Describe(GetMemberValue(target, memberPath));
+
+        if (source != null)
+        {
+            ParseOverridePath(source, ov.Path, out object? sourceTarget, out string sourceMemberPath);
+            if (sourceTarget != null && GetMemberByPath(sourceTarget, sourceMemberPath).IsValid)
+                described.SourceValue = Describe(GetMemberValue(sourceTarget, sourceMemberPath));
+        }
+
+        return described;
+
+        static string Describe(object? value) => value switch
+        {
+            null => "none",
+            EngineObject engineObject => engineObject.IsValid() ? engineObject.Name : "none",
+            _ => value.ToString() ?? ""
+        };
+    }
+
     public static bool IsOverrideResolvable(GameObject instanceGO, string overridePath)
     {
         if (!instanceGO.IsPrefabInstance) return false;

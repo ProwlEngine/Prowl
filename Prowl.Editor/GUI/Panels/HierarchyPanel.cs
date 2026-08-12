@@ -853,8 +853,17 @@ public class HierarchyPanel : DockPanel
                 string suffix = prefabRoots.Count > 1 ? $" ({prefabRoots.Count})" : "";
 
                 if (prefabRoots.Count == 1)
+                {
+                    Guid assetId = prefabRoots[0].PrefabAssetId;
+
+                    // Straight into the prefab, rather than pinging the asset and leaving the user to
+                    // find it in the project panel and double click it.
+                    builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
+                        icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
+
                     builder.Item(Loc.Get("hierarchy.select_prefab_asset"),
-                        () => Selection.Ping(prefabRoots[0].PrefabAssetId), icon: EditorIcons.Cubes);
+                        () => Selection.Ping(assetId), icon: EditorIcons.Cubes);
+                }
 
                 bool anyOverrides = prefabRoots.Any(PrefabUtility.HasAnyOverrides);
                 // A generated prefab (a model) is rebuilt from its source on every import, so there

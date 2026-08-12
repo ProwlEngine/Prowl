@@ -10,8 +10,15 @@ namespace Prowl.Runtime;
 /// What ties a GameObject to the prefab it came from. Held by reference and only allocated for
 /// objects that actually are prefab instances, so an ordinary GameObject carries one null field
 /// rather than a copy of every prefab-related value.
+/// <para/>
+/// Internal, and its fields stay public inside that: none of these values mean anything on their
+/// own, and there is no setter that can check them against each other. An asset id with no source
+/// identities, or a component map keyed on identifiers nothing carries any more, are states no
+/// operation produces and every operation would then have to survive. What a prefab instance is
+/// gets changed through <c>PrefabUtility</c> and the instantiate path, and read through the
+/// properties on <see cref="GameObject"/>.
 /// </summary>
-public sealed class PrefabLink
+internal sealed class PrefabLink
 {
     /// <summary>The prefab asset this object is an instance of.</summary>
     public Guid AssetId;

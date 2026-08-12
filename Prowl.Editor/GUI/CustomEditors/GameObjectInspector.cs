@@ -930,11 +930,22 @@ public static class GameObjectInspector
 
     private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
     {
-        builder.Item(Loc.Get("inspector.reset"), () =>
+        // On an instance, what this component is supposed to be is whatever the prefab says, so Reset
+        // means go back to that. Everywhere else there is nothing to go back to but the values a new
+        // one of its type would have.
+        bool provided = go.IsPrefabInstance && go.GetComponentSourceIdentifier(comp) != Guid.Empty;
+
+        builder.Item(Loc.Get(provided ? "inspector.revert_component" : "inspector.reset"), () =>
         {
-            // TODO: Reset to default values
-            Runtime.Debug.Log($"Reset {comp.GetType().Name}");
-        }, icon: EditorIcons.ArrowsRotate);
+            if (provided) PrefabUtility.RevertComponentOverrides(go, comp);
+            else PrefabUtility.ResetComponentToDefaults(go, comp);
+        }, icon: EditorIcons.ArrowsRotate, enabled: !provided || PrefabUtility.HasComponentOverrides(go, comp));
+
+        // Pushing one component back to the prefab, at the scale the user is working at rather than
+        // the whole instance at once.
+        if (provided && PrefabUtility.IsEditablePrefab(go.PrefabAssetId))
+            builder.Item(Loc.Get("inspector.apply_component"), () => PrefabUtility.ApplyComponentOverrides(go, comp),
+                icon: EditorIcons.Check, enabled: PrefabUtility.HasComponentOverrides(go, comp));
 
         builder.Separator();
 
@@ -1160,91 +1171,174 @@ public static class GameObjectInspector
         }
     }
 
+    /// <summary>
+    /// What this instance overrides, grouped by the object and component each one is on, with what
+    /// the prefab says beside what the instance says.
+    /// <para/>
+    /// The stored path is three source identifiers, which is the right thing to write down and
+    /// unreadable to anyone looking at it, so nothing here shows the path itself.
+    /// </summary>
     private static void DrawOverridesContent(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
-        float fs = EditorTheme.FontSize;
         // Overrides for the whole prefab instance are stored on its root.
         var prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
         go = prefabRoot.IsValid() ? prefabRoot : go;
-        var overrides = go.PrefabOverrides;
         bool canApply = PrefabUtility.IsEditablePrefab(go.PrefabAssetId);
+
+        var described = PrefabUtility.DescribeOverrides(go);
+        if (described.Count == 0) return;
 
         using (paper.Column("gi_prefab_ov_list")
             .Height(UnitValue.Auto)
             .Margin(8, 0, 4, 4)
             .Enter())
         {
-            for (int i = 0; i < overrides.Count; i++)
+            DrawOverridesToolbar(paper, font, go, described.Count, canApply);
+
+            int key = 0;
+            foreach (var group in described.GroupBy(d => d.Group))
             {
-                int idx = i;
-                var ov = overrides[i];
+                DrawOverrideGroupHeader(paper, font, go, group.Key, group.First(), canApply, key++);
 
-                // A path that no longer resolves cannot be applied or reverted, so it is shown as
-                // broken and offers removal instead. Otherwise it sits in the list forever, keeping
-                // the instance permanently "modified".
-                bool resolvable = PrefabUtility.IsOverrideResolvable(go, ov.Path);
-
-                using (paper.Row($"gi_ov_{i}")
-                    .Height(EditorTheme.RowHeight)
-                    .BackgroundColor(EditorTheme.Neutral300)
-                    .Rounded(3).Margin(0, 0, 0, 1)
-                    .ChildLeft(6).RowBetween(4)
-                    .Enter())
-                {
-                    // Override path
-                    paper.Box($"gi_ov_path_{i}")
-                        .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                        .Text(resolvable ? ov.Path : $"{ov.Path}  ({Loc.Get("inspector.override_missing")})", font)
-                        .TextColor(resolvable ? EditorTheme.Purple400 : EditorTheme.Red400)
-                        .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
-
-                    if (resolvable)
-                    {
-                        // Revert single
-                        paper.Box($"gi_ov_revert_{i}")
-                            .Width(50).Height(EditorTheme.RowHeight).Rounded(3)
-                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                            .Text(Loc.Get("inspector.revert"), font).TextColor(EditorTheme.Ink400)
-                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                            .OnClick((go, idx), (cap, _) =>
-                            {
-                                if (cap.idx < cap.go.PrefabOverrides.Count)
-                                {
-                                    var overridePath = cap.go.PrefabOverrides[cap.idx].Path;
-                                    PrefabUtility.RevertSingleOverride(cap.go, overridePath);
-                                }
-                            });
-
-                        // Apply single, only where there is something to apply to
-                        if (canApply)
-                            paper.Box($"gi_ov_apply_{i}")
-                                .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
-                                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                                .Text(Loc.Get("inspector.apply"), font).TextColor(EditorTheme.Ink400)
-                                .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                                .OnClick((go, idx), (cap, _) =>
-                                {
-                                    if (cap.idx < cap.go.PrefabOverrides.Count)
-                                        PrefabUtility.ApplySingleOverride(cap.go, cap.go.PrefabOverrides[cap.idx].Path);
-                                });
-                    }
-                    else
-                    {
-                        paper.Box($"gi_ov_remove_{i}")
-                            .Width(95).Height(EditorTheme.RowHeight).Rounded(3)
-                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                            .Text(Loc.Get("inspector.remove_override"), font).TextColor(EditorTheme.Ink400)
-                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                            .OnClick((go, idx), (cap, _) =>
-                            {
-                                if (cap.idx < cap.go.PrefabOverrides.Count)
-                                    PrefabUtility.RemoveOverride(cap.go, cap.go.PrefabOverrides[cap.idx].Path);
-                            });
-                    }
-                }
+                foreach (var entry in group)
+                    DrawOverrideRow(paper, font, go, entry, canApply, key++);
             }
         }
     }
+
+    /// <summary>Everything at once, so a whole instance can be settled without walking the list.</summary>
+    private static void DrawOverridesToolbar(Paper paper, Prowl.Scribe.FontFile font, GameObject root, int count, bool canApply)
+    {
+        using (paper.Row("gi_ov_bar").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        {
+            paper.Box("gi_ov_count")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text(Loc.Get("inspector.override_count", new { count }), font)
+                .TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+
+            OverrideButton(paper, font, "gi_ov_revert_all", Loc.Get("inspector.revert_all"), 70,
+                root, r => PrefabUtility.RevertOverrides(r));
+
+            if (canApply)
+                OverrideButton(paper, font, "gi_ov_apply_all", Loc.Get("inspector.apply_all"), 65,
+                    root, r => PrefabUtility.ApplyOverrides(r));
+        }
+    }
+
+    /// <summary>One heading per object, or per component of one, with the actions for all of it.</summary>
+    private static void DrawOverrideGroupHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject root,
+        string title, PrefabUtility.OverrideDescription first, bool canApply, int key)
+    {
+        using (paper.Row($"gi_ovg_{key}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        {
+            paper.Box($"gi_ovg_name_{key}")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text(title, EditorTheme.FontSemiBold ?? font)
+                .TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+
+            // Component level actions belong to the component, so a group standing for one offers
+            // them here rather than making the user revert its members one at a time.
+            if (string.IsNullOrEmpty(first.ComponentName)) return;
+
+            MonoBehaviour? component = ComponentFor(root, first);
+            if (component.IsNotValid()) return;
+
+            OverrideButton(paper, font, $"gi_ovg_revert_{key}", Loc.Get("inspector.revert"), 50,
+                root, _ => PrefabUtility.RevertComponentOverrides(component!.GameObject, component!));
+
+            if (canApply)
+                OverrideButton(paper, font, $"gi_ovg_apply_{key}", Loc.Get("inspector.apply"), 45,
+                    root, _ => PrefabUtility.ApplyComponentOverrides(component!.GameObject, component!));
+        }
+    }
+
+    private static void DrawOverrideRow(Paper paper, Prowl.Scribe.FontFile font, GameObject root,
+        PrefabUtility.OverrideDescription entry, bool canApply, int key)
+    {
+        float fs = EditorTheme.FontSize;
+        string path = entry.Path;
+
+        using (paper.Row($"gi_ov_{key}")
+            .Height(EditorTheme.RowHeight)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .Rounded(3).Margin(12, 0, 0, 1)
+            .ChildLeft(6).RowBetween(4)
+            .Enter())
+        {
+            paper.Box($"gi_ov_member_{key}")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text(entry.Resolvable ? entry.MemberName : $"{entry.MemberName}  ({Loc.Get("inspector.override_missing")})", font)
+                .TextColor(entry.Resolvable ? EditorTheme.Purple400 : EditorTheme.Red400)
+                .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+
+            if (entry.Resolvable)
+            {
+                // What it was against what it is, which is the question the list is read to answer.
+                paper.Box($"gi_ov_value_{key}")
+                    .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                    .Text($"{entry.SourceValue}  {EditorIcons.ArrowRight}  {entry.InstanceValue}", font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+
+                OverrideButton(paper, font, $"gi_ov_revert_{key}", Loc.Get("inspector.revert"), 50,
+                    root, r => PrefabUtility.RevertSingleOverride(r, path));
+
+                if (canApply)
+                    OverrideButton(paper, font, $"gi_ov_apply_{key}", Loc.Get("inspector.apply"), 45,
+                        root, r => PrefabUtility.ApplySingleOverride(r, path));
+            }
+            else
+            {
+                OverrideButton(paper, font, $"gi_ov_remove_{key}", Loc.Get("inspector.remove_override"), 95,
+                    root, r => PrefabUtility.RemoveOverride(r, path));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The component an entry is on, found on the live instance by the object and type its path named.
+    /// </summary>
+    private static MonoBehaviour? ComponentFor(GameObject root, PrefabUtility.OverrideDescription entry)
+    {
+        Runtime.Resources.Scene? scene = root.Scene;
+        if (scene.IsNotValid()) return null;
+
+        foreach (GameObject go in scene!.AllObjects)
+        {
+            if (go.Name != entry.ObjectName) continue;
+
+            foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
+                if (component.GetType().Name == entry.ComponentName
+                    && PrefabUtility.HasComponentOverrides(go, component))
+                    return component;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A small text button that acts on the instance root, looked up when it is clicked rather than
+    /// captured: these operations replace what they touch, so a handler holding an object would be
+    /// holding a dead one by the time it ran.
+    /// </summary>
+    private static void OverrideButton(Paper paper, Prowl.Scribe.FontFile font, string id, string label,
+        float width, GameObject root, Action<GameObject> act)
+    {
+        Guid rootId = root.Identifier;
+
+        paper.Box(id)
+            .Width(width).Height(EditorTheme.RowHeight).Rounded(3)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(label, font).TextColor(EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter)
+            .OnClick((rootId, act), (cap, _) =>
+            {
+                var live = Undo.FindGO(cap.rootId);
+                if (live.IsValid()) cap.act(live!);
+            });
+    }
+
 
     // ================================================================
     //  Helpers
