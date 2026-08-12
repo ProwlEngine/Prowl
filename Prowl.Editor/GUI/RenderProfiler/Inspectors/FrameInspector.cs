@@ -149,7 +149,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawGeometryChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
     {
-        InspectorKit.DrawLineChart(paper, id, "Geometry", "Count", InspectorKit.FormatCountCompact, width, height, true,
+        InspectorKit.DrawChart(paper, history, id, "Geometry", "Count", InspectorKit.FormatCountCompact, width, height, true,
             ("Triangles", EditorTheme.Blue500, InspectorKit.FrameSeries(history, f => f.TrianglesDrawn)),
             ("Vertices", EditorTheme.Purple500, InspectorKit.FrameSeries(history, f => f.InputAssemblyVertices)));
     }
@@ -157,7 +157,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawRenderingChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
     {
-        InspectorKit.DrawLineChart(paper, id, "Rendering", "Count", InspectorKit.FormatCountCompact, width, height, true,
+        InspectorKit.DrawChart(paper, history, id, "Rendering", "Count", InspectorKit.FormatCountCompact, width, height, true,
             ("Draw Calls", EditorTheme.Green500, InspectorKit.FrameSeries(history, f => f.DrawCallCount)),
             ("Resource Binds", EditorTheme.Amber500, InspectorKit.CounterSeries(history, "ResourceSet/Binds")),
             ("Dispatches", EditorTheme.Red500, InspectorKit.FrameSeries(history, f => f.DispatchCallCount)));
@@ -166,7 +166,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawPipelineStateChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
     {
-        InspectorKit.DrawLineChart(paper, id, "Pipeline State", "Count", InspectorKit.FormatCountCompact, width, height, true,
+        InspectorKit.DrawChart(paper, history, id, "Pipeline State", "Count", InspectorKit.FormatCountCompact, width, height, true,
             ("Pipeline Switches", EditorTheme.Purple500, InspectorKit.FrameSeries(history, f => f.PipelineSwitchCount)),
             ("Command Submits", EditorTheme.Blue500, InspectorKit.CounterSeries(history, "Submit/Graphics")),
             ("Transfer Submits", EditorTheme.Amber500, InspectorKit.CounterSeries(history, "Submit/Transfer")));
@@ -222,7 +222,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawUsageChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
     {
-        InspectorKit.DrawLineChart(paper, id, "Usage", "Size", InspectorKit.FormatBytesAuto, width, height, false,
+        InspectorKit.DrawChart(paper, history, id, "Usage", "Size", InspectorKit.FormatBytesAuto, width, height, false,
             ("Buffer", EditorTheme.Blue500, InspectorKit.CounterSeries(history, "Resident/DeviceBuffer")),
             ("Texture", EditorTheme.Purple500, InspectorKit.CounterSeries(history, "Resident/Texture")),
             ("Shader", EditorTheme.Amber500, InspectorKit.CounterSeries(history, "Resident/Shader")));
@@ -236,7 +236,7 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < roles.Length; i++)
             series[i] = (roles[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Resident/{roles[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Buffer Usage", "Size", InspectorKit.FormatBytesAuto, width, height, false, series);
+        InspectorKit.DrawChart(paper, history, id, "Buffer Usage", "Size", InspectorKit.FormatBytesAuto, width, height, false, series);
     }
 
 
@@ -247,7 +247,7 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < bins.Length; i++)
             series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Live/{bins[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Count", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
+        InspectorKit.DrawChart(paper, history, id, "Count", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
     }
 
 
@@ -258,7 +258,7 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < bins.Length; i++)
             series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Alloc/{bins[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Allocations", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
+        InspectorKit.DrawChart(paper, history, id, "Allocations", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
     }
 
 
@@ -269,7 +269,7 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < bins.Length; i++)
             series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Free/{bins[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Frees", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
+        InspectorKit.DrawChart(paper, history, id, "Frees", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
     }
 
 
@@ -280,7 +280,7 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < ops.Length; i++)
             series[i] = (ops[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"BufferOp/{ops[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Count", "Ops", InspectorKit.FormatCountCompact, width, height, true, series);
+        InspectorKit.DrawChart(paper, history, id, "Count", "Ops", InspectorKit.FormatCountCompact, width, height, true, series);
     }
 
 
@@ -292,7 +292,7 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < ops.Length; i++)
             series[i] = (ops[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"BufferOpBytes/{ops[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Bytes", "Size", InspectorKit.FormatBytesAuto, width, height, true, series);
+        InspectorKit.DrawChart(paper, history, id, "Bytes", "Size", InspectorKit.FormatBytesAuto, width, height, true, series);
     }
 
 
@@ -303,7 +303,7 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < bins.Length; i++)
             series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Swap/{bins[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Operations", "Ops", InspectorKit.FormatCountCompact, width, height, true, series);
+        InspectorKit.DrawChart(paper, history, id, "Operations", "Ops", InspectorKit.FormatCountCompact, width, height, true, series);
     }
 
 
@@ -314,6 +314,6 @@ public static class ProfilerFrameInspector
         for (int i = 0; i < bins.Length; i++)
             series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Barrier/{bins[i]}"));
 
-        InspectorKit.DrawLineChart(paper, id, "Operations", "Ops", InspectorKit.FormatCountCompact, width, height, true, series);
+        InspectorKit.DrawChart(paper, history, id, "Operations", "Ops", InspectorKit.FormatCountCompact, width, height, true, series);
     }
 }

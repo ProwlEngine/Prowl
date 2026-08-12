@@ -1,3 +1,7 @@
+using System;
+using System.IO;
+
+using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.RenderProfiler.Data;
 using Prowl.Editor.GUI.RenderProfiler.Inspectors;
@@ -18,10 +22,12 @@ public class SnapshotViewerPanel : DockPanel
     public override string Title => "Snapshot Viewer";
     public override string Icon => EditorIcons.MagnifyingGlassChart;
 
-    private const float HeaderHeight = 32f;
+    private const float ToolbarHeight = 32f;
     private const float FlameGraphHeight = 100f;
     private const float HierarchyPanelWidth = 340f;
     private const float DividerHeight = 1f;
+    private static readonly string[] SnapshotFilters = { "*.prowlsnap" };
+    private static readonly string[] SnapshotFilterLabels = { "Render Profiler Snapshot" };
 
     private readonly ProfilerSelection _selection = new();
     private readonly ProfilerHierarchyView _hierarchy = new("snap_hier_tree");
@@ -64,22 +70,22 @@ public class SnapshotViewerPanel : DockPanel
 
     public override void OnGUI(Paper paper, float width, float height)
     {
-        if (_snapshot == null)
-        {
-            Origami.Label(paper, "snap_empty", "No snapshot loaded")
-                .Muted()
-                .Show();
-            return;
-        }
-
         using (paper.Column("snap_root").Enter())
         {
-            DrawHeader(paper);
+            DrawToolbar(paper);
 
-            paper.Box("snap_header_div")
+            paper.Box("snap_toolbar_div")
                 .Height(DividerHeight)
                 .IsNotInteractable()
                 .BackgroundColor(EditorTheme.BorderStrong);
+
+            if (_snapshot == null)
+            {
+                Origami.Label(paper, "snap_empty", "No snapshot loaded")
+                    .Muted()
+                    .Show();
+                return;
+            }
 
             _flame.Draw(paper, _snapshot.Frame, FlameGraphHeight);
 
@@ -90,7 +96,7 @@ public class SnapshotViewerPanel : DockPanel
 
             using (paper.Row("snap_contents").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
             {
-                float contentsHeight = height - HeaderHeight - FlameGraphHeight - DividerHeight * 2f;
+                float contentsHeight = height - ToolbarHeight - FlameGraphHeight - DividerHeight * 2f;
                 _hierarchy.Draw(paper, _snapshot.Frame, HierarchyPanelWidth, contentsHeight);
 
                 paper.Box("snap_contents_vdiv")
@@ -105,22 +111,85 @@ public class SnapshotViewerPanel : DockPanel
     }
 
 
-    private void DrawHeader(Paper paper)
+    public override void OnClosed()
     {
-        using (paper.Row("snap_header").Height(HeaderHeight).ColBetween(6).Padding(6).Enter())
+        _passInspector.Dispose();
+    }
+
+
+    private void DrawToolbar(Paper paper)
+    {
+        using (paper.Row("snap_toolbar").Height(ToolbarHeight).ColBetween(6).Padding(6).Enter())
         {
-            Origami.Label(paper, "snap_header_name", _snapshot!.Name ?? $"Frame {_snapshot.FrameIndex}")
+            Origami.Label(paper, "snap_toolbar_name", _snapshot != null ? _snapshot.Name ?? $"Frame {_snapshot.FrameIndex}" : "No snapshot")
                 .Heading()
                 .AlignLeft()
                 .Show();
 
-            paper.Box("snap_header_spacer");
+            if (_snapshot != null)
+            {
+                Origami.Label(paper, "snap_toolbar_gpu", $"{_snapshot.Frame.GpuMilliseconds:F2} ms")
+                    .Muted()
+                    .AlignLeft()
+                    .Show();
+            }
 
-            Origami.Label(paper, "snap_header_gpu", $"{_snapshot.Frame.GpuMilliseconds:F2} ms")
-                .Muted()
-                .AlignRight()
+            paper.Box("snap_toolbar_spacer");
+
+            // Save no-ops when there's no snapshot loaded (see SaveSnapshot) rather than disabling the
+            // segment - DisabledItem only takes a font-glyph icon, not the vector IOrigamiIcon used here.
+            Origami.ButtonGroup(paper, "snap_toolbar_saveload", -1, OnSaveLoadClicked)
+                .Item("Save", EditorIcons.FloppyDisk_I)
+                .Item("Load", EditorIcons.FolderOpen_I)
+                .Small()
                 .Show();
         }
+    }
+
+
+    private void OnSaveLoadClicked(int index)
+    {
+        if (index == 0)
+            SaveSnapshot();
+        else
+            LoadSnapshot();
+    }
+
+
+    private void SaveSnapshot()
+    {
+        if (_snapshot == null)
+            return;
+
+        Snapshot snapshot = _snapshot;
+        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
+            {
+                if (path == null)
+                    return;
+
+                if (!path.EndsWith(".prowlsnap", StringComparison.OrdinalIgnoreCase))
+                    path += ".prowlsnap";
+
+                EchoObject echo = SnapshotSerializer.ToEcho(snapshot);
+                echo.WriteToBinary(new FileInfo(path));
+            },
+            filters: SnapshotFilters,
+            filterLabels: SnapshotFilterLabels);
+    }
+
+
+    private void LoadSnapshot()
+    {
+        EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
+            {
+                if (path == null)
+                    return;
+
+                EchoObject echo = EchoObject.ReadFromBinary(new FileInfo(path));
+                Snapshot = SnapshotSerializer.FromEcho(echo);
+            },
+            filters: SnapshotFilters,
+            filterLabels: SnapshotFilterLabels);
     }
 
 

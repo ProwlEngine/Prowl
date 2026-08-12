@@ -83,6 +83,31 @@ public static class InspectorKit
     }
 
 
+    // Gated chart drawer - a history of one frame (SingleFrameHistory, i.e. a snapshot) has nothing to
+    // plot a line against, so this falls back to a StatGroup of each series' single value instead of
+    // drawing a one-point line chart. Every sub-inspector's history-backed chart should go through
+    // this instead of calling DrawLineChart directly, so the snapshot viewer gets this for free.
+    public static void DrawChart(Paper paper, IProfilerHistory history, string id, string title, string yLabel, Func<double, string> valueFormatter,
+        UnitValue width, float height, bool legend,
+        params (string Label, Color Color, IReadOnlyList<double> Values)[] series)
+    {
+        if (history.Frames.Count > 1)
+        {
+            DrawLineChart(paper, id, title, yLabel, valueFormatter, width, height, legend, series);
+            return;
+        }
+
+        var stats = new (string Label, string Value)[series.Length];
+        for (int i = 0; i < series.Length; i++)
+        {
+            IReadOnlyList<double> values = series[i].Values;
+            double value = values.Count > 0 ? values[^1] : 0d;
+            stats[i] = (series[i].Label, valueFormatter(value));
+        }
+        StatGroup(paper, id, title, stats);
+    }
+
+
     public static void DrawLineChart(Paper paper, string id, string title, string yLabel, Func<double, string> valueFormatter,
         UnitValue width, float height, bool legend,
         params (string Label, Color Color, IReadOnlyList<double> Values)[] series)
@@ -108,6 +133,53 @@ public static class InspectorKit
             line.Series(label, color, values).StrokeWidth(1.5f);
 
         chart.Show();
+    }
+
+
+    // ── Stat tiles (single-value readouts, no history to chart) ──────
+
+    public static void StatGroup(Paper paper, string id, string title, params (string Label, string Value)[] stats)
+    {
+        using (paper.Column(id + "_group").Height(UnitValue.Auto).ColBetween(4f).Enter())
+        {
+            Origami.Label(paper, id + "_title", title)
+                .SM()
+                .Muted()
+                .AlignLeft()
+                .Height(ChartTitleHeight)
+                .Show();
+
+            using (paper.Row(id + "_tiles").Height(UnitValue.Auto).RowBetween(8f).Enter())
+            {
+                for (int i = 0; i < stats.Length; i++)
+                    StatTile(paper, $"{id}_t{i}", stats[i].Label, stats[i].Value);
+            }
+        }
+    }
+
+    public static void StatTile(Paper paper, string id, string label, string value)
+    {
+        using (paper.Column(id)
+            .Height(UnitValue.Auto)
+            .BackgroundColor(EditorTheme.Glass)
+            .BorderColor(EditorTheme.BorderSoft)
+            .BorderWidth(1f)
+            .Rounded(EditorTheme.Roundness)
+            .Padding(8f, 6f)
+            .ColBetween(2f)
+            .Enter())
+        {
+            Origami.Label(paper, id + "_val", value)
+                .Subheading()
+                .AlignLeft()
+                .Show();
+
+            Origami.Label(paper, id + "_lbl", label)
+                .XS()
+                .Muted()
+                .AlignLeft()
+                .Show();
+        }
     }
 
 

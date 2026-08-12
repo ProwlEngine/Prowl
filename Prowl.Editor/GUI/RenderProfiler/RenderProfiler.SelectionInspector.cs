@@ -28,7 +28,7 @@ public partial class RenderProfilerPanel
                             _passInspector.Draw(paper, SelectedView, SelectedPass, History, null);
                             break;
                         case ProfilerSelectionType.CommandBuffer:
-                            DrawCommandBufferInspector(paper);
+                            ProfilerCommandBufferInspector.Draw(paper, SelectedView, SelectedPass, SelectedCommandBuffer);
                             break;
                         case ProfilerSelectionType.Pipeline:
                             DrawPipelineInspector(paper);
@@ -46,7 +46,6 @@ public partial class RenderProfilerPanel
 
 
     // Placeholder sub-inspectors - filled in as each selection kind's inspector is implemented.
-    private void DrawCommandBufferInspector(Paper paper) { }
     private void DrawPipelineInspector(Paper paper) { }
     private void DrawObjectInspector(Paper paper) { }
     private void DrawDrawCallInspector(Paper paper) { }

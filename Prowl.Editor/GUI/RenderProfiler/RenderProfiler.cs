@@ -63,6 +63,7 @@ public partial class RenderProfilerPanel : DockPanel
     {
         _profiler.SnapshotCaptured -= OpenSnapshot;
         _profiler.Pause();
+        _passInspector.Dispose();
     }
 
     public void SelectFrame(long index)
