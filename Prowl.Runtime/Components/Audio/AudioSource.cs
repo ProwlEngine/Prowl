@@ -368,8 +368,13 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets or sets the current playback position in PCM samples.
+    /// Playback position, counted in the frames the device runs at.
     /// </summary>
+    /// <remarks>
+    /// This is the engine's own read position, so it advances at the rate the device was opened at
+    /// whatever rate the clip was authored at. That is not the unit <see cref="Length"/> is in, so
+    /// the two do not belong in one expression. <see cref="NormalizedTime"/> is what compares them.
+    /// </remarks>
     public ulong Cursor
     {
         get
@@ -386,8 +391,13 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets the total length of the current audio clip in PCM samples.
+    /// Length of the playing clip, counted in the frames it was authored at.
     /// </summary>
+    /// <remarks>
+    /// This comes from the decoder rather than from the mix, so it is in the clip's own rate. Only a
+    /// clip that happens to have been authored at the rate the device was opened at counts the same
+    /// way <see cref="Cursor"/> does.
+    /// </remarks>
     public ulong Length
     {
         get
@@ -399,42 +409,65 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
+    /// The rate <see cref="Length"/> is counted at, which is the playing clip's own. Falls back to the
+    /// device's, which is also the one case where the two cannot disagree.
+    /// </summary>
+    /// <remarks>
+    /// Asking a clip its format decodes it once, so this is read where a caller has asked for a time
+    /// in seconds rather than on the path that starts playback.
+    /// </remarks>
+    private int ClipFrameRate
+    {
+        get
+        {
+            AudioClip clip = _clip.Res;
+            int rate = clip.IsValid() ? clip.SampleRate : 0;
+            return rate > 0 ? rate : AudioContext.SampleRate;
+        }
+    }
+
+    /// <summary>
     /// Playback position in seconds. Named to stay clear of the engine's <see cref="Time"/> class.
     /// </summary>
     public float PlaybackTime
     {
-        get => FramesToSeconds(Cursor);
-        set => Cursor = SecondsToFrames(value);
+        get => AudioContext.SampleRate > 0 ? (float)(Cursor / (double)AudioContext.SampleRate) : 0.0f;
+        set => Cursor = value <= 0.0f ? 0 : (ulong)(value * AudioContext.SampleRate);
     }
 
     /// <summary>Length of the playing clip in seconds, 0 when nothing is loaded.</summary>
-    public float Duration => FramesToSeconds(Length);
+    public float Duration
+    {
+        get
+        {
+            int rate = ClipFrameRate;
+            return rate > 0 ? (float)(Length / (double)rate) : 0.0f;
+        }
+    }
 
     /// <summary>
-    /// Playback position as a fraction of the clip, 0 at the start and 1 at the end. Exact regardless
-    /// of what rate the frame counts are expressed in, which makes it the safer choice for a progress
-    /// readout than <see cref="PlaybackTime"/>.
+    /// Playback position as a fraction of the clip, 0 at the start and 1 at the end.
     /// </summary>
+    /// <remarks>
+    /// Compared as seconds, because the two frame counts are not counted at the same rate. Dividing
+    /// one by the other answers the ratio between those rates as much as it answers the position: a
+    /// clip authored at half the rate the device runs at reached 1 barely half way through.
+    /// </remarks>
     public float NormalizedTime
     {
         get
         {
-            ulong length = Length;
-            return length > 0 ? (float)(Cursor / (double)length) : 0.0f;
+            float duration = Duration;
+            return duration > 0.0f ? Maths.Clamp(PlaybackTime / duration, 0.0f, 1.0f) : 0.0f;
         }
         set
         {
-            ulong length = Length;
-            if (length > 0)
-                Cursor = (ulong)(Maths.Clamp(value, 0.0f, 1.0f) * length);
+            float duration = Duration;
+
+            if (duration > 0.0f)
+                PlaybackTime = Maths.Clamp(value, 0.0f, 1.0f) * duration;
         }
     }
-
-    private static float FramesToSeconds(ulong frames)
-        => AudioContext.SampleRate > 0 ? (float)(frames / (double)AudioContext.SampleRate) : 0.0f;
-
-    private static ulong SecondsToFrames(float seconds)
-        => seconds <= 0.0f ? 0 : (ulong)(seconds * AudioContext.SampleRate);
 
     #endregion
 

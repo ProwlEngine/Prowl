@@ -201,12 +201,19 @@ public static class PrefabEditingMode
 
         PrefabUtility.ReportDroppedSceneReferences(writeContext, "Saving this prefab");
 
+        // Prefabs do not nest, and the importer drops any link inside the asset on the way in. Doing
+        // it here as well is what stops the file on disk from claiming something the asset built from
+        // it does not. The links come off the copy being written, not off the session's own objects,
+        // which keep theirs for as long as the session lasts.
+        Importers.ImportHelper.FlattenNestedPrefabLinks(echo, insideInstance: true);
+
         if (EditingPrefabPath != null && Project.Current != null)
         {
             string absolutePath = Path.Combine(Project.Current.AssetsPath, EditingPrefabPath);
             if (!PrefabUtility.TryWriteFile(absolutePath, echo.WriteToString()))
                 return false;
 
+            PrefabUtility.RaisePrefabSaved(EditingPrefabGuid);
             EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
             EditorSceneManager.IsDirty = false;

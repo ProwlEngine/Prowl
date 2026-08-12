@@ -1904,6 +1904,60 @@ public class AudioTests : RuntimeTestBase
         Assert.False(AudioContext.IsInitialized);
     }
 
+    // Pausing play mode stops every component updating but says nothing to the audio engine, so the
+    // music used to carry on over a frozen game. The game loop drives the pause half of this, and
+    // game code owns the other half, and neither may clear the other's suspension.
+    [Fact]
+    public void Suspension_TracksItsTwoReasonsSeparately()
+    {
+        Assert.False(AudioContext.IsSuspended);
+
+        try
+        {
+            AudioContext.Suspended = true;
+            Assert.True(AudioContext.IsSuspended);
+
+            // The editor resuming must not undo a suspension the game asked for.
+            AudioContext.SuspendedByPause = true;
+            AudioContext.SuspendedByPause = false;
+            Assert.True(AudioContext.IsSuspended);
+
+            AudioContext.Suspended = false;
+            Assert.False(AudioContext.IsSuspended);
+
+            // And the same the other way round.
+            AudioContext.SuspendedByPause = true;
+            Assert.True(AudioContext.IsSuspended);
+            AudioContext.Suspended = false;
+            Assert.True(AudioContext.IsSuspended);
+        }
+        finally
+        {
+            AudioContext.Suspended = false;
+            AudioContext.SuspendedByPause = false;
+        }
+
+        Assert.False(AudioContext.IsSuspended);
+    }
+
+    // A headless run has no device to stop, and a suspension asked for before one opens has to be
+    // remembered rather than thrown away, since that is what applying project settings looks like.
+    [Fact]
+    public void Suspension_WithoutADevice_IsRememberedRatherThanThrowing()
+    {
+        Assert.False(AudioContext.IsInitialized);
+
+        try
+        {
+            AudioContext.Suspended = true;
+            Assert.True(AudioContext.Suspended);
+        }
+        finally
+        {
+            AudioContext.Suspended = false;
+        }
+    }
+
     // The volume is set from project settings, which can be applied before the device opens and in
     // runs where it never opens at all. It has to survive that rather than being dropped.
     [Fact]

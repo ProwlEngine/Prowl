@@ -38,6 +38,9 @@ public static class AudioContext
     private static UInt32 periodSizeInFrames = 2048;
     private static Int32 deviceIndex = -1;
     private static bool deviceProcessFailed;
+    private static bool suspendedByGame;
+    private static bool suspendedByPause;
+    private static bool suspensionApplied;
 
     public static event DeviceDataEvent DataProcess;
 
@@ -125,6 +128,79 @@ public static class AudioContext
     }
 
     /// <summary>
+    /// Stops the device without closing it, freezing everything that is playing exactly where it is.
+    /// Set it for a pause menu, clear it to pick every voice up where it left off.
+    /// </summary>
+    /// <remarks>
+    /// Silencing the master volume instead would leave the mix running, so a game coming back from a
+    /// pause would find its music part way past where it stopped.
+    ///
+    /// Play mode being paused suspends the device too, and the two are tracked apart, so the editor
+    /// resuming cannot clear a suspension the game asked for or the other way round.
+    /// </remarks>
+    public static bool Suspended
+    {
+        get => suspendedByGame;
+        set
+        {
+            if (suspendedByGame == value)
+                return;
+
+            suspendedByGame = value;
+            ApplySuspension();
+        }
+    }
+
+    /// <summary>
+    /// Suspends the device for as long as play mode is paused. Driven by the game loop, which is why
+    /// this is not the one game code sets: that is <see cref="Suspended"/>.
+    /// </summary>
+    internal static bool SuspendedByPause
+    {
+        get => suspendedByPause;
+        set
+        {
+            if (suspendedByPause == value)
+                return;
+
+            suspendedByPause = value;
+            ApplySuspension();
+        }
+    }
+
+    /// <summary>True while the device is stopped, for either reason.</summary>
+    public static bool IsSuspended => suspendedByGame || suspendedByPause;
+
+    /// <summary>
+    /// Brings the device into line with whether anything is asking for it to be suspended. Remembered
+    /// either way, so a suspension asked for before the device opened still takes effect when it does.
+    /// </summary>
+    private static void ApplySuspension()
+    {
+        if (!IsInitialized)
+            return;
+
+        bool suspend = IsSuspended;
+
+        if (suspend == suspensionApplied)
+            return;
+
+        var engine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(audioContext));
+
+        ma_result result = suspend
+            ? MiniAudioNative.ma_engine_stop(engine)
+            : MiniAudioNative.ma_engine_start(engine);
+
+        if (result != ma_result.success)
+        {
+            Debug.LogWarning($"The audio device could not be {(suspend ? "stopped" : "started")} ({result}).");
+            return;
+        }
+
+        suspensionApplied = suspend;
+    }
+
+    /// <summary>
     /// The elapsed time since last call to 'Update'.
     /// </summary>
     /// <value></value>
@@ -177,6 +253,10 @@ public static class AudioContext
 
         DeviceGeneration++;
         MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, masterVolume);
+
+        // A device opens running, so one opened while something is asking for silence has to be told.
+        suspensionApplied = false;
+        ApplySuspension();
 
         lastUpdateTime = System.Diagnostics.Stopwatch.GetTimestamp();
     }
@@ -243,6 +323,9 @@ public static class AudioContext
         MiniAudioExNative.ma_ex_context_uninit(audioContext);
         audioContext = IntPtr.Zero;
         DeviceGeneration++;
+
+        // The next device opens running, whatever this one was left doing.
+        suspensionApplied = false;
     }
 
     /// <summary>

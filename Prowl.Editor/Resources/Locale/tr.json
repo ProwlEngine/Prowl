@@ -57,6 +57,8 @@
   "toast.prefab_cant_add": "Bir prefab ornegine alt nesne eklenemez. Once prefabi kirin.",
   "toast.prefab_cant_delete": "Bir prefab alt nesnesi silinemez. Once prefabi kirin.",
   "toast.prefab_cant_move": "Bir prefab alt nesnesi tasinamaz. Once prefabi kirin.",
+  "toast.prefab_create_failed": "Prefab olusturulamadi",
+  "toast.prefab_create_failed_body": "'{name}' prefab olarak kaydedilemedi. Ayrintilar icin konsola bakin.",
   "toast.rename_exists": "'{{name}}' adinda bir dosya veya klasor zaten mevcut.",
   "toast.rename_failed": "Yeniden Adlandirma Basarisiz",
 

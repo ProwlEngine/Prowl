@@ -1779,6 +1779,154 @@ public class PrefabTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // Odds and ends
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void SetPropertyModifications_RebuildsOnlyTheInstanceItWasHanded()
+    {
+        Guid g = MakeNestedPrefab("SetOnly.prefab");
+        var a = Inst(g);
+        var b = Inst(g);
+        LoadSceneWith(a, b);
+
+        var bComp = b.GetComponent<OverrideComp>()!;
+        bComp.A = 5;
+        PrefabUtility.RecordComponentOverrides(b, bComp);
+
+        var rebuilt = new List<GameObject>();
+        void OnUpdated(GameObject go) => rebuilt.Add(go);
+        PrefabUtility.OnPrefabInstanceUpdated += OnUpdated;
+        try
+        {
+            PrefabUtility.SetPropertyModifications(a, [
+                new PropertyOverride
+                {
+                    Path = PrefabUtility.GetOverridePath(a, a.GetComponent<OverrideComp>()!, "A"),
+                    Value = Serializer.Serialize(typeof(int), 42)
+                }
+            ]);
+        }
+        finally { PrefabUtility.OnPrefabInstanceUpdated -= OnUpdated; }
+
+        Assert.Equal(42, a.GetComponent<OverrideComp>()!.A);
+        Assert.Equal(5, b.GetComponent<OverrideComp>()!.A);
+
+        // The others are instances of the same prefab, not of this one. Rebuilding them lands on the
+        // same values it started from, so the cost and the churn are all it amounts to.
+        Assert.Equal([a], rebuilt);
+    }
+
+    [Fact]
+    public void SetPropertyModifications_IsUndoable()
+    {
+        Guid g = MakeNestedPrefab("SetUndo.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        Undo.Clear();
+        PrefabUtility.SetPropertyModifications(instance, [
+            new PropertyOverride
+            {
+                Path = PrefabUtility.GetOverridePath(instance, instance.GetComponent<OverrideComp>()!, "A"),
+                Value = Serializer.Serialize(typeof(int), 42)
+            }
+        ]);
+        Assert.Equal(42, instance.GetComponent<OverrideComp>()!.A);
+
+        Undo.PerformUndo();
+
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Empty(live.PrefabOverrides);
+        Assert.Equal(1, live.GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void ConnectGameObjectToPrefab_SaysWhatItCouldNotMatch()
+    {
+        Guid g = MakeNestedPrefab("Connect.prefab");
+
+        // Same shape as the prefab plus a component it has no counterpart for.
+        var stray = new GameObject("Root");
+        stray.AddComponent<OverrideComp>();
+        stray.AddComponent<VecComp>();
+        var child = new GameObject("Child");
+        child.AddComponent<OverrideComp>();
+        child.SetParent(stray);
+        LoadSceneWith(stray);
+
+        var warnings = CaptureWarnings(() =>
+            Assert.True(PrefabUtility.ConnectGameObjectToPrefab(stray, g)));
+
+        Assert.Contains(warnings, w => w.Contains("VecComp"));
+    }
+
+    [Fact]
+    public void PrefabEditingMode_SavingRaisesSavedAndWritesNoNestedLinks()
+    {
+        Guid inner = AuthorLeaf("Save_Inner", 7);
+        Guid outer = AuthorLeaf("Save_Outer", 1);
+
+        var sceneObject = new GameObject("InTheScene");
+        LoadSceneWith(sceneObject);
+
+        var saved = new List<Guid>();
+        void OnSaved(Guid g) => saved.Add(g);
+        PrefabUtility.OnPrefabSaved += OnSaved;
+        try
+        {
+            PrefabEditingMode.Enter(outer);
+            Scene.ProcessPendingLoad();
+            Assert.True(PrefabEditingMode.IsEditing);
+
+            // Something the session adds that answers to another prefab.
+            var editingRoot = Scene.Current!.RootObjects.First(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+            Inst(inner).SetParent(editingRoot);
+
+            Assert.True(PrefabEditingMode.Save());
+        }
+        finally
+        {
+            PrefabUtility.OnPrefabSaved -= OnSaved;
+            PrefabEditingMode.Exit();
+            Scene.ProcessPendingLoad();
+        }
+
+        // Listeners hear about a prefab-mode save the same as any other write.
+        Assert.Contains(outer, saved);
+
+        // The importer drops nested links on the way in, so a file that still carried them would
+        // describe something the asset built from it is not.
+        Assert.DoesNotContain(inner.ToString(), File.ReadAllText(AssetAbsolutePath("Save_Outer.prefab")));
+    }
+
+    [Fact]
+    public void PrefabEditingMode_KeepsTheScenesUndoHistory()
+    {
+        Guid g = AuthorLeaf("Undo_Prefab", 1);
+
+        var sceneObject = new GameObject("InTheScene");
+        LoadSceneWith(sceneObject);
+
+        Undo.Clear();
+        int value = 0;
+        Undo.RegisterAction("Scene Edit", () => value = 1, () => value = 2);
+        Undo.IncrementGroup();
+
+        PrefabEditingMode.Enter(g);
+        Scene.ProcessPendingLoad();
+        Assert.False(Undo.CanUndo); // the session starts with nothing behind it
+
+        PrefabEditingMode.Exit();
+        Scene.ProcessPendingLoad();
+
+        // Glancing at a prefab used to cost every step taken in the scene.
+        Assert.True(Undo.CanUndo);
+        Undo.PerformUndo();
+        Assert.Equal(1, value);
+    }
+
+    // ---------------------------------------------------------------------
     // Redo replays an operation without recording it a second time
     // ---------------------------------------------------------------------
 

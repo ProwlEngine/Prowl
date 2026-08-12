@@ -872,22 +872,44 @@ public static partial class PrefabUtility
         if (source == null) return;
 
         foreach (var root in roots)
-        {
-            var savedOverrides = root.PrefabOverrides.ToList();
+            RefreshInstance(root, source, prefabGuid);
+    }
 
-            // Nested instances answer to their own prefab, so their overrides are re-applied after
-            // this instance's structure has been brought back into line with its own source.
-            var nested = CollectNestedInstances(root, prefabGuid);
+    /// <summary>
+    /// Bring one instance back into line with a prefab, given a copy of the prefab's contents to read
+    /// from. Split out so a caller that changed one instance can refresh that one rather than every
+    /// instance of the prefab in the scene.
+    /// </summary>
+    private static void RefreshInstance(GameObject root, GameObject source, Guid prefabGuid)
+    {
+        var savedOverrides = root.PrefabOverrides.ToList();
 
-            ReconcileToSource(root, source, prefabGuid);
+        // Nested instances answer to their own prefab, so their overrides are re-applied after
+        // this instance's structure has been brought back into line with its own source.
+        var nested = CollectNestedInstances(root, prefabGuid);
 
-            ApplyPropertyOverridesToInstance(root, savedOverrides);
-            foreach (var nestedRoot in nested)
-                if (nestedRoot.IsValid())
-                    ApplyPropertyOverridesToInstance(nestedRoot, nestedRoot.PrefabOverrides);
+        ReconcileToSource(root, source, prefabGuid);
 
-            RaiseInstanceUpdated(root);
-        }
+        ApplyPropertyOverridesToInstance(root, savedOverrides);
+        foreach (var nestedRoot in nested)
+            if (nestedRoot.IsValid())
+                ApplyPropertyOverridesToInstance(nestedRoot, nestedRoot.PrefabOverrides);
+
+        RaiseInstanceUpdated(root);
+    }
+
+    /// <summary>
+    /// Bring one instance back into line with its prefab, reading the prefab fresh. For a caller
+    /// acting on a single instance; use <see cref="RefreshAllInstances"/> when the asset itself moved.
+    /// </summary>
+    internal static void RefreshOneInstance(GameObject instanceRoot)
+    {
+        if (AssetDatabase.Get(instanceRoot.PrefabAssetId) is not PrefabAsset prefab) return;
+
+        var source = GameObject.InstantiateDetached(prefab);
+        if (source == null) return;
+
+        RefreshInstance(instanceRoot, source, instanceRoot.PrefabAssetId);
     }
 
     /// <summary>Instance roots of other prefabs sitting inside this one.</summary>

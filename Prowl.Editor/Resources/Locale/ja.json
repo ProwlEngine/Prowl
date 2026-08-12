@@ -57,6 +57,8 @@
   "toast.prefab_cant_add": "プレハブインスタンスに子を追加できません。先にプレハブを解除してください。",
   "toast.prefab_cant_delete": "プレハブの子を削除できません。先にプレハブを解除してください。",
   "toast.prefab_cant_move": "プレハブの子を移動できません。先にプレハブを解除してください。",
+  "toast.prefab_create_failed": "プレハブを作成できません",
+  "toast.prefab_create_failed_body": "'{name}' をプレハブとして保存できませんでした。詳細はコンソールを確認してください。",
   "toast.rename_exists": "'{{name}}'という名前のファイルまたはフォルダーが既に存在します。",
   "toast.rename_failed": "名前変更に失敗",
 

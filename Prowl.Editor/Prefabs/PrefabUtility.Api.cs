@@ -127,6 +127,9 @@ public static partial class PrefabUtility
     /// <summary>
     /// Replace what this instance overrides and bring it back into line with the result, so the
     /// objects show the values that were just set rather than whatever they held before.
+    /// <para/>
+    /// Only this instance is touched. The others are instances of the same prefab, not of this one,
+    /// and nothing about their overrides changed.
     /// </summary>
     public static void SetPropertyModifications(GameObject go, IEnumerable<PropertyOverride> modifications)
     {
@@ -134,8 +137,26 @@ public static partial class PrefabUtility
         if (instanceRoot == null) return;
         if (!GuardNotPlaying("change prefab overrides")) return;
 
-        instanceRoot.PrefabOverrides = modifications.ToList();
-        RefreshAllInstances(instanceRoot.PrefabAssetId);
+        List<PropertyOverride> before = instanceRoot.PrefabOverrides.ToList();
+        List<PropertyOverride> after = modifications.ToList();
+        Guid rootId = instanceRoot.Identifier;
+
+        Apply(after);
+
+        Undo.RegisterAction("Set Prefab Overrides",
+            undo: () => Apply(before),
+            redo: () => Apply(after));
+
+        EditorSceneManager.MarkDirty();
+
+        void Apply(List<PropertyOverride> overrides)
+        {
+            GameObject? live = Undo.FindGO(rootId);
+            if (live.IsNotValid()) return;
+
+            live!.PrefabOverrides = overrides.ToList();
+            RefreshOneInstance(live);
+        }
     }
 
     #endregion
@@ -163,12 +184,19 @@ public static partial class PrefabUtility
 
         var previous = CapturePrefabState(go, go.PrefabAssetId);
 
-        AdoptSourceIdentities(go, source, prefabGuid);
+        var unmatched = new List<string>();
+        AdoptSourceIdentities(go, source, prefabGuid, unmatched);
         ReconcileInstance(go);
+
+        // Matching by position gets most of a tree that drifted, and none of a tree that is simply a
+        // different shape. Either way the caller is told what did not line up.
+        if (unmatched.Count > 0)
+            Runtime.Debug.LogWarning($"[Prefab] Connected, but {unmatched.Count} part(s) had no counterpart in the prefab " +
+                $"and will not track overrides: {string.Join(", ", unmatched)}");
 
         Undo.RegisterAction("Connect To Prefab",
             undo: () => RestorePrefabState(previous),
-            redo: () => { AdoptSourceIdentities(go, source, prefabGuid); ReconcileInstance(go); });
+            redo: () => { AdoptSourceIdentities(go, source, prefabGuid, []); ReconcileInstance(go); });
 
         EditorSceneManager.MarkDirty();
         return true;
@@ -178,7 +206,12 @@ public static partial class PrefabUtility
     /// Point an unlinked tree at a prefab by walking both in step. Position is all there is to go on:
     /// an object with no link has no record of where it came from.
     /// </summary>
-    private static void AdoptSourceIdentities(GameObject go, GameObject source, Guid prefabGuid)
+    /// <param name="unmatched">
+    /// Collects what could not be paired up. A relink that matched only part of the tree still leaves
+    /// a working instance, but the parts it skipped can never record or revert an override, so the
+    /// caller has something to say rather than reporting a clean success.
+    /// </param>
+    private static void AdoptSourceIdentities(GameObject go, GameObject source, Guid prefabGuid, List<string> unmatched)
     {
         PrefabLink link = go.EnsurePrefabLink();
         link.AssetId = prefabGuid;
@@ -188,14 +221,27 @@ public static partial class PrefabUtility
         var components = go.GetComponents<MonoBehaviour>().ToList();
         var sourceComponents = source.GetComponents<MonoBehaviour>().ToList();
 
-        for (int i = 0; i < Math.Min(components.Count, sourceComponents.Count); i++)
+        for (int i = 0; i < components.Count; i++)
         {
-            if (components[i].GetType() != sourceComponents[i].GetType()) continue;
+            if (i >= sourceComponents.Count || components[i].GetType() != sourceComponents[i].GetType())
+            {
+                unmatched.Add($"{go.Name} > {components[i].GetType().Name}");
+                continue;
+            }
+
             link.ComponentSources[components[i].Identifier] = source.GetComponentSourceIdentifier(sourceComponents[i]);
         }
 
-        for (int i = 0; i < Math.Min(go.Children.Count, source.Children.Count); i++)
-            AdoptSourceIdentities(go.Children[i], source.Children[i], prefabGuid);
+        for (int i = 0; i < go.Children.Count; i++)
+        {
+            if (i >= source.Children.Count)
+            {
+                unmatched.Add(go.Children[i].Name);
+                continue;
+            }
+
+            AdoptSourceIdentities(go.Children[i], source.Children[i], prefabGuid, unmatched);
+        }
     }
 
     #endregion

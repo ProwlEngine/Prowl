@@ -57,6 +57,8 @@
   "toast.prefab_cant_add": "No se pueden agregar hijos a una instancia de prefab. Rompa el prefab primero.",
   "toast.prefab_cant_delete": "No se puede eliminar un hijo de prefab. Rompa el prefab primero.",
   "toast.prefab_cant_move": "No se puede mover un hijo de prefab. Rompa el prefab primero.",
+  "toast.prefab_create_failed": "Prefab no creado",
+  "toast.prefab_create_failed_body": "No se pudo guardar '{name}' como prefab. Consulta la consola.",
   "toast.rename_exists": "Ya existe un archivo o carpeta con el nombre '{{name}}'.",
   "toast.rename_failed": "Error al renombrar",
 

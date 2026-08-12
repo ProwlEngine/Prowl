@@ -57,6 +57,8 @@
   "toast.prefab_cant_add": "Kann keine Kinder zu einer Prefab-Instanz hinzufuegen. Prefab zuerst aufloesen.",
   "toast.prefab_cant_delete": "Kann kein Prefab-Kind entfernen. Prefab zuerst aufloesen.",
   "toast.prefab_cant_move": "Kann kein Prefab-Kind verschieben. Prefab zuerst aufloesen.",
+  "toast.prefab_create_failed": "Prefab nicht erstellt",
+  "toast.prefab_create_failed_body": "'{name}' konnte nicht als Prefab gespeichert werden. Details in der Konsole.",
   "toast.rename_exists": "Eine Datei oder ein Ordner mit dem Namen '{{name}}' existiert bereits.",
   "toast.rename_failed": "Umbenennung fehlgeschlagen",
 

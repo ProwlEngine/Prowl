@@ -57,6 +57,8 @@
   "toast.prefab_cant_add": "Cannot add children to a prefab instance. Break the prefab first.",
   "toast.prefab_cant_delete": "Cannot delete a prefab child. Break the prefab first.",
   "toast.prefab_cant_move": "Cannot move a prefab child. Break the prefab first.",
+  "toast.prefab_create_failed": "Prefab Not Created",
+  "toast.prefab_create_failed_body": "'{name}' could not be saved as a prefab. See the console for why.",
   "toast.rename_exists": "A file or folder named '{{name}}' already exists.",
   "toast.rename_failed": "Rename Failed",
 

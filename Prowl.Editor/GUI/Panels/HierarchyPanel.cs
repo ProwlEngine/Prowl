@@ -1093,14 +1093,7 @@ public class HierarchyPanel : DockPanel
         // Roots only: a prefab of a parent already contains its children, and making one of a child
         // afterwards would tear that subtree back out of the parent's new instance.
         foreach (var go in GameObjectClipboard.FilterToRoots(gameObjects))
-        {
-            string absoluteFolder = AssetCreateMenu.GetAbsoluteFolder(folder);
-            if (!System.IO.Directory.Exists(absoluteFolder)) return;
-
-            string name = AssetCreateMenu.FindUniqueName(absoluteFolder, go.Name, ".prefab");
-            string relativePath = string.IsNullOrEmpty(folder) ? name : $"{folder}/{name}";
-            PrefabUtility.SaveAsPrefabAssetAndConnect(go, relativePath);
-        }
+            AssetCreateMenu.CreatePrefabIn(go, folder);
     }
 
     /// <summary>

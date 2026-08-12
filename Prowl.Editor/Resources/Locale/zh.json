@@ -57,6 +57,8 @@
   "toast.prefab_cant_add": "无法向预制体实例添加子对象。请先断开预制体。",
   "toast.prefab_cant_delete": "无法删除预制体子对象。请先断开预制体。",
   "toast.prefab_cant_move": "无法移动预制体子对象。请先断开预制体。",
+  "toast.prefab_create_failed": "未能创建预制件",
+  "toast.prefab_create_failed_body": "无法将 '{name}' 保存为预制件。请查看控制台。",
   "toast.rename_exists": "名为'{{name}}'的文件或文件夹已存在。",
   "toast.rename_failed": "重命名失败",
 

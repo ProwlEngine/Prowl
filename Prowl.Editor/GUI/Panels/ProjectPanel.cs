@@ -463,17 +463,7 @@ public class ProjectPanel : DockPanel
     /// (assets-relative; empty = root). Uniquifies the filename against what's already there.
     /// </summary>
     private static void CreatePrefabInFolder(GameObject go, string destRelFolder)
-    {
-        if (Project.Current == null) return;
-        string absFolder = string.IsNullOrEmpty(destRelFolder)
-            ? Project.Current.AssetsPath
-            : Path.Combine(Project.Current.AssetsPath, destRelFolder);
-        if (!Directory.Exists(absFolder)) return;
-
-        string uniqueName = AssetCreateMenu.FindUniqueName(absFolder, go.Name, ".prefab");
-        string relPath = string.IsNullOrEmpty(destRelFolder) ? uniqueName : destRelFolder + "/" + uniqueName;
-        PrefabUtility.SaveAsPrefabAssetAndConnect(go, relPath);
-    }
+        => AssetCreateMenu.CreatePrefabIn(go, destRelFolder);
 
     /// <summary>
     /// True when an <see cref="AssetDragPayload"/> could meaningfully land in

@@ -57,6 +57,8 @@
   "toast.prefab_cant_add": "Nie mozna dodac potomkow do instancji prefabu. Najpierw rozlacz prefab.",
   "toast.prefab_cant_delete": "Nie mozna usunac potomka prefabu. Najpierw rozlacz prefab.",
   "toast.prefab_cant_move": "Nie mozna przeniesc potomka prefabu. Najpierw rozlacz prefab.",
+  "toast.prefab_create_failed": "Nie utworzono prefabu",
+  "toast.prefab_create_failed_body": "Nie udalo sie zapisac '{name}' jako prefab. Sprawdz konsole.",
   "toast.rename_exists": "Plik lub folder o nazwie '{{name}}' juz istnieje.",
   "toast.rename_failed": "Zmiana nazwy nie powiodla sie",
 
