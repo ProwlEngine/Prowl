@@ -27,7 +27,7 @@ public static class AudioImportKeys
 [ImporterFor(".wav", ".mp3", ".ogg", ".flac")]
 public class AudioImporter : AssetImporter
 {
-    public override int Version => 3;
+    public override int Version => 4;
 
     public override EchoObject? DefaultSettings()
     {
@@ -80,6 +80,11 @@ public class AudioImporter : AssetImporter
 
             clip.ClipName = ctx.FileName;
             clip.Name = ctx.FileName;
+
+            // Worked out here so it ships with the asset. Otherwise the first thing at runtime to ask
+            // how long the clip is decodes the whole file to find out, on whatever thread asked.
+            clip.EnsureFormatLoaded();
+
             ctx.SetMainAsset(clip);
         }
         catch (System.Exception ex)

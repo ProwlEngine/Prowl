@@ -210,30 +210,53 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Volume of the audio source (0.0 to 1.0+).
+    /// The slowest playback speed a source can be set to. Zero stalls the resampler and a negative
+    /// rate is not something the native layer defines, so the range stops short of both.
+    /// </summary>
+    public const float MinPitch = 0.01f;
+
+    /// <summary>
+    /// Keeps a live audio parameter inside the range the native layer is defined over, and replaces a
+    /// value that is not a number at all.
+    /// </summary>
+    /// <remarks>
+    /// A NaN or an infinity reaching the mix is not a bad frame, it is permanent: it propagates
+    /// through the filters and the spatializer and stays in their state until something rebuilds
+    /// them, so the source is silence or noise for the rest of the session. These come off sliders,
+    /// curves and gameplay arithmetic, any of which can produce one by dividing by something that
+    /// happened to be zero, so they are checked at the boundary rather than trusted.
+    /// </remarks>
+    private static float Sane(float value, float min, float max, float fallback)
+        => float.IsFinite(value) ? Maths.Clamp(value, min, max) : fallback;
+
+    /// <summary>
+    /// Level of the audio source. 1 is the clip as it was authored, 0 is silence, and above 1
+    /// amplifies. Negative is not a quieter sound, it is the same sound with its phase inverted, so
+    /// the range stops at 0.
     /// </summary>
     public float Volume
     {
         get => _volume;
         set
         {
-            _volume = value;
+            _volume = Sane(value, 0.0f, float.MaxValue, 1.0f);
             if (_soundGroup.pointer != IntPtr.Zero)
-                MiniAudioNative.ma_sound_group_set_volume(_soundGroup, value);
+                MiniAudioNative.ma_sound_group_set_volume(_soundGroup, _volume);
         }
     }
 
     /// <summary>
-    /// Pitch of the audio source. 1.0 is normal pitch.
+    /// Playback speed of the audio source, which carries the pitch with it. 1 is the clip's own rate.
+    /// Never below <see cref="MinPitch"/>.
     /// </summary>
     public float Pitch
     {
         get => _pitch;
         set
         {
-            _pitch = value;
+            _pitch = Sane(value, MinPitch, float.MaxValue, 1.0f);
             if (_soundGroup.pointer != IntPtr.Zero)
-                MiniAudioNative.ma_sound_group_set_pitch(_soundGroup, value);
+                MiniAudioNative.ma_sound_group_set_pitch(_soundGroup, _pitch);
         }
     }
 
@@ -245,9 +268,9 @@ public sealed class AudioSource : MonoBehaviour
         get => _pan;
         set
         {
-            _pan = value;
+            _pan = Sane(value, -1.0f, 1.0f, 0.0f);
             if (_soundGroup.pointer != IntPtr.Zero)
-                MiniAudioNative.ma_sound_group_set_pan(_soundGroup, value);
+                MiniAudioNative.ma_sound_group_set_pan(_soundGroup, _pan);
         }
     }
 
@@ -280,16 +303,17 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Doppler effect intensity for spatial audio.
+    /// Strength of the pitch shift from relative motion. 0 disables doppler, 1 is the real world
+    /// amount, and above that exaggerates it. Never negative, which would shift the wrong way.
     /// </summary>
     public float DopplerFactor
     {
         get => _dopplerFactor;
         set
         {
-            _dopplerFactor = value;
+            _dopplerFactor = Sane(value, 0.0f, float.MaxValue, 1.0f);
             if (_soundGroup.pointer != IntPtr.Zero)
-                MiniAudioNative.ma_sound_group_set_doppler_factor(_soundGroup, value);
+                MiniAudioNative.ma_sound_group_set_doppler_factor(_soundGroup, _dopplerFactor);
         }
     }
 
@@ -331,8 +355,8 @@ public sealed class AudioSource : MonoBehaviour
     /// </remarks>
     private void ApplyDistances()
     {
-        _minDistance = Maths.Max(0.0f, _minDistance);
-        _maxDistance = Maths.Max(_maxDistance, _minDistance);
+        _minDistance = Sane(_minDistance, 0.0f, float.MaxValue, 1.0f);
+        _maxDistance = Maths.Max(Sane(_maxDistance, 0.0f, float.MaxValue, 10.0f), _minDistance);
 
         if (_soundGroup.pointer == IntPtr.Zero) return;
 
@@ -1329,8 +1353,14 @@ public sealed class AudioSource : MonoBehaviour
 
     private void ApplySettings()
     {
-        // First, and outside the guard below: the inspector writes these directly, so this is where an
-        // inverted distance range or a lowered voice cap takes effect, device or no device.
+        // First, and outside the guard below: the inspector and the deserializer write these fields
+        // directly rather than through the setters that check them, so this is where an inverted
+        // distance range, an impossible pitch or a lowered voice cap takes effect, device or not.
+        _volume = Sane(_volume, 0.0f, float.MaxValue, 1.0f);
+        _pitch = Sane(_pitch, MinPitch, float.MaxValue, 1.0f);
+        _pan = Sane(_pan, -1.0f, 1.0f, 0.0f);
+        _dopplerFactor = Sane(_dopplerFactor, 0.0f, float.MaxValue, 1.0f);
+
         ApplyDistances();
         TrimOneShotVoices();
 

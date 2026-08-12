@@ -503,6 +503,120 @@ public class AudioTests : RuntimeTestBase
         Assert.False(AudioContext.RetainClipHandle(0xDEADBEEFDEADBEEF));
     }
 
+    // A clip that asked not to share used to be keyed on the identity hash of its byte array, in the
+    // same table as content hashes. Two clips could be handed one key that way, which is the one
+    // thing the flag exists to prevent.
+    [Fact]
+    public void UniqueClip_SharesWithNothing()
+    {
+        byte[] data = [31, 41, 59, 26, 53];
+
+        var shared = new AudioClip(data);
+        var first = new AudioClip(data, isUnique: true);
+        var second = new AudioClip(data, isUnique: true);
+
+        Assert.NotEqual(shared.Handle, first.Handle);
+        Assert.NotEqual(shared.Handle, second.Handle);
+        Assert.NotEqual(first.Handle, second.Handle);
+
+        ulong sharedKey = shared.Hash;
+        ulong firstKey = first.Hash;
+        ulong secondKey = second.Hash;
+
+        Assert.NotEqual(sharedKey, firstKey);
+        Assert.NotEqual(firstKey, secondKey);
+
+        // Each holds its own buffer, so letting one go cannot take another's away.
+        first.Dispose();
+
+        Assert.Equal(0, AudioContext.GetClipRefCount(firstKey));
+        Assert.Equal(1, AudioContext.GetClipRefCount(secondKey));
+        Assert.Equal(1, AudioContext.GetClipRefCount(sharedKey));
+
+        second.Dispose();
+        shared.Dispose();
+    }
+
+    // Sharing is what stops ten prefabs referencing one sound from holding ten copies of it, so it
+    // has to survive the round trip that loading an asset is.
+    [Fact]
+    public void UniqueClip_StaysUniqueAcrossARoundTrip()
+    {
+        byte[] data = [7, 7, 7, 8, 9];
+
+        var unique = new AudioClip(data, isUnique: true);
+        var restored = Serializer.Deserialize<AudioClip>(Serializer.Serialize(unique))!;
+
+        Assert.NotEqual(unique.Handle, restored.Handle);
+
+        var shared = new AudioClip(data);
+        var sharedAgain = Serializer.Deserialize<AudioClip>(Serializer.Serialize(shared))!;
+
+        Assert.Equal(shared.Handle, sharedAgain.Handle);
+
+        unique.Dispose();
+        restored.Dispose();
+        shared.Dispose();
+        sharedAgain.Dispose();
+    }
+
+    // Identical bytes have to reach the same key however the clip got there, since that is the whole
+    // basis of sharing one buffer between them.
+    [Fact]
+    public void ContentHash_DependsOnTheBytesAndNothingElse()
+    {
+        var first = new AudioClip([1, 2, 3, 4]);
+        var second = new AudioClip([1, 2, 3, 4]);
+        var different = new AudioClip([1, 2, 3, 5]);
+
+        Assert.Equal(first.Hash, second.Hash);
+        Assert.NotEqual(first.Hash, different.Hash);
+
+        // The top of the key space belongs to clips that asked not to share.
+        Assert.True(first.Hash < (1UL << 63));
+        Assert.True(different.Hash < (1UL << 63));
+
+        first.Dispose();
+        second.Dispose();
+        different.Dispose();
+    }
+
+    // Reading a clip's format used to decode the whole file, so asking a five minute track how long
+    // it was decoded five minutes of audio. A WAVE says what it holds in its header, and an imported
+    // clip carries what it was found to hold.
+    [Fact]
+    public void WaveClip_ReportsItsFormatWithoutDecoding()
+    {
+        AudioClip clip = AudioClip.Create("wave", new float[600], 2, 24000);
+
+        Assert.Equal(2, clip.Channels);
+        Assert.Equal(24000, clip.SampleRate);
+        Assert.Equal(300ul, clip.SampleCount);
+        Assert.Equal(0.0125f, clip.LengthInSeconds, 4);
+
+        clip.Dispose();
+    }
+
+    // The format an importer worked out ships with the asset, so loading one never decodes. A clip
+    // whose bytes cannot be decoded at all proves the stored format is what answered.
+    [Fact]
+    public void StoredFormat_IsUsedWithoutTouchingTheAudio()
+    {
+        AudioClip clip = AudioClip.Create("stored", new float[400], 1, 8000);
+        EchoObject echo = Serializer.Serialize(clip);
+
+        echo["AudioData"] = new EchoObject(new byte[] { 9, 9, 9, 9 });
+
+        var restored = Serializer.Deserialize<AudioClip>(echo)!;
+
+        Assert.Equal(1, restored.Channels);
+        Assert.Equal(8000, restored.SampleRate);
+        Assert.Equal(400ul, restored.SampleCount);
+
+        clip.Dispose();
+        restored.Dispose();
+    }
+
     // Deserializing into a clip that already held a buffer used to overwrite the handle, orphaning
     // the previous one with a reference that nothing could ever drop.
     [Fact]
@@ -1722,6 +1836,64 @@ public class AudioTests : RuntimeTestBase
         source.PlaybackTime = 2f;
 
         Assert.Equal(0f, source.NormalizedTime);
+    }
+
+    // A NaN reaching the mix is not one bad frame, it is permanent: it sits in the filter and
+    // spatializer state until something rebuilds them. These come off sliders and gameplay
+    // arithmetic, so they are checked rather than trusted.
+    [Fact]
+    public void PlaybackParameters_RejectValuesTheMixCannotUse()
+    {
+        var source = CreateSource();
+
+        source.Volume = -2f;
+        Assert.Equal(0f, source.Volume);
+
+        source.Volume = float.NaN;
+        Assert.Equal(1f, source.Volume);
+
+        // Above 1 is a boost, which is allowed.
+        source.Volume = 2.5f;
+        Assert.Equal(2.5f, source.Volume);
+
+        // Zero stalls the resampler and negative is not defined at all.
+        source.Pitch = 0f;
+        Assert.Equal(AudioSource.MinPitch, source.Pitch);
+
+        source.Pitch = -1f;
+        Assert.Equal(AudioSource.MinPitch, source.Pitch);
+
+        source.Pitch = float.PositiveInfinity;
+        Assert.Equal(1f, source.Pitch);
+
+        source.Pan = 4f;
+        Assert.Equal(1f, source.Pan);
+
+        source.Pan = float.NaN;
+        Assert.Equal(0f, source.Pan);
+
+        source.DopplerFactor = -3f;
+        Assert.Equal(0f, source.DopplerFactor);
+    }
+
+    // The inspector and the deserializer write the fields directly and never go through the setters
+    // that check them, which is why the check has to run again from OnValidate.
+    [Fact]
+    public void PlaybackParameters_AreStraightenedOutOnValidate()
+    {
+        var source = CreateSource();
+        EchoObject echo = Serializer.Serialize(source);
+
+        echo["_volume"] = new EchoObject(-5f);
+        echo["_pitch"] = new EchoObject(0f);
+        echo["_pan"] = new EchoObject(9f);
+
+        var restored = Serializer.Deserialize<AudioSource>(echo)!;
+        restored.OnValidate();
+
+        Assert.Equal(0f, restored.Volume);
+        Assert.Equal(AudioSource.MinPitch, restored.Pitch);
+        Assert.Equal(1f, restored.Pan);
     }
 
     // Spatial audio is only defined with exactly one listener, so the count has to track enable and

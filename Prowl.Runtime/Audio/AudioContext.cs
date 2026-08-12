@@ -41,6 +41,7 @@ public static class AudioContext
     private static bool suspendedByGame;
     private static bool suspendedByPause;
     private static bool suspensionApplied;
+    private static bool deviceLossReported;
 
     public static event DeviceDataEvent DataProcess;
 
@@ -292,6 +293,84 @@ public static class AudioContext
         Initialize(sampleRate, channels, periodSizeInFrames, deviceInfo);
     }
 
+    /// <summary>
+    /// Closes the device and opens it again on the same settings. For picking a device back up after
+    /// it has stopped underneath the engine, which <see cref="Restart"/> will not do because nothing
+    /// about the settings has changed.
+    /// </summary>
+    public static void Reopen()
+    {
+        if (!IsInitialized)
+            return;
+
+        UInt32 rate = sampleRate;
+        UInt32 channelCount = channels;
+        UInt32 period = periodSizeInFrames;
+        DeviceInfo device = deviceIndex >= 0 ? FindDevice(deviceIndex) : null;
+
+        Deinitialize();
+        Initialize(rate, channelCount, period, device);
+    }
+
+    private static DeviceInfo FindDevice(int index)
+    {
+        DeviceInfo[] devices = GetDevices();
+
+        if (devices == null)
+            return null;
+
+        foreach (DeviceInfo device in devices)
+        {
+            if (device.Index == index)
+                return device;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Notices a device that has stopped without being asked to and opens it again.
+    /// </summary>
+    /// <remarks>
+    /// A device can go on its own: the output it was using is unplugged, the driver resets, the
+    /// system moves the default elsewhere. miniaudio follows the system default on its own for a
+    /// device opened without naming one, so this is the backstop for the cases where it cannot, and
+    /// those used to be the rest of the session in silence with nothing logged.
+    ///
+    /// One attempt, then it stays quiet. A machine with no working output would otherwise reopen a
+    /// device it cannot have once a frame, and every failure logs.
+    /// </remarks>
+    private static void RecoverFromDeviceLoss()
+    {
+        if (IsSuspended)
+            return;
+
+        var engine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(audioContext));
+        ma_device_ptr device = MiniAudioNative.ma_engine_get_device(engine);
+
+        if (device.pointer == IntPtr.Zero)
+            return;
+
+        ma_device_state state = MiniAudioNative.ma_device_get_state(device);
+
+        // Anything mid transition is on its way somewhere on its own account, so it is left alone.
+        if (state != ma_device_state.stopped && state != ma_device_state.uninitialized)
+        {
+            deviceLossReported = false;
+            return;
+        }
+
+        if (deviceLossReported)
+            return;
+
+        deviceLossReported = true;
+
+        Debug.LogWarning("The audio device stopped on its own, which usually means the output it was " +
+                         "using went away. Opening it again.");
+
+        Reopen();
+    }
+
     /// <summary>The buffer size the device was opened with, in frames.</summary>
     public static Int32 PeriodSizeInFrames => (int)periodSizeInFrames;
 
@@ -342,6 +421,8 @@ public static class AudioContext
         deltaTime = (float)((currentTime - lastUpdateTime) / (double)System.Diagnostics.Stopwatch.Frequency);
 
         lastUpdateTime = currentTime;
+
+        RecoverFromDeviceLoss();
     }
 
     /// <summary>
@@ -373,6 +454,47 @@ public static class AudioContext
         MiniAudioExNative.ma_ex_playback_devices_free(pDevices, count);
 
         return devices;
+    }
+
+    /// <summary>
+    /// A key with this bit set belongs to a clip that asked for a buffer of its own. Content hashes
+    /// give the bit up so the two spaces cannot meet, and a clip that asked not to share cannot be
+    /// handed someone else's buffer because a hash happened to equal a counter.
+    /// </summary>
+    internal const UInt64 UniqueKeyFlag = 1UL << 63;
+
+    /// <summary>Masks a content hash down to the space shared buffers are keyed in.</summary>
+    internal const UInt64 ContentKeyMask = ~UniqueKeyFlag;
+
+    private static UInt64 uniqueKeyCounter;
+
+    /// <summary>
+    /// Allocates a buffer that is never shared and returns the key it is held under, or IntPtr.Zero
+    /// if the allocation failed. Released the same way a shared one is.
+    /// </summary>
+    internal static IntPtr AcquireUniqueClipHandle(byte[] data, int length, out UInt64 key)
+    {
+        key = 0;
+
+        if (data == null || length <= 0)
+            return IntPtr.Zero;
+
+        lock (clipTableLock)
+        {
+            IntPtr handle = Marshal.AllocHGlobal(length);
+
+            if (handle == IntPtr.Zero)
+                return IntPtr.Zero;
+
+            Marshal.Copy(data, 0, handle, length);
+
+            // A counter rather than a hash of the data, which is the whole point: two clips holding
+            // the same bytes have to come out with different keys here.
+            key = UniqueKeyFlag | ++uniqueKeyCounter;
+            audioClipHandles[key] = handle;
+            audioClipRefCounts[key] = 1;
+            return handle;
+        }
     }
 
     /// <summary>
