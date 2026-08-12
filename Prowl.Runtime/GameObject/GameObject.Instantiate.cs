@@ -44,7 +44,10 @@ public partial class GameObject
         {
             // A prefab cannot reference objects outside itself, so anything the editor recorded as an
             // external reference comes back null rather than as an empty object built from the stub.
-            clone = Serializer.Deserialize<GameObject>(prefab.GameObjectData,
+            // Identifiers come through intact and are traded for fresh ones by StampPrefabId, which
+            // is what lets it record where each object came from without having to work out which
+            // part of the serialized data produced which object.
+            clone = DeserializePreservingIdentifiers(prefab.GameObjectData,
                 new SerializationContext { ExternalReferences = SceneReferenceResolver.None });
         }
         catch (Exception ex)
@@ -59,41 +62,69 @@ public partial class GameObject
             return null;
         }
 
-        StampPrefabId(clone, prefab.AssetID, prefab.GameObjectData);
+        StampPrefabId(clone, prefab.AssetID);
         return clone;
     }
 
     /// <summary>
-    /// Marks a freshly built tree as an instance of the prefab it came from. Stops at objects that
-    /// already belong to a different prefab, which are nested instances with their own link.
+    /// Marks a freshly built tree as an instance of the prefab it came from, recording which prefab
+    /// object each one is. Stops at objects that already belong to a different prefab, which are
+    /// nested instances with their own link.
     /// <para/>
-    /// The asset's own data is walked alongside the tree to record which source object each new one
-    /// came from. Identifiers are handed out fresh on load, so that correspondence cannot be read off
-    /// the objects afterwards, and it is what the editor matches overrides against.
+    /// The tree still wears the prefab's own identifiers at this point, so each object is holding the
+    /// answer already: it notes down what it came in as and is given a fresh identity of its own.
+    /// Reading the correspondence back off the serialized data instead meant pairing objects with the
+    /// nodes that produced them by position, which is only true while nothing failed to load.
     /// </summary>
-    private static void StampPrefabId(GameObject go, Guid prefabAssetId, EchoObject? data)
+    private static void StampPrefabId(GameObject go, Guid prefabAssetId)
     {
         if (go.IsPrefabInstance && go.PrefabAssetId != prefabAssetId)
             return; // a nested instance, with a link of its own
 
         var link = go.EnsurePrefabLink();
         link.AssetId = prefabAssetId;
+        link.SourceIdentifier = go.Identifier;
+        go.SetIdentifier(Guid.NewGuid());
 
-        if (data != null && Guid.TryParse(data.Get("Identifier")?.StringValue, out Guid sourceId))
-            link.SourceIdentifier = sourceId;
-
-        var componentData = data?.Get("Components")?.List;
-        for (int i = 0; i < go._components.Count; i++)
+        foreach (MonoBehaviour component in go._components)
         {
-            if (componentData == null || i >= componentData.Count) break;
-            if (Guid.TryParse(componentData[i].Get("_identifier")?.StringValue, out Guid sourceComponentId))
-                link.ComponentSources[go._components[i].Identifier] = sourceComponentId;
+            if (component.IsNotValid()) continue;
+
+            Guid sourceComponentId = component.Identifier;
+            component.Identifier = Guid.NewGuid();
+            link.ComponentSources[component.Identifier] = sourceComponentId;
         }
 
-        var childData = data?.Get("Children")?.List;
-        for (int i = 0; i < go.Children.Count; i++)
-            StampPrefabId(go.Children[i], prefabAssetId, childData != null && i < childData.Count ? childData[i] : null);
+        foreach (GameObject child in go.Children)
+            StampPrefabId(child, prefabAssetId);
     }
+
+    /// <summary>
+    /// Deserialize a GameObject tree with the identifiers the data carries, rather than the fresh
+    /// ones a load normally hands out. For callers that need to know which serialized object each
+    /// live one came from, and that take responsibility for the identities afterwards.
+    /// </summary>
+    internal static GameObject? DeserializePreservingIdentifiers(EchoObject data, SerializationContext? context = null)
+    {
+        PreservingIdentifiers = true;
+        try
+        {
+            return context == null
+                ? Serializer.Deserialize<GameObject>(data)
+                : Serializer.Deserialize<GameObject>(data, context);
+        }
+        finally
+        {
+            PreservingIdentifiers = false;
+        }
+    }
+
+    /// <summary>
+    /// Set while <see cref="DeserializePreservingIdentifiers"/> runs. Thread-local, so a load on one
+    /// thread cannot change what another thread's load does.
+    /// </summary>
+    [ThreadStatic]
+    internal static bool PreservingIdentifiers;
 
     /// <summary>Spawn a prefab into the current scene.</summary>
     public static GameObject? Instantiate(PrefabAsset prefab) => Instantiate(prefab, Scene.Current);

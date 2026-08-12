@@ -360,9 +360,10 @@ public static class Undo
                 var scene = Scene.Current;
                 if (scene == null) return;
 
-                var restored = Serializer.Deserialize<GameObject>(serialized);
+                // Preserving identifiers: what comes back has to be the object that went away, or
+                // every other record addressing it stops resolving.
+                var restored = GameObject.DeserializePreservingIdentifiers(serialized);
                 if (restored == null) return;
-                RestoreIdentifiers(restored, serialized);
 
                 scene.Add(restored);
                 if (parentId != Guid.Empty)
@@ -402,9 +403,10 @@ public static class Undo
                 var scene = Scene.Current;
                 if (scene == null) return;
 
-                var restored = Serializer.Deserialize<GameObject>(serialized);
+                // Preserving identifiers: what comes back has to be the object that went away, or
+                // every other record addressing it stops resolving.
+                var restored = GameObject.DeserializePreservingIdentifiers(serialized);
                 if (restored == null) return;
-                RestoreIdentifiers(restored, serialized);
 
                 scene.Add(restored);
                 if (parentId != Guid.Empty)

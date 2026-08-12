@@ -1232,7 +1232,11 @@ public partial class GameObject : EngineObject, ISerializable
 
         // Always a fresh identity - Scene restores the real one by index once the whole graph has
         // loaded, and a copy of an object must not come back wearing the original's identifier.
-        _identifier = Guid.NewGuid();
+        // Unless the caller asked for the stored ones, which is how a load can be told which
+        // serialized object each live one came from.
+        _identifier = PreservingIdentifiers && Guid.TryParse(value["Identifier"]?.StringValue, out Guid storedId)
+            ? storedId
+            : Guid.NewGuid();
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;

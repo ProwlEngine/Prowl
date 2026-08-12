@@ -510,7 +510,8 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         // A fresh identity every time: a copy of a component must not come back wearing the
         // original's identifier. Which source component this came from is recorded on the owning
         // GameObject's prefab link instead.
-        _identifier = Guid.NewGuid();
+        if (!GameObject.PreservingIdentifiers)
+            _identifier = Guid.NewGuid();
 
         OnAfterDeserialize();
     }
