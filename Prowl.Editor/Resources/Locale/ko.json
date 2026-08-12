@@ -226,6 +226,8 @@
   "prefab.preview": "미리보기",
   "inspector.override_missing": "없음",
   "inspector.remove_override": "제거",
+  "inspector.added": "추가됨",
+  "inspector.remove": "제거",
   "inspector.override_count": "{count}개 재정의",
   "inspector.revert_all": "모두 되돌리기",
   "inspector.apply_all": "모두 적용",

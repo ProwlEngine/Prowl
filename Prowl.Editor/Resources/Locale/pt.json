@@ -226,6 +226,8 @@
   "prefab.preview": "Previsualizacao",
   "inspector.override_missing": "ausente",
   "inspector.remove_override": "Remover",
+  "inspector.added": "Adicionado",
+  "inspector.remove": "Remover",
   "inspector.override_count": "{count} substituicao(oes)",
   "inspector.revert_all": "Reverter tudo",
   "inspector.apply_all": "Aplicar tudo",

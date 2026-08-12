@@ -226,6 +226,8 @@
   "prefab.preview": "预览",
   "inspector.override_missing": "缺失",
   "inspector.remove_override": "移除",
+  "inspector.added": "已添加",
+  "inspector.remove": "移除",
   "inspector.override_count": "{count} 项覆盖",
   "inspector.revert_all": "全部还原",
   "inspector.apply_all": "全部应用",

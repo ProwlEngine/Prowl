@@ -129,6 +129,7 @@ public class HierarchyPanel : DockPanel
                     string prefabName = PrefabEditingMode.EditingPrefabPath != null
                         ? System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath)
                         : Loc.Get("hierarchy.prefab_fallback");
+
                     paper.Box("hier_prefab_name")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(prefabName, font)

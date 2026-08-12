@@ -1837,6 +1837,149 @@ public class PrefabTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // What the instance has that the prefab does not
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void DescribeAdditions_FindsAddedComponentsAndObjects()
+    {
+        Guid g = MakeNestedPrefab("Additions.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.Children[0].AddComponent<VecComp>();
+        var added = new GameObject("Extra");
+        added.SetParent(instance);
+
+        var describedAdditions = PrefabUtility.DescribeAdditions(instance);
+        Assert.Equal(2, describedAdditions.Count);
+
+        var component = describedAdditions.Single(a => !a.IsWholeObject);
+        Assert.Equal("Child > VecComp", component.Label);
+
+        var whole = describedAdditions.Single(a => a.IsWholeObject);
+        Assert.Equal("Extra", whole.Label);
+
+        // What the prefab provides is not an addition, however much of it there is.
+        Assert.DoesNotContain(describedAdditions, a => a.ObjectName == "Root" && a.ComponentName == "OverrideComp");
+    }
+
+    [Fact]
+    public void RemoveAddition_TakesAnAddedComponentBackOut()
+    {
+        Guid g = MakeNestedPrefab("AddRemove.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.AddComponent<VecComp>();
+        var addition = PrefabUtility.DescribeAdditions(instance).Single(a => !a.IsWholeObject);
+
+        PrefabUtility.RemoveAddition(instance, addition);
+
+        Assert.Null(instance.GetComponent<VecComp>());
+        Assert.Empty(PrefabUtility.DescribeAdditions(instance));
+    }
+
+    [Fact]
+    public void ApplyAddition_PutsAnAddedComponentIntoThePrefab()
+    {
+        Guid g = MakeNestedPrefab("AddApplyComp.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.AddComponent<VecComp>().V = new Float3(1, 2, 3);
+        var addition = PrefabUtility.DescribeAdditions(instance).Single(a => !a.IsWholeObject);
+
+        PrefabUtility.ApplyAddition(instance, addition);
+
+        // In the prefab now, with the values it was given.
+        var fresh = Inst(g);
+        Assert.NotNull(fresh.GetComponent<VecComp>());
+        Assert.Equal(1.0, fresh.GetComponent<VecComp>()!.V.X, 3);
+
+        // And the instance stops carrying it as its own, so a refresh does not hand it a second copy.
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Empty(PrefabUtility.DescribeAdditions(live));
+        Assert.Single(live.GetComponents<VecComp>());
+
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Single(Scene.Current!.RootObjects.First().GetComponents<VecComp>());
+    }
+
+    [Fact]
+    public void ApplyAddition_PutsAnAddedObjectIntoThePrefab()
+    {
+        Guid g = MakeNestedPrefab("AddApplyObj.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        var added = new GameObject("Extra");
+        added.AddComponent<VecComp>().V = new Float3(4, 5, 6);
+        added.SetParent(instance);
+
+        var addition = PrefabUtility.DescribeAdditions(instance).Single(a => a.IsWholeObject);
+        PrefabUtility.ApplyAddition(instance, addition);
+
+        var fresh = Inst(g);
+        var freshChild = fresh.Children.Single(c => c.Name == "Extra");
+        Assert.Equal(4.0, freshChild.GetComponent<VecComp>()!.V.X, 3);
+
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Empty(PrefabUtility.DescribeAdditions(live));
+
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Single(Scene.Current!.RootObjects.First().Children.Where(c => c.Name == "Extra"));
+    }
+
+    [Fact]
+    public void ApplyAddition_WithAnotherAdditionBesideIt_AppliesTheRightOne()
+    {
+        Guid g = MakeNestedPrefab("AddApplyTwo.prefab");
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        // Two added objects, and only the second one applied. The prefab then has one child the
+        // instance has three of, so nothing lines up by position any more.
+        var first = new GameObject("FirstAdded");
+        first.SetParent(instance);
+        var second = new GameObject("SecondAdded");
+        second.AddComponent<VecComp>().V = new Float3(7, 0, 0);
+        second.SetParent(instance);
+
+        var addition = PrefabUtility.DescribeAdditions(instance).Single(a => a.ObjectName == "SecondAdded");
+        PrefabUtility.ApplyAddition(instance, addition);
+        PrefabUtility.RefreshAllInstances(g);
+
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Equal(7.0, live.Children.Single(c => c.Name == "SecondAdded").GetComponent<VecComp>()!.V.X, 3);
+
+        // The one that was not applied is untouched and still the instance's own.
+        Assert.NotNull(live.Children.SingleOrDefault(c => c.Name == "FirstAdded"));
+        Assert.Equal("FirstAdded", Assert.Single(PrefabUtility.DescribeAdditions(live)).ObjectName);
+
+        // And the prefab took only what it was given.
+        var fresh = Inst(g);
+        Assert.DoesNotContain(fresh.Children, c => c.Name == "FirstAdded");
+        Assert.Contains(fresh.Children, c => c.Name == "SecondAdded");
+    }
+
+    [Fact]
+    public void ApplyAddition_LeavesOtherInstancesToTheRefresh()
+    {
+        Guid g = MakeNestedPrefab("AddApplyMany.prefab");
+        var a = Inst(g);
+        var b = Inst(g);
+        LoadSceneWith(a, b);
+
+        a.AddComponent<VecComp>();
+        PrefabUtility.ApplyAddition(a, PrefabUtility.DescribeAdditions(a).Single());
+
+        // The prefab has it now, so every instance does, and none of them call it their own.
+        Assert.NotNull(b.GetComponent<VecComp>());
+        Assert.Empty(PrefabUtility.DescribeAdditions(b));
+    }
+
+    // ---------------------------------------------------------------------
     // Acting on one component rather than the whole instance
     // ---------------------------------------------------------------------
 

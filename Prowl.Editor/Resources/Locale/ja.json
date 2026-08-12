@@ -204,6 +204,8 @@
   "prefab.preview": "プレビュー",
   "inspector.override_missing": "見つかりません",
   "inspector.remove_override": "削除",
+  "inspector.added": "追加",
+  "inspector.remove": "削除",
   "inspector.override_count": "{count} 件の上書き",
   "inspector.revert_all": "すべて戻す",
   "inspector.apply_all": "すべて適用",

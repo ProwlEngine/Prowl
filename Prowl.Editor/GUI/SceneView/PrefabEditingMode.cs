@@ -131,7 +131,7 @@ public static class PrefabEditingMode
         var camGo = new GameObject("PrefabEdit Camera");
         camGo.Tag = "Main Camera";
         camGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        camGo.Transform.Position = new Float3(0, 2, -5);
+        camGo.Transform.Position = FramingPositionFor(go);
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         var cam = camGo.AddComponent<Camera>();
         cam.Depth = -1;
@@ -154,6 +154,27 @@ public static class PrefabEditingMode
         EditorSceneManager.IsDirty = false; // the prefab session starts clean
 
         Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
+    }
+
+    /// <summary>
+    /// Where to put the editing camera so the prefab fills the view: back off along its own tilt by
+    /// enough to take in its bounds. A prefab that draws nothing keeps the old fixed spot, which is
+    /// as good a guess as any for something with no extent.
+    /// </summary>
+    private static Float3 FramingPositionFor(GameObject go)
+    {
+        if (!Panels.SceneViewPanel.TryGetWorldBounds(go, out Float3 min, out Float3 max))
+            return new Float3(0, 2, -5);
+
+        Float3 center = (min + max) * 0.5f;
+        Float3 extents = (max - min) * 0.5f;
+
+        // Far enough that the largest axis is comfortably inside the view, with a floor so a tiny
+        // object is not framed from a millimetre away.
+        float radius = MathF.Max(MathF.Max((float)extents.X, (float)extents.Y), (float)extents.Z);
+        float distance = MathF.Max(radius * 3.5f, 1.5f);
+
+        return center + new Float3(0, distance * 0.35f, -distance);
     }
 
     /// <summary>

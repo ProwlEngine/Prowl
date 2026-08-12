@@ -226,6 +226,8 @@
   "prefab.preview": "Предпросмотр",
   "inspector.override_missing": "отсутствует",
   "inspector.remove_override": "Удалить",
+  "inspector.added": "Добавлено",
+  "inspector.remove": "Удалить",
   "inspector.override_count": "Переопределений: {count}",
   "inspector.revert_all": "Сбросить все",
   "inspector.apply_all": "Применить все",

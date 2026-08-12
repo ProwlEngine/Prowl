@@ -205,6 +205,8 @@
   "prefab.preview": "Preview",
   "inspector.override_missing": "missing",
   "inspector.remove_override": "Remove",
+  "inspector.added": "Added",
+  "inspector.remove": "Remove",
   "inspector.override_count": "{count} override(s)",
   "inspector.revert_all": "Revert All",
   "inspector.apply_all": "Apply All",

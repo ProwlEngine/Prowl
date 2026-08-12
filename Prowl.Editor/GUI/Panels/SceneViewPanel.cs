@@ -724,6 +724,21 @@ public class SceneViewPanel : DockPanel
         }
     }
 
+    /// <summary>
+    /// The world bounds of everything a GameObject tree draws, or false when it draws nothing.
+    /// Shared so anything that needs to point a camera at an object agrees with what the selection
+    /// outline says its extent is.
+    /// </summary>
+    internal static bool TryGetWorldBounds(GameObject go, out Float3 min, out Float3 max)
+    {
+        min = new Float3(float.MaxValue);
+        max = new Float3(float.MinValue);
+        bool found = false;
+
+        CollectRendererBounds(go, ref min, ref max, ref found);
+        return found;
+    }
+
     private static void CollectRendererBounds(GameObject go, ref Float3 min, ref Float3 max, ref bool found)
     {
         // Check MeshRenderer

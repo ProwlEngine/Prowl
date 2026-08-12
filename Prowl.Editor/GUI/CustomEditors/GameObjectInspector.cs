@@ -1160,8 +1160,9 @@ public static class GameObjectInspector
                 }
             }
 
-            // Overrides list inline
-            if (hasOverrides)
+            // What makes this instance differ from its prefab, whether by a changed value or by
+            // something it has that the prefab does not.
+            if (hasOverrides || PrefabUtility.HasAnyAdditions(go))
             {
                 paper.Box("gi_prefab_ov_sep").Height(1)
                     .BackgroundColor(borderColor).Margin(0, 2, 0, 2);
@@ -1186,7 +1187,8 @@ public static class GameObjectInspector
         bool canApply = PrefabUtility.IsEditablePrefab(go.PrefabAssetId);
 
         var described = PrefabUtility.DescribeOverrides(go);
-        if (described.Count == 0) return;
+        var additions = PrefabUtility.DescribeAdditions(go);
+        if (described.Count == 0 && additions.Count == 0) return;
 
         using (paper.Column("gi_prefab_ov_list")
             .Height(UnitValue.Auto)
@@ -1203,6 +1205,40 @@ public static class GameObjectInspector
                 foreach (var entry in group)
                     DrawOverrideRow(paper, font, go, entry, canApply, key++);
             }
+
+            foreach (var addition in additions)
+                DrawAdditionRow(paper, font, go, addition, canApply, key++);
+        }
+    }
+
+    /// <summary>
+    /// Something the instance has that the prefab does not. A refresh keeps it and an apply leaves it
+    /// behind, both correctly, and neither said it was there.
+    /// </summary>
+    private static void DrawAdditionRow(Paper paper, Prowl.Scribe.FontFile font, GameObject root,
+        PrefabUtility.AdditionDescription addition, bool canApply, int key)
+    {
+        float fs = EditorTheme.FontSize;
+
+        using (paper.Row($"gi_add_{key}")
+            .Height(EditorTheme.RowHeight)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .Rounded(3).Margin(0, 0, 0, 1)
+            .ChildLeft(6).RowBetween(4)
+            .Enter())
+        {
+            paper.Box($"gi_add_name_{key}")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text($"{Loc.Get("inspector.added")}  {addition.Label}", font)
+                .TextColor(EditorTheme.Green400)
+                .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+
+            OverrideButton(paper, font, $"gi_add_remove_{key}", Loc.Get("inspector.remove"), 55,
+                root, r => PrefabUtility.RemoveAddition(r, addition));
+
+            if (canApply)
+                OverrideButton(paper, font, $"gi_add_apply_{key}", Loc.Get("inspector.apply"), 45,
+                    root, r => PrefabUtility.ApplyAddition(r, addition));
         }
     }
 

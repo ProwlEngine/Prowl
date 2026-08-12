@@ -720,6 +720,269 @@ public static partial class PrefabUtility
     /// resolving when the structure drifts (a component or child added, removed or reordered), and
     /// such an entry can no longer be applied or reverted - only removed.
     /// </summary>
+    // ================================================================
+    //  What the instance added
+    // ================================================================
+
+    /// <summary>
+    /// Something an instance has that its prefab does not. Told apart by carrying no source identity,
+    /// the same way a refresh tells them apart when it decides what to leave alone.
+    /// </summary>
+    public sealed class AdditionDescription
+    {
+        /// <summary>The object it is on, or the added object itself.</summary>
+        public string ObjectName = "";
+        /// <summary>The added component, or empty when a whole object was added.</summary>
+        public string ComponentName = "";
+        /// <summary>Identifier of the added component, or of the added object.</summary>
+        public Guid Identifier;
+        /// <summary>Identifier of the object the component was added to. Empty for an added object.</summary>
+        public Guid OwnerIdentifier;
+
+        public bool IsWholeObject => string.IsNullOrEmpty(ComponentName);
+        public string Label => IsWholeObject ? ObjectName : $"{ObjectName} > {ComponentName}";
+    }
+
+    /// <summary>
+    /// Everything this instance has that its prefab does not: components added to its objects, and
+    /// objects added under them. A refresh keeps all of it and an apply leaves all of it behind, and
+    /// until now nothing said it was there.
+    /// </summary>
+    public static List<AdditionDescription> DescribeAdditions(GameObject go)
+    {
+        GameObject? prefabRoot = GetPrefabInstanceRoot(go);
+        if (prefabRoot.IsNotValid()) return [];
+
+        GameObject root = prefabRoot!;
+        var found = new List<AdditionDescription>();
+        Walk(root);
+        return found;
+
+        void Walk(GameObject owner)
+        {
+            foreach (MonoBehaviour component in owner.GetComponents<MonoBehaviour>())
+            {
+                if (owner.GetComponentSourceIdentifier(component) != Guid.Empty) continue;
+
+                found.Add(new AdditionDescription
+                {
+                    ObjectName = owner.Name,
+                    ComponentName = component.GetType().Name,
+                    Identifier = component.Identifier,
+                    OwnerIdentifier = owner.Identifier
+                });
+            }
+
+            foreach (GameObject child in owner.Children)
+            {
+                // Anything the prefab does not provide is the instance's, including an instance of
+                // another prefab dropped in, which carries a source identity of its own.
+                if (!IsProvidedByPrefab(child))
+                {
+                    found.Add(new AdditionDescription { ObjectName = child.Name, Identifier = child.Identifier });
+                    continue;
+                }
+
+                Walk(child);
+            }
+        }
+    }
+
+    /// <summary>Whether this instance has anything its prefab does not.</summary>
+    public static bool HasAnyAdditions(GameObject go) => DescribeAdditions(go).Count > 0;
+
+    /// <summary>Take an addition back out of the instance. It was the instance's, so it simply goes.</summary>
+    public static void RemoveAddition(GameObject instanceGO, AdditionDescription addition)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+        if (!GuardNotPlaying("remove an addition")) return;
+
+        GameObject? prefabRoot = GetPrefabInstanceRoot(instanceGO);
+        GameObject root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
+
+        if (addition.IsWholeObject)
+        {
+            GameObject? added = root.FindChildByIdentifier(addition.Identifier);
+            if (added.IsNotValid()) return;
+
+            Undo.RegisterDestroyObject(added!, "Remove Added Object");
+
+            Scene? scene = added!.Scene;
+            if (scene.IsValid()) scene!.Remove(added);
+            added.Destroy();
+        }
+        else
+        {
+            GameObject? owner = root.Identifier == addition.OwnerIdentifier
+                ? root
+                : root.FindChildByIdentifier(addition.OwnerIdentifier);
+
+            MonoBehaviour? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
+            if (component.IsNotValid()) return;
+
+            EchoObject? state = Serializer.Serialize(component!.GetType(), component, ComponentValueContext(component!));
+            Type componentType = component!.GetType();
+            Guid ownerId = owner!.Identifier;
+            Guid componentId = component.Identifier;
+
+            owner.RemoveComponent(component);
+
+            Undo.RegisterAction("Remove Added Component",
+                undo: () =>
+                {
+                    GameObject? live = Undo.FindGO(ownerId);
+                    if (live.IsNotValid() || state == null) return;
+
+                    if (Serializer.Deserialize(state, componentType, InstanceValueContext()) is not MonoBehaviour restored) return;
+                    restored.Identifier = componentId;
+                    live!.AddComponent(restored);
+                },
+                redo: () =>
+                {
+                    GameObject? live = Undo.FindGO(ownerId);
+                    MonoBehaviour? target = live.IsValid() ? live!.GetComponentByIdentifier(componentId) : null;
+                    if (target.IsValid()) live!.RemoveComponent(target!);
+                });
+        }
+
+        EditorSceneManager.MarkDirty();
+    }
+
+    /// <summary>
+    /// Put an addition into the prefab, so every instance gets it and this one stops carrying it as
+    /// its own. The instance keeps the objects it already has and adopts the identities they were
+    /// written under, rather than being handed a second copy by the refresh that follows.
+    /// </summary>
+    public static void ApplyAddition(GameObject instanceGO, AdditionDescription addition)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+        if (!GuardNotPlaying("apply an addition")) return;
+        if (!GuardEditablePrefab(instanceGO.PrefabAssetId, "apply an addition")) return;
+
+        var db = EditorAssetBackend.Instance;
+        if (db == null || Project.Current == null) return;
+
+        Guid prefabGuid = instanceGO.PrefabAssetId;
+        var entry = db.GetEntry(prefabGuid);
+        if (entry == null) return;
+        if (AssetDatabase.Get(prefabGuid) is not PrefabAsset prefab) return;
+
+        GameObject? prefabRoot = GetPrefabInstanceRoot(instanceGO);
+        GameObject root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
+
+        string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        string? oldFileContent = File.Exists(absolutePath) ? File.ReadAllText(absolutePath) : null;
+
+        GameObject? source = GameObject.InstantiateDetached(prefab);
+        if (source == null) return;
+
+        if (!WriteAdditionInto(source, root, addition, prefabGuid, out Action adopt))
+            return;
+
+        StripInstanceDataForEditing(source, prefabGuid);
+        StabilizeSourceIdentifiers(source);
+
+        var writeContext = TreeValueContext(source);
+        var echo = Serializer.Serialize(typeof(object), source, writeContext);
+        if (echo == null || !TryWriteFile(absolutePath, echo.WriteToString())) return;
+
+        ReportDroppedSceneReferences(writeContext, "Applying this addition");
+
+        // Stamped after the write, so the identities the instance takes on are the ones that ended up
+        // in the file rather than the ones it had before stabilising.
+        adopt();
+
+        _sourceCache.Remove(prefabGuid);
+        db.Reimport(entry.Guid);
+
+        Guid rootId = root.Identifier;
+        Undo.RegisterAction("Apply Prefab Addition",
+            undo: () =>
+            {
+                if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
+                _sourceCache.Remove(prefabGuid);
+                db.Reimport(entry.Guid);
+
+                // The instance goes back to owning it, which is what having no source identity means.
+                GameObject? live = Undo.FindGO(rootId);
+                if (live.IsValid()) ForgetSourceIdentity(live!, addition);
+                RefreshAllInstances(prefabGuid);
+            },
+            redo: () =>
+            {
+                GameObject? live = Undo.FindGO(rootId);
+                if (live.IsValid()) ApplyAddition(live!, addition);
+            });
+
+        RefreshAllInstances(prefabGuid);
+        EditorSceneManager.MarkDirty();
+    }
+
+    /// <summary>
+    /// Copy an addition into a tree about to become the prefab, and hand back what makes the live
+    /// instance recognise it as the prefab's afterwards.
+    /// </summary>
+    private static bool WriteAdditionInto(GameObject source, GameObject root, AdditionDescription addition,
+        Guid prefabGuid, out Action adopt)
+    {
+        adopt = () => { };
+
+        if (addition.IsWholeObject)
+        {
+            GameObject? added = root.FindChildByIdentifier(addition.Identifier);
+            GameObject? parent = added.IsValid() ? added!.Parent : null;
+            if (added.IsNotValid() || parent.IsNotValid()) return false;
+
+            GameObject? sourceParent = FindBySourceIdentifier(source, parent!.SourceIdentifier, source.PrefabAssetId);
+            if (sourceParent == null) return false;
+
+            GameObject? copy = Serializer.Deserialize<GameObject>(
+                Serializer.Serialize(typeof(object), added, TreeValueContext(added!)), InstanceValueContext());
+            if (copy == null) return false;
+
+            copy.SetParent(sourceParent, worldPositionStays: false);
+            copy.ClearPrefabDataRecursive();
+
+            adopt = () => StampAsPrefabInstance(added!, copy, prefabGuid, added!.PrefabAssetId);
+            return true;
+        }
+
+        GameObject? owner = root.Identifier == addition.OwnerIdentifier
+            ? root
+            : root.FindChildByIdentifier(addition.OwnerIdentifier);
+
+        MonoBehaviour? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
+        if (component.IsNotValid()) return false;
+
+        GameObject? sourceOwner = FindBySourceIdentifier(source, owner!.SourceIdentifier, source.PrefabAssetId);
+        if (sourceOwner == null) return false;
+
+        MonoBehaviour copied = sourceOwner.AddComponent(component!.GetType());
+        EchoObject? state = Serializer.Serialize(component!.GetType(), component, ComponentValueContext(component!));
+        if (state != null)
+            Serializer.DeserializeInto(state, copied, InstanceValueContext());
+
+        adopt = () => owner!.EnsurePrefabLink().ComponentSources[component!.Identifier] = copied.Identifier;
+        return true;
+    }
+
+    /// <summary>Undo of adopting: the instance owns it again, so it carries no source identity.</summary>
+    private static void ForgetSourceIdentity(GameObject root, AdditionDescription addition)
+    {
+        if (addition.IsWholeObject)
+        {
+            GameObject? added = root.FindChildByIdentifier(addition.Identifier);
+            if (added.IsValid()) added!.ClearPrefabDataRecursive();
+            return;
+        }
+
+        GameObject? owner = root.Identifier == addition.OwnerIdentifier
+            ? root
+            : root.FindChildByIdentifier(addition.OwnerIdentifier);
+
+        if (owner.IsValid()) owner!.EnsurePrefabLink().ComponentSources.Remove(addition.Identifier);
+    }
+
     /// <summary>The override paths on one component of an instance, as they are stored on its root.</summary>
     private static List<string> PathsFor(GameObject instanceGO, MonoBehaviour component, out GameObject root)
     {

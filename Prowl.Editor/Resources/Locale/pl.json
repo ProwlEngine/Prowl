@@ -226,6 +226,8 @@
   "prefab.preview": "Podglad",
   "inspector.override_missing": "brak",
   "inspector.remove_override": "Usun",
+  "inspector.added": "Dodano",
+  "inspector.remove": "Usun",
   "inspector.override_count": "{count} nadpisan",
   "inspector.revert_all": "Cofnij wszystko",
   "inspector.apply_all": "Zastosuj wszystko",

@@ -226,6 +226,8 @@
   "prefab.preview": "Onizleme",
   "inspector.override_missing": "eksik",
   "inspector.remove_override": "Kaldir",
+  "inspector.added": "Eklendi",
+  "inspector.remove": "Kaldir",
   "inspector.override_count": "{count} gecersiz kilma",
   "inspector.revert_all": "Tumunu geri al",
   "inspector.apply_all": "Tumunu uygula",

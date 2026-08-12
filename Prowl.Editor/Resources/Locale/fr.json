@@ -204,6 +204,8 @@
   "prefab.preview": "Apercu",
   "inspector.override_missing": "absent",
   "inspector.remove_override": "Retirer",
+  "inspector.added": "Ajoute",
+  "inspector.remove": "Retirer",
   "inspector.override_count": "{count} modification(s)",
   "inspector.revert_all": "Tout annuler",
   "inspector.apply_all": "Tout appliquer",
