@@ -374,6 +374,10 @@ public sealed class AudioSource : MonoBehaviour
     /// This is the engine's own read position, so it advances at the rate the device was opened at
     /// whatever rate the clip was authored at. That is not the unit <see cref="Length"/> is in, so
     /// the two do not belong in one expression. <see cref="NormalizedTime"/> is what compares them.
+    ///
+    /// It also keeps counting across a loop rather than starting over, so on a looping source it is
+    /// how long the source has been sounding for. <see cref="PlaybackTime"/> is where in the clip it
+    /// currently is.
     /// </remarks>
     public ulong Cursor
     {
@@ -427,11 +431,18 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Playback position in seconds. Named to stay clear of the engine's <see cref="Time"/> class.
+    /// Where in the clip playback currently is, in seconds. Named to stay clear of the engine's
+    /// <see cref="Time"/> class.
     /// </summary>
     public float PlaybackTime
     {
-        get => AudioContext.SampleRate > 0 ? (float)(Cursor / (double)AudioContext.SampleRate) : 0.0f;
+        get
+        {
+            float position = AudioContext.SampleRate > 0 ? (float)(Cursor / (double)AudioContext.SampleRate) : 0.0f;
+            float duration = _loop ? Duration : 0.0f;
+
+            return duration > 0.0f ? position % duration : position;
+        }
         set => Cursor = value <= 0.0f ? 0 : (ulong)(value * AudioContext.SampleRate);
     }
 
