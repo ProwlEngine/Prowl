@@ -102,20 +102,77 @@ public class PrefabTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Instantiate_RecordsWhereEachComponentAndChildCameFrom()
+    public void Instantiate_InTheEditor_RecordsWhereEachComponentAndChildCameFrom()
     {
         var source = CreateGameObject("Root");
         source.AddComponent<SerializableComponent>();
         CreateGameObject("Child").SetParent(source);
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var instance = GameObject.InstantiateDetached(prefab)!;
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = true;
+        try
+        {
+            var instance = GameObject.InstantiateDetached(prefab)!;
 
-        // What tells a prefab-provided component from one the instance adds later. Position is not
-        // used, so reordering cannot reclassify anything.
-        MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
-        Assert.NotEqual(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
-        Assert.NotEqual(Guid.Empty, instance.Children[0].SourceIdentifier);
+            // What tells a prefab-provided component from one the instance adds later. Position is
+            // not used, so reordering cannot reclassify anything.
+            MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
+            Assert.NotEqual(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
+            Assert.NotEqual(Guid.Empty, instance.Children[0].SourceIdentifier);
+        }
+        finally { Application.IsEditor = wasEditor; }
+    }
+
+    [Fact]
+    public void Instantiate_OutsideTheEditor_RecordsOnlyWhichPrefabItIs()
+    {
+        var source = CreateGameObject("Root");
+        source.AddComponent<SerializableComponent>();
+        CreateGameObject("Child").SetParent(source);
+        Guid assetId = Guid.NewGuid();
+        var prefab = MakePrefab(source, assetId);
+
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = false;
+        try
+        {
+            var instance = GameObject.InstantiateDetached(prefab)!;
+
+            // Which prefab an object came from is what a game can see and act on. Which prefab object
+            // it was is bookkeeping for matching overrides, which nothing outside the editor does, and
+            // which a built scene does not carry either.
+            Assert.True(instance.IsPrefabInstance);
+            Assert.Equal(assetId, instance.PrefabAssetId);
+            Assert.Equal(assetId, instance.Children[0].PrefabAssetId);
+
+            MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
+            Assert.Equal(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
+            Assert.Equal(Guid.Empty, instance.Children[0].SourceIdentifier);
+        }
+        finally { Application.IsEditor = wasEditor; }
+    }
+
+    [Fact]
+    public void Instantiate_OutsideTheEditor_StillGivesEveryInstanceItsOwnIdentifiers()
+    {
+        var source = CreateGameObject("Root");
+        source.AddComponent<SerializableComponent>();
+        var prefab = MakePrefab(source, Guid.NewGuid());
+
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = false;
+        try
+        {
+            var a = GameObject.InstantiateDetached(prefab)!;
+            var b = GameObject.InstantiateDetached(prefab)!;
+
+            // Skipping the bookkeeping must not mean two spawns wearing one identity.
+            Assert.NotEqual(a.Identifier, b.Identifier);
+            Assert.NotEqual(a.GetComponents<MonoBehaviour>().First().Identifier,
+                            b.GetComponents<MonoBehaviour>().First().Identifier);
+        }
+        finally { Application.IsEditor = wasEditor; }
     }
 
     [Fact]

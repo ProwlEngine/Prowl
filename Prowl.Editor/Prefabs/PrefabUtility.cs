@@ -306,7 +306,7 @@ public static partial class PrefabUtility
         ClearOverridesWithinBoundary(instanceRoot, instanceRoot.PrefabAssetId);
 
         // Reimport and refresh invalidate source cache first
-        _sourceCache.Remove(prefabGuid);
+        InvalidateSource(prefabGuid);
         db.Reimport(entry.Guid);
 
         if (recordUndo)
@@ -316,7 +316,7 @@ public static partial class PrefabUtility
                 {
                     // Restore old prefab file
                     if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
-                    _sourceCache.Remove(prefabGuid);
+                    InvalidateSource(prefabGuid);
                     db.Reimport(entry.Guid);
                     // Put the overrides back on the live instance before refreshing, since the
                     // refresh is what re-applies them to the rebuilt objects.
@@ -526,7 +526,7 @@ public static partial class PrefabUtility
 
         if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
         {
-            _sourceCache.Remove(instanceGO.PrefabAssetId);
+            InvalidateSource(instanceGO.PrefabAssetId);
             db.Reimport(entry.Guid);
         }
 
@@ -540,7 +540,7 @@ public static partial class PrefabUtility
                 {
                     // Restore old prefab file
                     if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
-                    _sourceCache.Remove(prefabGuid);
+                    InvalidateSource(prefabGuid);
                     db.Reimport(entry.Guid);
                     // Re-add the override to the instance
                     var live = Undo.FindGO(rootId);
@@ -892,7 +892,7 @@ public static partial class PrefabUtility
         // in the file rather than the ones it had before stabilising.
         adopt();
 
-        _sourceCache.Remove(prefabGuid);
+        InvalidateSource(prefabGuid);
         db.Reimport(entry.Guid);
 
         Guid rootId = root.Identifier;
@@ -900,7 +900,7 @@ public static partial class PrefabUtility
             undo: () =>
             {
                 if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
-                _sourceCache.Remove(prefabGuid);
+                InvalidateSource(prefabGuid);
                 db.Reimport(entry.Guid);
 
                 // The instance goes back to owning it, which is what having no source identity means.
@@ -1288,7 +1288,7 @@ public static partial class PrefabUtility
 
             try
             {
-                _sourceCache.Remove(entry.Guid);
+                InvalidateSource(entry.Guid);
                 RefreshAllInstances(entry.Guid);
             }
             catch (Exception ex)
@@ -1864,6 +1864,19 @@ public static partial class PrefabUtility
         return fields;
     }
 
+    /// <summary>
+    /// Whether two field values are the same, for the kinds of value that can say so on their own:
+    /// the very same object, or a value type or string, where equality means equal content. Anything
+    /// else answers false and gets compared properly.
+    /// </summary>
+    private static bool IsSameByValue(Type fieldType, object? instanceVal, object? sourceVal)
+    {
+        if (ReferenceEquals(instanceVal, sourceVal)) return true;
+        if (instanceVal == null || sourceVal == null) return false;
+
+        return (fieldType.IsValueType || fieldType == typeof(string)) && instanceVal.Equals(sourceVal);
+    }
+
     private static void CompareFields(object instance, object source, string pathPrefix, List<PropertyOverride> overrides)
     {
         foreach (var field in GetOverridableFields(instance))
@@ -1872,14 +1885,42 @@ public static partial class PrefabUtility
             var sourceVal = field.GetValue(source);
             string path = pathPrefix + field.Name;
 
+            // Looked up by hand: a lambda over `path` allocates a closure per field, and this runs for
+            // every field of every drawn component every frame.
+            PropertyOverride? existing = null;
+            foreach (PropertyOverride candidate in overrides)
+            {
+                if (candidate.Path != path) continue;
+                existing = candidate;
+                break;
+            }
+
+            // Most fields are a number, a bool, an enum, a string or a small struct, and for those
+            // this settles it without serializing anything.
+            //
+            // Only ever allowed to answer "the same": equality saying no proves nothing about
+            // content, so that falls through to the real comparison. And only asked of things whose
+            // equality is about their value by construction. A class is free to define equality as
+            // loosely as it likes, and one that called two different states equal would turn a real
+            // override into one nothing ever records.
+            if (IsSameByValue(field.FieldType, instanceVal, sourceVal))
+            {
+                if (existing != null) overrides.Remove(existing);
+                continue;
+            }
+
             // A context per side, deliberately: Echo numbers object references as it goes, so sharing
             // one would give the second value different ids and make equal content compare unequal.
             var instanceEcho = Serializer.Serialize(field.FieldType, instanceVal, InstanceValueContext());
             var sourceEcho = Serializer.Serialize(field.FieldType, sourceVal, InstanceValueContext());
 
-            bool areSame = (instanceEcho?.WriteToString() ?? "") == (sourceEcho?.WriteToString() ?? "");
+            // Compared as data rather than as text. Writing both out to strings first said the same
+            // thing and built two of them per field, on every field of every drawn component, every
+            // frame.
+            bool areSame = instanceEcho == null
+                ? sourceEcho == null
+                : instanceEcho.Equals(sourceEcho);
 
-            var existing = overrides.FirstOrDefault(o => o.Path == path);
             if (!areSame)
             {
                 if (existing != null)
@@ -1914,16 +1955,20 @@ public static partial class PrefabUtility
         }
     }
 
-    // Cache the deserialized prefab source for comparison (per prefab GUID), for the current frame
-    // only, so an edited or reimported prefab is picked up on the next one.
-    private static readonly Dictionary<Guid, (GameObject go, long frame)> _sourceCache = new();
+    // What each prefab holds, built once and kept until the prefab changes. This used to expire every
+    // frame, which meant rebuilding a whole tree from Echo for every prefab an instance was being
+    // compared against, on every frame the inspector drew one. Nothing about a prefab changes without
+    // going through a write here or an import, and both drop what they invalidate, so the frame
+    // counter was buying nothing the invalidation was not already buying.
+    private static readonly Dictionary<Guid, GameObject> _sourceCache = new();
 
     private static GameObject? GetCachedPrefabSource(Guid prefabGuid)
     {
-        long frame = Runtime.Time.FrameCount;
-
-        if (_sourceCache.TryGetValue(prefabGuid, out var cached) && cached.frame == frame)
-            return cached.go;
+        if (_sourceCache.TryGetValue(prefabGuid, out GameObject? cached))
+        {
+            if (cached.IsValid()) return cached;
+            _sourceCache.Remove(prefabGuid);
+        }
 
         var prefab = Runtime.AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab.IsNotValid() || prefab.GameObjectData == null) return null;
@@ -1933,10 +1978,21 @@ public static partial class PrefabUtility
         // override paths are written in terms of.
         var source = GameObject.InstantiateDetached(prefab);
         if (source != null)
-            _sourceCache[prefabGuid] = (source, frame);
+            _sourceCache[prefabGuid] = source;
 
         return source;
     }
+
+    /// <summary>
+    /// Drop what was cached for a prefab. Every path that writes one, or hears that one was imported,
+    /// calls this.
+    /// <para/>
+    /// Dropped rather than disposed. A source tree is never in a scene and never enabled, so it holds
+    /// nothing that needs releasing, and <see cref="GetCorrespondingObjectFromSource"/> hands its
+    /// objects out to callers: disposing here would turn a reference held across an import into a
+    /// dead one, to buy nothing the collector was not already going to do.
+    /// </summary>
+    private static void InvalidateSource(Guid prefabGuid) => _sourceCache.Remove(prefabGuid);
 
 
 

@@ -39,16 +39,27 @@ public partial class GameObject
             return null;
         }
 
+        // Which prefab object each new one came from is what the editor matches overrides against.
+        // A player never refreshes an instance, and ships its scenes with this stripped out already,
+        // so outside the editor a spawn skips the whole business and pays for none of it. Gated on
+        // the editor rather than on play mode so that what an instance carries never depends on
+        // whether it was spawned before or after someone pressed play.
+        bool trackSources = Application.IsEditor;
+
         GameObject? clone;
         try
         {
             // A prefab cannot reference objects outside itself, so anything the editor recorded as an
             // external reference comes back null rather than as an empty object built from the stub.
-            // Identifiers come through intact and are traded for fresh ones by StampPrefabId, which
-            // is what lets it record where each object came from without having to work out which
-            // part of the serialized data produced which object.
-            clone = DeserializePreservingIdentifiers(prefab.GameObjectData,
-                new SerializationContext { ExternalReferences = SceneReferenceResolver.None });
+            var context = new SerializationContext { ExternalReferences = SceneReferenceResolver.None };
+
+            // Identifiers come through intact and are traded for fresh ones by StampPrefabId, which is
+            // what lets it record where each object came from without having to work out which part of
+            // the serialized data produced which object. Without that to record, an ordinary load
+            // hands out the fresh identifiers itself and there is nothing left to walk for.
+            clone = trackSources
+                ? DeserializePreservingIdentifiers(prefab.GameObjectData, context)
+                : Serializer.Deserialize<GameObject>(prefab.GameObjectData, context);
         }
         catch (Exception ex)
         {
@@ -62,8 +73,26 @@ public partial class GameObject
             return null;
         }
 
-        StampPrefabId(clone, prefab.AssetID);
+        if (trackSources) StampPrefabId(clone, prefab.AssetID);
+        else MarkAsPrefabInstance(clone, prefab.AssetID);
+
         return clone;
+    }
+
+    /// <summary>
+    /// Says which prefab a tree came from and nothing else. What a player and a running game can
+    /// observe of an instance is <see cref="IsPrefabInstance"/> and <see cref="PrefabAssetId"/>, and a
+    /// scene ships with only those, so a spawn while playing records only those.
+    /// </summary>
+    private static void MarkAsPrefabInstance(GameObject go, Guid prefabAssetId)
+    {
+        if (go.IsPrefabInstance && go.PrefabAssetId != prefabAssetId)
+            return; // a nested instance, with a link of its own
+
+        go.EnsurePrefabLink().AssetId = prefabAssetId;
+
+        foreach (GameObject child in go.Children)
+            MarkAsPrefabInstance(child, prefabAssetId);
     }
 
     /// <summary>

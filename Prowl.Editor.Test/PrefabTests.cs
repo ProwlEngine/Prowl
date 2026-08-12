@@ -50,6 +50,20 @@ public sealed class ListComp : MonoBehaviour
     public List<int> Values = [];
 }
 
+/// <summary>Calls every instance of itself equal, however different they are.</summary>
+public sealed class LooseEquality
+{
+    public int Value;
+    public override bool Equals(object? obj) => obj is LooseEquality;
+    public override int GetHashCode() => 0;
+}
+
+/// <summary>Holds something whose own equality cannot be trusted to mean equal content.</summary>
+public sealed class LooseComp : MonoBehaviour
+{
+    public LooseEquality Held = new();
+}
+
 /// <summary>State derived in OnValidate, for checking a refresh re-derives it.</summary>
 public sealed class DerivedStateComp : MonoBehaviour
 {
@@ -1834,6 +1848,27 @@ public class PrefabTests : EditorTestHarness
         var described = Assert.Single(PrefabUtility.DescribeOverrides(instance));
         Assert.Equal("Child", described.Group);   // no component, so the object is the whole heading
         Assert.Equal("Enabled", described.MemberName);
+    }
+
+    [Fact]
+    public void OverrideDetection_DoesNotTakeAClassesWordForIt()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<LooseComp>().Held = new LooseEquality { Value = 1 };
+        Guid g = CreatePrefabAsset(root, "Loose.prefab");
+
+        var instance = Inst(g);
+        LoadSceneWith(instance);
+
+        instance.GetComponent<LooseComp>()!.Held = new LooseEquality { Value = 2 };
+        PrefabUtility.ReconcileInstance(instance);
+
+        // Comparison starts by asking cheap questions, and a class is free to answer that two
+        // different states are equal. Only things whose equality is about their value get asked.
+        Assert.Single(instance.PrefabOverrides);
+
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Equal(2, Scene.Current!.RootObjects.First().GetComponent<LooseComp>()!.Held.Value);
     }
 
     // ---------------------------------------------------------------------
