@@ -9,9 +9,9 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 
-namespace Prowl.Editor.GUI.RenderProfiler.Viewers;
+namespace Prowl.Editor.GUI.RenderProfiler.Inspectors;
 
-public sealed class ProfilerViewViewer
+public sealed class ProfilerViewInspector
 {
     private const int ModeStats = 0;
     private const int ModePipeline = 1;
@@ -43,9 +43,9 @@ public sealed class ProfilerViewViewer
             return;
         }
 
-        using (paper.Column("rdp_view_viewer").Height(UnitValue.Auto).ColBetween(ViewerKit.SectionGap).Enter())
+        using (paper.Column("rdp_view_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
         {
-            using (paper.Row("rdp_view_header").Height(ViewerKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+            using (paper.Row("rdp_view_header").Height(InspectorKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
             {
                 Origami.Label(paper, "rdp_view_title", view.Name)
                     .Heading()
@@ -78,23 +78,23 @@ public sealed class ProfilerViewViewer
 
     private static void DrawViewStats(Paper paper, ProfiledView view, IProfilerHistory history)
     {
-        ViewerKit.SectionCard(paper, "rdp_vv_objects", "Objects", () => DrawViewObjectsChart(paper, view.Name, history));
-        ViewerKit.SectionCard(paper, "rdp_vv_renderops", "Render Operations", () => DrawViewRenderOperationsSection(paper, view, history));
+        InspectorKit.SectionCard(paper, "rdp_vv_objects", "Objects", () => DrawViewObjectsChart(paper, view.Name, history));
+        InspectorKit.SectionCard(paper, "rdp_vv_renderops", "Render Operations", () => DrawViewRenderOperationsSection(paper, view, history));
     }
 
 
     private static void DrawViewObjectsChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        ViewerKit.DrawLineChart(paper, "rdp_vv_objects_chart", "Objects", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
-            ("Total", EditorTheme.Blue500, ViewerKit.ViewSeries(history, viewName, v => v.RegisteredObjects)),
-            ("Drawn", EditorTheme.Green500, ViewerKit.ViewSeries(history, viewName, v => v.RenderedObjects)),
-            ("Culled", EditorTheme.Red500, ViewerKit.ViewSeries(history, viewName, v => v.CulledObjects)));
+        InspectorKit.DrawLineChart(paper, "rdp_vv_objects_chart", "Objects", "Count", InspectorKit.FormatCountCompact, UnitValue.Stretch(), InspectorKit.ChartHeight, true,
+            ("Total", EditorTheme.Blue500, InspectorKit.ViewSeries(history, viewName, v => v.RegisteredObjects)),
+            ("Drawn", EditorTheme.Green500, InspectorKit.ViewSeries(history, viewName, v => v.RenderedObjects)),
+            ("Culled", EditorTheme.Red500, InspectorKit.ViewSeries(history, viewName, v => v.CulledObjects)));
     }
 
 
     private static void DrawViewRenderOperationsSection(Paper paper, ProfiledView view, IProfilerHistory history)
     {
-        using (paper.Column("rdp_vv_renderops_col").Height(UnitValue.Auto).ColBetween(ViewerKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_vv_renderops_col").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
         {
             DrawViewGeometryChart(paper, view.Name, history);
             DrawViewRenderingChart(paper, view.Name, history);
@@ -106,17 +106,17 @@ public sealed class ProfilerViewViewer
 
     private static void DrawViewGeometryChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        ViewerKit.DrawLineChart(paper, "rdp_vv_geometry_chart", "Geometry", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
-            ("Triangles", EditorTheme.Blue500, ViewerKit.ViewSeries(history, viewName, v => v.TrianglesDrawn)),
-            ("Vertices", EditorTheme.Purple500, ViewerKit.ViewSeries(history, viewName, v => v.InputAssemblyVertices)));
+        InspectorKit.DrawLineChart(paper, "rdp_vv_geometry_chart", "Geometry", "Count", InspectorKit.FormatCountCompact, UnitValue.Stretch(), InspectorKit.ChartHeight, true,
+            ("Triangles", EditorTheme.Blue500, InspectorKit.ViewSeries(history, viewName, v => v.TrianglesDrawn)),
+            ("Vertices", EditorTheme.Purple500, InspectorKit.ViewSeries(history, viewName, v => v.InputAssemblyVertices)));
     }
 
 
     private static void DrawViewRenderingChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        ViewerKit.DrawLineChart(paper, "rdp_vv_rendering_chart", "Rendering", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
-            ("Draw Calls", EditorTheme.Green500, ViewerKit.ViewSeries(history, viewName, v => v.DrawCallCount)),
-            ("Dispatches", EditorTheme.Red500, ViewerKit.ViewSeries(history, viewName, v => v.DispatchCallCount)));
+        InspectorKit.DrawLineChart(paper, "rdp_vv_rendering_chart", "Rendering", "Count", InspectorKit.FormatCountCompact, UnitValue.Stretch(), InspectorKit.ChartHeight, true,
+            ("Draw Calls", EditorTheme.Green500, InspectorKit.ViewSeries(history, viewName, v => v.DrawCallCount)),
+            ("Dispatches", EditorTheme.Red500, InspectorKit.ViewSeries(history, viewName, v => v.DispatchCallCount)));
     }
 
 
@@ -138,8 +138,8 @@ public sealed class ProfilerViewViewer
                     .Show();
             }
 
-            ViewerKit.DrawLineChart(paper, "rdp_vv_pixelproc_chart", "Pixel Processing", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, false,
-                ("Fragment Invocations", EditorTheme.Amber500, ViewerKit.ViewSeries(history, view.Name, v => v.FragmentShaderInvocations)));
+            InspectorKit.DrawLineChart(paper, "rdp_vv_pixelproc_chart", "Pixel Processing", "Count", InspectorKit.FormatCountCompact, UnitValue.Stretch(), InspectorKit.ChartHeight, false,
+                ("Fragment Invocations", EditorTheme.Amber500, InspectorKit.ViewSeries(history, view.Name, v => v.FragmentShaderInvocations)));
         }
     }
 
@@ -148,9 +148,9 @@ public sealed class ProfilerViewViewer
     // command buffers, never tied to a view - so this chart only carries what's actually per-view.
     private static void DrawViewPipelineStateChart(Paper paper, string viewName, IProfilerHistory history)
     {
-        ViewerKit.DrawLineChart(paper, "rdp_vv_pipelinestate_chart", "Pipeline State", "Count", ViewerKit.FormatCountCompact, UnitValue.Stretch(), ViewerKit.ChartHeight, true,
-            ("Switches", EditorTheme.Purple500, ViewerKit.ViewSeries(history, viewName, v => v.PipelineSwitchCount)),
-            ("Command Submits", EditorTheme.Blue500, ViewerKit.ViewSeries(history, viewName, ViewCommandBufferCount)));
+        InspectorKit.DrawLineChart(paper, "rdp_vv_pipelinestate_chart", "Pipeline State", "Count", InspectorKit.FormatCountCompact, UnitValue.Stretch(), InspectorKit.ChartHeight, true,
+            ("Switches", EditorTheme.Purple500, InspectorKit.ViewSeries(history, viewName, v => v.PipelineSwitchCount)),
+            ("Command Submits", EditorTheme.Blue500, InspectorKit.ViewSeries(history, viewName, ViewCommandBufferCount)));
     }
 
 
@@ -169,7 +169,7 @@ public sealed class ProfilerViewViewer
 
     private void DrawViewPipeline(Paper paper, ProfiledView view, float width)
     {
-        ViewerKit.SectionCard(paper, "rdp_vv_pipeline", "Pass Graph", () => DrawPipelineGraph(paper, view, width));
+        InspectorKit.SectionCard(paper, "rdp_vv_pipeline", "Pass Graph", () => DrawPipelineGraph(paper, view, width));
     }
 
 

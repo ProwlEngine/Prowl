@@ -12,11 +12,12 @@ using Prowl.PaperUI.LayoutEngine;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.GUI.RenderProfiler.Viewers;
+namespace Prowl.Editor.GUI.RenderProfiler.Inspectors;
 
-// Normalized card/chart drawer shared by every sub-viewer (FrameViewer, ViewViewer, PassViewer, ...)
-// so each one doesn't reinvent section cards, line charts, value formatting, or history projection.
-public static class ViewerKit
+// Normalized card/chart drawer shared by every sub-inspector (FrameInspector, ViewInspector,
+// PassInspector, ...) so each one doesn't reinvent section cards, line charts, value formatting, or
+// history projection.
+public static class InspectorKit
 {
     public const float ChartHeight = 170f;
     public const float ChartTitleHeight = 18f;

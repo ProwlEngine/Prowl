@@ -2,7 +2,7 @@ using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.RenderProfiler.Data;
-using Prowl.Editor.GUI.RenderProfiler.Viewers;
+using Prowl.Editor.GUI.RenderProfiler.Inspectors;
 using Prowl.Editor.GUI.RenderProfiler.Widgets;
 using Prowl.Editor.Profiling;
 using Prowl.Editor.Theming;
@@ -32,8 +32,8 @@ public partial class RenderProfilerPanel : DockPanel
 
     private readonly ProfilerHierarchyView _hierarchy = new("rdp_hier_tree");
     private readonly ProfilerFlameGraphView _flame = new("rdp_flame");
-    private readonly ProfilerViewViewer _viewViewer = new();
-    private readonly ProfilerPassViewer _passViewer = new();
+    private readonly ProfilerViewInspector _viewInspector = new();
+    private readonly ProfilerPassInspector _passInspector = new();
 
     public ProfiledFrame? SelectedFrame => _profiler.FrameAgo((int)(_selectedFrameIndex ?? 0));
 
@@ -50,7 +50,7 @@ public partial class RenderProfilerPanel : DockPanel
         _hierarchy.IsSelected = IsHierarchyNodeSelected;
         _hierarchy.Selected += OnHierarchyNodeSelected;
         _flame.NodeClicked += t => _hierarchy.Ping(t.View, t.Pass, t.CommandBuffer);
-        _viewViewer.PassSelected += (view, pass) =>
+        _viewInspector.PassSelected += (view, pass) =>
         {
             SelectPass(view, pass);
             _hierarchy.Ping(view, pass, null);
@@ -108,7 +108,7 @@ public partial class RenderProfilerPanel : DockPanel
                     .BackgroundColor(EditorTheme.BorderStrong);
 
                 float detailPanelWidth = width - HierarchyPanelWidth - DividerHeight;
-                DrawSelectionViewer(paper, detailPanelWidth, contentsHeight);
+                DrawSelectionInspector(paper, detailPanelWidth, contentsHeight);
             }
         }
     }

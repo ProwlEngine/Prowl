@@ -1,4 +1,4 @@
-using Prowl.Editor.GUI.RenderProfiler.Viewers;
+using Prowl.Editor.GUI.RenderProfiler.Inspectors;
 using Prowl.Editor.Profiling;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -7,7 +7,7 @@ namespace Prowl.Editor.GUI.RenderProfiler;
 
 public partial class RenderProfilerPanel
 {
-    private void DrawSelectionViewer(Paper paper, float width, float height)
+    private void DrawSelectionInspector(Paper paper, float width, float height)
     {
         using (paper.Box("rdp_detail_panel").Enter())
         {
@@ -19,25 +19,25 @@ public partial class RenderProfilerPanel
                     switch (SelectionType)
                     {
                         case ProfilerSelectionType.Frame:
-                            ProfilerFrameViewer.Draw(paper, SelectedFrame, History);
+                            ProfilerFrameInspector.Draw(paper, SelectedFrame, History);
                             break;
                         case ProfilerSelectionType.View:
-                            _viewViewer.Draw(paper, SelectedView, History, width);
+                            _viewInspector.Draw(paper, SelectedView, History, width);
                             break;
                         case ProfilerSelectionType.Pass:
-                            _passViewer.Draw(paper, SelectedView, SelectedPass, History, SelectedFrame?.HasCaptureDepth ?? false);
+                            _passInspector.Draw(paper, SelectedView, SelectedPass, History, null);
                             break;
                         case ProfilerSelectionType.CommandBuffer:
-                            DrawCommandBufferViewer(paper);
+                            DrawCommandBufferInspector(paper);
                             break;
                         case ProfilerSelectionType.Pipeline:
-                            DrawPipelineViewer(paper);
+                            DrawPipelineInspector(paper);
                             break;
                         case ProfilerSelectionType.Object:
-                            DrawObjectViewer(paper);
+                            DrawObjectInspector(paper);
                             break;
                         case ProfilerSelectionType.DrawCall:
-                            DrawDrawCallViewer(paper);
+                            DrawDrawCallInspector(paper);
                             break;
                     }
                 });
@@ -45,9 +45,9 @@ public partial class RenderProfilerPanel
     }
 
 
-    // Placeholder sub-viewers - filled in as each selection kind's viewer is implemented.
-    private void DrawCommandBufferViewer(Paper paper) { }
-    private void DrawPipelineViewer(Paper paper) { }
-    private void DrawObjectViewer(Paper paper) { }
-    private void DrawDrawCallViewer(Paper paper) { }
+    // Placeholder sub-inspectors - filled in as each selection kind's inspector is implemented.
+    private void DrawCommandBufferInspector(Paper paper) { }
+    private void DrawPipelineInspector(Paper paper) { }
+    private void DrawObjectInspector(Paper paper) { }
+    private void DrawDrawCallInspector(Paper paper) { }
 }
