@@ -37,6 +37,7 @@ public static class AudioContext
     private static float masterVolume = 1.0f;
     private static UInt32 periodSizeInFrames = 2048;
     private static Int32 deviceIndex = -1;
+    private static string deviceName = string.Empty;
     private static bool deviceProcessFailed;
     private static bool suspendedByGame;
     private static bool suspendedByPause;
@@ -236,6 +237,10 @@ public static class AudioContext
         AudioContext.periodSizeInFrames = periodSizeInFrames;
         AudioContext.deviceIndex = deviceInfo == null ? -1 : deviceInfo.Index;
 
+        // Kept alongside the index because the index is only meaningful against the enumeration it
+        // came from, and reopening this device later happens against a fresh one.
+        AudioContext.deviceName = deviceInfo == null ? string.Empty : deviceInfo.Name;
+
         ma_ex_context_config contextConfig = MiniAudioExNative.ma_ex_context_config_init(sampleRate, (byte)channels, periodSizeInFrames, ref pDeviceInfo);
 
         unsafe
@@ -282,11 +287,15 @@ public static class AudioContext
             return;
 
         int requestedDevice = deviceInfo == null ? -1 : deviceInfo.Index;
+        string requestedName = deviceInfo == null ? string.Empty : deviceInfo.Name;
 
+        // The name is compared as well, so asking for the same output after the list has been
+        // renumbered is not read as a request to move to whatever now sits at that index.
         if (AudioContext.sampleRate == sampleRate &&
             AudioContext.channels == channels &&
             AudioContext.periodSizeInFrames == periodSizeInFrames &&
-            AudioContext.deviceIndex == requestedDevice)
+            AudioContext.deviceIndex == requestedDevice &&
+            AudioContext.deviceName == requestedName)
             return;
 
         Deinitialize();
@@ -306,22 +315,37 @@ public static class AudioContext
         UInt32 rate = sampleRate;
         UInt32 channelCount = channels;
         UInt32 period = periodSizeInFrames;
-        DeviceInfo device = deviceIndex >= 0 ? FindDevice(deviceIndex) : null;
+        DeviceInfo device = deviceIndex >= 0 ? FindDevice(deviceName, deviceIndex) : null;
 
         Deinitialize();
         Initialize(rate, channelCount, period, device);
     }
 
-    private static DeviceInfo FindDevice(int index)
+    /// <summary>
+    /// Finds a playback device by the name it reports, falling back to a position in the list. Null
+    /// if neither finds one.
+    /// </summary>
+    /// <remarks>
+    /// Names are what survive between two runs. An index is a position in whatever the backend
+    /// enumerated this time, so plugging in a headset renumbers the devices after it and a setting
+    /// saved as an index quietly comes back pointing at a different output.
+    /// </remarks>
+    public static DeviceInfo FindDevice(string name, int index = -1)
     {
         DeviceInfo[] devices = GetDevices();
 
-        if (devices == null)
-            return null;
+        if (!string.IsNullOrEmpty(name))
+        {
+            foreach (DeviceInfo device in devices)
+            {
+                if (device.Name == name)
+                    return device;
+            }
+        }
 
         foreach (DeviceInfo device in devices)
         {
-            if (device.Index == index)
+            if (index >= 0 && device.Index == index)
                 return device;
         }
 
@@ -376,6 +400,13 @@ public static class AudioContext
 
     /// <summary>Index of the device in use, or -1 for the system default.</summary>
     public static Int32 DeviceIndex => deviceIndex;
+
+    /// <summary>
+    /// Name of the device in use, empty when the system default was taken. This is what to persist
+    /// for a "remember my output" setting, since <see cref="DeviceIndex"/> only means anything
+    /// against the enumeration it came from.
+    /// </summary>
+    public static string DeviceName => deviceName;
 
     /// <summary>
     /// Closes the device. Clip data outlives it: those are plain allocations the clips themselves own
