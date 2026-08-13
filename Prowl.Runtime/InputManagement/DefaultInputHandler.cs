@@ -151,6 +151,9 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         _inputString = string.Empty;
         pressedChars.Clear();
 
+        // Before sampling, so this frame reports the clamped position and the delta at the wall is zero
+        ConfineCursor();
+
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
         if (!_prevMousePos.Equals(_currentMousePos))
@@ -260,7 +263,37 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     public bool GetMouseButtonUp(int button) => !Down(isMousePressed, (MouseButton)button) && Down(wasMousePressed, (MouseButton)button);
 
-    public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
+    public void ApplyCursorState(bool visible, CursorLockMode mode)
+    {
+        ICursor cursor = Mice[0].Cursor;
+        CursorMode previous = cursor.CursorMode;
+        CursorMode next = mode == CursorLockMode.Locked
+            ? CursorMode.Disabled
+            : visible ? CursorMode.Normal : CursorMode.Hidden;
+
+        if (previous == next)
+            return;
+
+        cursor.CursorMode = next;
+
+        // Leaving Disabled restores the real position, but the cached ones still hold the unbounded
+        // virtual coordinate from while it was locked - without this the next MouseDelta is that jump.
+        if (previous == CursorMode.Disabled)
+            _prevMousePos = _currentMousePos = (Int2)(Float2)Mice[0].Position;
+    }
+
+    // GLFW has no hidden-and-confined mode, so hold the cursor inside the bounds ourselves. Skipped
+    // while unfocused so alt-tabbing away doesn't fight the user for the pointer.
+    private void ConfineCursor()
+    {
+        if (Input.CursorLockState != CursorLockMode.Confined || !Window.IsFocused)
+            return;
+
+        Int2 pos = (Int2)(Float2)Mice[0].Position;
+        Int2 clamped = Input.CursorConfineBounds.ClosestPointTo(pos);
+        if (!clamped.Equals(pos))
+            Mice[0].Position = (Float2)clamped;
+    }
 
     public void SetCursorShape(PaperCursor shape, int miceIndex = 0)
     {

@@ -101,7 +101,7 @@ public sealed class AudioDemoGame : Game
         // Create visual markers for audio sources
         CreateVisualMarkers();
 
-        Input.SetCursorVisible(false);
+        Input.LockCursor();
         Scene.Load(scene);
     }
 
@@ -356,7 +356,7 @@ public sealed class AudioDemoGame : Game
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))
-            Input.SetCursorVisible(true);
+            Input.UnlockCursor();
     }
 
     private void AnimateMovingSources()

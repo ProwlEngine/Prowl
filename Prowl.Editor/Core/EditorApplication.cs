@@ -344,10 +344,11 @@ public class EditorApplication : Game
         // (taken last frame) against the current state to detect changes.
         Undo.FlushFrame();
 
-        // Escape always unlocks cursor in editor
-        if (Input.GetKeyDown(KeyCode.Escape) && Input.CursorLocked)
+        // Escape always releases the cursor in editor.
+        if (Input.GetKeyDown(KeyCode.Escape) && (Input.CursorLockState != CursorLockMode.None || !Input.CursorVisible))
         {
             Input.UnlockCursor();
+            Input.CursorVisible = true;
         }
 
         // Global keyboard shortcuts
@@ -1600,6 +1601,10 @@ public class EditorApplication : Game
             Undo.Clear();
             _savedEditorScene = null;
         }
+
+        // Don't inherit cursor state the game left behind
+        Input.CursorLockState = CursorLockMode.None;
+        Input.CursorVisible = true;
 
         // Pop play-mode input handler
         if (Input.Current is GameViewInputHandler)

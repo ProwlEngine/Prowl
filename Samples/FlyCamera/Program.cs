@@ -94,7 +94,7 @@ public sealed class MyGame : Game
         voxelPlanet.material = new Material(Shader.LoadDefault(DefaultShader.Standard));
         scene.Add(planetGO);
 
-        Input.SetCursorVisible(false);
+        Input.LockCursor();
 
         Scene.Load(scene);
     }
@@ -180,7 +180,7 @@ public sealed class MyGame : Game
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))
-            Input.SetCursorVisible(true);
+            Input.UnlockCursor();
     }
 }
 
