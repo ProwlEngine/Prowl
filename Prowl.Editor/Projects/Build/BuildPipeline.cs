@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Editor.Projects;
+using Prowl.Runtime;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
 
@@ -125,6 +126,48 @@ public abstract class BuildPipeline
         ["Overrides", "SourceIdentifier", "ComponentSources"];
 
     /// <summary>
+    /// Bring the prefab instances in a scene payload up to date with the prefabs as they stand now,
+    /// rewriting <paramref name="echo"/> when any of them had fallen behind.
+    /// <para/>
+    /// A scene holds its objects outright rather than as references to be resolved, so an instance in
+    /// one says whatever the prefab said the last time that scene was saved. A prefab edited while the
+    /// scene was closed leaves it behind, and nothing brings it back on its own: opening the scene
+    /// catches it up in the editor, but a build reads what is on disk, and shipping a scene nobody has
+    /// opened since means shipping the old contents.
+    /// <para/>
+    /// Done on the copy being shipped and not written back, so a build reports what a project holds
+    /// rather than quietly editing it.
+    /// </summary>
+    private static bool TryBringInstancesUpToDate(ref EchoObject echo, string scenePath)
+    {
+        Runtime.Resources.Scene? scene = null;
+        try
+        {
+            scene = Serializer.Deserialize<Runtime.Resources.Scene>(echo);
+            if (scene.IsNotValid()) return false;
+
+            EchoObject? before = Serializer.Serialize(typeof(object), scene);
+            Prefabs.PrefabUtility.RefreshInstancesIn(scene!);
+            EchoObject? after = Serializer.Serialize(typeof(object), scene);
+
+            if (before == null || after == null || before.Equals(after)) return false;
+
+            echo = after;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Shipping what the scene last saved is wrong but survivable; failing the build is not.
+            Runtime.Debug.LogWarning($"[Build] Could not bring prefab instances in '{scenePath}' up to date: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            if (scene.IsValid()) scene!.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Rewrites a scene or prefab payload without its editor-only prefab data, or null to ship the
     /// cached bytes untouched.
     /// </summary>
@@ -139,7 +182,9 @@ public abstract class BuildPipeline
             var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
             if (echo == null) return null;
 
-            bool changed = StripEditorOnlyPrefabData(echo);
+            bool changed = entry.ImporterType == "SceneImporter" && TryBringInstancesUpToDate(ref echo, entry.Path);
+
+            changed |= StripEditorOnlyPrefabData(echo);
             // Inside a prefab asset every link is nested by definition, since the asset's own root
             // carries none. Inside a scene the top-level instances are not.
             changed |= Importers.ImportHelper.FlattenNestedPrefabLinks(
