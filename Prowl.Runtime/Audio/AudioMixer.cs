@@ -281,6 +281,13 @@ public sealed class AudioMixerGroup : EngineObject
     {
         if (effect == null) return;
 
+        if (!effect.TryClaim(this))
+        {
+            Debug.LogError($"Audio mixer group '{_groupName}' was given an effect that is already in another " +
+                           "chain. An effect carries its own filter and delay state, so it can only be in one.");
+            return;
+        }
+
         _effects.Add(effect);
         effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
         _chain.Publish(_effects);

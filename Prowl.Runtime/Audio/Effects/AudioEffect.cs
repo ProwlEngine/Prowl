@@ -42,10 +42,33 @@ public abstract class AudioEffect
     }
 
     /// <summary>Sample rate of the chain this effect is in. Valid from <see cref="OnInitialize"/> onward.</summary>
-    protected int SampleRate { get; private set; }
+    public int SampleRate { get; private set; }
 
     /// <summary>Channel count of the chain this effect is in. Valid from <see cref="OnInitialize"/> onward.</summary>
-    protected int Channels { get; private set; }
+    public int Channels { get; private set; }
+
+    /// <summary>
+    /// The source or mixer group this effect belongs to. An effect carries its own filter state, so
+    /// one instance cannot be in two chains: they would drive the same delay lines from two audio
+    /// callbacks and destroy it twice.
+    /// </summary>
+    private object _owner;
+
+    /// <summary>Takes this effect for <paramref name="owner"/>, false if it belongs to someone else.</summary>
+    internal bool TryClaim(object owner)
+    {
+        if (ReferenceEquals(_owner, owner))
+            return true;
+
+        if (_owner is not null)
+            return false;
+
+        _owner = owner;
+        return true;
+    }
+
+    /// <summary>Gives the effect up, so it can be added somewhere else.</summary>
+    internal void Release() => _owner = null;
 
     /// <summary>True once <see cref="OnInitialize"/> has run and the DSP state exists.</summary>
     public bool IsInitialized { get; private set; }

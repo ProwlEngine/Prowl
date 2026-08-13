@@ -1143,6 +1143,13 @@ public sealed class AudioSource : MonoBehaviour
     {
         if (effect == null) return;
 
+        if (!effect.TryClaim(this))
+        {
+            Debug.LogError($"[{Name}] That audio effect is already in another chain. An effect carries " +
+                           "its own filter and delay state, so it can only be in one.");
+            return;
+        }
+
         _effects.Add(effect);
         effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
         _chain.Publish(_effects);
@@ -1195,6 +1202,16 @@ public sealed class AudioSource : MonoBehaviour
             if (effect == null) continue;
 
             if (!effect.IsInitialized)
+            // An effect that belongs to another chain is taken back out rather than left in a list
+            // that claims to own it. Assigning one in two places is the inspector's easiest mistake.
+            if (!effect.TryClaim(this))
+            {
+                Debug.LogError($"[{Name}] An audio effect in this chain already belongs to another one, " +
+                               "so it has been removed. An effect carries its own state and can only be in one chain.");
+                _effects.RemoveAt(i);
+                continue;
+            }
+
                 effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
             else
                 effect.OnValidate();
