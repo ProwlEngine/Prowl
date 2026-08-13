@@ -927,7 +927,9 @@ public class AudioTests : RuntimeTestBase
     public void DelayEffect_ReturnsAnImpulseOneDelayLater()
     {
         const int delayFrames = 8;
-        var effect = new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f };
+
+        // Fully wet, so the repeat is on its own and nothing at frame zero can be the dry path.
+        var effect = new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f, Mix = 1f };
 
         float[] input = new float[64 * Channels];
         input[0] = 1f;
@@ -954,7 +956,7 @@ public class AudioTests : RuntimeTestBase
     [InlineData(1f / TestSampleRate)]
     public void DelayEffect_ZeroLengthDelay_ClampsToOneFrame(float seconds)
     {
-        var effect = new DelayEffect { DelayInSeconds = seconds, Decay = 0f };
+        var effect = new DelayEffect { DelayInSeconds = seconds, Decay = 0f, Mix = 1f };
 
         float[] output = Run(effect, Interleave(1f, 1f));
 
@@ -1034,7 +1036,7 @@ public class AudioTests : RuntimeTestBase
     public void DelayEffect_OnValidate_KeepsItsBufferedAudio()
     {
         const int delayFrames = 8;
-        var effect = new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f };
+        var effect = new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f, Mix = 1f };
 
         float[] impulse = new float[delayFrames * Channels];
         impulse[0] = 1f;
@@ -1052,11 +1054,79 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(1f, output[0], 4);
     }
 
+    // A delay is an insert, so the sound that goes in has to come back out with the repeats on top
+    // of it. It used to replace the input with the delay line, so adding one to a source removed the
+    // sound and left a copy of it arriving a quarter of a second later.
+    [Fact]
+    public void DelayEffect_KeepsTheDrySignal()
+    {
+        const int delayFrames = 8;
+        var effect = new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f };
+
+        float[] input = new float[32 * Channels];
+        input[0] = 1f;
+        input[1] = 1f;
+
+        float[] output = Run(effect, input);
+
+        // Half and half at the default, so the impulse is heard when it happens and again on the repeat.
+        Assert.Equal(0.5f, output[0], 4);
+        Assert.Equal(0.5f, output[delayFrames * Channels], 4);
+
+        // And fully dry is the input untouched, which is what makes it a mix rather than two levels.
+        effect.Mix = 0f;
+
+        float[] dry = Run(effect, input);
+        Assert.Equal(1f, dry[0], 4);
+        Assert.Equal(0f, dry[delayFrames * Channels], 4);
+    }
+
+    // Feedback is how much of each repeat feeds the next one. It used to decide something else as
+    // well: at zero the line was read before it was written and at anything above zero after, which
+    // is a different effect, so turning the knob up changed what the effect was.
+    [Fact]
+    public void DelayEffect_FeedbackDoesNotChangeWhenTheRepeatArrives()
+    {
+        const int delayFrames = 4;
+
+        float[] input = new float[32 * Channels];
+        input[0] = 1f;
+        input[1] = 1f;
+
+        float[] withoutFeedback = Run(new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f, Mix = 1f }, input);
+        float[] withFeedback = Run(new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0.5f, Mix = 1f }, input);
+
+        // The first repeat lands in the same place either way.
+        Assert.Equal(1f, withoutFeedback[delayFrames * Channels], 4);
+        Assert.Equal(1f, withFeedback[delayFrames * Channels], 4);
+
+        // Feedback only decides what happens after it: a second repeat at half the level.
+        Assert.Equal(0f, withoutFeedback[2 * delayFrames * Channels], 4);
+        Assert.Equal(0.5f, withFeedback[2 * delayFrames * Channels], 4);
+    }
+
+    // Same reasoning as the delay. A reverb on an insert chain that defaults to no dry signal takes
+    // the sound away and leaves the tail.
+    [Fact]
+    public void ReverbEffect_KeepsTheDrySignalByDefault()
+    {
+        var effect = new ReverbEffect();
+        effect.Initialize(TestSampleRate, Channels);
+
+        Assert.Equal(1f, effect.Dry);
+
+        float[] input = Interleave(0.5f, 0.5f, 64);
+        float[] output = Run(effect, input);
+
+        // The tail takes time to build, so the front of the block is essentially the dry signal.
+        Assert.True(output[0] > 0.4f, $"the dry signal did not come through, got {output[0]}");
+    }
+
     // Changing the length does replace the line, since the geometry is different.
     [Fact]
     public void DelayEffect_ChangingTheLength_Resizes()
     {
-        var effect = new DelayEffect { DelayInSeconds = 8f / TestSampleRate, Decay = 0f };
+        var effect = new DelayEffect { DelayInSeconds = 8f / TestSampleRate, Decay = 0f, Mix = 1f };
         Run(effect, Interleave(0f, 0f, 8));
 
         Assert.Equal(8u, effect.DelayInFrames);
@@ -1677,6 +1747,109 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(1, source.EffectCount);
     }
 
+    // The inspector replaces the whole list rather than editing it, so an effect deleted there never
+    // passes through RemoveEffect and used to be dropped without ever being told it was finished.
+    [Fact]
+    public void Effects_TakenOutOfTheListAreDestroyedOnRefresh()
+    {
+        var source = CreateSource();
+        var kept = new CountingEffect();
+        var dropped = new CountingEffect();
+        source.AddEffect(kept);
+        source.AddEffect(dropped);
+
+        // What the property grid does: a new list, without the one that was deleted.
+        var edited = new List<AudioEffect> { kept };
+        typeof(AudioSource).GetField("_effects", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(source, edited);
+
+        source.OnValidate();
+
+        Assert.Equal(1, dropped.Destroyed);
+        Assert.Equal(0, kept.Destroyed);
+        Assert.Equal(1, source.EffectCount);
+
+        // And it is genuinely let go, so it can be put somewhere else afterwards.
+        var other = CreateSource();
+        other.AddEffect(dropped);
+        Assert.Equal(1, other.EffectCount);
+    }
+
+    // An effect carries its own filter and delay state, so one instance in two chains is two audio
+    // callbacks driving one set of delay lines, and two owners that will each destroy it.
+    [Fact]
+    public void Effects_CannotBeInTwoChainsAtOnce()
+    {
+        var first = CreateSource();
+        var second = CreateSource();
+        var effect = new CountingEffect();
+
+        first.AddEffect(effect);
+        second.AddEffect(effect);
+
+        Assert.Equal(1, first.EffectCount);
+        Assert.Equal(0, second.EffectCount);
+
+        // A mixer group is the other kind of chain, and it has to refuse for the same reason.
+        var mixer = new AudioMixer();
+        mixer.Master.AddEffect(effect);
+        Assert.Empty(mixer.Master.Effects);
+
+        // Once its owner is done with it, it is free.
+        first.RemoveEffect(effect);
+        second.AddEffect(effect);
+        Assert.Equal(1, second.EffectCount);
+    }
+
+    // The same, for an effect that arrives in the list rather than through AddEffect, which is what
+    // assigning one instance to two sources in the inspector looks like.
+    [Fact]
+    public void Effects_ListedInTwoChains_AreTakenOutOfTheSecond()
+    {
+        var first = CreateSource();
+        var second = CreateSource();
+        var effect = new CountingEffect();
+
+        first.AddEffect(effect);
+
+        var stolen = new List<AudioEffect> { effect };
+        typeof(AudioSource).GetField("_effects", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(second, stolen);
+
+        second.OnValidate();
+
+        Assert.Equal(0, second.EffectCount);
+        Assert.Equal(1, first.EffectCount);
+
+        // Refused, not destroyed. It still belongs to the source that had it.
+        Assert.Equal(0, effect.Destroyed);
+    }
+
+    // A copy of a source is a copy of its effects, and those arrive holding whatever the originals
+    // were holding. If that includes a claim on the source they were copied from, the copy's chain
+    // looks like it is full of somebody else's effects.
+    [Fact]
+    public void Effects_SurviveTheirSourceBeingCloned()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject("Speaker");
+        var source = go.AddComponent<AudioSource>();
+        scene.Add(go);
+
+        source.AddEffect(new FilterEffect { Type = FilterType.Highpass, Frequency = 900f });
+
+        GameObject clone = GameObject.Instantiate(go, scene)!;
+        var cloned = clone.GetComponent<AudioSource>()!;
+
+        cloned.OnValidate();
+
+        Assert.Equal(1, cloned.EffectCount);
+        Assert.Equal(1, source.EffectCount);
+        Assert.NotSame(source.Effects[0], cloned.Effects[0]);
+
+        var filter = Assert.IsType<FilterEffect>(cloned.Effects[0]);
+        Assert.Equal(900f, filter.Frequency);
+        Assert.True(filter.IsInitialized);
+    }
+
     // ClearEffects emptied the list without telling the effects, so the two removal paths disagreed
     // about whether an effect ever gets destroyed.
     [Fact]
@@ -2128,6 +2301,43 @@ public class AudioTests : RuntimeTestBase
         {
             AudioContext.Suspended = false;
         }
+    }
+
+    // Every caller had to guard against null, and there is nothing any of them would do differently
+    // for "the backend would not answer" than for "there are none".
+    [Fact]
+    public void GetDevices_AnswersWithAListRatherThanNull()
+    {
+        DeviceInfo[] devices = AudioContext.GetDevices();
+
+        Assert.NotNull(devices);
+
+        foreach (DeviceInfo device in devices)
+            Assert.NotNull(device.Name);
+    }
+
+    // A device is found by the name it reports, because that is what survives between two runs. An
+    // index is a position in whatever was enumerated that time, so plugging in a headset renumbers
+    // everything after it and a setting saved as an index comes back pointing somewhere else.
+    [Fact]
+    public void FindDevice_MatchesOnTheNameFirst()
+    {
+        Assert.Null(AudioContext.FindDevice("a playback device that is not there"));
+        Assert.Null(AudioContext.FindDevice(null));
+        Assert.Null(AudioContext.FindDevice(string.Empty, -1));
+
+        DeviceInfo[] devices = AudioContext.GetDevices();
+
+        if (devices.Length == 0)
+            return;
+
+        DeviceInfo first = devices[0];
+
+        Assert.Equal(first.Index, AudioContext.FindDevice(first.Name)!.Index);
+
+        // The name wins over a position that points at a different device.
+        if (devices.Length > 1)
+            Assert.Equal(first.Index, AudioContext.FindDevice(first.Name, devices[1].Index)!.Index);
     }
 
     // The volume is set from project settings, which can be applied before the device opens and in
