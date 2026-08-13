@@ -10,6 +10,11 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Audio.Effects;
 
 /// <summary>Freeverb style reverb. Supports mono and stereo chains only.</summary>
+/// <remarks>
+/// An insert, so it defaults to the untouched signal with a tail on top of it. Sending a source to a
+/// reverb and hearing back only the tail is what a send bus is for, and this chain is not one: with
+/// no dry signal, as this used to default, dropping a reverb on a source removed the sound.
+/// </remarks>
 public sealed class ReverbEffect : AudioEffect
 {
     [SerializeField, Range(0f, 1f), Tooltip("Apparent size of the space.")]
@@ -19,7 +24,7 @@ public sealed class ReverbEffect : AudioEffect
     [SerializeField, Range(0f, 1f), Tooltip("Level of the reverberated signal.")]
     private float _wet = 1.0f / 3.0f;
     [SerializeField, Range(0f, 1f), Tooltip("Level of the untouched signal.")]
-    private float _dry = 0.0f;
+    private float _dry = 1.0f;
     [SerializeField, Range(0f, 1f), Tooltip("Stereo spread of the reverb tail.")]
     private float _width = 1.0f;
     [SerializeField, Tooltip("Widens or narrows the stereo image going in. 0 sums it to mono.")]
