@@ -115,8 +115,21 @@ public sealed class FilterEffect : AudioEffect
 
     protected override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
     {
+        // Passing audio through untouched is the only safe answer to either of these, but doing it
+        // without a word is how an effect ends up looking broken rather than misconfigured.
         if (_filter == null)
+        {
+            Debug.LogWarningOnce("Audio.FilterUnbound",
+                "A FilterEffect is in a chain without having been bound to an audio format, so it passes audio through untouched.");
             return;
+        }
+
+        if (channels != (uint)Channels)
+        {
+            Debug.LogWarningOnce("Audio.FilterChannels",
+                $"A FilterEffect built for {Channels} channels was handed {channels}, so it passes audio through untouched. A biquad keeps one delay pair per channel.");
+            return;
+        }
 
         _filter.Process(framesIn, framesOut, frameCountIn, (int)channels);
     }
