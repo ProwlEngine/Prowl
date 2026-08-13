@@ -69,8 +69,15 @@ public sealed class PhaserEffect : AudioEffect
         if (channels == 0)
             return;
 
+        // Said out loud rather than quietly building the missing state here. This runs on the audio
+        // thread, where allocating is a dropout, and it would restart the sweep and the allpass
+        // state of every channel mid stream to do it.
         if (channels > _phasers.Length)
-            Allocate((int)channels);
+        {
+            Debug.LogWarningOnce("Audio.PhaserChannels",
+                $"A PhaserEffect built for {_phasers.Length} channels was handed {channels}, so it passes audio through untouched. Each channel needs its own allpass state and sweep.");
+            return;
+        }
 
         int frames = (int)frameCountIn;
         int available = Math.Min(framesIn.Length, framesOut.Length) / (int)channels;
