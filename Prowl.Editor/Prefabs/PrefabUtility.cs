@@ -1348,7 +1348,13 @@ public static partial class PrefabUtility
     /// </summary>
     public static void RefreshAllInstances(Guid prefabGuid)
     {
-        List<GameObject> roots = FindInstancesOf(prefabGuid);
+        Scene? scene = Scene.Current;
+        if (scene != null) RefreshInstancesOf(prefabGuid, scene);
+    }
+
+    private static void RefreshInstancesOf(Guid prefabGuid, Scene scene)
+    {
+        List<GameObject> roots = FindInstancesOf(prefabGuid, scene);
         if (roots.Count == 0) return;
 
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
@@ -1360,6 +1366,36 @@ public static partial class PrefabUtility
 
         foreach (var root in roots)
             RefreshInstance(root, source, prefabGuid);
+    }
+
+    /// <summary>
+    /// Bring every prefab instance in a scene up to date, for a scene that is not the one open.
+    /// <para/>
+    /// A scene holds its objects outright, so an instance in one is only as current as the last time
+    /// the scene was saved. Open it and it catches up, but a build reads what is on disk, and nobody
+    /// has to have opened a scene since the prefabs it uses last changed.
+    /// </summary>
+    public static void RefreshInstancesIn(Scene scene)
+    {
+        if (scene.IsNotValid()) return;
+
+        var prefabs = new HashSet<Guid>();
+        foreach (GameObject go in scene.AllObjects)
+            if (go.IsPrefabInstance && IsInstanceRoot(go))
+                prefabs.Add(go.PrefabAssetId);
+
+        foreach (Guid prefabGuid in prefabs)
+        {
+            try
+            {
+                RefreshInstancesOf(prefabGuid, scene);
+            }
+            catch (Exception ex)
+            {
+                // One prefab that cannot be rebuilt must not take the rest of the scene with it.
+                Runtime.Debug.LogError($"[Prefab] Failed to bring instances of {prefabGuid} up to date: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>

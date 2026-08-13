@@ -635,6 +635,58 @@ public class PrefabTests : EditorTestHarness
     // Editor-only prefab bookkeeping does not ship
     // ---------------------------------------------------------------------
 
+    /// <summary>
+    /// What a build does with a scene it is shipping: read what was saved, without that scene ever
+    /// being the open one.
+    /// </summary>
+    private static Scene ReadSavedScene(EchoObject saved) => Serializer.Deserialize<Scene>(saved)!;
+
+    [Fact]
+    public void RefreshInstancesIn_BringsASceneThatWasNotOpenUpToDate()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "Shelved.prefab");
+
+        EchoObject saved = Serializer.Serialize(typeof(object), LoadSceneWith(Inst(g)));
+
+        // The prefab changes while that scene is not the one open, so what was saved is behind.
+        LoadSceneWith(new GameObject("Elsewhere"));
+        EditPrefabSource(g, "Shelved.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
+
+        Scene shipped = ReadSavedScene(saved);
+        Assert.Equal(1, shipped.RootObjects.First().GetComponent<OverrideComp>()!.A);
+
+        PrefabUtility.RefreshInstancesIn(shipped);
+
+        Assert.Equal(77, shipped.RootObjects.First().GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void RefreshInstancesIn_KeepsWhatTheInstanceOverrode()
+    {
+        var root = new GameObject("Root");
+        var comp = root.AddComponent<OverrideComp>();
+        comp.A = 1; comp.B = 1;
+        Guid g = CreatePrefabAsset(root, "ShelvedOv.prefab");
+
+        var instance = Inst(g);
+        Scene open = LoadSceneWith(instance);
+        instance.GetComponent<OverrideComp>()!.B = 99;
+        PrefabUtility.ReconcileInstance(instance);
+        EchoObject saved = Serializer.Serialize(typeof(object), open);
+
+        LoadSceneWith(new GameObject("Elsewhere"));
+        EditPrefabSource(g, "ShelvedOv.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
+
+        Scene shipped = ReadSavedScene(saved);
+        PrefabUtility.RefreshInstancesIn(shipped);
+
+        var live = shipped.RootObjects.First().GetComponent<OverrideComp>()!;
+        Assert.Equal(77, live.A);   // followed the prefab
+        Assert.Equal(99, live.B);   // kept its own
+    }
+
     [Fact]
     public void Build_StripsOverrideDataButKeepsThePrefabLink()
     {

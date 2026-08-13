@@ -64,7 +64,13 @@ public static partial class PrefabUtility
     public static List<GameObject> FindInstancesOf(Guid prefabGuid)
     {
         var scene = Scene.Current;
-        if (scene == null || prefabGuid == Guid.Empty) return [];
+        return scene == null ? [] : FindInstancesOf(prefabGuid, scene);
+    }
+
+    /// <summary>Every instance root of a prefab in a given scene, open or not.</summary>
+    public static List<GameObject> FindInstancesOf(Guid prefabGuid, Scene scene)
+    {
+        if (scene.IsNotValid() || prefabGuid == Guid.Empty) return [];
 
         return scene.AllObjects
             .Where(go => go.PrefabAssetId == prefabGuid && IsInstanceRoot(go))
