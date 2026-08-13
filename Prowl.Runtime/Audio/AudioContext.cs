@@ -426,20 +426,23 @@ public static class AudioContext
     }
 
     /// <summary>
-    /// Gets an array of available playback devices. Retrieving devices is a relatively slow operation, so don't call it continuously.
+    /// The playback devices the system reports, empty if it reports none. Walking them asks the
+    /// backend to enumerate the system's hardware and allocates an object per device and per format
+    /// each one supports, so this is not something to call every frame.
     /// </summary>
-    /// <returns>An array with playback devices</returns>
     public static DeviceInfo[] GetDevices()
     {
         IntPtr pDevices = MiniAudioExNative.ma_ex_playback_devices_get(out UInt32 count);
 
+        // Empty rather than null. There is nothing a caller does differently for "the backend would
+        // not answer" than for "there are none", and every one of them had to guard against null.
         if (pDevices == IntPtr.Zero)
-            return null;
+            return [];
 
         if (count == 0)
         {
             MiniAudioExNative.ma_ex_playback_devices_free(pDevices, count);
-            return null;
+            return [];
         }
 
         DeviceInfo[] devices = new DeviceInfo[count];
