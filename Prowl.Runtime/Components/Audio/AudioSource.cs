@@ -1165,6 +1165,13 @@ public sealed class AudioSource : MonoBehaviour
         if (!_effects.Remove(effect)) return;
 
         _chain.Publish(_effects);
+        Retire(effect);
+    }
+
+    /// <summary>Destroys an effect this chain is finished with and gives it up.</summary>
+    private static void Retire(AudioEffect effect)
+    {
+        effect.Release();
         effect.OnDestroy();
     }
 
@@ -1188,7 +1195,10 @@ public sealed class AudioSource : MonoBehaviour
         _chain.Publish(_effects);
 
         foreach (AudioEffect effect in removed)
-            effect?.OnDestroy();
+        {
+            if (effect != null)
+                Retire(effect);
+        }
     }
 
     /// <summary>
@@ -1197,11 +1207,14 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void RefreshEffects()
     {
-        foreach (AudioEffect effect in _effects)
+        DropEffectsNoLongerListed();
+
+        for (int i = _effects.Count - 1; i >= 0; i--)
         {
+            AudioEffect effect = _effects[i];
+
             if (effect == null) continue;
 
-            if (!effect.IsInitialized)
             // An effect that belongs to another chain is taken back out rather than left in a list
             // that claims to own it. Assigning one in two places is the inspector's easiest mistake.
             if (!effect.TryClaim(this))
@@ -1212,12 +1225,32 @@ public sealed class AudioSource : MonoBehaviour
                 continue;
             }
 
+            // Re-bound rather than just re-validated when the format has moved, which reopening the
+            // device on a different rate or channel count does. The DSP state is sized to a format.
+            if (!effect.IsInitialized || effect.SampleRate != AudioContext.SampleRate || effect.Channels != AudioContext.Channels)
                 effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
             else
                 effect.OnValidate();
         }
 
         _chain.Publish(_effects);
+    }
+
+    /// <summary>
+    /// Destroys effects that were in the chain and are not in the list any more.
+    /// </summary>
+    /// <remarks>
+    /// The inspector replaces the whole list rather than editing it in place, so an effect deleted
+    /// there never passes through <see cref="RemoveEffect"/> and would be dropped without ever being
+    /// told it was finished. What was published last is the record of what the chain used to hold.
+    /// </remarks>
+    private void DropEffectsNoLongerListed()
+    {
+        foreach (AudioEffect previous in _chain.Current)
+        {
+            if (previous != null && !_effects.Contains(previous))
+                Retire(previous);
+        }
     }
 
     /// <summary>

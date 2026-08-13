@@ -299,6 +299,12 @@ public sealed class AudioMixerGroup : EngineObject
         if (effect == null || !_effects.Remove(effect)) return;
 
         _chain.Publish(_effects);
+        Retire(effect);
+    }
+
+    private static void Retire(AudioEffect effect)
+    {
+        effect.Release();
         effect.OnDestroy();
     }
 
@@ -308,11 +314,31 @@ public sealed class AudioMixerGroup : EngineObject
     /// </summary>
     public void RefreshEffects()
     {
-        foreach (AudioEffect effect in _effects)
+        // The inspector replaces the list rather than editing it, so an effect deleted there never
+        // passes through RemoveEffect. What was published last is what the bus used to hold.
+        foreach (AudioEffect previous in _chain.Current)
         {
+            if (previous != null && !_effects.Contains(previous))
+                Retire(previous);
+        }
+
+        for (int i = _effects.Count - 1; i >= 0; i--)
+        {
+            AudioEffect effect = _effects[i];
+
             if (effect == null) continue;
 
-            if (!effect.IsInitialized)
+            if (!effect.TryClaim(this))
+            {
+                Debug.LogError($"Audio mixer group '{_groupName}' holds an effect that belongs to another chain, " +
+                               "so it has been removed. An effect carries its own state and can only be in one.");
+                _effects.RemoveAt(i);
+                continue;
+            }
+
+            // Re-bound rather than just re-validated when the device has reopened on a different
+            // format, since the DSP state is sized to one.
+            if (!effect.IsInitialized || effect.SampleRate != AudioContext.SampleRate || effect.Channels != AudioContext.Channels)
                 effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
             else
                 effect.OnValidate();
