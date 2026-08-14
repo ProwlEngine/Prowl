@@ -639,7 +639,8 @@ namespace Prowl.Recast.Detour.TileCache
         }
 
         // TODO: move this somewhere else, once the layer meshing is done.
-        public static DtTileCacheContourSet BuildTileCacheContours(DtTileCacheAlloc alloc, DtTileCacheLayer layer, int walkableClimb, float maxError)
+        public static DtTileCacheContourSet BuildTileCacheContours(DtTileCacheAlloc alloc, DtTileCacheLayer layer,
+            int walkableClimb, float maxError)
         {
             int w = layer.header.width;
             int h = layer.header.height;
@@ -1202,7 +1203,20 @@ namespace Prowl.Recast.Detour.TileCache
                 - (verts[c] - verts[a]) * (verts[b + 2] - verts[a + 2]) < 0;
         }
 
-        public static int GetPolyMergeValue(int[] polys, int pa, int pb, int[] verts, out int ea, out int eb, int maxVertsPerPoly)
+        /// @param[in] allowCollinear  Accept unions that are only weakly convex. Off for the
+        ///                            general merge loop, on for sliver absorption, whose whole
+        ///                            purpose is to remove edges along straightened borders. A
+        ///                            corner that comes out exactly straight bothers nothing
+        ///                            downstream: Detour's point-in-polygon tests are inclusive,
+        ///                            adjacency matches exact vertex pairs, and detail hulls
+        ///                            already carry collinear vertices wherever an edge was
+        ///                            tessellated.
+        /// @param[in] maxMergedVerts  Vertex cap for the union; defaults to the per-polygon
+        ///                            budget. Sliver absorption raises it to merge past the
+        ///                            budget, on the promise of cutting the union back into two
+        ///                            polygons that fit.
+        public static int GetPolyMergeValue(int[] polys, int pa, int pb, int[] verts, out int ea, out int eb,
+            int maxVertsPerPoly, bool allowCollinear = false, int maxMergedVerts = -1)
         {
             ea = 0;
             eb = 0;
@@ -1211,7 +1225,7 @@ namespace Prowl.Recast.Detour.TileCache
             int nb = CountPolyVerts(polys, pb, maxVertsPerPoly);
 
             // If the merged polygon would be too big, do not merge.
-            if (na + nb - 2 > maxVertsPerPoly)
+            if (na + nb - 2 > (maxMergedVerts > 0 ? maxMergedVerts : maxVertsPerPoly))
                 return -1;
 
             // Check if the polygons share an edge.
@@ -1255,13 +1269,13 @@ namespace Prowl.Recast.Detour.TileCache
             va = polys[pa + (ea + na - 1) % na];
             vb = polys[pa + ea];
             vc = polys[pb + (eb + 2) % nb];
-            if (!Uleft(verts, va * 3, vb * 3, vc * 3))
+            if (!(allowCollinear ? LeftOn(verts, va * 3, vb * 3, vc * 3) : Uleft(verts, va * 3, vb * 3, vc * 3)))
                 return -1;
 
             va = polys[pb + (eb + nb - 1) % nb];
             vb = polys[pb + eb];
             vc = polys[pa + (ea + 2) % na];
-            if (!Uleft(verts, va * 3, vb * 3, vc * 3))
+            if (!(allowCollinear ? LeftOn(verts, va * 3, vb * 3, vc * 3) : Uleft(verts, va * 3, vb * 3, vc * 3)))
                 return -1;
 
             va = polys[pa + ea];
@@ -1810,9 +1824,1022 @@ namespace Prowl.Recast.Detour.TileCache
                 }
             }
 
+            // Absorb slivers. After vertex removal, whose hole re-triangulation would otherwise
+            // put back what this takes out, and before adjacency, which the merges change.
+            AbsorbSliverPolys(mesh, maxVertsPerPoly);
+
             // Calculate adjacency.
             BuildMeshAdjacency(mesh.polys, mesh.npolys, mesh.verts, mesh.nverts, lcset, maxVertsPerPoly);
 
+            return mesh;
+        }
+
+        /// XZ width in voxels under which a polygon counts as a sliver worth merging away.
+        /// Observed slivers are 0.3-0.7 voxels across; three also catches the wedge polygons
+        /// that taper to a pinched tip at a seam corner, whose forced near-vertical facets and
+        /// sampling margins otherwise leak through every later stage. Matching too eagerly
+        /// costs nothing but a chunkier polygon, since merging never changes which ground is
+        /// walkable.
+        private const int SliverWidthVoxels = 3;
+
+        /// @par
+        ///
+        /// Merges sliver polygons into a neighbour of the same area, deleting the interior edge
+        /// that pens them in; where every union overflows the vertex budget, merges past it and
+        /// cuts the union back into two polygons that fit. A strip a fraction of a voxel wide
+        /// triangulates into nothing but a near-vertical facet, since its correctly-placed corners
+        /// take the whole rise along its length across almost no width.
+        ///
+        /// Runs on the stored mesh, not one contour's scratch polygons: a sliver is frequently a
+        /// region to itself and has no partner inside its own contour.
+        ///
+        /// Only the shape of the walkable surface changes, never its extent: no vertex moves and
+        /// the outline is untouched, so tile portals still match their neighbours edge for edge.
+        private static void AbsorbSliverPolys(DtTileCachePolyMesh mesh, int maxVertsPerPoly)
+        {
+            if (maxVertsPerPoly <= 3)
+                return;
+
+            int[] ring = new int[maxVertsPerPoly * 2];
+            int[] bestRing = new int[maxVertsPerPoly * 2];
+            int[] half = new int[maxVertsPerPoly];
+
+            // Which polygons are slivers, kept rather than re-derived: a merge changes the shape
+            // of exactly one polygon and moves one other into the freed slot, so every other
+            // answer still holds.
+            bool[] isSliver = new bool[mesh.npolys];
+            for (int i = 0; i < mesh.npolys; ++i)
+                isSliver[i] = IsSliverPoly(mesh, i, maxVertsPerPoly, SliverWidthVoxels);
+
+            for (;;)
+            {
+                // Best in-budget merge over every sliver. The highest merge value is the longest
+                // shared edge, which is the interior wall most worth deleting.
+                int bestMergeVal = 0;
+                int bestPa = 0, bestPb = 0, bestEa = 0, bestEb = 0;
+
+                for (int i = 0; i < mesh.npolys; ++i)
+                {
+                    if (!isSliver[i])
+                        continue;
+
+                    for (int j = 0; j < mesh.npolys; ++j)
+                    {
+                        // Regions mean nothing to Detour, so merging across one is fine and is
+                        // the point; areas are what a query filter reads and must not blend.
+                        if (j == i || mesh.areas[j] != mesh.areas[i])
+                            continue;
+
+                        int v = GetPolyMergeValue(mesh.polys, i * maxVertsPerPoly * 2, j * maxVertsPerPoly * 2,
+                            mesh.verts, out var ea, out var eb, maxVertsPerPoly, allowCollinear: true);
+                        if (v > bestMergeVal)
+                        {
+                            bestMergeVal = v;
+                            bestPa = i;
+                            bestPb = j;
+                            bestEa = ea;
+                            bestEb = eb;
+                        }
+                    }
+                }
+
+                if (bestMergeVal > 0)
+                {
+                    // Merge into the lower slot, so the compaction below cannot move the polygon
+                    // just merged into. The per-contour merge loop gets the same invariant from
+                    // searching ordered pairs; this pass searches both directions and has to
+                    // restore it.
+                    if (bestPa > bestPb)
+                    {
+                        (bestPa, bestPb) = (bestPb, bestPa);
+                        (bestEa, bestEb) = (bestEb, bestEa);
+                    }
+
+                    MergePolys(mesh.polys, bestPa * maxVertsPerPoly * 2, bestPb * maxVertsPerPoly * 2,
+                        bestEa, bestEb, maxVertsPerPoly);
+
+                    int last = mesh.npolys - 1;
+                    if (bestPb != last)
+                    {
+                        RcArrays.Copy(mesh.polys, last * maxVertsPerPoly * 2, mesh.polys, bestPb * maxVertsPerPoly * 2,
+                            maxVertsPerPoly * 2);
+                        mesh.areas[bestPb] = mesh.areas[last];
+                        mesh.flags[bestPb] = mesh.flags[last];
+                        isSliver[bestPb] = isSliver[last];
+                    }
+
+                    isSliver[bestPa] = IsSliverPoly(mesh, bestPa, maxVertsPerPoly, SliverWidthVoxels);
+                    mesh.npolys--;
+                    continue;
+                }
+
+                // Every remaining sliver's unions overflow the vertex budget (a sliver plus a
+                // full hexagon is the common case). Merge past the budget and cut the union in
+                // two along the diagonal that leaves the narrower half widest. Both halves must
+                // clear the sliver threshold — by the same exact arithmetic the hunt above uses,
+                // or the pass would chase its own output — so every cut retires a sliver for
+                // good, which is also why this terminates. Polygon count is unchanged: two in,
+                // one union, two out.
+                double bestScore = -1;
+                int splitPa = -1, splitPb = 0, bestS = 0, bestT = 0, bestN = 0;
+
+                for (int i = 0; i < mesh.npolys; ++i)
+                {
+                    if (!isSliver[i])
+                        continue;
+
+                    for (int j = 0; j < mesh.npolys; ++j)
+                    {
+                        if (j == i || mesh.areas[j] != mesh.areas[i])
+                            continue;
+
+                        int v = GetPolyMergeValue(mesh.polys, i * maxVertsPerPoly * 2, j * maxVertsPerPoly * 2,
+                            mesh.verts, out var ea, out var eb, maxVertsPerPoly, allowCollinear: true,
+                            maxMergedVerts: maxVertsPerPoly * 2 - 2);
+                        if (v <= 0)
+                            continue;
+
+                        int n = BuildMergedRing(mesh.polys, i * maxVertsPerPoly * 2, j * maxVertsPerPoly * 2,
+                            ea, eb, maxVertsPerPoly, ring);
+                        if (FindRingSplit(ring, n, mesh.verts, maxVertsPerPoly, half, out int s, out int t, out double score)
+                            && score > bestScore)
+                        {
+                            bestScore = score;
+                            splitPa = i;
+                            splitPb = j;
+                            bestS = s;
+                            bestT = t;
+                            bestN = n;
+                            RcArrays.Copy(ring, 0, bestRing, 0, n);
+                        }
+                    }
+                }
+
+                if (splitPa < 0)
+                    break;
+
+                WriteRingRange(mesh.polys, splitPa * maxVertsPerPoly * 2, bestRing, bestS, bestT, bestN, maxVertsPerPoly);
+                WriteRingRange(mesh.polys, splitPb * maxVertsPerPoly * 2, bestRing, bestT, bestS, bestN, maxVertsPerPoly);
+                isSliver[splitPa] = IsSliverPoly(mesh, splitPa, maxVertsPerPoly, SliverWidthVoxels);
+                isSliver[splitPb] = IsSliverPoly(mesh, splitPb, maxVertsPerPoly, SliverWidthVoxels);
+            }
+        }
+
+        private static bool IsSliverPoly(DtTileCachePolyMesh mesh, int poly, int maxVertsPerPoly, int widthVoxels)
+        {
+            int p = poly * maxVertsPerPoly * 2;
+            int n = CountPolyVerts(mesh.polys, p, maxVertsPerPoly);
+            return n >= 3 && IsSliverRing(mesh.polys, p, n, mesh.verts, widthVoxels);
+        }
+
+        /// Whether a polygon ring covers a strip narrower than @p widthVoxels: twice the XZ area
+        /// over the longest edge is the width of that strip.
+        private static bool IsSliverRing(int[] polys, int p, int n, int[] verts, int widthVoxels)
+        {
+            RingSpan(polys, p, n, verts, out long area2, out long maxEdgeSq);
+            return area2 * area2 < (long)widthVoxels * widthVoxels * maxEdgeSq;
+        }
+
+        /// Twice the XZ area of a vertex ring and its longest squared edge. Integer voxel maths
+        /// like the rest of the builder, widened to long because the squared area overflows an
+        /// int on a full layer.
+        private static void RingSpan(int[] ring, int p, int n, int[] verts, out long area2, out long maxEdgeSq)
+        {
+            area2 = 0;
+            maxEdgeSq = 0;
+            for (int i = 0, j = n - 1; i < n; j = i++)
+            {
+                int a = ring[p + j] * 3;
+                int b = ring[p + i] * 3;
+                area2 += ((long)verts[a] * verts[b + 2]) - ((long)verts[b] * verts[a + 2]);
+
+                long dx = verts[b] - verts[a];
+                long dz = verts[b + 2] - verts[a + 2];
+                maxEdgeSq = Math.Max(maxEdgeSq, (dx * dx) + (dz * dz));
+            }
+
+            area2 = Math.Abs(area2);
+        }
+
+        /// The union ring of two polygons sharing edge @p ea / @p eb, laid out the way MergePolys
+        /// lays it out — first polygon's vertices from past the shared edge around, then the
+        /// second's — except into caller scratch, because here the union may exceed the
+        /// per-polygon budget. Returns the ring's vertex count.
+        private static int BuildMergedRing(int[] polys, int pa, int pb, int ea, int eb, int maxVertsPerPoly, int[] ring)
+        {
+            int na = CountPolyVerts(polys, pa, maxVertsPerPoly);
+            int nb = CountPolyVerts(polys, pb, maxVertsPerPoly);
+            int n = 0;
+            for (int i = 0; i < na - 1; ++i)
+                ring[n++] = polys[pa + (ea + 1 + i) % na];
+            for (int i = 0; i < nb - 1; ++i)
+                ring[n++] = polys[pb + (eb + 1 + i) % nb];
+            return n;
+        }
+
+        /// The diagonal cutting @p ring into the two most usable polygons: both inside the vertex
+        /// budget, neither a sliver, and the narrower of the two as wide as any cut can make it.
+        /// The ring is convex — the merge checked its two seams and every other corner came from
+        /// a convex polygon unchanged — so any diagonal lies inside it and no intersection tests
+        /// are needed. False when every cut leaves a sliver behind.
+        private static bool FindRingSplit(int[] ring, int n, int[] verts, int maxVertsPerPoly, int[] half,
+            out int s, out int t, out double score)
+        {
+            s = 0;
+            t = 0;
+            score = -1;
+            for (int a = 0; a < n - 2; ++a)
+            {
+                for (int b = a + 2; b < n; ++b)
+                {
+                    if (a == 0 && b == n - 1)
+                        continue; // consecutive around the wrap: a ring edge, not a diagonal
+
+                    if (b - a + 1 > maxVertsPerPoly || n - (b - a) + 1 > maxVertsPerPoly)
+                        continue;
+
+                    if (!TryHalf(ring, a, b, n, verts, half, out double w1)
+                        || !TryHalf(ring, b, a, n, verts, half, out double w2))
+                        continue;
+
+                    double d = Math.Min(w1, w2);
+                    if (d > score)
+                    {
+                        score = d;
+                        s = a;
+                        t = b;
+                    }
+                }
+            }
+
+            return score >= 0;
+        }
+
+        /// Measures the sub-ring from @p from to @p to inclusive, wrapping. False when the piece
+        /// is itself a sliver, judged by the same exact arithmetic the absorption pass hunts
+        /// with; the width comes back as a double only to rank cuts.
+        private static bool TryHalf(int[] ring, int from, int to, int n, int[] verts, int[] half, out double width)
+        {
+            int count = ((to - from) + n) % n + 1;
+            for (int i = 0; i < count; ++i)
+                half[i] = ring[(from + i) % n];
+
+            RingSpan(half, 0, count, verts, out long area2, out long maxEdgeSq);
+            width = maxEdgeSq > 0 ? area2 / Math.Sqrt(maxEdgeSq) : 0;
+            return area2 * area2 >= (long)SliverWidthVoxels * SliverWidthVoxels * maxEdgeSq;
+        }
+
+        /// Writes the sub-ring from @p from to @p to inclusive (wrapping) into a polygon slot's
+        /// vertex half, padding the remainder with the null index. The adjacency half is left
+        /// alone: it is computed after this pass.
+        private static void WriteRingRange(int[] polys, int p, int[] ring, int from, int to, int n, int maxVertsPerPoly)
+        {
+            int count = ((to - from) + n) % n + 1;
+            for (int k = 0; k < maxVertsPerPoly; ++k)
+                polys[p + k] = k < count ? ring[(from + k) % n] : DT_TILECACHE_NULL_IDX;
+        }
+
+        /// The height a layer cell carries where the layer has no surface. Layers are built with a
+        /// span under 255 voxels, which is what leaves this value free to mean "nothing here".
+        internal const int NoSurface = 0xFF;
+
+        /// How many cells of the neighbouring tiles' layers a tile borrows around its edge when
+        /// it meshes. The standard tiled pipeline rasterizes past the tile edge for the same
+        /// reason: with the seam's surroundings present on both sides, corner heights, contours
+        /// and height detail at the seam are computed from the same world cells by both tiles,
+        /// and the seam closes by construction. Two cells covers everything that reads across
+        /// the boundary — corner neighbourhoods and detail height patches alike.
+        public const int SeamBorder = 2;
+
+        /// A tile's layer widened by #SeamBorder cells of its neighbours' layers, heights
+        /// rebased into this tile's units. -1 marks no surface — rebased neighbour heights can
+        /// take any value, so the layer's own 0xFF sentinel is not safe here.
+        public class DtTileBorderGrid
+        {
+            public readonly int width;   // core width, without the border
+            public readonly int height;  // core height, without the border
+            public readonly int border;
+            public readonly int[] heights;
+            public readonly int[] areas;
+
+            public DtTileBorderGrid(int width, int height, int border)
+            {
+                this.width = width;
+                this.height = height;
+                this.border = border;
+                int gw = width + border * 2, gh = height + border * 2;
+                heights = new int[gw * gh];
+                areas = new int[gw * gh];
+                Array.Fill(heights, -1);
+            }
+
+            /// Index by core cell coordinates; the border lives at -border..-1 and width..width+border-1.
+            public int Index(int x, int z) => (x + border) + (z + border) * (width + border * 2);
+        }
+
+        /// @par
+        ///
+        /// Partitions and contours a tile with the standard pipeline instead of the cache's
+        /// classic monotone sweep: a watershed over a distance field for regions, and
+        /// rcBuildContours for outlines — which handles regions that enclose holes (the classic
+        /// walker traces one loop per region and silently drops the rest), takes corner heights
+        /// through span connectivity rather than any cell within climbing reach, and splits
+        /// contour edges longer than @p DtTileCacheParams.maxEdgeLen so open ground polygonizes
+        /// into compact local polygons instead of fans that reach across the tile.
+        ///
+        /// Returns null when the tile needs the classic path instead: when any interior cell
+        /// carries a portal to another vertical layer — the heightfield here holds one layer, so
+        /// the standard contourer cannot place the mandatory vertices those seams need — or when
+        /// the contourer rejects the region set outright.
+        ///
+        /// Tile seams still stitch: portal edges lie exactly on the tile boundary lines, where
+        /// simplification cannot move them, and each converted edge takes its portal direction
+        /// from the layer's own connection bits.
+        public static DtTileCacheContourSet BuildTileCacheContoursWatershed(RcContext ctx, DtTileCacheLayer layer,
+            RcCompactHeightfield chf, in DtTileCacheParams cacheParams)
+        {
+            if (HasInteriorLayerPortals(layer))
+                return null;
+
+            RcContourSet rcset;
+            try
+            {
+                RcRegions.BuildDistanceField(ctx, chf);
+                RcRegions.BuildRegions(ctx, chf, cacheParams.minRegionArea, cacheParams.mergeRegionArea);
+                rcset = RcContours.BuildContours(ctx, chf, cacheParams.maxSimplificationError,
+                    cacheParams.maxEdgeLen, RcBuildContoursFlags.RC_CONTOUR_TESS_WALL_EDGES);
+            }
+            catch (Exception e)
+            {
+                // "Multiple outlines" / "bad outline": over-aggressive simplification made a
+                // contour self-overlap. Rare, and the classic path still produces a usable tile.
+                ctx.Warn("BuildTileCacheContoursWatershed: falling back to monotone partitioning: " + e.Message);
+                return null;
+            }
+
+            var lcset = new DtTileCacheContourSet();
+            lcset.nconts = rcset.conts.Count;
+            lcset.conts = new DtTileCacheContour[lcset.nconts];
+
+            for (int i = 0; i < rcset.conts.Count; i++)
+            {
+                RcContour src = rcset.conts[i];
+                var cont = new DtTileCacheContour();
+                cont.nverts = src.nverts;
+                // Nothing downstream keys on the region id — polygons carry their contour's
+                // area, and adjacency matches vertices — so a watershed id past the byte just
+                // wraps harmlessly.
+                cont.reg = unchecked((byte)src.reg);
+                cont.area = (byte)src.area;
+                cont.verts = new int[src.nverts * 4];
+
+                for (int v = 0; v < src.nverts; v++)
+                {
+                    int n = (v + 1) % src.nverts;
+                    // Vertex coordinates come out core-relative — the standard contourer
+                    // subtracts the border itself — and their heights already agree with the
+                    // neighbouring tile's, because the border spans put the same world cells
+                    // under both tiles' corner rules.
+                    cont.verts[v * 4 + 0] = src.verts[v * 4 + 0];
+                    cont.verts[v * 4 + 1] = src.verts[v * 4 + 1];
+                    cont.verts[v * 4 + 2] = src.verts[v * 4 + 2];
+                    // The classic format keeps a segment's portal direction on its first vertex;
+                    // 0x0f is "not a portal". No 0x80 removal flags: the standard contourer
+                    // already places only the vertices it means to keep.
+                    cont.verts[v * 4 + 3] = PortalDir(layer,
+                        src.verts[v * 4 + 0], src.verts[v * 4 + 2],
+                        src.verts[n * 4 + 0], src.verts[n * 4 + 2]);
+                }
+
+                lcset.conts[i] = cont;
+            }
+
+            return lcset;
+        }
+
+        /// Whether any cell away from the tile boundary carries a portal bit — a seam to another
+        /// vertical layer of the same tile. Boundary cells' bits point at neighbouring tiles and
+        /// are expected.
+        private static bool HasInteriorLayerPortals(DtTileCacheLayer layer)
+        {
+            int w = layer.header.width, h = layer.header.height;
+            for (int z = 1; z < h - 1; ++z)
+                for (int x = 1; x < w - 1; ++x)
+                    if ((layer.cons[x + z * w] >> 4) != 0)
+                        return true;
+            return false;
+        }
+
+        /// The portal direction of one contour edge, or 0x0f for none: the edge must lie on a
+        /// tile boundary line, and a cell it runs along must actually connect onward through the
+        /// layer's portal bits — the map's perimeter sits on the same lines with nothing beyond.
+        private static int PortalDir(DtTileCacheLayer layer, int ax, int az, int bx, int bz)
+        {
+            int w = layer.header.width, h = layer.header.height;
+
+            int dir;
+            if (ax == 0 && bx == 0) dir = 0;
+            else if (az == h && bz == h) dir = 1;
+            else if (ax == w && bx == w) dir = 2;
+            else if (az == 0 && bz == 0) dir = 3;
+            else return 0x0f;
+
+            // The cells the edge runs along, one row or column inside the boundary line.
+            int lo, hi;
+            if (dir == 0 || dir == 2)
+            {
+                lo = Math.Min(az, bz);
+                hi = Math.Max(az, bz);
+            }
+            else
+            {
+                lo = Math.Min(ax, bx);
+                hi = Math.Max(ax, bx);
+            }
+
+            for (int k = lo; k < hi; ++k)
+            {
+                int x = dir == 0 ? 0 : dir == 2 ? w - 1 : k;
+                int z = dir == 3 ? 0 : dir == 1 ? h - 1 : k;
+                if (((layer.cons[x + z * w] >> 4) & (1 << dir)) != 0)
+                    return dir;
+            }
+
+            return 0x0f;
+        }
+
+        /// @par
+        ///
+        /// Gives the tile's polygons height detail, so Detour reads heights off the surface rather
+        /// than off each polygon's own corners. Without it a polygon is flat between its corners,
+        /// which is exact on a floor or a ramp and wrong by a wide margin on anything that curves,
+        /// where one polygon can cover a whole hillside.
+        ///
+        /// The layer is a per-cell height grid in the same coordinates as the polygon vertices, so
+        /// it is presented to rcBuildPolyMeshDetail as a one-span-per-cell compact heightfield.
+        /// Writes the detail mesh into @p option; leaves it untouched if the layer is level, since
+        /// the corners already describe the surface there.
+        ///
+        /// @param[in]      ctx           The build context.
+        /// @param[in]      layer         The layer the tile was contoured from.
+        /// @param[in]      chf           The layer as a compact heightfield (#ToCompactHeightfield),
+        ///                               shared with the partition stage rather than rebuilt.
+        /// @param[in,out]  option        Tile parameters carrying the polygon mesh.
+        /// @param[in]      cacheParams   The cache's parameters, for the sampling settings.
+        public static void BuildTileCacheDetailMesh(RcContext ctx, DtTileCacheLayer layer, RcCompactHeightfield chf,
+            DtNavMeshCreateParams option, in DtTileCacheParams cacheParams)
+        {
+            if (option.polyCount == 0 || cacheParams.detailSampleDist <= 0 || IsLevel(layer))
+                return;
+
+            RcPolyMesh mesh = ToPolyMesh(option);
+            mesh.maxEdgeError = cacheParams.maxSimplificationError;
+            // Polygon vertices are core-relative while the heightfield carries the seam
+            // border; the detail builder offsets its heightfield reads by this, exactly as the
+            // standard pipeline does.
+            mesh.borderSize = chf.borderSize;
+
+            // Both tiles at a seam draw the seam's one canonical polyline (#RcSeamProfileSet):
+            // polygon corners on a seam line snap to it, and the detail builder fills each
+            // seam edge with its knots instead of sampling.
+            RcSeamProfileSet seams = RcSeamProfileSet.Build(chf, cacheParams.detailSampleMaxError);
+            if (seams != null)
+                SnapSeamCorners(option, chf, seams);
+
+            // Interior samples at half the outline spacing: cache polygons are small enough that
+            // at one shared spacing most clear neither the extent bar nor the grid's edge margin,
+            // leaving their interiors to whatever their outlines span. Outline spacing stays as
+            // configured — each extra outline vertex on a barely-not-a-sliver polygon costs a
+            // steep facet.
+            RcPolyMeshDetail dmesh = RcMeshDetails.BuildPolyMeshDetail(ctx, mesh, chf,
+                cacheParams.detailSampleDist, cacheParams.detailSampleMaxError, seams,
+                cacheParams.detailSampleDist * 0.5f);
+            if (dmesh == null)
+                return;
+
+            // The detail builder lifts every vertex it emits, corner copies included, one cell
+            // height; the built tile discards those copies and reads corners from the polygon
+            // vertices instead. Align them to what the tile will render, or the passes below
+            // judge facets a step away from the ones agents and the scene view get.
+            for (int i = 0; i < dmesh.nmeshes; ++i)
+            {
+                int vb = dmesh.meshes[i * 4 + 0];
+                int npoly = CountPolyVerts(option.polys, i * option.nvp * 2, option.nvp);
+                for (int v = 0; v < npoly; ++v)
+                {
+                    int corner = option.polys[i * option.nvp * 2 + v];
+                    dmesh.verts[(vb + v) * 3 + 1] = option.bmin.Y + option.verts[corner * 3 + 1] * option.ch;
+                }
+            }
+
+            FlipDetailPleats(option, dmesh);
+
+            option.detailMeshes = dmesh.meshes;
+            option.detailVerts = dmesh.verts;
+            option.detailVertsCount = dmesh.nverts;
+            option.detailTris = dmesh.tris;
+            option.detailTriCount = dmesh.ntris;
+        }
+
+        /// Puts every polygon corner on a seam line onto the seam's canonical polyline, so both
+        /// tiles hang their surfaces from the same heights along it. Corner heights are whole
+        /// cell heights, so a corner between two knots rounds onto the polyline rather than
+        /// landing on it; the knots either side are shared and exact, and #RcSeamProfileSet's
+        /// pins hold that rounding inside the corner's own cell. Corners the profile has
+        /// nothing for — a gap, or another walkable surface's stretch — keep their contoured
+        /// height.
+        private static void SnapSeamCorners(DtNavMeshCreateParams option, RcCompactHeightfield chf, RcSeamProfileSet seams)
+        {
+            int coreW = chf.width - chf.borderSize * 2;
+            int coreH = chf.height - chf.borderSize * 2;
+            float climb = chf.walkableClimb * chf.ch;
+            for (int v = 0; v < option.vertCount; ++v)
+            {
+                int x = option.verts[v * 3 + 0];
+                int z = option.verts[v * 3 + 2];
+                if (x != 0 && x != coreW && z != 0 && z != coreH)
+                    continue;
+
+                float yWorld = option.verts[v * 3 + 1] * chf.ch;
+                if (seams.TryEval(x * chf.cs, z * chf.cs, climb, yWorld, out float sy))
+                    option.verts[v * 3 + 1] = (int)MathF.Round(sy / chf.ch);
+            }
+        }
+
+        /// A facet steeper than this is treated as a pleat worth re-triangulating: tan 50°. The
+        /// walk limit anything sensible bakes with is 45°, so real ground stays below this and
+        /// only artifacts stand above it.
+        private const double PleatTanSlope = 1.19;
+
+        /// @par
+        ///
+        /// Re-triangulates knife-pleats out of the detail mesh: triangles penned into the strip
+        /// between three nearly collinear outline vertices, whose near-zero footprint takes the
+        /// whole height change along the run and draws as a streak of wall on smooth ground.
+        /// Every vertex is already at the right height — only the connectivity is wrong — so
+        /// flipping the interior edge re-covers the same quad with two triangles that have real
+        /// footprint and real slope.
+        ///
+        /// Hull edges are never re-cut, so the surface along polygon boundaries — where
+        /// neighbours must tell the same story — is untouched, and no vertex is added, moved or
+        /// removed; only the interior diagonals change.
+        ///
+        /// A polygon whose detail vertices all sit on its boundary ring is re-cut outright to the
+        /// ring triangulation with the flattest worst facet (#RetriangulateRing), because single
+        /// flips cannot get there: around a collinear run every path to it climbs through steeper
+        /// intermediates and a greedy pass parks. Interior samples give flips room to work, and
+        /// each accepted flip strictly flattens the steeper of its pair, so the passes settle.
+        private static void FlipDetailPleats(DtNavMeshCreateParams option, RcPolyMeshDetail dmesh)
+        {
+            int maxRing = 0;
+            for (int i = 0; i < dmesh.nmeshes; ++i)
+                maxRing = Math.Max(maxRing, dmesh.meshes[i * 4 + 1]);
+            int[] ring = new int[maxRing];
+            RingDpScratch dp = null;
+
+            for (int i = 0; i < dmesh.nmeshes; ++i)
+            {
+                int vb = dmesh.meshes[i * 4 + 0];
+                int tb = dmesh.meshes[i * 4 + 2];
+                int ntris = dmesh.meshes[i * 4 + 3];
+
+                double worst = 0;
+                for (int t = 0; t < ntris; ++t)
+                    worst = Math.Max(worst, TriTanSlope(dmesh, vb, tb + t));
+                if (worst <= PleatTanSlope)
+                    continue;
+
+                int npoly = CountPolyVerts(option.polys, i * option.nvp * 2, option.nvp);
+                if (TryBuildHullRing(dmesh, i, npoly, ring, out int ringLen))
+                {
+                    dp ??= new RingDpScratch();
+                    dp.EnsureCapacity(ringLen);
+                    RetriangulateRing(dmesh, i, ring, ringLen, worst, dp);
+                    continue;
+                }
+
+                for (int pass = 0; pass < 8; ++pass)
+                {
+                    bool improved = false;
+                    for (int t = 0; t < ntris; ++t)
+                    {
+                        if (TriTanSlope(dmesh, vb, tb + t) > PleatTanSlope)
+                            improved |= TryFlipPleat(dmesh, vb, tb, ntris, t);
+                    }
+
+                    if (!improved)
+                        break;
+                }
+            }
+        }
+
+        /// Orders a polygon's detail vertices around its boundary: corners in polygon order,
+        /// each followed by the edge-tessellation vertices that lie on its outgoing edge, sorted
+        /// along it. False when any vertex sits off the boundary — an interior sample — because
+        /// then the ring alone does not describe the polygon and re-cutting it would drop real
+        /// surface data.
+        private static bool TryBuildHullRing(RcPolyMeshDetail dmesh, int poly, int npoly, int[] ring, out int ringLen)
+        {
+            int vb = dmesh.meshes[poly * 4 + 0];
+            int nverts = dmesh.meshes[poly * 4 + 1];
+            int ntris = dmesh.meshes[poly * 4 + 3];
+            ringLen = 0;
+            if (npoly < 3 || nverts < npoly || ntris != nverts - 2)
+                return false;
+
+            // Which hull edge carries each added vertex, and how far along. Edge vertices were
+            // made by lerping along the edge, so the fit is tight; anything that misses every
+            // edge is an interior sample.
+            const double tol = 0.01;
+            Span<int> onEdge = nverts - npoly <= 128 ? stackalloc int[nverts - npoly] : new int[nverts - npoly];
+            Span<double> along = nverts - npoly <= 128 ? stackalloc double[nverts - npoly] : new double[nverts - npoly];
+            for (int a = npoly; a < nverts; ++a)
+            {
+                int va = (vb + a) * 3;
+                double px = dmesh.verts[va], pz = dmesh.verts[va + 2];
+
+                int bestEdge = -1;
+                double bestDist = tol, bestT = 0;
+                for (int e = 0; e < npoly; ++e)
+                {
+                    int e0 = (vb + e) * 3;
+                    int e1 = (vb + (e + 1) % npoly) * 3;
+                    double ax = dmesh.verts[e0], az = dmesh.verts[e0 + 2];
+                    double bx = dmesh.verts[e1], bz = dmesh.verts[e1 + 2];
+                    double dx = bx - ax, dz = bz - az;
+                    double lenSq = dx * dx + dz * dz;
+                    if (lenSq < 1e-12) continue;
+                    double t = ((px - ax) * dx + (pz - az) * dz) / lenSq;
+                    if (t <= 0 || t >= 1) continue;
+                    double ox = ax + t * dx - px, oz = az + t * dz - pz;
+                    double dist = Math.Sqrt(ox * ox + oz * oz);
+                    if (dist < bestDist)
+                    {
+                        bestDist = dist;
+                        bestEdge = e;
+                        bestT = t;
+                    }
+                }
+
+                if (bestEdge < 0)
+                    return false;
+                onEdge[a - npoly] = bestEdge;
+                along[a - npoly] = bestT;
+            }
+
+            for (int e = 0; e < npoly; ++e)
+            {
+                ring[ringLen++] = e;
+                // Insertion order along the edge; counts are tiny.
+                int start = ringLen;
+                for (int a = 0; a < nverts - npoly; ++a)
+                {
+                    if (onEdge[a] != e) continue;
+                    int at = ringLen++;
+                    while (at > start && along[ring[at - 1] - npoly] > along[a])
+                    {
+                        ring[at] = ring[at - 1];
+                        at--;
+                    }
+                    ring[at] = npoly + a;
+                }
+            }
+
+            return ringLen == nverts;
+        }
+
+        /// Re-cuts a boundary ring to the triangulation with the flattest steepest facet, by
+        /// interval dynamic programming over the ring — small rings, and only polygons that
+        /// contain a pleat get here. Ring edges are all boundary and are all kept; only the
+        /// diagonals are chosen. Leaves the mesh alone unless the optimum actually beats the
+        /// triangulation it arrived with.
+        private static void RetriangulateRing(RcPolyMeshDetail dmesh, int poly, int[] ring, int n, double currentWorst,
+            RingDpScratch scratch)
+        {
+            int vb = dmesh.meshes[poly * 4 + 0];
+            int tb = dmesh.meshes[poly * 4 + 2];
+
+            double[] best = scratch.Best;
+            int[] pick = scratch.Pick;
+            int stride = scratch.Stride;
+            for (int len = 2; len < n; ++len)
+            {
+                for (int i = 0; i + len < n; ++i)
+                {
+                    int j = i + len;
+                    double b = double.MaxValue;
+                    int bk = -1;
+                    for (int k = i + 1; k < j; ++k)
+                    {
+                        double v = Math.Max(TanSlope(dmesh, vb, ring[i], ring[k], ring[j]),
+                            Math.Max(best[i * stride + k], best[k * stride + j]));
+                        if (v < b)
+                        {
+                            b = v;
+                            bk = k;
+                        }
+                    }
+
+                    best[i * stride + j] = b;
+                    pick[i * stride + j] = bk;
+                }
+            }
+
+            if (best[n - 1] >= currentWorst)
+                return;
+
+            const int hull = 0x1; // DT_DETAIL_EDGE_BOUNDARY
+            int dst = tb * 4;
+            List<int> stack = scratch.Stack;
+            stack.Clear();
+            stack.Add(0);
+            stack.Add(n - 1);
+            while (stack.Count > 0)
+            {
+                int j = stack[^1];
+                int i = stack[^2];
+                stack.RemoveRange(stack.Count - 2, 2);
+                if (j - i < 2) continue;
+                int k = pick[i * stride + j];
+
+                dmesh.tris[dst++] = ring[i];
+                dmesh.tris[dst++] = ring[k];
+                dmesh.tris[dst++] = ring[j];
+                dmesh.tris[dst++] = (k == i + 1 ? hull : 0)
+                    | (j == k + 1 ? hull << 2 : 0)
+                    | (i == 0 && j == n - 1 ? hull << 4 : 0);
+
+                stack.Add(i);
+                stack.Add(k);
+                stack.Add(k);
+                stack.Add(j);
+            }
+        }
+
+        /// Working set for #RetriangulateRing's interval DP, sized once for the largest ring in a
+        /// tile: two n×n tables in flat arrays and the walk's own stack.
+        private sealed class RingDpScratch
+        {
+            public double[] Best = [];
+            public int[] Pick = [];
+            public readonly List<int> Stack = [];
+            public int Stride;
+
+            public void EnsureCapacity(int n)
+            {
+                if (Stride < n)
+                {
+                    Stride = n;
+                    Best = new double[n * n];
+                    Pick = new int[n * n];
+                    return;
+                }
+
+                // Intervals shorter than two edges are never written but are read as the zero
+                // base case, so the rows this ring will use start clear.
+                for (int i = 0; i < n; ++i)
+                    Array.Clear(Best, i * Stride, n);
+            }
+        }
+
+        /// Tangent of one detail triangle's slope against level ground — the horizontal over the
+        /// vertical of its normal. Degenerate footprints read as vertical.
+        private static double TriTanSlope(RcPolyMeshDetail dmesh, int vb, int tri)
+        {
+            int t = tri * 4;
+            return TanSlope(dmesh, vb, dmesh.tris[t], dmesh.tris[t + 1], dmesh.tris[t + 2]);
+        }
+
+        private static double TanSlope(RcPolyMeshDetail dmesh, int vb, int ia, int ib, int ic)
+        {
+            int a = (vb + ia) * 3;
+            int b = (vb + ib) * 3;
+            int c = (vb + ic) * 3;
+
+            double ux = dmesh.verts[b] - dmesh.verts[a], uy = dmesh.verts[b + 1] - dmesh.verts[a + 1], uz = dmesh.verts[b + 2] - dmesh.verts[a + 2];
+            double wx = dmesh.verts[c] - dmesh.verts[a], wy = dmesh.verts[c + 1] - dmesh.verts[a + 1], wz = dmesh.verts[c + 2] - dmesh.verts[a + 2];
+
+            double nx = uy * wz - uz * wy;
+            double ny = uz * wx - ux * wz;
+            double nz = ux * wy - uy * wx;
+
+            double horizontal = Math.Sqrt(nx * nx + nz * nz);
+            return Math.Abs(ny) < 1e-12 ? double.PositiveInfinity : horizontal / Math.Abs(ny);
+        }
+
+        /// Twice the XZ area of a detail triangle, signed. Not DtUtils.TriArea2D: only the sign is
+        /// read here, and these accumulate in double so the near-degenerate slivers this pass
+        /// exists to judge do not decide their own winding by float rounding.
+        private static double SignedArea2XZ(RcPolyMeshDetail dmesh, int vb, int a, int b, int c)
+        {
+            int va = (vb + a) * 3, vc2 = (vb + b) * 3, vd = (vb + c) * 3;
+            return ((double)dmesh.verts[vc2] - dmesh.verts[va]) * (dmesh.verts[vd + 2] - dmesh.verts[va + 2])
+                 - ((double)dmesh.verts[vd] - dmesh.verts[va]) * (dmesh.verts[vc2 + 2] - dmesh.verts[va + 2]);
+        }
+
+        /// Flips the first edge of pleat triangle @p t whose flip helps: the edge must be
+        /// interior (a hull flag on either side pins it), shared with another of the polygon's
+        /// triangles, the enclosing quad convex — both replacement triangles keep the winding —
+        /// and the steeper of the pair must come out flatter than it went in.
+        private static bool TryFlipPleat(RcPolyMeshDetail dmesh, int vb, int tb, int ntris, int t)
+        {
+            int ta = (tb + t) * 4;
+            for (int k = 0; k < 3; ++k)
+            {
+                if (((dmesh.tris[ta + 3] >> (k * 2)) & 0x3) != 0)
+                    continue; // hull edge: the boundary with the neighbouring polygon stays as-is
+
+                int p = dmesh.tris[ta + k];
+                int q = dmesh.tris[ta + (k + 1) % 3];
+                int r = dmesh.tris[ta + (k + 2) % 3];
+
+                // The partner triangle walks the shared edge the other way.
+                for (int u = 0; u < ntris; ++u)
+                {
+                    if (u == t)
+                        continue;
+
+                    int tu = (tb + u) * 4;
+                    int m = -1;
+                    for (int e = 0; e < 3; ++e)
+                    {
+                        if (dmesh.tris[tu + e] == q && dmesh.tris[tu + (e + 1) % 3] == p)
+                        {
+                            m = e;
+                            break;
+                        }
+                    }
+
+                    if (m < 0)
+                        continue;
+                    if (((dmesh.tris[tu + 3] >> (m * 2)) & 0x3) != 0)
+                        break; // the same edge hull-flagged from the other side
+
+                    int s = dmesh.tris[tu + (m + 2) % 3];
+
+                    // Convexity of the quad p-s-q-r, as winding: both replacements must turn the
+                    // same way as the originals.
+                    double sign = SignedArea2XZ(dmesh, vb, p, q, r);
+                    double a1 = SignedArea2XZ(dmesh, vb, p, s, r);
+                    double a2 = SignedArea2XZ(dmesh, vb, s, q, r);
+                    if (sign == 0 || Math.Sign(a1) != Math.Sign(sign) || Math.Sign(a2) != Math.Sign(sign))
+                        break;
+
+                    double oldWorst = Math.Max(TriTanSlope(dmesh, vb, tb + t), TriTanSlope(dmesh, vb, tb + u));
+
+                    int fQR = (dmesh.tris[ta + 3] >> (((k + 1) % 3) * 2)) & 0x3;
+                    int fRP = (dmesh.tris[ta + 3] >> (((k + 2) % 3) * 2)) & 0x3;
+                    int fPS = (dmesh.tris[tu + 3] >> (((m + 1) % 3) * 2)) & 0x3;
+                    int fSQ = (dmesh.tris[tu + 3] >> (((m + 2) % 3) * 2)) & 0x3;
+
+                    // Both triangles verbatim, to restore if the flip does not pay.
+                    int wasA0 = dmesh.tris[ta], wasA1 = dmesh.tris[ta + 1], wasA2 = dmesh.tris[ta + 2], wasAf = dmesh.tris[ta + 3];
+                    int wasU0 = dmesh.tris[tu], wasU1 = dmesh.tris[tu + 1], wasU2 = dmesh.tris[tu + 2], wasUf = dmesh.tris[tu + 3];
+
+                    dmesh.tris[ta] = p;
+                    dmesh.tris[ta + 1] = s;
+                    dmesh.tris[ta + 2] = r;
+                    dmesh.tris[ta + 3] = fPS | (0 << 2) | (fRP << 4);
+
+                    dmesh.tris[tu] = s;
+                    dmesh.tris[tu + 1] = q;
+                    dmesh.tris[tu + 2] = r;
+                    dmesh.tris[tu + 3] = fSQ | (fQR << 2) | (0 << 4);
+
+                    if (Math.Max(TriTanSlope(dmesh, vb, tb + t), TriTanSlope(dmesh, vb, tb + u)) < oldWorst)
+                        return true;
+
+                    // No flatter than before: put both back exactly as stored, so the edge walk
+                    // above still visits every edge it has not tried yet.
+                    dmesh.tris[ta] = wasA0;
+                    dmesh.tris[ta + 1] = wasA1;
+                    dmesh.tris[ta + 2] = wasA2;
+                    dmesh.tris[ta + 3] = wasAf;
+                    dmesh.tris[tu] = wasU0;
+                    dmesh.tris[tu + 1] = wasU1;
+                    dmesh.tris[tu + 2] = wasU2;
+                    dmesh.tris[tu + 3] = wasUf;
+                    break;
+                }
+            }
+
+            return false;
+        }
+
+        /// True when every cell the layer has a surface for sits at one height, so the polygons are
+        /// already the surface and detail would restate a flat plane. Level tiles are the common
+        /// case in a built environment, and this runs on every tile build rather than once.
+        private static bool IsLevel(DtTileCacheLayer layer)
+        {
+            int height = -1;
+            for (int i = 0; i < layer.heights.Length; i++)
+            {
+                if (layer.heights[i] == NoSurface) continue;
+                if (height < 0) height = layer.heights[i];
+                else if (layer.heights[i] != height) return false;
+            }
+
+            return true;
+        }
+
+        /// The bordered tile grid as the compact heightfield the standard builders read: one
+        /// span per cell with a surface. The partition, contour and detail stages all walk it:
+        /// regions and contours check areas themselves, and the detail builder floods each
+        /// polygon's height patch across span connections, so unwalkable surface gets spans
+        /// too, and neighbours connect on the step between them — what a heightfield built
+        /// from geometry would hold, border included.
+        ///
+        /// Spans pack densely, exactly like a real compact heightfield: array-wide passes index by
+        /// span, so padded slots would leak their sentinel values into the aggregates those passes
+        /// take.
+        public static RcCompactHeightfield ToCompactHeightfield(DtTileBorderGrid grid, in DtTileCacheParams cacheParams)
+        {
+            int b = grid.border;
+            int width = grid.width + b * 2, depth = grid.height + b * 2;
+
+            int spanCount = 0;
+            for (int i = 0; i < width * depth; ++i)
+                if (grid.heights[i] >= 0)
+                    spanCount++;
+
+            RcCompactHeightfield chf = new RcCompactHeightfield();
+            chf.width = width;
+            chf.height = depth;
+            chf.borderSize = b;
+            chf.spanCount = spanCount;
+            chf.walkableHeight = (int)MathF.Ceiling(cacheParams.walkableHeight / cacheParams.ch);
+            chf.walkableClimb = (int)MathF.Floor(cacheParams.walkableClimb / cacheParams.ch);
+            chf.cs = cacheParams.cs;
+            chf.ch = cacheParams.ch;
+            chf.cells = new RcCompactCell[width * depth];
+            chf.spans = new RcCompactSpan[spanCount];
+            chf.areas = new int[spanCount];
+
+            RcCompactSpanBuilder span = RcCompactSpanBuilder.NewBuilder();
+            int cur = 0;
+            for (int z = 0; z < depth; ++z)
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    int i = x + z * width;
+                    if (grid.heights[i] < 0)
+                    {
+                        chf.cells[i] = new RcCompactCell(cur, 0);
+                        continue;
+                    }
+
+                    chf.cells[i] = new RcCompactCell(cur, 1);
+                    chf.areas[cur] = grid.areas[i];
+
+                    span.y = grid.heights[i];
+                    span.h = chf.walkableHeight;
+                    span.con = 0;
+                    // One span per cell, so the neighbour a connection points at is always span 0.
+                    for (int dir = 0; dir < 4; ++dir)
+                        RcRecast.SetCon(span, dir,
+                            Steps(grid.heights, width, depth, x, z, dir, chf.walkableClimb) ? 0 : RcRecast.RC_NOT_CONNECTED);
+                    chf.spans[cur] = new RcCompactSpan(span);
+                    cur++;
+                }
+            }
+
+            return chf;
+        }
+
+        /// Whether a cell's neighbour in one direction has a surface within climbing distance of
+        /// it, which is what a compact heightfield means by connected.
+        private static bool Steps(int[] heights, int width, int depth, int x, int z, int dir, int walkableClimb)
+        {
+            int nx = x + RcRecast.GetDirOffsetX(dir);
+            int nz = z + RcRecast.GetDirOffsetY(dir);
+            if (nx < 0 || nz < 0 || nx >= width || nz >= depth)
+                return false;
+
+            int neighbour = heights[nx + nz * width];
+            return neighbour >= 0 && Math.Abs(neighbour - heights[x + z * width]) <= walkableClimb;
+        }
+
+        /// The tile's polygons as the mesh the detail builder walks. Regions stay at
+        /// RC_MULTIPLE_REGS because the cache keeps no region ids: that sends the builder down its
+        /// seed-from-the-polygon-center path, which starts at the cell nearest a corner, walks in
+        /// to the middle and floods the height patch from there, rather than gathering heights by
+        /// a region id the cache cannot supply.
+        private static RcPolyMesh ToPolyMesh(DtNavMeshCreateParams option)
+        {
+            RcPolyMesh mesh = new RcPolyMesh();
+            mesh.verts = option.verts;
+            mesh.polys = option.polys;
+            mesh.areas = option.polyAreas;
+            mesh.flags = option.polyFlags;
+            mesh.regs = new int[option.polyCount];
+            mesh.nverts = option.vertCount;
+            mesh.npolys = option.polyCount;
+            mesh.maxpolys = option.polyCount;
+            mesh.nvp = option.nvp;
+            mesh.bmin = option.bmin;
+            mesh.bmax = option.bmax;
+            mesh.cs = option.cs;
+            mesh.ch = option.ch;
             return mesh;
         }
 

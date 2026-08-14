@@ -31,6 +31,29 @@ namespace Prowl.Recast.Detour.TileCache
         public float walkableRadius;
         public float walkableClimb;
         public float maxSimplificationError;
+
+        /// Spacing of the height samples used to give each tile's polygons height detail, in world
+        /// units, and how far the detail may sit from the sampled surface before it is subdivided.
+        /// Leave detailSampleDist at 0 to build tiles without detail, in which case Detour treats
+        /// every polygon as flat between its own corners.
+        public float detailSampleDist;
+        public float detailSampleMaxError;
+
+        /// Partition tiles with a watershed over a distance field and contour them with the
+        /// standard builder — hole-aware, connectivity-based corner heights, long edges split —
+        /// instead of the cache's classic monotone sweep, whose row-band regions come out a
+        /// fraction of a voxel wide on sloped ground and whose unsplit contours polygonize open
+        /// ground into fans that reach across the tile. Tiles stacking several vertical layers
+        /// keep the classic path either way: the standard contourer cannot see the other layers.
+        public bool watershedPartition;
+
+        /// Watershed tuning, used only when @p watershedPartition is set: regions smaller than
+        /// minRegionArea cells are culled, regions smaller than mergeRegionArea cells are merged
+        /// into their neighbours, and contour edges longer than maxEdgeLen voxels are split.
+        public int minRegionArea;
+        public int mergeRegionArea;
+        public int maxEdgeLen;
+
         public int maxTiles;
         public int maxObstacles;
     }
