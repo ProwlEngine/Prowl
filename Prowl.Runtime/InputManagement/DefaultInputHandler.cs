@@ -83,7 +83,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     private Queue<char> pressedChars { get; set; } = new();
 
     // Characters typed this frame, accumulated as KeyChar events arrive (during DoEvents) and cleared at
-    // the frame boundary (LateUpdate). Unlike the pressedChars queue this is read non-destructively, so
+    // the frame boundary (BeginFrame). Unlike the pressedChars queue this is read non-destructively, so
     // any number of consumers - Paper, GameObject UI, user UI - can all see the same input each frame.
     private string _inputString = string.Empty;
 
@@ -144,13 +144,20 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         }
     }
 
-    internal void LateUpdate()
+    /// <summary>
+    /// Drops the previous frame's typed characters, before DoEvents appends this frame's. Clearing here
+    /// rather than in LateUpdate is what lets them survive the whole frame - the editor pumps the Game
+    /// View's Paper during Render, which is after LateUpdate, so a clear there dropped every character
+    /// before that Paper could see one.
+    /// </summary>
+    internal void BeginFrame()
     {
-        // Typed characters live for exactly one frame: they arrive during DoEvents, are read (non
-        // destructively) by every consumer during Update, and are cleared here at the frame boundary.
         _inputString = string.Empty;
         pressedChars.Clear();
+    }
 
+    internal void LateUpdate()
+    {
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
         if (!_prevMousePos.Equals(_currentMousePos))
