@@ -1,23 +1,30 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+
+using Prowl.Echo;
 using Prowl.Runtime.Audio.Native;
 
 namespace Prowl.Runtime.Audio.Effects;
 
-public sealed class PhaserEffect : IAudioEffect
+/// <summary>Six stage phase shifter with a swept notch.</summary>
+public sealed class PhaserEffect : AudioEffect
 {
-    // A phaser carries allpass state and an LFO. One instance shared by every channel smears them
-    // together and advances the sweep once per sample per channel, so stereo swept at double rate.
-    private Phaser[] _phasers;
-    private readonly float _sampleRate;
-
+    [SerializeField, Tooltip("How much of the shifted signal is mixed back in.")]
     private float _depth = 1.0f;
+    [SerializeField, Range(0f, 1f), Tooltip("How much output is fed back into the input.")]
     private float _feedback = 0.7f;
+    [SerializeField, Tooltip("Lowest frequency the sweep reaches, in hertz.")]
     private float _minimum = 440.0f;
+    [SerializeField, Tooltip("Highest frequency the sweep reaches, in hertz.")]
     private float _maximum = 1600.0f;
+    [SerializeField, Tooltip("Sweep speed in hertz.")]
     private float _rate = 5.0f;
+
+    // A phaser carries allpass state and an LFO. One instance shared by every channel smears them
+    // together and advances the sweep once per sample per channel.
+    private Phaser[] _phasers = [];
 
     public float Depth
     {
@@ -49,19 +56,28 @@ public sealed class PhaserEffect : IAudioEffect
         set { _rate = value; foreach (Phaser phaser in _phasers) phaser.Rate = value; }
     }
 
-    public PhaserEffect(UInt32 sampleRate)
+    protected override void OnInitialize() => Allocate(Channels);
+
+    public override void OnValidate()
     {
-        _sampleRate = sampleRate;
-        AllocatePhasers(AudioContext.Channels);
+        foreach (Phaser phaser in _phasers)
+            Configure(phaser);
     }
 
-    public void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels)
+    protected override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
     {
         if (channels == 0)
             return;
 
+        // Said out loud rather than quietly building the missing state here. This runs on the audio
+        // thread, where allocating is a dropout, and it would restart the sweep and the allpass
+        // state of every channel mid stream to do it.
         if (channels > _phasers.Length)
-            AllocatePhasers((int)channels);
+        {
+            Debug.LogWarningOnce("Audio.PhaserChannels",
+                $"A PhaserEffect built for {_phasers.Length} channels was handed {channels}, so it passes audio through untouched. Each channel needs its own allpass state and sweep.");
+            return;
+        }
 
         int frames = (int)frameCountIn;
         int available = Math.Min(framesIn.Length, framesOut.Length) / (int)channels;
@@ -81,23 +97,25 @@ public sealed class PhaserEffect : IAudioEffect
         }
     }
 
-    private void AllocatePhasers(int channels)
+    private void Allocate(int channels)
     {
         _phasers = new Phaser[Math.Max(1, channels)];
 
         for (int i = 0; i < _phasers.Length; i++)
         {
-            _phasers[i] = new Phaser
-            {
-                Depth = _depth,
-                Feedback = _feedback,
-                Minimum = _minimum,
-                Maximum = _maximum,
-                Rate = _rate,
-                SampleRate = _sampleRate,
-            };
+            _phasers[i] = new Phaser();
+            Configure(_phasers[i]);
         }
     }
 
-    public void OnDestroy() { }
+    private void Configure(Phaser phaser)
+    {
+        phaser.Depth = _depth;
+        phaser.Feedback = _feedback;
+        phaser.Minimum = _minimum;
+        phaser.Maximum = _maximum;
+        phaser.Rate = _rate;
+        // Last: its setter recomputes the sweep increment and the normalised sweep range.
+        phaser.SampleRate = SampleRate > 0 ? SampleRate : AudioContext.SampleRate;
+    }
 }

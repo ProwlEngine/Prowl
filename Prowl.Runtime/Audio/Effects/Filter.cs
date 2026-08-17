@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -20,7 +20,6 @@ public enum FilterType
 
 public sealed class Filter
 {
-    private delegate void CalcCoefficientsFunc(Filter filter);
     private FilterType type;
     private Int32 sampleRate;
     private float frequency;
@@ -35,13 +34,24 @@ public sealed class Filter
     // through a single pair is not a stereo filter, it is one filter fed two unrelated signals.
     private float[] z1;
     private float[] z2;
-    private CalcCoefficientsFunc calcCoefficients;
 
+    /// <summary>
+    /// Which response this filter has. Changing it re-picks the coefficient set and leaves the delay
+    /// state alone, so a live filter can change shape without restarting.
+    /// </summary>
     public FilterType Type
     {
         get
         {
             return type;
+        }
+        set
+        {
+            if (type == value)
+                return;
+
+            type = value;
+            Recalculate();
         }
     }
     
@@ -55,7 +65,7 @@ public sealed class Filter
         set
         {
             frequency = ClampFrequency(value);
-            calcCoefficients(this);
+            Recalculate();
         }
     }
 
@@ -69,7 +79,7 @@ public sealed class Filter
         set
         {
             q = ClampQ(value);
-            calcCoefficients(this);
+            Recalculate();
         }
     }
 
@@ -84,7 +94,7 @@ public sealed class Filter
         set
         {
             gainDB = value;
-            calcCoefficients(this);
+            Recalculate();
         }
     }
 
@@ -101,8 +111,7 @@ public sealed class Filter
         this.q = ClampQ(q);
         this.gainDB = gainDB;
         AllocateState(channels > 0 ? channels : AudioContext.Channels);
-        SetCoefficientsFunc();
-        calcCoefficients(this);
+        Recalculate();
     }
 
     // The coefficients run the frequency through tan(pi * f / sampleRate), which runs away as it
@@ -157,31 +166,26 @@ public sealed class Filter
         z2 = new float[Math.Max(1, channels)];
     }
 
-    private void SetCoefficientsFunc()
+    /// <summary>
+    /// Works the coefficients out for the filter's current shape and parameters.
+    /// </summary>
+    /// <remarks>
+    /// Dispatched here rather than through a delegate picked when the shape changes. A delegate is a
+    /// field like any other, and cloning an object graph does not carry one across: a filter that
+    /// arrived by being copied, which is what instantiating a prefab does to every effect on it, then
+    /// threw on the first parameter it was given.
+    /// </remarks>
+    private void Recalculate()
     {
-        switch(type) 
+        switch (type)
         {
-            case FilterType.Lowpass:
-                calcCoefficients = CalculateLowpassCoefficients;
-                break;
-            case FilterType.Highpass:
-                calcCoefficients = CalculateHighpassCoefficients;
-                break;
-            case FilterType.Bandpass:
-                calcCoefficients = CalculateBandpassCoefficients;
-                break;
-            case FilterType.Lowshelf:
-                calcCoefficients = CalculateLowshelfCoefficients;
-                break;
-            case FilterType.Highshelf:
-                calcCoefficients = CalculateHighshelfCoefficients;
-                break;
-            case FilterType.Peak:
-                calcCoefficients = CalculatePeakCoefficients;
-                break;
-            case FilterType.Notch:
-                calcCoefficients = CalculateNotchCoefficients;
-                break;
+            case FilterType.Lowpass: CalculateLowpassCoefficients(this); break;
+            case FilterType.Highpass: CalculateHighpassCoefficients(this); break;
+            case FilterType.Bandpass: CalculateBandpassCoefficients(this); break;
+            case FilterType.Lowshelf: CalculateLowshelfCoefficients(this); break;
+            case FilterType.Highshelf: CalculateHighshelfCoefficients(this); break;
+            case FilterType.Peak: CalculatePeakCoefficients(this); break;
+            case FilterType.Notch: CalculateNotchCoefficients(this); break;
         }
     }
 

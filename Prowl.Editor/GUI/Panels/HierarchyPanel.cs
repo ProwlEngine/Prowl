@@ -17,6 +17,7 @@ using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -104,7 +105,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
-                        .OnClick(0, (_, _) => PrefabEditingMode.Exit());
+                        .OnClick(0, (_, _) => PrefabEditingMode.RequestExit());
 
                     paper.Box("hier_prefab_sep_arrow")
                         .Width(UnitValue.Auto).Height(24)
@@ -128,6 +129,7 @@ public class HierarchyPanel : DockPanel
                     string prefabName = PrefabEditingMode.EditingPrefabPath != null
                         ? System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath)
                         : Loc.Get("hierarchy.prefab_fallback");
+
                     paper.Box("hier_prefab_name")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(prefabName, font)
@@ -589,11 +591,8 @@ public class HierarchyPanel : DockPanel
             switch (dropPos)
             {
                 case DropPosition.Into:
-                    if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
-                    {
-                        Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_add"), ToastType.Warning, 3f);
-                        continue;
-                    }
+                    // A prefab instance can be given children of its own; they belong to the instance
+                    // and survive a refresh.
                     dragged.SetParent(target);
                     if (insertIndex >= 0)
                         dragged.SetSiblingIndex(insertIndex);
@@ -843,31 +842,51 @@ public class HierarchyPanel : DockPanel
                 builder.Separator();
             }
 
-            // Prefab operations
-            if (!multiSelect && firstSelected!.IsPrefabInstance)
+            // Creating a prefab from what is selected, rather than only by dragging into the project
+            // panel, which nothing advertises.
+            builder.Item(Loc.Get("hierarchy.create_prefab"), () => CreatePrefabsFrom(selectedGOs),
+                icon: EditorIcons.Cubes);
+
+            // Prefab operations, over every selected instance rather than only the first.
+            var prefabRoots = PrefabInstanceRootsOf(selectedGOs);
+            if (prefabRoots.Count > 0)
             {
-                builder.Item(Loc.Get("hierarchy.select_prefab_asset"), () =>
-                {
-                    Selection.Ping(firstSelected.PrefabAssetId);
-                }, icon: EditorIcons.Cubes);
+                string suffix = prefabRoots.Count > 1 ? $" ({prefabRoots.Count})" : "";
 
-                bool hasOverrides = Prefabs.PrefabUtility.HasAnyOverrides(firstSelected);
-
-                builder.Item(Loc.Get("hierarchy.apply_prefab_overrides"), () =>
+                if (prefabRoots.Count == 1)
                 {
-                    var root = Prefabs.PrefabUtility.GetPrefabInstanceRoot(firstSelected);
-                    if (root != null) Prefabs.PrefabUtility.ApplyOverrides(root);
-                }, enabled: hasOverrides, icon: EditorIcons.Check);
+                    Guid assetId = prefabRoots[0].PrefabAssetId;
 
-                builder.Item(Loc.Get("hierarchy.revert_to_prefab"), () =>
-                {
-                    var root = Prefabs.PrefabUtility.GetPrefabInstanceRoot(firstSelected);
-                    if (root != null) Prefabs.PrefabUtility.RevertOverrides(root);
-                }, enabled: hasOverrides, icon: EditorIcons.ArrowsRotate);
+                    // Straight into the prefab, rather than pinging the asset and leaving the user to
+                    // find it in the project panel and double click it.
+                    builder.Item(Loc.Get("hierarchy.open_prefab"), () => PrefabEditingMode.Enter(assetId),
+                        icon: EditorIcons.PenToSquare, enabled: PrefabUtility.IsEditablePrefab(assetId));
 
-                builder.Item(Loc.Get("hierarchy.break_prefab_instance"), () =>
+                    builder.Item(Loc.Get("hierarchy.select_prefab_asset"),
+                        () => Selection.Ping(assetId), icon: EditorIcons.Cubes);
+                }
+
+                bool anyOverrides = prefabRoots.Any(PrefabUtility.HasAnyOverrides);
+                // A generated prefab (a model) is rebuilt from its source on every import, so there
+                // is nothing to apply to. Reverting still works.
+                bool anyApplyable = prefabRoots.Any(r =>
+                    PrefabUtility.HasAnyOverrides(r) && PrefabUtility.IsEditablePrefab(r.PrefabAssetId));
+
+                builder.Item(Loc.Get("hierarchy.apply_prefab_overrides") + suffix, () =>
                 {
-                    Prefabs.PrefabUtility.BreakPrefabInstance(firstSelected);
+                    foreach (var root in prefabRoots)
+                        if (PrefabUtility.IsEditablePrefab(root.PrefabAssetId))
+                            PrefabUtility.ApplyOverrides(root);
+                }, enabled: anyApplyable, icon: EditorIcons.Check);
+
+                builder.Item(Loc.Get("hierarchy.revert_to_prefab") + suffix, () =>
+                {
+                    foreach (var root in prefabRoots) PrefabUtility.RevertOverrides(root);
+                }, enabled: anyOverrides, icon: EditorIcons.ArrowsRotate);
+
+                builder.Item(Loc.Get("hierarchy.break_prefab_instance") + suffix, () =>
+                {
+                    foreach (var root in prefabRoots) PrefabUtility.UnpackPrefabInstance(root);
                 }, icon: EditorIcons.LinkSlash);
 
                 builder.Separator();
@@ -1057,15 +1076,43 @@ public class HierarchyPanel : DockPanel
             });
     }
 
-    /// <summary>True when the GameObject is part of its parent prefab instance's fixed structure.
-    /// Those children can't be deleted or reparented without breaking the link to the prefab.</summary>
-    private static bool IsPrefabStructuralChild(GameObject go)
+    /// <summary>
+    /// The distinct prefab instances a selection touches. Selecting several objects inside one
+    /// instance, or an instance and its own child, is one instance to act on, not several.
+    /// </summary>
+    private static List<GameObject> PrefabInstanceRootsOf(IEnumerable<GameObject> gameObjects)
     {
-        var parent = go.Parent;
-        if (!parent.IsValid() || !parent!.IsPrefabInstance || parent.PrefabChildCount < 0) return false;
-        int index = parent.Children.IndexOf(go);
-        return index >= 0 && index < parent.PrefabChildCount;
+        var roots = new List<GameObject>();
+        foreach (var go in gameObjects)
+        {
+            if (go.IsNotValid() || !go.IsPrefabInstance) continue;
+
+            var instanceRoot = PrefabUtility.GetPrefabInstanceRoot(go);
+            var target = instanceRoot.IsValid() ? instanceRoot! : go;
+            if (!roots.Any(r => ReferenceEquals(r, target)))
+                roots.Add(target);
+        }
+        return roots;
     }
+
+    /// <summary>Save each selected hierarchy as a prefab, into the folder the project panel is on.</summary>
+    private static void CreatePrefabsFrom(IEnumerable<GameObject> gameObjects)
+    {
+        string folder = AssetCreateMenu.GetCurrentFolder();
+
+        // Roots only: a prefab of a parent already contains its children, and making one of a child
+        // afterwards would tear that subtree back out of the parent's new instance.
+        foreach (var go in GameObjectClipboard.FilterToRoots(gameObjects))
+            AssetCreateMenu.CreatePrefabIn(go, folder);
+    }
+
+    /// <summary>
+    /// True when this GameObject is one the prefab provides, rather than one added to the instance.
+    /// Those cannot be deleted or reparented, because nothing records the change and a refresh would
+    /// undo it. Told apart by where the object came from, not by its position, so reordering cannot
+    /// reclassify it.
+    /// </summary>
+    private static bool IsPrefabStructuralChild(GameObject go) => PrefabUtility.IsProvidedByPrefab(go);
 
     private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
     {
@@ -1239,18 +1286,7 @@ public class HierarchyPanel : DockPanel
 
         string name = System.IO.Path.GetFileNameWithoutExtension(payload.AssetName);
 
-        if (asset is Model model)
-        {
-            var go = model.Instantiate();
-            if (go == null) { Debug.LogWarning("Failed to instantiate model."); return; }
-            go.Name = name;
-            go.Transform.Position = position;
-            scene.Add(go);
-            if (parent != null) go.SetParent(parent);
-            Selection.Select(go);
-            Undo.RegisterCreatedObject(go, "Spawn Model");
-        }
-        else if (asset is Mesh mesh)
+        if (asset is Mesh mesh)
         {
             var go = new GameObject(name);
             go.Transform.Position = position;
@@ -1275,7 +1311,7 @@ public class HierarchyPanel : DockPanel
         }
         else if (asset is PrefabAsset)
         {
-            var instance = Prefabs.PrefabUtility.InstantiatePrefab(payload.AssetGuid);
+            var instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
             if (instance != null)
             {
                 instance.Transform.Position = position;

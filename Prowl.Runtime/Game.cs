@@ -324,6 +324,12 @@ public abstract class Game
         // the frame will. Anything left over from a finished play session is dropped here.
         Tasks.MainThreadContext.Current?.Pump();
 
+        // Pausing play mode has to stop the sound as well as the simulation, or the music carries on
+        // over a frozen game. Only in the editor: pausing there is a debugging tool that freezes
+        // everything, while a shipped game pausing itself is a design decision, and that one reaches
+        // for AudioContext.Suspended when it wants the audio to stop too.
+        AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && Application.IsPaused;
+
         // Fixed update loop only when gameplay should run
         fixedTimeAccumulator += delta;
         if (Application.ShouldRunGameplay)

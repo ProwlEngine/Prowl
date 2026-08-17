@@ -1,68 +1,136 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+
+using Prowl.Echo;
 using Prowl.Runtime.Audio.Native;
 
 namespace Prowl.Runtime.Audio.Effects;
 
-public sealed class FilterEffect: IAudioEffect
+/// <summary>Biquad filter: lowpass, highpass, bandpass, shelves, peak and notch.</summary>
+public sealed class FilterEffect : AudioEffect
 {
-    private Filter filter;
+    [SerializeField]
+    private FilterType _type = FilterType.Lowpass;
+    [SerializeField, Tooltip("Cutoff or centre frequency in hertz.")]
+    private float _frequency = 1000.0f;
+    [SerializeField, Tooltip("Resonance. Higher is a narrower, more emphasised peak.")]
+    private float _q = 0.707f;
+    [SerializeField, Tooltip("Shelf or peak gain in decibels. Only the shelf and peak types use it.")]
+    private float _gainDB = 0.0f;
+
+    private Filter _filter;
 
     public FilterType Type
     {
-        get
-        {
-            return filter.Type;
-        }
-    }
-    
-    public float Frequency
-    {
-        get
-        {
-            return filter.Frequency;
-        }
+        get => _type;
         set
         {
-            filter.Frequency = value;
+            _type = value;
+            if (_filter != null)
+                _filter.Type = value;
+        }
+    }
+
+    public float Frequency
+    {
+        get => _frequency;
+        set
+        {
+            _frequency = value;
+            if (_filter != null)
+            {
+                _filter.Frequency = value;
+                _frequency = _filter.Frequency;
+            }
         }
     }
 
     public float Q
     {
-        get
-        {
-            return filter.Q;
-        }
+        get => _q;
         set
         {
-            filter.Q = value;
+            _q = value;
+            if (_filter != null)
+            {
+                _filter.Q = value;
+                _q = _filter.Q;
+            }
         }
     }
 
     public float GainDB
     {
-        get
-        {
-            return filter.GainDB;
-        }
+        get => _gainDB;
         set
         {
-            filter.GainDB = value;
+            _gainDB = value;
+            if (_filter != null)
+                _filter.GainDB = value;
         }
     }
 
-    public FilterEffect(FilterType type, float frequency, float q, float gainDB)
+    /// <summary>Binding to a format is the one thing that needs a filter built from scratch.</summary>
+    protected override void OnInitialize() => Rebuild();
+
+    /// <summary>
+    /// Pushes the serialized values into the live filter rather than replacing it. Replacing it threw
+    /// away the delay state mid stream, so an unrelated inspector edit on the source, dragging its
+    /// volume say, clicked once per frame of the drag.
+    /// </summary>
+    public override void OnValidate()
     {
-        filter = new Filter(type, frequency, q, gainDB, AudioContext.SampleRate, AudioContext.Channels);
+        if (_filter == null)
+        {
+            Rebuild();
+            return;
+        }
+
+        _filter.Type = _type;
+        _filter.Frequency = _frequency;
+        _filter.Q = _q;
+        _filter.GainDB = _gainDB;
+
+        MirrorClamps();
     }
 
-    public void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    private void Rebuild()
     {
-        filter.Process(framesIn, framesOut, frameCountIn, (int)channels);
-		}
+        // Not bound to a chain yet, so there is no format to size the filter against.
+        if (SampleRate <= 0)
+            return;
 
-    public void OnDestroy() { }
-	}
+        _filter = new Filter(_type, _frequency, _q, _gainDB, SampleRate, Channels);
+        MirrorClamps();
+    }
+
+    /// <summary>The filter clamps what it is given, so the serialized values follow what it settled on.</summary>
+    private void MirrorClamps()
+    {
+        _frequency = _filter.Frequency;
+        _q = _filter.Q;
+    }
+
+    protected override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    {
+        // Passing audio through untouched is the only safe answer to either of these, but doing it
+        // without a word is how an effect ends up looking broken rather than misconfigured.
+        if (_filter == null)
+        {
+            Debug.LogWarningOnce("Audio.FilterUnbound",
+                "A FilterEffect is in a chain without having been bound to an audio format, so it passes audio through untouched.");
+            return;
+        }
+
+        if (channels != (uint)Channels)
+        {
+            Debug.LogWarningOnce("Audio.FilterChannels",
+                $"A FilterEffect built for {Channels} channels was handed {channels}, so it passes audio through untouched. A biquad keeps one delay pair per channel.");
+            return;
+        }
+
+        _filter.Process(framesIn, framesOut, frameCountIn, (int)channels);
+    }
+}

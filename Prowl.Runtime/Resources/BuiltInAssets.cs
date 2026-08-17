@@ -75,10 +75,10 @@ public static class BuiltInAssets
             };
             if (fileName == null) continue;
 
-            // The model itself, so the ID Model.LoadDefault stamps on it actually resolves. Only its
-            // mesh was registered before, leaving every default Model carrying a dangling AssetID.
-            Register($"$Default:Model/{model}", model.ToString(), typeof(Model),
-                () => Model.LoadDefault(model));
+            // The model itself, so the ID DefaultModels.Load stamps on it actually resolves. Only its
+            // mesh was registered before, leaving every default model carrying a dangling AssetID.
+            Register($"$Default:Model/{model}", model.ToString(), typeof(PrefabAsset),
+                () => DefaultModels.Load(model));
 
             Register($"$Default:Model/{model}/Mesh/0", model.ToString(), typeof(Mesh),
                 () =>

@@ -40,8 +40,10 @@ public unsafe ref struct NativeArray<T> where T : unmanaged
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         get
         {
-            if (index >= _length || index < 0)
-                new System.IndexOutOfRangeException();
+            // The exception used to be constructed and dropped, so every out of range index silently
+            // read or wrote native memory belonging to something else.
+            if ((uint)index >= (uint)_length)
+                throw new System.IndexOutOfRangeException();
             return ref ((T*)_pointer)[index];
         }
     }
@@ -65,7 +67,9 @@ public unsafe ref struct NativeArray<T> where T : unmanaged
     {
         if ((uint)_length <= (uint)destination.Length)
         {
-            long byteCount = _length * System.Runtime.InteropServices.Marshal.SizeOf<T>();
+            // Unsafe.SizeOf folds to a constant, Marshal.SizeOf is a call, and this runs per block on
+            // the audio thread.
+            long byteCount = (long)_length * System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
             Buffer.MemoryCopy(_pointer, (void*)destination.Pointer, byteCount, byteCount);
         }
         else

@@ -360,9 +360,10 @@ public static class Undo
                 var scene = Scene.Current;
                 if (scene == null) return;
 
-                var restored = Serializer.Deserialize<GameObject>(serialized);
+                // Preserving identifiers: what comes back has to be the object that went away, or
+                // every other record addressing it stops resolving.
+                var restored = GameObject.DeserializePreservingIdentifiers(serialized);
                 if (restored == null) return;
-                RestoreIdentifiers(restored, serialized);
 
                 scene.Add(restored);
                 if (parentId != Guid.Empty)
@@ -402,9 +403,10 @@ public static class Undo
                 var scene = Scene.Current;
                 if (scene == null) return;
 
-                var restored = Serializer.Deserialize<GameObject>(serialized);
+                // Preserving identifiers: what comes back has to be the object that went away, or
+                // every other record addressing it stops resolving.
+                var restored = GameObject.DeserializePreservingIdentifiers(serialized);
                 if (restored == null) return;
-                RestoreIdentifiers(restored, serialized);
 
                 scene.Add(restored);
                 if (parentId != Guid.Empty)
@@ -638,6 +640,54 @@ public static class Undo
     }
 
     /// <summary>
+    /// Set the history aside and start an empty one, for a session that edits something other than
+    /// the open scene. Returns what was put away, to be handed back to <see cref="PopContext"/>.
+    /// <para/>
+    /// Opening a prefab used to clear the history outright, so glancing at one cost the user every
+    /// step they had taken in the scene. The two sets of steps cannot simply be shared either: a step
+    /// recorded against the prefab addresses objects that stop existing when the session ends.
+    /// </summary>
+    internal static object PushContext()
+    {
+        var saved = new UndoContext(
+            [.. _undoStack], [.. _redoStack],
+            new Dictionary<object, EchoObject>(_pendingSnapshots),
+            [.. _pendingActions], [.. _pendingActionGroups], [.. _pendingStructural],
+            _isContinuous, _continuousDescription, _continuousStartState);
+
+        Clear();
+        return saved;
+    }
+
+    /// <summary>Put back a history <see cref="PushContext"/> set aside, discarding the current one.</summary>
+    internal static void PopContext(object? context)
+    {
+        Clear();
+        if (context is not UndoContext saved) return;
+
+        _undoStack.AddRange(saved.UndoSteps);
+        _redoStack.AddRange(saved.RedoSteps);
+        foreach (var (target, before) in saved.Snapshots) _pendingSnapshots[target] = before;
+        _pendingActions.AddRange(saved.Actions);
+        _pendingActionGroups.AddRange(saved.ActionGroups);
+        _pendingStructural.AddRange(saved.Structural);
+        _isContinuous = saved.IsContinuous;
+        _continuousDescription = saved.ContinuousDescription;
+        _continuousStartState = saved.ContinuousStartState;
+    }
+
+    private sealed record UndoContext(
+        List<UndoStep> UndoSteps,
+        List<UndoStep> RedoSteps,
+        Dictionary<object, EchoObject> Snapshots,
+        List<(string description, UndoRecord record)> Actions,
+        List<(UndoStep step, bool coalesce)> ActionGroups,
+        List<(GameObject go, string description, bool isCreate)> Structural,
+        bool IsContinuous,
+        string ContinuousDescription,
+        List<(Guid goId, Float3 pos, Quaternion rot, Float3 scale)>? ContinuousStartState);
+
+    /// <summary>
     /// Clear all undo/redo history. Called on scene load.
     /// </summary>
     public static void Clear()
@@ -858,46 +908,6 @@ public static class Undo
         catch (Exception ex)
         {
             Runtime.Debug.LogWarning($"Failed to restore object state: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Recursively restore identifiers on a deserialized GO tree from the stored EchoObject.
-    /// </summary>
-    internal static void RestoreIdentifiers(GameObject go, EchoObject serializedGO)
-    {
-        // Restore GO identifier
-        var idStr = serializedGO.Get("Identifier")?.StringValue;
-        if (Guid.TryParse(idStr, out var goId))
-            go.SetIdentifier(goId);
-
-        // Restore component identifiers
-        var comps = serializedGO.Get("Components")?.List;
-        if (comps != null)
-        {
-            var liveComps = go.GetComponents().ToArray();
-            for (int i = 0; i < Math.Min(comps.Count, liveComps.Length); i++)
-            {
-                var compEcho = comps[i];
-                // MonoBehaviour._identifier has [SerializeField] so it's in the EchoObject
-                var compIdField = compEcho.Get("_identifier");
-                if (compIdField != null)
-                {
-                    // _identifier is a Guid serialized by Echo may be stored as string or via type wrapper
-                    if (Guid.TryParse(compIdField.StringValue, out var compId))
-                        liveComps[i].Identifier = compId;
-                    else if (compIdField.TryGet("$value", out var innerVal) && Guid.TryParse(innerVal.StringValue, out var compId2))
-                        liveComps[i].Identifier = compId2;
-                }
-            }
-        }
-
-        // Recurse children
-        var children = serializedGO.Get("Children")?.List;
-        if (children != null)
-        {
-            for (int i = 0; i < Math.Min(children.Count, go.Children.Count); i++)
-                RestoreIdentifiers(go.Children[i], children[i]);
         }
     }
 

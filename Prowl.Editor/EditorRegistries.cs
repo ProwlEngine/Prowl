@@ -68,6 +68,10 @@ public static class EditorRegistries
     private static readonly Dictionary<Type, Type> _assetEditorTypes = new();
     private static readonly Dictionary<Type, AssetImporterEditor> _assetEditorCache = new();
 
+    // Keyed by importer type name, matching AssetEntry.ImporterType.
+    private static readonly Dictionary<string, Type> _assetEditorTypesByImporter = new();
+    private static readonly Dictionary<string, AssetImporterEditor> _assetEditorByImporterCache = new();
+
     private static readonly Dictionary<string, Type> _importersByExt = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, Type> _importersByName = new(StringComparer.OrdinalIgnoreCase);
     public static IEnumerable<string> RegisteredImporterExtensions => _importersByExt.Keys;
@@ -109,6 +113,7 @@ public static class EditorRegistries
         _customEditorTypes.Clear(); _customEditorCache.Clear();
         _propertyEditorTypes.Clear(); _propertyEditorCache.Clear();
         _assetEditorTypes.Clear(); _assetEditorCache.Clear();
+        _assetEditorTypesByImporter.Clear(); _assetEditorByImporterCache.Clear();
 
         _importersByExt.Clear();
         _importersByName.Clear();
@@ -222,7 +227,15 @@ public static class EditorRegistries
     {
         if (!typeof(AssetImporterEditor).IsAssignableFrom(type) || type.IsAbstract) return;
         var target = type.GetCustomAttribute<CustomAssetEditorAttribute>()?.TargetType;
-        if (target != null) _assetEditorTypes[target] = type;
+        if (target == null) return;
+
+        // An editor may target an importer rather than an asset type, for formats whose main asset is
+        // a shared type: a model imports into a PrefabAsset like any prefab, but still needs its own
+        // import settings, which the PrefabAsset editor knows nothing about.
+        if (typeof(AssetImporter).IsAssignableFrom(target))
+            _assetEditorTypesByImporter[target.Name] = type;
+        else
+            _assetEditorTypes[target] = type;
     }
 
     private static void ScanImporter(Type type)
@@ -438,6 +451,23 @@ public static class EditorRegistries
     public static PropertyEditor? GetPropertyEditor(Type type) => LookupEditor(type, _propertyEditorTypes, _propertyEditorCache, checkInterfaces: true);
     public static AssetImporterEditor? GetAssetEditor(Type type) => LookupEditor(type, _assetEditorTypes, _assetEditorCache);
 
+    /// <summary>
+    /// The editor for an asset, preferring one registered for its importer over one registered for
+    /// its type. Several formats can import to the same asset type while needing different settings.
+    /// </summary>
+    public static AssetImporterEditor? GetAssetEditor(AssetEntry entry)
+    {
+        if (!string.IsNullOrEmpty(entry.ImporterType))
+        {
+            if (_assetEditorByImporterCache.TryGetValue(entry.ImporterType, out var cached)) return cached;
+
+            if (_assetEditorTypesByImporter.TryGetValue(entry.ImporterType, out var editorType))
+                return _assetEditorByImporterCache[entry.ImporterType] = (AssetImporterEditor)Activator.CreateInstance(editorType)!;
+        }
+
+        return GetAssetEditor(entry.MainAssetType);
+    }
+
     private static T? LookupEditor<T>(Type targetType, Dictionary<Type, Type> types, Dictionary<Type, T> cache, bool checkInterfaces = false) where T : class
     {
         if (cache.TryGetValue(targetType, out var cached)) return cached;
@@ -490,12 +520,43 @@ public static class EditorRegistries
         return null;
     }
 
+    /// <summary>
+    /// The handler registered closest to <paramref name="assetType"/> in its inheritance chain.
+    /// Specificity decides, not registration order, so an asset type that derives from another
+    /// (Model from PrefabAsset) is not captured by the handler for its base just because that one was
+    /// registered with a lower Order. Order still breaks ties between equally specific handlers.
+    /// </summary>
     public static ISceneDropHandler? FindSceneDropHandler(Type? assetType)
     {
         if (assetType == null) return null;
+
+        ISceneDropHandler? best = null;
+        int bestDistance = int.MaxValue;
+
+        // _dropHandlers is sorted by Order, so a strict improvement keeps the first of equal matches.
         foreach (var entry in _dropHandlers)
-            if (entry.AssetType.IsAssignableFrom(assetType)) return entry.Handler;
-        return null;
+        {
+            if (!entry.AssetType.IsAssignableFrom(assetType)) continue;
+
+            int distance = InheritanceDistance(assetType, entry.AssetType);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = entry.Handler;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>Steps from a type up to an ancestor. Interfaces rank below every class match.</summary>
+    private static int InheritanceDistance(Type type, Type ancestor)
+    {
+        int steps = 0;
+        for (var t = type; t != null; t = t.BaseType, steps++)
+            if (t == ancestor) return steps;
+
+        return ancestor.IsInterface ? int.MaxValue - 1 : int.MaxValue;
     }
 
     #endregion

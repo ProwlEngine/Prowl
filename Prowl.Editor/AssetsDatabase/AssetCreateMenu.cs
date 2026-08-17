@@ -3,6 +3,8 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
@@ -12,6 +14,9 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Core.Tasks;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+
+using Prowl.Editor.GUI;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor;
 
@@ -23,6 +28,44 @@ public static class AssetCreateMenu
         var task = new CreateAssetTask();
         task.TaskType = CreateAssetTask.AssetType.Folder;
         task.BeginCreateTask(new AssetMenuEntry { Name = "New Folder", Extension = "", Icon = EditorRegistries.GetFileIconForExtension("") }, GetCurrentFolder());
+    }
+
+    [MenuItem("Assets/Create/Prefab From Selection", priority: 100, Icon = EditorIcons.Cubes, Separator = true)]
+    static void CreatePrefabFromSelectionItem()
+    {
+        var selected = Selection.GetSelected<GameObject>().ToList();
+        if (selected.Count == 0)
+        {
+            Runtime.Debug.LogWarning("[Prefab] Select a GameObject in the scene to make a prefab from it.");
+            return;
+        }
+
+        // Roots only, so a prefab of a parent is not immediately torn apart by making one of its child.
+        foreach (var go in GameObjectClipboard.FilterToRoots(selected))
+            CreatePrefabIn(go, GetCurrentFolder());
+    }
+
+    /// <summary>
+    /// Save a GameObject as a new prefab in a project folder, named so it does not collide with what
+    /// is already there.
+    /// <para/>
+    /// Shared by the three places that offer this, which each worked out the same name and path and
+    /// each threw away the result. A refused write reached the console and nowhere else, so the user
+    /// saw a menu item do nothing at all.
+    /// </summary>
+    internal static bool CreatePrefabIn(GameObject go, string relativeFolder)
+    {
+        string absoluteFolder = GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absoluteFolder)) return false;
+
+        string name = FindUniqueName(absoluteFolder, go.Name, ".prefab");
+        string relativePath = string.IsNullOrEmpty(relativeFolder) ? name : $"{relativeFolder}/{name}";
+
+        if (PrefabUtility.SaveAsPrefabAssetAndConnect(go, relativePath)) return true;
+
+        Toasts.Show(Loc.Get("toast.prefab_create_failed"),
+            Loc.Get("toast.prefab_create_failed_body", new { name = go.Name }), ToastType.Error, 4f);
+        return false;
     }
 
     [MenuItem("Assets/Create/Shader", priority: 1000, Icon = EditorIcons.WandMagicSparkles, Separator = true)]

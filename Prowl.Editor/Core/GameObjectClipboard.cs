@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Utils;
@@ -28,24 +29,25 @@ public static class GameObjectClipboard
     /// </summary>
     public static void Copy(IEnumerable<GameObject> gameObjects)
     {
-        var roots = FilterToRoots(gameObjects);
-        var list = new List<EchoObject>();
-        foreach (var go in roots)
+        List<GameObject> roots = FilterToRoots(gameObjects);
+        if (roots.Count == 0) return;
+
+        // One context for the whole selection. A reference from one copied object to another stays
+        // inside the data, and a reference to anything else is linked by id so pasting binds it back
+        // to that object rather than to a copy of it that belongs to no scene.
+        var context = new SerializationContext { ExternalReferences = SceneReferenceResolver.ForTrees(roots) };
+
+        var root = EchoObject.NewList();
+        foreach (GameObject go in roots)
         {
-            var echo = Serializer.Serialize(typeof(object), go);
+            var echo = Serializer.Serialize(typeof(object), go, context);
             if (echo != null)
-                list.Add(echo);
+                root.ListAdd(echo);
         }
 
-        if (list.Count == 0) return;
+        if (root.Count == 0) return;
 
-        // Wrap in a compound with a header tag so we can identify our clipboard content
-        var root = EchoObject.NewList();
-        foreach (var item in list)
-            root.ListAdd(item);
-
-        string text = ClipboardHeader + root.WriteToString();
-        Input.Clipboard = text;
+        Input.Clipboard = ClipboardHeader + root.WriteToString();
     }
 
     /// <summary>
@@ -70,9 +72,13 @@ public static class GameObjectClipboard
             var scene = Scene.Current;
             if (scene == null) return results;
 
+            // Shared context so a reference between two pasted objects resolves to the pasted one,
+            // and a resolver so a reference out of the selection binds to the live scene object.
+            var context = new SerializationContext { ExternalReferences = new SceneReferenceResolver() };
+
             foreach (var item in root.List)
             {
-                var go = Serializer.Deserialize<GameObject>(item);
+                var go = Serializer.Deserialize<GameObject>(item, context);
                 if (go == null) continue;
 
                 go.Name = UniqueNames.ForGameObjectSibling(go.Name, parent, scene);
@@ -110,28 +116,34 @@ public static class GameObjectClipboard
         var scene = Scene.Current;
         if (scene == null) return results;
 
-        foreach (var source in FilterToRoots(gameObjects))
+        List<GameObject> roots = FilterToRoots(gameObjects);
+        if (roots.Count == 0) return results;
+
+        List<GameObject> clones;
+        try
         {
-            try
-            {
-                var echo = Serializer.Serialize(typeof(object), source);
-                if (echo == null) continue;
+            // Every root in one operation, so a reference from one selected object to another lands on
+            // that object's copy rather than staying pointed at the original.
+            clones = Cloner.CloneAll(roots);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Failed to duplicate: {ex.Message}");
+            return results;
+        }
 
-                var clone = Serializer.Deserialize<GameObject>(echo);
-                if (clone == null) continue;
+        for (int i = 0; i < roots.Count; i++)
+        {
+            GameObject source = roots[i];
+            GameObject clone = clones[i];
 
-                clone.Name = UniqueNames.ForGameObjectSibling(source.Name, source.Parent, scene);
-                scene.Add(clone);
-                if (source.Parent != null)
-                    // Keep the clone's copied local transform; don't preserve world position (the
-                    // clone is briefly a root, so that path would reinterpret its local pos as world).
-                    clone.SetParent(source.Parent, worldPositionStays: false);
-                results.Add(clone);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"Failed to duplicate '{source.Name}': {ex.Message}");
-            }
+            clone.Name = UniqueNames.ForGameObjectSibling(source.Name, source.Parent, scene);
+            scene.Add(clone);
+            if (source.Parent != null)
+                // Keep the clone's copied local transform; don't preserve world position (the
+                // clone is briefly a root, so that path would reinterpret its local pos as world).
+                clone.SetParent(source.Parent, worldPositionStays: false);
+            results.Add(clone);
         }
 
         if (results.Count > 0)
@@ -150,7 +162,11 @@ public static class GameObjectClipboard
     /// NOT also in the selection. This prevents duplicating a child that's already
     /// included inside a selected parent's hierarchy.
     /// </summary>
-    private static List<GameObject> FilterToRoots(IEnumerable<GameObject> gameObjects)
+    /// <summary>
+    /// Drop any GameObject that already has an ancestor in the set, so an operation applied to a
+    /// selection runs once per subtree rather than once per selected object.
+    /// </summary>
+    public static List<GameObject> FilterToRoots(IEnumerable<GameObject> gameObjects)
     {
         var set = new HashSet<GameObject>(gameObjects);
         var roots = new List<GameObject>();

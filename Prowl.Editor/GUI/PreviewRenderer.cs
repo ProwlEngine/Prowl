@@ -68,24 +68,6 @@ public class PreviewRenderer : IDisposable
         UpdateCameraPosition();
     }
 
-    /// <summary>Set up the preview to show a Model.</summary>
-    public void SetupForModel(Model model)
-    {
-        ClearSubject();
-        if (model == null) return;
-
-        // Instantiate the model's GO hierarchy for preview
-        _subjectGo = model.Instantiate();
-        if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
-        _subjectGo.Name = "PreviewSubject";
-        _subjectGo.HideFlags = HideFlags.HideAndDontSave;
-
-        NormalizeSubjectToUnitCube(_subjectGo);
-
-        _scene.Add(_subjectGo);
-        FitToSubject(AABB.FromCenterAndSize(Float3.Zero, Float3.One));
-    }
-
     /// <summary>Set up the preview to show a Mesh with a material.</summary>
     public void SetupForMesh(Mesh mesh, Material? material = null)
     {
@@ -110,7 +92,7 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         if (prefab == null) return;
 
-        _subjectGo = prefab.Instantiate();
+        _subjectGo = GameObject.InstantiateDetached(prefab);
         if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
         _subjectGo.Name = "PreviewSubject";
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;

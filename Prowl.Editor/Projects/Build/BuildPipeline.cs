@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Editor.Projects;
+using Prowl.Runtime;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
 
@@ -109,7 +110,128 @@ public abstract class BuildPipeline
     protected virtual Stream? OpenShippedAsset(Guid guid)
     {
         string path = Path.Combine(Project.Current!.CachePath, $"{guid}.asset");
-        return File.Exists(path) ? File.OpenRead(path) : null;
+        if (!File.Exists(path)) return null;
+
+        return TryStripEditorOnlyPrefabData(guid, path) ?? File.OpenRead(path);
+    }
+
+    /// <summary>
+    /// Keys inside a GameObject's "Prefab" block that only the editor reads. The override list in
+    /// particular is duplicated state: the values are already baked into the objects themselves, so a
+    /// scene stores each overridden value twice. AssetId is deliberately not here - it is one guid per
+    /// object and is observable through GameObject.IsPrefabInstance, which would then read differently
+    /// in a player than in play mode.
+    /// </summary>
+    private static readonly string[] EditorOnlyPrefabKeys =
+        ["Overrides", "SourceIdentifier", "ComponentSources"];
+
+    /// <summary>
+    /// Bring the prefab instances in a scene payload up to date with the prefabs as they stand now,
+    /// rewriting <paramref name="echo"/> when any of them had fallen behind.
+    /// <para/>
+    /// A scene holds its objects outright rather than as references to be resolved, so an instance in
+    /// one says whatever the prefab said the last time that scene was saved. A prefab edited while the
+    /// scene was closed leaves it behind, and nothing brings it back on its own: opening the scene
+    /// catches it up in the editor, but a build reads what is on disk, and shipping a scene nobody has
+    /// opened since means shipping the old contents.
+    /// <para/>
+    /// Done on the copy being shipped and not written back, so a build reports what a project holds
+    /// rather than quietly editing it.
+    /// </summary>
+    private static bool TryBringInstancesUpToDate(ref EchoObject echo, string scenePath)
+    {
+        Runtime.Resources.Scene? scene = null;
+        try
+        {
+            scene = Serializer.Deserialize<Runtime.Resources.Scene>(echo);
+            if (scene.IsNotValid()) return false;
+
+            EchoObject? before = Serializer.Serialize(typeof(object), scene);
+            Prefabs.PrefabUtility.RefreshInstancesIn(scene!);
+            EchoObject? after = Serializer.Serialize(typeof(object), scene);
+
+            if (before == null || after == null || before.Equals(after)) return false;
+
+            echo = after;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Shipping what the scene last saved is wrong but survivable; failing the build is not.
+            Runtime.Debug.LogWarning($"[Build] Could not bring prefab instances in '{scenePath}' up to date: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            if (scene.IsValid()) scene!.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Rewrites a scene or prefab payload without its editor-only prefab data, or null to ship the
+    /// cached bytes untouched.
+    /// </summary>
+    private static Stream? TryStripEditorOnlyPrefabData(Guid guid, string cachePath)
+    {
+        var entry = EditorAssetBackend.Instance?.GetEntry(guid);
+        if (entry == null) return null;
+        if (entry.ImporterType is not ("SceneImporter" or "PrefabImporter")) return null;
+
+        try
+        {
+            var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
+            if (echo == null) return null;
+
+            bool changed = entry.ImporterType == "SceneImporter" && TryBringInstancesUpToDate(ref echo, entry.Path);
+
+            changed |= StripEditorOnlyPrefabData(echo);
+            // Inside a prefab asset every link is nested by definition, since the asset's own root
+            // carries none. Inside a scene the top-level instances are not.
+            changed |= Importers.ImportHelper.FlattenNestedPrefabLinks(
+                echo, insideInstance: entry.ImporterType == "PrefabImporter");
+            if (!changed) return null;
+
+            var buffer = new MemoryStream();
+            using (var writer = new BinaryWriter(buffer, System.Text.Encoding.UTF8, leaveOpen: true))
+                echo.WriteToBinary(writer);
+
+            buffer.Position = 0;
+            return buffer;
+        }
+        catch (Exception ex)
+        {
+            // Shipping the unstripped asset is correct, just larger, so this must never fail a build.
+            Runtime.Debug.LogWarning($"[Build] Could not strip prefab data from '{entry.Path}': {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes <see cref="EditorOnlyPrefabKeys"/> everywhere in a serialized tree, returning whether
+    /// anything was found. Prefab data nests arbitrarily deep, once per GameObject.
+    /// </summary>
+    internal static bool StripEditorOnlyPrefabData(EchoObject echo)
+    {
+        bool removed = false;
+
+        if (echo.TagType == EchoType.Compound)
+        {
+            // Scoped to the prefab block rather than matched by name anywhere, so a component field
+            // that happens to be called Overrides is not caught by this.
+            if (echo.TryGet("Prefab", out var link) && link.TagType == EchoType.Compound)
+                foreach (var key in EditorOnlyPrefabKeys)
+                    removed |= link.Remove(key);
+
+            foreach (var child in echo.Tags.Values)
+                removed |= StripEditorOnlyPrefabData(child);
+        }
+        else if (echo.TagType == EchoType.List && echo.List != null)
+        {
+            foreach (var item in echo.List)
+                removed |= StripEditorOnlyPrefabData(item);
+        }
+
+        return removed;
     }
 
     /// <summary>Copies shipped assets to output as loose files, returning the ones actually written.</summary>

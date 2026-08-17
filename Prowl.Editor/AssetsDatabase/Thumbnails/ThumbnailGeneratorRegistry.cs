@@ -35,13 +35,6 @@ internal class SpriteThumbnailGenerator : IThumbnailGenerator
         => ThumbnailGenerator.GenerateForSprite((Sprite)asset);
 }
 
-[CustomThumbnailGenerator(typeof(Model))]
-internal class ModelThumbnailGenerator : IThumbnailGenerator
-{
-    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
-        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForModel((Model)asset));
-}
-
 [CustomThumbnailGenerator(typeof(Material))]
 internal class MaterialThumbnailGenerator : IThumbnailGenerator
 {

@@ -20,6 +20,7 @@ using Prowl.Editor.Utils;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -230,8 +231,10 @@ public class ProjectPanel : DockPanel
                 DragDrop.EndDrag();
                 break;
             case GameObjectDragPayload gp:
-                foreach (var go in gp.GameObjects)
-                    if (go != null) CreatePrefabInFolder(go, targetFolder);
+                // Roots only: making a prefab of a parent already captures its children, and making
+                // one of a child afterwards would tear that subtree back out of the parent's instance.
+                foreach (var go in GameObjectClipboard.FilterToRoots(gp.GameObjects.Where(g => g != null)))
+                    CreatePrefabInFolder(go, targetFolder);
                 DragDrop.EndDrag();
                 break;
         }
@@ -460,17 +463,7 @@ public class ProjectPanel : DockPanel
     /// (assets-relative; empty = root). Uniquifies the filename against what's already there.
     /// </summary>
     private static void CreatePrefabInFolder(GameObject go, string destRelFolder)
-    {
-        if (Project.Current == null) return;
-        string absFolder = string.IsNullOrEmpty(destRelFolder)
-            ? Project.Current.AssetsPath
-            : Path.Combine(Project.Current.AssetsPath, destRelFolder);
-        if (!Directory.Exists(absFolder)) return;
-
-        string uniqueName = AssetCreateMenu.FindUniqueName(absFolder, go.Name, ".prefab");
-        string relPath = string.IsNullOrEmpty(destRelFolder) ? uniqueName : destRelFolder + "/" + uniqueName;
-        Prefabs.PrefabUtility.CreatePrefab(go, relPath);
-    }
+        => AssetCreateMenu.CreatePrefabIn(go, destRelFolder);
 
     /// <summary>
     /// True when an <see cref="AssetDragPayload"/> could meaningfully land in
