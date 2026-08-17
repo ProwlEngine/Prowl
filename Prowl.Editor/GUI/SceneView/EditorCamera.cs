@@ -518,6 +518,26 @@ public class EditorCamera
             max = new Float3(MathF.Max(max.X, wb.Max.X), MathF.Max(max.Y, wb.Max.Y), MathF.Max(max.Z, wb.Max.Z));
             any = true;
         }
+        var gcv = go.GetComponent<GameCanvas>();
+        if (gcv != null)
+        {
+            // Mirrors the scene view's own world-space presentation of a canvas (see
+            // GameCanvas.EditorWorldSpaceOverride): its extent is ReferenceResolution, placed by
+            // the GameObject's transform - regardless of the canvas's actual RenderMode.
+            Float2 res = gcv.ReferenceResolution;
+            Float4x4 model = go.Transform.LocalToWorldMatrix;
+            Float3 bl = Float4x4.TransformPoint(new Float3(0, 0, 0), model);
+            Float3 br = Float4x4.TransformPoint(new Float3(res.X, 0, 0), model);
+            Float3 tr = Float4x4.TransformPoint(new Float3(res.X, res.Y, 0), model);
+            Float3 tl = Float4x4.TransformPoint(new Float3(0, res.Y, 0), model);
+            min = new Float3(MathF.Min(min.X, MathF.Min(MathF.Min(bl.X, br.X), MathF.Min(tr.X, tl.X))),
+                              MathF.Min(min.Y, MathF.Min(MathF.Min(bl.Y, br.Y), MathF.Min(tr.Y, tl.Y))),
+                              MathF.Min(min.Z, MathF.Min(MathF.Min(bl.Z, br.Z), MathF.Min(tr.Z, tl.Z))));
+            max = new Float3(MathF.Max(max.X, MathF.Max(MathF.Max(bl.X, br.X), MathF.Max(tr.X, tl.X))),
+                              MathF.Max(max.Y, MathF.Max(MathF.Max(bl.Y, br.Y), MathF.Max(tr.Y, tl.Y))),
+                              MathF.Max(max.Z, MathF.Max(MathF.Max(bl.Z, br.Z), MathF.Max(tr.Z, tl.Z))));
+            any = true;
+        }
         foreach (var child in go.Children)
             AccumulateRendererBounds(child, ref min, ref max, ref any);
     }
