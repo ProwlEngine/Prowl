@@ -41,7 +41,7 @@ public interface IInputHandler
     bool GetMouseButton(int button);
     bool GetMouseButtonDown(int button);
     bool GetMouseButtonUp(int button);
-    void SetCursorVisible(bool visible, int miceIndex = 0);
+    void ApplyCursorState(bool visible, CursorLockMode mode);
 
     /// <summary>Sets the hardware cursor shape (e.g. from Paper's <see cref="PaperCursor"/> hover state).</summary>
     void SetCursorShape(PaperCursor shape, int miceIndex = 0);

@@ -214,6 +214,7 @@ public static class Window
 
             Graphics.BeginFrame();
 
+            WindowInputHandler?.BeginFrame();
             InternalWindow.DoEvents();
             Update?.Invoke(delta);
             WindowInputHandler?.LateUpdate();

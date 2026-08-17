@@ -78,7 +78,11 @@ public static class Input
     public static bool GetMouseButton(int button) => Current.GetMouseButton(button);
     public static bool GetMouseButtonDown(int button) => Current.GetMouseButtonDown(button);
     public static bool GetMouseButtonUp(int button) => Current.GetMouseButtonUp(button);
-    public static void SetCursorVisible(bool visible, int miceIndex = 0) => Current.SetCursorVisible(visible, miceIndex);
+    public static void SetCursorVisible(bool visible)
+    {
+        _cursorVisible = visible;
+        Current.ApplyCursorState(_cursorVisible, _lockMode);
+    }
 
     /// <summary>Sets the hardware cursor shape. Hook this to <c>Paper.OnCursorChange</c> so hovered
     /// elements can request a shape (pointer, resize, text, ...).</summary>
@@ -87,19 +91,66 @@ public static class Input
     /// <summary>
     /// Whether the cursor is currently locked (hidden + recentered each frame).
     /// </summary>
-    public static bool CursorLocked { get; private set; }
+    public static bool CursorLocked => _lockMode == CursorLockMode.Locked;
+
+    /// <summary>
+    /// How the cursor is constrained, independently of <see cref="CursorVisible"/>. A mode the topmost
+    /// context disallows is rejected: <see cref="OnCursorLockFailed"/> fires and the mode is unchanged.
+    /// </summary>
+    public static CursorLockMode CursorLockState
+    {
+        get => _lockMode;
+        set
+        {
+            if (value == _lockMode) return;
+
+            if (value != CursorLockMode.None && !TopLockContext.AllowLock)
+            {
+                OnCursorLockFailed?.Invoke();
+                return;
+            }
+
+            _lockMode = value;
+            Current.ApplyCursorState(_cursorVisible, _lockMode);
+
+            // Confined traps the pointer as effectively as Locked, so it needs the same escape prompt.
+            if (value != CursorLockMode.None)
+                OnCursorLocked?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Whether the hardware cursor is drawn. <see cref="CursorLockMode.Locked"/> hides it regardless.
+    /// </summary>
+    public static bool CursorVisible
+    {
+        get => _cursorVisible;
+        set => SetCursorVisible(value);
+    }
 
     /// <summary>
     /// The screen-space center point where the cursor is locked to,
     /// as defined by the topmost lock context.
     /// </summary>
-    public static Int2 CursorLockCenter => _lockContextStack.Count > 0
-        ? _lockContextStack.Peek().GetLockCenter()
-        : new Int2(Window.InternalWindow.Size.X / 2, Window.InternalWindow.Size.Y / 2);
+    public static Int2 CursorLockCenter => TopLockContext.GetLockCenter();
+
+    /// <summary>
+    /// The inclusive window-space rect <see cref="CursorLockMode.Confined"/> holds the cursor inside,
+    /// as defined by the topmost lock context.
+    /// </summary>
+    public static IntRect CursorConfineBounds => TopLockContext.GetConfineBounds();
+
+    private static CursorLockMode _lockMode = CursorLockMode.None;
+    private static bool _cursorVisible = true;
 
     private static readonly Stack<CursorLockContext> _lockContextStack = new();
+    private static readonly CursorLockContext _defaultLockContext = new();
 
-    /// <summary>Fired when the cursor is successfully locked. Editor hooks this to show a toast.</summary>
+    private static CursorLockContext TopLockContext => _lockContextStack.Count > 0
+        ? _lockContextStack.Peek()
+        : _defaultLockContext;
+
+    /// <summary>Fired when the cursor is successfully constrained, locked or confined. Editor hooks this to show a toast.</summary>
     public static event Action? OnCursorLocked;
 
     /// <summary>Fired when a lock attempt is rejected by the current context. Editor hooks this for a toast.</summary>
@@ -120,8 +171,8 @@ public static class Input
         if (_lockContextStack.Count == 0) return;
         _lockContextStack.Pop();
 
-        // If locked but no context remains, or new top disallows it, unlock
-        if (CursorLocked && (_lockContextStack.Count == 0 || !_lockContextStack.Peek().AllowLock))
+        // If constrained but no context remains, or new top disallows it, release the cursor
+        if (_lockMode != CursorLockMode.None && (_lockContextStack.Count == 0 || !TopLockContext.AllowLock))
             UnlockCursor();
     }
 
@@ -132,25 +183,18 @@ public static class Input
     /// </summary>
     public static void LockCursor()
     {
-        // Check if the current context allows locking
-        if (_lockContextStack.Count > 0 && !_lockContextStack.Peek().AllowLock)
-        {
-            OnCursorLockFailed?.Invoke();
-            return;
-        }
-
-        CursorLocked = true;
-        SetCursorVisible(false);
-        OnCursorLocked?.Invoke();
+        CursorLockState = CursorLockMode.Locked;
+        if (CursorLocked) // the context can refuse; don't hide a cursor that never locked
+            SetCursorVisible(false);
     }
 
     /// <summary>
-    /// Unlock the cursor shows it and stops reporting the lock center.
+    /// Release any cursor constraint and show the cursor again.
+    /// Overrides <see cref="CursorVisible"/> for back-compat, unlike setting <see cref="CursorLockState"/> directly
     /// </summary>
     public static void UnlockCursor()
     {
-        if (!CursorLocked) return;
-        CursorLocked = false;
+        CursorLockState = CursorLockMode.None;
         SetCursorVisible(true);
     }
 
