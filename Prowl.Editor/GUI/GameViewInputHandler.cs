@@ -123,9 +123,10 @@ public class GameViewInputHandler : IInputHandler
     public bool GetMouseButton(int button) => ShouldFilter ? false : _real.GetMouseButton(button);
     public bool GetMouseButtonDown(int button) => ShouldFilter ? false : _real.GetMouseButtonDown(button);
     public bool GetMouseButtonUp(int button) => ShouldFilter ? false : _real.GetMouseButtonUp(button);
-    public void SetCursorVisible(bool visible, int miceIndex = 0)
+
+    public void ApplyCursorState(bool visible, CursorLockMode mode)
     {
-        _real.SetCursorVisible(visible, miceIndex);
+        _real.ApplyCursorState(visible, mode);
     }
 
     public void SetCursorShape(PaperCursor shape, int miceIndex = 0)
