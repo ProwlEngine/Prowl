@@ -81,6 +81,12 @@ public static class GameObjectClipboard
                 var go = Serializer.Deserialize<GameObject>(item, context);
                 if (go == null) continue;
 
+                // The clipboard carries whatever prefab data the copied objects had. Only a whole
+                // instance may keep it, and the paste has no original to ask, so the object answers for
+                // itself: an instance root stands for its prefab's root object, and nothing else does.
+                if (go.IsPrefabInstance && !Prefabs.PrefabUtility.IsInstanceRoot(go))
+                    go.ClearPrefabDataRecursive();
+
                 go.Name = UniqueNames.ForGameObjectSibling(go.Name, parent, scene);
                 scene.Add(go);
                 if (parent != null)
@@ -136,6 +142,8 @@ public static class GameObjectClipboard
         {
             GameObject source = roots[i];
             GameObject clone = clones[i];
+
+            Prefabs.PrefabUtility.SettleCopiedPrefabData(source, clone);
 
             clone.Name = UniqueNames.ForGameObjectSibling(source.Name, source.Parent, scene);
             scene.Add(clone);

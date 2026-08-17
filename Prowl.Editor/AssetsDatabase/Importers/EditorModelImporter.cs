@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
@@ -73,6 +74,10 @@ public class EditorModelImporter : AssetImporter
             var prefab = new PrefabAsset { Name = ctx.FileName, InstanceType = PrefabInstanceType.Model };
             if (data.RootGO != null)
             {
+                // The tree is built fresh from the file on every import, so its identities would be new
+                // every time and every instance in the project would lose its overrides on any reimport.
+                StabilizeIdentities(data.RootGO);
+
                 var goSerCtx = ImportHelper.CreateTrackingContext(out var goDependencies);
                 prefab.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO, goSerCtx);
                 foreach (var dep in goDependencies)
@@ -86,6 +91,45 @@ public class EditorModelImporter : AssetImporter
         {
             Debug.LogError($"Failed to import model: {ctx.AbsolutePath}\n{ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Gives every object identities derived from where it sits rather than from its constructor, so
+    /// importing the same file twice produces the same ones.
+    /// <para/>
+    /// This is what lets an instance survive a reimport. Every override names the object and component it
+    /// is on by the identity the asset holds them under, so handing out fresh identities would leave
+    /// every instance in the project addressing objects that no longer exist: overrides dropped, objects
+    /// below the instance root destroyed and rebuilt, references to them dead. A model is reimported
+    /// whenever its file or any of its settings change, so that is otherwise a routine loss.
+    /// <para/>
+    /// Keying on position means renaming or moving a node reads as a different object and orphans the
+    /// overrides on it, which is unavoidable while the source file carries no identities of its own. The
+    /// root is keyed as itself rather than by name, since the importer names it after the asset file.
+    /// </summary>
+    internal static void StabilizeIdentities(GameObject go, string path = "$Root")
+    {
+        go.SetIdentifier(BuiltInAssets.DeterministicGuid($"$GeneratedPrefab/{path}"));
+
+        var perType = new Dictionary<string, int>();
+        foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
+        {
+            string type = component.GetType().FullName ?? component.GetType().Name;
+            perType.TryGetValue(type, out int ordinal);
+            perType[type] = ordinal + 1;
+
+            component.Identifier = BuiltInAssets.DeterministicGuid($"$GeneratedPrefab/{path}#{type}#{ordinal}");
+        }
+
+        // Siblings can share a name, so the key says which one of those this is.
+        var perName = new Dictionary<string, int>();
+        foreach (GameObject child in go.Children)
+        {
+            perName.TryGetValue(child.Name, out int ordinal);
+            perName[child.Name] = ordinal + 1;
+
+            StabilizeIdentities(child, ordinal == 0 ? $"{path}/{child.Name}" : $"{path}/{child.Name}[{ordinal}]");
         }
     }
 

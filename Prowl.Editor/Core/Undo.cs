@@ -336,7 +336,10 @@ public static class Undo
     /// </summary>
     public static (Action undo, Action redo) CaptureCreatedObject(GameObject go)
     {
-        var serialized = Serializer.Serialize(typeof(object), go);
+        // The tree by value, anything it references outside itself linked by identifier: without a resolver
+        // Echo would deep copy those scene objects into the snapshot, and undo would restore the object
+        // pointing at orphan clones of whatever it referenced.
+        var serialized = Serializer.Serialize(typeof(object), go, SceneReferenceResolver.ContextForTree(go));
         var goId = go.Identifier;
         var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
@@ -362,7 +365,7 @@ public static class Undo
 
                 // Preserving identifiers: what comes back has to be the object that went away, or
                 // every other record addressing it stops resolving.
-                var restored = GameObject.DeserializePreservingIdentifiers(serialized);
+                var restored = GameObject.DeserializePreservingIdentifiers(serialized, SceneReferenceResolver.ContextForLinking());
                 if (restored == null) return;
 
                 scene.Add(restored);
@@ -392,7 +395,8 @@ public static class Undo
         if (go == null) return;
 
         // Serialize the entire GO tree before destruction
-        var serialized = Serializer.Serialize(typeof(object), go);
+        // Linked, not copied: see CaptureCreatedObject.
+        var serialized = Serializer.Serialize(typeof(object), go, SceneReferenceResolver.ContextForTree(go));
         var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
         var goId = go.Identifier;
@@ -405,7 +409,7 @@ public static class Undo
 
                 // Preserving identifiers: what comes back has to be the object that went away, or
                 // every other record addressing it stops resolving.
-                var restored = GameObject.DeserializePreservingIdentifiers(serialized);
+                var restored = GameObject.DeserializePreservingIdentifiers(serialized, SceneReferenceResolver.ContextForLinking());
                 if (restored == null) return;
 
                 scene.Add(restored);

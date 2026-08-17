@@ -45,6 +45,25 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         => _copied = new HashSet<object>(copied, ReferenceEqualityComparer.Instance);
 
     /// <summary>
+    /// Which scene a link resolves against. Null means the open one, which is right for everything the
+    /// user does directly. A caller working on a scene that is not open - a build reading one off disk -
+    /// has to say so, or its references resolve against whatever scene happens to be open and bind to
+    /// the wrong objects or to nothing.
+    /// </summary>
+    public Scene? ResolveIn { get; init; }
+
+    /// <summary>Context for writing a tree out by value, linking everything it references beyond itself.</summary>
+    public static SerializationContext ContextForTree(GameObject root)
+        => new() { ExternalReferences = ForTree(root) };
+
+    /// <summary>
+    /// Context for reading data back, binding every link to the live object it names.
+    /// </summary>
+    /// <param name="scene">The scene to resolve in, or null for the open one.</param>
+    public static SerializationContext ContextForLinking(Scene? scene = null)
+        => new() { ExternalReferences = new SceneReferenceResolver { ResolveIn = scene } };
+
+    /// <summary>
     /// A resolver for writing out a whole GameObject tree: the tree serializes by value, and anything
     /// it references from outside is linked. Transforms and components have to be listed alongside
     /// their GameObjects, or they would serialize as links themselves.
@@ -113,7 +132,8 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
 
     public object? ResolveReference(object key, Type targetType)
     {
-        if (key is not Guid id || Scene.Current is not { } scene) return null;
+        Scene? target = ResolveIn.IsValid() ? ResolveIn : Scene.Current;
+        if (key is not Guid id || target is not { } scene) return null;
 
         // GameObject and MonoBehaviour share the FindObjectByIdentifier lookup; a Transform key is
         // its GameObject's id, so resolve the GameObject and hand back its Transform.

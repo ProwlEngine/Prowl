@@ -124,8 +124,15 @@ public static partial class PrefabUtility
     /// An object that came from this prefab already knows its source identifier and adopts it; one
     /// added since is new content, and its current identifier becomes the stable one.
     /// </summary>
-    internal static void StabilizeSourceIdentifiers(GameObject root)
+    internal static void StabilizeSourceIdentifiers(GameObject root) => StabilizeSourceIdentifiers(root, root.PrefabAssetId);
+
+    private static void StabilizeSourceIdentifiers(GameObject root, Guid boundaryPrefabId)
     {
+        // An instance of another prefab answers to that prefab, and its identities are that prefab's to
+        // hand out. Pinning them here would give two copies of one nested prefab the same identifiers,
+        // and then anything resolving an object by identifier finds whichever comes first.
+        if (root.IsPrefabInstance && root.PrefabAssetId != boundaryPrefabId) return;
+
         var link = root.EnsurePrefabLink();
 
         if (link.SourceIdentifier == Guid.Empty)
@@ -146,7 +153,7 @@ public static partial class PrefabUtility
         }
 
         foreach (var child in root.Children)
-            StabilizeSourceIdentifiers(child);
+            StabilizeSourceIdentifiers(child, boundaryPrefabId);
     }
 
     /// <summary>
@@ -472,18 +479,25 @@ public static partial class PrefabUtility
             return;
         }
 
-        ApplySingleOverrideCore(instanceGO, ov, recordUndo: true);
+        ApplySelectedOverridesCore(instanceGO, [ov], recordUndo: true);
     }
 
-    private static void ApplySingleOverrideCore(GameObject instanceGO, PropertyOverride ov, bool recordUndo)
+    private static void ApplySelectedOverridesCore(GameObject instanceGO, List<PropertyOverride> overrides, bool recordUndo)
     {
         _refreshingFromApply = true;
-        try { ApplySingleOverrideCoreInner(instanceGO, ov, recordUndo); }
+        try { ApplySelectedOverridesCoreInner(instanceGO, overrides, recordUndo); }
         finally { _refreshingFromApply = false; }
     }
 
-    private static void ApplySingleOverrideCoreInner(GameObject instanceGO, PropertyOverride ov, bool recordUndo)
+    /// <summary>
+    /// Push a chosen set of overrides into the asset as one operation: one read of the prefab, one write,
+    /// one reimport and one undo step, whether the caller picked one member or a whole component's worth.
+    /// Done per override it would write the file once per member and leave a half applied asset behind
+    /// after a single undo.
+    /// </summary>
+    private static void ApplySelectedOverridesCoreInner(GameObject instanceGO, List<PropertyOverride> overrides, bool recordUndo)
     {
+        if (overrides.Count == 0) return;
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
@@ -497,8 +511,8 @@ public static partial class PrefabUtility
         // Capture old prefab file content for undo
         string absolutePath = System.IO.Path.Combine(Project.Current.AssetsPath, entry.Path);
         string? oldFileContent = System.IO.File.Exists(absolutePath) ? System.IO.File.ReadAllText(absolutePath) : null;
-        var ovPath = ov.Path;
-        var ovValue = ov.Value;
+        // Copied, because the entries themselves are about to be taken off the instance's list.
+        var applied = overrides.Select(o => new PropertyOverride { Path = o.Path, Value = o.Value }).ToList();
         var prefabGuid = instanceGO.PrefabAssetId;
         // Overrides live on the prefab instance root, and the refresh below replaces that object, so
         // undo and redo address it by identifier rather than holding on to it.
@@ -511,47 +525,56 @@ public static partial class PrefabUtility
         var source = GameObject.InstantiateDetached(prefab);
         if (source == null) return;
 
-        // Apply the override value to the source. A scene reference resolves here and is linked, not
+        // Apply each override value to the source. A scene reference resolves here and is linked, not
         // copied, when the source is written back below.
-        ParseOverridePath(source, ov.Path, out var target, out string fieldPath);
-        if (target != null && !string.IsNullOrEmpty(fieldPath))
-            ApplyFieldValue(target, fieldPath, ov.Value);
+        foreach (PropertyOverride ov in applied)
+        {
+            ParseOverridePath(source, ov.Path, out var target, out string fieldPath);
+            if (target != null && !string.IsNullOrEmpty(fieldPath))
+                ApplyFieldValue(target, fieldPath, ov.Value, source.Scene);
+        }
 
         // Save back to the .prefab file
         StripInstanceDataForEditing(source, prefabGuid);
         StabilizeSourceIdentifiers(source);
         var writeContext = TreeValueContext(source);
         var echo = Serializer.Serialize(typeof(object), source, writeContext);
-        ReportDroppedSceneReferences(writeContext, "Applying this override");
+        ReportDroppedSceneReferences(writeContext, applied.Count == 1 ? "Applying this override" : "Applying these overrides");
 
         if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
         {
+            // The asset was written, so whatever tracks that has to hear about it here too, not only
+            // from the whole-instance apply.
+            RaisePrefabSaved(prefabGuid);
             InvalidateSource(instanceGO.PrefabAssetId);
             db.Reimport(entry.Guid);
         }
 
-        // Remove this override from the instance (stored on the root)
-        goRef.PrefabOverrides.Remove(ov);
+        // Remove what was applied from the instance (overrides are stored on the root)
+        foreach (PropertyOverride ov in applied)
+            goRef.PrefabOverrides.RemoveAll(o => o.Path == ov.Path);
 
         if (recordUndo)
         {
-            Undo.RegisterAction("Apply Single Override",
+            Undo.RegisterAction(applied.Count == 1 ? "Apply Override" : "Apply Overrides",
                 undo: () =>
                 {
                     // Restore old prefab file
                     if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
                     InvalidateSource(prefabGuid);
                     db.Reimport(entry.Guid);
-                    // Re-add the override to the instance
+                    // Re-add the overrides to the instance
                     var live = Undo.FindGO(rootId);
-                    if (live.IsValid()) live!.PrefabOverrides.Add(new PropertyOverride { Path = ovPath, Value = ovValue });
+                    if (live.IsValid())
+                        foreach (PropertyOverride ov in applied)
+                            live!.PrefabOverrides.Add(new PropertyOverride { Path = ov.Path, Value = ov.Value });
                     RefreshAllInstances(prefabGuid);
                 },
                 redo: () =>
                 {
                     var live = Undo.FindGO(rootId);
                     if (live.IsValid())
-                        ApplySingleOverrideCore(live!, new PropertyOverride { Path = ovPath, Value = ovValue }, recordUndo: false);
+                        ApplySelectedOverridesCore(live!, applied, recordUndo: false);
                 });
         }
 
@@ -625,7 +648,7 @@ public static partial class PrefabUtility
                     // Restore old instance value
                     ParseOverridePath(live!, path, out var undoTarget, out string undoFieldPath);
                     if (undoTarget != null && oldInstanceEcho != null)
-                        ApplyFieldValue(undoTarget, undoFieldPath, oldInstanceEcho);
+                        ApplyFieldValue(undoTarget, undoFieldPath, oldInstanceEcho, live!.Scene);
                     // Re-add removed overrides
                     live!.PrefabOverrides.AddRange(removedOverrides);
                 },
@@ -859,6 +882,11 @@ public static partial class PrefabUtility
         if (!GuardNotPlaying("apply an addition")) return;
         if (!GuardEditablePrefab(instanceGO.PrefabAssetId, "apply an addition")) return;
 
+        ApplyAdditionCore(instanceGO, addition, recordUndo: true);
+    }
+
+    private static void ApplyAdditionCore(GameObject instanceGO, AdditionDescription addition, bool recordUndo)
+    {
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
@@ -896,23 +924,27 @@ public static partial class PrefabUtility
         db.Reimport(entry.Guid);
 
         Guid rootId = root.Identifier;
-        Undo.RegisterAction("Apply Prefab Addition",
-            undo: () =>
-            {
-                if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
-                InvalidateSource(prefabGuid);
-                db.Reimport(entry.Guid);
+        if (recordUndo)
+        {
+            Undo.RegisterAction("Apply Prefab Addition",
+                undo: () =>
+                {
+                    if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
+                    InvalidateSource(prefabGuid);
+                    db.Reimport(entry.Guid);
 
-                // The instance goes back to owning it, which is what having no source identity means.
-                GameObject? live = Undo.FindGO(rootId);
-                if (live.IsValid()) ForgetSourceIdentity(live!, addition);
-                RefreshAllInstances(prefabGuid);
-            },
-            redo: () =>
-            {
-                GameObject? live = Undo.FindGO(rootId);
-                if (live.IsValid()) ApplyAddition(live!, addition);
-            });
+                    // The instance goes back to owning it, which is what having no source identity means.
+                    GameObject? live = Undo.FindGO(rootId);
+                    if (live.IsValid()) ForgetSourceIdentity(live!, addition);
+                    RefreshAllInstances(prefabGuid);
+                },
+                // Through the core, or redoing would push a fresh undo entry every time.
+                redo: () =>
+                {
+                    GameObject? live = Undo.FindGO(rootId);
+                    if (live.IsValid()) ApplyAdditionCore(live!, addition, recordUndo: false);
+                });
+        }
 
         RefreshAllInstances(prefabGuid);
         EditorSceneManager.MarkDirty();
@@ -1049,7 +1081,7 @@ public static partial class PrefabUtility
         }
     }
 
-    /// <summary>Push everything overridden on one component into the prefab.</summary>
+    /// <summary>Push everything overridden on one component into the prefab, as one step.</summary>
     public static void ApplyComponentOverrides(GameObject instanceGO, MonoBehaviour component)
     {
         if (!instanceGO.IsPrefabInstance) return;
@@ -1057,8 +1089,10 @@ public static partial class PrefabUtility
         if (!GuardEditablePrefab(instanceGO.PrefabAssetId, "apply a component")) return;
 
         List<string> paths = PathsFor(instanceGO, component, out GameObject root);
-        foreach (string path in paths)
-            ApplySingleOverride(instanceGO, path);
+        List<PropertyOverride> overrides = root.PrefabOverrides.Where(o => paths.Contains(o.Path)).ToList();
+        if (overrides.Count == 0) return;
+
+        ApplySelectedOverridesCore(instanceGO, overrides, recordUndo: true);
     }
 
     /// <summary>
@@ -1125,6 +1159,13 @@ public static partial class PrefabUtility
         /// <summary>False when the path no longer addresses anything, so it can only be removed.</summary>
         public bool Resolvable;
 
+        /// <summary>
+        /// The component this entry is on, by identifier, or empty when the override is on the GameObject
+        /// itself. Carried because the names above are for display: several objects in a scene answer to
+        /// one name, and two instances of a prefab always do.
+        /// </summary>
+        public Guid ComponentIdentifier;
+
         /// <summary>What to group this under: one heading per object, or per component of one.</summary>
         public string Group => string.IsNullOrEmpty(ComponentName) ? ObjectName : $"{ObjectName} > {ComponentName}";
     }
@@ -1164,6 +1205,7 @@ public static partial class PrefabUtility
             case MonoBehaviour component:
                 described.ObjectName = component.GameObject.IsValid() ? component.GameObject.Name : "";
                 described.ComponentName = component.GetType().Name;
+                described.ComponentIdentifier = component.Identifier;
                 break;
             case GameObject owner:
                 described.ObjectName = owner.Name;
@@ -1298,6 +1340,23 @@ public static partial class PrefabUtility
                 Runtime.Debug.LogError($"[Prefab] Failed to refresh instances of '{entry.Path}': {ex.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Drop what was cached for prefabs that have just been deleted. The cache is what every override
+    /// comparison reads, so without this an instance of a deleted prefab keeps recording overrides
+    /// against a tree nothing can produce any more.
+    /// </summary>
+    internal static void OnAssetsDeleted(string[] paths)
+    {
+        var db = EditorAssetBackend.Instance;
+        if (db == null) return;
+
+        // The entries are gone by the time this runs, so which guid each path was is no longer
+        // answerable. Every cached prefab the database can no longer resolve is dropped instead.
+        foreach (Guid prefabGuid in _sourceCache.Keys.ToList())
+            if (db.GetEntry(prefabGuid) == null)
+                InvalidateSource(prefabGuid);
     }
 
     /// <summary>
@@ -1477,6 +1536,7 @@ public static partial class PrefabUtility
         foreach (PlacementState state in placement)
             state.Restore();
 
+
         AdoptClonedObjects(instance, source, boundaryPrefabId, context);
     }
 
@@ -1537,6 +1597,9 @@ public static partial class PrefabUtility
         if (sourceLink != null)
             context.AddTarget(sourceLink, instanceLink, walkContents: false);
 
+        // Every prefab component gets a counterpart, found or made. Leaving one unpaired would hand it
+        // to the cloner, whose fallback is "whatever sits at the same index", and that lands on
+        // components the instance added.
         foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
         {
             Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
@@ -1545,18 +1608,36 @@ public static partial class PrefabUtility
             MonoBehaviour? match = instance.GetComponents<MonoBehaviour>()
                 .FirstOrDefault(c => instance.GetComponentSourceIdentifier(c) == sourceId);
 
-            if (match.IsValid() && match!.GetType() == sourceComponent.GetType())
-                context.AddTarget(sourceComponent, match!);
+            // Same identity, different type: the prefab replaced what sits there, so the old one goes
+            // rather than being kept beside a second component answering to the same identity.
+            if (match.IsValid() && match!.GetType() != sourceComponent.GetType())
+            {
+                instance.EnsurePrefabLink().ComponentSources.Remove(match.Identifier);
+                instance.RemoveComponentInternal(match);
+                match = null;
+            }
+
+            MonoBehaviour paired = match.IsValid() ? match! : instance.AttachClonedComponent(sourceComponent.GetType());
+
+            context.AddTarget(sourceComponent, paired);
         }
 
+        // Same for children, and this one matters more: the cloner's fallback for a child has no type
+        // check at all, so an unpaired prefab child would simply overwrite whatever object the instance
+        // happens to have at that index.
         foreach (GameObject sourceChild in source.Children)
         {
             Guid sourceId = sourceChild.SourceIdentifier;
             if (sourceId == Guid.Empty) continue;
 
             GameObject? match = instance.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
-            if (match.IsValid())
-                PairToSource(match!, sourceChild, boundaryPrefabId, context, placement, isInstanceRoot: false);
+            if (match.IsNotValid())
+            {
+                match = new GameObject(sourceChild.Name);
+                match.SetParent(instance, worldPositionStays: false);
+            }
+
+            PairToSource(match!, sourceChild, boundaryPrefabId, context, placement, isInstanceRoot: false);
         }
     }
 
@@ -1601,8 +1682,12 @@ public static partial class PrefabUtility
                 continue;
             }
 
+            // Unparented explicitly: Scene.Remove does it on the way out, but a tree that is in no scene
+            // would otherwise keep the child in its list while Destroy waits for the end of the frame,
+            // and the pairing above would still see it.
             var childScene = child.Scene;
             if (childScene.IsValid()) childScene!.Remove(child);
+            else child.SetParent(null!);
             child.Destroy();
         }
     }
@@ -1665,10 +1750,23 @@ public static partial class PrefabUtility
         Guid prefabId = go.PrefabAssetId;
         GameObject root = go;
 
-        while (root.Parent != null && root.Parent.IsValid() && root.Parent.PrefabAssetId == prefabId)
+        // Stops at the first object that is an instance in its own right, which is what an instance of a
+        // prefab placed inside another instance of the same prefab is.
+        while (!IsInstanceRoot(root) && root.Parent != null && root.Parent.IsValid()
+               && root.Parent.PrefabAssetId == prefabId)
             root = root.Parent;
 
         return root;
+    }
+
+    /// <summary>
+    /// The identity the prefab stores its own root object under. Every instance root answers to it, and
+    /// nothing else in a well formed instance does.
+    /// </summary>
+    private static Guid RootIdentityOf(Guid prefabGuid)
+    {
+        GameObject? source = GetCachedPrefabSource(prefabGuid);
+        return source.IsValid() ? source!.SourceIdentifier : Guid.Empty;
     }
 
     /// <summary>
@@ -1682,14 +1780,33 @@ public static partial class PrefabUtility
         var parent = child.Parent;
         if (!parent.IsValid() || !parent!.IsPrefabInstance) return false;
 
-        return child.SourceIdentifier != Guid.Empty && child.PrefabAssetId == parent.PrefabAssetId;
+        if (child.SourceIdentifier == Guid.Empty || child.PrefabAssetId != parent.PrefabAssetId) return false;
+
+        // An object standing for the prefab's own root is an instance of it, placed inside another
+        // instance of the same prefab. That is the instance's to keep, move and delete, not structure
+        // the outer prefab provides.
+        return !IsInstanceRoot(child);
     }
 
-    /// <summary>True if this GO is a prefab instance root (not just a child within a prefab).</summary>
+    /// <summary>
+    /// True if this GO stands for the prefab's own root object, which is what makes it an instance
+    /// rather than one object inside one.
+    /// <para/>
+    /// Asked of the identity rather than of the parent. By the parent, an object that ended up outside
+    /// its instance reads as an instance of the whole prefab and the next refresh grafts the entire
+    /// prefab onto it, and an instance placed inside another instance of the same prefab reads as
+    /// content of the outer one and gets destroyed. Both are answered by asking which object of the
+    /// prefab this one came from.
+    /// </summary>
     public static bool IsInstanceRoot(GameObject go)
     {
         if (!go.IsPrefabInstance) return false;
-        // Root if parent is null, or parent has a different PrefabAssetId
+
+        Guid rootIdentity = RootIdentityOf(go.PrefabAssetId);
+        if (rootIdentity != Guid.Empty) return go.SourceIdentifier == rootIdentity;
+
+        // The prefab is gone, so nothing can say which object this was. Fall back to the shape of the
+        // hierarchy, which is all that is left to go on.
         return go.Parent == null || !go.Parent.IsValid() || go.Parent.PrefabAssetId != go.PrefabAssetId;
     }
 
@@ -1885,7 +2002,14 @@ public static partial class PrefabUtility
     private static readonly Dictionary<Type, FieldInfo[]> _overridableFields = new();
 
     /// <summary>
-    /// The fields an override may address: exactly what Echo persists, minus engine bookkeeping.
+    /// The fields an override may address: exactly what Echo persists, minus engine bookkeeping and
+    /// anything a clone never copies.
+    /// <para/>
+    /// That last one is the general rule behind a specific need. A field marked as never copied is one a
+    /// prefab has no say in, because bringing an instance into line with its prefab leaves it alone by
+    /// construction. Comparing it would report a difference no operation can act on: a bake writes a
+    /// lightmap binding per object, and every baked instance would otherwise read as modified and hand
+    /// its own binding to every other instance if anyone pressed apply.
     /// </summary>
     private static FieldInfo[] GetOverridableFields(object instance)
     {
@@ -1894,6 +2018,7 @@ public static partial class PrefabUtility
 
         var fields = instance.GetSerializableFields()
             .Where(f => !_skipFields.Contains(f.Name))
+            .Where(f => (f.GetCustomAttribute<CloneFieldAttribute>()?.Flags & CloneFieldFlags.Skip) == null)
             .ToArray();
 
         _overridableFields[type] = fields;
@@ -2153,40 +2278,40 @@ public static partial class PrefabUtility
         // dropped onto this one, since both carry a source identity.
         if (source == null) return;
 
-        var instanceComponents = instance.GetComponents<MonoBehaviour>().ToList();
-        var copyComponents = copy.GetComponents<MonoBehaviour>().ToList();
+        // Paired by identifier rather than by position: the copy is a round trip of the instance and
+        // keeps its identifiers, so this holds even if something in the middle failed to load and the
+        // two lists are no longer the same length.
         var sourceComponents = source.GetComponents<MonoBehaviour>().ToList();
 
-        for (int i = instanceComponents.Count - 1; i >= 0; i--)
+        foreach (MonoBehaviour copyComponent in copy.GetComponents<MonoBehaviour>().ToList())
         {
-            if (i >= copyComponents.Count) continue;
+            MonoBehaviour? original = instance.GetComponentByIdentifier(copyComponent.Identifier);
+            Guid sourceId = original.IsValid() ? instance.GetComponentSourceIdentifier(original!) : Guid.Empty;
 
-            Guid sourceId = instance.GetComponentSourceIdentifier(instanceComponents[i]);
             bool provided = sourceId != Guid.Empty
                 && sourceComponents.Any(c => source.GetComponentSourceIdentifier(c) == sourceId);
 
             if (!provided)
-                copy.RemoveComponentInternal(copyComponents[i]);
+                copy.RemoveComponentInternal(copyComponent);
         }
 
-        for (int i = instance.Children.Count - 1; i >= 0; i--)
+        foreach (GameObject copyChild in copy.Children.ToList())
         {
-            if (i >= copy.Children.Count) continue;
+            GameObject? original = instance.FindChildByIdentifier(copyChild.Identifier, deep: false);
+            Guid sourceId = original.IsValid() ? original!.SourceIdentifier : Guid.Empty;
 
-            Guid sourceId = instance.Children[i].SourceIdentifier;
             GameObject? sourceChild = sourceId == Guid.Empty
                 ? null
                 : source.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
 
             if (sourceChild == null)
             {
-                GameObject copyChild = copy.Children[i];
                 copyChild.SetParent(null!);
                 copyChild.Dispose();
                 continue;
             }
 
-            StripInstanceAdditions(copy.Children[i], instance.Children[i], sourceChild);
+            StripInstanceAdditions(copyChild, original!, sourceChild);
         }
     }
 
@@ -2200,8 +2325,11 @@ public static partial class PrefabUtility
         source.AssetID = savedId;
         if (echo == null) return null;
 
-        // Deserialize a clean copy, re-linking those references to the live scene objects.
-        var clone = Serializer.Deserialize<GameObject>(echo, InstanceValueContext());
+        // Preserving identifiers, because a component's source identity is stored on its GameObject
+        // keyed by the component's own identifier. A copy with fresh identifiers cannot look its own
+        // source identity up, and StabilizeSourceIdentifiers would then write this copy's identifiers
+        // into the asset as the components' identities, orphaning every other instance's overrides.
+        var clone = GameObject.DeserializePreservingIdentifiers(echo, InstanceValueContext());
         if (clone == null) return null;
 
         // Strip prefab data from the clone

@@ -185,10 +185,14 @@ public abstract class BuildPipeline
             bool changed = entry.ImporterType == "SceneImporter" && TryBringInstancesUpToDate(ref echo, entry.Path);
 
             changed |= StripEditorOnlyPrefabData(echo);
-            // Inside a prefab asset every link is nested by definition, since the asset's own root
-            // carries none. Inside a scene the top-level instances are not.
-            changed |= Importers.ImportHelper.FlattenNestedPrefabLinks(
-                echo, insideInstance: entry.ImporterType == "PrefabImporter");
+
+            // Only a prefab asset is flattened, and there every link is nested by definition since the
+            // asset's own root carries none. A scene keeps all of its links: which prefab an object is
+            // an instance of is observable through GameObject.PrefabAssetId, and stripping the link off
+            // an instance placed inside another instance would make that read differently in a player
+            // than in play mode.
+            if (entry.ImporterType == "PrefabImporter")
+                changed |= Importers.ImportHelper.FlattenNestedPrefabLinks(echo, insideInstance: true);
             if (!changed) return null;
 
             var buffer = new MemoryStream();

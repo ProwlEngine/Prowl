@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -43,10 +44,10 @@ public class SkinnedMeshRenderer : MonoBehaviour
     public Color MainColor = Color.White;
 
     /// <summary>Index into <c>Scene.BakedLighting.Lightmaps</c>, or -1 if not lightmapped. Assigned by the bake.</summary>
-    [HideInInspector] public int LightmapIndex = -1;
+    [HideInInspector, CloneField(CloneFieldFlags.Skip)] public int LightmapIndex = -1;
 
     /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
-    [HideInInspector] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
+    [HideInInspector, CloneField(CloneFieldFlags.Skip)] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
 
     // Resolved at runtime
     [System.NonSerialized] private Transform? _rootBone;

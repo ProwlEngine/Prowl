@@ -115,6 +115,11 @@ public partial class GameObject
         link.SourceIdentifier = go.Identifier;
         go.SetIdentifier(Guid.NewGuid());
 
+        // The map arrives holding the asset's own identity entries, keyed by identifiers no live
+        // component has. Cleared rather than added to, so what is left says only where these components
+        // came from instead of carrying a dead copy of the asset's own bookkeeping into every scene.
+        link.ComponentSources.Clear();
+
         foreach (MonoBehaviour component in go._components)
         {
             if (component.IsNotValid()) continue;

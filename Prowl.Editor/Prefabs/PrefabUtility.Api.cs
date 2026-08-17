@@ -72,9 +72,16 @@ public static partial class PrefabUtility
     {
         if (scene.IsNotValid() || prefabGuid == Guid.Empty) return [];
 
-        return scene.AllObjects
-            .Where(go => go.PrefabAssetId == prefabGuid && IsInstanceRoot(go))
-            .ToList();
+        List<GameObject> belonging = scene.AllObjects.Where(go => go.PrefabAssetId == prefabGuid).ToList();
+        List<GameObject> roots = belonging.Where(IsInstanceRoot).ToList();
+        if (roots.Count > 0) return roots;
+
+        // Nothing in the scene stands for the prefab's root object. That means the asset was rewritten
+        // with fresh identities, by a hand edit or by an importer that does not keep them, so no object
+        // can be matched to it any more. Falling back to the shape of the hierarchy at least brings the
+        // instances up to date, at the cost of rebuilding what is under them.
+        return belonging.Where(go => go.Parent == null || !go.Parent.IsValid()
+            || go.Parent.PrefabAssetId != prefabGuid).ToList();
     }
 
     /// <summary>
@@ -167,6 +174,29 @@ public static partial class PrefabUtility
 
     #endregion
 
+    #region Copies
+
+    /// <summary>
+    /// Settle what a freshly made copy of <paramref name="original"/> is: an instance in its own right,
+    /// or ordinary objects.
+    /// <para/>
+    /// A copy of a whole instance is another instance of the same prefab, which is what a user
+    /// duplicating one expects. A copy of part of one is not: it would answer to the same identities as
+    /// the objects it was copied from, so an override meant for one would land on both, a refresh would
+    /// update only whichever came first, and applying would write two objects under one identity into
+    /// the asset. Those copies become plain objects, which also makes them additions the instance can
+    /// report, move and delete.
+    /// </summary>
+    public static void SettleCopiedPrefabData(GameObject original, GameObject copy)
+    {
+        if (copy.IsNotValid() || !copy.IsPrefabInstance) return;
+        if (original.IsValid() && IsInstanceRoot(original)) return;
+
+        copy.ClearPrefabDataRecursive();
+    }
+
+    #endregion
+
     #region Linking
 
     /// <summary>
@@ -200,9 +230,21 @@ public static partial class PrefabUtility
             Runtime.Debug.LogWarning($"[Prefab] Connected, but {unmatched.Count} part(s) had no counterpart in the prefab " +
                 $"and will not track overrides: {string.Join(", ", unmatched)}");
 
+        // By identifier, and reading the prefab again on the way back: a redo can run long after the
+        // objects captured here were replaced by a refresh, and the cached source tree it matched
+        // against is dropped by every import in between.
+        Guid goId = go.Identifier;
         Undo.RegisterAction("Connect To Prefab",
             undo: () => RestorePrefabState(previous),
-            redo: () => { AdoptSourceIdentities(go, source, prefabGuid, []); ReconcileInstance(go); });
+            redo: () =>
+            {
+                GameObject? live = Undo.FindGO(goId);
+                GameObject? current = GetCachedPrefabSource(prefabGuid);
+                if (live.IsNotValid() || current == null) return;
+
+                AdoptSourceIdentities(live!, current, prefabGuid, []);
+                ReconcileInstance(live!);
+            });
 
         EditorSceneManager.MarkDirty();
         return true;

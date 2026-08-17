@@ -109,6 +109,12 @@ public static class PrefabEditingMode
         var go = GameObject.InstantiateDetached(prefab);
         if (go == null)
         {
+            // The scene snapshot above is only meaningful to a session that started. Dropped here, or
+            // the next session would restore a scene from whenever this failed.
+            _savedSceneState = null;
+            _savedScenePath = null;
+            _savedSceneDirty = false;
+            OriginalSceneName = null;
             Debug.LogWarning("[Prefab] Failed to instantiate prefab for editing.");
             return;
         }
@@ -192,15 +198,17 @@ public static class PrefabEditingMode
         var scene = Scene.Current;
         if (scene == null) return false;
 
-        // Use the tracked prefab root so we skip the editor-only camera/light we added
-        // to light the scene during editing. Fall back to the first non-HideAndDontSave
-        // root if the tracked reference is stale.
-        var root = _editingRoot;
-        if (root == null || root.Scene != scene)
+        // The tracked prefab root, and only that: it is what skips the editor-only camera and light.
+        // If it is no longer the session's own object then something replaced the scene underneath us,
+        // and whatever is in the scene now is not this prefab. Writing it would overwrite the asset
+        // with an unrelated object, so this refuses instead.
+        GameObject? root = _editingRoot;
+        if (root.IsNotValid() || root!.Scene != scene)
         {
-            root = scene.RootObjects.FirstOrDefault(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+            Debug.LogError("[Prefab] The prefab being edited is no longer in the open scene, so there is " +
+                "nothing to save. Exit prefab editing mode; the asset has been left untouched.");
+            return false;
         }
-        if (root == null) return false;
 
         // A prefab has exactly one root, so anything else the user created at the top level is not
         // going to be saved. Say so rather than dropping it silently.

@@ -90,6 +90,11 @@ public class EditorAssetBackend : AssetBackendBase
         OnAssetsImported -= PrefabUtility.OnAssetsImported;
         OnAssetsImported += PrefabUtility.OnAssetsImported;
 
+        // A deleted prefab must stop being the baseline instances are compared against, or an edit to
+        // an instance keeps recording overrides against contents that no longer exist anywhere.
+        OnAssetsDeleted -= PrefabUtility.OnAssetsDeleted;
+        OnAssetsDeleted += PrefabUtility.OnAssetsDeleted;
+
         // The notification above only reaches the scene that was open when the import happened, so a
         // scene opened afterwards has to catch up on whatever changed while it was closed.
         Runtime.Resources.Scene.OnSceneLoaded -= PrefabUtility.OnSceneLoaded;

@@ -1334,23 +1334,14 @@ public static class GameObjectInspector
     }
 
     /// <summary>
-    /// The component an entry is on, found on the live instance by the object and type its path named.
+    /// The component an entry is on, by the identity the entry was described with. Searched inside this
+    /// instance rather than across the scene: two instances of one prefab have identically named objects
+    /// carrying identically named components, and a search by name lands on whichever comes first.
     /// </summary>
     private static MonoBehaviour? ComponentFor(GameObject root, PrefabUtility.OverrideDescription entry)
     {
-        Runtime.Resources.Scene? scene = root.Scene;
-        if (scene.IsNotValid()) return null;
-
-        foreach (GameObject go in scene!.AllObjects)
-        {
-            if (go.Name != entry.ObjectName) continue;
-
-            foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
-                if (component.GetType().Name == entry.ComponentName
-                    && PrefabUtility.HasComponentOverrides(go, component))
-                    return component;
-        }
-        return null;
+        if (entry.ComponentIdentifier == Guid.Empty) return null;
+        return root.GetComponentInChildrenByIdentifier(entry.ComponentIdentifier);
     }
 
     /// <summary>

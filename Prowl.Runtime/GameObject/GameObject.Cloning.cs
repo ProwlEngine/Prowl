@@ -117,7 +117,7 @@ public partial class GameObject : ICloneExplicit
     /// Attaches a bare component of the given type. Unlike <see cref="AddComponent(Type)"/> this does
     /// not pull in required components, since the object being copied already has whatever it needs.
     /// </summary>
-    private MonoBehaviour AttachClonedComponent(Type type)
+    internal MonoBehaviour AttachClonedComponent(Type type)
     {
         var component = (MonoBehaviour)Activator.CreateInstance(type, nonPublic: true)!;
 

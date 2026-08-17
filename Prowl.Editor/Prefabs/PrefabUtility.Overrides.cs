@@ -7,6 +7,7 @@ using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Prefabs;
 
@@ -134,7 +135,7 @@ public static partial class PrefabUtility
         return null;
     }
 
-    private static void ApplyFieldValue(object target, string memberPath, EchoObject value)
+    private static void ApplyFieldValue(object target, string memberPath, EchoObject value, Scene? resolveIn)
     {
         string[] parts = memberPath.Split('.');
         if (!TraverseToParent(target, parts, out var parent)) return;
@@ -144,9 +145,10 @@ public static partial class PrefabUtility
 
         // An override value is serialized on its own, detached from any scene graph, so Echo cannot
         // tell that a GameObject or component field points at another scene object rather than at
-        // content to copy. Keying the reference by identifier lets it re-link to the live object.
-        var context = new SerializationContext { ExternalReferences = new SceneReferenceResolver() };
-        object? deserialized = Serializer.Deserialize(value, member.MemberType, context);
+        // content to copy. Keying the reference by identifier lets it re-link to the live object, in
+        // the scene the instance being written actually belongs to rather than whichever is open.
+        object? deserialized = Serializer.Deserialize(value, member.MemberType,
+            SceneReferenceResolver.ContextForLinking(resolveIn));
 
         // Null is a valid override for a reference field. Only skip it where the member cannot hold
         // null, which means deserialization failed rather than the value being null.
@@ -167,6 +169,11 @@ public static partial class PrefabUtility
         // Collected rather than validated per member, so a component with several overridden members
         // rebuilds its derived state once, after all of them have been written.
         var touched = new HashSet<MonoBehaviour>();
+
+        // Reference typed overrides name their target by identifier, and the object they name lives in
+        // the same scene as the instance. That is the open scene when a user is editing, and is not when
+        // a build brings a scene it read off disk up to date.
+        Scene? resolveIn = root.Scene;
 
         foreach (PropertyOverride ov in overrides)
         {
@@ -190,7 +197,7 @@ public static partial class PrefabUtility
                     continue;
                 }
 
-                ApplyFieldValue(target, memberPath, ov.Value);
+                ApplyFieldValue(target, memberPath, ov.Value, resolveIn);
                 if (target is MonoBehaviour behaviour)
                     touched.Add(behaviour);
             }

@@ -36,9 +36,23 @@ public static class EditorSceneManager
     /// <summary>
     /// Create and load a new empty default scene.
     /// </summary>
+    /// <summary>
+    /// Whether the scene can be swapped right now. A prefab editing session has borrowed the scene, the
+    /// undo history and the dirty flag, and it puts the previous scene back when it ends. Loading
+    /// another scene underneath it would leave the session writing whatever is in the scene over the
+    /// prefab, and the swapped-in scene discarded on exit.
+    /// </summary>
+    private static bool GuardNotEditingPrefab(string operation)
+    {
+        if (!PrefabEditingMode.IsEditing) return true;
+        Debug.LogWarning($"Cannot {operation} while editing a prefab. Leave prefab editing mode first.");
+        return false;
+    }
+
     public static void NewScene()
     {
         if (Application.IsPlaying) { Debug.LogWarning("Cannot create new scene during play mode."); return; }
+        if (!GuardNotEditingPrefab("create a new scene")) return;
         CreateAndLoadDefaultScene();
         CurrentScenePath = null;
         IsDirty = false;
@@ -115,6 +129,7 @@ public static class EditorSceneManager
     public static bool OpenScene(string relativePath)
     {
         if (Application.IsPlaying) { Debug.LogWarning("Cannot open scenes during play mode."); return false; }
+        if (!GuardNotEditingPrefab("open a scene")) return false;
         if (Project.Current == null) return false;
 
         string absolutePath = Path.Combine(Project.Current.AssetsPath, relativePath);
@@ -218,6 +233,9 @@ public static class EditorSceneManager
     private static bool SaveTo(string relativePath)
     {
         if (Project.Current == null || Scene.Current == null) return false;
+        // The prefab session's scene holds the prefab and the editor-only viewing rig, which is not a
+        // scene anyone means to save. Its own save goes through PrefabEditingMode.
+        if (!GuardNotEditingPrefab("save a scene")) return false;
 
         string absolutePath = Path.Combine(Project.Current.AssetsPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
