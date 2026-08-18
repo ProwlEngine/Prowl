@@ -79,9 +79,12 @@ public class DirectionalLight : Light
 
     public override LightType GetLightType() => LightType.Directional;
 
-    private void GetShadowMatrix(Float3 cameraPosition, int shadowResolution, float cascadeDistance, out Float4x4 view, out Float4x4 projection)
+    internal void GetShadowMatrix(Float3 focusPosition, int shadowResolution, float cascadeDistance, out Float4x4 view, out Float4x4 projection)
     {
         Float3 forward = -Transform.Forward;
+        // Depth range is a fixed +/- cascadeDistance * 0.5 slab around the (snapped) focus point, not a
+        // fit to the scene's casters. Occluders further toward the light than half a cascade get clipped
+        // out of the map and stop casting into it.
         projection = Float4x4.CreateOrtho(cascadeDistance, cascadeDistance, -cascadeDistance * 0.5f, cascadeDistance * 0.5f);
 
         // Calculate texel size in world units
@@ -92,10 +95,10 @@ public class DirectionalLight : Light
         Float3 lightRight = Float3.Normalize(Float3.Cross(lightUp, forward));
         lightUp = Float3.Normalize(Float3.Cross(forward, lightRight)); // Recompute to ensure orthogonality
 
-        // Project camera position onto light space axes
-        float x = Float3.Dot(cameraPosition, lightRight);
-        float y = Float3.Dot(cameraPosition, lightUp);
-        float z = Float3.Dot(cameraPosition, forward); // KEEP the Z component! god damnit lost so much time to this
+        // Project the focus position onto light space axes
+        float x = Float3.Dot(focusPosition, lightRight);
+        float y = Float3.Dot(focusPosition, lightUp);
+        float z = Float3.Dot(focusPosition, forward); // KEEP the Z component! god damnit lost so much time to this
 
         // Snap only X and Y to texel grid in light space
         x = Maths.Round(x / texelSize) * texelSize;
@@ -108,7 +111,7 @@ public class DirectionalLight : Light
         view = Float4x4.CreateLookTo(snappedPosition, forward, Transform.Up);
     }
 
-    public override void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
+    public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
     {
         if (!DoCastShadows())
         {
@@ -151,7 +154,7 @@ public class DirectionalLight : Light
                 int atlasX = slot.Value.X;
                 int atlasY = slot.Value.Y;
 
-                GetShadowMatrix(cameraPosition, res, cascadeDistance, out Float4x4 view, out Float4x4 proj);
+                GetShadowMatrix(shadowFocusPosition, res, cascadeDistance, out Float4x4 view, out Float4x4 proj);
 
                 Frustum frustum = Frustum.FromMatrix(proj * view);
 
