@@ -239,7 +239,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // is rendered for only the directional and the closest-N point/spot, and finally the
         // BVH textures + directional + shadow uniforms are pushed to the GPU.
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
-        lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
+        lightSystem.Reconcile(lights, css.ShadowFocusPosition, css.CullingMask);
 
         // ─── Shadow atlas setup (clear) ───
         // Done in its own CB and submitted before the lights start so the depth/stencil
@@ -254,11 +254,11 @@ public class DefaultRenderPipeline : RenderPipeline
         }
 
         RenderStats.BeginShadowPass();
-        lightSystem.RenderShadows(this, css.CameraPosition, renderables);
+        lightSystem.RenderShadows(this, css.ShadowFocusPosition, renderables);
         RenderStats.EndShadowPass();
 
         AssignCameraMatrices(css.View, css.Projection);
-        lightSystem.UploadGlobalUniforms();
+        lightSystem.UploadGlobalUniforms(css.ShadowFocusPosition);
 
         UploadFogUniforms(css.Scene);
         UploadAmbientUniforms(css.Scene);

@@ -51,6 +51,11 @@ uniform vec4 _CascadeAtlasParams1;
 uniform vec4 _CascadeAtlasParams2;
 uniform vec4 _CascadeAtlasParams3;
 
+// World-space point this frame's cascades were centered on (the camera position, or the
+// camera's shadow focus target when set). Cascade selection must measure distance from the
+// same point the cascade boxes were built around, or selection disagrees with placement.
+uniform vec3 _ShadowFocusPos;
+
 // Point shadows (6 faces per light). A point light occupying slot s uses indices [s*6 .. s*6+5].
 uniform mat4 _PointShadowMatrices[MAX_SHADOW_CASTERS * 6];
 uniform vec4 _PointShadowFaceParams[MAX_SHADOW_CASTERS * 6]; // xy: atlasPos, z: faceSize, w: farPlane
@@ -105,8 +110,8 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
 
     // Compare squared distance against squared cascade splits to avoid the per-fragment sqrt.
     // worldDistance was distance(...) * 2.0, so the squared form is dot(d,d) * 4.0.
-    vec3 toCamera = worldPos - _WorldSpaceCameraPos.xyz;
-    float worldDistSq = dot(toCamera, toCamera) * 4.0;
+    vec3 toFocus = worldPos - _ShadowFocusPos;
+    float worldDistSq = dot(toFocus, toFocus) * 4.0;
 
     mat4 cascadeMatrix;
     vec4 cascadeParams;

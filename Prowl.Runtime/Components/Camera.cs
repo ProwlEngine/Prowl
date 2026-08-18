@@ -91,6 +91,14 @@ public class Camera : MonoBehaviour
     public bool HDR = false;
     public float RenderScale = 1.0f;
 
+    /// <summary>
+    /// Optional transform that directional-light shadow cascades center on when this camera renders.
+    /// Intended for third-person games where the player character, not the camera, should sit in the
+    /// highest-resolution cascade. When null, or when its GameObject has been destroyed, cascades
+    /// center on the camera's own position.
+    /// </summary>
+    public Transform? ShadowFocus;
+
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
 
     private float _aspect;
@@ -368,6 +376,19 @@ public class Camera : MonoBehaviour
         Float3 rayDirection = Float3.Normalize(new Float3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z) - rayOrigin);
 
         return new Ray(rayOrigin, rayDirection);
+    }
+
+    /// <summary>
+    /// Resolves the world-space point directional shadow cascades center on for this camera:
+    /// the position of <see cref="ShadowFocus"/> when it is set and belongs to a live GameObject,
+    /// otherwise the camera's own position.
+    /// </summary>
+    public Float3 GetShadowFocusPosition()
+    {
+        Transform? focus = ShadowFocus;
+        if (focus == null || focus.GameObject.IsNotValid())
+            return Transform.Position;
+        return focus.Position;
     }
 
     public Float4x4 GetViewMatrix(bool applyPosition = true)

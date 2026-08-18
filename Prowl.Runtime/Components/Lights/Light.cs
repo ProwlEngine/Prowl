@@ -69,13 +69,8 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public virtual bool DoCastShadows() => CastShadows;
 
     /// <summary>
-    /// Renders this light's shadow map into the shadow atlas.
-    /// Called by the render pipeline during shadow pass.
-    /// </summary>
-    /// <param name="pipeline">The current render pipeline</param>
-    /// <param name="cameraPosition">Position of the camera in world space</param>
-    /// <param name="renderables">List of all renderables that could cast shadows</param>
-    /// <summary>Render this light's shadow map(s) into the shared shadow atlas.
+    /// Render this light's shadow map(s) into the shared shadow atlas.
+    /// Called by the render pipeline during the shadow pass.
     ///
     /// <para>
     /// Implementations rent and submit their own <see cref="CommandBuffer"/> per face
@@ -91,7 +86,12 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     /// separate setup CB before this method runs.
     /// </para>
     /// </summary>
-    public abstract void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
+    /// <param name="pipeline">The current render pipeline.</param>
+    /// <param name="shadowFocusPosition">World-space point shadows are prioritized around: the
+    /// rendering camera's position, or the camera's <see cref="Camera.ShadowFocus"/> position when
+    /// set. Directional lights center their cascades on it; point and spot lights ignore it.</param>
+    /// <param name="renderables">List of all renderables that could cast shadows.</param>
+    public abstract void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
 
     public abstract ForwardLightData GetForwardLightData();
 }
