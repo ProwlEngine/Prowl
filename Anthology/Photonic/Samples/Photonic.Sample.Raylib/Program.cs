@@ -45,7 +45,6 @@ internal static class Program
 
         // ---- build the Prowl.Photonic bake scene ---------------------------------------------
         using var baker = new LightmapBaker();
-        baker.Options.PathTracer = PathTracerKind.PerTexel;
         baker.Options.Bounces = 2;
         baker.Options.SamplesPerIteration = 1;
         baker.Options.IncludeDirectLighting = true;

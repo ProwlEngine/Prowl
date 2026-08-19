@@ -9,7 +9,6 @@ using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using Prowl.Photonic;
 using Prowl.Vector;
-using VoxelEngineTest; // ImGuiController namespace
 using Keys = OpenTK.Windowing.GraphicsLibraryFramework.Keys; // disambiguate from System.Windows.Forms.Keys
 using MouseButton = OpenTK.Windowing.GraphicsLibraryFramework.MouseButton;
 
@@ -28,7 +27,6 @@ internal sealed class DemoWindow : GameWindow
     private ImGuiController? _imgui;
     private SceneRenderer? _renderer;
     private LineRenderer? _lineRenderer;
-    private SurfelDebugRenderer? _surfelRenderer;
 
     // ---- demo scene -------------------------------------------------------------------------
     private readonly Scene _scene = new();
@@ -55,17 +53,8 @@ internal sealed class DemoWindow : GameWindow
     private int _dilatePixels = 2;
     private float _rayBias = 1e-3f;
     private bool _useHemisphereLUT = true;
-    private bool _jitterRayOrigin = true;
-    private float _jitterStrength = 1.0f;
     private bool _ignoreAlbedo = false;
     private bool _includeDirectLighting = true;
-    private int _pathTracerIdx = 0; // 0 PerTexel, 1 Surfel
-    private float _surfelDensity = 2.0f;
-    private int _surfelMaxNeighbors = 8;
-    private float _surfelNormalThr = 0.85f;
-    private bool _surfelNormalRejection = true;
-    private float _surfelPoissonRadiusFactor = 0.6f;
-    private float _surfelPoissonAlignThr = 0.85f;
 
     // ---- display / debug knobs --------------------------------------------------------------
     private System.Numerics.Vector3 _skyColor = new(0.02f, 0.02f, 0.03f);
@@ -73,8 +62,6 @@ internal sealed class DemoWindow : GameWindow
     private int _debugViewIdx = 0;
     private bool _wireframe = false;
     private float _bilateral = 0f;
-    private bool _showSurfels = false;
-    private float _surfelDrawSize = 1.0f;
     private bool _showAtlasViewer = true;
     private int _atlasViewerIdx = 0;
 
@@ -98,7 +85,6 @@ internal sealed class DemoWindow : GameWindow
         _imgui = new ImGuiController(ClientSize.X, ClientSize.Y);
         _renderer = new SceneRenderer();
         _lineRenderer = new LineRenderer();
-        _surfelRenderer = new SurfelDebugRenderer();
     }
 
     protected override void OnResize(ResizeEventArgs e)
@@ -177,12 +163,6 @@ internal sealed class DemoWindow : GameWindow
             _renderer.WireframeOverlay = _wireframe;
             _renderer.BilateralStrength = _bilateral;
             _renderer.Render(_scene, view, proj, _exposure);
-        }
-
-        // Surfel debug visualisation (when surfel mode + bake active).
-        if (_showSurfels && _surfelRenderer is not null && _baker?.Job?.SurfelCloud is { } cloud)
-        {
-            _surfelRenderer.Render(cloud, view, proj, Forward(), _surfelDrawSize);
         }
 
         DrawUi();
@@ -377,32 +357,13 @@ internal sealed class DemoWindow : GameWindow
 
         if (ImGui.CollapsingHeader("Path tracer", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            ImGui.Combo("Algorithm##pt", ref _pathTracerIdx, new[] { "Per-texel", "Surfel cloud" }, 2);
             ImGui.SliderInt("Bounces", ref _bounces, 0, 4);
             ImGui.SliderInt("Samples / iter", ref _samplesPerIter, 1, 32);
             ImGui.SliderInt("Dilate pixels", ref _dilatePixels, 0, 8);
             ImGui.SliderFloat("Ray bias", ref _rayBias, 1e-5f, 1e-2f, "%.5f");
             ImGui.Checkbox("Hemisphere LUT", ref _useHemisphereLUT);
-            ImGui.Checkbox("Jitter ray origin", ref _jitterRayOrigin);
-            if (_jitterRayOrigin) ImGui.SliderFloat("Jitter strength", ref _jitterStrength, 0f, 2f);
             ImGui.Checkbox("Ignore albedo", ref _ignoreAlbedo);
             ImGui.Checkbox("Include direct lighting at texel", ref _includeDirectLighting);
-        }
-
-        if (_pathTracerIdx == 1 && ImGui.CollapsingHeader("Surfel options"))
-        {
-            ImGui.SliderFloat("Surfels / m^2", ref _surfelDensity, 0.1f, 50f, "%.2f");
-            ImGui.SliderInt("Max neighbours / texel", ref _surfelMaxNeighbors, 1, 64);
-            ImGui.SliderFloat("Normal threshold", ref _surfelNormalThr, -1f, 1f, "%.3f");
-            ImGui.Checkbox("Normal-aware Poisson rejection", ref _surfelNormalRejection);
-            if (_surfelNormalRejection)
-            {
-                ImGui.SliderFloat("Poisson radius x kernel", ref _surfelPoissonRadiusFactor, 0.05f, 1.5f, "%.2f");
-                ImGui.SliderFloat("Poisson align threshold", ref _surfelPoissonAlignThr, -1f, 1f, "%.3f");
-            }
-            ImGui.Separator();
-            ImGui.Checkbox("Draw surfels (3D debug)", ref _showSurfels);
-            if (_showSurfels) ImGui.SliderFloat("Surfel sphere size x", ref _surfelDrawSize, 0.1f, 5f);
         }
 
         ImGui.End();
@@ -704,23 +665,14 @@ internal sealed class DemoWindow : GameWindow
     {
         if (_baker is null) return;
         var o = _baker.Options;
-        o.PathTracer = (PathTracerKind)_pathTracerIdx;
         o.Bounces = _bounces;
         o.SamplesPerIteration = _samplesPerIter;
         o.DilatePixels = _dilatePixels;
         o.RayBias = _rayBias;
         o.UseHemisphereLUT = _useHemisphereLUT;
-        o.JitterRayOrigin = _jitterRayOrigin;
-        o.JitterStrength = _jitterStrength;
         o.IgnoreAlbedo = _ignoreAlbedo;
         o.IncludeDirectLighting = _includeDirectLighting;
         o.SkyColor = new Float3(_skyColor.X, _skyColor.Y, _skyColor.Z);
-        o.SurfelsPerSquareMeter = _surfelDensity;
-        o.SurfelMaxNeighbors = _surfelMaxNeighbors;
-        o.SurfelNormalThreshold = _surfelNormalThr;
-        o.SurfelNormalRejection = _surfelNormalRejection;
-        o.SurfelPoissonRadiusFactor = _surfelPoissonRadiusFactor;
-        o.SurfelPoissonAlignThreshold = _surfelPoissonAlignThr;
     }
 
     private void ReuploadAllAtlases()
@@ -800,7 +752,6 @@ internal sealed class DemoWindow : GameWindow
     {
         _imgui?.Dispose();
         _lineRenderer?.Dispose();
-        _surfelRenderer?.Dispose();
         _renderer?.Dispose();
         _baker?.Cancel();
         base.OnUnload();

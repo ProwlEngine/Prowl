@@ -13,13 +13,13 @@
   <ItemGroup>
     <PackageReference Include="Raylib-cs" Version="6.1.1" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
-    <PackageReference Include="Prowl.Vector" Version="2.1.0" />
     <PackageReference Include="Prowl.Clay" Version="0.5.0" />
     <PackageReference Include="Prowl.Unwrapper" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Photonic\Photonic.csproj" />
+    <ProjectReference Include="..\..\..\Vector\Vector\Vector.csproj" />
   </ItemGroup>
 
   <ItemGroup>
