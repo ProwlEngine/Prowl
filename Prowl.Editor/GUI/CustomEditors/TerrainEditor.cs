@@ -482,6 +482,30 @@ public class TerrainEditor : CustomEditor
             Origami.Slider(paper, $"{id}_lodq_v", terrain.LODQuality,
                 v => { terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());
 
+        EditorGUI.SectionHeader(paper, $"{id}_bh", "Layer Blending");
+        EditorGUI.Row(paper, $"{id}_blendsharp", "Blend Sharpness", () =>
+            Origami.Slider(paper, $"{id}_blendsharp_v", terrain.HeightBlendSharpness,
+                v => { terrain.HeightBlendSharpness = Math.Clamp(v, 0.02f, 1f); }, 0.02f, 1f).Format("F2").Show());
+        EditorGUI.Row(paper, $"{id}_blendnrm", "Normal Influence", () =>
+            Origami.Slider(paper, $"{id}_blendnrm_v", terrain.NormalHeightInfluence,
+                v => { terrain.NormalHeightInfluence = Math.Clamp(v, 0f, 1f); }, 0f, 1f).Format("F2").Show());
+        HintPill(paper, $"{id}_blendhint", font, "Lower sharpness = crisper per-detail transitions");
+
+        EditorGUI.SectionHeader(paper, $"{id}_fth", "Distance Tiling");
+        EditorGUI.Row(paper, $"{id}_farstr", "Far Strength", () =>
+            Origami.Slider(paper, $"{id}_farstr_v", terrain.FarTilingStrength,
+                v => { terrain.FarTilingStrength = Math.Clamp(v, 0f, 1f); }, 0f, 1f).Format("F2").Show());
+        EditorGUI.Row(paper, $"{id}_farscale", "Far Scale", () =>
+            Origami.Slider(paper, $"{id}_farscale_v", terrain.FarTilingScale,
+                v => { terrain.FarTilingScale = MathF.Max(1f, v); }, 1f, 32f).Format("F1").Show());
+        EditorGUI.Row(paper, $"{id}_farstart", "Fade Start", () =>
+            Origami.Slider(paper, $"{id}_farstart_v", terrain.FarTilingStart,
+                v => { terrain.FarTilingStart = MathF.Max(0f, v); }, 0f, 500f).Format("F0").Show());
+        EditorGUI.Row(paper, $"{id}_farfade", "Fade Length", () =>
+            Origami.Slider(paper, $"{id}_farfade_v", terrain.FarTilingFade,
+                v => { terrain.FarTilingFade = MathF.Max(1f, v); }, 1f, 1000f).Format("F0").Show());
+        HintPill(paper, $"{id}_farhint", font, "Long fades keep the scale change invisible");
+
         EditorGUI.SectionHeader(paper, $"{id}_vh", "Vegetation");
         EditorGUI.Row(paper, $"{id}_grassdist", "Grass View Distance", () =>
             Origami.Slider(paper, $"{id}_grassdist_v", terrain.GrassDistance,
