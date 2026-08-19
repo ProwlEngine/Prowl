@@ -34,6 +34,8 @@
   "dialog.delete_assets": "Delete Assets",
   "dialog.unsaved_prefab": "Unsaved Prefab Changes",
   "dialog.unsaved_prefab_body": "\"{{name}}\" has unsaved changes. Save before switching?",
+  "dialog.flatten_prefab": "Flatten Prefab",
+  "dialog.flatten_prefab_body": "Prefabs cannot contain other prefabs. \"{{name}}\" will be added as plain objects and its link to the prefab dropped. Continue?",
   "dialog.unapplied_settings": "Unapplied Import Settings",
   "dialog.unapplied_settings_body": "\"{{name}}\" has import settings that have not been applied. Apply them, or revert to what is on disk?",
   "dialog.apply": "Apply",

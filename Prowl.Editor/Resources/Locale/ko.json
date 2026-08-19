@@ -34,6 +34,8 @@
   "dialog.delete_assets": "에셋 삭제",
   "dialog.unsaved_prefab": "저장되지 않은 Prefab 변경 사항",
   "dialog.unsaved_prefab_body": "\"{{name}}\"에 저장되지 않은 변경 사항이 있습니다. 전환하기 전에 저장하시겠습니까?",
+  "dialog.flatten_prefab": "Flatten Prefab",
+  "dialog.flatten_prefab_body": "Prefabs cannot contain other prefabs. \"{{name}}\" will be added as plain objects and its link to the prefab dropped. Continue?",
   "dialog.unapplied_settings": "적용되지 않은 가져오기 설정",
   "dialog.unapplied_settings_body": "\"{{name}}\"에 적용되지 않은 가져오기 설정이 있습니다. 적용하시겠습니까, 아니면 파일 상태로 되돌리시겠습니까?",
   "dialog.apply": "적용",

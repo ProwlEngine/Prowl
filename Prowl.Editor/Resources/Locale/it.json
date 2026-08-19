@@ -34,6 +34,8 @@
   "dialog.delete_assets": "Elimina asset",
   "dialog.unsaved_prefab": "Modifiche al Prefab non salvate",
   "dialog.unsaved_prefab_body": "\"{{name}}\" ha modifiche non salvate. Salvare prima di cambiare?",
+  "dialog.flatten_prefab": "Appiattisci Prefab",
+  "dialog.flatten_prefab_body": "I prefab non possono contenere altri prefab. \"{{name}}\" sara aggiunto come oggetti semplici e il collegamento al prefab sara rimosso. Continuare?",
   "dialog.unapplied_settings": "Impostazioni di importazione non applicate",
   "dialog.unapplied_settings_body": "\"{{name}}\" ha impostazioni di importazione non applicate. Applicarle o ripristinare il file?",
   "dialog.apply": "Applica",

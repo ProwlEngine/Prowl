@@ -41,6 +41,17 @@ public static partial class PrefabUtility
 
     #region Queries
 
+    // Four questions can be asked about an object's relationship to a prefab, and they are easy to
+    // confuse. In order of how much each claims:
+    //
+    //   GameObject.IsPrefabInstance   this one object carries a link to a prefab. The weakest, and the
+    //                                 wrong question for anything that then acts on the whole instance.
+    //   IsPartOfPrefabInstance        it belongs to an instance, root or not.
+    //   IsInstanceRoot                it stands for the prefab's own root object, so it is an instance
+    //                                 rather than one object inside one.
+    //   IsProvidedByPrefab            its parent's prefab is what put it there, so it is structure the
+    //                                 instance may not restructure.
+
     /// <summary>
     /// True when this object belongs to a prefab instance, whether it is the root of one or sits
     /// inside it. Distinct from <see cref="GameObject.IsPrefabInstance"/>, which is per object.
@@ -174,6 +185,23 @@ public static partial class PrefabUtility
 
     #endregion
 
+    #region Flattening
+
+    /// <summary>
+    /// Turn a freshly spawned instance into ordinary objects, keeping its contents and dropping what ties
+    /// them to a prefab. For where an instance cannot exist, which is inside the prefab being edited:
+    /// a prefab is one self contained tree, so what is added to it becomes its own content.
+    /// <para/>
+    /// No undo of its own. The caller is spawning, and the record for that already covers the objects
+    /// arriving and going away again.
+    /// </summary>
+    public static void DropPrefabLink(GameObject go)
+    {
+        if (go.IsValid()) go.ClearPrefabDataRecursive();
+    }
+
+    #endregion
+
     #region Copies
 
     /// <summary>
@@ -264,7 +292,6 @@ public static partial class PrefabUtility
         PrefabLink link = go.EnsurePrefabLink();
         link.AssetId = prefabGuid;
         link.SourceIdentifier = source.SourceIdentifier;
-        link.ComponentSources.Clear();
 
         var components = go.GetComponents<MonoBehaviour>().ToList();
         var sourceComponents = source.GetComponents<MonoBehaviour>().ToList();
@@ -273,11 +300,12 @@ public static partial class PrefabUtility
         {
             if (i >= sourceComponents.Count || components[i].GetType() != sourceComponents[i].GetType())
             {
+                components[i].SourceIdentifier = Guid.Empty;
                 unmatched.Add($"{go.Name} > {components[i].GetType().Name}");
                 continue;
             }
 
-            link.ComponentSources[components[i].Identifier] = source.GetComponentSourceIdentifier(sourceComponents[i]);
+            components[i].SourceIdentifier = sourceComponents[i].SourceIdentifier;
         }
 
         for (int i = 0; i < go.Children.Count; i++)

@@ -34,6 +34,8 @@
   "dialog.delete_assets": "アセットを削除",
   "dialog.unsaved_prefab": "未保存のPrefabの変更",
   "dialog.unsaved_prefab_body": "「{{name}}」には未保存の変更があります。切り替える前に保存しますか？",
+  "dialog.flatten_prefab": "Flatten Prefab",
+  "dialog.flatten_prefab_body": "Prefabs cannot contain other prefabs. \"{{name}}\" will be added as plain objects and its link to the prefab dropped. Continue?",
   "dialog.unapplied_settings": "未適用のインポート設定",
   "dialog.unapplied_settings_body": "「{{name}}」に未適用のインポート設定があります。適用しますか、それともファイルの状態に戻しますか？",
   "dialog.apply": "適用",

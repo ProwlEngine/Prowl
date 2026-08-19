@@ -133,7 +133,11 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     internal PrefabLink? PrefabLink => _prefabLink;
 
-    /// <summary>Is this GameObject a prefab instance?</summary>
+    /// <summary>
+    /// Whether this one object carries a link to a prefab. The weakest of the questions that can be
+    /// asked, and the wrong one for anything that goes on to act on the instance as a whole: see the
+    /// note above the queries in <c>PrefabUtility</c> for which to ask instead.
+    /// </summary>
     public bool IsPrefabInstance => _prefabLink != null && _prefabLink.AssetId != Guid.Empty;
 
     /// <summary>Creates the prefab link if this object does not have one yet.</summary>
@@ -171,13 +175,18 @@ public partial class GameObject : EngineObject, ISerializable
     public bool HasPrefabOverrides => _prefabLink is { Overrides.Count: > 0 };
 
     /// <summary>The identifier of the component in the prefab that <paramref name="component"/> came
-    /// from, or Guid.Empty when it is not part of the prefab.</summary>
-    public Guid GetComponentSourceIdentifier(MonoBehaviour component)
-        => _prefabLink != null && _prefabLink.ComponentSources.TryGetValue(component.Identifier, out var id)
-            ? id : Guid.Empty;
+    /// from, or Guid.Empty when it is not part of the prefab. The component itself holds this; the
+    /// method stays because callers read it while walking an object's components.</summary>
+    public Guid GetComponentSourceIdentifier(MonoBehaviour component) => component.SourceIdentifier;
 
-    /// <summary>Clear all prefab tracking data on this GameObject.</summary>
-    internal void ClearPrefabData() => _prefabLink = null;
+    /// <summary>Clear all prefab tracking data on this GameObject and its components.</summary>
+    internal void ClearPrefabData()
+    {
+        _prefabLink = null;
+        foreach (MonoBehaviour component in _components)
+            if (component.IsValid())
+                component.SourceIdentifier = Guid.Empty;
+    }
 
     /// <summary>Clear all prefab data on this GameObject and all descendants.</summary>
     internal void ClearPrefabDataRecursive()

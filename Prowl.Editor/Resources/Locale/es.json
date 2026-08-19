@@ -34,6 +34,8 @@
   "dialog.delete_assets": "Eliminar assets",
   "dialog.unsaved_prefab": "Cambios de Prefab sin guardar",
   "dialog.unsaved_prefab_body": "\"{{name}}\" tiene cambios sin guardar. Guardar antes de cambiar?",
+  "dialog.flatten_prefab": "Aplanar Prefab",
+  "dialog.flatten_prefab_body": "Los prefabs no pueden contener otros prefabs. \"{{name}}\" se agregara como objetos simples y se perdera su vinculo con el prefab. Continuar?",
   "dialog.unapplied_settings": "Ajustes de importacion sin aplicar",
   "dialog.unapplied_settings_body": "\"{{name}}\" tiene ajustes de importacion sin aplicar. Aplicarlos o revertir a lo guardado?",
   "dialog.apply": "Aplicar",

@@ -34,6 +34,8 @@
   "dialog.delete_assets": "Supprimer les assets",
   "dialog.unsaved_prefab": "Modifications de Prefab non enregistrees",
   "dialog.unsaved_prefab_body": "\"{{name}}\" contient des modifications non enregistrees. Enregistrer avant de changer ?",
+  "dialog.flatten_prefab": "Aplatir le Prefab",
+  "dialog.flatten_prefab_body": "Un prefab ne peut pas contenir d'autres prefabs. \"{{name}}\" sera ajoute comme objets simples et son lien avec le prefab sera perdu. Continuer?",
   "dialog.unapplied_settings": "Parametres d'import non appliques",
   "dialog.unapplied_settings_body": "\"{{name}}\" a des parametres d'import non appliques. Les appliquer ou revenir au fichier ?",
   "dialog.apply": "Appliquer",

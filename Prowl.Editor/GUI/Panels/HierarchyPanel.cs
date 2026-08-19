@@ -1311,19 +1311,42 @@ public class HierarchyPanel : DockPanel
         }
         else if (asset is PrefabAsset)
         {
-            var instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
-            if (instance != null)
+            // A prefab cannot contain another prefab, so inside a prefab editing session the only thing
+            // this can mean is "add these objects to what I am editing". Asked rather than assumed,
+            // because the link is what the user would be giving up.
+            if (PrefabEditingMode.IsEditing)
             {
-                instance.Transform.Position = position;
-                scene.Add(instance);
-                if (parent != null) instance.SetParent(parent);
-                Selection.Select(instance);
-                Undo.RegisterCreatedObject(instance, "Spawn Prefab");
+                Origami.Confirm(
+                    Loc.Get("dialog.flatten_prefab"),
+                    Loc.Get("dialog.flatten_prefab_body", new { name }),
+                    onYes: () => SpawnPrefab(payload, parent, position, scene, flatten: true));
+                return;
             }
+
+            SpawnPrefab(payload, parent, position, scene, flatten: false);
         }
         else
         {
             Runtime.Debug.LogWarning($"Cannot spawn asset of type {asset.GetType().Name} in scene.");
         }
+    }
+
+    /// <summary>
+    /// Put a prefab into the scene, either as an instance of it or as a copy of its contents with no
+    /// link, which is what a prefab editing session can hold.
+    /// </summary>
+    private static void SpawnPrefab(AssetDragPayload payload, GameObject? parent, Float3 position,
+        Runtime.Resources.Scene scene, bool flatten)
+    {
+        GameObject? instance = PrefabUtility.InstantiatePrefab(payload.AssetGuid);
+        if (instance == null) return;
+
+        if (flatten) PrefabUtility.DropPrefabLink(instance);
+
+        instance.Transform.Position = position;
+        scene.Add(instance);
+        if (parent != null) instance.SetParent(parent);
+        Selection.Select(instance);
+        Undo.RegisterCreatedObject(instance, flatten ? "Add Prefab Contents" : "Spawn Prefab");
     }
 }

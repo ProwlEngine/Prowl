@@ -54,31 +54,6 @@ public partial class GameObject : ICloneExplicit
             if (child.IsNotValid()) continue;
             operation.HandleObject(child, operation.GetTarget(child));
         }
-
-        RemapComponentSources(target, operation);
-    }
-
-    /// <summary>
-    /// The prefab link records which prefab component each of this object's components came from,
-    /// keyed by component identifier. A copy's components have identifiers of their own, so the keys
-    /// are rewritten against them rather than carried over pointing at nothing.
-    /// </summary>
-    private void RemapComponentSources(GameObject target, ICloneOperation operation)
-    {
-        PrefabLink? sourceLink = PrefabLink;
-        PrefabLink? targetLink = target.PrefabLink;
-        if (sourceLink == null || targetLink == null) return;
-
-        targetLink.ComponentSources.Clear();
-
-        foreach (MonoBehaviour component in _components)
-        {
-            if (component.IsNotValid()) continue;
-            if (!sourceLink.ComponentSources.TryGetValue(component.Identifier, out Guid sourceId)) continue;
-
-            if (operation.GetTarget(component) is MonoBehaviour copy)
-                targetLink.ComponentSources[copy.Identifier] = sourceId;
-        }
     }
 
     /// <summary>

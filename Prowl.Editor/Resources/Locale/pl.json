@@ -34,6 +34,8 @@
   "dialog.delete_assets": "Usun assety",
   "dialog.unsaved_prefab": "Niezapisane zmiany Prefabu",
   "dialog.unsaved_prefab_body": "\"{{name}}\" ma niezapisane zmiany. Zapisac przed przelaczeniem?",
+  "dialog.flatten_prefab": "Splaszcz Prefab",
+  "dialog.flatten_prefab_body": "Prefaby nie moga zawierac innych prefabow. \"{{name}}\" zostanie dodany jako zwykle obiekty, a jego powiazanie z prefabem zostanie usuniete. Kontynuowac?",
   "dialog.unapplied_settings": "Niezastosowane ustawienia importu",
   "dialog.unapplied_settings_body": "\"{{name}}\" ma niezastosowane ustawienia importu. Zastosowac je czy przywrocic zapisane?",
   "dialog.apply": "Zastosuj",

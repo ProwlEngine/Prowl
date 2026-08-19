@@ -34,6 +34,8 @@
   "dialog.delete_assets": "Varliklari Sil",
   "dialog.unsaved_prefab": "Kaydedilmemis Prefab Degisiklikleri",
   "dialog.unsaved_prefab_body": "\"{{name}}\" kaydedilmemis degisiklikler iceriyor. Degistirmeden once kaydedilsin mi?",
+  "dialog.flatten_prefab": "Prefab Duzlestir",
+  "dialog.flatten_prefab_body": "Prefablar baska prefablar iceremez. \"{{name}}\" duz nesneler olarak eklenecek ve prefab baglantisi kaldirilacak. Devam edilsin mi?",
   "dialog.unapplied_settings": "Uygulanmamis Ice Aktarma Ayarlari",
   "dialog.unapplied_settings_body": "\"{{name}}\" uygulanmamis ice aktarma ayarlarina sahip. Uygulansin mi yoksa dosyadaki haline mi donulsun?",
   "dialog.apply": "Uygula",

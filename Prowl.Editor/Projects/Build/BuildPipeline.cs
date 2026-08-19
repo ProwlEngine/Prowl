@@ -123,7 +123,15 @@ public abstract class BuildPipeline
     /// in a player than in play mode.
     /// </summary>
     private static readonly string[] EditorOnlyPrefabKeys =
-        ["Overrides", "SourceIdentifier", "ComponentSources"];
+        ["Overrides", "SourceIdentifier"];
+
+    /// <summary>
+    /// The same thing for a component, which records where it came from on itself rather than in the
+    /// GameObject's block. Matched by name because there is no block to scope it to, which is safe
+    /// enough: the name is the engine's own private field and a type would have to declare that exact
+    /// name to be caught by it.
+    /// </summary>
+    private const string EditorOnlyComponentKey = "_prefabTemplateIdentity";
 
     /// <summary>
     /// Bring the prefab instances in a scene payload up to date with the prefabs as they stand now,
@@ -225,6 +233,8 @@ public abstract class BuildPipeline
             if (echo.TryGet("Prefab", out var link) && link.TagType == EchoType.Compound)
                 foreach (var key in EditorOnlyPrefabKeys)
                     removed |= link.Remove(key);
+
+            removed |= echo.Remove(EditorOnlyComponentKey);
 
             foreach (var child in echo.Tags.Values)
                 removed |= StripEditorOnlyPrefabData(child);

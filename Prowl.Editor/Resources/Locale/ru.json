@@ -34,6 +34,8 @@
   "dialog.delete_assets": "Удалить ассеты",
   "dialog.unsaved_prefab": "Несохранённые изменения Prefab",
   "dialog.unsaved_prefab_body": "\"{{name}}\" содержит несохранённые изменения. Сохранить перед переключением?",
+  "dialog.flatten_prefab": "Flatten Prefab",
+  "dialog.flatten_prefab_body": "Prefabs cannot contain other prefabs. \"{{name}}\" will be added as plain objects and its link to the prefab dropped. Continue?",
   "dialog.unapplied_settings": "Непримененные настройки импорта",
   "dialog.unapplied_settings_body": "\"{{name}}\" содержит непримененные настройки импорта. Применить их или вернуть сохраненные?",
   "dialog.apply": "Применить",
