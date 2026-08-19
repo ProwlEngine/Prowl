@@ -733,8 +733,8 @@ public class TerrainEditor : CustomEditor
     {
         int res = data.HeightmapResolution;
         float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        int cx = (int)MathF.Round(uv.X * (res - 1));
+        int cz = (int)MathF.Round(uv.Y * (res - 1));
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)
@@ -800,9 +800,9 @@ public class TerrainEditor : CustomEditor
     private static void ApplySplatBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
     {
         int res = data.SplatmapResolution;
-        float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        float radiusPixels = BrushSize / data.Size * res;
+        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
+        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)
@@ -866,9 +866,9 @@ public class TerrainEditor : CustomEditor
         byte value = shiftHeld ? (byte)255 : (byte)0; // Shift = fill, normal = dig hole
 
         int res = data.SplatmapResolution;
-        float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        float radiusPixels = BrushSize / data.Size * res;
+        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
+        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)
@@ -896,9 +896,9 @@ public class TerrainEditor : CustomEditor
         float sign = shiftHeld ? -1f : 1f;
 
         int res = data.DetailResolution;
-        float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        float radiusPixels = BrushSize / data.Size * res;
+        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
+        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)

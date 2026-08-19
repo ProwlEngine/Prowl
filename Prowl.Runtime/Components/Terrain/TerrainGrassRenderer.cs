@@ -29,6 +29,12 @@ internal class TerrainGrassRenderer
     private readonly Dictionary<long, CachedPatch> _patchCache = [];
     private int _cacheGeneration;
 
+    // Source state the cached patches were built from
+    private TerrainData? _cachedData;
+    private int _cachedDetailsVersion;
+    private int _cachedHeightsVersion;
+    private float _cachedDensityMultiplier = float.NaN;
+
     private static readonly float[] s_ditherTable =
     [
         0/64f, 32/64f, 8/64f, 40/64f, 2/64f, 34/64f, 10/64f, 42/64f,
@@ -82,10 +88,22 @@ internal class TerrainGrassRenderer
     {
         if (_quadMesh == null || data.DetailPrototypes.Count == 0) return;
 
+        if (!ReferenceEquals(_cachedData, data)
+            || _cachedDetailsVersion != data.DetailsVersion
+            || _cachedHeightsVersion != data.HeightsVersion
+            || _cachedDensityMultiplier != densityMultiplier)
+        {
+            _patchCache.Clear();
+            _cachedData = data;
+            _cachedDetailsVersion = data.DetailsVersion;
+            _cachedHeightsVersion = data.HeightsVersion;
+            _cachedDensityMultiplier = densityMultiplier;
+        }
+
         float terrainSize = data.Size;
         int detailRes = data.DetailResolution;
-        int patchCount = Math.Max(1, detailRes / CellsPerPatch);
-        float patchLocalSize = terrainSize / patchCount;
+        int patchCount = Math.Max(1, (detailRes + CellsPerPatch - 1) / CellsPerPatch);
+        float patchLocalSize = terrainSize * CellsPerPatch / detailRes;
 
         // Convert maxDistance from world to terrain-local units (approximate via terrain scale)
         Float3 terrainScale = terrain.Transform.LocalScale;
@@ -185,7 +203,7 @@ internal class TerrainGrassRenderer
 
                     long patchKey = (long)protoIdx * patchCount * patchCount + px + pz * patchCount;
                     if (!_patchCache.TryGetValue(patchKey, out var cached))
-                        cached = BuildPatch(data, terrain, terrainSize, detailRes, patchCount, px, pz, protoIdx, proto, densityMultiplier);
+                        cached = BuildPatch(data, terrain, terrainSize, detailRes, px, pz, protoIdx, proto, densityMultiplier);
 
                     cached.LastUsedGeneration = _cacheGeneration;
                     _patchCache[patchKey] = cached;
@@ -230,7 +248,7 @@ internal class TerrainGrassRenderer
 
     private CachedPatch BuildPatch(
         TerrainData data, TerrainComponent terrain, float terrainSize,
-        int detailRes, int patchCount, int patchX, int patchZ,
+        int detailRes, int patchX, int patchZ,
         int protoIdx, DetailPrototype proto, float densityMultiplier)
     {
         var densityMap = data.DetailLayers[protoIdx];
@@ -261,15 +279,12 @@ internal class TerrainGrassRenderer
                 count = Math.Min(count, (MaxVerticesPerPatch - vertexCount) / VerticesPerBlade);
                 if (count <= 0) continue;
 
-                float cellU = cx / (float)(detailRes - 1);
-                float cellV = cz / (float)(detailRes - 1);
                 var rng = new SeededRandom((uint)(cx * 73856093 ^ cz * 19349663 ^ protoIdx * 83492791));
 
                 for (int k = 0; k < count; k++)
                 {
-                    float u = cellU + rng.NextFloat() / (detailRes - 1);
-                    float v = cellV + rng.NextFloat() / (detailRes - 1);
-                    if (u > 1f || v > 1f) continue;
+                    float u = (cx + rng.NextFloat()) / detailRes;
+                    float v = (cz + rng.NextFloat()) / detailRes;
 
                     // Position in terrain-local space (shader handles terrain transform)
                     float wx = u * terrainSize;
@@ -320,9 +335,9 @@ internal class TerrainGrassRenderer
 
         // Bounds in terrain-local space, padded for grass size
         float mgh = proto.MaxHeight, mgw = proto.MaxWidth * 0.5f;
-        float pws = terrainSize / patchCount;
-        Float3 localMin = new(patchX * pws - mgw, patchMinY == float.MaxValue ? 0 : patchMinY, patchZ * pws - mgw);
-        Float3 localMax = new((patchX + 1) * pws + mgw, (patchMaxY == float.MinValue ? 0 : patchMaxY) + mgh, (patchZ + 1) * pws + mgw);
+        float cellSize = terrainSize / detailRes;
+        Float3 localMin = new(cellStartX * cellSize - mgw, patchMinY == float.MaxValue ? 0 : patchMinY, cellStartZ * cellSize - mgw);
+        Float3 localMax = new(cellEndX * cellSize + mgw, (patchMaxY == float.MinValue ? 0 : patchMaxY) + mgh, cellEndZ * cellSize + mgw);
         // Transform to world for frustum culling
         Float3 bmin = new(float.MaxValue), bmax = new(float.MinValue);
         for (int ci = 0; ci < 8; ci++)
