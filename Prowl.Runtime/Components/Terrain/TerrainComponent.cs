@@ -77,6 +77,10 @@ public class TerrainComponent : MonoBehaviour
     [NonSerialized] private TerrainGrassRenderer? _grassRenderer;
     [NonSerialized] private TerrainTreeRenderer? _treeRenderer;
 
+    // Wind zones nearest the camera, refreshed each frame
+    [NonSerialized] private readonly WindZone?[] _windZones = new WindZone?[WindZone.kMaxShaderZones];
+    [NonSerialized] private int _windZoneCount;
+
     // Cached default materials and textures (avoid LoadDefault every frame)
     [NonSerialized] private static Material? s_defaultTerrainMat;
     [NonSerialized] private static Material? s_defaultGrassMat;
@@ -98,6 +102,9 @@ public class TerrainComponent : MonoBehaviour
 
     /// <summary>Invalidate cached grass patches (call after painting grass density).</summary>
     public void InvalidateGrassCache() => _grassRenderer?.InvalidateCache();
+
+    /// <summary>Apply the wind zones picked this frame to a grass material.</summary>
+    internal void ApplyWindZones(Material material) => WindZone.SetMaterialUniforms(material, _windZones, _windZoneCount);
 
     /// <summary>Shortcut to terrain size from the data asset.</summary>
     public float TerrainSize { get { var d = Data.Res; return d.IsValid() ? d.Size : 1024f; } }
@@ -234,6 +241,9 @@ public class TerrainComponent : MonoBehaviour
         var grassMat = GetGrassMaterialInstance();
         if (grassMat != null && terrainData.DetailPrototypes.Count > 0)
         {
+            _windZoneCount = WindZone.GetNearest(camera.Transform.Position, _windZones);
+            ApplyWindZones(grassMat);
+
             // Pass terrain transform info to grass shader
             Float3 terrainUp = Float3.Normalize(Float4x4.TransformPoint(Float3.UnitY, terrainToWorld) - Float4x4.TransformPoint(Float3.Zero, terrainToWorld));
             grassMat.SetVector("_TerrainUp", terrainUp);

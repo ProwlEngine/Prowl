@@ -159,6 +159,21 @@ public class ParticleSystemComponentEditor : CustomEditor
                 v => ps.VelocityOverLifetime.VelocityZ = v as AnimationCurve ?? new AnimationCurve(), 0);
         });
 
+        // Wind
+        EditorGUI.ModuleSection(paper, $"{id}_wind", EditorIcons.Fan, "Wind", ps.Wind.Enabled, v => ps.Wind.Enabled = v, () =>
+        {
+            EditorGUI.Row(paper, $"{id}_wind_amb", "Ambient Wind", () =>
+                Origami.Float3Field(paper, $"{id}_wind_amb_vf", ps.Wind.AmbientWind, v => ps.Wind.AmbientWind = v).Show());
+            FloatRow(paper, $"{id}_wind_mul", "Multiplier", ps.Wind.Multiplier, v => ps.Wind.Multiplier = v);
+            FloatRow(paper, $"{id}_wind_drag", "Drag", ps.Wind.Drag, v => ps.Wind.Drag = MathF.Max(0f, v));
+            FloatRow(paper, $"{id}_wind_force", "Force", ps.Wind.Force, v => ps.Wind.Force = v);
+            FloatRow(paper, $"{id}_wind_turb", "Turbulence", ps.Wind.Turbulence, v => ps.Wind.Turbulence = v);
+            FloatRow(paper, $"{id}_wind_turbs", "Turbulence Scale", ps.Wind.TurbulenceScale,
+                v => ps.Wind.TurbulenceScale = MathF.Max(0.001f, v));
+            FloatRow(paper, $"{id}_wind_turbsp", "Turbulence Speed", ps.Wind.TurbulenceSpeed,
+                v => ps.Wind.TurbulenceSpeed = v);
+        });
+
         // Collision
         EditorGUI.ModuleSection(paper, $"{id}_coll", EditorIcons.Explosion, "Collision", ps.Collision.Enabled, v => ps.Collision.Enabled = v, () =>
         {

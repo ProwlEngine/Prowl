@@ -171,6 +171,7 @@ internal class TerrainGrassRenderer
                     grassMat.SetFloat("_GrassFadeStart", fadeStartWorld);
                     var htex = data.GetHeightmapTexture();
                     if (htex != null) grassMat.SetTexture("_Heightmap", htex);
+                    terrain.ApplyWindZones(grassMat);
                 }
                 else
                 {

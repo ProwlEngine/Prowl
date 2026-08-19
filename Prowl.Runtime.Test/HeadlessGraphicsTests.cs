@@ -48,6 +48,20 @@ public class HeadlessGraphicsTests
         Assert.NotNull(mat.Shader);
     }
 
+    [Theory]
+    [InlineData(DefaultShader.Grass)]
+    [InlineData(DefaultShader.Terrain)]
+    [InlineData(DefaultShader.Standard)]
+    public void DefaultShader_ParsesHeadless(DefaultShader shader)
+    {
+        // Catches malformed pass or uniform declarations in the built-in shader sources without
+        // needing a GL device to compile the GLSL itself.
+        var loaded = Shader.LoadDefault(shader);
+
+        Assert.NotNull(loaded);
+        Assert.NotEmpty(loaded.Passes);
+    }
+
     [Fact]
     public void Mesh_UploadHeadless_DoesNotThrow()
     {

@@ -49,6 +49,35 @@ Pass "Grass"
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
 
+            // Spherical wind zones, nearest first. xyz = center, w = radius.
+            #define MAX_WIND_ZONES 4
+            uniform int _WindZoneCount;
+            uniform vec4 _WindZoneSphere[MAX_WIND_ZONES];
+            uniform vec4 _WindZoneParams[MAX_WIND_ZONES]; // strength, turbulence, pulse magnitude, pulse frequency
+
+            // Matches WindZone.SampleWind on the CPU so grass and particles agree.
+            vec3 sampleWindZones(vec3 worldPosition)
+            {
+                vec3 wind = vec3(0.0);
+                for (int i = 0; i < _WindZoneCount; i++)
+                {
+                    vec3 toPoint = worldPosition - _WindZoneSphere[i].xyz;
+                    float radius = max(_WindZoneSphere[i].w, 1e-4);
+                    float dist = length(toPoint);
+                    if (dist >= radius) continue;
+
+                    vec4 p = _WindZoneParams[i];
+                    float t = 1.0 - dist / radius;
+                    float falloff = t * t * (3.0 - 2.0 * t);
+                    float pulse = 1.0 + sin(_Time.y * p.w * 6.28318531 + dist * 0.1) * p.z;
+                    float turbulence = 1.0 + sin(_Time.y * 3.0 + worldPosition.x * 0.7 + worldPosition.z * 0.9) * p.y;
+
+                    vec3 dir = dist > 1e-4 ? toPoint / dist : vec3(0.0, 1.0, 0.0);
+                    wind += dir * (p.x * falloff * pulse * turbulence);
+                }
+                return wind;
+            }
+
 			void main()
 			{
 #ifdef GPU_INSTANCING
@@ -125,6 +154,10 @@ Pass "Grass"
                 float wind = sin(_Time.y * _WindSpeed + bladePosition.x * 0.7 + bladePosition.z * 0.4 + windPhase) * _WindStrength * bendFactor;
                 localOffset.x += wind * windAmount;
                 localOffset.z += wind * windAmount * 0.3;
+
+                vec3 zoneWind = sampleWindZones(bladePosition) * (windAmount * bendFactor);
+                localOffset.x += zoneWind.x;
+                localOffset.z += zoneWind.z;
 
                 vec3 worldPosition = bladePosition + localOffset;
                 worldPosition += up * 0.01 * scaleY; // Minimal offset to reduce ground clipping
@@ -221,6 +254,35 @@ Pass "GrassPrepass"
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
 
+            // Spherical wind zones, nearest first. xyz = center, w = radius.
+            #define MAX_WIND_ZONES 4
+            uniform int _WindZoneCount;
+            uniform vec4 _WindZoneSphere[MAX_WIND_ZONES];
+            uniform vec4 _WindZoneParams[MAX_WIND_ZONES]; // strength, turbulence, pulse magnitude, pulse frequency
+
+            // Matches WindZone.SampleWind on the CPU so grass and particles agree.
+            vec3 sampleWindZones(vec3 worldPosition)
+            {
+                vec3 wind = vec3(0.0);
+                for (int i = 0; i < _WindZoneCount; i++)
+                {
+                    vec3 toPoint = worldPosition - _WindZoneSphere[i].xyz;
+                    float radius = max(_WindZoneSphere[i].w, 1e-4);
+                    float dist = length(toPoint);
+                    if (dist >= radius) continue;
+
+                    vec4 p = _WindZoneParams[i];
+                    float t = 1.0 - dist / radius;
+                    float falloff = t * t * (3.0 - 2.0 * t);
+                    float pulse = 1.0 + sin(_Time.y * p.w * 6.28318531 + dist * 0.1) * p.z;
+                    float turbulence = 1.0 + sin(_Time.y * 3.0 + worldPosition.x * 0.7 + worldPosition.z * 0.9) * p.y;
+
+                    vec3 dir = dist > 1e-4 ? toPoint / dist : vec3(0.0, 1.0, 0.0);
+                    wind += dir * (p.x * falloff * pulse * turbulence);
+                }
+                return wind;
+            }
+
 			void main()
 			{
 #ifdef GPU_INSTANCING
@@ -276,6 +338,10 @@ Pass "GrassPrepass"
                 float wind = sin(_Time.y * _WindSpeed + bladePosition.x * 0.7 + bladePosition.z * 0.4 + windPhase) * _WindStrength * bendFactor;
                 localOffset.x += wind * windAmount;
                 localOffset.z += wind * windAmount * 0.3;
+
+                vec3 zoneWind = sampleWindZones(bladePosition) * (windAmount * bendFactor);
+                localOffset.x += zoneWind.x;
+                localOffset.z += zoneWind.z;
 
                 vec3 worldPosition = bladePosition + localOffset;
                 worldPosition += up * 0.01 * scaleY; // Must match main Grass pass offset
