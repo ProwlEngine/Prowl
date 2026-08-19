@@ -4728,6 +4728,66 @@ public class PrefabTests : EditorTestHarness
 
     #endregion
 
+    #region Prefab content sits where its prefab put it
+
+    // ---------------------------------------------------------------------
+    // The editor refuses to move prefab content, but a script or a tool can. What comes back has to be
+    // one object per source identity, whatever route the scene took to get there.
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void ProvidedContentMovedOutOfItsInstance_BecomesAnOrdinaryObject()
+    {
+        Guid guid = MakeNestedPrefab("MovedOut.prefab");
+        GameObject instance = Inst(guid);
+        var elsewhere = new GameObject("Elsewhere");
+        LoadSceneWith(instance, elsewhere);
+
+        GameObject child = instance.Children[0];
+        child.GetComponent<OverrideComp>()!.A = 99;
+        PrefabUtility.ReconcileInstance(instance);
+
+        child.SetParent(elsewhere);   // what a tool or a script can do, and the panels cannot refuse
+        PrefabUtility.RefreshAllInstances(guid);
+
+        // It keeps its place and its values, and stops claiming to be part of the instance.
+        Assert.False(child.IsDisposed);
+        Assert.Same(elsewhere, child.Parent);
+        Assert.Equal(99, child.GetComponent<OverrideComp>()!.A);
+        Assert.False(child.IsPrefabInstance);
+        Assert.Equal(Guid.Empty, child.SourceIdentifier);
+        Assert.Equal(Guid.Empty, child.GetComponent<OverrideComp>()!.SourceIdentifier);
+
+        // The prefab still provides its own child, in its own place, once.
+        GameObject provided = Assert.Single(instance.Children);
+        Assert.NotSame(child, provided);
+        Assert.NotEqual(Guid.Empty, provided.SourceIdentifier);
+    }
+
+    [Fact]
+    public void SettlingStrays_LeavesAnInstanceInsideAnotherInstanceAlone()
+    {
+        Guid inner = MakeNestedPrefab("StrayInner.prefab");
+        Guid outer = MakeNestedPrefab("StrayOuter.prefab");
+
+        GameObject outerInstance = Inst(outer);
+        LoadSceneWith(outerInstance);
+        GameObject nested = Inst(inner);
+        Scene.Current!.Add(nested);
+        nested.SetParent(outerInstance);
+
+        PrefabUtility.RefreshAllInstances(outer);
+        PrefabUtility.RefreshAllInstances(inner);
+        PrefabUtility.ReconcileOpenScene();
+
+        // It sits where its own prefab puts it, which is wherever the user put the instance.
+        Assert.True(nested.IsPrefabInstance);
+        Assert.Equal(inner, nested.PrefabAssetId);
+        Assert.Same(outerInstance, nested.Parent);
+    }
+
+    #endregion
+
     #region Where a component came from travels with the component
 
     [Fact]

@@ -442,15 +442,6 @@ public static partial class PrefabUtility
         }
     }
 
-    private static GameObject? FindByIdentifier(Scene scene, Guid id)
-    {
-        foreach (var root in scene.RootObjects)
-        {
-            var found = root.FindChildByIdentifier(id);
-            if (found != null) return found;
-        }
-        return null;
-    }
 
     // ================================================================
     //  Override Detection
@@ -1421,6 +1412,8 @@ public static partial class PrefabUtility
 
     private static void RefreshInstancesOf(Guid prefabGuid, Scene scene)
     {
+        SettleStrayPrefabContent(prefabGuid, scene);
+
         List<GameObject> roots = FindInstancesOf(prefabGuid, scene);
         if (roots.Count == 0) return;
 
@@ -1462,6 +1455,40 @@ public static partial class PrefabUtility
                 // One prefab that cannot be rebuilt must not take the rest of the scene with it.
                 Runtime.Debug.LogError($"[Prefab] Failed to bring instances of {prefabGuid} up to date: {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Settle objects that claim to be part of an instance of <paramref name="prefabGuid"/> while
+    /// sitting somewhere the prefab did not put them, by making them ordinary objects.
+    /// <para/>
+    /// Prefab content lives where its prefab put it. The editor refuses to move it, but nothing can
+    /// refuse a script or a tool calling <c>SetParent</c>, and the object that results is worse than
+    /// either outcome the user might have wanted: it still answers to a source identity, so the refresh
+    /// recreates the object it stands for in its proper place and the two then answer to the same
+    /// identity, which is how one override comes to be applied to both of them.
+    /// <para/>
+    /// Made ordinary rather than deleted or moved back. Whatever the user did to it is theirs, and this
+    /// only takes away a claim it can no longer support.
+    /// </summary>
+    private static void SettleStrayPrefabContent(Guid prefabGuid, Scene scene)
+    {
+        List<GameObject> belonging = scene.AllObjects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid).ToList();
+
+        // Only when the prefab's identities still line up with what is in the scene. If nothing here
+        // stands for the prefab's root object then the asset was rewritten with fresh identities and
+        // none of these objects can be judged against it, so none of them is a stray.
+        if (!belonging.Any(IsInstanceRoot)) return;
+
+        foreach (GameObject go in belonging)
+        {
+            if (go.IsNotValid() || IsInstanceRoot(go) || IsProvidedByPrefab(go)) continue;
+
+            Runtime.Debug.LogWarning($"[Prefab] '{go.Name}' came from a prefab but no longer sits where that " +
+                "prefab puts it, so it is now an ordinary object. Moving prefab content out of its instance " +
+                "is not something an instance can record.");
+
+            go.ClearPrefabDataRecursive();
         }
     }
 
@@ -1929,6 +1956,12 @@ public static partial class PrefabUtility
     {
         Scene? scene = Scene.Current;
         if (scene == null) return;
+
+        // Anything that drifted out of its instance is settled first, so what follows records overrides
+        // for objects that can still say which prefab object they are.
+        foreach (Guid prefabGuid in scene.AllObjects.Where(go => go.IsPrefabInstance)
+                     .Select(go => go.PrefabAssetId).Distinct().ToList())
+            SettleStrayPrefabContent(prefabGuid, scene);
 
         foreach (GameObject go in scene.AllObjects.ToList())
             if (IsInstanceRoot(go))
