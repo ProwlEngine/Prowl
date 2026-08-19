@@ -24,8 +24,8 @@ assumes you already know.
   Label, ScrollView, ContextMenu
 - [Overlays & Feedback](Overlays.md) - Modal, Toasts, Tooltip, ProgressBar, Spinner, Skeleton,
   ChatBubble, FileDialog
-- [Data Display](DataDisplay.md) - Table, Tree, PropertyGrid, Chart, FlameGraph, NodeGraph,
-  ImageDiff
+- [Data Display](DataDisplay.md) - Table, Tree, PropertyGrid, Charts (Line, Bar, Scatter, Bubble,
+  Histogram, Pie, Donut, Radar, FlameGraph), NodeGraph, ImageDiff
 - [Docking & Floating Windows](Docking.md) - DockSpace, DockNode, DockPanel, FloatingWindow,
   serialization
 - [3D Gizmos](Gizmos.md) - TransformGizmo, ViewManipulatorGizmo, sub-gizmos, GizmoDraw3D,
