@@ -66,7 +66,8 @@ public static class InputBindingListener
         }
 
         // Check gamepad buttons
-        for (int device = 0; device < Input.GetGamepadCount(); device++)
+        // Slots, not connected count: a pad in slot 3 with 1 and 2 empty must still be reachable.
+        for (int device = 0; device < Input.GetGamepadSlotCount(); device++)
         {
             if (!Input.IsGamepadConnected(device)) continue;
             foreach (GamepadButton gb in Enum.GetValues<GamepadButton>())

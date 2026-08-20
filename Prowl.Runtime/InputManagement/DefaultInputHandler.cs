@@ -327,7 +327,20 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     }
 
     // Gamepad methods implementation
-    public int GetGamepadCount() => Context.Gamepads.Count;
+
+    // Backends expose a fixed block of slots (16 under GLFW) whether or not anything is plugged into
+    // them, so Context.Gamepads.Count is a capacity rather than a device count. Every other method here
+    // already gates on IsGamepadConnected; this one now agrees with them.
+    public int GetGamepadCount()
+    {
+        int count = 0;
+        for (int i = 0; i < Context.Gamepads.Count; i++)
+            if (Context.Gamepads[i].IsConnected)
+                count++;
+        return count;
+    }
+
+    public int GetGamepadSlotCount() => Context.Gamepads.Count;
 
     public bool IsGamepadConnected(int gamepadIndex)
     {
