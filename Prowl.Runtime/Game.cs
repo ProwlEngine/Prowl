@@ -29,7 +29,6 @@ public class EchoLogger : IEchoLogger
 public abstract class Game
 {
     private TimeData time = new();
-    private float fixedTimeAccumulator = 0.0f;
 
     private PaperRenderer _paperRenderer;
     private Paper _paper;
@@ -331,28 +330,28 @@ public abstract class Game
         AudioContext.SuspendedByPause = Application.IsEditor && Application.IsPlaying && Application.IsPaused;
 
         // Fixed update loop only when gameplay should run
-        fixedTimeAccumulator += delta;
+        Time.FixedAccumulator += delta;
         if (Application.ShouldRunGameplay)
         {
             Application.IsGameplayExecuting = true;
             int count = 0;
-            while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
+            while (Time.FixedAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
             {
                 if (currentScene.IsValid()) currentScene.FixedUpdate();
-                fixedTimeAccumulator -= Time.FixedDeltaTime;
+                Time.FixedAccumulator -= Time.FixedDeltaTime;
             }
 
             // If the iteration cap was hit there is still a backlog; discard it rather than replaying
             // it over the next frames (avoids post-hitch slow-motion and the spiral of death).
-            if (fixedTimeAccumulator >= Time.FixedDeltaTime)
-                fixedTimeAccumulator = 0f;
+            if (Time.FixedAccumulator >= Time.FixedDeltaTime)
+                Time.FixedAccumulator = 0f;
 
             Application.IsGameplayExecuting = false;
         }
         else
         {
             // Clamp accumulator to prevent burst when unpausing/starting play
-            fixedTimeAccumulator = MathF.Min(fixedTimeAccumulator, Time.FixedDeltaTime);
+            Time.FixedAccumulator = MathF.Min(Time.FixedAccumulator, Time.FixedDeltaTime);
         }
 
         OnUpdate(currentScene);
@@ -438,7 +437,7 @@ public abstract class Game
     private void UpdatePaperInput() => PaperInputBridge.Pump(_paper, GetPaperMousePosition());
 
     /// <summary>Reset the fixed-update accumulator. Call when entering play mode to prevent a burst.</summary>
-    protected void ResetFixedTimeAccumulator() => fixedTimeAccumulator = 0f;
+    protected void ResetFixedTimeAccumulator() => Time.FixedAccumulator = 0f;
 
 
     public static void Quit()
