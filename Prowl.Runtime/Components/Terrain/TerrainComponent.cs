@@ -40,6 +40,36 @@ public class TerrainComponent : MonoBehaviour
     /// 1.0 = default, higher = more detail at distance, lower = less detail.
     /// </summary>
     public float LODQuality = 1f;
+    /// <summary>
+    /// Width of the band, in combined height + splat weight, that layers are allowed to feather
+    /// across. Small values give a crisp per-detail transition where the higher material punches
+    /// through; large values fall back toward a plain linear cross-dissolve.
+    /// </summary>
+    public float HeightBlendSharpness = 0.25f;
+
+    /// <summary>
+    /// How much a layer's normal map shapes its blend height. 0 uses albedo luminance alone,
+    /// 1 lets the normal's flat-topped detail fully carve the seam between layers.
+    /// </summary>
+    public float NormalHeightInfluence = 0.6f;
+
+    /// <summary>
+    /// How many times larger the distant copy of each layer texture is drawn. The far tap uses the
+    /// same texture at <c>tiling / FarTilingScale</c>, so its repeat is too large to read as a grid.
+    /// </summary>
+    public float FarTilingScale = 8f;
+
+    /// <summary>Distance from the camera, in world units, where the far-scale tiling starts fading in.</summary>
+    public float FarTilingStart = 35f;
+
+    /// <summary>
+    /// Length of the far-tiling crossfade in world units. Long fades are the point: spread far
+    /// enough, the swap never reaches a rate the eye can catch.
+    /// </summary>
+    public float FarTilingFade = 300f;
+
+    /// <summary>How completely the far-scale tiling replaces the close-up tiling. 0 disables it.</summary>
+    public float FarTilingStrength = 1f;
 
     /// <summary>Detail material override. If null, uses the built-in Grass material.</summary>
     public AssetRef<Material> DetailMaterial;
@@ -238,6 +268,14 @@ public class TerrainComponent : MonoBehaviour
             _properties.SetFloat(prefix + "Roughness", layer.Roughness);
             _properties.SetFloat(prefix + "Metallic", layer.Metallic);
         }
+
+        // Layer blending / distance tiling
+        _properties.SetFloat("_HeightBlendSharpness", MathF.Max(0.02f, HeightBlendSharpness));
+        _properties.SetFloat("_NormalHeightInfluence", Math.Clamp(NormalHeightInfluence, 0f, 1f));
+        _properties.SetFloat("_FarTilingScale", MathF.Max(1f, FarTilingScale));
+        _properties.SetFloat("_FarTilingStart", MathF.Max(0f, FarTilingStart));
+        _properties.SetFloat("_FarTilingFade", MathF.Max(0.001f, FarTilingFade));
+        _properties.SetFloat("_FarTilingStrength", Math.Clamp(FarTilingStrength, 0f, 1f));
 
         _properties.SetFloat("_TerrainSize", terrainSize);
         _properties.SetFloat("_TerrainHeight", terrainData.Height);

@@ -48,6 +48,12 @@ Properties
     _Layer7Tiling ("Layer 7 Tiling", Float) = 10.0
     _Layer7Roughness ("Layer 7 Roughness", Float) = 1.0
     _Layer7Metallic ("Layer 7 Metallic", Float) = 0.0
+    _HeightBlendSharpness ("Height Blend Sharpness", Range(0.02, 1.0)) = 0.25
+    _NormalHeightInfluence ("Normal Height Influence", Range(0.0, 1.0)) = 0.6
+    _FarTilingScale ("Far Tiling Scale", Float) = 8.0
+    _FarTilingStart ("Far Tiling Start Distance", Float) = 35.0
+    _FarTilingFade ("Far Tiling Fade Distance", Float) = 300.0
+    _FarTilingStrength ("Far Tiling Strength", Range(0.0, 1.0)) = 1.0
     _TerrainSize ("Terrain Size", Float) = 1024.0
     _TerrainHeight ("Terrain Height", Float) = 100.0
     _BrushPosition ("Brush Position", Vector2) = (0.0, 0.0)
@@ -261,6 +267,19 @@ Pass "Terrain"
             uniform float _BrushFalloff;
             uniform float _BrushVisible;
 
+            uniform float _HeightBlendSharpness;
+            uniform float _NormalHeightInfluence;
+            uniform float _FarTilingScale;
+            uniform float _FarTilingStart;
+            uniform float _FarTilingFade;
+            uniform float _FarTilingStrength;
+
+#ifdef TERRAIN_8_LAYERS
+#define TERRAIN_LAYERS 8
+#else
+#define TERRAIN_LAYERS 4
+#endif
+
             vec3 unpackNormal(vec4 packednormal)
             {
                 vec3 normal;
@@ -269,106 +288,150 @@ Pass "Terrain"
                 return normal;
             }
 
+            // Screen-space derivatives of the terrain UV, taken once at the top of main().
+            // Every layer tap goes through textureGrad because the taps live inside weight
+            // branches (where implicit derivatives are undefined) and because the far-scale
+            // tap below reads a deliberately different mip level of the same texture.
+            vec2 gUVdx;
+            vec2 gUVdy;
+
+            // 0 near the camera, 1 once the enlarged copy of each texture has fully taken over.
+            float gFarBlend;
+
+            // Per-layer material gathered before blending, so the blend can compare layers
+            // against each other instead of accumulating them one at a time.
+            vec3  gAlbedo[TERRAIN_LAYERS];
+            vec2  gNormalPD[TERRAIN_LAYERS];   // tangent normal as a slope (xy / z)
+            float gHeight[TERRAIN_LAYERS];
+            float gRoughness[TERRAIN_LAYERS];
+            float gMetallic[TERRAIN_LAYERS];
+            float gWeight[TERRAIN_LAYERS];
+
+            // A terrain layer has no height map, but its relief is still recoverable from two
+            // channels: luminance (crevices sit in shadow, tops catch the light) and the detail
+            // normal (a flat-topped bump keeps n.z near 1, the walls falling away from it do not).
+            // Folding the normal in is what turns a soft splatmap gradient into a transition that
+            // follows the individual pebbles and grooves of the material.
+            float detailHeight(vec3 albedo, vec3 normalTS)
+            {
+                float luminance = dot(albedo, vec3(0.299, 0.587, 0.114));
+                float flatness = clamp(normalTS.z, 0.0, 1.0);
+                return luminance * mix(1.0, flatness, _NormalHeightInfluence);
+            }
+
+            void gatherLayer(int index, sampler2D albedoTex, sampler2D normalTex,
+                             float tiling, float roughness, float metallic, float weight)
+            {
+                gWeight[index] = weight;
+                if (weight <= 0.001)
+                {
+                    gHeight[index] = 0.0;
+                    return;
+                }
+
+                vec2 uv = texCoord0 * tiling;
+                vec3 albedo = textureGrad(albedoTex, uv, gUVdx * tiling, gUVdy * tiling).rgb;
+                vec3 normalTS = unpackNormal(textureGrad(normalTex, uv, gUVdx * tiling, gUVdy * tiling));
+
+                if (gFarBlend > 0.001)
+                {
+                    // Same texture, far fewer repeats. Up close the near tiling carries the detail;
+                    // at distance its repeat period shrinks to a few pixels and reads as a grid, so
+                    // the blown-up copy - which has no visible repeat left - takes over instead.
+                    float farTiling = tiling / max(_FarTilingScale, 1.0);
+                    vec2 farUV = texCoord0 * farTiling;
+                    vec3 farAlbedo = textureGrad(albedoTex, farUV, gUVdx * farTiling, gUVdy * farTiling).rgb;
+                    vec3 farNormal = unpackNormal(textureGrad(normalTex, farUV, gUVdx * farTiling, gUVdy * farTiling));
+
+                    albedo = mix(albedo, farAlbedo, gFarBlend);
+                    normalTS = normalize(mix(normalTS, farNormal, gFarBlend));
+                }
+
+                gAlbedo[index] = albedo;
+                // Store the normal as a slope. Averaging slopes keeps the steepness of the
+                // strongest layer, where averaging unit normals would flatten it toward (0,0,1).
+                gNormalPD[index] = normalTS.xy / max(normalTS.z, 1e-3);
+                gHeight[index] = detailHeight(albedo, normalTS);
+                gRoughness[index] = roughness;
+                gMetallic[index] = metallic;
+            }
+
             void main()
             {
                 // Terrain holes
                 if (_HasHoles > 0 && texture(_HolesMap, texCoord0).r < 0.5)
                     discard;
 
+                gUVdx = dFdx(texCoord0);
+                gUVdy = dFdy(texCoord0);
+
+                // Distance ramp for the far-scale tiling. The fade is deliberately long: spread
+                // over hundreds of units the crossfade never reaches a rate the eye can catch,
+                // so the terrain simply stops tiling instead of visibly changing texture.
+                float camDistance = length(_WorldSpaceCameraPos.xyz - worldPos);
+                float farEnd = _FarTilingStart + max(_FarTilingFade, 0.001);
+                gFarBlend = _FarTilingStrength * smoothstep(_FarTilingStart, farEnd, camDistance);
+
                 // Sample splatmap 0 (layers 0-3)
                 vec4 w0 = texture(_Splatmap0, texCoord0);
 
-                // Accumulate albedo, normal, roughness, metallic from layers 0-3
-                vec3 albedo = vec3(0.0);
-                vec3 blendedNormalTS = vec3(0.0);
-                float roughness = 0.0;
-                float metallic = 0.0;
-                float totalWeight = 0.0;
-
-                // Layer 0
-                if (w0.r > 0.001) {
-                    vec2 uv = texCoord0 * _Layer0Tiling;
-                    albedo += texture(_Layer0, uv).rgb * w0.r;
-                    blendedNormalTS += unpackNormal(texture(_Layer0Normal, uv)) * w0.r;
-                    roughness += _Layer0Roughness * w0.r;
-                    metallic += _Layer0Metallic * w0.r;
-                    totalWeight += w0.r;
-                }
-                // Layer 1
-                if (w0.g > 0.001) {
-                    vec2 uv = texCoord0 * _Layer1Tiling;
-                    albedo += texture(_Layer1, uv).rgb * w0.g;
-                    blendedNormalTS += unpackNormal(texture(_Layer1Normal, uv)) * w0.g;
-                    roughness += _Layer1Roughness * w0.g;
-                    metallic += _Layer1Metallic * w0.g;
-                    totalWeight += w0.g;
-                }
-                // Layer 2
-                if (w0.b > 0.001) {
-                    vec2 uv = texCoord0 * _Layer2Tiling;
-                    albedo += texture(_Layer2, uv).rgb * w0.b;
-                    blendedNormalTS += unpackNormal(texture(_Layer2Normal, uv)) * w0.b;
-                    roughness += _Layer2Roughness * w0.b;
-                    metallic += _Layer2Metallic * w0.b;
-                    totalWeight += w0.b;
-                }
-                // Layer 3
-                if (w0.a > 0.001) {
-                    vec2 uv = texCoord0 * _Layer3Tiling;
-                    albedo += texture(_Layer3, uv).rgb * w0.a;
-                    blendedNormalTS += unpackNormal(texture(_Layer3Normal, uv)) * w0.a;
-                    roughness += _Layer3Roughness * w0.a;
-                    metallic += _Layer3Metallic * w0.a;
-                    totalWeight += w0.a;
-                }
+                gatherLayer(0, _Layer0, _Layer0Normal, _Layer0Tiling, _Layer0Roughness, _Layer0Metallic, w0.r);
+                gatherLayer(1, _Layer1, _Layer1Normal, _Layer1Tiling, _Layer1Roughness, _Layer1Metallic, w0.g);
+                gatherLayer(2, _Layer2, _Layer2Normal, _Layer2Tiling, _Layer2Roughness, _Layer2Metallic, w0.b);
+                gatherLayer(3, _Layer3, _Layer3Normal, _Layer3Tiling, _Layer3Roughness, _Layer3Metallic, w0.a);
 
 #ifdef TERRAIN_8_LAYERS
                 // Sample splatmap 1 (layers 4-7)
                 vec4 w1 = texture(_Splatmap1, texCoord0);
 
-                if (w1.r > 0.001) {
-                    vec2 uv = texCoord0 * _Layer4Tiling;
-                    albedo += texture(_Layer4, uv).rgb * w1.r;
-                    blendedNormalTS += unpackNormal(texture(_Layer4Normal, uv)) * w1.r;
-                    roughness += _Layer4Roughness * w1.r;
-                    metallic += _Layer4Metallic * w1.r;
-                    totalWeight += w1.r;
-                }
-                if (w1.g > 0.001) {
-                    vec2 uv = texCoord0 * _Layer5Tiling;
-                    albedo += texture(_Layer5, uv).rgb * w1.g;
-                    blendedNormalTS += unpackNormal(texture(_Layer5Normal, uv)) * w1.g;
-                    roughness += _Layer5Roughness * w1.g;
-                    metallic += _Layer5Metallic * w1.g;
-                    totalWeight += w1.g;
-                }
-                if (w1.b > 0.001) {
-                    vec2 uv = texCoord0 * _Layer6Tiling;
-                    albedo += texture(_Layer6, uv).rgb * w1.b;
-                    blendedNormalTS += unpackNormal(texture(_Layer6Normal, uv)) * w1.b;
-                    roughness += _Layer6Roughness * w1.b;
-                    metallic += _Layer6Metallic * w1.b;
-                    totalWeight += w1.b;
-                }
-                if (w1.a > 0.001) {
-                    vec2 uv = texCoord0 * _Layer7Tiling;
-                    albedo += texture(_Layer7, uv).rgb * w1.a;
-                    blendedNormalTS += unpackNormal(texture(_Layer7Normal, uv)) * w1.a;
-                    roughness += _Layer7Roughness * w1.a;
-                    metallic += _Layer7Metallic * w1.a;
-                    totalWeight += w1.a;
-                }
+                gatherLayer(4, _Layer4, _Layer4Normal, _Layer4Tiling, _Layer4Roughness, _Layer4Metallic, w1.r);
+                gatherLayer(5, _Layer5, _Layer5Normal, _Layer5Tiling, _Layer5Roughness, _Layer5Metallic, w1.g);
+                gatherLayer(6, _Layer6, _Layer6Normal, _Layer6Tiling, _Layer6Roughness, _Layer6Metallic, w1.b);
+                gatherLayer(7, _Layer7, _Layer7Normal, _Layer7Tiling, _Layer7Roughness, _Layer7Metallic, w1.a);
 #endif
+
+                // Height-aware splat blend. Each layer competes with its painted weight *plus* its
+                // per-pixel detail height, and only the layers within _HeightBlendSharpness of the
+                // winner get to feather in. The painted weight still decides which layer dominates;
+                // the height only decides the shape of the seam, so grass creeps into the low grout
+                // of a rock layer instead of the two cross-dissolving as flat colour.
+                float peak = -1.0;
+                for (int i = 0; i < TERRAIN_LAYERS; i++)
+                {
+                    if (gWeight[i] > 0.001)
+                        peak = max(peak, gHeight[i] + gWeight[i]);
+                }
+                float cutoff = peak - max(_HeightBlendSharpness, 0.001);
+
+                vec3 albedo = vec3(0.0);
+                vec2 blendedNormalPD = vec2(0.0);
+                float roughness = 0.0;
+                float metallic = 0.0;
+                float totalWeight = 0.0;
+
+                for (int i = 0; i < TERRAIN_LAYERS; i++)
+                {
+                    if (gWeight[i] <= 0.001)
+                        continue;
+
+                    float blend = max(gHeight[i] + gWeight[i] - cutoff, 0.0);
+                    albedo += gAlbedo[i] * blend;
+                    blendedNormalPD += gNormalPD[i] * blend;
+                    roughness += gRoughness[i] * blend;
+                    metallic += gMetallic[i] * blend;
+                    totalWeight += blend;
+                }
 
                 // Normalize
                 if (totalWeight > 0.0) {
                     albedo /= totalWeight;
+                    blendedNormalPD /= totalWeight;
                     roughness /= totalWeight;
                     metallic /= totalWeight;
                 }
 
                 vec3 baseColor = gammaToLinearSpace(albedo);
-                blendedNormalTS = normalize(blendedNormalTS);
+                vec3 blendedNormalTS = normalize(vec3(blendedNormalPD, 1.0));
 
                 vec3 N = normalize(worldNormal);
                 vec3 T = normalize(cross(N, vec3(0.0, 0.0, 1.0)));
