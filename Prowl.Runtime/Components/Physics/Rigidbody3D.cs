@@ -76,9 +76,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         }
     }
 
-    private float interpTimer = 0;
-
-    // The poses the last two steps produced, and how far into the current step we have rendered.
+    // The poses the last two steps produced. How far into the current step the frame being drawn
+    // sits is Time.FixedAccumulator, which the game loop already tracks for every body at once.
     private Float3 _previousPosition, _currentPosition;
     private Quaternion _previousRotation, _currentRotation;
     private bool _hasPose;
@@ -436,8 +435,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         // independent of AutoSyncTransforms, which only governs the transform->body direction.)
         if (motionType == MotionType.Static) return;
 
-        interpTimer += Time.DeltaTime;
-
         Float3 position;
         Quaternion rotation;
 
@@ -448,7 +445,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         }
         else if (interpolation == RigidbodyInterpolation.Extrapolate)
         {
-            _body.PredictPose(interpTimer, out JVector predicted, out JQuaternion predictedOrientation);
+            _body.PredictPose(Time.FixedAccumulator, out JVector predicted, out JQuaternion predictedOrientation);
             position = ToFloat3(predicted);
             rotation = ToQuaternion(predictedOrientation);
         }
@@ -456,7 +453,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             // Render between the last two steps. The visual trails the simulation by up to one fixed
             // step, which is the price of never overshooting into geometry the solver has not seen.
-            float t = Time.FixedDeltaTime > 0.0f ? Maths.Clamp(interpTimer / Time.FixedDeltaTime, 0.0f, 1.0f) : 1.0f;
+            float t = Time.FixedDeltaTime > 0.0f ? Maths.Clamp(Time.FixedAccumulator / Time.FixedDeltaTime, 0.0f, 1.0f) : 1.0f;
             position = Maths.Lerp(_previousPosition, _currentPosition, t);
             rotation = Quaternion.Slerp(_previousRotation, _currentRotation, t);
         }
@@ -538,7 +535,6 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         if (_body == null || _body.Handle.IsZero) return;
 
-        interpTimer = 0.0f;
         _previousPosition = _currentPosition;
         _previousRotation = _currentRotation;
         _currentPosition = ToFloat3(_body.Position);
@@ -559,7 +555,6 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (_body == null || _body.Handle.IsZero) { _hasPose = false; return; }
 
-        interpTimer = 0.0f;
         _currentPosition = _previousPosition = ToFloat3(_body.Position);
         _currentRotation = _previousRotation = ToQuaternion(_body.Orientation);
         _hasPose = true;
