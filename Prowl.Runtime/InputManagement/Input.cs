@@ -199,7 +199,16 @@ public static class Input
     }
 
     // Gamepad
+    /// <summary>The number of gamepads currently connected.</summary>
     public static int GetGamepadCount() => Current.GetGamepadCount();
+
+    /// <summary>
+    /// The number of gamepad slots the backend exposes, connected or not. Backends report a fixed slot
+    /// count (16 under GLFW) regardless of what is plugged in, so this is the index range to scan when
+    /// looking for a device - <see cref="GetGamepadCount"/> is how many are actually attached.
+    /// </summary>
+    public static int GetGamepadSlotCount() => Current.GetGamepadSlotCount();
+
     public static bool IsGamepadConnected(int gamepadIndex = 0) => Current.IsGamepadConnected(gamepadIndex);
     public static bool GetGamepadButton(GamepadButton button, int gamepadIndex = 0) => Current.GetGamepadButton(gamepadIndex, button);
     public static bool GetGamepadButtonDown(GamepadButton button, int gamepadIndex = 0) => Current.GetGamepadButtonDown(gamepadIndex, button);

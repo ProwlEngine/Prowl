@@ -47,7 +47,17 @@ public interface IInputHandler
     void SetCursorShape(PaperCursor shape, int miceIndex = 0);
 
     // Gamepad methods
+
+    /// <summary>The number of gamepads currently connected.</summary>
     int GetGamepadCount();
+
+    /// <summary>
+    /// The number of gamepad slots the backend exposes, connected or not. This is the valid index range
+    /// for the other gamepad methods, so use it to scan for a device and <see cref="GetGamepadCount"/>
+    /// to ask how many are attached.
+    /// </summary>
+    int GetGamepadSlotCount();
+
     bool IsGamepadConnected(int gamepadIndex);
     bool GetGamepadButton(int gamepadIndex, GamepadButton button);
     bool GetGamepadButtonDown(int gamepadIndex, GamepadButton button);

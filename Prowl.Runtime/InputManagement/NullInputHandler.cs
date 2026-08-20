@@ -33,6 +33,7 @@ internal class NullInputHandler : IInputHandler
     public void SetCursorShape(PaperCursor shape, int miceIndex = 0) { }
 
     public int GetGamepadCount() => 0;
+    public int GetGamepadSlotCount() => 0;
     public bool IsGamepadConnected(int gamepadIndex) => false;
     public bool GetGamepadButton(int gamepadIndex, GamepadButton button) => false;
     public bool GetGamepadButtonDown(int gamepadIndex, GamepadButton button) => false;
