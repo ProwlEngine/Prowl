@@ -400,4 +400,45 @@ public class HotReloadSceneTests : EditorTestHarness
         }
         finally { loaded.SetValue(null, null); } // reset the global static event
     }
+
+    // The prefab system caches a whole GameObject tree per prefab, as the baseline every override
+    // comparison is made against. Those trees hold user script components, so if the walk did not reach
+    // them a recompile would leave the baseline holding old-type components and every comparison against
+    // it would see a type mismatch, which reads as "this instance has no overrides to record".
+    [Fact]
+    public void RealRecompile_MigratesThePrefabComparisonBaseline_SoOverridesKeepBeingRecorded()
+    {
+        Assembly v1 = CompileGameAssembly("Knob.cs",
+            "using Prowl.Runtime; public class Knob : MonoBehaviour { public int Value; }");
+        Type knobV1 = v1.GetType("Knob")!;
+
+        var authored = new GameObject("Root");
+        authored.AddComponent(knobV1);
+        Guid guid = CreatePrefabAsset(authored, "Knob.prefab");
+
+        GameObject instance = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
+        var scene = new Scene();
+        scene.Add(instance);
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+
+        // Warm the cache: this is what builds and holds the baseline tree.
+        Prefabs.PrefabUtility.ReconcileInstance(instance);
+
+        Assembly v2 = CompileGameAssembly("Knob.cs",
+            "using Prowl.Runtime; public class Knob : MonoBehaviour { public int Value; public int Added; }");
+        Type knobV2 = v2.GetType("Knob")!;
+
+        SceneHotReload.Migrate(Scene.Current!, v1, v2);
+
+        MonoBehaviour migrated = instance.GetComponents().Single(c => c.GetType().Name == "Knob");
+        Assert.Same(knobV2, migrated.GetType());
+
+        // The comparison still works, which it cannot if the baseline is holding a v1 component.
+        knobV2.GetField("Value")!.SetValue(migrated, 42);
+        Prefabs.PrefabUtility.ReconcileInstance(instance);
+
+        PropertyOverride recorded = Assert.Single(instance.PrefabOverrides);
+        Assert.EndsWith("Value", recorded.Path);
+    }
 }

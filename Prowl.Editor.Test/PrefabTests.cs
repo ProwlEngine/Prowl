@@ -4788,6 +4788,81 @@ public class PrefabTests : EditorTestHarness
 
     #endregion
 
+    #region Baked lighting belongs to the scene, not to the objects
+
+    [Fact]
+    public void LightmapPlacements_SurviveASceneRoundTrip()
+    {
+        var go = new GameObject("Baked");
+        go.AddComponent<MeshRenderer>();
+        Scene scene = LoadSceneWith(go);
+
+        scene.BakedLighting.Placements[go.Identifier] = new Scene.LightmapPlacement
+        {
+            Index = 3,
+            ScaleOffset = new Float4(0.5f, 0.5f, 0.25f, 0.75f)
+        };
+
+        var reloaded = Serializer.Deserialize<Scene>(Serializer.Serialize(typeof(object), scene)!)!;
+        try
+        {
+            GameObject restored = reloaded.RootObjects.First(o => o.Name == "Baked");
+            Scene.LightmapPlacement placement = Assert.NotNull(reloaded.BakedLighting.PlacementFor(restored.Identifier));
+
+            Assert.Equal(3, placement.Index);
+            Assert.Equal(0.25, placement.ScaleOffset.Z, 3);
+        }
+        finally { reloaded.Dispose(); }
+    }
+
+    [Fact]
+    public void BakingAPrefabInstance_RecordsNoOverride_AndSurvivesARefresh()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<MeshRenderer>();
+        Guid guid = CreatePrefabAsset(root, "Baked.prefab");
+
+        GameObject a = Inst(guid);
+        GameObject b = Inst(guid);
+        Scene scene = LoadSceneWith(a, b);
+
+        // What a bake writes now: one placement per baked object, on the scene.
+        scene.BakedLighting.Placements[a.Identifier] = new Scene.LightmapPlacement { Index = 3, ScaleOffset = new Float4(1, 1, 0, 0) };
+        scene.BakedLighting.Placements[b.Identifier] = new Scene.LightmapPlacement { Index = 7, ScaleOffset = new Float4(1, 1, 0, 0) };
+
+        PrefabUtility.ReconcileOpenScene();
+
+        // The prefab has no say in it, so there is nothing to record and nothing to hand to anyone else.
+        Assert.Empty(a.PrefabOverrides);
+        Assert.Empty(b.PrefabOverrides);
+
+        PrefabUtility.RefreshAllInstances(guid);
+        Assert.Equal(3, scene.BakedLighting.PlacementFor(a.Identifier)!.Value.Index);
+        Assert.Equal(7, scene.BakedLighting.PlacementFor(b.Identifier)!.Value.Index);
+
+        // And applying one instance cannot carry its lighting into the prefab.
+        PrefabUtility.ApplyOverrides(a);
+        Assert.Equal(7, scene.BakedLighting.PlacementFor(b.Identifier)!.Value.Index);
+    }
+
+    [Fact]
+    public void ClearingBakedLighting_DropsEveryPlacement()
+    {
+        var go = new GameObject("Baked");
+        Scene scene = LoadSceneWith(go);
+
+        scene.BakedLighting.Placements[go.Identifier] = new Scene.LightmapPlacement { Index = 1, ScaleOffset = new Float4(1, 1, 0, 0) };
+        scene.BakedLighting.Lightmaps.Add(default);
+
+        scene.BakedLighting.ClearLightmaps();
+
+        Assert.Empty(scene.BakedLighting.Placements);
+        Assert.False(scene.BakedLighting.HasLightmaps);
+        Assert.Null(scene.BakedLighting.PlacementFor(go.Identifier));
+    }
+
+    #endregion
+
     #region Where a component came from travels with the component
 
     [Fact]

@@ -928,6 +928,41 @@ public static class GameObjectInspector
         }
     }
 
+    /// <summary>Take a component off its object, undoably, restoring it where it sat.</summary>
+    private static void RemoveComponentWithUndo(MonoBehaviour comp)
+    {
+        GameObject go = comp.GameObject;
+        if (go.IsNotValid()) return;
+
+        var serialized = Echo.Serializer.Serialize(comp.GetType(), comp);
+        Type compType = comp.GetType();
+        Guid compId = comp.Identifier;
+        int compIndex = comp.GetSiblingIndex() ?? 0;
+        Guid goId = go.Identifier;
+
+        Undo.RegisterAction("Remove Component",
+            undo: () =>
+            {
+                var g = Undo.FindGO(goId);
+                if (g == null) return;
+                if (Echo.Serializer.Deserialize(serialized, compType) is not MonoBehaviour restored) return;
+
+                restored.Identifier = compId;
+                g.AddComponent(restored);
+                restored.SetSiblingIndex(compIndex);
+            },
+            redo: () =>
+            {
+                var g = Undo.FindGO(goId);
+                if (g.IsNotValid()) return;
+
+                var c = g!.GetComponentByIdentifier(compId);
+                if (c != null) g.RemoveComponent(c);
+            });
+
+        go.RemoveComponent(comp);
+    }
+
     private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
     {
         // On an instance, what this component is supposed to be is whatever the prefab says, so Reset
@@ -949,40 +984,21 @@ public static class GameObjectInspector
 
         builder.Separator();
 
-        bool canRemove = comp.CanDestroy();
-        // A component the prefab provides is not the instance's to delete, because nothing records
-        // the deletion and the next refresh would put it straight back.
-        if (go.IsPrefabInstance && go.GetComponentSourceIdentifier(comp) != Guid.Empty)
-            canRemove = false;
+        // A component the prefab provides can still be removed, but not while the object is an instance:
+        // nothing records the removal, so the next refresh would put it straight back. Taking it away
+        // therefore asks first and unlinks the instance.
         builder.Item(Loc.Get("inspector.remove_component"), () =>
         {
-            var serialized = Echo.Serializer.Serialize(comp.GetType(), comp);
-            var compType = comp.GetType();
-            var compId = comp.Identifier;
-            var compIndex = index;
-            var goId = go.Identifier;
-            Undo.RegisterAction("Remove Component",
-                undo: () =>
-                {
-                    var g = Undo.FindGO(goId);
-                    if (g == null) return;
-                    var restored = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour;
-                    if (restored != null)
-                    {
-                        restored.Identifier = compId;
-                        g.AddComponent(restored);
-                        restored.SetSiblingIndex(compIndex);
-                    }
-                },
-                redo: () =>
-                {
-                    var g = Undo.FindGO(goId);
-                    if (g == null) return;
-                    var c = g.GetComponentByIdentifier(compId);
-                    if (c != null) g.RemoveComponent(c);
-                });
-            go.RemoveComponent(comp);
-        }, icon: EditorIcons.Trash, enabled: canRemove);
+            if (PrefabUtility.NeedsBreaking(comp))
+            {
+                MonoBehaviour target = comp;
+                PrefabUtility.BreakThenRun([go], () => RemoveComponentWithUndo(target));
+                return;
+            }
+
+            RemoveComponentWithUndo(comp);
+        }, icon: EditorIcons.Trash, enabled: comp.CanDestroy());
+
 
         builder.Separator();
 

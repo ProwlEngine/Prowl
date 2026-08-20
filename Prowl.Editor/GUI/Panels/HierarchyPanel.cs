@@ -565,22 +565,32 @@ public class HierarchyPanel : DockPanel
 
     private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
     {
+        // Moving prefab content out of its instance is not something an instance can record, so it asks
+        // and unlinks rather than refusing. Captured into a list first: the drag is over by the time the
+        // answer comes back.
+        List<GameObject> dragged = ExcludeNestedSelections(goDrop.GameObjects).ToList();
+        if (PrefabUtility.NeedsBreaking(dragged))
+        {
+            DragDrop.EndDrag();
+            PrefabUtility.BreakThenRun(dragged,
+                () => ProcessGODropCore(dragged, target, targetId, dropPos, insertIndex));
+            return;
+        }
+
+        ProcessGODropCore(dragged, target, targetId, dropPos, insertIndex);
+    }
+
+    private void ProcessGODropCore(List<GameObject> draggedObjects, GameObject target, string targetId, DropPosition dropPos, int insertIndex)
+    {
         var targetParent = target.Parent;
         bool targetIsRoot = targetParent == null || !targetParent.IsValid();
 
         // A descendant dragged alongside its own ancestor moves implicitly with it; reparenting it
         // again here would yank it out from under the ancestor and flatten it as a sibling instead.
-        foreach (var dragged in ExcludeNestedSelections(goDrop.GameObjects))
+        foreach (var dragged in draggedObjects)
         {
-            if (dragged == target || IsDescendantOf(target, dragged))
+            if (dragged.IsNotValid() || dragged == target || IsDescendantOf(target, dragged))
                 continue;
-
-            // Block moving a prefab child out of its parent
-            if (IsPrefabStructuralChild(dragged))
-            {
-                Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_move"), ToastType.Warning, 3f);
-                continue;
-            }
 
             // Capture state for undo (BEFORE the move)
             var oldParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
@@ -765,7 +775,7 @@ public class HierarchyPanel : DockPanel
 
                 builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
                 {
-                    foreach (var go in ExcludeNestedSelections(selectedGOs)) DeleteGameObject(go);
+                    DeleteGameObjects(ExcludeNestedSelections(selectedGOs).ToList());
                 }, icon: EditorIcons.Trash);
 
                 builder.Separator();
@@ -896,7 +906,7 @@ public class HierarchyPanel : DockPanel
             {
                 builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
                 {
-                    foreach (var go in ExcludeNestedSelections(selectedGOs)) DeleteGameObject(go);
+                    DeleteGameObjects(ExcludeNestedSelections(selectedGOs).ToList());
                 }, icon: EditorIcons.Trash, danger: true);
             }
             else
@@ -990,14 +1000,19 @@ public class HierarchyPanel : DockPanel
         var targets = ExcludeNestedSelections(Selection.GetSelected<GameObject>().ToList());
         if (targets.Count == 0) return;
 
-        foreach (var target in targets)
+        if (PrefabUtility.NeedsBreaking(targets))
         {
-            if (IsPrefabStructuralChild(target))
-            {
-                Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_move"), ToastType.Warning, 3f);
-                return;
-            }
+            PrefabUtility.BreakThenRun(targets, () => CreateEmptyParentCore(targets));
+            return;
         }
+
+        CreateEmptyParentCore(targets);
+    }
+
+    private static void CreateEmptyParentCore(List<GameObject> targets)
+    {
+        var scene = Scene.Current;
+        if (scene == null) return;
 
         // The first selected object anchors the group: the new parent drops into its place in the
         // hierarchy, so the wrapped objects stay where they were in the tree.
@@ -1106,14 +1121,6 @@ public class HierarchyPanel : DockPanel
             AssetCreateMenu.CreatePrefabIn(go, folder);
     }
 
-    /// <summary>
-    /// True when this GameObject is one the prefab provides, rather than one added to the instance.
-    /// Those cannot be deleted or reparented, because nothing records the change and a refresh would
-    /// undo it. Told apart by where the object came from, not by its position, so reordering cannot
-    /// reclassify it.
-    /// </summary>
-    private static bool IsPrefabStructuralChild(GameObject go) => PrefabUtility.IsProvidedByPrefab(go);
-
     private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
     {
         var targets = allTargets.ToList();
@@ -1133,15 +1140,33 @@ public class HierarchyPanel : DockPanel
     /// <summary>Delete a GameObject, blocking deletion of prefab-structural children (with a toast)
     /// and registering proper undo. Shared with SceneViewPanel's in-viewport Delete shortcut so both
     /// entry points enforce the same rules instead of the viewport bypassing them.</summary>
-    internal static void DeleteGameObject(GameObject go)
+    internal static void DeleteGameObject(GameObject go) => DeleteGameObjects([go]);
+
+    /// <summary>
+    /// Delete a set of GameObjects as one action. Deleting an object a prefab provides is not something
+    /// an instance can record, so that asks once for the whole set and unlinks what it touches, rather
+    /// than refusing or asking once per object.
+    /// </summary>
+    internal static void DeleteGameObjects(IReadOnlyList<GameObject> gameObjects)
     {
-        // Block deleting prefab children that are part of the prefab structure
-        if (IsPrefabStructuralChild(go))
+        if (PrefabUtility.NeedsBreaking(gameObjects))
         {
-            Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_delete"), ToastType.Warning, 3f);
+            PrefabUtility.BreakThenRun(gameObjects, () => DeleteGameObjectsCore(gameObjects));
             return;
         }
 
+        DeleteGameObjectsCore(gameObjects);
+    }
+
+    private static void DeleteGameObjectsCore(IReadOnlyList<GameObject> gameObjects)
+    {
+        foreach (GameObject go in gameObjects)
+            if (go.IsValid())
+                DeleteOneGameObject(go);
+    }
+
+    private static void DeleteOneGameObject(GameObject go)
+    {
         var scene = Scene.Current;
         if (scene == null) return;
 

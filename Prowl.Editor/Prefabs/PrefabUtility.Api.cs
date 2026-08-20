@@ -7,6 +7,8 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -198,6 +200,69 @@ public static partial class PrefabUtility
     public static void DropPrefabLink(GameObject go)
     {
         if (go.IsValid()) go.ClearPrefabDataRecursive();
+    }
+
+    #endregion
+
+    #region Restructuring
+
+    // Asking before an edit that a prefab instance cannot survive, and unlinking what it touches.
+    //
+    // An instance records the values its objects hold, not the shape they are in. Deleting one of its
+    // objects, or moving one out of it, or taking away a component the prefab provides, are all changes
+    // there is nowhere to write down: the next refresh reads the prefab and puts the object back, so the
+    // edit was never really made.
+    //
+    // The answer is not to refuse. Someone deleting a child of an instance usually means it, and telling
+    // them to unpack first is asking them to do by hand exactly what this does. So it says what will be
+    // lost, and on a yes the instance stops being one and the edit goes through as an ordinary edit.
+    //
+    // The break and the edit are two undo steps. One undo puts back what was deleted or moved, a second
+    // puts back the connection.
+
+    /// <summary>Whether any of these objects is structure its prefab provides.</summary>
+    public static bool NeedsBreaking(IEnumerable<GameObject> targets)
+        => targets.Any(go => go.IsValid() && IsProvidedByPrefab(go));
+
+    /// <summary>Whether this component is one its prefab provides.</summary>
+    public static bool NeedsBreaking(MonoBehaviour component)
+        => component.IsValid() && component.GameObject.IsValid()
+           && component.GameObject.IsPrefabInstance && component.SourceIdentifier != Guid.Empty;
+
+    /// <summary>
+    /// Ask, and on a yes unlink every instance the given objects belong to and then run the edit.
+    /// Prompts once however many objects are involved, since it is one action to the person doing it.
+    /// </summary>
+    public static void BreakThenRun(IEnumerable<GameObject> touched, Action perform)
+    {
+        // By identifier, because two references to one object have to count once and an EngineObject's
+        // own equality is not reference equality.
+        var roots = new Dictionary<Guid, GameObject>();
+
+        foreach (GameObject go in touched)
+        {
+            if (go.IsNotValid()) continue;
+
+            GameObject? root = GetPrefabInstanceRoot(go);
+            if (root.IsValid()) roots[root!.Identifier] = root;
+        }
+
+        if (roots.Count == 0)
+        {
+            perform();
+            return;
+        }
+
+        Origami.Confirm(
+            Loc.Get("dialog.break_prefab"),
+            Loc.Get("dialog.break_prefab_body", new { count = roots.Count }),
+            onYes: () =>
+            {
+                foreach (GameObject root in roots.Values)
+                    UnpackPrefabInstance(root);
+
+                perform();
+            });
     }
 
     #endregion
