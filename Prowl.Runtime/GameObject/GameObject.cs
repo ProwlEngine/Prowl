@@ -685,10 +685,11 @@ public partial class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <typeparam name="T">The type of component to remove.</typeparam>
     /// <param name="component">The component instance to remove.</param>
-    public void RemoveComponent<T>(T component) where T : MonoBehaviour
+    /// <inheritdoc cref="RemoveComponent(MonoBehaviour)"/>
+    public bool RemoveComponent<T>(T component) where T : MonoBehaviour
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
-        RemoveComponent((MonoBehaviour)component);
+        return RemoveComponent((MonoBehaviour)component);
     }
 
     /// <summary>
@@ -701,7 +702,11 @@ public partial class GameObject : EngineObject, ISerializable
     /// the way there.
     /// </summary>
     /// <param name="component">The component instance to remove.</param>
-    public void RemoveComponent(MonoBehaviour component)
+    /// <returns>
+    /// Whether it was removed. False means the prefab provides it, which is the one case this refuses,
+    /// and a caller that needs it gone has to break the link or change the prefab first.
+    /// </returns>
+    public bool RemoveComponent(MonoBehaviour component)
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
 
@@ -709,10 +714,11 @@ public partial class GameObject : EngineObject, ISerializable
         {
             Debug.LogWarning($"[Prefab] '{component.GetType().Name}' on '{Name}' comes from a prefab, " +
                 "so it cannot be removed from this instance. Unpack the instance, or remove it from the prefab.");
-            return;
+            return false;
         }
 
         RemoveComponentInternal(component);
+        return true;
     }
 
     /// <summary>
@@ -757,11 +763,11 @@ public partial class GameObject : EngineObject, ISerializable
     /// Removes a specific component from the GameObject By its Identifier.
     /// </summary>
     /// <param name="component">The component identifier to remove.</param>
-    public void RemoveComponent(Guid component)
+    /// <inheritdoc cref="RemoveComponent(MonoBehaviour)"/>
+    public bool RemoveComponent(Guid component)
     {
         MonoBehaviour? comp = GetComponentByIdentifier(component);
-        if (comp.IsValid())
-            RemoveComponent(comp);
+        return comp.IsValid() && RemoveComponent(comp!);
     }
 
     /// <summary>
