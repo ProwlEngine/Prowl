@@ -140,16 +140,15 @@ public static partial class PrefabUtility
         else
             root.SetIdentifier(link.SourceIdentifier);
 
-        // Adopting a source identifier changes the key the map is stored under, so it is rebuilt
-        // rather than patched. Afterwards each component's identifier is its source identifier.
-        var previous = new Dictionary<Guid, Guid>(link.ComponentSources);
-        link.ComponentSources.Clear();
-
+        // Afterwards each component's identifier is the identity the asset will hold it under. The
+        // record of where it came from is dropped: this tree is becoming the prefab, and the prefab
+        // came from nowhere.
         foreach (var component in root.GetComponents<MonoBehaviour>())
         {
-            Guid sourceId = previous.TryGetValue(component.Identifier, out var known) ? known : component.Identifier;
-            component.Identifier = sourceId;
-            link.ComponentSources[sourceId] = sourceId;
+            component.Identifier = component.SourceIdentifier != Guid.Empty
+                ? component.SourceIdentifier
+                : component.Identifier;
+            component.SourceIdentifier = Guid.Empty;
         }
 
         foreach (var child in root.Children)
@@ -443,15 +442,6 @@ public static partial class PrefabUtility
         }
     }
 
-    private static GameObject? FindByIdentifier(Scene scene, Guid id)
-    {
-        foreach (var root in scene.RootObjects)
-        {
-            var found = root.FindChildByIdentifier(id);
-            if (found != null) return found;
-        }
-        return null;
-    }
 
     // ================================================================
     //  Override Detection
@@ -994,7 +984,7 @@ public static partial class PrefabUtility
         if (state != null)
             Serializer.DeserializeInto(state, copied, InstanceValueContext());
 
-        adopt = () => owner!.EnsurePrefabLink().ComponentSources[component!.Identifier] = copied.Identifier;
+        adopt = () => component!.SourceIdentifier = copied.Identifier;
         return true;
     }
 
@@ -1012,7 +1002,8 @@ public static partial class PrefabUtility
             ? root
             : root.FindChildByIdentifier(addition.OwnerIdentifier);
 
-        if (owner.IsValid()) owner!.EnsurePrefabLink().ComponentSources.Remove(addition.Identifier);
+        MonoBehaviour? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
+        if (component.IsValid()) component!.SourceIdentifier = Guid.Empty;
     }
 
     /// <summary>The override paths on one component of an instance, as they are stored on its root.</summary>
@@ -1330,8 +1321,16 @@ public static partial class PrefabUtility
 
             try
             {
+                // Always: what a prefab holds has changed, so the tree cached as the comparison
+                // baseline is wrong from here on. This matters most during a prefab editing session,
+                // where saving reimports the very prefab being edited.
                 InvalidateSource(entry.Guid);
-                RefreshAllInstances(entry.Guid);
+
+                // A prefab is one self contained tree, so the session's scene holds the prefab itself
+                // and an editor-only viewing rig, and no instances at all. There is nothing there to
+                // bring up to date, and the scene it was borrowed from is refreshed when it comes back.
+                if (!PrefabEditingMode.IsEditing)
+                    RefreshAllInstances(entry.Guid);
             }
             catch (Exception ex)
             {
@@ -1413,6 +1412,8 @@ public static partial class PrefabUtility
 
     private static void RefreshInstancesOf(Guid prefabGuid, Scene scene)
     {
+        SettleStrayPrefabContent(prefabGuid, scene);
+
         List<GameObject> roots = FindInstancesOf(prefabGuid, scene);
         if (roots.Count == 0) return;
 
@@ -1454,6 +1455,40 @@ public static partial class PrefabUtility
                 // One prefab that cannot be rebuilt must not take the rest of the scene with it.
                 Runtime.Debug.LogError($"[Prefab] Failed to bring instances of {prefabGuid} up to date: {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Settle objects that claim to be part of an instance of <paramref name="prefabGuid"/> while
+    /// sitting somewhere the prefab did not put them, by making them ordinary objects.
+    /// <para/>
+    /// Prefab content lives where its prefab put it. The editor refuses to move it, but nothing can
+    /// refuse a script or a tool calling <c>SetParent</c>, and the object that results is worse than
+    /// either outcome the user might have wanted: it still answers to a source identity, so the refresh
+    /// recreates the object it stands for in its proper place and the two then answer to the same
+    /// identity, which is how one override comes to be applied to both of them.
+    /// <para/>
+    /// Made ordinary rather than deleted or moved back. Whatever the user did to it is theirs, and this
+    /// only takes away a claim it can no longer support.
+    /// </summary>
+    private static void SettleStrayPrefabContent(Guid prefabGuid, Scene scene)
+    {
+        List<GameObject> belonging = scene.AllObjects.Where(go => go.IsValid() && go.PrefabAssetId == prefabGuid).ToList();
+
+        // Only when the prefab's identities still line up with what is in the scene. If nothing here
+        // stands for the prefab's root object then the asset was rewritten with fresh identities and
+        // none of these objects can be judged against it, so none of them is a stray.
+        if (!belonging.Any(IsInstanceRoot)) return;
+
+        foreach (GameObject go in belonging)
+        {
+            if (go.IsNotValid() || IsInstanceRoot(go) || IsProvidedByPrefab(go)) continue;
+
+            Runtime.Debug.LogWarning($"[Prefab] '{go.Name}' came from a prefab but no longer sits where that " +
+                "prefab puts it, so it is now an ordinary object. Moving prefab content out of its instance " +
+                "is not something an instance can record.");
+
+            go.ClearPrefabDataRecursive();
         }
     }
 
@@ -1612,7 +1647,6 @@ public static partial class PrefabUtility
             // rather than being kept beside a second component answering to the same identity.
             if (match.IsValid() && match!.GetType() != sourceComponent.GetType())
             {
-                instance.EnsurePrefabLink().ComponentSources.Remove(match.Identifier);
                 instance.RemoveComponentInternal(match);
                 match = null;
             }
@@ -1662,7 +1696,6 @@ public static partial class PrefabUtility
             Guid sourceId = instance.GetComponentSourceIdentifier(component);
             if (sourceId == Guid.Empty || sourceComponentIds.Contains(sourceId)) continue;
 
-            link.ComponentSources.Remove(component.Identifier);
             instance.RemoveComponentInternal(component);
         }
 
@@ -1924,6 +1957,12 @@ public static partial class PrefabUtility
         Scene? scene = Scene.Current;
         if (scene == null) return;
 
+        // Anything that drifted out of its instance is settled first, so what follows records overrides
+        // for objects that can still say which prefab object they are.
+        foreach (Guid prefabGuid in scene.AllObjects.Where(go => go.IsPrefabInstance)
+                     .Select(go => go.PrefabAssetId).Distinct().ToList())
+            SettleStrayPrefabContent(prefabGuid, scene);
+
         foreach (GameObject go in scene.AllObjects.ToList())
             if (IsInstanceRoot(go))
                 ReconcileInstance(go);
@@ -2177,12 +2216,11 @@ public static partial class PrefabUtility
         link.AssetId = prefabGuid;
         link.SourceIdentifier = written.Identifier;
         link.Overrides.Clear();
-        link.ComponentSources.Clear();
 
         var components = go.GetComponents<MonoBehaviour>().ToList();
         var writtenComponents = written.GetComponents<MonoBehaviour>().ToList();
         for (int i = 0; i < Math.Min(components.Count, writtenComponents.Count); i++)
-            link.ComponentSources[components[i].Identifier] = writtenComponents[i].Identifier;
+            components[i].SourceIdentifier = writtenComponents[i].Identifier;
 
         for (int i = 0; i < Math.Min(go.Children.Count, written.Children.Count); i++)
             StampAsPrefabInstance(go.Children[i], written.Children[i], prefabGuid, boundaryId);
@@ -2193,31 +2231,49 @@ public static partial class PrefabUtility
     /// the asset id and overrides alone: an object restored without its source identities is linked
     /// to a prefab it can no longer address, which is indistinguishable from a broken instance.
     /// </summary>
-    private static List<(GameObject go, PrefabLink? link)> CapturePrefabState(GameObject root, Guid boundaryId)
+    /// <summary>What one object of an instance holds about the prefab it came from.</summary>
+    private readonly record struct PrefabState(
+        GameObject Go,
+        PrefabLink? Link,
+        (MonoBehaviour Component, Guid SourceIdentifier)[] Components);
+
+    private static List<PrefabState> CapturePrefabState(GameObject root, Guid boundaryId)
     {
-        var captured = new List<(GameObject, PrefabLink?)>();
+        var captured = new List<PrefabState>();
         Walk(root);
         return captured;
 
         void Walk(GameObject go)
         {
             if (go.PrefabAssetId != boundaryId) return;
-            captured.Add((go, go.PrefabLink?.Clone()));
+
+            // The components too, because each one records where it came from on itself. An object
+            // restored with its link but not those is linked to a prefab it can no longer address.
+            var components = go.GetComponents<MonoBehaviour>()
+                .Select(c => (c, c.SourceIdentifier))
+                .ToArray();
+
+            captured.Add(new PrefabState(go, go.PrefabLink?.Clone(), components));
+
             foreach (var child in go.Children)
                 Walk(child);
         }
     }
 
-    private static void RestorePrefabState(List<(GameObject go, PrefabLink? link)> captured)
+    private static void RestorePrefabState(List<PrefabState> captured)
     {
-        foreach (var (go, link) in captured)
+        foreach (PrefabState state in captured)
         {
-            if (go.IsNotValid()) continue;
+            if (state.Go.IsNotValid()) continue;
 
-            if (link == null)
-                go.ClearPrefabData();
+            if (state.Link == null)
+                state.Go.ClearPrefabData();
             else
-                go.EnsurePrefabLink().CopyFrom(link);
+                state.Go.EnsurePrefabLink().CopyFrom(state.Link);
+
+            foreach ((MonoBehaviour component, Guid sourceIdentifier) in state.Components)
+                if (component.IsValid())
+                    component.SourceIdentifier = sourceIdentifier;
         }
     }
 

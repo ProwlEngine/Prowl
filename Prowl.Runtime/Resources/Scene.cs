@@ -331,11 +331,31 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public SkyboxParams Skybox = new();
 
+    /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
+    public struct LightmapPlacement
+    {
+        /// <summary>Which atlas page, indexing <see cref="BakedLightingData.Lightmaps"/>.</summary>
+        public int Index;
+        /// <summary>Scale and offset taking the renderer's UVs into that page.</summary>
+        public Float4 ScaleOffset;
+    }
+
     /// <summary>Baked lightmaps + light-probe data for this scene, produced by the editor lightmap bake.</summary>
     public sealed class BakedLightingData
     {
-        /// <summary>Baked lightmap atlas pages (RGBM-encoded). A renderer's <c>LightmapIndex</c> selects one.</summary>
+        /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
         public List<AssetRef<Texture2D>> Lightmaps = new();
+
+        /// <summary>
+        /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
+        /// <para/>
+        /// Here rather than on the renderer because it belongs to this scene's bake and to nothing else.
+        /// On the component it was ordinary serialized state, so a prefab instance read as modified the
+        /// moment it was baked, applying one instance handed its atlas slot to every other instance of
+        /// that prefab, and reverting an instance cleared its lighting. None of that can be expressed
+        /// now: a prefab has no opinion about where this scene's bake put things.
+        /// </summary>
+        public Dictionary<Guid, LightmapPlacement> Placements = new();
         /// <summary>World-space light-probe positions.</summary>
         public Float3[] ProbePositions = [];
         /// <summary>Baked SH per probe, indexed with <see cref="ProbePositions"/>.</summary>
@@ -347,6 +367,17 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         public bool HasLightmaps => Lightmaps.Count > 0;
         public bool HasProbes => ProbeSH.Length > 0;
+
+        /// <summary>Where this object's surface was baked, or nothing if it was not.</summary>
+        public LightmapPlacement? PlacementFor(Guid objectIdentifier)
+            => Placements.TryGetValue(objectIdentifier, out LightmapPlacement placement) ? placement : null;
+
+        /// <summary>Drop every baked lightmap page and placement, leaving the probes alone.</summary>
+        public void ClearLightmaps()
+        {
+            Lightmaps.Clear();
+            Placements.Clear();
+        }
     }
 
     public BakedLightingData BakedLighting = new();

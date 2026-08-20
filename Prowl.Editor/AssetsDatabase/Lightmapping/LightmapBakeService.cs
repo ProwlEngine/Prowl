@@ -222,14 +222,10 @@ public sealed class LightmapBakeService
             try { if (Directory.Exists(lmFolderAbs)) Directory.Delete(lmFolderAbs, true); } catch { }
         }
 
+        // Everything the bake produced lives on the scene, so clearing is dropping it. Nothing has to be
+        // walked and reset object by object.
         scene.BakedLighting = new Scene.BakedLightingData();
         scene.InvalidateProbeVolume();
-
-        foreach (var go in scene.AllObjects)
-        {
-            if (go.GetComponent<MeshRenderer>() is { } mr) { mr.LightmapIndex = -1; mr.LightmapScaleOffset = new Float4(1, 1, 0, 0); }
-            if (go.GetComponent<SkinnedMeshRenderer>() is { } smr) { smr.LightmapIndex = -1; smr.LightmapScaleOffset = new Float4(1, 1, 0, 0); }
-        }
 
         EditorSceneManager.Save();
         Status = "Cleared";
@@ -287,14 +283,22 @@ public sealed class LightmapBakeService
         }
         scene.BakedLighting.Lightmaps = lightmaps;
 
-        // Assign per-renderer index + scale/offset.
+        // Record where each baked surface landed, against the object it is on. A rebake replaces the
+        // whole set, so a renderer that is no longer baked simply has no placement.
+        scene.BakedLighting.Placements.Clear();
         for (int i = 0; i < _renderers.Count && i < atlas.Instances.Length; i++)
         {
+            if (_renderers[i] is not MonoBehaviour renderer || renderer.IsNotValid()) continue;
+
+            GameObject owner = renderer.GameObject;
+            if (owner.IsNotValid()) continue;
+
             var inst = atlas.Instances[i];
-            int atlasIndex = atlas.Placements[i].AtlasIndex;
-            var so = new Float4(inst.UVScale.X, inst.UVScale.Y, inst.UVOffset.X, inst.UVOffset.Y);
-            if (_renderers[i] is MeshRenderer mr) { mr.LightmapIndex = atlasIndex; mr.LightmapScaleOffset = so; }
-            else if (_renderers[i] is SkinnedMeshRenderer smr) { smr.LightmapIndex = atlasIndex; smr.LightmapScaleOffset = so; }
+            scene.BakedLighting.Placements[owner.Identifier] = new Scene.LightmapPlacement
+            {
+                Index = atlas.Placements[i].AtlasIndex,
+                ScaleOffset = new Float4(inst.UVScale.X, inst.UVScale.Y, inst.UVOffset.X, inst.UVOffset.Y)
+            };
         }
 
         // Probes: bake SH + tetrahedralize.

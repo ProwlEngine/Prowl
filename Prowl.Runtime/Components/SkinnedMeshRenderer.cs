@@ -43,11 +43,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
     public Color MainColor = Color.White;
 
-    /// <summary>Index into <c>Scene.BakedLighting.Lightmaps</c>, or -1 if not lightmapped. Assigned by the bake.</summary>
-    [HideInInspector, CloneField(CloneFieldFlags.Skip)] public int LightmapIndex = -1;
 
-    /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
-    [HideInInspector, CloneField(CloneFieldFlags.Skip)] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
 
     // Resolved at runtime
     [System.NonSerialized] private Transform? _rootBone;
@@ -536,7 +532,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
             props.SetInt("_ObjectID", InstanceID);
             props.SetColor("_MainColor", MainColor);
             Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
-            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
+            LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
             if (_boneTexture != null)
             {
                 props.SetTexture("boneMatrixTexture", _boneTexture);

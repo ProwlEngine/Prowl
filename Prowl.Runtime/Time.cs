@@ -60,6 +60,19 @@ public static class Time
     public static float DeltaTime => CurrentTime.DeltaTime;
     public static float FixedDeltaTime = 1.0f / 60.0f;
     public static int MaxFixedIterations = 3;
+
+    /// <summary>
+    /// How far the frame being drawn sits past the last fixed step, in seconds - the fixed loop
+    /// leaves this holding whatever part of the frame its steps did not consume, so it is always
+    /// under <see cref="FixedDeltaTime"/> by the time the scene's Update runs.
+    ///
+    /// This is the alpha physics interpolation has to render at. Counting time since the last step
+    /// with a per-frame accumulator instead does not work: the step that resets such a counter
+    /// happens partway through a frame, and the whole of that frame's delta then gets added on top
+    /// of time the step already consumed, which reads back a pose the body has not reached yet.
+    /// Owned by the game loop - read it, do not write it.
+    /// </summary>
+    public static float FixedAccumulator;
     public static float TimeSinceStartup => CurrentTime.Time;
 
     public static float SmoothUnscaledDeltaTime => CurrentTime.SmoothUnscaledDeltaTime;

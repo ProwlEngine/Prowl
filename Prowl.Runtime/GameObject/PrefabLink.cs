@@ -13,10 +13,13 @@ namespace Prowl.Runtime;
 /// <para/>
 /// Internal, and its fields stay public inside that: none of these values mean anything on their
 /// own, and there is no setter that can check them against each other. An asset id with no source
-/// identities, or a component map keyed on identifiers nothing carries any more, are states no
-/// operation produces and every operation would then have to survive. What a prefab instance is
-/// gets changed through <c>PrefabUtility</c> and the instantiate path, and read through the
-/// properties on <see cref="GameObject"/>.
+/// identity is a state no operation produces and every operation would then have to survive. What a
+/// prefab instance is gets changed through <c>PrefabUtility</c> and the instantiate path, and read
+/// through the properties on <see cref="GameObject"/>.
+/// <para/>
+/// Only what belongs to the object as a whole lives here. Which component of the prefab a component came
+/// from is on <see cref="MonoBehaviour.SourceIdentifier"/>, because anything keyed on a component's
+/// identifier goes stale the moment that identifier is handed out fresh by a load.
 /// </summary>
 internal sealed class PrefabLink
 {
@@ -33,13 +36,6 @@ internal sealed class PrefabLink
     public List<PropertyOverride> Overrides = new();
 
     /// <summary>
-    /// Maps each component's identifier to the identifier of the component in the prefab it came
-    /// from. Kept here rather than on MonoBehaviour so that components on ordinary GameObjects -
-    /// the overwhelming majority - carry nothing at all.
-    /// </summary>
-    public Dictionary<Guid, Guid> ComponentSources = new();
-
-    /// <summary>
     /// Drop what makes this an instance, keeping what says where the objects came from. Writing a
     /// prefab strips the instance data but must keep the source identities, or the asset would be
     /// written with brand new ones and every override in every scene would stop resolving.
@@ -54,8 +50,7 @@ internal sealed class PrefabLink
     {
         AssetId = AssetId,
         SourceIdentifier = SourceIdentifier,
-        Overrides = new List<PropertyOverride>(Overrides),
-        ComponentSources = new Dictionary<Guid, Guid>(ComponentSources)
+        Overrides = new List<PropertyOverride>(Overrides)
     };
 
     /// <summary>
@@ -66,6 +61,5 @@ internal sealed class PrefabLink
         AssetId = other.AssetId;
         SourceIdentifier = other.SourceIdentifier;
         Overrides = new List<PropertyOverride>(other.Overrides);
-        ComponentSources = new Dictionary<Guid, Guid>(other.ComponentSources);
     }
 }

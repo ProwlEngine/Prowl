@@ -16,14 +16,25 @@ namespace Prowl.Runtime.Rendering;
 public static class LightmapBinding
 {
     /// <param name="props">The renderable's per-object property state.</param>
-    /// <param name="scene">Scene that owns the renderer (provides baked lightmaps + probe volume).</param>
-    /// <param name="lightmapIndex">Renderer's lightmap index, or -1.</param>
-    /// <param name="scaleOffset">Renderer's lightmap UV scale/offset.</param>
+    /// <param name="renderer">The object being drawn. Its scene holds the baked lightmaps and probes, and
+    /// its identifier is what the bake recorded a placement under.</param>
     /// <param name="worldPos">Renderer bounds-center world position, used to sample probe SH for dynamic objects.</param>
     /// <param name="meshHasUV2">Whether the renderer's mesh has a UV2 set. The bake samples the lightmap from UV2
     /// when present, else falls back to the primary UVs (UV0), so this selects the runtime sampling UV set.</param>
-    public static void Fill(PropertyState props, Scene? scene, int lightmapIndex, Float4 scaleOffset, Float3 worldPos, bool meshHasUV2)
+    public static void Fill(PropertyState props, GameObject renderer, Float3 worldPos, bool meshHasUV2)
     {
+        Scene? scene = renderer.IsValid() ? renderer.Scene : null;
+
+        // Where this object's surface landed in this scene's bake, if it was baked at all. Looked up
+        // per object rather than stored on the component: it describes this scene's atlas, so it is the
+        // scene's to remember, and a prefab has no say in it.
+        Scene.LightmapPlacement? placement = scene.IsValid()
+            ? scene!.BakedLighting.PlacementFor(renderer.Identifier)
+            : null;
+
+        int lightmapIndex = placement?.Index ?? -1;
+        Float4 scaleOffset = placement?.ScaleOffset ?? new Float4(1, 1, 0, 0);
+
         // 1) Baked lightmap (static, lightmapped). A renderer with a valid index IS lightmapped, so it
         // commits to baked GI here and never falls through to probe SH below: probes would light it
         // with a completely different (wrong) result, and on reload the lightmap pages stream in async,

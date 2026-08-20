@@ -509,8 +509,13 @@ public abstract class RenderPipeline : EngineObject
             renderable.GetRenderingData(viewer, out PropertyState _, out Mesh mesh, out Float4x4 _, out InstanceData[]? instanceData);
             if (mesh == null || mesh.VertexCount <= 0) continue;
 
-            // Handle instanced renderables - add to batches with proper sorting (instanceData != null)
-            if (instanceData != null && instanceData.Length > 0)
+            // Handle instanced renderables - add to batches with proper sorting. Procedural ones
+            // have no instance array at all; the vertex shader derives each instance itself.
+            // Route by type, not by count: an empty procedural renderable must still take the
+            // instanced path and draw nothing, rather than falling through to the single-instance
+            // path and drawing one untransformed copy of its mesh.
+            bool isProcedural = renderable is IProceduralInstanced;
+            if (isProcedural || (instanceData != null && instanceData.Length > 0))
             {
                 // Get material hash for batching
                 ulong instancedMaterialHash = material.GetStateHash();
@@ -751,7 +756,14 @@ public abstract class RenderPipeline : EngineObject
     {
         renderable.GetRenderingData(viewer, out PropertyState sharedProperties, out Mesh _, out Float4x4 __, out InstanceData[]? instanceData);
 
-        if (instanceData == null || instanceData.Length == 0)
+        // Procedural batches read gl_InstanceID and need neither an instance buffer nor an upload,
+        // so they draw straight from the mesh's own VAO.
+        bool procedural = renderable is IProceduralInstanced;
+        int proceduralCount = procedural ? ((IProceduralInstanced)renderable).InstanceCount : 0;
+
+        if (!procedural && (instanceData == null || instanceData.Length == 0))
+            return;
+        if (procedural && proceduralCount <= 0)
             return;
 
         // Ensure the shared instance VAO + buffer exist. The actual data upload is
@@ -760,10 +772,20 @@ public abstract class RenderPipeline : EngineObject
         // one prototype). Each batch's UpdateBuffer + DrawIndexedInstanced is a pair
         // in the stream, so the executor uploads each batch's data immediately before
         // its draw and they don't clobber each other.
-        GraphicsVertexArray vao = mesh.EnsureInstanceVAO(instanceData.Length, out GraphicsBuffer instanceBuf);
+        GraphicsVertexArray vao;
+        GraphicsBuffer instanceBuf = null;
+        if (procedural)
+        {
+            mesh.Upload();
+            vao = mesh.VertexArrayObject;
+        }
+        else
+        {
+            vao = mesh.EnsureInstanceVAO(instanceData!.Length, out instanceBuf);
+        }
         if (vao == null) return;
 
-        int instanceCount = instanceData.Length;
+        int instanceCount = procedural ? proceduralCount : instanceData!.Length;
         int indexCount = mesh.IndexCount;
         bool useIndex32 = mesh.IndexFormat == IndexFormat.UInt32;
 
@@ -799,7 +821,8 @@ public abstract class RenderPipeline : EngineObject
 
         // Upload THIS batch's instance data immediately before the draw so the
         // shared instance buffer holds the right contents when the draw executes.
-        cmd.UpdateBuffer<InstanceData>(instanceBuf, new System.ReadOnlySpan<InstanceData>(instanceData, 0, instanceCount));
+        if (!procedural)
+            cmd.UpdateBuffer<InstanceData>(instanceBuf, new System.ReadOnlySpan<InstanceData>(instanceData!, 0, instanceCount));
 
         int subIdx = renderable.GetSubMeshIndex();
         if (subIdx >= 0 && subIdx < mesh.SubMeshCount)

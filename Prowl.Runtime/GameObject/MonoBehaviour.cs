@@ -26,6 +26,24 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
+    /// <summary>
+    /// Which component of the prefab this one was built from, or empty when it came from no prefab.
+    /// <para/>
+    /// On the component rather than in a table on the owning GameObject, because a table has to be keyed
+    /// on something and the only thing available was the component's own identifier. Identifiers are
+    /// handed out fresh by every deserialization, so every path that copied a component had to remember
+    /// to either preserve identifiers or rewrite the keys, and one that forgot silently unaddressed every
+    /// override in every other instance. Held here, the answer travels with the component that is the
+    /// question, and there is no key to go stale.
+    /// <para/>
+    /// Written out only when it says something, so an ordinary component costs nothing in a scene file.
+    /// </summary>
+    [SerializeField, HideInInspector, SerializeIf(nameof(IsFromPrefab))]
+    private Guid _prefabTemplateIdentity;
+
+    /// <summary>Whether this component came from a prefab. Drives the condition above.</summary>
+    public bool IsFromPrefab => _prefabTemplateIdentity != Guid.Empty;
+
     [SerializeField, HideInInspector]
     protected internal bool _enabled = true;
     [SerializeField, HideInInspector]
@@ -89,10 +107,13 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
     /// <summary>
     /// The identifier of the component in the prefab this one came from, or Guid.Empty when it is not
-    /// part of a prefab. Stored on the GameObject's <see cref="PrefabLink"/>, so components on
-    /// ordinary objects carry nothing for it.
+    /// part of a prefab.
     /// </summary>
-    public Guid SourceIdentifier => _go.IsValid() ? _go.GetComponentSourceIdentifier(this) : Guid.Empty;
+    public Guid SourceIdentifier
+    {
+        get => _prefabTemplateIdentity;
+        internal set => _prefabTemplateIdentity = value;
+    }
 
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.

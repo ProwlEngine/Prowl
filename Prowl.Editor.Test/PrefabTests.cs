@@ -718,6 +718,8 @@ public class PrefabTests : EditorTestHarness
         Assert.DoesNotContain("SourceChildCount", text);
         Assert.DoesNotContain("ComponentSources", text);
         Assert.DoesNotContain("SourceIdentifier", text);
+        // Each component records where it came from on itself, and that goes the same way.
+        Assert.DoesNotContain("_prefabTemplateIdentity", text);
         // The link itself is observable through IsPrefabInstance, so it stays.
         Assert.Contains("AssetId", text);
         // The overridden value survives as the object's own state, once rather than twice.
@@ -3218,7 +3220,7 @@ public class PrefabTests : EditorTestHarness
         OverrideComp component = added.GetComponent<OverrideComp>()!;
         Assert.Equal(7, component.A);
         Assert.NotEqual(Guid.Empty, added.GetComponentSourceIdentifier(component));
-        Assert.Single(added.PrefabLink!.ComponentSources);
+        Assert.Single(added.GetComponents<MonoBehaviour>().Where(c => c.SourceIdentifier != Guid.Empty));
     }
 
     [Fact]
@@ -3237,7 +3239,7 @@ public class PrefabTests : EditorTestHarness
         PrefabUtility.RefreshAllInstances(guid);
 
         Assert.Null(instance.GetComponent<OverrideComp>());
-        Assert.Empty(instance.PrefabLink!.ComponentSources);
+        Assert.Empty(instance.GetComponents<MonoBehaviour>().Where(c => c.SourceIdentifier != Guid.Empty));
         Assert.Single(instance.Children);
     }
 
@@ -3269,12 +3271,12 @@ public class PrefabTests : EditorTestHarness
         PrefabUtility.ReconcileInstance(instance);
 
         PrefabUtility.RefreshAllInstances(guid);
-        int mapSize = instance.PrefabLink!.ComponentSources.Count;
+        int tracked = instance.GetComponents<MonoBehaviour>().Count(c => c.SourceIdentifier != Guid.Empty);
 
         PrefabUtility.RefreshAllInstances(guid);
 
         Assert.Equal(12, instance.GetComponent<OverrideComp>()!.A);
-        Assert.Equal(mapSize, instance.PrefabLink!.ComponentSources.Count);
+        Assert.Equal(tracked, instance.GetComponents<MonoBehaviour>().Count(c => c.SourceIdentifier != Guid.Empty));
         Assert.Single(instance.Children);
     }
 
@@ -4726,6 +4728,245 @@ public class PrefabTests : EditorTestHarness
 
     #endregion
 
+    #region Prefab content sits where its prefab put it
+
+    // ---------------------------------------------------------------------
+    // The editor refuses to move prefab content, but a script or a tool can. What comes back has to be
+    // one object per source identity, whatever route the scene took to get there.
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void ProvidedContentMovedOutOfItsInstance_BecomesAnOrdinaryObject()
+    {
+        Guid guid = MakeNestedPrefab("MovedOut.prefab");
+        GameObject instance = Inst(guid);
+        var elsewhere = new GameObject("Elsewhere");
+        LoadSceneWith(instance, elsewhere);
+
+        GameObject child = instance.Children[0];
+        child.GetComponent<OverrideComp>()!.A = 99;
+        PrefabUtility.ReconcileInstance(instance);
+
+        child.SetParent(elsewhere);   // what a tool or a script can do, and the panels cannot refuse
+        PrefabUtility.RefreshAllInstances(guid);
+
+        // It keeps its place and its values, and stops claiming to be part of the instance.
+        Assert.False(child.IsDisposed);
+        Assert.Same(elsewhere, child.Parent);
+        Assert.Equal(99, child.GetComponent<OverrideComp>()!.A);
+        Assert.False(child.IsPrefabInstance);
+        Assert.Equal(Guid.Empty, child.SourceIdentifier);
+        Assert.Equal(Guid.Empty, child.GetComponent<OverrideComp>()!.SourceIdentifier);
+
+        // The prefab still provides its own child, in its own place, once.
+        GameObject provided = Assert.Single(instance.Children);
+        Assert.NotSame(child, provided);
+        Assert.NotEqual(Guid.Empty, provided.SourceIdentifier);
+    }
+
+    [Fact]
+    public void SettlingStrays_LeavesAnInstanceInsideAnotherInstanceAlone()
+    {
+        Guid inner = MakeNestedPrefab("StrayInner.prefab");
+        Guid outer = MakeNestedPrefab("StrayOuter.prefab");
+
+        GameObject outerInstance = Inst(outer);
+        LoadSceneWith(outerInstance);
+        GameObject nested = Inst(inner);
+        Scene.Current!.Add(nested);
+        nested.SetParent(outerInstance);
+
+        PrefabUtility.RefreshAllInstances(outer);
+        PrefabUtility.RefreshAllInstances(inner);
+        PrefabUtility.ReconcileOpenScene();
+
+        // It sits where its own prefab puts it, which is wherever the user put the instance.
+        Assert.True(nested.IsPrefabInstance);
+        Assert.Equal(inner, nested.PrefabAssetId);
+        Assert.Same(outerInstance, nested.Parent);
+    }
+
+    #endregion
+
+    #region Baked lighting belongs to the scene, not to the objects
+
+    [Fact]
+    public void LightmapPlacements_SurviveASceneRoundTrip()
+    {
+        var go = new GameObject("Baked");
+        go.AddComponent<MeshRenderer>();
+        Scene scene = LoadSceneWith(go);
+
+        scene.BakedLighting.Placements[go.Identifier] = new Scene.LightmapPlacement
+        {
+            Index = 3,
+            ScaleOffset = new Float4(0.5f, 0.5f, 0.25f, 0.75f)
+        };
+
+        var reloaded = Serializer.Deserialize<Scene>(Serializer.Serialize(typeof(object), scene)!)!;
+        try
+        {
+            GameObject restored = reloaded.RootObjects.First(o => o.Name == "Baked");
+            Scene.LightmapPlacement placement = Assert.NotNull(reloaded.BakedLighting.PlacementFor(restored.Identifier));
+
+            Assert.Equal(3, placement.Index);
+            Assert.Equal(0.25, placement.ScaleOffset.Z, 3);
+        }
+        finally { reloaded.Dispose(); }
+    }
+
+    [Fact]
+    public void BakingAPrefabInstance_RecordsNoOverride_AndSurvivesARefresh()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<MeshRenderer>();
+        Guid guid = CreatePrefabAsset(root, "Baked.prefab");
+
+        GameObject a = Inst(guid);
+        GameObject b = Inst(guid);
+        Scene scene = LoadSceneWith(a, b);
+
+        // What a bake writes now: one placement per baked object, on the scene.
+        scene.BakedLighting.Placements[a.Identifier] = new Scene.LightmapPlacement { Index = 3, ScaleOffset = new Float4(1, 1, 0, 0) };
+        scene.BakedLighting.Placements[b.Identifier] = new Scene.LightmapPlacement { Index = 7, ScaleOffset = new Float4(1, 1, 0, 0) };
+
+        PrefabUtility.ReconcileOpenScene();
+
+        // The prefab has no say in it, so there is nothing to record and nothing to hand to anyone else.
+        Assert.Empty(a.PrefabOverrides);
+        Assert.Empty(b.PrefabOverrides);
+
+        PrefabUtility.RefreshAllInstances(guid);
+        Assert.Equal(3, scene.BakedLighting.PlacementFor(a.Identifier)!.Value.Index);
+        Assert.Equal(7, scene.BakedLighting.PlacementFor(b.Identifier)!.Value.Index);
+
+        // And applying one instance cannot carry its lighting into the prefab.
+        PrefabUtility.ApplyOverrides(a);
+        Assert.Equal(7, scene.BakedLighting.PlacementFor(b.Identifier)!.Value.Index);
+    }
+
+    [Fact]
+    public void ClearingBakedLighting_DropsEveryPlacement()
+    {
+        var go = new GameObject("Baked");
+        Scene scene = LoadSceneWith(go);
+
+        scene.BakedLighting.Placements[go.Identifier] = new Scene.LightmapPlacement { Index = 1, ScaleOffset = new Float4(1, 1, 0, 0) };
+        scene.BakedLighting.Lightmaps.Add(default);
+
+        scene.BakedLighting.ClearLightmaps();
+
+        Assert.Empty(scene.BakedLighting.Placements);
+        Assert.False(scene.BakedLighting.HasLightmaps);
+        Assert.Null(scene.BakedLighting.PlacementFor(go.Identifier));
+    }
+
+    #endregion
+
+    #region Where a component came from travels with the component
+
+    [Fact]
+    public void ComponentSourceIdentities_SurviveASceneRoundTrip()
+    {
+        Guid guid = MakeNestedPrefab("CompIdRoundTrip.prefab");
+        GameObject instance = Inst(guid);
+        LoadSceneWith(instance);
+
+        Guid rootSource = instance.GetComponent<OverrideComp>()!.SourceIdentifier;
+        Guid childSource = instance.Children[0].GetComponent<OverrideComp>()!.SourceIdentifier;
+        Assert.NotEqual(Guid.Empty, rootSource);
+
+        EchoObject saved = Serializer.Serialize(typeof(object), Scene.Current!)!;
+        var reloaded = Serializer.Deserialize<Scene>(saved)!;
+        try
+        {
+            GameObject restored = reloaded.RootObjects.First(go => go.PrefabAssetId == guid);
+
+            Assert.Equal(rootSource, restored.GetComponent<OverrideComp>()!.SourceIdentifier);
+            Assert.Equal(childSource, restored.Children[0].GetComponent<OverrideComp>()!.SourceIdentifier);
+
+            // Which is what keeps an override addressable across the round trip.
+            Assert.Equal(rootSource, restored.GetComponentSourceIdentifier(restored.GetComponent<OverrideComp>()!));
+        }
+        finally { reloaded.Dispose(); }
+    }
+
+    [Fact]
+    public void AComponentOnAnOrdinaryObject_WritesNothingAboutPrefabs()
+    {
+        var plain = new GameObject("Plain");
+        plain.AddComponent<OverrideComp>();
+
+        string text = Serializer.Serialize(typeof(object), plain)!.WriteToString();
+
+        Assert.DoesNotContain("_prefabTemplateIdentity", text);
+    }
+
+    [Fact]
+    public void CopyingAComponentIdentityOntoACopy_TravelsWithTheComponent()
+    {
+        Guid guid = MakeNestedPrefab("CompIdClone.prefab");
+        GameObject instance = Inst(guid);
+        LoadSceneWith(instance);
+
+        Guid source = instance.GetComponent<OverrideComp>()!.SourceIdentifier;
+
+        // A copy of the whole instance is another instance, so its components say the same thing.
+        GameObject dupe = GameObjectClipboard.Duplicate([instance])[0];
+        Assert.Equal(source, dupe.GetComponent<OverrideComp>()!.SourceIdentifier);
+        Assert.NotEqual(instance.GetComponent<OverrideComp>()!.Identifier,
+                        dupe.GetComponent<OverrideComp>()!.Identifier);
+
+        // A copy of part of one is not, so its components say nothing.
+        GameObject childCopy = GameObjectClipboard.Duplicate([instance.Children[0]])[0];
+        Assert.Equal(Guid.Empty, childCopy.GetComponent<OverrideComp>()!.SourceIdentifier);
+    }
+
+    #endregion
+
+    #region A prefab cannot contain another prefab
+
+    [Fact]
+    public void DroppingAPrefabIntoAPrefabSession_KeepsItsContentsAndDropsTheLink()
+    {
+        Guid inner = MakeNestedPrefab("DropInner.prefab");
+        GameObject spawned = Inst(inner);
+
+        PrefabUtility.DropPrefabLink(spawned);
+
+        Assert.False(spawned.IsPrefabInstance);
+        Assert.Equal(Guid.Empty, spawned.PrefabAssetId);
+        Assert.All(spawned.Children, c => Assert.False(c.IsPrefabInstance));
+
+        // The contents are still there, which is the point of flattening rather than refusing.
+        Assert.Single(spawned.Children);
+        Assert.Equal(2, spawned.Children[0].GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void AnImportDuringAPrefabSession_DropsTheCachedSourceWithoutRefreshing()
+    {
+        Guid guid = MakePrefab(1, 1, "SessionImport.prefab");
+        LoadSceneWith(new GameObject("OriginalSceneObject"));
+
+        PrefabEditingMode.Enter(guid);
+        Scene.ProcessPendingLoad();
+
+        // What saving during a session does: rewrite the asset and reimport it.
+        GameObject edited = Scene.Current!.RootObjects.First(go => go.Name == "Root");
+        edited.GetComponent<OverrideComp>()!.A = 8;
+        Assert.True(PrefabEditingMode.Save());
+
+        // The session's scene holds the prefab itself, so there was nothing to refresh, and the
+        // comparison baseline now reflects what was just written.
+        Assert.Equal(8, Inst(guid).GetComponent<OverrideComp>()!.A);
+
+        PrefabEditingMode.Exit();
+        Scene.ProcessPendingLoad();
+    }
+
+    #endregion
+
     #region A copy of part of an instance is not part of an instance
 
     [Fact]
@@ -5069,9 +5310,8 @@ public class PrefabTests : EditorTestHarness
         Guid guid = MakeNestedPrefab("NoDeadEntries.prefab");
         GameObject instance = Inst(guid);
 
-        // One entry per component it actually has, not one per component plus the asset's own copy.
-        int components = instance.GetComponents<MonoBehaviour>().Count();
-        Assert.Equal(components, instance.PrefabLink!.ComponentSources.Count);
+        // Every component says where it came from, and none of them is left saying nothing.
+        Assert.All(instance.GetComponents<MonoBehaviour>(), c => Assert.NotEqual(Guid.Empty, c.SourceIdentifier));
     }
 
     #endregion
