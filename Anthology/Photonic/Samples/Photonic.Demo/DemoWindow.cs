@@ -37,7 +37,7 @@ internal sealed class DemoWindow : GameWindow
     // Re-upload queue for models whose Baked* arrays changed (e.g. UV1 strategy switched). UI
     // thread drains and pushes fresh vertex data to the existing GPU resources.
     private readonly System.Collections.Concurrent.ConcurrentQueue<SceneModel> _pendingReupload = new();
-    private bool _wantInitialSponzaLoad = true;
+    private bool _wantInitialSceneLoad = true;
 
     // ---- bake state -------------------------------------------------------------------------
     private LightmapBaker? _baker;
@@ -117,18 +117,10 @@ internal sealed class DemoWindow : GameWindow
         base.OnRenderFrame(args);
 
         // Default-scene bootstrap on the first rendered frame so the GL context + ImGui are alive.
-        if (_wantInitialSponzaLoad)
+        if (_wantInitialSceneLoad)
         {
-            _wantInitialSponzaLoad = false;
-            BeginImportInBackground(SponzaPath, UV1Strategy.AutoUnwrap, isDefaultScene: true);
-            // Spawn the default sun.
-            _scene.AddLight(new SceneLight
-            {
-                Name = "Sun",
-                Kind = SceneLightKind.Directional,
-                Direction = new System.Numerics.Vector3(-0.5f, -1f, -0.3f),
-                Color = new System.Numerics.Vector3(3f, 2.8f, 2.4f),
-            });
+            _wantInitialSceneLoad = false;
+            LoadTestScene();
         }
 
         // Drain any newly-imported models (single-threaded scene mutation on the UI thread).
@@ -188,6 +180,7 @@ internal sealed class DemoWindow : GameWindow
         if (ImGui.BeginMenu("File"))
         {
             if (ImGui.MenuItem("Import Model..."))           { OpenImportDialog(); }
+            if (ImGui.MenuItem("Load Procedural Test Scene")) { LoadTestScene(); }
             if (ImGui.MenuItem("Load Bundled Sponza"))        { BeginImportInBackground(SponzaPath, UV1Strategy.AutoUnwrap, isDefaultScene: false); }
             ImGui.Separator();
             if (ImGui.MenuItem("Clear Scene"))                { ClearScene(); }
@@ -508,6 +501,29 @@ internal sealed class DemoWindow : GameWindow
                 _status = $"UV1 regen failed: {ex.Message}";
             }
         });
+    }
+
+    /// <summary>Replace the scene with the procedural shape scene. Generation is fast enough to run inline on the UI thread.</summary>
+    private void LoadTestScene()
+    {
+        ClearScene();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (models, lights) = TestScene.Build();
+        foreach (var sm in models)
+        {
+            UV1Generator.Bake(sm);
+            _scene.AddModel(sm);
+            _renderer!.UploadModel(sm);
+        }
+        foreach (var l in lights) _scene.AddLight(l);
+        _scene.Selection = SceneSelection.None;
+        _skyColor = new System.Numerics.Vector3(0.10f, 0.13f, 0.18f);
+        _atlasPageSize = 1024;
+        _texelsPerWorldUnit = 24f;
+
+        int tris = 0;
+        foreach (var sm in models) tris += sm.BakedIndices.Length / 3;
+        _status = $"Test scene: {models.Count} models, {tris} tris, {lights.Count} lights ({sw.ElapsedMilliseconds} ms).";
     }
 
     private void AddLightOfKind(SceneLightKind k)

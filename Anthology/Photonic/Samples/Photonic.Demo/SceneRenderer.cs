@@ -32,6 +32,7 @@ internal sealed class SceneRenderer : System.IDisposable
     private readonly int _uLightmap;
     private readonly int _uHasLightmap;
     private readonly int _uHasDiffuse;
+    private readonly int _uBaseColor;
     private readonly int _uDebugMode;
     private readonly int _uBilateral;
     private readonly int _uUVOffset;
@@ -53,6 +54,7 @@ internal sealed class SceneRenderer : System.IDisposable
         _uLightmap    = GL.GetUniformLocation(_program, "uLightmap");
         _uHasLightmap = GL.GetUniformLocation(_program, "uHasLightmap");
         _uHasDiffuse  = GL.GetUniformLocation(_program, "uHasDiffuse");
+        _uBaseColor   = GL.GetUniformLocation(_program, "uBaseColor");
         _uDebugMode   = GL.GetUniformLocation(_program, "uDebugMode");
         _uBilateral   = GL.GetUniformLocation(_program, "uBilateralStrength");
         _uUVOffset    = GL.GetUniformLocation(_program, "uUV1Offset");
@@ -151,12 +153,15 @@ internal sealed class SceneRenderer : System.IDisposable
             sourceToGl[i] = tex;
         }
         var matDiffuse = new int[src.Materials.Length];
+        var matColor = new Float3[src.Materials.Length];
         for (int m = 0; m < src.Materials.Length; m++)
         {
             int ti = src.Materials[m].DiffuseTextureIndex;
             matDiffuse[m] = (ti >= 0 && ti < sourceToGl.Length) ? sourceToGl[ti] : 0;
+            matColor[m] = src.Materials[m].BaseColor;
         }
         g.MaterialDiffuseTex = matDiffuse;
+        g.MaterialColor = matColor;
         g.OwnedTextures = sourceToGl; // for Dispose to clean up
     }
 
@@ -246,6 +251,9 @@ internal sealed class SceneRenderer : System.IDisposable
                 var sub = g.SubMeshes[s];
                 int diff = (sub.MaterialIndex >= 0 && sub.MaterialIndex < g.MaterialDiffuseTex.Length)
                     ? g.MaterialDiffuseTex[sub.MaterialIndex] : 0;
+                var baseColor = (sub.MaterialIndex >= 0 && sub.MaterialIndex < g.MaterialColor.Length)
+                    ? g.MaterialColor[sub.MaterialIndex] : Float3.One;
+                GL.Uniform3(_uBaseColor, baseColor.X, baseColor.Y, baseColor.Z);
                 GL.ActiveTexture(TextureUnit.Texture0);
                 GL.BindTexture(TextureTarget.Texture2D, diff != 0 ? diff : _white1x1);
                 GL.Uniform1(_uDiffuse, 0);
@@ -306,6 +314,7 @@ internal sealed class SceneRenderer : System.IDisposable
         public int IndexCount;
         public LoadedModel.SubMeshSlice[] SubMeshes = System.Array.Empty<LoadedModel.SubMeshSlice>();
         public int[] MaterialDiffuseTex = System.Array.Empty<int>();
+        public Float3[] MaterialColor = System.Array.Empty<Float3>();
         public int[] OwnedTextures = System.Array.Empty<int>();
     }
 
@@ -337,6 +346,7 @@ uniform sampler2D uLightmap;
 uniform float uExposure;
 uniform int uHasLightmap;
 uniform int uHasDiffuse;
+uniform vec3 uBaseColor;
 uniform int uDebugMode;
 uniform float uBilateralStrength;
 out vec4 fragColor;
@@ -383,7 +393,7 @@ void main(){
         fragColor = vec4(0.0, 1.0, 0.4, 1.0); return;
     }
 
-    vec3 albedo = uHasDiffuse == 1 ? texture(uDiffuse, vUV0).rgb : vec3(0.7);
+    vec3 albedo = (uHasDiffuse == 1 ? texture(uDiffuse, vUV0).rgb : vec3(1.0)) * uBaseColor;
     if (uHasLightmap == 1) {
         vec3 light = sampleLightmap(vUV1) * uExposure;
         vec3 col = albedo * light;
