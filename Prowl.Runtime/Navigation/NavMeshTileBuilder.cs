@@ -1,0 +1,410 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+
+using Prowl.Recast.Core;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.TileCache;
+using Prowl.Recast.Detour.TileCache.Io.Compress;
+using Prowl.Recast;
+using Prowl.Recast.Geom;
+
+using Prowl.Vector;
+
+namespace Prowl.Runtime;
+
+/// <summary>
+/// Turns one Recast build result into a serialized Detour tile. Poly areas are preserved
+/// as-is (they already carry the Prowl area mapping from
+/// <see cref="ProwlInputGeomProvider.DetourAreaFor"/>) and every polygon gets the walkable
+/// flag, since inclusion/exclusion is the query filter's job.
+/// </summary>
+internal static class NavMeshTileBuilder
+{
+    /// <summary>The single poly flag Prowl sets on every built polygon. Detour ignores polys
+    /// with zero flags, so something must be set; area-based filtering happens in
+    /// <see cref="NavMeshQueryFilter"/> against the poly's area, not its flags.</summary>
+    public const int PolyFlagWalkable = 1;
+
+    /// <summary>Vertices per navmesh polygon. Fixed, not a setting: the TileCache builds its
+    /// polygons at Detour's maximum and the navmesh must be initialized to match.</summary>
+    public const int VertsPerPoly = 6;
+
+    /// <summary>
+    /// Reusable bake state. Tile building allocates a fixed working set per tile (heightfield
+    /// spans, context bookkeeping) regardless of geometry; recycling it across tiles removes that
+    /// churn from bake-heavy games (destructible maps rebuild tiles at gameplay frequency).
+    /// </summary>
+    internal sealed class TileBuildScratch
+    {
+        public readonly RcContext Context = new();
+        /// <summary>Recycled span pool pages, transplanted into each tile's heightfield. Grows
+        /// to the largest tile's span count, then no span is ever allocated again.</summary>
+        public RcSpanPool? SpanPools;
+    }
+
+    /// <summary>
+    /// Fallback scratch for callers that supply none — runtime tile rebuilds, which stay on the
+    /// main thread and want their pages warm between frames. Parallel bakes pass their own: a
+    /// thread-static set on a pool thread outlives the bake by the life of that thread.
+    /// </summary>
+    [ThreadStatic] private static TileBuildScratch? t_scratch;
+
+    /// <summary>Chunk lists per area mesh overlapping this tile (parallel to
+    /// <see cref="ProwlInputGeomProvider.AreaMeshes"/>), or null when nothing overlaps —
+    /// collected once and shared by the empty-tile check and the rasterization pass.</summary>
+    private static List<RcChunkyTriMeshNode>[]? CollectOverlappingChunks(ProwlInputGeomProvider geom, RcBuilderConfig builderCfg)
+    {
+        var tileMin = new RcVec2f(builderCfg.bmin.X, builderCfg.bmin.Z);
+        var tileMax = new RcVec2f(builderCfg.bmax.X, builderCfg.bmax.Z);
+
+        // Cheap pre-pass: on bounded bakes most tiles miss every area's XZ extent entirely,
+        // and this rejects them with zero allocations (GetChunksOverlappingRect allocates its
+        // return list even when empty).
+        bool anyPossible = false;
+        for (int i = 0; i < geom.AreaMeshes.Count; i++)
+        {
+            if (geom.AreaMeshes[i].OverlapsXZ(tileMin.X, tileMin.Y, tileMax.X, tileMax.Y))
+            {
+                anyPossible = true;
+                break;
+            }
+        }
+        if (!anyPossible)
+            return null;
+
+        var chunks = new List<RcChunkyTriMeshNode>[geom.AreaMeshes.Count];
+        bool any = false;
+        for (int i = 0; i < geom.AreaMeshes.Count; i++)
+        {
+            chunks[i] = geom.AreaMeshes[i].Mesh.GetChunksOverlappingRect(tileMin, tileMax);
+            any |= chunks[i].Count > 0;
+        }
+        return any ? chunks : null;
+    }
+
+    private static RcHeightfield BuildHeightfieldPooled(ProwlInputGeomProvider geom, RcBuilderConfig builderCfg,
+        List<RcChunkyTriMeshNode>[]? overlappingChunks, TileBuildScratch scratch)
+    {
+        RcConfig cfg = builderCfg.cfg;
+        var solid = new RcHeightfield(builderCfg.width, builderCfg.height, builderCfg.bmin, builderCfg.bmax, cfg.Cs, cfg.Ch, cfg.BorderSize);
+
+        // Attach recycled span pool pages: every span in them is free (the previous tile's
+        // heightfield was discarded), so the freelist is simply all of them.
+        if (scratch.SpanPools != null)
+            RcRasterizations.AdoptSpanPools(solid, scratch.SpanPools);
+
+        if (overlappingChunks == null)
+            return solid;
+
+        float walkableSlopeCos = MathF.Cos(cfg.WalkableSlopeAngle / 180.0f * MathF.PI);
+        for (int i = 0; i < geom.AreaMeshes.Count; i++)
+        {
+            ProwlInputGeomProvider.AreaMesh areaMesh = geom.AreaMeshes[i];
+            float[] verts = areaMesh.Mesh.GetVerts();
+            // Chunky-mesh culling: only triangles overlapping this tile (plus border) rasterize.
+            foreach (RcChunkyTriMeshNode node in overlappingChunks[i])
+            {
+                RcRasterizations.RasterizeTriangles(scratch.Context, verts, node.tris, node.tris.Length / 3,
+                    walkableSlopeCos, areaMesh.DetourArea, solid, cfg.WalkableClimb);
+            }
+        }
+
+        return solid;
+    }
+
+    /// <summary>
+    /// Build one tile's compressed layers: area-aware pooled rasterization, the standard
+    /// filter + compact + erode + volume-marking steps, then heightfield layers compressed into
+    /// self-describing blobs. Returns an empty list for tiles no geometry overlaps — the common
+    /// case on bounded bakes of mostly-sealed worlds — without paying for a heightfield.
+    /// Contours/polymeshes are NOT built here — the TileCache builds them per tile at runtime,
+    /// which is what lets obstacles re-carve without re-voxelizing.
+    /// </summary>
+    /// <param name="reusable">Scratch to build through, so its span pages survive into the next
+    /// tile. Null shares the calling thread's.</param>
+    public static List<byte[]> BuildTileLayers(ProwlInputGeomProvider geom, RcConfig cfg, RcVec3f bmin, RcVec3f bmax,
+        int tileX, int tileZ, TileBuildScratch? reusable = null)
+    {
+        var builderCfg = new RcBuilderConfig(cfg, bmin, bmax, tileX, tileZ);
+
+        List<RcChunkyTriMeshNode>[]? overlappingChunks = CollectOverlappingChunks(geom, builderCfg);
+        if (overlappingChunks == null)
+            return [];
+
+        TileBuildScratch scratch = reusable ?? (t_scratch ??= new TileBuildScratch());
+        RcHeightfield solid = BuildHeightfieldPooled(geom, builderCfg, overlappingChunks, scratch);
+        RcContext ctx = scratch.Context;
+
+        // Filter + compact + erode + convex volumes: the same steps RcBuilder runs before
+        // region building, applied here because the layer path bypasses RcBuilder.Build.
+        if (cfg.FilterLowHangingObstacles)
+            RcFilters.FilterLowHangingWalkableObstacles(ctx, cfg.WalkableClimb, solid);
+        if (cfg.FilterLedgeSpans)
+            RcFilters.FilterLedgeSpans(ctx, cfg.WalkableHeight, cfg.WalkableClimb, solid);
+        if (cfg.FilterWalkableLowHeightSpans)
+            RcFilters.FilterWalkableLowHeightSpans(ctx, cfg.WalkableHeight, solid);
+
+        RcCompactHeightfield chf = RcCompacts.BuildCompactHeightfield(ctx, cfg.WalkableHeight, cfg.WalkableClimb, solid);
+
+        // Not Walkable rasterizes as a sentinel area so span merging cannot discard it; retire it
+        // here, before erosion, so agents keep their radius clear of it like any other wall.
+        for (int i = 0; i < chf.spanCount; i++)
+            if (chf.areas[i] == ProwlInputGeomProvider.NotWalkableRasterArea)
+                chf.areas[i] = RcRecast.RC_NULL_AREA;
+
+        RcAreas.ErodeWalkableArea(ctx, cfg.WalkableRadius, chf);
+        foreach (RcConvexVolume vol in geom.ConvexVolumes())
+            RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
+
+        // Cull islands too small to stand on (Unity's Min Region Area). Regions are built here
+        // only to find the spans to erase — BuildRegions zeroes the region id of anything it
+        // culled, and erasing those spans' areas keeps them out of the compressed layer for
+        // good. Regions reaching a tile border are exempt, so an island spanning two tiles
+        // survives in both.
+        if (cfg.MinRegionArea > 0)
+        {
+            // BuildLayerRegions, not the watershed pair: it's what Recast intends for layer
+            // builds, skips watershed's expensive distance-field step, and zeroes culled region
+            // ids the same way — all the sweep below reads.
+            RcRegions.BuildLayerRegions(ctx, chf, cfg.MinRegionArea);
+            for (int i = 0; i < chf.spanCount; i++)
+                if (chf.spans[i].reg == 0)
+                    chf.areas[i] = RcRecast.RC_NULL_AREA;
+        }
+
+        RcLayers.BuildHeightfieldLayers(ctx, chf, cfg.BorderSize, cfg.WalkableHeight, out RcHeightfieldLayerSet lset);
+
+        // Keep the (possibly grown) pool pages for the next tile on this thread.
+        scratch.SpanPools = solid.pools;
+
+        var blobs = new List<byte[]>();
+        if (lset == null) return blobs;
+
+        // Compatibility index 0 = the built-in FastLZ compressor; other indices return null
+        // unless a custom compressor was registered. Must stay paired with the
+        // cCompatibility: true storage layout below and in CreateTileCache.
+        IRcCompressor compressor = DtTileCacheCompressorFactory.Shared.Create(0);
+        for (int i = 0; i < lset.layers.Length; i++)
+        {
+            RcHeightfieldLayer layer = lset.layers[i];
+            var header = new DtTileCacheLayerHeader
+            {
+                magic = DtTileCacheLayerHeader.DT_TILECACHE_MAGIC,
+                version = DtTileCacheLayerHeader.DT_TILECACHE_VERSION,
+                tx = tileX,
+                ty = tileZ,
+                tlayer = i,
+                bmin = layer.bmin,
+                bmax = layer.bmax,
+                width = layer.width,
+                height = layer.height,
+                minx = layer.minx,
+                maxx = layer.maxx,
+                miny = layer.miny,
+                maxy = layer.maxy,
+                hmin = layer.hmin,
+                hmax = layer.hmax,
+            };
+            blobs.Add(DtTileCacheBuilder.CompressTileCacheLayer(header, layer.heights, layer.areas, layer.cons,
+                RcByteOrder.LITTLE_ENDIAN, cCompatibility: true, compressor));
+        }
+        return blobs;
+    }
+
+    /// <summary>
+    /// Poly finishing for cache-built tiles: every polygon gets the walkable flag —
+    /// inclusion/exclusion is the query filter's job, and areas already carry the Prowl mapping
+    /// from the baked layers.
+    /// <para/>
+    /// This is also where the navmesh gets its off-mesh links. The cache re-contours a whole
+    /// tile whenever an obstacle carves or a region regenerates, discarding anything previously
+    /// built into it, so connections cannot be baked in once — they are re-supplied here on
+    /// every tile build, and Detour keeps only those whose start point lands in the tile.
+    /// </summary>
+    public sealed class ProwlTileCacheMeshProcess : IDtTileCacheMeshProcess
+    {
+        private readonly List<(Float3 Start, Float3 End, float Radius, bool Bidirectional, int Area, int UserId)> _connections = [];
+
+        /// <summary>
+        /// Replace the link set future tile builds inject. Call under the instance's write lock,
+        /// then rebuild the tiles that should carry the change.
+        /// </summary>
+        public void SetLinks(IReadOnlyList<NavMeshLinkSource>? links, float agentRadius)
+        {
+            _connections.Clear();
+
+            if (links == null || links.Count == 0) return;
+
+            float radius = Math.Max(0.01f, agentRadius);
+            List<(Float3 Start, Float3 End)> crossings = [];
+
+            foreach (NavMeshLinkSource link in links)
+            {
+                crossings.Clear();
+                link.ExpandCrossings(radius, crossings);
+                foreach ((Float3 start, Float3 end) in crossings)
+                    _connections.Add((start, end, radius, link.Bidirectional,
+                        ProwlInputGeomProvider.DetourAreaFor(link.Area), link.UserId));
+            }
+        }
+
+        public void Process(DtNavMeshCreateParams option)
+        {
+            for (int i = 0; i < option.polyCount; i++)
+                option.polyFlags[i] = PolyFlagWalkable;
+
+            if (_connections.Count == 0) return;
+
+            // Detour keeps only connections whose start point lies in the tile (an XZ test,
+            // widened by each connection's radius). Counted first so the six output arrays can
+            // be sized exactly, then filled in a second pass — cheaper than collecting matches
+            // into a list first.
+            int count = 0;
+            for (int i = 0; i < _connections.Count; i++)
+                if (StartsInTile(_connections[i], option)) count++;
+            if (count == 0) return;
+
+            option.offMeshConCount = count;
+            option.offMeshConVerts = new float[count * 6];
+            option.offMeshConRad = new float[count];
+            option.offMeshConDir = new int[count];
+            option.offMeshConAreas = new int[count];
+            option.offMeshConFlags = new int[count];
+            option.offMeshConUserID = new int[count];
+            int w = 0;
+            for (int i = 0; i < _connections.Count; i++)
+            {
+                if (!StartsInTile(_connections[i], option)) continue;
+                (Float3 start, Float3 end, float radius, bool bidir, int area, int userId) = _connections[i];
+                option.offMeshConVerts[6 * w + 0] = (float)start.X;
+                option.offMeshConVerts[6 * w + 1] = (float)start.Y;
+                option.offMeshConVerts[6 * w + 2] = (float)start.Z;
+                option.offMeshConVerts[6 * w + 3] = (float)end.X;
+                option.offMeshConVerts[6 * w + 4] = (float)end.Y;
+                option.offMeshConVerts[6 * w + 5] = (float)end.Z;
+                option.offMeshConRad[w] = radius;
+                option.offMeshConDir[w] = bidir ? 1 : 0;
+                option.offMeshConAreas[w] = area;
+                option.offMeshConFlags[w] = PolyFlagWalkable;
+                option.offMeshConUserID[w] = userId;
+                w++;
+            }
+        }
+
+        private static bool StartsInTile(
+            (Float3 Start, Float3 End, float Radius, bool Bidirectional, int Area, int UserId) connection,
+            DtNavMeshCreateParams option)
+        {
+            float margin = connection.Radius;
+            return connection.Start.X >= option.bmin.X - margin && connection.Start.X <= option.bmax.X + margin
+                && connection.Start.Z >= option.bmin.Z - margin && connection.Start.Z <= option.bmax.Z + margin;
+        }
+    }
+
+    /// <summary>Create the DtTileCache wrapping a navmesh (unseeded — the caller adds the layer
+    /// blobs), with the asset's links loaded into the mesh process so every tile it builds
+    /// carries them.</summary>
+    public static DtTileCache CreateTileCache(NavMeshData data, DtNavMesh navMesh, int maxObstacles)
+        => CreateTileCache(data, navMesh, maxObstacles, out _);
+
+    /// <inheritdoc cref="CreateTileCache(NavMeshData, DtNavMesh, int)"/>
+    /// <param name="meshProcess">The cache's link registry, for keeping the navmesh in step
+    /// with live <see cref="NavMeshLink"/>s after instantiation.</param>
+    public static DtTileCache CreateTileCache(NavMeshData data, DtNavMesh navMesh, int maxObstacles,
+        out ProwlTileCacheMeshProcess meshProcess)
+    {
+        NavMeshBuildSettings settings = data.Settings;
+        var option = new DtTileCacheParams
+        {
+            orig = new RcVec3f((float)data.Origin.X, (float)data.Origin.Y, (float)data.Origin.Z),
+            cs = settings.EffectiveVoxelSize,
+            ch = settings.EffectiveVoxelHeight,
+            width = settings.EffectiveTileSize,
+            height = settings.EffectiveTileSize,
+            walkableHeight = settings.AgentHeight,
+            walkableRadius = settings.AgentRadius,
+            walkableClimb = settings.AgentMaxClimb,
+            maxSimplificationError = settings.EdgeMaxError,
+            // Height detail, so polygons follow the surface instead of spanning flat between their
+            // corners. Recast recommends sampling every six voxels, given here in world units as
+            // the cache expects; zero is how it is told to skip detail, which is what the setting
+            // turns off.
+            detailSampleDist = settings.BuildHeightDetail ? settings.EffectiveVoxelSize * 6 : 0,
+            detailSampleMaxError = settings.EffectiveVoxelHeight,
+            // Watershed partitioning with standard contouring, not the cache's monotone sweep:
+            // avoids sub-voxel ribbon slivers on slopes and keeps holes in regions that enclose
+            // them. The edge cap is loose on purpose — over-splitting floods flat floors with
+            // polygons and gives the crowd extra portal corners to steer around. Area thresholds
+            // are cell counts converted from world units (not Recast's flat default), so voxel
+            // size doesn't change the mesh's character between rebakes.
+            watershedPartition = true,
+            minRegionArea = (int)(settings.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
+            mergeRegionArea = (int)(20f / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
+            maxEdgeLen = 24,
+            // Layer capacity: tiles can stack several vertical layers each, and the baked
+            // layer count is a hard floor.
+            maxTiles = Math.Max(Math.Max(1, data.MaxTiles) * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE, data.CacheLayers.Count),
+            maxObstacles = Math.Max(1, maxObstacles),
+        };
+
+        meshProcess = new ProwlTileCacheMeshProcess();
+        var links = new List<NavMeshLinkSource>(data.Links.Count);
+        foreach (NavMeshData.NavMeshLinkEntry entry in data.Links)
+            links.Add(entry.ToSource());
+        meshProcess.SetLinks(links, data.Settings.AgentRadius);
+
+        // FastLZ + cCompatibility layout, matching how BuildTileLayers compressed the blobs.
+        return new DtTileCache(option, new DtTileCacheStorageParams(RcByteOrder.LITTLE_ENDIAN, true),
+            navMesh, DtTileCacheCompressorFactory.Shared.Create(0), meshProcess);
+    }
+
+    /// <summary>
+    /// Recompute every obstacle's touched-tile list from the cache's CURRENT tiles. Replacing a
+    /// compressed tile bumps its salt, so refs captured when the obstacle was added go stale —
+    /// without this, a regenerated tile would rebuild WITHOUT its carves. Call with the cache
+    /// quiescent (Update() reporting up-to-date). Replicates the private
+    /// QueryTiles/CalcTightTileBounds pair from public API.
+    /// </summary>
+    public static void RefreshObstacleTouchedTiles(DtTileCache cache, NavMeshData data)
+    {
+        float cs = data.Settings.EffectiveVoxelSize;
+        float tw = data.TileWorldSize;
+        if (tw <= 0) return;
+
+        for (int i = 0; i < cache.GetObstacleCount(); i++)
+        {
+            DtTileCacheObstacle ob = cache.GetObstacle(i);
+            if (ob.state != DtObstacleState.DT_OBSTACLE_PROCESSED) continue;
+
+            RcVec3f bmin = default, bmax = default;
+            cache.GetObstacleBounds(ob, ref bmin, ref bmax);
+            ob.touched.Clear();
+
+            int tx0 = (int)MathF.Floor((bmin.X - (float)data.Origin.X) / tw);
+            int tx1 = (int)MathF.Floor((bmax.X - (float)data.Origin.X) / tw);
+            int tz0 = (int)MathF.Floor((bmin.Z - (float)data.Origin.Z) / tw);
+            int tz1 = (int)MathF.Floor((bmax.Z - (float)data.Origin.Z) / tw);
+            for (int tz = tz0; tz <= tz1; tz++)
+            {
+                for (int tx = tx0; tx <= tx1; tx++)
+                {
+                    foreach (long tileRef in cache.GetTilesAt(tx, tz))
+                    {
+                        DtTileCacheLayerHeader? header = cache.GetTileByRef(tileRef)?.header;
+                        if (header == null) continue;
+                        // Tight tile bounds (CalcTightTileBounds is internal upstream).
+                        var tbmin = new RcVec3f(header.bmin.X + header.minx * cs, header.bmin.Y, header.bmin.Z + header.miny * cs);
+                        var tbmax = new RcVec3f(header.bmin.X + (header.maxx + 1) * cs, header.bmax.Y, header.bmin.Z + (header.maxy + 1) * cs);
+                        if (DtUtils.OverlapBounds(bmin, bmax, tbmin, tbmax))
+                            ob.touched.Add(tileRef);
+                    }
+                }
+            }
+        }
+    }
+
+}
