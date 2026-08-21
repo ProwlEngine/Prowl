@@ -17,12 +17,17 @@ namespace Prowl.Photonic.Imaging;
 /// </remarks>
 internal static class Dilate
 {
-    /// <summary>Run dilation in-place. <paramref name="covered"/> marks the already-valid texels.</summary>
-    public static void Run(float[] rgb, bool[] covered, int width, int height, int passes)
+    /// <summary>
+    /// Run dilation in-place. <paramref name="covered"/> marks the already-valid texels and is
+    /// mutated as the lit area grows, so callers that need to keep their own mask pass a copy.
+    /// <paramref name="scratchRGB"/> is borrowed as the per-pass snapshot.
+    /// </summary>
+    public static void Run(float[] rgb, bool[] covered, int width, int height, int passes,
+                           float[] scratchRGB, bool[] scratchCovered)
     {
         if (passes <= 0) return;
-        var tmpRGB = new float[rgb.Length];
-        var tmpCov = new bool[covered.Length];
+        var tmpRGB = scratchRGB;
+        var tmpCov = scratchCovered;
         for (int p = 0; p < passes; p++)
         {
             System.Array.Copy(rgb, tmpRGB, rgb.Length);

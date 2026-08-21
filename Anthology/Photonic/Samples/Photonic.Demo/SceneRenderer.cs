@@ -19,11 +19,14 @@ internal sealed class SceneRenderer : System.IDisposable
         UV1          = 1,
         Coverage     = 2,
         LightmapOnly = 3,
+        SamplePoints = 5,
     }
 
     public DebugMode CurrentDebug { get; set; } = DebugMode.Off;
     public bool WireframeOverlay { get; set; } = false;
     public float BilateralStrength { get; set; } = 0f;
+    /// <summary>Sample the atlas with a 4-tap bicubic instead of a single bilinear tap. Hides the lightmap's resolution and smooths jagged shadow edges.</summary>
+    public bool Bicubic { get; set; } = true;
 
     private readonly int _program;
     private readonly int _uMVP;
@@ -35,6 +38,9 @@ internal sealed class SceneRenderer : System.IDisposable
     private readonly int _uBaseColor;
     private readonly int _uDebugMode;
     private readonly int _uBilateral;
+    private readonly int _uBicubic;
+    private readonly int _uSamplePoints;
+    private readonly int _uHasSamplePoints;
     private readonly int _uUVOffset;
     private readonly int _uUVScale;
     private readonly int _white1x1;
@@ -44,6 +50,8 @@ internal sealed class SceneRenderer : System.IDisposable
     // Atlas textures, indexed in parallel with the bake's LightmapTarget list. _atlas[i] = 0 means
     // "no atlas uploaded yet" (model is shown unlit until the first iteration completes).
     private int[] _atlas = System.Array.Empty<int>();
+    // Parallel to _atlas: the per-texel sampling role published by the bake, for the debug view.
+    private int[] _samplePoints = System.Array.Empty<int>();
 
     public SceneRenderer()
     {
@@ -57,6 +65,9 @@ internal sealed class SceneRenderer : System.IDisposable
         _uBaseColor   = GL.GetUniformLocation(_program, "uBaseColor");
         _uDebugMode   = GL.GetUniformLocation(_program, "uDebugMode");
         _uBilateral   = GL.GetUniformLocation(_program, "uBilateralStrength");
+        _uBicubic     = GL.GetUniformLocation(_program, "uBicubic");
+        _uSamplePoints    = GL.GetUniformLocation(_program, "uSamplePoints");
+        _uHasSamplePoints = GL.GetUniformLocation(_program, "uHasSamplePoints");
         _uUVOffset    = GL.GetUniformLocation(_program, "uUV1Offset");
         _uUVScale     = GL.GetUniformLocation(_program, "uUV1Scale");
 
@@ -185,7 +196,32 @@ internal sealed class SceneRenderer : System.IDisposable
     {
         for (int i = 0; i < _atlas.Length; i++)
             if (_atlas[i] != 0) GL.DeleteTexture(_atlas[i]);
+        for (int i = 0; i < _samplePoints.Length; i++)
+            if (_samplePoints[i] != 0) GL.DeleteTexture(_samplePoints[i]);
         _atlas = new int[count];
+        _samplePoints = new int[count];
+    }
+
+    /// <summary>Upload one page's sampling-role mask. Point sampled: every texel is a distinct answer.</summary>
+    public unsafe void UpdateSamplePoints(int index, int width, int height, System.ReadOnlySpan<byte> roles)
+    {
+        if (index < 0 || index >= _samplePoints.Length || roles.Length < width * height) return;
+        int tex = _samplePoints[index];
+        if (tex == 0)
+        {
+            tex = GL.GenTexture();
+            _samplePoints[index] = tex;
+            GL.BindTexture(TextureTarget.Texture2D, tex);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        }
+        GL.BindTexture(TextureTarget.Texture2D, tex);
+        GL.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+        fixed (byte* p = roles)
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8, width, height, 0,
+                          PixelFormat.Red, PixelType.UnsignedByte, (System.IntPtr)p);
     }
 
     /// <summary>
@@ -224,6 +260,7 @@ internal sealed class SceneRenderer : System.IDisposable
         GL.Uniform1(_uExposure, exposure);
         GL.Uniform1(_uDebugMode, (int)CurrentDebug);
         GL.Uniform1(_uBilateral, BilateralStrength);
+        GL.Uniform1(_uBicubic, Bicubic ? 1 : 0);
         GL.Disable(EnableCap.CullFace);
         GL.Enable(EnableCap.DepthTest);
         GL.Enable(EnableCap.FramebufferSrgb);
@@ -240,6 +277,12 @@ internal sealed class SceneRenderer : System.IDisposable
 
             int atlasTex = sm.AtlasTargetIndex >= 0 ? GetAtlasTexture(sm.AtlasTargetIndex) : 0;
             bool hasLM = atlasTex != 0;
+            int roleTex = sm.AtlasTargetIndex >= 0 && sm.AtlasTargetIndex < _samplePoints.Length
+                ? _samplePoints[sm.AtlasTargetIndex] : 0;
+            GL.ActiveTexture(TextureUnit.Texture2);
+            GL.BindTexture(TextureTarget.Texture2D, roleTex != 0 ? roleTex : _white1x1);
+            GL.Uniform1(_uSamplePoints, 2);
+            GL.Uniform1(_uHasSamplePoints, roleTex != 0 ? 1 : 0);
             GL.ActiveTexture(TextureUnit.Texture1);
             GL.BindTexture(TextureTarget.Texture2D, hasLM ? atlasTex : _white1x1);
             GL.Uniform1(_uLightmap, 1);
@@ -292,6 +335,8 @@ internal sealed class SceneRenderer : System.IDisposable
 
     public void Dispose()
     {
+        for (int i = 0; i < _samplePoints.Length; i++)
+            if (_samplePoints[i] != 0) GL.DeleteTexture(_samplePoints[i]);
         foreach (var kv in _gpu)
         {
             var g = kv.Value;
@@ -343,17 +388,52 @@ in vec2 vUV0;
 in vec2 vUV1;
 uniform sampler2D uDiffuse;
 uniform sampler2D uLightmap;
+uniform sampler2D uSamplePoints;
+uniform int uHasSamplePoints;
 uniform float uExposure;
 uniform int uHasLightmap;
 uniform int uHasDiffuse;
 uniform vec3 uBaseColor;
 uniform int uDebugMode;
 uniform float uBilateralStrength;
+uniform int uBicubic;
 out vec4 fragColor;
 
+// B-spline bicubic built from 4 bilinear taps: the lightmap is low resolution by design, and a
+// single bilinear tap makes that obvious as blocky, jagged shadow edges. The kernel spans texels
+// i-1 to i+2, so it reads up to two texels past the fragment and needs BakeOptions.DilatePixels
+// to be at least 2 or it will sample texels the bake never wrote.
+vec3 bicubicLightmap(vec2 uv) {
+    vec2 texSize = vec2(textureSize(uLightmap, 0));
+    vec2 coord = uv * texSize - 0.5;
+    vec2 base = floor(coord);
+    vec2 f = coord - base;
+
+    vec2 w0 = (1.0 / 6.0) * (((-f + 3.0) * f - 3.0) * f + 1.0);
+    vec2 w1 = (1.0 / 6.0) * ((3.0 * f - 6.0) * f * f + 4.0);
+    vec2 w2 = (1.0 / 6.0) * (((-3.0 * f + 3.0) * f + 3.0) * f + 1.0);
+    vec2 w3 = (1.0 / 6.0) * (f * f * f);
+
+    vec2 g0 = w0 + w1;
+    vec2 g1 = w2 + w3;
+    vec2 h0 = (base - 0.5 + w1 / g0) / texSize;
+    vec2 h1 = (base + 1.5 + w3 / g1) / texSize;
+
+    vec3 row0 = mix(texture(uLightmap, vec2(h1.x, h0.y)).rgb, texture(uLightmap, vec2(h0.x, h0.y)).rgb, g0.x);
+    vec3 row1 = mix(texture(uLightmap, vec2(h1.x, h1.y)).rgb, texture(uLightmap, vec2(h0.x, h1.y)).rgb, g0.x);
+    return mix(row1, row0, g0.y);
+}
+
+vec3 fetchLightmap(vec2 uv) {
+    return uBicubic == 1 ? bicubicLightmap(uv) : texture(uLightmap, uv).rgb;
+}
+
 vec3 sampleLightmap(vec2 uv) {
+    if (uBilateralStrength <= 0.0) return fetchLightmap(uv);
+
+    // The bilateral pass works on the texel grid, so it reads raw taps throughout rather than
+    // mixing a bicubic centre with bilinear neighbours.
     vec3 center = texture(uLightmap, uv).rgb;
-    if (uBilateralStrength <= 0.0) return center;
     float centerLum = dot(center, vec3(0.2126, 0.7152, 0.0722));
     vec2 ts = 1.0 / vec2(textureSize(uLightmap, 0));
     vec3 acc = center;
@@ -391,6 +471,20 @@ void main(){
     }
     if (uDebugMode == 4) {
         fragColor = vec4(0.0, 1.0, 0.4, 1.0); return;
+    }
+    if (uDebugMode == 5) {
+        // Blue means the mask never arrived, which is a different problem from every texel being
+        // interpolated and should not look the same.
+        if (uHasSamplePoints == 0) { fragColor = vec4(0.1, 0.15, 0.5, 1.0); return; }
+
+        int role = int(texture(uSamplePoints, vUV1).r * 255.0 + 0.5);
+        vec3 lm = uHasLightmap == 1 ? texture(uLightmap, vUV1).rgb : vec3(0.0);
+        lm = lm * uExposure; lm = lm / (vec3(1.0) + lm);
+        float shape = 0.25 + 0.35 * dot(lm, vec3(0.2126, 0.7152, 0.0722));
+        vec3 col = vec3(shape);                              // interpolated: shaded grey
+        if (role == 2) col = vec3(0.1, 1.0, 0.3);            // traced, open surface
+        else if (role == 3) col = vec3(1.0, 0.25, 0.1);      // traced, on a contact
+        fragColor = vec4(col, 1.0); return;
     }
 
     vec3 albedo = (uHasDiffuse == 1 ? texture(uDiffuse, vUV0).rgb : vec3(1.0)) * uBaseColor;

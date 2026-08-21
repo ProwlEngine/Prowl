@@ -42,6 +42,7 @@ internal sealed class DemoWindow : GameWindow
     // ---- bake state -------------------------------------------------------------------------
     private LightmapBaker? _baker;
     private int _lastUploadedIter = -1;
+    private bool _samplePointsUploaded = false;
     private string _status = "Ready.";
     private bool _bakeRequested = false;
 
@@ -55,6 +56,15 @@ internal sealed class DemoWindow : GameWindow
     private bool _useHemisphereLUT = true;
     private bool _ignoreAlbedo = false;
     private bool _includeDirectLighting = true;
+    private int _sparseStride = 1;
+    private bool _sparseIncludesDirect = false;
+    private float _sparseContactWidth = 2f;
+    private int _sparseContactStride = 0;
+    private bool _fixShadowLeaks = true;
+    private bool _smoothShadowTerminator = true;
+    private bool _fixSeams = true;
+    private int _seamFixPasses = 4;
+    private bool _bicubicLightmap = true;
 
     // ---- display / debug knobs --------------------------------------------------------------
     private System.Numerics.Vector3 _skyColor = new(0.02f, 0.02f, 0.03f);
@@ -120,7 +130,7 @@ internal sealed class DemoWindow : GameWindow
         if (_wantInitialSceneLoad)
         {
             _wantInitialSceneLoad = false;
-            LoadTestScene();
+            LoadTestScene(UV1Strategy.AutoUnwrap);
         }
 
         // Drain any newly-imported models (single-threaded scene mutation on the UI thread).
@@ -151,7 +161,11 @@ internal sealed class DemoWindow : GameWindow
 
         if (_renderer is not null)
         {
-            _renderer.CurrentDebug = (SceneRenderer.DebugMode)_debugViewIdx;
+            // The sample-point view is mode 5 in the shader; 4 is reserved for the wireframe overlay.
+            _renderer.CurrentDebug = _debugViewIdx == 4
+                ? SceneRenderer.DebugMode.SamplePoints
+                : (SceneRenderer.DebugMode)_debugViewIdx;
+            _renderer.Bicubic = _bicubicLightmap;
             _renderer.WireframeOverlay = _wireframe;
             _renderer.BilateralStrength = _bilateral;
             _renderer.Render(_scene, view, proj, _exposure);
@@ -180,7 +194,8 @@ internal sealed class DemoWindow : GameWindow
         if (ImGui.BeginMenu("File"))
         {
             if (ImGui.MenuItem("Import Model..."))           { OpenImportDialog(); }
-            if (ImGui.MenuItem("Load Procedural Test Scene")) { LoadTestScene(); }
+            if (ImGui.MenuItem("Load Procedural Test Scene")) { LoadTestScene(UV1Strategy.AutoUnwrap); }
+            if (ImGui.MenuItem("Load Test Scene (built-in UVs)")) { LoadTestScene(UV1Strategy.UseExisting); }
             if (ImGui.MenuItem("Load Bundled Sponza"))        { BeginImportInBackground(SponzaPath, UV1Strategy.AutoUnwrap, isDefaultScene: false); }
             ImGui.Separator();
             if (ImGui.MenuItem("Clear Scene"))                { ClearScene(); }
@@ -337,7 +352,9 @@ internal sealed class DemoWindow : GameWindow
         ImGui.SliderFloat("Display exposure", ref _exposure, 0.1f, 8f);
         ImGui.SliderFloat("Bilateral denoise", ref _bilateral, 0f, 4f);
         ImGui.Combo("Debug view", ref _debugViewIdx,
-            new[] { "Off (diffuse * lightmap)", "UV1 atlas coords", "Coverage (magenta = empty)", "Lightmap only" }, 4);
+            new[] { "Off (diffuse * lightmap)", "UV1 atlas coords", "Coverage (magenta = empty)", "Lightmap only", "Sample points" }, 5);
+        if (_debugViewIdx == 4)
+            ImGui.TextDisabled("  Green = traced, red = traced on a contact, grey = interpolated.");
         ImGui.Checkbox("Wireframe overlay", ref _wireframe);
 
         ImGui.Separator();
@@ -357,6 +374,33 @@ internal sealed class DemoWindow : GameWindow
             ImGui.Checkbox("Hemisphere LUT", ref _useHemisphereLUT);
             ImGui.Checkbox("Ignore albedo", ref _ignoreAlbedo);
             ImGui.Checkbox("Include direct lighting at texel", ref _includeDirectLighting);
+            ImGui.SliderInt("Sparse stride", ref _sparseStride, 1, 16);
+            ImGui.TextDisabled(_sparseStride > 1
+                ? $"  Tracing 1 texel per {_sparseStride}x{_sparseStride} cell, interpolating the rest."
+                : "  Tracing every texel.");
+            if (_sparseStride > 1)
+            {
+                ImGui.SliderFloat("Contact line width (texels)", ref _sparseContactWidth, 0.5f, 8f, "%.1f");
+                ImGui.SliderInt("Contact point spacing", ref _sparseContactStride, 0, 16);
+                ImGui.TextDisabled(_sparseContactStride == 0
+                    ? "  Contacts sampled at the sparse stride; corners always traced."
+                    : $"  Contacts sampled every {_sparseContactStride} texels; corners always traced.");
+                ImGui.Checkbox("Sparse direct too", ref _sparseIncludesDirect);
+                if (_sparseIncludesDirect)
+                    ImGui.TextColored(new System.Numerics.Vector4(1, 0.7f, 0.2f, 1), "  Blurs shadow edges by about one cell.");
+            }
+        }
+
+        if (ImGui.CollapsingHeader("Artifact fixes", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            ImGui.Checkbox("Push samples out of solids", ref _fixShadowLeaks);
+            ImGui.Checkbox("Smooth shadow terminator", ref _smoothShadowTerminator);
+            ImGui.Checkbox("Stitch UV seams", ref _fixSeams);
+            if (_fixSeams) ImGui.SliderInt("Seam passes", ref _seamFixPasses, 1, 16);
+            ImGui.TextDisabled("  Rebake to apply. Bicubic is a display setting and applies live.");
+            ImGui.Checkbox("Bicubic lightmap filtering", ref _bicubicLightmap);
+            if (_bicubicLightmap && _dilatePixels < 2)
+                ImGui.TextColored(new System.Numerics.Vector4(1, 0.7f, 0.2f, 1), "  Bicubic reads 2 texels past each chart; raise dilate to 2.");
         }
 
         ImGui.End();
@@ -438,6 +482,7 @@ internal sealed class DemoWindow : GameWindow
 
     private void BeginImportInBackground(string path, UV1Strategy uv1, bool isDefaultScene)
     {
+        UV1Generator.TexelsPerWorldUnit = _texelsPerWorldUnit;
         _status = $"Importing {Path.GetFileName(path)}...";
         Task.Run(() =>
         {
@@ -486,6 +531,7 @@ internal sealed class DemoWindow : GameWindow
             m.UVScale  = Float2.One;
         }
         _lastUploadedIter = -1;
+        UV1Generator.TexelsPerWorldUnit = _texelsPerWorldUnit;
         _status = $"Regenerating UV1 for {sm.Name}...";
 
         Task.Run(() =>
@@ -503,26 +549,52 @@ internal sealed class DemoWindow : GameWindow
         });
     }
 
-    /// <summary>Replace the scene with the procedural shape scene. Generation is fast enough to run inline on the UI thread.</summary>
-    private void LoadTestScene()
+    /// <summary>
+    /// Replace the scene with the procedural shape scene. The generators ship their own charted
+    /// lightmap UVs, so UseExisting loads instantly on the UI thread; AutoUnwrap re-unwraps every
+    /// model with Prowl.Unwrapper on a worker and streams them in as they finish.
+    /// </summary>
+    private void LoadTestScene(UV1Strategy strategy)
     {
         ClearScene();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var (models, lights) = TestScene.Build();
-        foreach (var sm in models)
-        {
-            UV1Generator.Bake(sm);
-            _scene.AddModel(sm);
-            _renderer!.UploadModel(sm);
-        }
         foreach (var l in lights) _scene.AddLight(l);
         _scene.Selection = SceneSelection.None;
         _skyColor = new System.Numerics.Vector3(0.10f, 0.13f, 0.18f);
         _atlasPageSize = 1024;
         _texelsPerWorldUnit = 24f;
+        UV1Generator.TexelsPerWorldUnit = _texelsPerWorldUnit;
 
         int tris = 0;
-        foreach (var sm in models) tris += sm.BakedIndices.Length / 3;
+        foreach (var sm in models) tris += sm.Source.Indices.Length / 3;
+
+        UV1Generator.TexelsPerWorldUnit = _texelsPerWorldUnit;
+        if (strategy == UV1Strategy.AutoUnwrap)
+        {
+            _status = $"Unwrapping {models.Count} models...";
+            Task.Run(() =>
+            {
+                var unwrapTimer = System.Diagnostics.Stopwatch.StartNew();
+                foreach (var sm in models)
+                {
+                    sm.UV1Mode = strategy;
+                    try { UV1Generator.Bake(sm); }
+                    catch (Exception ex) { _status = $"Unwrap failed for {sm.Name}: {ex.Message}"; sm.UV1Mode = UV1Strategy.UseExisting; UV1Generator.Bake(sm); }
+                    _pendingNewModels.Enqueue(sm);
+                }
+                _status = $"Test scene unwrapped: {models.Count} models, {tris} tris ({unwrapTimer.ElapsedMilliseconds} ms).";
+            });
+            return;
+        }
+
+        foreach (var sm in models)
+        {
+            sm.UV1Mode = strategy;
+            UV1Generator.Bake(sm);
+            _scene.AddModel(sm);
+            _renderer!.UploadModel(sm);
+        }
         _status = $"Test scene: {models.Count} models, {tris} tris, {lights.Count} lights ({sw.ElapsedMilliseconds} ms).";
     }
 
@@ -671,6 +743,7 @@ internal sealed class DemoWindow : GameWindow
 
         _renderer?.SetAtlasCount(packed.Targets.Length);
         _lastUploadedIter = -1;
+        _samplePointsUploaded = false;
 
         photonicScene.End();
         _baker.Start();
@@ -689,19 +762,35 @@ internal sealed class DemoWindow : GameWindow
         o.IgnoreAlbedo = _ignoreAlbedo;
         o.IncludeDirectLighting = _includeDirectLighting;
         o.SkyColor = new Float3(_skyColor.X, _skyColor.Y, _skyColor.Z);
+        o.SparseStride = _sparseStride;
+        o.SparseIncludesDirect = _sparseIncludesDirect;
+        o.SparseContactWidth = _sparseContactWidth;
+        o.SparseContactStride = _sparseContactStride;
+        o.FixShadowLeaks = _fixShadowLeaks;
+        o.SmoothShadowTerminator = _smoothShadowTerminator;
+        o.FixSeams = _fixSeams;
+        o.SeamFixPasses = _seamFixPasses;
     }
 
     private void ReuploadAllAtlases()
     {
         if (_renderer is null || _baker is null) return;
+        bool samplePointsReady = true;
         for (int t = 0; t < _baker.Targets.Count; t++)
         {
             var target = _baker.Targets[t];
+            // The sampling roles are decided once per bake, so upload them as soon as they exist.
+            if (!_samplePointsUploaded)
+            {
+                if (target.SamplePoints.Length == 0) samplePointsReady = false;
+                else _renderer.UpdateSamplePoints(t, target.Width, target.Height, target.SamplePoints);
+            }
             // Upload the raw HDR linear irradiance straight through. The fragment shader handles
             // exposure + Reinhard + the sRGB gamma encode via FramebufferSrgb -- doing any of that
             // here would mean tonemapping twice.
             _renderer.UpdateAtlas(t, target.Width, target.Height, target.Pixels);
         }
+        if (samplePointsReady) _samplePointsUploaded = true;
     }
 
     // ---- camera + view ----------------------------------------------------------------------

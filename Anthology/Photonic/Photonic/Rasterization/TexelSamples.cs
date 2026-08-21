@@ -14,6 +14,28 @@ internal struct TexelSample
 {
     public Float3 Position;
     public Float3 Normal;
+    /// <summary>
+    /// Geometric (face) normal of the source triangle, in world space, flipped when needed to agree
+    /// with <see cref="Normal"/>. Rays are offset and leak-tested against this rather than the
+    /// interpolated normal, which can point far away from the surface it belongs to.
+    /// </summary>
+    public Float3 FaceNormal;
+    /// <summary>
+    /// Phong-tessellated position: where this texel would sit if the triangle were curved to match
+    /// its vertex normals. Constrained to never fall behind the triangle's own plane. Used instead
+    /// of <see cref="Position"/> unless the triangle was rejected as occluded, which is what stops
+    /// low-poly smooth surfaces from shadowing themselves in facets.
+    /// </summary>
+    public Float3 SmoothPosition;
+    /// <summary>Stable id of the source triangle across the whole bake; indexes the smooth/flat decision table.</summary>
+    public int TriangleId;
+    /// <summary>
+    /// Distance to the nearest other surface in this texel's own lighting hemisphere, as a fraction of
+    /// the detail radius. 1 means nothing is near: the lighting here can only change slowly, so the
+    /// texel is safe to interpolate. Anything below 1 is a contact, crease or junction, where lighting
+    /// changes faster than a sparse grid can follow.
+    /// </summary>
+    public float Proximity;
     public int InstanceIndex;
     public int MaterialGroupIndex;
     public Float2 UV0;        // material UV at this texel (for diffuse texture sampling)
@@ -39,6 +61,18 @@ internal sealed class TargetWorkspace
     public bool[] Integrated;       // true if we've already integrated/interpolated this texel
     public Float3[] Pixels;         // working buffer; parallel Float3 view of LightmapTarget.PixelsRGB
 
+    // Scratch for the per-iteration post passes (seam stitch, dilate). These run every iteration on
+    // every page, so allocating them per call would churn tens of megabytes per iteration.
+    /// <summary>
+    /// Where an iteration accumulates. Published to the target in one copy when the iteration is
+    /// complete, so a host polling from another thread never sees a half-written atlas.
+    /// </summary>
+    public float[]? WorkingRGB;
+
+    public float[]? PostScratchRGB;
+    public bool[]? PostScratchCovered;
+    public bool[]? PostScratchSnapshot;
+
     // Progressive-bake buffers, allocated lazily by the Job at the start of integration.
     public Float3[]? DirectCache;          // deterministic direct lighting per texel; computed once.
     public Float3[]? IndirectSum;          // accumulator for indirect samples; sum / count = current estimate.
@@ -61,6 +95,26 @@ internal sealed class TargetWorkspace
         DirectCache = new Float3[n];
         IndirectSum = new Float3[n];
         IndirectSampleCount = new int[n];
+    }
+
+    /// <summary>Iteration-local pixel buffer. Same layout as the target's.</summary>
+    public float[] Working() => WorkingRGB ??= new float[Width * Height * 3];
+
+    /// <summary>Copy the finished iteration into the target in one pass.</summary>
+    public void Publish() => System.Array.Copy(Working(), Target.PixelsRGB, Target.PixelsRGB.Length);
+
+    /// <summary>Scratch copy of the pixel buffer, allocated once and reused by every post pass.</summary>
+    public float[] ScratchRGB() => PostScratchRGB ??= new float[Width * Height * 3];
+
+    /// <summary>Second scratch mask, used by dilation as its per-pass snapshot.</summary>
+    public bool[] ScratchSnapshot() => PostScratchSnapshot ??= new bool[Width * Height];
+
+    /// <summary>Scratch copy of the coverage mask, so dilation never mutates the bake's own state.</summary>
+    public bool[] ScratchCovered()
+    {
+        PostScratchCovered ??= new bool[Width * Height];
+        System.Array.Copy(Covered, PostScratchCovered, Covered.Length);
+        return PostScratchCovered;
     }
 
     /// <summary>Copy <see cref="Pixels"/> into the target's float buffer.</summary>

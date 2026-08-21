@@ -21,7 +21,7 @@ internal static class ConservativeTexelMapper
                                    Float3 n0, Float3 n1, Float3 n2,
                                    Float2 uvBake0, Float2 uvBake1, Float2 uvBake2,
                                    Float2 uv0_0, Float2 uv1_0, Float2 uv2_0,
-                                   int materialGroupIndex)
+                                   int materialGroupIndex, int triangleId)
     {
         // map bake UVs into pixel space: apply per-instance offset + scale into [0,1], then multiply by W,H.
         var offset = instance.UVOffset;
@@ -70,6 +70,15 @@ internal static class ConservativeTexelMapper
         float worldPerPixel = pixelAreaTwice > 1e-12f ? worldAreaTwice / pixelAreaTwice : 0f;
         float texelRadius = (float)System.Math.Sqrt(worldPerPixel) * 0.5f;
 
+        // World-space vertex normals + geometric normal, shared by every texel of this triangle.
+        var wn0 = Float3.NormalizeSafe(Raytracing.RayMath.Transform(NM, n0, 0f), Float3.UnitY);
+        var wn1 = Float3.NormalizeSafe(Raytracing.RayMath.Transform(NM, n1, 0f), Float3.UnitY);
+        var wn2 = Float3.NormalizeSafe(Raytracing.RayMath.Transform(NM, n2, 0f), Float3.UnitY);
+        var faceNormal = Float3.NormalizeSafe(Float3.Cross(w_v1 - w_v0, w_v2 - w_v0), wn0);
+        // Meshes with winding that disagrees with their shading normals are common enough that
+        // trusting the winding alone would push samples into the surface instead of out of it.
+        if (Float3.Dot(faceNormal, wn0 + wn1 + wn2) < 0f) faceNormal = -faceNormal;
+
         for (int py = iy0; py <= iy1; py++)
             for (int px = ix0; px <= ix1; px++)
             {
@@ -110,6 +119,8 @@ internal static class ConservativeTexelMapper
 
                 var uv0 = uv0_0 * w0 + uv1_0 * w1 + uv2_0 * w2;
 
+                var smoothW = PhongPosition(pW, w_v0, w_v1, w_v2, wn0, wn1, wn2, faceNormal, w0, w1, w2);
+
                 int idx = py * ws.Width + px;
                 // Strict-inside wins. A new claimant takes the texel if:
                 //   - nobody has claimed it yet, OR
@@ -126,14 +137,71 @@ internal static class ConservativeTexelMapper
                     {
                         Position = pW,
                         Normal = nW,
+                        FaceNormal = faceNormal,
+                        SmoothPosition = smoothW,
+                        TriangleId = triangleId,
                         InstanceIndex = instanceIndex,
                         MaterialGroupIndex = materialGroupIndex,
                         UV0 = uv0,
                         WorldRadius = texelRadius,
+                        Proximity = 1f,
                         StrictlyInside = strictlyInside,
                     };
                 }
             }
+    }
+
+    /// <summary>
+    /// Phong tessellation: the position this texel would have on a curved triangle that matches the
+    /// vertex normals, obtained by projecting the flat position onto each vertex's tangent plane and
+    /// blending by barycentrics.
+    /// </summary>
+    /// <remarks>
+    /// Only convex results are usable: a smooth position behind the triangle's own plane would sink
+    /// the sample into the surface. When the straight result goes the wrong way, the vertex normals
+    /// are flattened against each edge in turn (which is enough to rescue the common case of one
+    /// normal leaning inward), and failing all three the flat position is kept.
+    /// </remarks>
+    private static Float3 PhongPosition(Float3 p, Float3 a, Float3 b, Float3 c,
+                                        Float3 na, Float3 nb, Float3 nc, Float3 faceNormal,
+                                        float w0, float w1, float w2)
+    {
+        var smooth = BlendProjections(p, a, b, c, na, nb, nc, w0, w1, w2);
+        if (Float3.Dot(smooth - p, faceNormal) >= 0f) return smooth;
+
+        for (int edge = 0; edge < 3; edge++)
+        {
+            Float3 e = edge switch
+            {
+                0 => a - b,
+                1 => b - c,
+                _ => c - a,
+            };
+            e = Float3.NormalizeSafe(e, Float3.UnitX);
+            var fa = FlattenAgainstEdge(na, e, faceNormal);
+            var fb = FlattenAgainstEdge(nb, e, faceNormal);
+            var fc = FlattenAgainstEdge(nc, e, faceNormal);
+            smooth = BlendProjections(p, a, b, c, fa, fb, fc, w0, w1, w2);
+            if (Float3.Dot(smooth - p, faceNormal) >= 0f) return smooth;
+        }
+        return p;
+    }
+
+    private static Float3 BlendProjections(Float3 p, Float3 a, Float3 b, Float3 c,
+                                           Float3 na, Float3 nb, Float3 nc,
+                                           float w0, float w1, float w2)
+    {
+        var pa = p - na * Float3.Dot(p - a, na);
+        var pb = p - nb * Float3.Dot(p - b, nb);
+        var pc = p - nc * Float3.Dot(p - c, nc);
+        return pa * w0 + pb * w1 + pc * w2;
+    }
+
+    /// <summary>Drop the component of <paramref name="n"/> that leans across the edge, keeping the plane spanned by the edge and the face normal.</summary>
+    private static Float3 FlattenAgainstEdge(Float3 n, Float3 edge, Float3 faceNormal)
+    {
+        var flattened = edge * Float3.Dot(n, edge) + faceNormal * Float3.Dot(n, faceNormal);
+        return Float3.NormalizeSafe(flattened, faceNormal);
     }
 
     /// <summary>2D signed edge function: positive when (a, b, c) is CCW.</summary>

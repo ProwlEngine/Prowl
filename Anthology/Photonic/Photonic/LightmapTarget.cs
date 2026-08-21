@@ -45,6 +45,15 @@ public sealed class LightmapTarget
     internal byte[]? CoverageMask;
     public System.ReadOnlySpan<byte> Coverage => CoverageMask;
 
+    /// <summary>
+    /// Per-texel sampling role, for tooling that wants to see where the bake actually spent its rays:
+    /// 0 empty, 1 interpolated from nearby points, 2 traced as an open-surface point, 3 traced as a
+    /// contact point. Every covered texel is 2 when sparse sampling is off. Same layout as
+    /// <see cref="Coverage"/>, populated at the same time.
+    /// </summary>
+    internal byte[]? SamplePointMask;
+    public System.ReadOnlySpan<byte> SamplePoints => SamplePointMask;
+
     internal LightmapTarget(string name, int width, int height)
     {
         Name = name;

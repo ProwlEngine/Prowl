@@ -11,6 +11,18 @@ namespace Photonic.Demo;
 /// </summary>
 internal static class UV1Generator
 {
+    /// <summary>
+    /// Gutter to leave between charts, in atlas texels. The unwrapper packs into the unit square, so
+    /// the margin it needs depends on how many texels the model will occupy once it is placed, which
+    /// is why this is converted per model rather than left as a constant fraction. Below about three
+    /// texels, neighbouring charts overlap in the conservative rasteriser and steal each other's
+    /// border texels, which shows up as dark speckle along every chart edge.
+    /// </summary>
+    public static float ChartGutterTexels = 4f;
+
+    /// <summary>Bake density the margin is computed against; the demo keeps this in step with its own setting.</summary>
+    public static float TexelsPerWorldUnit = 24f;
+
     public static void Bake(SceneModel sm, System.Action<string>? progress = null)
     {
         var src = sm.Source;
@@ -24,7 +36,7 @@ internal static class UV1Generator
                     doublePos[i] = new Double3(src.Positions[i].X, src.Positions[i].Y, src.Positions[i].Z);
                 var unwrap = UnwrapMesh.Unwrap(doublePos, src.Indices, new UnwrapOptions
                 {
-                    PackMargin = 2.0 / 512.0,
+                    PackMargin = ChartMargin(src),
                 });
                 SplitPerCornerUVs(sm, unwrap.PerCornerUVs);
                 progress?.Invoke($"Unwrap done: {sm.BakedPositions.Length} verts after seam splits.");
@@ -44,6 +56,25 @@ internal static class UV1Generator
                 break;
             }
         }
+    }
+
+    /// <summary>
+    /// Chart margin for this model: the packer works in the unit square, so convert the gutter we want
+    /// in texels through the atlas footprint the model is going to get, which is its world surface area
+    /// at the bake's texel density.
+    /// </summary>
+    private static double ChartMargin(LoadedModel model)
+    {
+        double area = 0;
+        for (int i = 0; i + 2 < model.Indices.Length; i += 3)
+        {
+            var a = model.Positions[model.Indices[i]];
+            var b = model.Positions[model.Indices[i + 1]];
+            var c = model.Positions[model.Indices[i + 2]];
+            area += Float3.Length(Float3.Cross(b - a, c - a)) * 0.5;
+        }
+        double sidePixels = TexelsPerWorldUnit * System.Math.Sqrt(System.Math.Max(area, 1e-4));
+        return System.Math.Clamp(ChartGutterTexels / System.Math.Max(sidePixels, 1.0), 1.0 / 512.0, 1.0 / 16.0);
     }
 
     /// <summary>Pass-through: keep vertex layout, just copy <see cref="LoadedModel.BestExistingUV"/> into UV1.</summary>
@@ -135,7 +166,11 @@ internal static class UV1Generator
                 MaterialIndex = src.SubMeshes[i].MaterialIndex,
             };
 
-        var packed = TrianglePacker.Repack(packerInput, atlasWidth: 512, atlasHeight: 512, progress: null);
+        // Same gutter rule as the unwrap path: convert the texels we want through the atlas
+        // footprint this model will actually be given.
+        const int packGrid = 512;
+        float padding = (float)(ChartMargin(src) * packGrid);
+        var packed = TrianglePacker.Repack(packerInput, packGrid, packGrid, progress: null, padding);
 
         sm.BakedPositions = packed.Vertices;
         sm.BakedNormals   = packed.Normals;

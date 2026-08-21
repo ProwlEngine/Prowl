@@ -7,6 +7,9 @@ namespace Photonic.Demo;
 /// Deterministic procedural stress scene: one big floor plus a pile of separately-generated shapes.
 /// Every entry is its own <see cref="LoadedModel"/>, so each one is a separate draw call and a
 /// separate atlas placement, which is what pushes the auto packer into opening multiple pages.
+/// <para>Models default to <see cref="UV1Strategy.AutoUnwrap"/>. The generators still ship their own
+/// charted UVs in <c>BestExistingUV</c>, so switching a model to <see cref="UV1Strategy.UseExisting"/>
+/// in the Inspector compares Prowl.Unwrapper against a hand-built layout on identical geometry.</para>
 /// </summary>
 internal static class TestScene
 {
@@ -34,7 +37,7 @@ internal static class TestScene
             {
                 Name = source.DisplayName,
                 Source = source,
-                UV1Mode = UV1Strategy.UseExisting,
+                UV1Mode = UV1Strategy.AutoUnwrap,
                 Position = new System.Numerics.Vector3(position.X, position.Y, position.Z),
                 RotationEulerDeg = new System.Numerics.Vector3(pitchDeg, yawDeg, rollDeg),
             });

@@ -72,6 +72,34 @@ public sealed class BakeOptions
     public int DilatePixels { get; set; } = 2;
 
     /// <summary>
+    /// Move texel samples that landed inside solid geometry back out into the open, by probing four
+    /// tangential directions one texel-diagonal long and stepping past any back face they hit.
+    /// Removes the dark halos where a texel straddles a wall base or a floor junction: without it,
+    /// the sample point sits behind the surface and every shadow ray from it is blocked.
+    /// </summary>
+    public bool FixShadowLeaks { get; set; } = true;
+
+    /// <summary>
+    /// Evaluate lighting at a Phong-tessellated position instead of the flat triangle position, so a
+    /// low-poly curved surface is shaded as the round surface its normals describe rather than the
+    /// faceted one its triangles describe. Triangles whose smooth position is occluded fall back to
+    /// flat automatically, which keeps samples from sliding inside neighbouring geometry.
+    /// </summary>
+    public bool SmoothShadowTerminator { get; set; } = true;
+
+    /// <summary>
+    /// Blend the two sides of every UV seam together after each iteration, so edges that are
+    /// continuous on the model but split in the atlas stop showing a visible lighting discontinuity.
+    /// </summary>
+    public bool FixSeams { get; set; } = true;
+
+    /// <summary>Seam blending passes. Each pass pulls both sides half-way to their shared average.</summary>
+    public int SeamFixPasses { get; set; } = 4;
+
+    /// <summary>How far each seam texel moves toward the average of the two sides per pass.</summary>
+    public float SeamFixStrength { get; set; } = 0.5f;
+
+    /// <summary>
     /// Run an edge-avoiding wavelet denoiser over the converged lightmap (before dilation), guided by
     /// per-texel normal + position so it removes Monte-Carlo noise without bleeding across chart seams
     /// or geometric / lighting edges. Off by default. Applied once at finalize via <see cref="Job.Denoise"/>.
@@ -86,6 +114,46 @@ public sealed class BakeOptions
 
     /// <summary>Denoiser position bandwidth as a multiple of the per-texel world footprint. Lower = preserves finer spatial detail.</summary>
     public float DenoisePositionScale { get; set; } = 2f;
+
+    /// <summary>
+    /// Trace one texel per <c>SparseStride</c> x <c>SparseStride</c> cell of the atlas and interpolate
+    /// the rest from the traced points around them. 1 traces every texel. 8 traces roughly one texel
+    /// in sixty-four, so a bake converges dramatically faster at the cost of detail: lighting that
+    /// varies faster than the cell size, which mostly means direct shadow edges, is smoothed away.
+    /// Texels that no traced point can reach are traced anyway, so thin charts and chart borders stay
+    /// correct at any stride.
+    /// </summary>
+    public int SparseStride { get; set; } = 1;
+
+    /// <summary>
+    /// Let sparse sampling cover direct lighting as well as indirect. Off by default: direct light is
+    /// where the fast-changing detail lives, and interpolating it blurs every shadow edge by about one
+    /// cell. It is also the cheap half of the bake, one shadow ray per light computed once, so leaving
+    /// it dense costs little and keeps shadows sharp while indirect still traces sparsely.
+    /// </summary>
+    public bool SparseIncludesDirect { get; set; } = false;
+
+    /// <summary>
+    /// Width of the contact line, in texels: how close another surface has to be before a texel is
+    /// treated as sitting on a contact rather than on open surface. A couple of texels is enough to
+    /// carry the junction; wider only costs time.
+    /// </summary>
+    public float SparseContactWidth { get; set; } = 2f;
+
+    /// <summary>
+    /// Spacing of traced points along the contact line, in texels. 0 follows <see cref="SparseStride"/>,
+    /// so contacts are sampled at the same rate as open surface. Corners of the line are always traced
+    /// whatever this is set to.
+    /// </summary>
+    public int SparseContactStride { get; set; } = 0;
+
+    /// <summary>
+    /// Check that a texel can actually see a traced point before interpolating from it. Without this,
+    /// two texels that share a plane and a normal are treated as the same surface even when a wall
+    /// stands between them, which carries light straight through the wall. Costs a one-off ray per
+    /// texel-point pair during setup.
+    /// </summary>
+    public bool SparseCheckVisibility { get; set; } = true;
 
     /// <summary>Cap on worker threads. -1 = use the runtime default.</summary>
     public int MaxDegreeOfParallelism { get; set; } = -1;

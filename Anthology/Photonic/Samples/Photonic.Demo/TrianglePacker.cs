@@ -14,10 +14,15 @@ namespace Photonic.Demo;
 internal static class TrianglePacker
 {
     private const float PairNormalDot = 0.95f;   // pair if face normals are within ~18 degrees
-    private const float Padding = 1.0f;          // texels of padding between groups
 
+    /// <summary>
+    /// Gap between groups, in units of the <paramref name="atlasWidth"/> grid this packs into. One
+    /// texel is not enough once the layout is rescaled into a real atlas page: conservative
+    /// rasterisation alone eats half a texel on each side, before dilation or a bicubic tap needs
+    /// anywhere to read from. Callers should scale it by the atlas footprint the model will get.
+    /// </summary>
     public static CombinedSponza Repack(CombinedSponza src, int atlasWidth, int atlasHeight,
-                                        System.Action<string>? progress)
+                                        System.Action<string>? progress, float padding = 4.0f)
     {
         int triCount = src.Indices.Length / 3;
         var indices = src.Indices;
@@ -122,41 +127,41 @@ internal static class TrianglePacker
 
         // 6) Trial-pack at unit scale to find natural footprint, then choose final scale.
         float totalAreaWithPad = 0;
-        for (int g = 0; g < groupCount; g++) totalAreaWithPad += (groupW[g] + Padding) * (groupH[g] + Padding);
+        for (int g = 0; g < groupCount; g++) totalAreaWithPad += (groupW[g] + padding) * (groupH[g] + padding);
         float targetW = (float)System.Math.Sqrt(totalAreaWithPad);
 
         float trialMaxX = 0, trialMaxY = 0;
         {
-            float cx = Padding, cy = Padding, rowH = 0;
+            float cx = padding, cy = padding, rowH = 0;
             for (int oi = 0; oi < groupCount; oi++)
             {
                 int g = order[oi];
                 float w = groupW[g], h = groupH[g];
-                if (cx + w + Padding > targetW) { cy += rowH + Padding; cx = Padding; rowH = 0; }
+                if (cx + w + padding > targetW) { cy += rowH + padding; cx = padding; rowH = 0; }
                 trialMaxX = System.Math.Max(trialMaxX, cx + w);
                 trialMaxY = System.Math.Max(trialMaxY, cy + h);
-                cx += w + Padding;
+                cx += w + padding;
                 rowH = System.Math.Max(rowH, h);
             }
         }
 
-        float sX = (atlasWidth  - 2 * Padding) / (trialMaxX + Padding);
-        float sY = (atlasHeight - 2 * Padding) / (trialMaxY + Padding);
+        float sX = (atlasWidth  - 2 * padding) / (trialMaxX + padding);
+        float sY = (atlasHeight - 2 * padding) / (trialMaxY + padding);
         float scale = System.Math.Min(sX, sY) * 0.99f;
         progress?.Invoke($"[pack] natural footprint {trialMaxX:0}x{trialMaxY:0}, scale = {scale:0.000} tex/unit");
 
         // 7) Final pack at chosen scale: record each group's atlas-pixel offset.
         var groupOffset = new Float2[groupCount];
         {
-            float maxPixW = atlasWidth - Padding;
-            float cx = Padding, cy = Padding, rowH = 0;
+            float maxPixW = atlasWidth - padding;
+            float cx = padding, cy = padding, rowH = 0;
             for (int oi = 0; oi < groupCount; oi++)
             {
                 int g = order[oi];
                 float w = groupW[g] * scale, h = groupH[g] * scale;
-                if (cx + w + Padding > maxPixW) { cy += rowH + Padding; cx = Padding; rowH = 0; }
+                if (cx + w + padding > maxPixW) { cy += rowH + padding; cx = padding; rowH = 0; }
                 groupOffset[g] = new Float2(cx, cy);
-                cx += w + Padding;
+                cx += w + padding;
                 rowH = System.Math.Max(rowH, h);
             }
         }

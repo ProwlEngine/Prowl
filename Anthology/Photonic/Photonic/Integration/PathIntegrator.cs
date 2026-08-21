@@ -108,7 +108,7 @@ internal sealed class PathIntegrator
                 float u1 = rng.NextFloat(), u2 = rng.NextFloat();
                 rd = Hemisphere.SampleCosine(n, u1, u2);
             }
-            var hit = ClosestHitWorld(ro + n * _options.RayBias, rd, _options.MaxRayDistance);
+            var hit = ClosestHitWorld(RayMath.OffsetOrigin(ro, n, _options.RayBias), rd, _options.MaxRayDistance);
             if (!hit.Hit)
             {
                 radiance += t * SampleEnvironment(rd);
@@ -267,7 +267,7 @@ internal sealed class PathIntegrator
             float ndotl = Float3.Dot(normal, toLight);
             if (ndotl <= 0) continue;
 
-            var ro = position + normal * _options.RayBias;
+            var ro = RayMath.OffsetOrigin(position, normal, _options.RayBias);
             bool blocked = false;
             if (l.CastsShadows)
                 blocked = _blas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet);
@@ -313,7 +313,7 @@ internal sealed class PathIntegrator
                 rd = Hemisphere.SampleCosine(n, u1, u2);
             }
 
-            var rayOrigin = ro + n * _options.RayBias;
+            var rayOrigin = RayMath.OffsetOrigin(ro, n, _options.RayBias);
             var hit = ClosestHitWorld(rayOrigin, rd, _options.MaxRayDistance);
 
             // Record this bounce segment regardless of hit.
@@ -356,7 +356,7 @@ internal sealed class PathIntegrator
                 if (Li.X + Li.Y + Li.Z <= 0) continue;
                 float ndotl = Float3.Dot(hit.Normal, toLight);
                 if (ndotl <= 0) continue;
-                var shadowOrigin = hit.Position + hit.Normal * _options.RayBias;
+                var shadowOrigin = RayMath.OffsetOrigin(hit.Position, hit.Normal, _options.RayBias);
                 bool blocked = false;
                 if (l.CastsShadows) blocked = _blas.AnyHit(shadowOrigin, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet);
                 float drawLen = float.IsPositiveInfinity(maxDist) ? 50f : maxDist;
@@ -399,7 +399,7 @@ internal sealed class PathIntegrator
 
             if (l.CastsShadows)
             {
-                var ro = position + normal * _options.RayBias;
+                var ro = RayMath.OffsetOrigin(position, normal, _options.RayBias);
                 if (_blas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet))
                     continue;
             }
