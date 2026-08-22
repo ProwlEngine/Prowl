@@ -10,7 +10,9 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Spherical zone of wind. Air pushes outward from the center and fades to nothing at the radius.
+/// Spherical zone of wind shaped like a downwash: air comes down through the middle, spreads out
+/// across the ground and dies at the rim. The middle is calm, not the strongest point, which is what
+/// makes it read as something hovering rather than a starburst.
 /// Terrain grass blends the nearest <see cref="kMaxShaderZones"/> zones per frame, particle systems
 /// take the single nearest one.
 /// </summary>
@@ -34,7 +36,7 @@ public sealed class WindZone : MonoBehaviour
     /// <summary>Gust amplitude, as a fraction of <see cref="WindMain"/>.</summary>
     public float PulseMagnitude = 0.5f;
 
-    /// <summary>Gusts per second.</summary>
+    /// <summary>Gusts per second. They roll outward as rings rather than pulsing the whole zone at once.</summary>
     public float PulseFrequency = 0.25f;
 
     private static readonly List<WindZone> s_active = [];
@@ -64,32 +66,57 @@ public sealed class WindZone : MonoBehaviour
     public Float3 SampleWind(Float3 worldPosition) => SampleWind(worldPosition, Time.TimeSinceStartup);
 
     /// <summary>
-    /// Wind velocity this zone applies at a world position. Mirrors the math the grass shader runs,
-    /// so a particle and a grass blade in the same spot are pushed the same way.
+    /// Wind velocity this zone applies at a world position: outflow across the ground plane plus the
+    /// column coming down through the middle. The grass shader runs the same profile, so a particle
+    /// and a blade in the same spot are pushed the same way.
     /// </summary>
     public Float3 SampleWind(Float3 worldPosition, float time)
     {
         Float3 toPoint = worldPosition - Transform.Position;
-        float distance = Float3.Length(toPoint);
+        float radius = MathF.Max(Radius, 1e-4f);
 
-        float strength = StrengthAt(worldPosition, distance, time);
-        if (strength == 0f) return Float3.Zero;
+        float horizontal = MathF.Sqrt(toPoint.X * toPoint.X + toPoint.Z * toPoint.Z);
+        float height = MathF.Abs(toPoint.Y);
+        if (horizontal >= radius || height >= radius) return Float3.Zero;
 
-        Float3 direction = distance > 1e-4f ? toPoint / distance : Float3.UnitY;
-        return direction * strength;
+        // Height falls off on its own, so a zone parked high overhead barely stirs the ground
+        float vertical = 1f - Smoothstep(0f, radius, height);
+        float r = horizontal / radius;
+
+        Float2 outward = horizontal > 1e-4f
+            ? new Float2(toPoint.X / horizontal, toPoint.Z / horizontal)
+            : Float2.Zero;
+
+        // Calm eye, peaking where the column spreads, then a long decay to the rim
+        float outflow = Smoothstep(0f, 0.22f, r) * (1f - Smoothstep(0.35f, 1f, r));
+        // The column itself, which is what the middle gets instead of outflow
+        float downdraft = 1f - Smoothstep(0f, 0.5f, r);
+
+        // Gust fronts travelling outward. Time is a phase on a wave running out from the middle,
+        // never a multiplier on anything that moves with the zone, so nudging the zone shifts the
+        // pattern by what it moved rather than scrambling it. The grass shader runs the same
+        // structure with value noise for finer detail.
+        float gustSpeed = 0.35f * (1f + WindMain);
+        float ringPhase = r * 3f - time * gustSpeed;
+        float front = MathF.Sin(outward.X * 2.5f + ringPhase) * MathF.Cos(outward.Y * 2.5f);
+        float wobble = MathF.Sin(outward.Y * 2.5f + ringPhase * 1.3f + 17f) * MathF.Cos(outward.X * 2.5f);
+
+        float gust = 1f + front * Turbulence
+                   + MathF.Sin((time * PulseFrequency - r * 2f) * MathF.Tau) * PulseMagnitude;
+        float speed = MathF.Max(WindMain * vertical * gust, 0f);
+
+        // Turning the flow stays visible after a blade is already flat, where more push does not
+        float twist = wobble * Turbulence * 0.8f;
+        float cs = MathF.Cos(twist), sn = MathF.Sin(twist);
+        Float2 flow = new(outward.X * cs - outward.Y * sn, outward.X * sn + outward.Y * cs);
+
+        return new Float3(flow.X * speed * outflow, -speed * downdraft, flow.Y * speed * outflow);
     }
 
-    /// <summary>Force at a point that sits <paramref name="distance"/> from the center.</summary>
-    public float StrengthAt(Float3 worldPosition, float distance, float time)
+    private static float Smoothstep(float edge0, float edge1, float x)
     {
-        float radius = MathF.Max(Radius, 1e-4f);
-        if (distance >= radius) return 0f;
-
-        float t = 1f - distance / radius;
-        float falloff = t * t * (3f - 2f * t);
-        float pulse = 1f + MathF.Sin(time * PulseFrequency * MathF.Tau + distance * 0.1f) * PulseMagnitude;
-        float turbulence = 1f + MathF.Sin(time * 3f + worldPosition.X * 0.7f + worldPosition.Z * 0.9f) * Turbulence;
-        return WindMain * falloff * pulse * turbulence;
+        float t = Maths.Clamp((x - edge0) / MathF.Max(edge1 - edge0, 1e-6f), 0f, 1f);
+        return t * t * (3f - 2f * t);
     }
 
     /// <summary>The zone reaching <paramref name="worldPosition"/> from closest range, or null if there are none.</summary>

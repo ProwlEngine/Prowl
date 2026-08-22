@@ -98,7 +98,7 @@ public class WindModule : ParticleSystemModule
             particle.Velocity += (wind - particle.Velocity) * (1f - MathF.Exp(-Drag * deltaTime));
     }
 
-    /// <summary>Swirl velocity at a world position. Three decorrelated noise lanes, offset per particle.</summary>
+    /// <summary>Turbulence velocity at a world position. Three decorrelated noise lanes, offset per particle.</summary>
     private Float3 SampleTurbulence(Float3 worldPosition, uint seed)
     {
         float x = worldPosition.X * _turbulenceScale + _turbulenceDrift;

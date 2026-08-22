@@ -19,7 +19,7 @@ namespace Prowl.Runtime.Test;
 /// </summary>
 public class WindZoneTests : RuntimeTestBase
 {
-    /// <summary>Zone with the time-varying terms switched off, so strength is purely the falloff.</summary>
+    /// <summary>Zone with the time-varying terms off, so only the profile is left.</summary>
     private WindZone CreateZone(Scene scene, Float3 position, float radius, float strength)
     {
         var go = CreateGameObject("WindZone");
@@ -47,23 +47,39 @@ public class WindZoneTests : RuntimeTestBase
     }
 
     [Fact]
-    public void WindPushesOutwardAndFadesToTheRadius()
+    public void OutflowIsStrongestBetweenTheEyeAndTheRim()
     {
+        // Downwash, not an explosion: the middle is where the air arrives, so it has no outward
+        // push of its own. The flow builds as it spreads and dies at the rim.
         var scene = CreateScene(enable: true);
         var zone = CreateZone(scene, Float3.Zero, 10f, 2f);
 
-        Float3 near = zone.SampleWind(new Float3(1f, 0f, 0f), 0f);
-        Float3 far = zone.SampleWind(new Float3(8f, 0f, 0f), 0f);
-        Float3 outside = zone.SampleWind(new Float3(11f, 0f, 0f), 0f);
+        float eye = zone.SampleWind(new Float3(0.2f, 0f, 0f), 0f).X;
+        float spread = zone.SampleWind(new Float3(4.5f, 0f, 0f), 0f).X;
+        float rim = zone.SampleWind(new Float3(9.5f, 0f, 0f), 0f).X;
 
-        Assert.True(near.X > 0f);
-        Assert.True(far.X > 0f);
-        Assert.True(near.X > far.X);
-        Assert.Equal(Float3.Zero, outside);
+        Assert.True(spread > eye, "the spread should outrun the eye");
+        Assert.True(spread > rim, "the spread should outrun the rim");
+        Assert.Equal(Float3.Zero, zone.SampleWind(new Float3(11f, 0f, 0f), 0f));
     }
 
     [Fact]
-    public void WindDirectionIsRadial()
+    public void TheEyeBlowsDownwardInstead()
+    {
+        // What the middle gets is the column coming down, which is what pins particles to the
+        // ground under a hovering craft rather than blasting them sideways.
+        var scene = CreateScene(enable: true);
+        var zone = CreateZone(scene, Float3.Zero, 10f, 2f);
+
+        Float3 eye = zone.SampleWind(Float3.Zero, 0f);
+
+        Assert.True(eye.Y < 0f);
+        Assert.True(MathF.Abs(eye.X) < 1e-4f);
+        Assert.True(MathF.Abs(eye.Z) < 1e-4f);
+    }
+
+    [Fact]
+    public void OutflowIsRadial()
     {
         var scene = CreateScene(enable: true);
         var zone = CreateZone(scene, new Float3(5f, 0f, 5f), 10f, 1f);
@@ -72,6 +88,82 @@ public class WindZoneTests : RuntimeTestBase
 
         Assert.True(wind.Z > 0f);
         Assert.True(MathF.Abs(wind.X) < 1e-4f);
+    }
+
+    [Fact]
+    public void GustsKeepTheFieldMoving()
+    {
+        // Turbulence has to animate. A field that only varies in space reads as noise painted on
+        // the ground rather than as air moving over it.
+        var scene = CreateScene(enable: true);
+        var zone = CreateZone(scene, Float3.Zero, 10f, 2f);
+        zone.Turbulence = 0.6f;
+
+        var sample = new Float3(3.5f, 0f, 0f);
+        Float3 now = zone.SampleWind(sample, 0f);
+        Float3 later = zone.SampleWind(sample, 0.15f);
+
+        Assert.True(Float3.Length(now - later) > 1e-3f);
+    }
+
+    [Fact]
+    public void StrongerWindDrivesGustsFaster()
+    {
+        // Turning the strength up past the point where grass lies flat has to keep doing something,
+        // and what it does is drive the gust fronts outward faster.
+        var scene = CreateScene(enable: true);
+        var zone = CreateZone(scene, Float3.Zero, 10f, 1f);
+        zone.Turbulence = 0.6f;
+
+        float ChangeRate(float strength)
+        {
+            zone.WindMain = strength;
+            var sample = new Float3(3.5f, 0f, 0f);
+            // Divided through by strength, so this measures how fast the pattern moves, not how hard it blows
+            return Float3.Length(zone.SampleWind(sample, 0f) - zone.SampleWind(sample, 0.02f)) / strength;
+        }
+
+        Assert.True(ChangeRate(10f) > ChangeRate(1f));
+    }
+
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(60f)]
+    [InlineData(600f)]
+    public void MovingTheZoneDoesNotScrambleTheField(float time)
+    {
+        // Anything that multiplies the zone's own position by elapsed time makes a small move
+        // decorrelate the whole gust pattern, and worse the longer the game has been running. That
+        // reads as the field flickering whenever the zone is dragged, so a nudge has to stay a nudge
+        // no matter how late it happens.
+        var scene = CreateScene(enable: true);
+        var zone = CreateZone(scene, Float3.Zero, 10f, 2f);
+        zone.Turbulence = 1f;
+
+        var sample = new Float3(4f, 0f, 0f);
+        Float3 before = zone.SampleWind(sample, time);
+
+        // Sideways, which is the move that turns the outward direction the most
+        zone.Transform.Position = new Float3(0f, 0f, 0.05f);
+        Float3 after = zone.SampleWind(sample, time);
+
+        float change = Float3.Length(after - before);
+        Assert.True(change < Float3.Length(before) * 0.1f,
+            $"a 5cm nudge at t={time} changed the wind by {change}");
+    }
+
+    [Fact]
+    public void HeightFadesTheGroundEffect()
+    {
+        // A zone parked well overhead should barely stir the ground under it
+        var scene = CreateScene(enable: true);
+        var low = CreateZone(scene, Float3.Zero, 10f, 2f);
+        var high = CreateZone(scene, new Float3(0f, 8f, 0f), 10f, 2f);
+
+        var ground = new Float3(4.5f, 0f, 0f);
+
+        Assert.True(low.SampleWind(ground, 0f).X > high.SampleWind(ground, 0f).X);
+        Assert.Equal(Float3.Zero, CreateZone(scene, new Float3(0f, 20f, 0f), 10f, 2f).SampleWind(ground, 0f));
     }
 
     [Fact]
