@@ -116,6 +116,7 @@ public static class EditorRegistries
         _assetEditorTypesByImporter.Clear(); _assetEditorByImporterCache.Clear();
 
         _importersByExt.Clear();
+        _customAssetExtensions.Clear();
         _importersByName.Clear();
 
         _componentIcons.Clear();
@@ -186,6 +187,14 @@ public static class EditorRegistries
                 Debug.LogWarning($"EditorRegistries: skipped scanning '{type.FullName}': {ex.Message}");
             }
         }
+
+        // Anything creatable from the Assets menu has to be readable again. Extensions with their own
+        // importer keep it; the rest would otherwise fall through to DefaultImporter, which tracks the
+        // file and produces no asset, leaving a custom asset that can be made but never loaded.
+        foreach (string ext in _customAssetExtensions)
+            if (!_importersByExt.ContainsKey(ext))
+                _importersByExt[ext] = typeof(Importers.CustomAssetImporter);
+        _importersByName[nameof(Importers.CustomAssetImporter)] = typeof(Importers.CustomAssetImporter);
 
         _scriptTemplates.Sort((a, b) =>
         {
@@ -338,6 +347,9 @@ public static class EditorRegistries
         }
     }
 
+    /// <summary>Extensions claimed by a create-asset menu entry, resolved to an importer after the scan.</summary>
+    private static readonly HashSet<string> _customAssetExtensions = [];
+
     /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
     private static readonly Dictionary<Type, Func<EngineObject>> _assetFactories = new()
     {
@@ -358,6 +370,8 @@ public static class EditorRegistries
             Order = attr.Order,
             Factory = _assetFactories.GetValueOrDefault(type),
         };
+        if (!string.IsNullOrEmpty(attr.Extension))
+            _customAssetExtensions.Add(NormalizeExt(attr.Extension));
         MenuItemAttribute.Register("Assets/Create/" + attr.Name, () =>
         {
             var task = new Core.Tasks.CreateAssetTask();

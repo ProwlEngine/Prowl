@@ -26,6 +26,13 @@ public static class ImportHelper
     /// Reads the file, deserializes as T with dependency tracking, sets it as the main asset,
     /// and forwards all discovered dependencies to ctx. Returns false and logs on any error.
     /// </summary>
+    /// <summary>
+    /// Import an Echo file whose concrete type is written in the file itself, for assets the editor
+    /// has no specific importer for. Same as <see cref="ImportEcho{T}"/> without naming the type up front.
+    /// </summary>
+    public static bool ImportEchoObject(ImportContext ctx, string errorLabel)
+        => ImportEcho<EngineObject>(ctx, errorLabel);
+
     public static bool ImportEcho<T>(ImportContext ctx, string errorLabel) where T : EngineObject
     {
         try
