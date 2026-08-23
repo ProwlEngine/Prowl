@@ -676,6 +676,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         if (succeeded.Count > 0)
         {
+            ContentVersion++;
             OnAssetsImported?.Invoke(succeeded.ToArray());
             ReclaimMemory();
         }
@@ -1052,8 +1053,18 @@ public class EditorAssetBackend : AssetBackendBase
             ? c.Files : Array.Empty<FileRecord>();
     }
 
+    /// <summary>
+    /// Bumped every time the folder/file index is invalidated or an asset is imported, deleted or moved.
+    /// Lets views that rebuild a model from the index cache it and rebuild only when this changes.
+    /// </summary>
+    public int ContentVersion { get; private set; }
+
     /// <summary>Force the folder/file index to rebuild on next query. Driven by the asset watcher.</summary>
-    public void InvalidateFolderIndex() => _folderIndexDirty = true;
+    public void InvalidateFolderIndex()
+    {
+        _folderIndexDirty = true;
+        ContentVersion++;
+    }
 
     private void EnsureFolderIndex()
     {
@@ -1197,7 +1208,7 @@ public class EditorAssetBackend : AssetBackendBase
         };
         _guidToEntry[meta.Guid] = entry;
         _pathToGuid[relativePath] = meta.Guid;
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -1251,7 +1262,7 @@ public class EditorAssetBackend : AssetBackendBase
         };
         _guidToEntry[meta.Guid] = entry;
         _pathToGuid[relativePath] = meta.Guid;
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         return meta.Guid;
@@ -1344,7 +1355,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetsDeleted?.Invoke(new[] { relativePath });
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         if (AffectsCompilation(relativePath))
             ScriptAssemblyManager.RequestRecompile();
@@ -1436,7 +1447,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         if (AffectsCompilation(oldRelativePath) || AffectsCompilation(newRelativePath))
             ScriptAssemblyManager.RequestRecompile();
@@ -1521,7 +1532,7 @@ public class EditorAssetBackend : AssetBackendBase
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         if (recompile)
             ScriptAssemblyManager.RequestRecompile();
@@ -1566,6 +1577,7 @@ public class EditorAssetBackend : AssetBackendBase
             entry.NeedsReimport = true;
             RunImport(entry);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            ContentVersion++;
             OnAssetsImported?.Invoke(new[] { entry.Path });
 
             // Reload the asset and enqueue thumbnail regeneration
@@ -1679,6 +1691,7 @@ public class EditorAssetBackend : AssetBackendBase
         if (imported.Count > 0 || deleted.Count > 0)
         {
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            ContentVersion++;
             if (imported.Count > 0) OnAssetsImported?.Invoke(imported.ToArray());
             if (deleted.Count > 0) OnAssetsDeleted?.Invoke(deleted.ToArray());
 
@@ -1695,7 +1708,7 @@ public class EditorAssetBackend : AssetBackendBase
             // change a file's size/date, so the cached folder index the Project Panel reads is stale.
             // .meta files are ours and don't affect the displayed structure.
             if (!evt.Path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
-                _folderIndexDirty = true;
+                InvalidateFolderIndex();
 
             // Skip directory events - ScanAssets handles directory .meta creation
             if (Directory.Exists(evt.Path))
@@ -1829,7 +1842,7 @@ public class EditorAssetBackend : AssetBackendBase
         ImportDirty();
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         RefreshResourcesMap();
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
     }
 
     // ================================================================
