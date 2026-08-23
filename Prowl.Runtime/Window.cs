@@ -3,6 +3,7 @@
 
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -127,10 +128,35 @@ public static class Window
         set { InternalWindow.IsVisible = value; }
     }
 
+    // Requested swap interval, or -1 for "nothing pending".
+    private static int s_pendingSwapInterval = -1;
+
     public static bool VSync
     {
         get { return InternalWindow.VSync; }
-        set { InternalWindow.VSync = value; }
+        set
+        {
+            InternalWindow.VSync = value;
+
+            // IWindow.VSync is only read by Silk.NET's automatic Render path, which does not run under the manual loop - so setting it alone changes nothing.
+            // SwapInterval is the call that matters, but it needs the GL context current, and Start() hands the context to the render thread without it ever returning to main.
+            // So record the request and let the render thread apply it.
+            Interlocked.Exchange(ref s_pendingSwapInterval, value ? 1 : 0);
+        }
+    }
+
+    /// <summary>
+    /// Applies a pending <see cref="VSync"/> change. **Render thread only** - the caller must hold the GL context current.
+    /// </summary>
+    internal static void ApplyPendingSwapInterval()
+    {
+        int pending = Interlocked.Exchange(ref s_pendingSwapInterval, -1);
+        if (pending < 0)
+        {
+            return;
+        }
+
+        InternalWindow.GLContext?.SwapInterval(pending);
     }
 
     public static float FramesPerSecond

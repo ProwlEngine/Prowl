@@ -232,6 +232,12 @@ public static unsafe class Graphics
 
                 if (job.IsFrameEnd)
                 {
+                    // VSync changes are requested from the main thread but SwapInterval needs the context,
+                    // which lives on this thread for the whole run. Applied next to SwapBuffers because that
+                    // is the call the interval governs.
+                    try { Window.ApplyPendingSwapInterval(); }
+                    catch (Exception ex) { Debug.LogError($"SwapInterval failed: {ex}"); }
+
                     try { Window.InternalWindow.GLContext!.SwapBuffers(); }
                     catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
                     finally { s_renderFrameDone.Set(); }
