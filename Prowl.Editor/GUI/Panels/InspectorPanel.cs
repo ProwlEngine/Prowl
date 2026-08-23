@@ -527,18 +527,41 @@ public class InspectorPanel : DockPanel
         Origami.Label(paper, "insp_folder_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
 
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        if (Directory.Exists(absPath))
+        if (!Directory.Exists(absPath)) return;
+
+        var counts = GetFolderCounts(item.RelativePath, absPath);
+        if (counts == null) return;
+
+        Origami.Label(paper, "insp_folder_files", $"{Loc.Get("inspector.files")}: {counts.Value.Files}").Show();
+        Origami.Label(paper, "insp_folder_folders", $"{Loc.Get("inspector.subfolders")}: {counts.Value.Folders}").Show();
+    }
+
+    // Recursive folder counts are cached rather than walked every frame, since the inspector redraws
+    // continuously while a folder stays selected. Dropped whenever the asset database content moves.
+    private static readonly Dictionary<string, (int Files, int Folders)> _folderCounts = [];
+    private static int _folderCountsVersion = -1;
+
+    private static (int Files, int Folders)? GetFolderCounts(string relativePath, string absPath)
+    {
+        int version = EditorAssetBackend.Instance?.ContentVersion ?? -1;
+        if (_folderCountsVersion != version)
         {
-            try
-            {
-                int fileCount = Directory.GetFiles(absPath, "*", SearchOption.AllDirectories)
-                    .Count(f => !f.EndsWith(".meta"));
-                int folderCount = Directory.GetDirectories(absPath, "*", SearchOption.AllDirectories).Length;
-                Origami.Label(paper, "insp_folder_files", $"{Loc.Get("inspector.files")}: {fileCount}").Show();
-                Origami.Label(paper, "insp_folder_folders", $"{Loc.Get("inspector.subfolders")}: {folderCount}").Show();
-            }
-            catch { }
+            _folderCounts.Clear();
+            _folderCountsVersion = version;
         }
+
+        if (_folderCounts.TryGetValue(relativePath, out var cached)) return cached;
+
+        try
+        {
+            int files = Directory.GetFiles(absPath, "*", SearchOption.AllDirectories)
+                .Count(f => !f.EndsWith(".meta"));
+            int folders = Directory.GetDirectories(absPath, "*", SearchOption.AllDirectories).Length;
+            var counts = (files, folders);
+            _folderCounts[relativePath] = counts;
+            return counts;
+        }
+        catch { return null; }
     }
 
     private void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetBackend db)
