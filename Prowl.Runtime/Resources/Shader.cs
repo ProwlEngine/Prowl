@@ -201,6 +201,13 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
+    /// Raw source text of an embedded default shader. Tooling that only needs the declared
+    /// <c>Shader "path"</c> can read it from here without paying for a full parse.
+    /// </summary>
+    public static string GetDefaultSource(DefaultShader shader) =>
+        EmbeddedResources.ReadAllText($"Assets/Defaults/{shader}.shader");
+
+    /// <summary>
     /// Pulls the declared path out of the <c>Shader "Some/Path"</c> line at the top of a shader
     /// source, without running the parser. Leading comments and blank lines are skipped, so this
     /// works on files that open with a header comment. Returns <c>null</c> when no declaration is
