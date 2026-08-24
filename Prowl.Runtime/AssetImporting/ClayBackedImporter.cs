@@ -373,32 +373,126 @@ internal static class ClayBackedImporter
     // Material bake
     // ----------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Picks the Default/Standard* or Default/Unlit* variant matching the source material's alpha
+    /// mode and sidedness. Render state (cull, blend, depth write) is baked into the shader rather
+    /// than overridden per material, so the mode has to be chosen here.
+    /// </summary>
+    private static DefaultShader SelectShader(ClayMaterial src)
+    {
+        bool twoSided = src.DoubleSided;
+
+        if (src.Unlit)
+        {
+            return src.AlphaMode switch
+            {
+                MaterialAlphaMode.Mask => twoSided ? DefaultShader.UnlitCutoutDoubleSided : DefaultShader.UnlitCutout,
+                MaterialAlphaMode.Blend => twoSided ? DefaultShader.UnlitTransparentDoubleSided : DefaultShader.UnlitTransparent,
+                _ => twoSided ? DefaultShader.UnlitDoubleSided : DefaultShader.Unlit,
+            };
+        }
+
+        return src.AlphaMode switch
+        {
+            MaterialAlphaMode.Mask => twoSided ? DefaultShader.StandardCutoutDoubleSided : DefaultShader.StandardCutout,
+            MaterialAlphaMode.Blend => twoSided ? DefaultShader.StandardTransparentDoubleSided : DefaultShader.StandardTransparent,
+            _ => twoSided ? DefaultShader.StandardDoubleSided : DefaultShader.Standard,
+        };
+    }
+
     private static PMaterial BuildMaterial(ClayMaterial src, AssetRef<Texture2D>[] textureCache)
     {
-        var mat = new PMaterial(Shader.LoadDefault(DefaultShader.Standard))
+        var mat = new PMaterial(Shader.LoadDefault(SelectShader(src)))
         {
             Name = string.IsNullOrEmpty(src.Name) ? "Material" : src.Name,
         };
 
+        // BaseColor is linear (glTF baseColorFactor), and the Standard shaders multiply _MainColor
+        // in after decoding the albedo texture, so it crosses over untouched.
         mat.SetColor("_MainColor", src.BaseColor);
 
-        mat.SetTexture("_MainTex", OrDefault(ResolveTexture(src.BaseColorTexture, textureCache), DefaultTexture.Grid));
-        mat.SetTexture("_NormalTex", OrDefault(ResolveTexture(src.NormalTexture, textureCache), DefaultTexture.Normal));
+        // An absent albedo texture means "the factor is the colour", so the neutral is white. The
+        // grid checker is the missing-texture placeholder for hand-authored materials and would
+        // otherwise get multiplied into every untextured imported material.
+        mat.SetTexture("_MainTex", OrDefault(ResolveTexture(src.BaseColorTexture, textureCache), DefaultTexture.White));
 
+        ApplyTextureTransform(mat, src);
+
+        if (src.AlphaMode == MaterialAlphaMode.Mask)
+            mat.SetFloat("_AlphaCutoff", src.AlphaCutoff);
+
+        // The unlit shaders carry only the base slots; everything below has no uniform there.
+        if (src.Unlit)
+            return mat;
+
+        mat.SetTexture("_NormalTex", OrDefault(ResolveTexture(src.NormalTexture, textureCache), DefaultTexture.Normal));
+        mat.SetFloat("_NormalScale", src.NormalScale);
+
+        // Factors multiply the texture channels, matching glTF. White is the neutral texture so a
+        // factor-only material lands on exactly its factors.
+        mat.SetTexture("_SurfaceTex", OrDefault(ResolveTexture(src.MetallicRoughnessTexture, textureCache), DefaultTexture.White));
         mat.SetFloat("_Metallic", src.Metallic);
         mat.SetFloat("_Roughness", src.Roughness);
-        mat.SetTexture("_SurfaceTex", OrDefault(ResolveTexture(src.MetallicRoughnessTexture, textureCache), DefaultTexture.Surface));
 
-        mat.SetTexture("_EmissionTex", OrDefault(ResolveTexture(src.EmissiveTexture, textureCache), DefaultTexture.Emission));
+        // Occlusion is its own slot. When a model packs ORM into one image and points both
+        // occlusionTexture and metallicRoughnessTexture at it, both slots resolve to that image.
+        mat.SetTexture("_OcclusionTex", OrDefault(ResolveTexture(src.OcclusionTexture, textureCache), DefaultTexture.White));
+        mat.SetFloat("_OcclusionStrength", src.OcclusionStrength);
 
-        // EmissiveFactor is already linear-RGB in Clay; EmissiveStrength multiplies it.
-        var e = src.EmissiveFactor;
-        var emissiveColor = new Color(e.R * src.EmissiveStrength, e.G * src.EmissiveStrength, e.B * src.EmissiveStrength, 1f);
-        mat.SetColor("_EmissiveColor", emissiveColor);
-        float maxE = MathF.Max(emissiveColor.R, MathF.Max(emissiveColor.G, emissiveColor.B));
-        mat.SetFloat("_EmissionIntensity", maxE > 0f ? 1f : 0f);
+        mat.SetTexture("_EmissionTex", OrDefault(ResolveTexture(src.EmissiveTexture, textureCache), DefaultTexture.White));
+        mat.SetColor("_EmissiveColor", src.EmissiveFactor);
+        mat.SetFloat("_EmissionIntensity", src.EmissiveStrength);
 
         return mat;
+    }
+
+    /// <summary>
+    /// Carries KHR_texture_transform across. The Standard shaders apply one tiling/offset pair to
+    /// every slot, so the base-colour slot wins and anything the shader cannot express is reported
+    /// rather than dropped silently.
+    /// </summary>
+    private static void ApplyTextureTransform(PMaterial mat, ClayMaterial src)
+    {
+        var slot = src.BaseColorTexture;
+        if (slot is not null)
+        {
+            mat.SetVector("_Tiling", slot.Scale);
+            mat.SetVector("_Offset", slot.Offset);
+
+            if (slot.Rotation != 0f)
+                Debug.LogWarning($"[Clay] Material '{src.Name}' uses a rotated UV transform ({slot.Rotation:0.###} rad); " +
+                    "the Standard shaders only support tiling and offset, so the rotation was dropped.");
+        }
+
+        foreach (var other in EnumerateSlots(src))
+        {
+            if (other is null || ReferenceEquals(other, slot)) continue;
+
+            if (other.UVChannel != 0)
+            {
+                Debug.LogWarning($"[Clay] Material '{src.Name}' samples a texture from UV channel {other.UVChannel}; " +
+                    "the Standard shaders sample UV0 for every slot, so UV0 was used instead.");
+            }
+
+            bool differs = slot is null
+                ? other.Scale != Float2.One || other.Offset != Float2.Zero
+                : other.Scale != slot.Scale || other.Offset != slot.Offset;
+
+            if (differs)
+            {
+                Debug.LogWarning($"[Clay] Material '{src.Name}' uses per-slot UV transforms that differ from its base " +
+                    "colour slot; the Standard shaders apply one transform to every slot, so the base colour slot won.");
+            }
+        }
+    }
+
+    private static IEnumerable<MaterialTextureSlot?> EnumerateSlots(ClayMaterial src)
+    {
+        yield return src.BaseColorTexture;
+        yield return src.MetallicRoughnessTexture;
+        yield return src.NormalTexture;
+        yield return src.OcclusionTexture;
+        yield return src.EmissiveTexture;
     }
 
     private static AssetRef<Texture2D> ResolveTexture(MaterialTextureSlot? slot, AssetRef<Texture2D>[] cache)
