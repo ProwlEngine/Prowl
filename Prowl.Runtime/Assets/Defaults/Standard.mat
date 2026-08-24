@@ -24,8 +24,7 @@
 
     },
     "_floats": {
-      "_EmissionIntensity": 1F,
-      "_AlphaCutoff": 0.5F
+      "_EmissionIntensity": 1F
     },
     "_ints": {
 
