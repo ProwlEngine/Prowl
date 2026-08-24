@@ -1101,7 +1101,7 @@ public static class GameObjectInspector
                         CloseAddComponentPopup();
                     else
                     {
-                        RenderAddComponentBackdrop(paper);
+                        MenuTreePopup.Backdrop(paper, "gi_acp", CloseAddComponentPopup);
                         RenderAddComponentPopover(paper, trigHandle);
                     }
                 }
@@ -1447,24 +1447,10 @@ public static class GameObjectInspector
     //  Add Component Popup
     // ================================================================
 
-    private struct ComponentEntry
-    {
-        public string Path;     // Full path e.g. "Physics/Colliders/Box Collider"
-        public string Category; // e.g. "Physics/Colliders"
-        public string Name;     // e.g. "Box Collider"
-        public string Icon;
-        public Type Type;
-    }
-
     private static bool _addComponentOpen;
     private static GameObject? _addComponentTarget;
-    private static string _addComponentSearch = "";
-    private static List<string> _addComponentNavStack = [];
-    private static List<ComponentEntry>? _cachedComponents;
-
-    // Matches Origami's DropdownBuilder default popover cap (Widgets/Dropdown.cs), so the Add
-    // Component popover scrolls the same way any other dropdown in the editor does.
-    private const float PopoverMaxListHeight = 320f;
+    private static readonly MenuTreeState _addComponentMenu = new();
+    private static List<MenuTreeEntry>? _cachedComponents;
 
     /// <summary>
     /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
@@ -1481,8 +1467,7 @@ public static class GameObjectInspector
         }
 
         _addComponentTarget = target;
-        _addComponentSearch = "";
-        _addComponentNavStack = [];
+        _addComponentMenu.Reset();
         _cachedComponents ??= GatherComponents();
         _addComponentOpen = true;
     }
@@ -1493,212 +1478,19 @@ public static class GameObjectInspector
         _addComponentTarget = null;
     }
 
-    // Fullscreen, invisible click-catcher so clicking anywhere outside the popover closes it -
-    // the same click-outside behaviour Origami's dropdowns use (see DropdownInternal.RenderBackdrop).
-    private static void RenderAddComponentBackdrop(Paper paper)
-    {
-        paper.Box("gi_acp_backdrop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(-9999, -9999)
-            .Size(99999, 99999)
-            .Layer(Layer.Overlay)
-            .StopEventPropagation()
-            .OnClick(0, (_, _) => CloseAddComponentPopup());
-    }
-
-    // Popover anchored directly below the Add Component button, styled like Origami's dropdown
-    // popovers - same background, border, shadow, rounding and row hover, sourced from EditorTheme.
     private static void RenderAddComponentPopover(Paper paper, ElementHandle trigHandle)
     {
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
-
-        float triggerWidth = trigHandle.Data.LayoutRect.Size.X > 0 ? (float)trigHandle.Data.LayoutRect.Size.X : 280f;
-        float triggerHeight = trigHandle.Data.LayoutRect.Size.Y > 0 ? (float)trigHandle.Data.LayoutRect.Size.Y : 28f;
-
-        const float padX = 5f, padY = 5f, searchH = 28f, searchGap = 4f;
-
-        using (paper.Column("gi_acp_pop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, triggerHeight + 4f)
-            .Width(triggerWidth)
-            .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.Popover)
-            .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
-            .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
-            .Rounded(EditorTheme.Roundness + 2f)
-            .Padding(padX, padX, padY, padY)
-            .ColBetween(searchGap)
-            .HookToParent()
-            .Layer(Layer.Topmost)
-            .ClampToScreen()
-            .StopEventPropagation()
-            .Enter())
-        {
-            using (paper.Row("gi_acp_search_row").Height(searchH).Enter())
+        MenuTreePopup.Popover(paper, "gi_acp", trigHandle, _cachedComponents ?? [], _addComponentMenu,
+            entry =>
             {
-                Origami.SearchField(paper, "gi_acp_search", _addComponentSearch, v => _addComponentSearch = v, Loc.Get("popup.search_components")).Show();
-            }
-
-            var components = _cachedComponents ?? [];
-
-            Origami.ScrollView(paper, "gi_acp_scroll", triggerWidth - padX * 2, PopoverMaxListHeight)
-                .Padding(0)
-                .Body(() =>
-            {
-                if (!string.IsNullOrEmpty(_addComponentSearch))
-                    DrawAddComponentSearchResults(paper, font, components);
-                else
-                    DrawAddComponentBrowseLevel(paper, font, components);
-            });
-        }
-    }
-
-    // Flat, globally-filtered list shown while the search box has text (ignores current folder).
-    private static void DrawAddComponentSearchResults(Paper paper, Prowl.Scribe.FontFile font, List<ComponentEntry> components)
-    {
-        var filtered = components.Where(c =>
-            c.Name.Contains(_addComponentSearch, StringComparison.OrdinalIgnoreCase) ||
-            c.Path.Contains(_addComponentSearch, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (filtered.Count == 0)
-        {
-            paper.Box("acp_empty").Height(40)
-                .Text(Loc.Get("popup.no_components"), font)
-                .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-            return;
-        }
-
-        for (int i = 0; i < filtered.Count; i++)
-            DrawComponentItem(paper, font, $"acp_item_{i}", filtered[i]);
-    }
-
-    // Unity-style click-to-navigate browser: the current folder's subfolders and components,
-    // with a "Back" row when nested. Clicking a folder drills in; clicking Back steps back out.
-    private static void DrawAddComponentBrowseLevel(Paper paper, Prowl.Scribe.FontFile font, List<ComponentEntry> components)
-    {
-        string prefix = string.Join("/", _addComponentNavStack);
-        var (leaves, subfolders) = SplitComponentLevel(components, prefix);
-
-        if (_addComponentNavStack.Count > 0)
-        {
-            string currentName = _addComponentNavStack[^1];
-            using (paper.Row("acp_back")
-                .Height(EditorTheme.RowHeight)
-                .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
-                .OnClick(0, (_, _) => _addComponentNavStack.RemoveAt(_addComponentNavStack.Count - 1))
-                .Enter())
-            {
-                paper.Box("acp_back_ico").Width(16).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.ChevronLeft, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-                paper.Box("acp_back_name").Height(EditorTheme.RowHeight)
-                    .Text(currentName, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-            }
-
-            paper.Box("acp_back_sep").Height(1).Margin(8, 3, 8, 3).BackgroundColor(EditorTheme.BorderSoft);
-        }
-
-        foreach (var folder in subfolders)
-        {
-            var captured = folder;
-            using (paper.Row($"acp_folder_{folder}")
-                .Height(EditorTheme.RowHeight)
-                .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
-                .OnClick(0, (_, _) => _addComponentNavStack.Add(captured))
-                .Enter())
-            {
-                paper.Box($"acp_folder_{folder}_ico").Width(16).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.Folder, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-
-                paper.Box($"acp_folder_{folder}_name")
-                    .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                    .Text(folder, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-
-                paper.Box($"acp_folder_{folder}_arw").Width(16).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.ChevronRight, font).TextColor(EditorTheme.Ink300)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-            }
-        }
-
-        if (subfolders.Count > 0 && leaves.Count > 0)
-            paper.Box("acp_level_sep").Height(1).Margin(8, 3, 8, 3).BackgroundColor(EditorTheme.BorderSoft);
-
-        foreach (var comp in leaves)
-            DrawComponentItem(paper, font, $"acp_item_{comp.Type.Name}", comp);
-
-        if (subfolders.Count == 0 && leaves.Count == 0)
-        {
-            paper.Box("acp_empty").Height(40)
-                .Text(Loc.Get("popup.no_components"), font)
-                .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-        }
-    }
-
-    // Splits components into this level's direct items (Category == prefix) and its immediate
-    // subfolder names (the next path segment past prefix), so browsing can drill in one segment
-    // at a time regardless of how deep the full category path goes.
-    private static (List<ComponentEntry> Leaves, List<string> Subfolders) SplitComponentLevel(List<ComponentEntry> components, string prefix)
-    {
-        var leaves = new List<ComponentEntry>();
-        var subfolders = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var c in components)
-        {
-            if (c.Category == prefix)
-            {
-                leaves.Add(c);
-                continue;
-            }
-
-            if (prefix.Length > 0 && !c.Category.StartsWith(prefix + "/", StringComparison.Ordinal))
-                continue;
-
-            string rel = prefix.Length > 0 ? c.Category[(prefix.Length + 1)..] : c.Category;
-            int slash = rel.IndexOf('/');
-            subfolders.Add(slash < 0 ? rel : rel[..slash]);
-        }
-
-        var sortedSubfolders = subfolders.ToList();
-        sortedSubfolders.Sort(StringComparer.OrdinalIgnoreCase);
-        leaves.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        return (leaves, sortedSubfolders);
-    }
-
-    private static void DrawComponentItem(Paper paper, Prowl.Scribe.FontFile font, string id, ComponentEntry comp)
-    {
-        using (paper.Row(id)
-            .Height(EditorTheme.RowHeight)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
-            .OnClick(comp.Type, (type, _) =>
-            {
-                if (_addComponentTarget != null)
+                if (_addComponentTarget != null && entry.Tag is Type type)
                 {
                     AddComponentWithUndo(_addComponentTarget, type);
                     CloseAddComponentPopup();
                 }
-            })
-            .Enter())
-        {
-            paper.Box($"{id}_ico")
-                .Width(16).Height(EditorTheme.RowHeight)
-                .Text(comp.Icon, font).TextColor(EditorTheme.Ink400)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-
-            paper.Box($"{id}_name")
-                .Height(EditorTheme.RowHeight)
-                .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-        }
+            },
+            Loc.Get("popup.search_components"),
+            Loc.Get("popup.no_components"));
     }
 
     /// <summary>
@@ -1721,9 +1513,9 @@ public static class GameObjectInspector
         return addedComp;
     }
 
-    private static List<ComponentEntry> GatherComponents()
+    private static List<MenuTreeEntry> GatherComponents()
     {
-        var result = new List<ComponentEntry>();
+        var result = new List<MenuTreeEntry>();
 
         foreach (var type in EditorUtils.GetAllTypes())
         {
@@ -1737,7 +1529,6 @@ public static class GameObjectInspector
 
             int lastSlash = path.LastIndexOf('/');
             string category = lastSlash >= 0 ? path[..lastSlash] : "";
-            string name = lastSlash >= 0 ? path[(lastSlash + 1)..] : path;
 
             if (string.IsNullOrEmpty(icon))
             {
@@ -1756,14 +1547,7 @@ public static class GameObjectInspector
                 };
             }
 
-            result.Add(new ComponentEntry
-            {
-                Path = path,
-                Category = category,
-                Name = name,
-                Icon = icon,
-                Type = type
-            });
+            result.Add(MenuTreeEntry.FromPath(path, icon, type));
         }
 
         return result;

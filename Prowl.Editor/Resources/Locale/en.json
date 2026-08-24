@@ -185,6 +185,7 @@
   "inspector.rotation": "Rotation",
   "inspector.scale": "Scale",
   "inspector.add_component": "Add Component",
+  "inspector.shader_none": "None",
   "inspector.reset": "Reset",
   "inspector.remove_component": "Remove Component",
   "inspector.copy_component": "Copy Component",
@@ -264,6 +265,8 @@
 
   "popup.search_components": "Search components...",
   "popup.no_components": "No matching components",
+  "popup.search_shaders": "Search shaders...",
+  "popup.no_shaders": "No matching shaders",
   "popup.uncategorized": "Uncategorized",
   "selector.no_scene": "No scene loaded",
   "selector.no_objects": "No matching objects in scene",

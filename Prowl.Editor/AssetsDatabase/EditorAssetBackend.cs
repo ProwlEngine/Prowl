@@ -151,6 +151,10 @@ public class EditorAssetBackend : AssetBackendBase
         // triggers a recompile / package restore, the same as editing the Packages UI used to.
         StartBuildPropsWatcher();
 
+        // Read every tracked shader's declared menu path now that the scan and import have settled,
+        // so the material inspector's shader picker opens against a warm catalog.
+        RebuildShaderMenuPaths();
+
         Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
 
         // Initialize GameResources mapping for editor play mode
@@ -702,7 +706,18 @@ public class EditorAssetBackend : AssetBackendBase
     // reads them from its own thread. Unsynchronized, a load either fails on a sharing violation or
     // reads a file mid-replace, and the replace itself can lose to the reader and leave the previous
     // cache in place. Re-entrant, so LoadFresh's own on-demand import path still works.
-    private bool RunImport(AssetEntry entry) { lock (_loadLock) return RunImportCore(entry); }
+    private bool RunImport(AssetEntry entry)
+    {
+        bool imported;
+        lock (_loadLock) imported = RunImportCore(entry);
+
+        // Every add and every reimport funnels through here, so this is the one place the shader
+        // catalog has to react to a declaration having possibly changed.
+        if (IsShaderPath(entry.Path))
+            InvalidateShaderMenuPath(entry.Guid);
+
+        return imported;
+    }
 
     private bool RunImportCore(AssetEntry entry)
     {
@@ -1013,6 +1028,190 @@ public class EditorAssetBackend : AssetBackendBase
 
     public string[] GetAllAssetPaths()
         => _pathToGuid.Keys.ToArray();
+
+    // ================================================================
+    //  Shader menu paths
+    // ================================================================
+    // A shader's menu path is the `Shader "Some/Path"` declaration at the top of its own source,
+    // which is not something the importer records anywhere. The database reads it directly and
+    // keeps it beside the entry index: the built-ins are compiled in and read once, project
+    // shaders are re-read whenever they import and are validated against the live entries so a
+    // deleted one stops being offered.
+
+    /// <summary>
+    /// Menu-path prefix for shaders the engine drives itself (post-process, gizmos, blits) rather
+    /// than ones a material would be assigned. Excluded from <see cref="GetShaderCatalog"/> by default.
+    /// </summary>
+    public const string HiddenShaderPrefix = "Hidden/";
+
+    // Kept apart from the project cache below: these are compiled into the runtime assembly, so
+    // they are read once and never invalidated, and crucially they are never subject to the
+    // liveness check (they have no asset entry to be live against).
+    private readonly Dictionary<Guid, string> _builtInShaderPaths = new();
+
+    // Written from the import path and read from the inspector, so this carries its own lock
+    // rather than borrowing _loadLock (which is held across a whole import).
+    private readonly Dictionary<Guid, string> _projectShaderPaths = new();
+    private readonly object _shaderMenuLock = new();
+
+    /// <summary>One assignable shader and the menu path it declares.</summary>
+    public readonly struct ShaderMenuEntry
+    {
+        /// <summary>Asset GUID to assign, built-in or project.</summary>
+        public Guid Guid { get; init; }
+        /// <summary>The declared menu path, e.g. <c>"Default/Cutout/Standard"</c>.</summary>
+        public string MenuPath { get; init; }
+        /// <summary>True for the shaders embedded in the runtime assembly.</summary>
+        public bool IsBuiltIn { get; init; }
+    }
+
+    /// <summary>
+    /// Every shader the editor can assign, built-in and project, sorted by menu path.
+    /// </summary>
+    public List<ShaderMenuEntry> GetShaderCatalog(bool includeHidden = false)
+    {
+        var result = new List<ShaderMenuEntry>();
+
+        lock (_shaderMenuLock)
+        {
+            SeedBuiltInShaderPaths();
+
+            foreach (var (guid, path) in _builtInShaderPaths)
+            {
+                if (!includeHidden && path.StartsWith(HiddenShaderPrefix, StringComparison.Ordinal)) continue;
+                result.Add(new ShaderMenuEntry { Guid = guid, MenuPath = path, IsBuiltIn = true });
+            }
+
+            // Driven off the live entries rather than the cache, so a shader whose entry has gone
+            // stops being offered whether or not its cached path has been pruned yet.
+            foreach (var entry in _guidToEntry.Values)
+            {
+                if (!IsShaderPath(entry.Path)) continue;
+
+                string path = GetOrReadProjectShaderPath(entry.Guid, entry.Path);
+                if (!includeHidden && path.StartsWith(HiddenShaderPrefix, StringComparison.Ordinal)) continue;
+                result.Add(new ShaderMenuEntry { Guid = entry.Guid, MenuPath = path, IsBuiltIn = false });
+            }
+        }
+
+        result.Sort((a, b) => string.Compare(a.MenuPath, b.MenuPath, StringComparison.OrdinalIgnoreCase));
+        return result;
+    }
+
+    /// <summary>
+    /// The menu path a shader GUID declares, or <paramref name="fallback"/> when it is not a shader
+    /// this database knows about.
+    /// </summary>
+    public string GetShaderMenuPath(Guid guid, string fallback)
+    {
+        if (guid == Guid.Empty) return fallback;
+
+        lock (_shaderMenuLock)
+        {
+            SeedBuiltInShaderPaths();
+            if (_builtInShaderPaths.TryGetValue(guid, out string? builtIn)) return builtIn;
+
+            if (_guidToEntry.TryGetValue(guid, out var entry) && IsShaderPath(entry.Path))
+                return GetOrReadProjectShaderPath(guid, entry.Path);
+
+            // Not a live shader any more (deleted, or never one). Drop whatever was cached so the
+            // GUID does not keep reporting a path for an asset that is gone.
+            _projectShaderPaths.Remove(guid);
+            return fallback;
+        }
+    }
+
+    private static bool IsShaderPath(string relativePath)
+        => relativePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase);
+
+    private void SeedBuiltInShaderPaths()
+    {
+        if (_builtInShaderPaths.Count > 0) return;
+
+        foreach (Runtime.Resources.DefaultShader shader in Enum.GetValues<Runtime.Resources.DefaultShader>())
+        {
+            string path;
+            try
+            {
+                path = Runtime.Resources.Shader.ReadDeclaredPath(Runtime.Resources.Shader.GetDefaultSource(shader))
+                       ?? shader.ToString();
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogWarning($"Could not read the declared path of built-in shader '{shader}': {ex.Message}");
+                path = shader.ToString();
+            }
+
+            _builtInShaderPaths[Runtime.BuiltInAssets.GuidFor(shader)] = path;
+        }
+    }
+
+    /// <summary>
+    /// The cached menu path for a project shader, reading it off disk the first time. Import drops
+    /// the cached value, so an edited declaration is picked up on the next read.
+    /// </summary>
+    private string GetOrReadProjectShaderPath(Guid guid, string relativePath)
+    {
+        if (_projectShaderPaths.TryGetValue(guid, out string? existing)) return existing;
+
+        string path = ReadDeclaredShaderPath(Path.Combine(_project.AssetsPath, relativePath))
+            ?? Path.GetFileNameWithoutExtension(relativePath);
+
+        _projectShaderPaths[guid] = path;
+        return path;
+    }
+
+    /// <summary>
+    /// Called after a shader is imported so the next catalog read picks up an edited declaration.
+    /// </summary>
+    private void InvalidateShaderMenuPath(Guid guid)
+    {
+        lock (_shaderMenuLock)
+            _projectShaderPaths.Remove(guid);
+    }
+
+    /// <summary>
+    /// Reads every tracked shader's declaration and drops cached paths whose asset is gone. Run once
+    /// the initial scan and import have settled, so the catalog is warm before anything asks for it.
+    /// </summary>
+    private void RebuildShaderMenuPaths()
+    {
+        lock (_shaderMenuLock)
+        {
+            SeedBuiltInShaderPaths();
+
+            var live = new HashSet<Guid>();
+            foreach (var entry in _guidToEntry.Values)
+            {
+                if (!IsShaderPath(entry.Path)) continue;
+                live.Add(entry.Guid);
+                GetOrReadProjectShaderPath(entry.Guid, entry.Path);
+            }
+
+            foreach (Guid guid in _projectShaderPaths.Keys.ToList())
+                if (!live.Contains(guid))
+                    _projectShaderPaths.Remove(guid);
+        }
+    }
+
+    // Only the head of the file matters - the declaration sits at the top and a shader can be tens
+    // of kilobytes of GLSL below it.
+    private static string? ReadDeclaredShaderPath(string absolutePath)
+    {
+        const int HeadChars = 8 * 1024;
+        try
+        {
+            using var reader = new StreamReader(absolutePath);
+            char[] buffer = new char[HeadChars];
+            int read = reader.ReadBlock(buffer, 0, HeadChars);
+            return Runtime.Resources.Shader.ReadDeclaredPath(new string(buffer, 0, read));
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Could not read shader '{absolutePath}': {ex.Message}");
+            return null;
+        }
+    }
 
     // ================================================================
     //  Folder / file structure (cached tree the Project Panel reads)
