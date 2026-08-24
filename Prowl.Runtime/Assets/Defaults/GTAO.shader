@@ -1,4 +1,4 @@
-Shader "Default/GTAO"
+Shader "Hidden/Post Process/GTAO"
 
 Properties
 {

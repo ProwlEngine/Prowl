@@ -1,4 +1,4 @@
-Shader "Paper/UI"
+Shader "UI/Paper"
 
 Properties
 {

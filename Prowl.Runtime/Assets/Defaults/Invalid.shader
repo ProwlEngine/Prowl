@@ -1,4 +1,4 @@
-﻿Shader "Default/Invalid"
+﻿Shader "Hidden/Invalid"
 
 Properties
 {

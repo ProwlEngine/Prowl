@@ -1,4 +1,4 @@
-Shader "Default/DefaultTextMesh"
+Shader "UI/Text Mesh"
 
 Properties
 {

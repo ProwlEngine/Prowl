@@ -1,4 +1,4 @@
-Shader "Default/VolumetricFog"
+Shader "Hidden/Post Process/Volumetric Fog"
 
 Properties
 {

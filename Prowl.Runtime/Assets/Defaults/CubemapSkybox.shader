@@ -1,4 +1,4 @@
-Shader "Default/CubemapSkybox"
+Shader "Skybox/Cubemap"
 
 Properties
 {
