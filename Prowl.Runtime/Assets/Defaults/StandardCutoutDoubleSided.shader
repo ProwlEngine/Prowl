@@ -1,4 +1,4 @@
-Shader "Default/Transparent/Standard"
+Shader "Default/Cutout/Standard Double Sided"
 
 Properties
 {
@@ -21,6 +21,8 @@ Properties
     _EmissiveColor ("Emissive Color", Color) = (1.0, 1.0, 1.0, 1.0)
     _EmissionIntensity ("Emission Intensity", Float) = 1.0
 
+    _AlphaCutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
+
     _ParallaxMap ("Height Map (G)", Texture2D) = "black"
     _Parallax ("Height Scale", Float) = 0.0
     _ParallaxSteps ("POM Steps", Int) = 16
@@ -34,16 +36,80 @@ Properties
 
 Pass "Forward"
 {
-    Tags { "RenderOrder" = "Transparent" }
-    Blend Alpha
-    ZWrite Off
-    Cull Back
+    Tags { "RenderOrder" = "Opaque" }
+    Cull Off
     GLSLPROGRAM
 
         Shared
         {
-            #define PROWL_ALPHA_BLEND
+            #define PROWL_ALPHA_CUTOUT
+            #define PROWL_DOUBLE_SIDED
             #define PROWL_PASS_FORWARD
+        }
+
+        Vertex
+        {
+            #define PROWL_VERTEX_STAGE
+            #include "StandardCore"
+
+            void main() { ProwlVertex(); }
+        }
+
+        Fragment
+        {
+            #define PROWL_FRAGMENT_STAGE
+            #include "StandardCore"
+
+            void main() { ProwlFragment(); }
+        }
+
+    ENDGLSL
+}
+
+Pass "Prepass"
+{
+    Tags { "LightMode" = "Prepass" }
+    Cull Off
+    ZWrite On
+    GLSLPROGRAM
+
+        Shared
+        {
+            #define PROWL_ALPHA_CUTOUT
+            #define PROWL_DOUBLE_SIDED
+            #define PROWL_PASS_PREPASS
+        }
+
+        Vertex
+        {
+            #define PROWL_VERTEX_STAGE
+            #include "StandardCore"
+
+            void main() { ProwlVertex(); }
+        }
+
+        Fragment
+        {
+            #define PROWL_FRAGMENT_STAGE
+            #include "StandardCore"
+
+            void main() { ProwlFragment(); }
+        }
+
+    ENDGLSL
+}
+
+Pass "ShadowCaster"
+{
+    Tags { "LightMode" = "ShadowCaster" }
+    Cull Off
+    GLSLPROGRAM
+
+        Shared
+        {
+            #define PROWL_ALPHA_CUTOUT
+            #define PROWL_DOUBLE_SIDED
+            #define PROWL_PASS_SHADOW
         }
 
         Vertex

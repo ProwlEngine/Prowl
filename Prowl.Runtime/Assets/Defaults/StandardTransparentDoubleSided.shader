@@ -1,4 +1,4 @@
-Shader "Default/Transparent/Standard"
+Shader "Default/Transparent/Standard Double Sided"
 
 Properties
 {
@@ -37,12 +37,13 @@ Pass "Forward"
     Tags { "RenderOrder" = "Transparent" }
     Blend Alpha
     ZWrite Off
-    Cull Back
+    Cull Off
     GLSLPROGRAM
 
         Shared
         {
             #define PROWL_ALPHA_BLEND
+            #define PROWL_DOUBLE_SIDED
             #define PROWL_PASS_FORWARD
         }
 
