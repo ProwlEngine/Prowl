@@ -297,8 +297,10 @@ void ProwlFragment()
     vec3 worldNormal = ApplyNormalMapScaled(_NormalTex, uv, N, T, B, _NormalScale);
 
     // --- Surface: G = Roughness, B = Metallic, each scaled by its factor (glTF semantics). ---
+    // glTF is free to author a roughnessFactor of 0 and plenty of models do, so the floor matters
+    // here and not just as a backstop inside the BRDF.
     vec4 surface = texture(_SurfaceTex, uv);
-    float roughness = clamp(surface.g * _Roughness, 0.0, 1.0);
+    float roughness = clamp(surface.g * _Roughness, PROWL_MIN_ROUGHNESS, 1.0);
     float metallic = clamp(surface.b * _Metallic, 0.0, 1.0);
 
     // --- Ambient occlusion. R channel, 1 = unoccluded, lerped by strength. ---
@@ -393,10 +395,11 @@ void ProwlFragment()
 #else
     normalOut = EncodeViewNormal(ApplyNormalMapScaled(_NormalTex, vUV, N, T, B, _NormalScale));
 
-    // Roughness/metallic must match the forward pass exactly or SSR reflects off the wrong surface.
+    // Roughness/metallic must match the forward pass exactly, floor included, or SSR reflects off
+    // a different surface than the one being shaded.
     vec4 surface = texture(_SurfaceTex, vUV);
     motionRM = vec4(currNDC - prevNDC,
-                    clamp(surface.g * _Roughness, 0.0, 1.0),
+                    clamp(surface.g * _Roughness, PROWL_MIN_ROUGHNESS, 1.0),
                     clamp(surface.b * _Metallic, 0.0, 1.0));
 #endif
 }
