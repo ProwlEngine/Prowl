@@ -2,7 +2,7 @@ Shader "Default/Standard"
 
 Properties
 {
-    _MainTex ("Albedo", Texture2D) = "grid"
+    _MainTex ("Albedo", Texture2D) = "white"
     _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
     _Tiling ("Tiling", Vector2) = (1.0, 1.0)
     _Offset ("Offset", Vector2) = (0.0, 0.0)
