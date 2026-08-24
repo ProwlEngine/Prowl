@@ -287,6 +287,20 @@ vec3 ApplyNormalMap(sampler2D normalTex, vec2 uv, vec3 normal, vec3 tangent, vec
 #endif
 }
 
+// ApplyNormalMap with a strength multiplier on the tangent-space XY, matching the
+// glTF normalTexture.scale semantics. A scale of 0 flattens the map completely.
+vec3 ApplyNormalMapScaled(sampler2D normalTex, vec2 uv, vec3 normal, vec3 tangent, vec3 bitangent, float scale)
+{
+#ifdef HAS_TANGENTS
+    mat3 TBN = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
+    vec3 normalTS = texture(normalTex, uv).rgb * 2.0 - 1.0;
+    normalTS.xy *= scale;
+    return normalize(TBN * normalTS);
+#else
+    return normalize(normal);
+#endif
+}
+
 // Encode a world-space normal to view-space [0,1] range for the depth-normals pre-pass.
 vec4 EncodeViewNormal(vec3 worldNormal)
 {
