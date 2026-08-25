@@ -65,7 +65,8 @@ internal sealed class GltfFormat : IModelFormat
                 $"glTF asset version is '{dom.Asset.Version}'; only 2.0 is officially supported.",
                 "GltfFormat");
 
-        ReportRequiredExtensions(dom, context);
+        CheckRequiredExtensions(dom, context);
+        CheckMeshCompression(dom, context);
 
         var buffers = new GltfBufferStore(dom, binChunk, context);
         var accessor = new GltfAccessorReader(dom, buffers);
@@ -98,19 +99,73 @@ internal sealed class GltfFormat : IModelFormat
         return scene;
     }
 
-    private static void ReportRequiredExtensions(GltfDom dom, ImportContext ctx)
+    /// <summary>
+    /// An <c>extensionsRequired</c> entry means exactly what it says: a client that does not
+    /// implement it must not render the file. Importing anyway produced a model that looked
+    /// plausible and was quietly wrong, so this fails instead, naming everything missing at once
+    /// rather than one re-export at a time.
+    /// </summary>
+    private static void CheckRequiredExtensions(GltfDom dom, ImportContext ctx)
     {
         if (dom.ExtensionsRequired is null) return;
+
+        var missing = new List<string>();
         foreach (var ext in dom.ExtensionsRequired)
+            if (!IsKnown(ext) && !missing.Contains(ext))
+                missing.Add(ext);
+
+        if (missing.Count == 0) return;
+
+        throw new ImportException(
+            $"This glTF requires extension(s) the importer does not implement: {string.Join(", ", missing)}. " +
+            "The file declared them as required, so importing anyway would silently produce wrong data. " +
+            "Re-export without them, or run the file through a converter such as gltf-transform to bake them out.",
+            ctx.SourcePath, ctx.Format);
+    }
+
+    /// <summary>
+    /// Compressed geometry is the dangerous case and gets its own check. A compressed primitive's
+    /// accessors carry no <c>bufferView</c>, and an accessor without one reads as all zeros, so
+    /// without this the mesh imports as every vertex sitting on the origin with nothing to show
+    /// that anything went wrong. Checked wherever the extension appears rather than only in
+    /// <c>extensionsRequired</c>, since a file that lists it only under <c>extensionsUsed</c>
+    /// decodes to the same nothing.
+    /// </summary>
+    private static void CheckMeshCompression(GltfDom dom, ImportContext ctx)
+    {
+        string? found = null;
+
+        if (dom.ExtensionsUsed is { } used)
+            foreach (var ext in used)
+                if (IsMeshCompression(ext)) { found = ext; break; }
+
+        if (found is null && dom.Meshes is { } meshes)
         {
-            if (!IsKnown(ext))
+            foreach (var mesh in meshes)
             {
-                ctx.Log.Warning(
-                    $"Required extension '{ext}' is not implemented; importing may produce incomplete data.",
-                    "GltfFormat");
+                foreach (var prim in mesh.Primitives)
+                {
+                    if (prim.Extensions is null) continue;
+                    foreach (var key in prim.Extensions.Keys)
+                        if (IsMeshCompression(key)) { found = key; break; }
+                    if (found is not null) break;
+                }
+                if (found is not null) break;
             }
         }
+
+        if (found is null) return;
+
+        throw new ImportException(
+            $"This glTF uses '{found}' to compress its geometry, which the importer cannot decode. " +
+            "Compressed vertex data has no readable fallback in the file, so the mesh would import as " +
+            "every vertex at the origin. Re-export without compression, or decompress the file first " +
+            "(gltf-transform and the Khronos tools both do this).",
+            ctx.SourcePath, ctx.Format);
     }
+
+    private static bool IsMeshCompression(string extension) =>
+        extension is "KHR_draco_mesh_compression" or "EXT_meshopt_compression";
 
     private static bool IsKnown(string extension) => extension switch
     {
@@ -123,7 +178,10 @@ internal sealed class GltfFormat : IModelFormat
         "KHR_materials_volume" or
         "KHR_materials_ior" or
         "KHR_materials_specular" or
-        "KHR_materials_pbrSpecularGlossiness" => true,
+        "KHR_materials_pbrSpecularGlossiness" or
+        // Quantized attributes need no special handling: the accessor reader already decodes every
+        // integer component type the extension permits, normalized or not.
+        "KHR_mesh_quantization" => true,
         _ => false,
     };
 

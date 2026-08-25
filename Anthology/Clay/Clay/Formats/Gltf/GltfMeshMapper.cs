@@ -80,6 +80,19 @@ internal static class GltfMeshMapper
 
         if (!prim.Attributes.TryGetValue("POSITION", out int posIdx))
             throw new ImportException($"glTF primitive in '{parentName}' has no POSITION attribute.");
+
+        // An accessor with neither a bufferView nor a sparse overlay is legal and reads as all
+        // zeros, but for POSITION that means every vertex on the origin, which is never what was
+        // meant. It is what an undecoded compression extension leaves behind.
+        var posAccessor = reader.Get(posIdx);
+        if (posAccessor.BufferView is null && posAccessor.Sparse is null)
+        {
+            ctx.Log.Warning(
+                $"{parentName}: the POSITION accessor has no bufferView and no sparse data, so every vertex " +
+                "reads as the origin. The mesh will be a single point.",
+                "GltfMeshMapper");
+        }
+
         mesh.Positions.AddRange(reader.ReadVec3(posIdx));
         int vertexCount = mesh.Positions.Count;
 
