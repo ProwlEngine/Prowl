@@ -218,7 +218,9 @@ public static class ReflectionUtils
     private static bool IsFieldSerializable(FieldInfo field)
     {
         // Check if field should be serialized
-        bool shouldSerialize = field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null;
+        bool shouldSerialize = field.IsPublic ||
+                               field.GetCustomAttribute<SerializeFieldAttribute>() != null ||
+                               field.GetCustomAttribute<System.Runtime.Serialization.DataMemberAttribute>() != null;
         if (!shouldSerialize)
             return false;
         // Check if field should be ignored
