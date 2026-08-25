@@ -15,6 +15,14 @@ public sealed record ModelImporterSettings
     /// <summary>Maximum smoothing angle (in degrees) used by <c>GenerateSmoothNormals</c>.</summary>
     public float SmoothNormalsAngleDeg { get; init; } = 80f;
 
+    /// <summary>
+    /// When true, the <c>GenerateNormals</c> / <c>GenerateSmoothNormals</c> steps replace normals
+    /// the source already supplied instead of leaving them alone. Off by default: a source that
+    /// shipped normals knows its own smoothing groups, and rebuilding them from geometry discards
+    /// that.
+    /// </summary>
+    public bool RecalculateNormals { get; init; }
+
     /// <summary>Maximum number of bone weights kept per vertex by <c>LimitBoneWeights</c>.</summary>
     public int BoneWeightLimit { get; init; } = 4;
 

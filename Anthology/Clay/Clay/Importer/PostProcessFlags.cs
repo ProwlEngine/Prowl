@@ -19,10 +19,16 @@ public enum PostProcessFlags : uint
     /// <summary>Identify and collapse identical vertex attribute tuples into shared vertices.</summary>
     JoinIdenticalVertices = 1u << 1,
 
-    /// <summary>Generate flat per-face normals when the source did not supply them.</summary>
+    /// <summary>
+    /// Generate flat per-face normals when the source did not supply them. Ignored when
+    /// <see cref="GenerateSmoothNormals"/> is also set, which runs first and wins.
+    /// </summary>
     GenerateNormals = 1u << 2,
 
-    /// <summary>Generate angle-weighted smooth normals.</summary>
+    /// <summary>
+    /// Generate angle-weighted smooth normals when the source did not supply them, splitting
+    /// vertices across edges sharper than <see cref="ModelImporterSettings.SmoothNormalsAngleDeg"/>.
+    /// </summary>
     GenerateSmoothNormals = 1u << 3,
 
     /// <summary>Compute tangents and bitangent signs using MikkTSpace.</summary>

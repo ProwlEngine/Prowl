@@ -67,6 +67,12 @@ internal sealed class Pipeline
         new FlipWindingOrderStep(),
         new ConvertCoordinateSystemStep(),
 
+        // Normals come after every step that can change winding or handedness, since a face normal
+        // is derived from it. Smooth runs before flat so that if both flags are set the smooth
+        // result wins and the flat step finds the normals already present.
+        new GenerateSmoothNormalsStep(),
+        new GenerateNormalsStep(),
+
         // Per-vertex computations + dedup.
         new CalcTangentSpaceStep(),
         new JoinIdenticalVerticesStep(),
