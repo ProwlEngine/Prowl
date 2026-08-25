@@ -3,6 +3,7 @@
 
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
+using Prowl.Vector;
 
 namespace Prowl.Clay.PostProcess;
 
@@ -145,9 +146,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
             for (int bi = 0; bi < anim.Bindings.Count; bi++)
             {
                 var b = anim.Bindings[bi];
-                int valuesPerKey = b.Interpolation == AnimationInterpolation.CubicSpline
-                    ? b.Dimension * 3
-                    : b.Dimension;
+                int valuesPerKey = b.ValuesPerKey;
                 if (b.Values.Count != b.Times.Count * valuesPerKey)
                     r.Add($"Animation {ai}, binding {bi}: values count {b.Values.Count} != times {b.Times.Count} * stride {valuesPerKey}.");
             }

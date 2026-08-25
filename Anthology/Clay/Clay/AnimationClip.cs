@@ -18,28 +18,25 @@ public enum AnimatedProperty
     Visibility,
 }
 
-/// <summary>Interpolation between keyframes on an <see cref="AnimationCurve"/>.</summary>
-public enum AnimationInterpolation
-{
-    /// <summary>Step: the value at time t is the value of the latest key whose time is &lt;= t.</summary>
-    Step,
-    /// <summary>Linear: linear interpolation between adjacent keys (slerp for quaternions).</summary>
-    Linear,
-    /// <summary>Cubic Hermite spline; <see cref="AnimationCurve.Values"/> is laid out as
-    /// (in-tangent, value, out-tangent) per key.</summary>
-    CubicSpline,
-}
-
 /// <summary>
-/// A named animation clip: a duration and a list of curve bindings.
+/// A named animation clip: a time range and a list of curve bindings.
 /// </summary>
 public sealed class AnimationClip
 {
     /// <summary>Clip name.</summary>
     public required string Name { get; init; }
 
-    /// <summary>Total duration in seconds, equal to the largest end-time across all bindings.</summary>
-    public float Duration { get; init; }
+    /// <summary>
+    /// Time of the earliest key across all bindings. Usually zero, but a clip authored on a shared
+    /// timeline can start later, and playing it from zero would sit on its first pose for the gap.
+    /// </summary>
+    public float StartTime { get; init; }
+
+    /// <summary>Time of the latest key across all bindings.</summary>
+    public float EndTime { get; init; }
+
+    /// <summary>Length of the clip, <see cref="EndTime"/> minus <see cref="StartTime"/>.</summary>
+    public float Duration => EndTime - StartTime;
 
     /// <summary>Curves driving node transforms or blend-shape weights.</summary>
     public required AnimationBinding[] Bindings { get; init; }

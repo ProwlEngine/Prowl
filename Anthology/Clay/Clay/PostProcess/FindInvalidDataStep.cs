@@ -113,7 +113,7 @@ internal sealed class FindInvalidDataStep : IPostProcess
         int collapsed = 0;
         foreach (var b in anim.Bindings)
         {
-            int valuesPerKey = b.Interpolation == AnimationInterpolation.CubicSpline
+            int valuesPerKey = b.Interpolation == CurveInterpolation.CubicSpline
                 ? b.Dimension * 3
                 : b.Dimension;
             if (b.Times.Count < 3 || b.Values.Count != b.Times.Count * valuesPerKey)

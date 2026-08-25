@@ -3,6 +3,7 @@
 
 using Prowl.Clay;
 using Prowl.Clay.Importer;
+using Prowl.Vector;
 
 using Xunit;
 
@@ -104,13 +105,15 @@ public sealed class GltfAnimationTests
     {
         var model = ModelImporter.Load(TestModels.Gltf("2.0/InterpolationTest/glTF/InterpolationTest.gltf"));
 
-        var seen = new HashSet<AnimationInterpolation>();
+        // Interpolation is per key on the shared curve, so a clip can mix modes within one curve.
+        var seen = new HashSet<CurveInterpolation>();
         foreach (var clip in model.AnimationClips)
             foreach (var b in clip.Bindings)
-                seen.Add(b.Curve.Interpolation);
+                foreach (var mode in b.Curve.GetInterpolations())
+                    seen.Add(mode);
 
-        Assert.Contains(AnimationInterpolation.Step, seen);
-        Assert.Contains(AnimationInterpolation.Linear, seen);
-        Assert.Contains(AnimationInterpolation.CubicSpline, seen);
+        Assert.Contains(CurveInterpolation.Step, seen);
+        Assert.Contains(CurveInterpolation.Linear, seen);
+        Assert.Contains(CurveInterpolation.CubicSpline, seen);
     }
 }

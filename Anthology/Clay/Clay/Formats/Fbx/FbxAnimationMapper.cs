@@ -74,12 +74,7 @@ internal static class FbxAnimationMapper
             }
         }
 
-        // Duration: max time across all bindings.
-        float maxT = 0f;
-        foreach (var b in clip.Bindings)
-            if (b.Times.Count > 0)
-                maxT = MathF.Max(maxT, b.Times[^1]);
-        clip.Duration = maxT;
+        // The clip's time range is measured at bake, from the curves themselves.
         return clip;
     }
 
@@ -230,7 +225,7 @@ internal static class FbxAnimationMapper
             TargetNode = node,
             Property = AnimatedProperty.BlendShapeWeight,
             SubIndex = target.BlendShapeIndex,
-            Interpolation = AnimationInterpolation.Linear,
+            Interpolation = CurveInterpolation.Linear,
             Dimension = 1,
         };
         binding.Times.AddRange(curve.Times);
@@ -267,7 +262,7 @@ internal static class FbxAnimationMapper
         {
             TargetNode = target,
             Property = property,
-            Interpolation = AnimationInterpolation.Linear,
+            Interpolation = CurveInterpolation.Linear,
             Dimension = 3,
         };
         binding.Times.AddRange(mergedTimes);
@@ -304,7 +299,7 @@ internal static class FbxAnimationMapper
         {
             TargetNode = target,
             Property = AnimatedProperty.Rotation,
-            Interpolation = AnimationInterpolation.Linear,
+            Interpolation = CurveInterpolation.Linear,
             Dimension = 4,
         };
         binding.Times.AddRange(mergedTimes);

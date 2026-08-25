@@ -323,24 +323,53 @@ internal static class SceneBaker
                 NodeIndex = nodeIdx,
                 Property = b.Property,
                 SubIndex = b.SubIndex,
-                Curve = new AnimationCurve
-                {
-                    Interpolation = b.Interpolation,
-                    Dimension = b.Dimension,
-                    Times = b.Times.ToArray(),
-                    Values = b.Values.ToArray(),
-                },
+                Curve = BuildCurve(b),
             });
         }
 
         BackfillMissingTRSBindings(bindings, bakedNodes);
 
+        // The range is measured from the curves rather than tracked alongside them, so it stays
+        // right after the backfill adds constant channels and after any step that trims keys.
+        float start = float.PositiveInfinity;
+        float end = float.NegativeInfinity;
+        foreach (var binding in bindings)
+        {
+            if (binding.Curve.Count == 0) continue;
+            start = MathF.Min(start, binding.Curve.StartTime);
+            end = MathF.Max(end, binding.Curve.EndTime);
+        }
+        if (float.IsInfinity(start)) { start = 0f; end = 0f; }
+
         return new AnimationClip
         {
             Name = src.Name,
-            Duration = src.Duration,
+            StartTime = start,
+            EndTime = end,
             Bindings = bindings.ToArray(),
         };
+    }
+
+    /// <summary>
+    /// Turns a binding's flat key data into a curve. Cubic sampler output is interleaved as
+    /// in-tangent, value, out-tangent per key, which the curve knows how to unpack, so the tangents
+    /// survive instead of being thrown away and re-derived.
+    /// </summary>
+    private static AnimationCurve BuildCurve(IntermediateAnimationBinding b)
+    {
+        float[] times = b.Times.ToArray();
+        float[] values = b.Values.ToArray();
+
+        AnimationCurve curve = b.Interpolation == CurveInterpolation.CubicSpline
+            ? AnimationCurve.FromGltfCubicSpline(b.Dimension, times, values)
+            : AnimationCurve.FromPacked(b.Dimension, times, values, b.Interpolation);
+
+        // A rotation curve interpolated component-wise across a sign flip sweeps the long way round.
+        // Slerp handles that itself, so this only matters for the cubic case, but it costs nothing.
+        if (b.Property == AnimatedProperty.Rotation && b.Dimension == 4)
+            curve.EnsureQuaternionContinuity();
+
+        return curve;
     }
 
     /// <summary>
@@ -397,13 +426,7 @@ internal static class SceneBaker
             NodeIndex = nodeIndex,
             Property = prop,
             SubIndex = 0,
-            Curve = new AnimationCurve
-            {
-                Interpolation = AnimationInterpolation.Linear,
-                Dimension = dim,
-                Times = new[] { 0f },
-                Values = values,
-            },
+            Curve = AnimationCurve.FromPacked(dim, new[] { 0f }, values, CurveInterpolation.Linear),
         };
     }
 

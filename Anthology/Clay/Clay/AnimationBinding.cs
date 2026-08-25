@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Vector;
+
 namespace Prowl.Clay;
 
 /// <summary>
@@ -21,6 +23,14 @@ public sealed class AnimationBinding
     /// </summary>
     public int SubIndex { get; init; }
 
-    /// <summary>The keyframed curve.</summary>
+    /// <summary>
+    /// The keyframed curve. Component count follows the property: 1 for a blend-shape weight, 3 for
+    /// position and scale, 4 for a rotation.
+    /// </summary>
+    /// <remarks>
+    /// This is <see cref="Prowl.Vector.AnimationCurve"/>, which carries interpolation per key and
+    /// keeps cubic tangents, so a sampler's mode and handles survive the import rather than being
+    /// flattened into resampled points.
+    /// </remarks>
     public required AnimationCurve Curve { get; init; }
 }

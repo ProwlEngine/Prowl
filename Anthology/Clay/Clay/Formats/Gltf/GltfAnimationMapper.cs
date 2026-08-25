@@ -48,7 +48,7 @@ internal static class GltfAnimationMapper
                 }
 
                 var sampler = src.Samplers[channel.Sampler];
-                AnimationInterpolation interp = ParseInterpolation(sampler.Interpolation, ctx);
+                CurveInterpolation interp = ParseInterpolation(sampler.Interpolation, ctx);
 
                 var times = reader.ReadFloats1D(sampler.Input);
                 if (times.Length == 0) continue;
@@ -75,13 +75,8 @@ internal static class GltfAnimationMapper
                 }
             }
 
-            // Duration = largest key time encountered across all bindings.
-            float duration = 0f;
-            foreach (var b in anim.Bindings)
-                if (b.Times.Count > 0)
-                    duration = MathF.Max(duration, b.Times[^1]);
-            anim.Duration = duration;
-
+            // The clip's time range is measured at bake, from the curves themselves, so it stays
+            // correct after the backfill and any step that adds or trims keys.
             scene.Animations.Add(anim);
         }
     }
@@ -91,7 +86,7 @@ internal static class GltfAnimationMapper
         IntermediateNode target,
         AnimatedProperty property,
         int subIndex,
-        AnimationInterpolation interp,
+        CurveInterpolation interp,
         float[] times,
         GltfAccessorReader reader,
         int outputAccessor,
@@ -99,7 +94,7 @@ internal static class GltfAnimationMapper
     {
         float[] values = reader.ReadFloats1DComponents(outputAccessor, components);
         // Sanity: cubic spline triples the values per key.
-        int expected = (interp == AnimationInterpolation.CubicSpline ? 3 : 1) * times.Length * components;
+        int expected = (interp == CurveInterpolation.CubicSpline ? 3 : 1) * times.Length * components;
         if (values.Length != expected)
             throw new ImportException(
                 $"Animation output value count {values.Length} does not match expected {expected}.");
@@ -122,7 +117,7 @@ internal static class GltfAnimationMapper
         IntermediateNode[] nodes,
         int nodeIdx,
         GltfMeshMapper.Result meshMapping,
-        AnimationInterpolation interp,
+        CurveInterpolation interp,
         float[] times,
         GltfAccessorReader reader,
         int outputAccessor,
@@ -133,7 +128,7 @@ internal static class GltfAnimationMapper
         // by stride: total values / (keys * (cubic? 3 : 1)) must equal blend shape count.
         // For simplicity, we read the raw float stream and split per-shape into separate bindings.
         float[] flatValues = reader.ReadFloats1D(outputAccessor);
-        int stride = interp == AnimationInterpolation.CubicSpline ? 3 : 1;
+        int stride = interp == CurveInterpolation.CubicSpline ? 3 : 1;
         int totalPerKey = flatValues.Length / (times.Length * stride);
         if (totalPerKey * times.Length * stride != flatValues.Length)
         {
@@ -172,17 +167,17 @@ internal static class GltfAnimationMapper
         }
     }
 
-    private static AnimationInterpolation ParseInterpolation(string? interp, ImportContext ctx) => interp switch
+    private static CurveInterpolation ParseInterpolation(string? interp, ImportContext ctx) => interp switch
     {
-        "STEP" => AnimationInterpolation.Step,
-        "LINEAR" or null => AnimationInterpolation.Linear,
-        "CUBICSPLINE" => AnimationInterpolation.CubicSpline,
+        "STEP" => CurveInterpolation.Step,
+        "LINEAR" or null => CurveInterpolation.Linear,
+        "CUBICSPLINE" => CurveInterpolation.CubicSpline,
         _ => Warn(interp, ctx),
     };
 
-    private static AnimationInterpolation Warn(string? interp, ImportContext ctx)
+    private static CurveInterpolation Warn(string? interp, ImportContext ctx)
     {
         ctx.Log.Warning($"Unknown animation interpolation '{interp}'; using LINEAR.", "GltfAnimationMapper");
-        return AnimationInterpolation.Linear;
+        return CurveInterpolation.Linear;
     }
 }
