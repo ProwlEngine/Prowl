@@ -86,8 +86,116 @@ internal static class GltfMaterialMapper
             }
         }
 
+        if (dst.SpecularGlossiness is { } specGloss)
+            ApplySpecularGlossiness(specGloss, src, dst, ctx);
+
         return dst;
     }
+
+    /// <summary>
+    /// Fills the metallic-roughness core from a KHR_materials_pbrSpecularGlossiness material, so a
+    /// consumer that only understands metal/rough still gets a usable surface instead of the
+    /// all-defaults white metal it would otherwise see. The typed extension is left in place for
+    /// consumers that would rather shade the original.
+    /// </summary>
+    /// <remarks>
+    /// An authored <c>pbrMetallicRoughness</c> block wins when one is present. The extension
+    /// nominally takes precedence, but that block is the exporter's own fallback for clients
+    /// without the extension, produced with access to the source images. It can carry a properly
+    /// baked metallic-roughness texture, which this conversion cannot synthesise: Clay never
+    /// decodes image data, so only the factors and the diffuse texture reference can move across.
+    /// </remarks>
+    private static void ApplySpecularGlossiness(
+        SpecularGlossinessExtension src, GltfMaterial srcJson, IntermediateMaterial dst, ImportContext ctx)
+    {
+        if (srcJson.PbrMetallicRoughness is not null)
+        {
+            ctx.Log.Info(
+                $"Material '{dst.Name}' carries both pbrSpecularGlossiness and pbrMetallicRoughness; " +
+                "using the authored metallic-roughness block, which the exporter wrote as the fallback.",
+                "GltfMaterialMapper");
+            return;
+        }
+
+        Color diffuse = src.DiffuseFactor;
+        Color specular = src.SpecularFactor;
+
+        float oneMinusSpecularStrength = 1f - MathF.Max(specular.R, MathF.Max(specular.G, specular.B));
+        float metallic = SolveMetallic(
+            PerceivedBrightness(diffuse),
+            PerceivedBrightness(specular),
+            oneMinusSpecularStrength);
+
+        // Recover the base colour the metal/rough model would need to land on the same appearance,
+        // blending the dielectric and metallic reconstructions by how metallic the solve came out.
+        Color fromDiffuse = Scale(diffuse,
+            oneMinusSpecularStrength / (1f - DielectricSpecular) / MathF.Max(1f - metallic, Epsilon));
+        Color fromSpecular = Scale(
+            Subtract(specular, DielectricSpecular * (1f - metallic)),
+            1f / MathF.Max(metallic, Epsilon));
+
+        float t = metallic * metallic;
+        dst.BaseColor = new Color(
+            Saturate(Lerp(fromDiffuse.R, fromSpecular.R, t)),
+            Saturate(Lerp(fromDiffuse.G, fromSpecular.G, t)),
+            Saturate(Lerp(fromDiffuse.B, fromSpecular.B, t)),
+            Saturate(diffuse.A));
+
+        dst.Metallic = Saturate(metallic);
+        dst.Roughness = Saturate(1f - src.GlossinessFactor);
+
+        // The diffuse map is the base colour map closely enough to be worth carrying; without it the
+        // material imports untextured, which is the single worst part of the unconverted result.
+        if (src.DiffuseTexture is { } diffuseTex)
+            dst.BaseColorTexture = ToIntermediateSlot(diffuseTex);
+
+        if (src.SpecularGlossinessTexture is not null)
+        {
+            ctx.Log.Warning(
+                $"Material '{dst.Name}': the specular-glossiness texture cannot be converted to a " +
+                "metallic-roughness texture without resampling the image, which the importer does not do. " +
+                "Its metal and roughness come from the converted factors only.",
+                "GltfMaterialMapper");
+        }
+    }
+
+    /// <summary>Reflectance of a dielectric surface at normal incidence, the metal/rough model's constant.</summary>
+    private const float DielectricSpecular = 0.04f;
+    private const float Epsilon = 1e-6f;
+
+    /// <summary>
+    /// Solves the metallic value whose dielectric/metal blend reproduces the given diffuse and
+    /// specular brightness. The positive root of the quadratic the two models agree on.
+    /// </summary>
+    private static float SolveMetallic(float diffuse, float specular, float oneMinusSpecularStrength)
+    {
+        if (specular < DielectricSpecular)
+            return 0f;
+
+        float a = DielectricSpecular;
+        float b = diffuse * oneMinusSpecularStrength / (1f - DielectricSpecular) + specular - 2f * DielectricSpecular;
+        float c = DielectricSpecular - specular;
+        float d = MathF.Max(b * b - 4f * a * c, 0f);
+
+        return Saturate((-b + MathF.Sqrt(d)) / (2f * a));
+    }
+
+    private static float PerceivedBrightness(Color c) =>
+        MathF.Sqrt(0.299f * c.R * c.R + 0.587f * c.G * c.G + 0.114f * c.B * c.B);
+
+    private static Color Scale(Color c, float s) => new(c.R * s, c.G * s, c.B * s, c.A);
+    private static Color Subtract(Color c, float s) => new(c.R - s, c.G - s, c.B - s, c.A);
+    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+    private static float Saturate(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
+
+    private static IntermediateTextureSlot ToIntermediateSlot(MaterialTextureSlot s) => new()
+    {
+        TextureIndex = s.TextureIndex,
+        UVChannel = s.UVChannel,
+        Offset = s.Offset,
+        Scale = s.Scale,
+        Rotation = s.Rotation,
+    };
 
     private static bool TryConsume(string name, JsonElement value, IntermediateMaterial dst, ImportContext ctx)
     {
