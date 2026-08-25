@@ -35,9 +35,6 @@ public abstract class Light
     /// </summary>
     public bool BakeDirect { get; set; } = true;
 
-    /// <summary>Indirect-only scale applied during bounce sampling (1.0 = no bias).</summary>
-    public float IndirectScale { get; set; } = 1.0f;
-
     protected Light(string name, Float4x4 transform, Float3 color)
     {
         Name = name;

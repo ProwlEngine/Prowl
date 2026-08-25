@@ -43,27 +43,32 @@ internal sealed class DemoWindow : GameWindow
     private LightmapBaker? _baker;
     private int _lastUploadedIter = -1;
     private bool _samplePointsUploaded = false;
+    private bool _finalizePending = false;
+
+    // Atlas uploads are paced rather than done all at once. A full set of 1024 pages is tens of
+    // megabytes, and pushing all of it every time the bake folds in an iteration costs the render
+    // thread far more than the preview is worth. One page per tick keeps the preview live and lets
+    // the bake have the machine.
+    private int _uploadCursor = 0;
+    private double _uploadClock = 0;
+    private bool _sweepHadSamplePoints = true;
+    private const double UploadInterval = 0.05;
     private string _status = "Ready.";
     private bool _bakeRequested = false;
 
     // ---- bake settings (mirror BakeOptions) -------------------------------------------------
     private int _atlasPageSize = 512;
-    private float _texelsPerWorldUnit = 100f;
+    private float _texelsPerWorldUnit = 8f;
     private int _bounces = 2;
     private int _samplesPerIter = 1;
     private int _dilatePixels = 2;
-    private float _rayBias = 1e-3f;
-    private bool _useHemisphereLUT = true;
     private bool _ignoreAlbedo = false;
     private bool _includeDirectLighting = true;
-    private int _sparseStride = 1;
+    private int _sparseStride = 8;
     private bool _sparseIncludesDirect = false;
-    private float _sparseContactWidth = 2f;
-    private int _sparseContactStride = 0;
-    private bool _fixShadowLeaks = true;
-    private bool _smoothShadowTerminator = true;
+    private bool _disableShadowLeakFix = false;
+    private bool _disableSmoothTerminator = false;
     private bool _fixSeams = true;
-    private int _seamFixPasses = 4;
     private bool _bicubicLightmap = true;
 
     // ---- display / debug knobs --------------------------------------------------------------
@@ -71,7 +76,6 @@ internal sealed class DemoWindow : GameWindow
     private float _exposure = 1.0f;
     private int _debugViewIdx = 0;
     private bool _wireframe = false;
-    private float _bilateral = 0f;
     private bool _showAtlasViewer = true;
     private int _atlasViewerIdx = 0;
 
@@ -145,11 +149,15 @@ internal sealed class DemoWindow : GameWindow
             _renderer!.UploadModel(sm);
         }
 
-        // Re-upload atlas pages whenever the bake folded a new iteration in.
-        if (_baker?.Job is { } job && job.IterationCount != _lastUploadedIter)
+        PumpAtlasUploads(args.Time);
+
+        // Once the worker has actually stopped, push every page so the preview shows the last
+        // published iteration whole rather than the half-swept set the pacing left behind.
+        if (_finalizePending && _baker?.Job is { } finishing && !finishing.Poll())
         {
-            _lastUploadedIter = job.IterationCount;
-            ReuploadAllAtlases();
+            _finalizePending = false;
+            UploadAllAtlases();
+            _status = "Bake stopped.";
         }
 
         _imgui?.Update(this, (float)args.Time);
@@ -167,7 +175,6 @@ internal sealed class DemoWindow : GameWindow
                 : (SceneRenderer.DebugMode)_debugViewIdx;
             _renderer.Bicubic = _bicubicLightmap;
             _renderer.WireframeOverlay = _wireframe;
-            _renderer.BilateralStrength = _bilateral;
             _renderer.Render(_scene, view, proj, _exposure);
         }
 
@@ -334,7 +341,11 @@ internal sealed class DemoWindow : GameWindow
         // Toolbar row.
         if (running)
         {
-            if (ImGui.Button("Cancel")) _baker!.Cancel();
+            if (ImGui.Button("Cancel"))
+            {
+                _baker!.Cancel();
+                _finalizePending = true;
+            }
         }
         else
         {
@@ -350,7 +361,6 @@ internal sealed class DemoWindow : GameWindow
         ImGui.Separator();
         ImGui.ColorEdit3("Sky color (HDR)", ref _skyColor, ImGuiColorEditFlags.HDR | ImGuiColorEditFlags.Float);
         ImGui.SliderFloat("Display exposure", ref _exposure, 0.1f, 8f);
-        ImGui.SliderFloat("Bilateral denoise", ref _bilateral, 0f, 4f);
         ImGui.Combo("Debug view", ref _debugViewIdx,
             new[] { "Off (diffuse * lightmap)", "UV1 atlas coords", "Coverage (magenta = empty)", "Lightmap only", "Sample points" }, 5);
         if (_debugViewIdx == 4)
@@ -370,9 +380,6 @@ internal sealed class DemoWindow : GameWindow
             ImGui.SliderInt("Bounces", ref _bounces, 0, 4);
             ImGui.SliderInt("Samples / iter", ref _samplesPerIter, 1, 32);
             ImGui.SliderInt("Dilate pixels", ref _dilatePixels, 0, 8);
-            ImGui.SliderFloat("Ray bias", ref _rayBias, 1e-5f, 1e-2f, "%.5f");
-            ImGui.Checkbox("Hemisphere LUT", ref _useHemisphereLUT);
-            ImGui.Checkbox("Ignore albedo", ref _ignoreAlbedo);
             ImGui.Checkbox("Include direct lighting at texel", ref _includeDirectLighting);
             ImGui.SliderInt("Sparse stride", ref _sparseStride, 1, 16);
             ImGui.TextDisabled(_sparseStride > 1
@@ -380,27 +387,28 @@ internal sealed class DemoWindow : GameWindow
                 : "  Tracing every texel.");
             if (_sparseStride > 1)
             {
-                ImGui.SliderFloat("Contact line width (texels)", ref _sparseContactWidth, 0.5f, 8f, "%.1f");
-                ImGui.SliderInt("Contact point spacing", ref _sparseContactStride, 0, 16);
-                ImGui.TextDisabled(_sparseContactStride == 0
-                    ? "  Contacts sampled at the sparse stride; corners always traced."
-                    : $"  Contacts sampled every {_sparseContactStride} texels; corners always traced.");
+                ImGui.TextDisabled("  Contacts, corners and shadow edges keep their own points.");
                 ImGui.Checkbox("Sparse direct too", ref _sparseIncludesDirect);
                 if (_sparseIncludesDirect)
                     ImGui.TextColored(new System.Numerics.Vector4(1, 0.7f, 0.2f, 1), "  Blurs shadow edges by about one cell.");
             }
         }
 
-        if (ImGui.CollapsingHeader("Artifact fixes", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Output", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            ImGui.Checkbox("Push samples out of solids", ref _fixShadowLeaks);
-            ImGui.Checkbox("Smooth shadow terminator", ref _smoothShadowTerminator);
             ImGui.Checkbox("Stitch UV seams", ref _fixSeams);
-            if (_fixSeams) ImGui.SliderInt("Seam passes", ref _seamFixPasses, 1, 16);
             ImGui.TextDisabled("  Rebake to apply. Bicubic is a display setting and applies live.");
             ImGui.Checkbox("Bicubic lightmap filtering", ref _bicubicLightmap);
             if (_bicubicLightmap && _dilatePixels < 2)
                 ImGui.TextColored(new System.Numerics.Vector4(1, 0.7f, 0.2f, 1), "  Bicubic reads 2 texels past each chart; raise dilate to 2.");
+        }
+
+        if (ImGui.CollapsingHeader("Diagnostics"))
+        {
+            ImGui.TextDisabled("  These make the bake worse. They isolate where an artifact comes from.");
+            ImGui.Checkbox("Ignore albedo", ref _ignoreAlbedo);
+            ImGui.Checkbox("Disable shadow leak fix", ref _disableShadowLeakFix);
+            ImGui.Checkbox("Disable smooth terminator", ref _disableSmoothTerminator);
         }
 
         ImGui.End();
@@ -563,7 +571,7 @@ internal sealed class DemoWindow : GameWindow
         _scene.Selection = SceneSelection.None;
         _skyColor = new System.Numerics.Vector3(0.10f, 0.13f, 0.18f);
         _atlasPageSize = 1024;
-        _texelsPerWorldUnit = 24f;
+        _texelsPerWorldUnit = 8f;
         UV1Generator.TexelsPerWorldUnit = _texelsPerWorldUnit;
 
         int tris = 0;
@@ -744,6 +752,8 @@ internal sealed class DemoWindow : GameWindow
         _renderer?.SetAtlasCount(packed.Targets.Length);
         _lastUploadedIter = -1;
         _samplePointsUploaded = false;
+        _finalizePending = false;
+        _uploadCursor = 0;
 
         photonicScene.End();
         _baker.Start();
@@ -757,40 +767,64 @@ internal sealed class DemoWindow : GameWindow
         o.Bounces = _bounces;
         o.SamplesPerIteration = _samplesPerIter;
         o.DilatePixels = _dilatePixels;
-        o.RayBias = _rayBias;
-        o.UseHemisphereLUT = _useHemisphereLUT;
-        o.IgnoreAlbedo = _ignoreAlbedo;
         o.IncludeDirectLighting = _includeDirectLighting;
         o.SkyColor = new Float3(_skyColor.X, _skyColor.Y, _skyColor.Z);
         o.SparseStride = _sparseStride;
         o.SparseIncludesDirect = _sparseIncludesDirect;
-        o.SparseContactWidth = _sparseContactWidth;
-        o.SparseContactStride = _sparseContactStride;
-        o.FixShadowLeaks = _fixShadowLeaks;
-        o.SmoothShadowTerminator = _smoothShadowTerminator;
         o.FixSeams = _fixSeams;
-        o.SeamFixPasses = _seamFixPasses;
+        o.Diagnostics.IgnoreAlbedo = _ignoreAlbedo;
+        o.Diagnostics.DisableShadowLeakFix = _disableShadowLeakFix;
+        o.Diagnostics.DisableSmoothTerminator = _disableSmoothTerminator;
     }
 
-    private void ReuploadAllAtlases()
+    /// <summary>
+    /// Push one atlas page per tick while the bake has something newer to show. A full sweep marks the
+    /// iteration as uploaded, so the next sweep only starts once the bake has moved on again.
+    /// </summary>
+    private void PumpAtlasUploads(double dt)
+    {
+        if (_renderer is null || _baker is null || _baker.Job is not { } job) return;
+        int pages = _baker.Targets.Count;
+        if (pages == 0 || job.IterationCount == _lastUploadedIter) return;
+
+        _uploadClock += dt;
+        if (_uploadClock < UploadInterval) return;
+        _uploadClock = 0;
+
+        if (_uploadCursor == 0) _sweepHadSamplePoints = true;
+        UploadAtlasPage(_uploadCursor);
+
+        if (++_uploadCursor < pages) return;
+        _uploadCursor = 0;
+        _lastUploadedIter = job.IterationCount;
+        if (_sweepHadSamplePoints) _samplePointsUploaded = true;
+    }
+
+    private void UploadAtlasPage(int index)
+    {
+        var target = _baker!.Targets[index];
+
+        // The sampling roles are decided once per bake, so upload them as soon as they exist.
+        if (!_samplePointsUploaded)
+        {
+            if (target.SamplePoints.Length == 0) _sweepHadSamplePoints = false;
+            else _renderer!.UpdateSamplePoints(index, target.Width, target.Height, target.SamplePoints);
+        }
+
+        // Upload the raw HDR linear irradiance straight through. The fragment shader handles
+        // exposure + Reinhard + the sRGB gamma encode via FramebufferSrgb -- doing any of that
+        // here would mean tonemapping twice.
+        _renderer!.UpdateAtlas(index, target.Width, target.Height, target.Pixels);
+    }
+
+    /// <summary>Push every page at once. Used at finalize, where the result matters more than the frame.</summary>
+    private void UploadAllAtlases()
     {
         if (_renderer is null || _baker is null) return;
-        bool samplePointsReady = true;
-        for (int t = 0; t < _baker.Targets.Count; t++)
-        {
-            var target = _baker.Targets[t];
-            // The sampling roles are decided once per bake, so upload them as soon as they exist.
-            if (!_samplePointsUploaded)
-            {
-                if (target.SamplePoints.Length == 0) samplePointsReady = false;
-                else _renderer.UpdateSamplePoints(t, target.Width, target.Height, target.SamplePoints);
-            }
-            // Upload the raw HDR linear irradiance straight through. The fragment shader handles
-            // exposure + Reinhard + the sRGB gamma encode via FramebufferSrgb -- doing any of that
-            // here would mean tonemapping twice.
-            _renderer.UpdateAtlas(t, target.Width, target.Height, target.Pixels);
-        }
-        if (samplePointsReady) _samplePointsUploaded = true;
+        _sweepHadSamplePoints = true;
+        for (int t = 0; t < _baker.Targets.Count; t++) UploadAtlasPage(t);
+        if (_sweepHadSamplePoints) _samplePointsUploaded = true;
+        _uploadCursor = 0;
     }
 
     // ---- camera + view ----------------------------------------------------------------------

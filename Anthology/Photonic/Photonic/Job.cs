@@ -105,40 +105,6 @@ public sealed class Job
         };
     }
 
-    /// <summary>
-    /// Run the edge-avoiding denoiser over every target's converged atlas, then re-dilate the seams.
-    /// No-op unless <see cref="BakeOptions.Denoise"/> is set or the bake never rasterized. Mutates the
-    /// pixel buffers in place using the rasterizer's retained per-texel guides, so call it once after
-    /// the bake has stopped (<see cref="Cancel"/> then <see cref="Wait"/>); reads after this see the
-    /// denoised result.
-    /// </summary>
-    public void Denoise()
-    {
-        if (!_options.Denoise) return;
-        var ws = _workspacesPublic;
-        if (ws is null) return;
-
-        for (int t = 0; t < ws.Length; t++)
-        {
-            var w = ws[t];
-            if (w is null) continue;
-
-            Imaging.LightmapDenoiser.Run(w.Target.PixelsRGB, w.Covered, w.Samples, w.Width, w.Height,
-                _options.DenoiseIterations, _options.DenoiseNormalPhi, _options.DenoisePositionScale);
-
-            System.Array.Copy(w.Target.PixelsRGB, w.Working(), w.Target.PixelsRGB.Length);
-
-            // Seams are stitched after denoising: the denoiser works per chart and would otherwise
-            // pull the two sides apart again.
-            StitchSeams(w, t);
-
-            if (_options.DilatePixels > 0)
-                Imaging.Dilate.Run(w.Working(), w.ScratchCovered(), w.Width, w.Height,
-                    _options.DilatePixels, w.ScratchRGB(), w.ScratchSnapshot());
-            w.Publish();
-        }
-    }
-
     /// <summary>Current state.</summary>
     public JobStatus Status { get; private set; } = JobStatus.Pending;
 
@@ -215,6 +181,7 @@ public sealed class Job
 
     private Imaging.SeamFixer.Sample[][] _seamSamples = System.Array.Empty<Imaging.SeamFixer.Sample[]>();
     private Integration.SparseTexelSet?[] _sparse = System.Array.Empty<Integration.SparseTexelSet?>();
+    private Integration.SparseNeighbours?[] _neighbours = System.Array.Empty<Integration.SparseNeighbours?>();
 
     /// <summary>Per-target sparse sample sets, or null entries when the bake traces every texel. Diagnostics only.</summary>
     internal Integration.SparseTexelSet?[] SparseSets => _sparse;
@@ -281,8 +248,9 @@ public sealed class Job
         if (!_options.FixSeams || targetIndex >= _seamSamples.Length) return;
         var samples = _seamSamples[targetIndex];
         if (samples is null) return;
+        // Four passes at half strength converges without smearing the correction into the chart.
         Imaging.SeamFixer.Run(ws.Working(), ws.Covered, ws.Width, ws.Height,
-            samples, _options.SeamFixPasses, _options.SeamFixStrength, ws.ScratchRGB());
+            samples, passes: 4, strength: 0.5f, ws.ScratchRGB());
     }
 
     private void Run()
@@ -301,6 +269,11 @@ public sealed class Job
 
             // Build the merged world-space BLAS + pre-resolved materials (shared with BakeProbes).
             var accel = Integration.BakeAcceleration.Build(_scene, instances);
+
+            // Anything the caller left automatic is decided here, from the size of what is actually
+            // being baked: a fixed ray bias or ray length cannot be right at every scale.
+            var bounds = accel.Blas.Mesh.Bounds;
+            _options.Resolve(Float3.Length(bounds.Max - bounds.Min));
 
             // 3) For each target: rasterize UV1 to texel samples --------------------------------
             //    Build the workspaces array fully before publishing it. GetTexelInfo (called from
@@ -338,19 +311,17 @@ public sealed class Job
             }
 
             _sparse = new Integration.SparseTexelSet?[workspaces.Length];
+            _neighbours = new Integration.SparseNeighbours?[workspaces.Length];
             if (_options.SparseStride > 1)
             {
                 _activity = "Select sample points";
                 for (int t = 0; t < workspaces.Length; t++)
-                    _sparse[t] = Integration.SparseTexelSet.Build(workspaces[t], _options.SparseStride, _options.SparseContactStride);
+                    _sparse[t] = Integration.SparseTexelSet.Build(workspaces[t], _options.SparseStride);
 
-                if (_options.SparseCheckVisibility)
-                {
-                    _activity = "Check sample point visibility";
-                    var visibilityOpts = CreateParallelOptions();
-                    for (int t = 0; t < workspaces.Length; t++)
-                        _sparse[t]!.ComputeVisibility(workspaces[t], accel.Blas, _options, visibilityOpts);
-                }
+                _activity = "Link sample points";
+                var linkOpts = CreateParallelOptions();
+                for (int t = 0; t < workspaces.Length; t++)
+                    _neighbours[t] = Integration.SparseNeighbours.Build(workspaces[t], _sparse[t]!, accel.Blas, _options, linkOpts);
             }
 
             for (int t = 0; t < workspaces.Length; t++)
@@ -435,7 +406,7 @@ public sealed class Job
                         var mat = instanceMaterials[s.InstanceIndex][s.MaterialGroupIndex];
                         Float3 albedo;
                         Float3 emissive = mat is not null ? mat.Emissive : Float3.Zero;
-                        if (_options.IgnoreAlbedo)
+                        if (_options.Diagnostics.IgnoreAlbedo)
                         {
                             albedo = Float3.One;
                         }
@@ -540,7 +511,7 @@ public sealed class Job
                     {
                         var points = sparse.Points;
                         System.Threading.Tasks.Parallel.For(0, points.Length, parallelOpts, i => IntegrateTexel(points[i]));
-                        sparse.Reconstruct(ws, parallelOpts);
+                        _neighbours[ti]?.Apply(ws, sparse, parallelOpts);
                         if (!pointsCarryDirect) Integration.SparseTexelSet.AddDirect(ws, direct, parallelOpts);
                     }
                 }

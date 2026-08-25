@@ -24,6 +24,12 @@ internal static class SamplePositionRefiner
     private const float ProbeDiagonal = 1.4142135f;
 
     /// <summary>
+    /// Width of the contact line, in texels. Two is enough to carry a junction: the line only has to
+    /// be wide enough that the points elected along it sit on the contact rather than beside it.
+    /// </summary>
+    private const float ContactWidthTexels = 2f;
+
+    /// <summary>
     /// Probe directions for the proximity test, as (tilt from the normal, azimuth). Straight up plus
     /// two rings: the shallow ring finds walls and neighbouring objects, the steep one finds anything
     /// resting on or overhanging the surface.
@@ -38,17 +44,17 @@ internal static class SamplePositionRefiner
         return probes.ToArray();
     }
 
-    public static void Run(TargetWorkspace[] workspaces, Blas blas, BakeOptions options, int triangleCount,
-                           System.Threading.Tasks.ParallelOptions parallelOpts)
+    public static void Run(TargetWorkspace[] workspaces, Blas blas, BakeOptions options,
+                           int triangleCount, System.Threading.Tasks.ParallelOptions parallelOpts)
     {
-        if (options.SmoothShadowTerminator)
+        if (!options.Diagnostics.DisableSmoothTerminator)
         {
             var useFlat = new bool[triangleCount];
             MarkOccludedTriangles(workspaces, blas, options, useFlat, parallelOpts);
             ApplySmoothPositions(workspaces, useFlat, parallelOpts);
         }
 
-        if (options.FixShadowLeaks)
+        if (!options.Diagnostics.DisableShadowLeakFix)
             PushOutOfSolids(workspaces, blas, options, parallelOpts);
 
         if (options.SparseStride > 1)
@@ -56,15 +62,15 @@ internal static class SamplePositionRefiner
     }
 
     /// <summary>
-    /// Record how close the nearest other surface is, in each texel's own lighting hemisphere. This is
-    /// what tells sparse sampling where it is not allowed to be sparse: the ring of floor around an
-    /// object resting on it, the base of a wall, the inside of a corner. Those are exactly the places
-    /// where contact shadows live and where interpolating across a wall would leak light through it.
+    /// Record how close the nearest other surface is, in each texel's own hemisphere. This is what
+    /// tells sparse sampling where it is not allowed to be sparse: the ring of floor around an object
+    /// resting on it, the base of a wall, the inside of a corner. Those are where contact shadows live
+    /// and where interpolating across a junction would carry light through it.
     /// </summary>
     private static void MeasureProximity(TargetWorkspace[] workspaces, Blas blas, BakeOptions options,
                                          System.Threading.Tasks.ParallelOptions parallelOpts)
     {
-        float contactTexels = System.MathF.Max(0.5f, options.SparseContactWidth);
+        const float contactTexels = ContactWidthTexels;
 
         foreach (var ws in workspaces)
         {
@@ -78,10 +84,10 @@ internal static class SamplePositionRefiner
                     var s = ws.Samples[idx];
 
                     float radius = s.WorldRadius * 2f * contactTexels;
-                    if (radius <= options.RayBias) continue;
+                    if (radius <= options.EffectiveRayBias) continue;
 
                     Hemisphere.BuildOrthonormalBasis(s.Normal, out var tangent, out var bitangent);
-                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.RayBias);
+                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
 
                     float nearest = radius;
                     foreach (var probe in ProximityProbes)
@@ -89,16 +95,16 @@ internal static class SamplePositionRefiner
                         float tilt = probe.Tilt * (System.MathF.PI / 180f);
                         float azimuth = probe.Azimuth * (System.MathF.PI / 180f);
                         float sin = System.MathF.Sin(tilt);
-                        var dir = s.Normal * System.MathF.Cos(tilt)
-                                + tangent * (sin * System.MathF.Cos(azimuth))
-                                + bitangent * (sin * System.MathF.Sin(azimuth));
+                        var direction = Float3.Normalize(
+                            s.Normal * System.MathF.Cos(tilt)
+                            + tangent * (sin * System.MathF.Cos(azimuth))
+                            + bitangent * (sin * System.MathF.Sin(azimuth)));
 
-                        var direction = Float3.Normalize(dir);
-                        if (!blas.ClosestHit(origin, direction, options.RayBias, nearest, out float hitT, out _, out _, out int triIndex))
+                        if (!blas.ClosestHit(origin, direction, options.EffectiveRayBias, nearest, out float hitT, out _, out _, out int triIndex))
                             continue;
 
                         // Only surfaces turned towards this texel shade it or bounce onto it. Skipping
-                        // the rest keeps a curved surface from flagging itself detail everywhere its
+                        // the rest keeps a curved surface from flagging itself a contact everywhere its
                         // own geometry happens to be within reach at a grazing angle.
                         if (Float3.Dot(GeometricNormal(blas, triIndex), direction) > -0.2f) continue;
                         nearest = System.MathF.Min(nearest, hitT);
@@ -133,10 +139,10 @@ internal static class SamplePositionRefiner
 
                     var delta = s.SmoothPosition - s.Position;
                     float distance = Float3.Length(delta);
-                    if (distance <= options.RayBias) continue;
+                    if (distance <= options.EffectiveRayBias) continue;
 
-                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.RayBias);
-                    if (blas.AnyHit(origin, delta / distance, options.RayBias, distance))
+                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
+                    if (blas.AnyHit(origin, delta / distance, options.EffectiveRayBias, distance))
                         useFlat[s.TriangleId] = true;
                 }
             });
@@ -182,10 +188,10 @@ internal static class SamplePositionRefiner
                     if (!ws.Covered[idx]) continue;
                     var s = ws.Samples[idx];
                     float reach = s.WorldRadius * ProbeDiagonal;
-                    if (reach <= options.RayBias) continue;
+                    if (reach <= options.EffectiveRayBias) continue;
 
                     Hemisphere.BuildOrthonormalBasis(s.FaceNormal, out var tangent, out var bitangent);
-                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.RayBias);
+                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
 
                     // Take the nearest wall, not the first one probed. On a thin double-sided wall the
                     // probes hit both of its faces, and stepping past the far one drops the sample on
@@ -202,7 +208,7 @@ internal static class SamplePositionRefiner
                             2 => bitangent,
                             _ => -bitangent,
                         };
-                        if (!blas.ClosestHit(origin, dir, options.RayBias, reach, out float hitT, out _, out _, out int triIndex))
+                        if (!blas.ClosestHit(origin, dir, options.EffectiveRayBias, reach, out float hitT, out _, out _, out int triIndex))
                             continue;
                         if (hitT >= nearest) continue;
 
@@ -215,7 +221,7 @@ internal static class SamplePositionRefiner
                     }
 
                     if (nearest < float.MaxValue)
-                        ws.Samples[idx].Position = RayMath.OffsetOrigin(pushed, pushNormal, options.RayBias);
+                        ws.Samples[idx].Position = RayMath.OffsetOrigin(pushed, pushNormal, options.EffectiveRayBias);
                 }
             });
         }

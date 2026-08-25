@@ -23,7 +23,7 @@ public struct TexelDiagnostic
     /// <summary>Surface normal at the sample point.</summary>
     public Float3 Normal;
 
-    /// <summary>Half-extent of the texel's world footprint, in metres. Scales the denoiser's position bandwidth.</summary>
+    /// <summary>Half-extent of the texel's world footprint, in metres.</summary>
     public float WorldRadius;
 
     /// <summary>Current RGB value stored at this texel in the target's pixel buffer.</summary>

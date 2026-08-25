@@ -30,20 +30,11 @@ public sealed class BakeMaterial
     /// <summary>Linear-space emissive colour added to direct lighting at any bake hit on this material.</summary>
     public Float3 Emissive { get; set; } = Float3.Zero;
 
-    /// <summary>Optional emissive texture (modulated by <see cref="Emissive"/>).</summary>
+    /// <summary>
+    /// Optional emissive texture (modulated by <see cref="Emissive"/>). Sampled at the texel's own
+    /// <c>UV0</c>, not at <see cref="DiffuseUVLayer"/>.
+    /// </summary>
     public BakeTexture? EmissiveTexture { get; set; }
-
-    /// <summary>UV layer the emissive texture is sampled from. Defaults to <c>"UV0"</c>.</summary>
-    public string EmissiveUVLayer { get; set; } = "UV0";
-
-    /// <summary>Optional alpha mask; below <see cref="AlphaCutoff"/> the shadow ray treats the hit as a miss.</summary>
-    public BakeTexture? AlphaTexture { get; set; }
-
-    /// <summary>Alpha cutoff for the alpha-mask shadow test.</summary>
-    public float AlphaCutoff { get; set; } = 0.5f;
-
-    /// <summary>True if the surface is double-sided; controls back-face shading.</summary>
-    public bool DoubleSided { get; set; }
 
     internal BakeMaterial(string name) { Name = name; }
 }

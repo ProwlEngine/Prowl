@@ -59,9 +59,8 @@ internal static class ConservativeTexelMapper
         var W = instance.WorldTransform;
         var NM = NormalMatrix(W);
 
-        // Per-texel world radius: how big this triangle's pixels are in world space. Used by the
-        // denoiser as the per-texel footprint that scales its position bandwidth, regardless of
-        // mesh scale or atlas density.
+        // Per-texel world radius: how big this triangle's pixels are in world space. Every scale-
+        // relative decision downstream measures against it, regardless of mesh scale or atlas density.
         var w_v0 = Raytracing.RayMath.Transform(W, v0L, 1f);
         var w_v1 = Raytracing.RayMath.Transform(W, v1L, 1f);
         var w_v2 = Raytracing.RayMath.Transform(W, v2L, 1f);

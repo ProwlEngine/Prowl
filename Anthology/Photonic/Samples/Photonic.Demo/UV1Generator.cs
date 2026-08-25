@@ -21,7 +21,7 @@ internal static class UV1Generator
     public static float ChartGutterTexels = 4f;
 
     /// <summary>Bake density the margin is computed against; the demo keeps this in step with its own setting.</summary>
-    public static float TexelsPerWorldUnit = 24f;
+    public static float TexelsPerWorldUnit = 8f;
 
     public static void Bake(SceneModel sm, System.Action<string>? progress = null)
     {

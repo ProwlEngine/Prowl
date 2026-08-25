@@ -31,6 +31,10 @@ internal sealed class PathIntegrator
     private readonly BakeMaterial?[] _mats; // resolved material per merged group
     private readonly BakeOptions _options;
     private readonly bool _cullEnabled;
+    private readonly float _bias;
+    private readonly float _maxDistance;
+    private readonly bool _useLUT;
+    private readonly bool _ignoreAlbedo;
 
     // Prowl renders with WindingOrder.CW (front = clockwise) and culls back faces. With cull=Back the
     // Blas keep-positive-determinant flag reduces to the front-face winding, which for CW front is
@@ -41,6 +45,10 @@ internal sealed class PathIntegrator
     {
         _scene = scene; _blas = blas; _mats = mats; _options = options;
         _cullEnabled = options.DoBackfaceCull;
+        _bias = options.EffectiveRayBias;
+        _maxDistance = options.EffectiveMaxRayDistance;
+        _useLUT = !options.Diagnostics.DisableHemisphereLUT;
+        _ignoreAlbedo = options.Diagnostics.IgnoreAlbedo;
     }
 
     /// <summary>
@@ -93,7 +101,7 @@ internal sealed class PathIntegrator
         Float3 t = throughput;
 
         const float ThroughputEpsilon = 1e-4f;
-        bool useLUT = _options.UseHemisphereLUT;
+        bool useLUT = _useLUT;
         for (int bounce = 0; bounce < bouncesLeft; bounce++)
         {
             Float3 rd;
@@ -108,7 +116,7 @@ internal sealed class PathIntegrator
                 float u1 = rng.NextFloat(), u2 = rng.NextFloat();
                 rd = Hemisphere.SampleCosine(n, u1, u2);
             }
-            var hit = ClosestHitWorld(RayMath.OffsetOrigin(ro, n, _options.RayBias), rd, _options.MaxRayDistance);
+            var hit = ClosestHitWorld(RayMath.OffsetOrigin(ro, n, _bias), rd, _maxDistance);
             if (!hit.Hit)
             {
                 radiance += t * SampleEnvironment(rd);
@@ -126,15 +134,6 @@ internal sealed class PathIntegrator
             // throughput cutoff: stop when continuing can't materially add more energy
             if (t.X + t.Y + t.Z < ThroughputEpsilon) break;
 
-            // optional russian roulette
-            if (_options.RussianRoulette > 0 && bounce >= 1)
-            {
-                float p = System.Math.Max(t.X, System.Math.Max(t.Y, t.Z));
-                p = System.Math.Min(1f, System.Math.Max(_options.RussianRoulette, p));
-                if (rng.NextFloat() > p) break;
-                t = t * (1f / p);
-            }
-
             ro = hit.Position;
             n = hit.Normal;
         }
@@ -143,14 +142,14 @@ internal sealed class PathIntegrator
 
     /// <summary>
     /// Resolve the diffuse albedo and emissive of a ray hit (material colour x diffuse texel, or
-    /// white when <see cref="BakeOptions.IgnoreAlbedo"/> is set). Reads straight off the merged mesh.
+    /// white when <see cref="BakeDiagnostics.IgnoreAlbedo"/> is set). Reads straight off the merged mesh.
     /// </summary>
     private void ResolveHitSurface(HitInfo hit, out Float3 albedo, out Float3 emissive)
     {
         var triRef = _blas.Triangles[hit.TriangleIndex];
         var mat = _mats[triRef.MaterialGroupIndex];
         emissive = mat is not null ? mat.Emissive : Float3.Zero;
-        if (_options.IgnoreAlbedo)
+        if (_ignoreAlbedo)
         {
             albedo = Float3.One;
             return;
@@ -220,7 +219,7 @@ internal sealed class PathIntegrator
     /// otherwise the hit surface's outgoing radiance under the lightmap shading convention.</summary>
     private Float3 ProbeIncomingRadiance(Float3 origin, Float3 dir, int bounces, ref Sampler rng)
     {
-        var hit = ClosestHitWorld(origin, dir, _options.MaxRayDistance);
+        var hit = ClosestHitWorld(origin, dir, _maxDistance);
         if (!hit.Hit) return SampleEnvironment(dir);
 
         ResolveHitSurface(hit, out Float3 albedo, out Float3 emissive);
@@ -267,10 +266,10 @@ internal sealed class PathIntegrator
             float ndotl = Float3.Dot(normal, toLight);
             if (ndotl <= 0) continue;
 
-            var ro = RayMath.OffsetOrigin(position, normal, _options.RayBias);
+            var ro = RayMath.OffsetOrigin(position, normal, _bias);
             bool blocked = false;
             if (l.CastsShadows)
-                blocked = _blas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet);
+                blocked = _blas.AnyHit(ro, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet);
 
             float drawLen = float.IsPositiveInfinity(maxDist) ? 50f : maxDist;
             segs.Add(new DebugSegment
@@ -296,7 +295,7 @@ internal sealed class PathIntegrator
         Float3 ro = position;
         Float3 n = normal;
         Float3 t = albedo;
-        bool useLUT = _options.UseHemisphereLUT;
+        bool useLUT = _useLUT;
 
         for (int bounce = 0; bounce < bouncesLeft; bounce++)
         {
@@ -313,14 +312,14 @@ internal sealed class PathIntegrator
                 rd = Hemisphere.SampleCosine(n, u1, u2);
             }
 
-            var rayOrigin = RayMath.OffsetOrigin(ro, n, _options.RayBias);
-            var hit = ClosestHitWorld(rayOrigin, rd, _options.MaxRayDistance);
+            var rayOrigin = RayMath.OffsetOrigin(ro, n, _bias);
+            var hit = ClosestHitWorld(rayOrigin, rd, _maxDistance);
 
             // Record this bounce segment regardless of hit.
             segs.Add(new DebugSegment
             {
                 Start = rayOrigin,
-                End = hit.Hit ? hit.Position : rayOrigin + rd * System.Math.Min(50f, _options.MaxRayDistance),
+                End = hit.Hit ? hit.Position : rayOrigin + rd * System.Math.Min(50f, _maxDistance),
                 BounceIndex = bounce,
                 IsShadow = false,
                 Hit = hit.Hit,
@@ -331,7 +330,7 @@ internal sealed class PathIntegrator
             var triRef = _blas.Triangles[hit.TriangleIndex];
             var mat = _mats[triRef.MaterialGroupIndex];
             Float3 hitAlbedo;
-            if (_options.IgnoreAlbedo)
+            if (_ignoreAlbedo)
             {
                 hitAlbedo = Float3.One;
             }
@@ -356,9 +355,9 @@ internal sealed class PathIntegrator
                 if (Li.X + Li.Y + Li.Z <= 0) continue;
                 float ndotl = Float3.Dot(hit.Normal, toLight);
                 if (ndotl <= 0) continue;
-                var shadowOrigin = RayMath.OffsetOrigin(hit.Position, hit.Normal, _options.RayBias);
+                var shadowOrigin = RayMath.OffsetOrigin(hit.Position, hit.Normal, _bias);
                 bool blocked = false;
-                if (l.CastsShadows) blocked = _blas.AnyHit(shadowOrigin, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet);
+                if (l.CastsShadows) blocked = _blas.AnyHit(shadowOrigin, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet);
                 float drawLen = float.IsPositiveInfinity(maxDist) ? 50f : maxDist;
                 segs.Add(new DebugSegment
                 {
@@ -399,8 +398,8 @@ internal sealed class PathIntegrator
 
             if (l.CastsShadows)
             {
-                var ro = RayMath.OffsetOrigin(position, normal, _options.RayBias);
-                if (_blas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet))
+                var ro = RayMath.OffsetOrigin(position, normal, _bias);
+                if (_blas.AnyHit(ro, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet))
                     continue;
             }
             sum += Li * ndotl;
@@ -411,7 +410,7 @@ internal sealed class PathIntegrator
     public HitInfo ClosestHitWorld(Float3 ro, Float3 rd, float maxT)
     {
         var hit = new HitInfo { Distance = maxT };
-        if (_blas.ClosestHit(ro, rd, _options.RayBias, maxT, out float tt, out float uu, out float vv, out int triIdx, _cullEnabled, ProwlKeepPositiveDet))
+        if (_blas.ClosestHit(ro, rd, _bias, maxT, out float tt, out float uu, out float vv, out int triIdx, _cullEnabled, ProwlKeepPositiveDet))
         {
             hit.Hit = true;
             hit.Distance = tt;

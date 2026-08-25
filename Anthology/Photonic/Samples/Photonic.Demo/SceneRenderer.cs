@@ -24,7 +24,6 @@ internal sealed class SceneRenderer : System.IDisposable
 
     public DebugMode CurrentDebug { get; set; } = DebugMode.Off;
     public bool WireframeOverlay { get; set; } = false;
-    public float BilateralStrength { get; set; } = 0f;
     /// <summary>Sample the atlas with a 4-tap bicubic instead of a single bilinear tap. Hides the lightmap's resolution and smooths jagged shadow edges.</summary>
     public bool Bicubic { get; set; } = true;
 
@@ -37,7 +36,6 @@ internal sealed class SceneRenderer : System.IDisposable
     private readonly int _uHasDiffuse;
     private readonly int _uBaseColor;
     private readonly int _uDebugMode;
-    private readonly int _uBilateral;
     private readonly int _uBicubic;
     private readonly int _uSamplePoints;
     private readonly int _uHasSamplePoints;
@@ -64,7 +62,6 @@ internal sealed class SceneRenderer : System.IDisposable
         _uHasDiffuse  = GL.GetUniformLocation(_program, "uHasDiffuse");
         _uBaseColor   = GL.GetUniformLocation(_program, "uBaseColor");
         _uDebugMode   = GL.GetUniformLocation(_program, "uDebugMode");
-        _uBilateral   = GL.GetUniformLocation(_program, "uBilateralStrength");
         _uBicubic     = GL.GetUniformLocation(_program, "uBicubic");
         _uSamplePoints    = GL.GetUniformLocation(_program, "uSamplePoints");
         _uHasSamplePoints = GL.GetUniformLocation(_program, "uHasSamplePoints");
@@ -259,7 +256,6 @@ internal sealed class SceneRenderer : System.IDisposable
         GL.UseProgram(_program);
         GL.Uniform1(_uExposure, exposure);
         GL.Uniform1(_uDebugMode, (int)CurrentDebug);
-        GL.Uniform1(_uBilateral, BilateralStrength);
         GL.Uniform1(_uBicubic, Bicubic ? 1 : 0);
         GL.Disable(EnableCap.CullFace);
         GL.Enable(EnableCap.DepthTest);
@@ -395,7 +391,6 @@ uniform int uHasLightmap;
 uniform int uHasDiffuse;
 uniform vec3 uBaseColor;
 uniform int uDebugMode;
-uniform float uBilateralStrength;
 uniform int uBicubic;
 out vec4 fragColor;
 
@@ -429,30 +424,7 @@ vec3 fetchLightmap(vec2 uv) {
 }
 
 vec3 sampleLightmap(vec2 uv) {
-    if (uBilateralStrength <= 0.0) return fetchLightmap(uv);
-
-    // The bilateral pass works on the texel grid, so it reads raw taps throughout rather than
-    // mixing a bicubic centre with bilinear neighbours.
-    vec3 center = texture(uLightmap, uv).rgb;
-    float centerLum = dot(center, vec3(0.2126, 0.7152, 0.0722));
-    vec2 ts = 1.0 / vec2(textureSize(uLightmap, 0));
-    vec3 acc = center;
-    float totalW = 1.0;
-    float sigmaLum = max(0.02, 0.15 / max(uBilateralStrength, 0.01));
-    for (int dy = -1; dy <= 1; dy++) {
-        for (int dx = -1; dx <= 1; dx++) {
-            if (dx == 0 && dy == 0) continue;
-            vec3 n = texture(uLightmap, uv + vec2(dx, dy) * ts).rgb;
-            float nLum = dot(n, vec3(0.2126, 0.7152, 0.0722));
-            float dLum = abs(centerLum - nLum);
-            float wLum = exp(-(dLum * dLum) / (sigmaLum * sigmaLum));
-            float spatial = (dx == 0 || dy == 0) ? 1.0 : 0.7071;
-            float w = wLum * spatial * uBilateralStrength;
-            acc += n * w;
-            totalW += w;
-        }
-    }
-    return acc / totalW;
+    return fetchLightmap(uv);
 }
 
 void main(){
