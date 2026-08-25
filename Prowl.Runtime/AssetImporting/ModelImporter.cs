@@ -14,8 +14,15 @@ public struct ModelImporterSettings
     /// <summary>Generate normals if the mesh doesn't have them.</summary>
     public bool GenerateNormals = true;
 
-    /// <summary>Use smooth (area-weighted vertex) normals instead of flat/faceted.</summary>
+    /// <summary>Use smooth (angle-weighted vertex) normals instead of flat/faceted.</summary>
     public bool GenerateSmoothNormals = true;
+
+    /// <summary>
+    /// Edges sharper than this stay hard when generating smooth normals; the vertices along them
+    /// are split so each side keeps its own normal. Only used when <see cref="GenerateSmoothNormals"/>
+    /// is on.
+    /// </summary>
+    public float SmoothNormalsAngleDeg = 80f;
 
     /// <summary>Force recalculate normals even if the mesh already has them.</summary>
     public bool RecalculateNormals = false;

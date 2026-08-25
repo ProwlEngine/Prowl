@@ -15,7 +15,8 @@ namespace Prowl.Editor.Importers;
 public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
-    private const int BaseVersion = 7;
+    // 8: normals now come from Clay, which splits vertices on hard edges.
+    private const int BaseVersion = 8;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     public override bool Import(ImportContext ctx)
@@ -32,6 +33,7 @@ public class EditorModelImporter : AssetImporter
                 var s = ctx.Settings;
                 importSettings.GenerateNormals = !s.TryGet("generateNormals", out var gn) || gn.BoolValue;
                 importSettings.GenerateSmoothNormals = !s.TryGet("generateSmoothNormals", out var gsn) || gsn.BoolValue;
+                importSettings.SmoothNormalsAngleDeg = s.TryGet("smoothNormalsAngle", out var sna) ? sna.FloatValue : 80f;
                 importSettings.RecalculateNormals = s.TryGet("recalculateNormals", out var rn) && rn.BoolValue;
                 importSettings.CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue;
                 importSettings.FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue;
@@ -138,6 +140,7 @@ public class EditorModelImporter : AssetImporter
         var s = EchoObject.NewCompound();
         s["generateNormals"] = new EchoObject(true);
         s["generateSmoothNormals"] = new EchoObject(true);
+        s["smoothNormalsAngle"] = new EchoObject(80.0f);
         s["recalculateNormals"] = new EchoObject(false);
         s["calculateTangents"] = new EchoObject(true);
         s["flipUVs"] = new EchoObject(true);
