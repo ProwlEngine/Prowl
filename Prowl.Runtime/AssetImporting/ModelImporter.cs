@@ -46,6 +46,13 @@ public struct ModelImporterSettings
     /// <summary>Create a light component for every punctual light the file defines.</summary>
     public bool ImportLights = true;
 
+    /// <summary>
+    /// Wrap mode given to every imported clip. Model formats carry no looping flag of their own, so
+    /// this is a choice the importer has to make rather than read. Loop suits the cycles most
+    /// character animation ships as; a one-shot clip (a door, a chest, an emote) wants Once.
+    /// </summary>
+    public AnimationWrapMode AnimationWrapMode = AnimationWrapMode.Loop;
+
     /// <summary>Generate a lightmap UV set (UV2) for every mesh via Prowl.Unwrapper. Off by default
     /// (it's slow and some models ship their own UV2); the built-in default models force it on.</summary>
     public bool GenerateLightmapUVs = false;

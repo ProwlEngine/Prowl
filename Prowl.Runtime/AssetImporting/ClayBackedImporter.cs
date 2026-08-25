@@ -15,13 +15,11 @@ using ClayMesh = Prowl.Clay.Mesh;
 using ClayMaterial = Prowl.Clay.Material;
 using ClayAnim = Prowl.Clay.AnimationClip;
 using ClayBinding = Prowl.Clay.AnimationBinding;
-using ClayCurve = Prowl.Clay.AnimationCurve;
 using ClayTexture = Prowl.Clay.Texture;
 using ClaySettings = Prowl.Clay.Importer.ModelImporterSettings;
 using PMesh = Prowl.Runtime.Resources.Mesh;
 using PMaterial = Prowl.Runtime.Resources.Material;
 using PAnim = Prowl.Runtime.AnimationClip;
-using PCurve = Prowl.Runtime.AnimationCurve;
 using PBlendShape = Prowl.Runtime.Resources.BlendShape;
 using PBlendShapeFrame = Prowl.Runtime.Resources.BlendShapeFrame;
 
@@ -224,7 +222,7 @@ internal static class ClayBackedImporter
         // 6. Animations.
         var animations = new List<PAnim>(clayModel.AnimationClips.Count);
         foreach (var clip in clayModel.AnimationClips)
-            animations.Add(BuildAnimationClip(clip, clayModel, nodeGOs, rootGO));
+            animations.Add(BuildAnimationClip(clip, clayModel, nodeGOs, rootGO, settings.AnimationWrapMode));
 
         if (animations.Count > 0)
         {
@@ -597,15 +595,18 @@ internal static class ClayBackedImporter
     // Animation bake
     // ----------------------------------------------------------------------------------------
 
-    private static PAnim BuildAnimationClip(ClayAnim src, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO)
+    private static PAnim BuildAnimationClip(ClayAnim src, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO, AnimationWrapMode wrap)
     {
         var clip = new PAnim
         {
             Name = src.Name,
+            // A clip authored on a shared timeline can start after zero; carrying that keeps the
+            // player from sitting on the first pose for the gap.
+            StartTime = src.StartTime,
             Duration = src.Duration,
             DurationInTicks = src.Duration,
             TicksPerSecond = 1f,
-            Wrap = AnimationWrapMode.Loop,
+            Wrap = wrap,
         };
 
         // Bin bindings by target node -> AnimBone. Blend-shape weight channels are handled
@@ -642,27 +643,18 @@ internal static class ClayBackedImporter
         return clip;
     }
 
+    /// <summary>
+    /// Hands Clay's curve to the bone channel unchanged. Both sides are
+    /// <see cref="Prowl.Vector.AnimationCurve"/>, so per-key interpolation and cubic tangents cross
+    /// intact rather than being resampled into scalar points.
+    /// </summary>
     private static void ApplyBinding(ClayBinding binding, PAnim.AnimBone bone)
     {
-        var curve = binding.Curve;
         switch (binding.Property)
         {
-            case AnimatedProperty.Position:
-                bone.PosX = SampleComponent(curve, component: 0);
-                bone.PosY = SampleComponent(curve, component: 1);
-                bone.PosZ = SampleComponent(curve, component: 2);
-                break;
-            case AnimatedProperty.Rotation:
-                bone.RotX = SampleComponent(curve, component: 0);
-                bone.RotY = SampleComponent(curve, component: 1);
-                bone.RotZ = SampleComponent(curve, component: 2);
-                bone.RotW = SampleComponent(curve, component: 3);
-                break;
-            case AnimatedProperty.Scale:
-                bone.ScaleX = SampleComponent(curve, component: 0);
-                bone.ScaleY = SampleComponent(curve, component: 1);
-                bone.ScaleZ = SampleComponent(curve, component: 2);
-                break;
+            case AnimatedProperty.Position: bone.Position = binding.Curve; break;
+            case AnimatedProperty.Rotation: bone.Rotation = binding.Curve; break;
+            case AnimatedProperty.Scale: bone.Scale = binding.Curve; break;
             // Visibility: not handled by Prowl yet. BlendShapeWeight is handled separately
             // (see ApplyBlendShapeBinding) since it targets a renderer + named shape, not a bone.
         }
@@ -688,36 +680,8 @@ internal static class ClayBackedImporter
         {
             Path = path,
             ShapeName = shapeName,
-            Weight = SampleComponent(binding.Curve, 0),
+            Weight = binding.Curve,
         });
     }
 
-    /// <summary>
-    /// Builds a Prowl <see cref="PCurve"/> by sampling one component of a Clay curve at each of its
-    /// authored key times. Cubic spline curves are sampled at their value entry only; runtime
-    /// re-interpolation uses Prowl's own smoothing.
-    /// </summary>
-    private static PCurve SampleComponent(ClayCurve curve, int component)
-    {
-        int dim = curve.Dimension;
-        int valuesPerKey = curve.Interpolation == AnimationInterpolation.CubicSpline ? dim * 3 : dim;
-        int valueOffset = curve.Interpolation == AnimationInterpolation.CubicSpline ? dim : 0;
-        if (component >= dim)
-        {
-            // Shouldn't happen if caller and binding agree on dimension.
-            return new PCurve(new[] { new KeyFrame(0f, 0f) });
-        }
-
-        int keyCount = curve.Times.Length;
-        var keys = new List<KeyFrame>(keyCount);
-        for (int k = 0; k < keyCount; k++)
-        {
-            float t = curve.Times[k];
-            float v = curve.Values[k * valuesPerKey + valueOffset + component];
-            keys.Add(new KeyFrame(t, v));
-        }
-        if (keys.Count == 0)
-            keys.Add(new KeyFrame(0f, 0f));
-        return new PCurve(keys);
-    }
 }

@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Vector;
 using System;
 
 namespace Prowl.Runtime.ParticleSystem.Modules;
@@ -11,7 +12,7 @@ namespace Prowl.Runtime.ParticleSystem.Modules;
 [Serializable]
 public class SizeOverLifetimeModule : ParticleSystemModule
 {
-    public AnimationCurve SizeCurve = new([new KeyFrame(0f, 1f), new KeyFrame(1f, 1f)]);
+    public AnimationCurve SizeCurve = new([new Keyframe(0f, 1f), new Keyframe(1f, 1f)]);
 
     public override void OnParticleUpdate(ref Particle particle, float deltaTime)
     {

@@ -16,7 +16,7 @@ public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
     // 8: normals now come from Clay, which splits vertices on hard edges.
-    private const int BaseVersion = 9;
+    private const int BaseVersion = 10;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     public override bool Import(ImportContext ctx)
@@ -40,6 +40,7 @@ public class EditorModelImporter : AssetImporter
                 importSettings.UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f;
                 importSettings.ImportCameras = !s.TryGet("importCameras", out var ic) || ic.BoolValue;
                 importSettings.ImportLights = !s.TryGet("importLights", out var il) || il.BoolValue;
+                importSettings.AnimationWrapMode = (AnimationWrapMode)(s.TryGet("animationWrapMode", out var awm) ? awm.IntValue : (int)AnimationWrapMode.Loop);
                 // Off by default (slow; some models ship their own UV2). The importer runs the
                 // unwrap in its post-process so the baked UV2 is captured before serialization.
                 importSettings.GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
@@ -149,6 +150,7 @@ public class EditorModelImporter : AssetImporter
         s["unitScale"] = new EchoObject(1.0f);
         s["importCameras"] = new EchoObject(true);
         s["importLights"] = new EchoObject(true);
+        s["animationWrapMode"] = new EchoObject((int)AnimationWrapMode.Loop);
         s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;
