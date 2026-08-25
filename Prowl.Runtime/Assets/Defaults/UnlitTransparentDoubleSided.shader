@@ -3,6 +3,7 @@ Shader "Default/Transparent/Unlit Double Sided"
 Properties
 {
     _MainTex ("Texture", Texture2D) = "white"
+    _MainTexUV ("Texture UV Set", Int) = 0
     _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
     _Tiling ("Tiling", Vector2) = (1.0, 1.0)
     _Offset ("Offset", Vector2) = (0.0, 0.0)

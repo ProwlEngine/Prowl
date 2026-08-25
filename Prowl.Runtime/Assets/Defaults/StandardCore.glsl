@@ -69,20 +69,25 @@
 uniform vec2 _Tiling;
 uniform vec2 _Offset;
 
+// vUV is UV0 with the material's tiling/offset already applied. vUV1 is the raw second set: the
+// lightmap needs it untransformed, and material slots that select it apply the transform per
+// fragment. glTF's texCoord is per slot, hence the per-slot selectors below rather than one set
+// for the whole material.
 #ifdef PROWL_PASS_FORWARD
     PROWL_VARYING vec2 vUV;
+    PROWL_VARYING vec2 vUV1;
     PROWL_VARYING vec3 vWorldPos;
     PROWL_VARYING vec4 vColor;
     #ifndef PROWL_UNLIT
         PROWL_VARYING vec3 vNormal;
         PROWL_VARYING vec3 vTangent;
         PROWL_VARYING vec3 vBitangent;
-        PROWL_VARYING vec2 vLightmapUV;
     #endif
 #endif
 
 #ifdef PROWL_PASS_PREPASS
     PROWL_VARYING vec2 vUV;
+    PROWL_VARYING vec2 vUV1;
     PROWL_VARYING vec3 vNormal;
     PROWL_VARYING vec3 vTangent;
     PROWL_VARYING vec3 vBitangent;
@@ -92,6 +97,7 @@ uniform vec2 _Offset;
 
 #if defined(PROWL_PASS_SHADOW) && defined(PROWL_ALPHA_CUTOUT)
     PROWL_VARYING vec2 vUV;
+    PROWL_VARYING vec2 vUV1;
 #endif
 
 // ============================================================================
@@ -136,10 +142,10 @@ void ProwlVertex()
 
 #ifdef PROWL_PASS_FORWARD
     vUV = vertexTexCoord0 * _Tiling + _Offset;
+    vUV1 = vertexTexCoord1;
     vWorldPos = TransformPosition(vertexPosition);
     vColor = GetInstanceColor();
     #ifndef PROWL_UNLIT
-        vLightmapUV = vertexTexCoord1; // raw UV2, the lightmap scale/offset is applied per fragment
         vNormal = TransformDirection(GetMorphedNormal(vertexNormal));
         ProwlBuildTangentFrame(vNormal, vTangent, vBitangent);
     #endif
@@ -147,6 +153,7 @@ void ProwlVertex()
 
 #ifdef PROWL_PASS_PREPASS
     vUV = vertexTexCoord0 * _Tiling + _Offset;
+    vUV1 = vertexTexCoord1;
     vNormal = TransformDirection(GetMorphedNormal(vertexNormal));
     ProwlBuildTangentFrame(vNormal, vTangent, vBitangent);
 
@@ -159,6 +166,7 @@ void ProwlVertex()
 
 #if defined(PROWL_PASS_SHADOW) && defined(PROWL_ALPHA_CUTOUT)
     vUV = vertexTexCoord0 * _Tiling + _Offset;
+    vUV1 = vertexTexCoord1;
 #endif
 }
 
@@ -170,9 +178,14 @@ void ProwlVertex()
 
 #ifdef PROWL_FRAGMENT_STAGE
 
+// Per-slot UV set, matching glTF's per-slot texCoord. 0 selects UV0, anything else UV1.
+// Sampling helper: uv0 already carries the material transform, uv1 gets it applied here.
+vec2 ProwlSlotUV(int uvSet, vec2 uv0, vec2 uv1) { return uvSet == 0 ? uv0 : uv1; }
+
 #if defined(PROWL_PASS_FORWARD) || defined(PROWL_READS_ALPHA)
 uniform sampler2D _MainTex;
 uniform vec4 _MainColor;
+uniform int _MainTexUV;
 #endif
 
 #ifdef PROWL_ALPHA_CUTOUT
@@ -183,16 +196,20 @@ uniform float _AlphaCutoff;
     #if defined(PROWL_PASS_FORWARD) || defined(PROWL_PASS_PREPASS)
         uniform sampler2D _NormalTex;
         uniform float _NormalScale;
+        uniform int _NormalTexUV;
         uniform sampler2D _SurfaceTex;
         uniform float _Metallic;
         uniform float _Roughness;
+        uniform int _SurfaceTexUV;
     #endif
     #ifdef PROWL_PASS_FORWARD
         uniform sampler2D _OcclusionTex;
         uniform float _OcclusionStrength;
+        uniform int _OcclusionTexUV;
         uniform sampler2D _EmissionTex;
         uniform vec4 _EmissiveColor;
         uniform float _EmissionIntensity;
+        uniform int _EmissionTexUV;
 
         uniform sampler2D _ParallaxMap;
         uniform float _Parallax;
@@ -269,12 +286,16 @@ layout (location = 0) out vec4 fragColor;
 void ProwlFragment()
 {
     vec2 uv = vUV;
+    vec2 uv1 = vUV1 * _Tiling + _Offset;
 
 #ifndef PROWL_UNLIT
     vec3 N, T, B;
     ProwlSurfaceFrame(N, T, B);
 
     // --- Parallax Occlusion Mapping ---
+    // Displaces UV0 only. A height map is authored against the primary set in every real pipeline,
+    // and a UV0 offset has no meaning in a second set's parameterisation, so slots that select UV1
+    // sample unparallaxed.
     #ifdef HAS_TANGENTS
     if (_Parallax > 0.0 && _ParallaxSteps > 0)
     {
@@ -286,7 +307,7 @@ void ProwlFragment()
 #endif
 
     // --- Albedo. sRGB texture decoded first, linear factors applied after. ---
-    vec4 albedoTexel = texture(_MainTex, uv);
+    vec4 albedoTexel = texture(_MainTex, ProwlSlotUV(_MainTexUV, uv, uv1));
     vec3 baseColor = gammaToLinearSpace(albedoTexel.rgb) * _MainColor.rgb * vColor.rgb;
 
 #ifdef PROWL_READS_ALPHA
@@ -301,17 +322,17 @@ void ProwlFragment()
 #ifdef PROWL_UNLIT
     vec3 color = ApplyFog(baseColor, vWorldPos);
 #else
-    vec3 worldNormal = ApplyNormalMapScaled(_NormalTex, uv, N, T, B, _NormalScale);
+    vec3 worldNormal = ApplyNormalMapScaled(_NormalTex, ProwlSlotUV(_NormalTexUV, uv, uv1), N, T, B, _NormalScale);
 
     // --- Surface: G = Roughness, B = Metallic, each scaled by its factor (glTF semantics). ---
     // glTF is free to author a roughnessFactor of 0 and plenty of models do, so the floor matters
     // here and not just as a backstop inside the BRDF.
-    vec4 surface = texture(_SurfaceTex, uv);
+    vec4 surface = texture(_SurfaceTex, ProwlSlotUV(_SurfaceTexUV, uv, uv1));
     float roughness = clamp(surface.g * _Roughness, PROWL_MIN_ROUGHNESS, 1.0);
     float metallic = clamp(surface.b * _Metallic, 0.0, 1.0);
 
     // --- Ambient occlusion. R channel, 1 = unoccluded, lerped by strength. ---
-    float ao = mix(1.0, texture(_OcclusionTex, uv).r, _OcclusionStrength);
+    float ao = mix(1.0, texture(_OcclusionTex, ProwlSlotUV(_OcclusionTexUV, uv, uv1)).r, _OcclusionStrength);
 
     // --- Translucency map: G = extra occlusion, B = thickness ---
     vec4 transOcc = texture(_TranslucencyMap, uv);
@@ -319,7 +340,8 @@ void ProwlFragment()
     float translucency = transOcc.b * _TranslucencyStrength;
 
     // --- Emission. sRGB texture, linear factor, then the strength multiplier. ---
-    vec3 emission = gammaToLinearSpace(texture(_EmissionTex, uv).rgb) * _EmissiveColor.rgb * _EmissionIntensity;
+    vec3 emission = gammaToLinearSpace(texture(_EmissionTex, ProwlSlotUV(_EmissionTexUV, uv, uv1)).rgb)
+                    * _EmissiveColor.rgb * _EmissionIntensity;
 
     vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - vWorldPos);
 
@@ -346,7 +368,7 @@ void ProwlFragment()
     #endif
 
     // --- Ambient / baked GI ---
-    vec3 ambientLight = CalculateGI(worldNormal, vLightmapUV, uv) * ao;
+    vec3 ambientLight = CalculateGI(worldNormal, vUV1, uv) * ao;
 
     // Diffuse ambient (non-metals only, metals have no diffuse)
     vec3 diffuseColor = baseColor * (1.0 - metallic);
@@ -385,7 +407,7 @@ layout (location = 1) out vec4 motionRM;
 void ProwlFragment()
 {
 #ifdef PROWL_ALPHA_CUTOUT
-    if (texture(_MainTex, vUV).a * _MainColor.a < _AlphaCutoff)
+    if (texture(_MainTex, ProwlSlotUV(_MainTexUV, vUV, vUV1 * _Tiling + _Offset)).a * _MainColor.a < _AlphaCutoff)
         discard;
 #endif
 
@@ -400,11 +422,11 @@ void ProwlFragment()
     normalOut = EncodeViewNormal(N);
     motionRM = vec4(currNDC - prevNDC, 0.0, 0.0);
 #else
-    normalOut = EncodeViewNormal(ApplyNormalMapScaled(_NormalTex, vUV, N, T, B, _NormalScale));
+    normalOut = EncodeViewNormal(ApplyNormalMapScaled(_NormalTex, ProwlSlotUV(_NormalTexUV, vUV, vUV1 * _Tiling + _Offset), N, T, B, _NormalScale));
 
     // Roughness/metallic must match the forward pass exactly, floor included, or SSR reflects off
     // a different surface than the one being shaded.
-    vec4 surface = texture(_SurfaceTex, vUV);
+    vec4 surface = texture(_SurfaceTex, ProwlSlotUV(_SurfaceTexUV, vUV, vUV1 * _Tiling + _Offset));
     motionRM = vec4(currNDC - prevNDC,
                     clamp(surface.g * _Roughness, PROWL_MIN_ROUGHNESS, 1.0),
                     clamp(surface.b * _Metallic, 0.0, 1.0));
@@ -422,7 +444,7 @@ void ProwlFragment()
 void ProwlFragment()
 {
 #ifdef PROWL_ALPHA_CUTOUT
-    if (texture(_MainTex, vUV).a * _MainColor.a < _AlphaCutoff)
+    if (texture(_MainTex, ProwlSlotUV(_MainTexUV, vUV, vUV1 * _Tiling + _Offset)).a * _MainColor.a < _AlphaCutoff)
         discard;
 #endif
     gl_FragDepth = gl_FragCoord.z;

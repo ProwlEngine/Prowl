@@ -415,6 +415,7 @@ internal static class ClayBackedImporter
         // grid checker is the missing-texture placeholder for hand-authored materials and would
         // otherwise get multiplied into every untextured imported material.
         mat.SetTexture("_MainTex", OrDefault(ResolveTexture(src.BaseColorTexture, textureCache), DefaultTexture.White));
+        mat.SetInt("_MainTexUV", UVSetFor(src.BaseColorTexture, src));
 
         ApplyTextureTransform(mat, src);
 
@@ -427,23 +428,37 @@ internal static class ClayBackedImporter
 
         mat.SetTexture("_NormalTex", OrDefault(ResolveTexture(src.NormalTexture, textureCache), DefaultTexture.Normal));
         mat.SetFloat("_NormalScale", src.NormalScale);
+        mat.SetInt("_NormalTexUV", UVSetFor(src.NormalTexture, src));
 
         // Factors multiply the texture channels, matching glTF. White is the neutral texture so a
         // factor-only material lands on exactly its factors.
         mat.SetTexture("_SurfaceTex", OrDefault(ResolveTexture(src.MetallicRoughnessTexture, textureCache), DefaultTexture.White));
         mat.SetFloat("_Metallic", src.Metallic);
         mat.SetFloat("_Roughness", src.Roughness);
+        mat.SetInt("_SurfaceTexUV", UVSetFor(src.MetallicRoughnessTexture, src));
 
         // Occlusion is its own slot. When a model packs ORM into one image and points both
         // occlusionTexture and metallicRoughnessTexture at it, both slots resolve to that image.
         mat.SetTexture("_OcclusionTex", OrDefault(ResolveTexture(src.OcclusionTexture, textureCache), DefaultTexture.White));
         mat.SetFloat("_OcclusionStrength", src.OcclusionStrength);
+        mat.SetInt("_OcclusionTexUV", UVSetFor(src.OcclusionTexture, src));
 
         mat.SetTexture("_EmissionTex", OrDefault(ResolveTexture(src.EmissiveTexture, textureCache), DefaultTexture.White));
         mat.SetColor("_EmissiveColor", src.EmissiveFactor);
         mat.SetFloat("_EmissionIntensity", src.EmissiveStrength);
+        mat.SetInt("_EmissionTexUV", UVSetFor(src.EmissiveTexture, src));
 
         return mat;
+    }
+
+    private static int UVSetFor(MaterialTextureSlot? slot, ClayMaterial src)
+    {
+        if (slot is null) return 0;
+        if (slot.UVChannel is 0 or 1) return slot.UVChannel;
+
+        Debug.LogWarning($"[Clay] Material '{src.Name}' samples a texture from UV channel {slot.UVChannel}; " +
+            "a mesh carries UV0 and UV1 only, so UV0 was used instead.");
+        return 0;
     }
 
     /// <summary>
@@ -467,12 +482,6 @@ internal static class ClayBackedImporter
         foreach (var other in EnumerateSlots(src))
         {
             if (other is null || ReferenceEquals(other, slot)) continue;
-
-            if (other.UVChannel != 0)
-            {
-                Debug.LogWarning($"[Clay] Material '{src.Name}' samples a texture from UV channel {other.UVChannel}; " +
-                    "the Standard shaders sample UV0 for every slot, so UV0 was used instead.");
-            }
 
             bool differs = slot is null
                 ? other.Scale != Float2.One || other.Offset != Float2.Zero
