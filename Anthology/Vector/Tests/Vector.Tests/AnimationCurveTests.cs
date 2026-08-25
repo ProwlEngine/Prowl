@@ -1238,4 +1238,76 @@ public class AnimationCurveTests
     }
 
     #endregion
+
+    #region Quaternion continuity
+
+    /// <summary>
+    /// A quaternion and its negation are the same rotation and exporters emit either, so a sign flip
+    /// between adjacent keys is common and means nothing. It matters anyway: cubic interpolation runs
+    /// per component, and across a flip that sweeps the long way round.
+    /// </summary>
+    [Fact]
+    public void EnsureQuaternionContinuity_FlipsKeysMoreThanAHalfTurnApart()
+    {
+        var curve = new AnimationCurve(4,
+            new Keyframe(0f, new Float4(0f, 0f, 0f, 1f)),
+            new Keyframe(1f, new Float4(0f, 0f, 0f, -1f)));
+
+        curve.EnsureQuaternionContinuity();
+
+        Assert.Equal(1f, curve[1].Value4.W, 4);
+    }
+
+    [Fact]
+    public void EnsureQuaternionContinuity_LeavesAlreadyContinuousKeysAlone()
+    {
+        var curve = new AnimationCurve(4,
+            new Keyframe(0f, new Float4(0f, 0f, 0f, 1f)),
+            new Keyframe(1f, new Float4(0f, 0.1f, 0f, 0.995f)));
+
+        curve.EnsureQuaternionContinuity();
+
+        Assert.Equal(0.995f, curve[1].Value4.W, 4);
+        Assert.Equal(0.1f, curve[1].Value4.Y, 4);
+    }
+
+    // A tangent is a rate of change of the value it belongs to, so it flips with its key.
+    [Fact]
+    public void EnsureQuaternionContinuity_FlipsTangentsWithTheirKey()
+    {
+        var curve = new AnimationCurve(4,
+            new Keyframe(0f, new Float4(0f, 0f, 0f, 1f)),
+            new Keyframe(1f, new Float4(0f, 0f, 0f, -1f), new Float4(0f, 0f, 0f, 2f), new Float4(0f, 0f, 0f, 3f)));
+
+        curve.EnsureQuaternionContinuity();
+
+        Assert.Equal(-2f, curve[1].InTangent4.W, 4);
+        Assert.Equal(-3f, curve[1].OutTangent4.W, 4);
+    }
+
+    // The flip has to carry along the chain, not just be judged against the original first key.
+    [Fact]
+    public void EnsureQuaternionContinuity_PropagatesAcrossAChainOfFlips()
+    {
+        var curve = new AnimationCurve(4,
+            new Keyframe(0f, new Float4(0f, 0f, 0f, 1f)),
+            new Keyframe(1f, new Float4(0f, 0f, 0f, -1f)),
+            new Keyframe(2f, new Float4(0f, 0f, 0f, 1f)));
+
+        curve.EnsureQuaternionContinuity();
+
+        // Key 1 flips to +1; key 2 was already +1 and so must now flip to stay continuous with it.
+        Assert.Equal(1f, curve[1].Value4.W, 4);
+        Assert.Equal(1f, curve[2].Value4.W, 4);
+    }
+
+    [Fact]
+    public void EnsureQuaternionContinuity_RejectsNonRotationCurves()
+    {
+        var curve = new AnimationCurve(3, new Keyframe(0f, new Float3(1f, 0f, 0f)));
+
+        Assert.Throws<InvalidOperationException>(() => curve.EnsureQuaternionContinuity());
+    }
+
+    #endregion
 }

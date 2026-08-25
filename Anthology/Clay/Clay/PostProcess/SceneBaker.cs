@@ -327,10 +327,9 @@ internal static class SceneBaker
             });
         }
 
-        BackfillMissingTRSBindings(bindings, bakedNodes);
-
-        // The range is measured from the curves rather than tracked alongside them, so it stays
-        // right after the backfill adds constant channels and after any step that trims keys.
+        // Measured from the authored curves, before the backfill runs. A backfilled channel is one
+        // key holding forever, so its time is arbitrary; letting it into the range would drag the
+        // start of every late-starting clip back to zero.
         float start = float.PositiveInfinity;
         float end = float.NegativeInfinity;
         foreach (var binding in bindings)
@@ -340,6 +339,10 @@ internal static class SceneBaker
             end = MathF.Max(end, binding.Curve.EndTime);
         }
         if (float.IsInfinity(start)) { start = 0f; end = 0f; }
+
+        // Placed at the start so the synthesized key lines up with the authored ones rather than
+        // sitting outside the clip.
+        BackfillMissingTRSBindings(bindings, bakedNodes, start);
 
         return new AnimationClip
         {
@@ -381,7 +384,7 @@ internal static class SceneBaker
     /// to snap those bones to origin. Backfilling at bake time means every Clay consumer gets
     /// a complete 9-channel-per-bone clip without having to special-case missing channels.
     /// </summary>
-    private static void BackfillMissingTRSBindings(List<AnimationBinding> bindings, ModelNode[] bakedNodes)
+    private static void BackfillMissingTRSBindings(List<AnimationBinding> bindings, ModelNode[] bakedNodes, float atTime)
     {
         // Bit flags per node: 1=has Position, 2=has Rotation, 4=has Scale. Limited to SubIndex==0
         // (TRS only has one slot; SubIndex is used by blend-shape-weight bindings).
@@ -411,22 +414,22 @@ internal static class SceneBaker
             var n = bakedNodes[nodeIdx];
 
             if ((mask & 1) == 0)
-                bindings.Add(MakeConstantBinding(nodeIdx, AnimatedProperty.Position, 3, n.LocalPosition.X, n.LocalPosition.Y, n.LocalPosition.Z));
+                bindings.Add(MakeConstantBinding(atTime, nodeIdx, AnimatedProperty.Position, 3, n.LocalPosition.X, n.LocalPosition.Y, n.LocalPosition.Z));
             if ((mask & 2) == 0)
-                bindings.Add(MakeConstantBinding(nodeIdx, AnimatedProperty.Rotation, 4, n.LocalRotation.X, n.LocalRotation.Y, n.LocalRotation.Z, n.LocalRotation.W));
+                bindings.Add(MakeConstantBinding(atTime, nodeIdx, AnimatedProperty.Rotation, 4, n.LocalRotation.X, n.LocalRotation.Y, n.LocalRotation.Z, n.LocalRotation.W));
             if ((mask & 4) == 0)
-                bindings.Add(MakeConstantBinding(nodeIdx, AnimatedProperty.Scale, 3, n.LocalScale.X, n.LocalScale.Y, n.LocalScale.Z));
+                bindings.Add(MakeConstantBinding(atTime, nodeIdx, AnimatedProperty.Scale, 3, n.LocalScale.X, n.LocalScale.Y, n.LocalScale.Z));
         }
     }
 
-    private static AnimationBinding MakeConstantBinding(int nodeIndex, AnimatedProperty prop, int dim, params float[] values)
+    private static AnimationBinding MakeConstantBinding(float atTime, int nodeIndex, AnimatedProperty prop, int dim, params float[] values)
     {
         return new AnimationBinding
         {
             NodeIndex = nodeIndex,
             Property = prop,
             SubIndex = 0,
-            Curve = AnimationCurve.FromPacked(dim, new[] { 0f }, values, CurveInterpolation.Linear),
+            Curve = AnimationCurve.FromPacked(dim, new[] { atTime }, values, CurveInterpolation.Linear),
         };
     }
 
