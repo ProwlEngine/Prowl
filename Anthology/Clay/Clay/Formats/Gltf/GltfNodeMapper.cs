@@ -11,10 +11,9 @@ namespace Prowl.Clay.Formats.Gltf;
 /// Builds the <see cref="IntermediateNode"/> hierarchy from glTF <c>nodes</c> + <c>scenes</c>.
 /// </summary>
 /// <remarks>
-/// Because one glTF mesh expands to N <see cref="IntermediateMesh"/>es (one per primitive), a glTF
-/// node with a <c>mesh</c> reference expands into the node itself plus N-1 sibling sub-nodes
-/// (one per extra primitive). Both the primary node and every sub-node inherit the source node's
-/// <c>skin</c> reference so they all render with the same skeleton.
+/// One glTF mesh is one <see cref="IntermediateMesh"/> with its primitives merged, so the hierarchy
+/// here is exactly the one the file describes: a node with a <c>mesh</c> reference points at that
+/// mesh and nothing is synthesised alongside it.
 /// </remarks>
 internal static class GltfNodeMapper
 {
@@ -75,7 +74,7 @@ internal static class GltfNodeMapper
             }
         }
 
-        ExpandMultiPrimitiveMeshNodes(sourceNodes, built, meshMapping, ctx);
+        AttachMeshes(sourceNodes, built, meshMapping, ctx);
 
         scene.Nodes.Clear();
         AppendDepthFirst(root, scene.Nodes);
@@ -130,7 +129,13 @@ internal static class GltfNodeMapper
         return node;
     }
 
-    private static void ExpandMultiPrimitiveMeshNodes(
+    /// <summary>
+    /// Attaches each mesh-bearing node to its mesh. One glTF mesh is one
+    /// <see cref="IntermediateMesh"/>, so this is a straight assignment: the sibling nodes that used
+    /// to be synthesised per primitive are gone, and a node keeps the single object the file
+    /// described.
+    /// </summary>
+    private static void AttachMeshes(
         GltfNode[] sourceNodes,
         IntermediateNode[] built,
         GltfMeshMapper.Result meshMapping,
@@ -141,29 +146,13 @@ internal static class GltfNodeMapper
             int? mi = sourceNodes[i].Mesh;
             if (mi is null) continue;
 
-            if ((uint)mi.Value >= (uint)meshMapping.MeshIndexRanges.Count)
+            if ((uint)mi.Value >= (uint)meshMapping.MeshIndex.Count)
             {
                 ctx.Log.Warning($"Node references missing mesh {mi.Value}.", "GltfNodeMapper");
                 continue;
             }
 
-            var range = meshMapping.MeshIndexRanges[mi.Value];
-            if (range.Count == 0)
-                continue;
-
-            built[i].MeshIndex = range.First;
-
-            for (int p = 1; p < range.Count; p++)
-            {
-                var sub = new IntermediateNode
-                {
-                    Name = $"{built[i].Name}_prim{p}",
-                    Parent = built[i],
-                    MeshIndex = range.First + p,
-                    SkinIndex = built[i].SkinIndex,
-                };
-                built[i].Children.Add(sub);
-            }
+            built[i].MeshIndex = meshMapping.MeshIndex[mi.Value];
         }
     }
 

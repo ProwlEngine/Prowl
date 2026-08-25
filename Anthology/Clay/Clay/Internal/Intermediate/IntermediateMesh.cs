@@ -39,19 +39,54 @@ internal sealed class IntermediateMesh
     /// <summary>Morph targets. Empty when none were authored.</summary>
     public List<IntermediateBlendShape> BlendShapes { get; } = new();
 
-    /// <summary>Index into the parent scene's material list. -1 for no material.</summary>
+    /// <summary>
+    /// Index into the parent scene's material list, -1 for no material. Applies to every face that
+    /// does not carry its own, which is the common case: only sources that assign materials per
+    /// face (glTF primitives merged into one mesh) set <see cref="IntermediateFace.Material"/>.
+    /// </summary>
     public int MaterialIndex { get; set; } = -1;
+
+    /// <summary>The material a face actually draws with, resolving the inherit sentinel.</summary>
+    public int MaterialForFace(in IntermediateFace face) =>
+        face.Material == IntermediateFace.InheritMaterial ? MaterialIndex : face.Material;
+
+    /// <summary>True when the faces do not all resolve to the same material.</summary>
+    public bool HasMixedMaterials()
+    {
+        if (Faces.Count == 0) return false;
+
+        int first = MaterialForFace(Faces[0]);
+        for (int i = 1; i < Faces.Count; i++)
+            if (MaterialForFace(Faces[i]) != first)
+                return true;
+        return false;
+    }
 
     /// <summary>True when the mesh contains primitives that aren't triangles.</summary>
     public PrimitiveKind PrimitiveKinds { get; set; }
 }
 
 /// <summary>A single face with N indices (3 for triangles, 2 for lines, 1 for points, N for polygons).</summary>
+/// <remarks>
+/// The material rides on the face rather than beside it so that every post-process step which
+/// reorders, filters or moves faces between meshes carries the assignment along without having to
+/// know about it. Only the handful of places that construct a face from scratch have to say what
+/// material it belongs to.
+/// </remarks>
 internal struct IntermediateFace
 {
+    /// <summary>Sentinel for "no material of my own", deferring to <see cref="IntermediateMesh.MaterialIndex"/>.
+    /// Distinct from -1, which is a real value meaning the face has no material at all.</summary>
+    public const int InheritMaterial = int.MinValue;
+
     public int[] Indices;
 
-    public IntermediateFace(int[] indices) { Indices = indices; }
+    /// <summary>Material index for this face, or <see cref="InheritMaterial"/> to use the mesh's.</summary>
+    public int Material;
+
+    public IntermediateFace(int[] indices) { Indices = indices; Material = InheritMaterial; }
+
+    public IntermediateFace(int[] indices, int material) { Indices = indices; Material = material; }
 }
 
 [Flags]

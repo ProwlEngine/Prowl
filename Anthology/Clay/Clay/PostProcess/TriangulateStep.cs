@@ -46,12 +46,12 @@ internal sealed class TriangulateStep : IPostProcess
                 if (n == 4 && IsConvexQuad(mesh, face.Indices))
                 {
                     int a = face.Indices[0], b = face.Indices[1], c = face.Indices[2], d = face.Indices[3];
-                    newFaces.Add(new IntermediateFace(new[] { a, b, c }));
-                    newFaces.Add(new IntermediateFace(new[] { a, c, d }));
+                    newFaces.Add(new IntermediateFace(new[] { a, b, c }, face.Material));
+                    newFaces.Add(new IntermediateFace(new[] { a, c, d }, face.Material));
                     continue;
                 }
 
-                EarClip(mesh, face.Indices, newFaces, context);
+                EarClip(mesh, face.Indices, face.Material, newFaces, context);
             }
 
             mesh.Faces.Clear();
@@ -76,7 +76,7 @@ internal sealed class TriangulateStep : IPostProcess
         return Float3.Dot(n0, n1) > 0f && Float3.Dot(n1, n2) > 0f && Float3.Dot(n2, n3) > 0f;
     }
 
-    private static void EarClip(IntermediateMesh mesh, int[] poly, List<IntermediateFace> output, ImportContext ctx)
+    private static void EarClip(IntermediateMesh mesh, int[] poly, int material, List<IntermediateFace> output, ImportContext ctx)
     {
         int n = poly.Length;
         Float3 normal = PolygonNormal(mesh, poly);
@@ -124,7 +124,7 @@ internal sealed class TriangulateStep : IPostProcess
 
             if (IsEar(pts2[p], pts2[q], pts2[r], pts2, prev, next, p, q, r))
             {
-                output.Add(new IntermediateFace(new[] { poly[p], poly[q], poly[r] }));
+                output.Add(new IntermediateFace(new[] { poly[p], poly[q], poly[r] }, material));
                 next[p] = r;
                 prev[r] = p;
                 remaining--;
@@ -139,7 +139,7 @@ internal sealed class TriangulateStep : IPostProcess
         if (remaining == 3)
         {
             int p = prev[cur], q = cur, r = next[cur];
-            output.Add(new IntermediateFace(new[] { poly[p], poly[q], poly[r] }));
+            output.Add(new IntermediateFace(new[] { poly[p], poly[q], poly[r] }, material));
             return;
         }
 
@@ -153,7 +153,7 @@ internal sealed class TriangulateStep : IPostProcess
             int walk = cur;
             for (int i = 0; i < remaining; i++) { survivors[i] = walk; walk = next[walk]; }
             for (int i = 1; i + 1 < remaining; i++)
-                output.Add(new IntermediateFace(new[] { poly[survivors[0]], poly[survivors[i]], poly[survivors[i + 1]] }));
+                output.Add(new IntermediateFace(new[] { poly[survivors[0]], poly[survivors[i]], poly[survivors[i + 1]] }, material));
             ctx.Log.Info(
                 $"Triangulate: fan-triangulated a {n}-gon after ear-clipping stalled on {remaining} remaining vertices.",
                 "Triangulate");

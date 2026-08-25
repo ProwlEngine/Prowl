@@ -81,6 +81,18 @@ internal sealed class ValidateDataStructureStep : IPostProcess
             if (mesh.MaterialIndex < -1 || mesh.MaterialIndex >= scene.Materials.Count)
                 r.Add($"Mesh {mi}: MaterialIndex {mesh.MaterialIndex} out of range.");
 
+            // Faces may carry their own material, and each of those has to resolve too.
+            for (int fi = 0; fi < mesh.Faces.Count; fi++)
+            {
+                var face = mesh.Faces[fi];
+                if (face.Material == IntermediateFace.InheritMaterial) continue;
+                if (face.Material < -1 || face.Material >= scene.Materials.Count)
+                {
+                    r.Add($"Mesh {mi}, face {fi}: material {face.Material} out of range.");
+                    break;
+                }
+            }
+
             // Blend shapes must match vertex count.
             for (int bs = 0; bs < mesh.BlendShapes.Count; bs++)
             {

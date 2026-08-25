@@ -186,9 +186,9 @@ internal static class SceneBaker
 
         var indicesList = new List<uint>(EstimateIndexCount(src));
         var submeshes = new List<SubMesh>(3);
-        AppendSubMesh(src, indicesList, submeshes, PrimitiveTopology.Triangles, hasTris);
-        AppendSubMesh(src, indicesList, submeshes, PrimitiveTopology.Lines, hasLines);
-        AppendSubMesh(src, indicesList, submeshes, PrimitiveTopology.Points, hasPoints);
+        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Triangles, hasTris);
+        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Lines, hasLines);
+        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Points, hasPoints);
 
         uint[] indices = indicesList.ToArray();
         bool has32 = vertexCount > ushort.MaxValue;
@@ -395,7 +395,13 @@ internal static class SceneBaker
         };
     }
 
-    private static void AppendSubMesh(
+    /// <summary>
+    /// Emits one <see cref="SubMesh"/> per material within a topology, which is what makes a mesh
+    /// carrying several materials draw correctly: each range is one draw call with one material.
+    /// Materials keep the order they are first met in the face list, so a merged glTF mesh's
+    /// sub-meshes come out in its primitive order.
+    /// </summary>
+    private static void AppendSubMeshes(
         IntermediateMesh src,
         List<uint> indicesList,
         List<SubMesh> submeshes,
@@ -412,25 +418,38 @@ internal static class SceneBaker
             _ => 3,
         };
 
-        int start = indicesList.Count;
+        var materialOrder = new List<int>();
         foreach (var face in src.Faces)
         {
             if (face.Indices.Length != indicesPerFace) continue;
-            for (int k = 0; k < face.Indices.Length; k++)
-                indicesList.Add((uint)face.Indices[k]);
+            int material = src.MaterialForFace(face);
+            if (!materialOrder.Contains(material)) materialOrder.Add(material);
         }
-        int count = indicesList.Count - start;
-        if (count == 0) return;
 
-        submeshes.Add(new SubMesh
+        foreach (int material in materialOrder)
         {
-            Topology = topology,
-            IndexStart = start,
-            IndexCount = count,
-            BaseVertex = 0,
-            MaterialIndex = src.MaterialIndex,
-            Bounds = Bounds.Empty,
-        });
+            int start = indicesList.Count;
+            foreach (var face in src.Faces)
+            {
+                if (face.Indices.Length != indicesPerFace) continue;
+                if (src.MaterialForFace(face) != material) continue;
+                for (int k = 0; k < face.Indices.Length; k++)
+                    indicesList.Add((uint)face.Indices[k]);
+            }
+
+            int count = indicesList.Count - start;
+            if (count == 0) continue;
+
+            submeshes.Add(new SubMesh
+            {
+                Topology = topology,
+                IndexStart = start,
+                IndexCount = count,
+                BaseVertex = 0,
+                MaterialIndex = material,
+                Bounds = Bounds.Empty,
+            });
+        }
     }
 
     private static int EstimateIndexCount(IntermediateMesh src)

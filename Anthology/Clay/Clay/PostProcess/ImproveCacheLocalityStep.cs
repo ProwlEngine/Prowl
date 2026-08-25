@@ -82,6 +82,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
         bool[] triEmitted = new bool[triCount];
 
         int[] outIndices = new int[triCount * 3];
+        int[] outTriSource = new int[triCount];
         int outCursor = 0;
         int timeStamp = CacheSize + 1;
         int next = 0;
@@ -96,7 +97,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
                 while (next < triCount && triEmitted[next]) next++;
                 if (next >= triCount) break;
                 int t = next++;
-                EmitTri(t, triVerts, outIndices, ref outCursor, triEmitted, liveTris, cacheTime, ref timeStamp);
+                EmitTri(t, triVerts, outIndices, ref outCursor, triEmitted, liveTris, cacheTime, ref timeStamp, outTriSource);
                 fanningVertex = NextFan(triVerts, t, liveTris, cacheTime, timeStamp);
             }
             else
@@ -122,7 +123,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
                     writeTri--;
                     continue;
                 }
-                EmitTri(bestTri, triVerts, outIndices, ref outCursor, triEmitted, liveTris, cacheTime, ref timeStamp);
+                EmitTri(bestTri, triVerts, outIndices, ref outCursor, triEmitted, liveTris, cacheTime, ref timeStamp, outTriSource);
                 fanningVertex = NextFan(triVerts, bestTri, liveTris, cacheTime, timeStamp);
             }
         }
@@ -142,7 +143,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
                         outIndices[triRead * 3 + 0],
                         outIndices[triRead * 3 + 1],
                         outIndices[triRead * 3 + 2],
-                    }));
+                    }, mesh.Faces[triIndex[outTriSource[triRead]]].Material));
                     triRead++;
                 }
             }
@@ -163,9 +164,13 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
         bool[] triEmitted,
         int[] liveTris,
         int[] cacheTime,
-        ref int timeStamp)
+        ref int timeStamp,
+        int[] outTriSource)
     {
         triEmitted[t] = true;
+        // The reorder is why this is recorded: emitted slot n is no longer source triangle n, so
+        // anything carried per triangle (its material) needs the mapping back.
+        outTriSource[outCursor / 3] = t;
         for (int k = 0; k < 3; k++)
         {
             int v = triVerts[t * 3 + k];

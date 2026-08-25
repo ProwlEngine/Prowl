@@ -18,14 +18,26 @@ internal static class GltfMeshMapper
 {
     public sealed class Result
     {
-        /// <summary>For each glTF mesh, the contiguous IntermediateScene mesh range and the
-        /// per-primitive skin index (-1 when the primitive is unskinned).</summary>
-        public List<(int First, int Count)> MeshIndexRanges { get; } = new();
+        /// <summary>For each glTF mesh, the index of the single IntermediateScene mesh it produced,
+        /// or -1 when it had no primitives.</summary>
+        public List<int> MeshIndex { get; } = new();
 
         /// <summary>Morph target names, populated from <c>mesh.extras.targetNames</c> when present.</summary>
         public List<string[]?> MorphTargetNames { get; } = new();
     }
 
+    /// <summary>
+    /// One glTF mesh becomes one <see cref="IntermediateMesh"/>, with its primitives merged and each
+    /// one's material recorded per face.
+    /// </summary>
+    /// <remarks>
+    /// A glTF primitive is a material batch, not an object: a single authored model with three
+    /// material slots exports as one mesh of three primitives. Mapping each to its own mesh turned
+    /// that into three sibling objects in the scene, which is not what the artist built, costs a
+    /// draw call setup and a transform each, and left morph-target weights reaching only the first
+    /// of them. Merged here, the sub-mesh split that <see cref="Mesh.SubMeshes"/> has always
+    /// described falls out of the material assignment at bake time.
+    /// </remarks>
     public static Result MapAll(GltfDom dom, GltfAccessorReader reader, IntermediateScene scene, ImportContext ctx)
     {
         var result = new Result();
@@ -35,21 +47,183 @@ internal static class GltfMeshMapper
         for (int mi = 0; mi < dom.Meshes.Length; mi++)
         {
             var srcMesh = dom.Meshes[mi];
-            int firstIndex = scene.Meshes.Count;
+            string name = srcMesh.Name ?? $"Mesh_{mi}";
 
             string[]? targetNames = ResolveTargetNames(srcMesh);
             result.MorphTargetNames.Add(targetNames);
 
-            for (int pi = 0; pi < srcMesh.Primitives.Length; pi++)
+            if (srcMesh.Primitives.Length == 0)
             {
-                var prim = srcMesh.Primitives[pi];
-                var im = MapPrimitive(srcMesh.Name ?? $"Mesh_{mi}", pi, prim, reader, ctx, targetNames);
-                scene.Meshes.Add(im);
+                result.MeshIndex.Add(-1);
+                continue;
             }
-            result.MeshIndexRanges.Add((firstIndex, srcMesh.Primitives.Length));
+
+            var primitives = new List<IntermediateMesh>(srcMesh.Primitives.Length);
+            for (int pi = 0; pi < srcMesh.Primitives.Length; pi++)
+                primitives.Add(MapPrimitive(name, pi, srcMesh.Primitives[pi], reader, ctx, targetNames));
+
+            result.MeshIndex.Add(scene.Meshes.Count);
+            scene.Meshes.Add(primitives.Count == 1
+                ? Rename(primitives[0], name)
+                : MergePrimitives(primitives, name, ctx));
         }
 
         return result;
+    }
+
+    private static IntermediateMesh Rename(IntermediateMesh mesh, string name)
+    {
+        mesh.Name = name;
+        return mesh;
+    }
+
+    /// <summary>
+    /// Concatenates primitives into one mesh. Attribute streams are unioned: a primitive missing an
+    /// attribute another one has is padded with that attribute's neutral value, since a single
+    /// vertex buffer cannot have a stream present for only some of its vertices.
+    /// </summary>
+    private static IntermediateMesh MergePrimitives(List<IntermediateMesh> parts, string name, ImportContext ctx)
+    {
+        int totalVertices = 0;
+        foreach (var p in parts) totalVertices += p.Positions.Count;
+
+        bool anyNormals = parts.Exists(p => p.Normals is not null);
+        bool anyTangents = parts.Exists(p => p.Tangents is not null);
+        bool anyColors = parts.Exists(p => p.Colors0 is not null);
+        bool anySkin = parts.Exists(p => p.VertexJoints is not null);
+
+        var uvUsed = new bool[Mesh.MaxUVChannels];
+        for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
+            uvUsed[uv] = parts.Exists(p => p.UVs[uv] is not null);
+
+        int influences = 4;
+        foreach (var p in parts)
+            if (p.VertexJoints is not null) influences = Math.Max(influences, p.MaxInfluencesPerVertex);
+
+        // Every primitive of a mesh must expose the same morph targets, so the count is the max and
+        // a primitive short of one contributes zero deltas for it.
+        int targetCount = 0;
+        foreach (var p in parts) targetCount = Math.Max(targetCount, p.BlendShapes.Count);
+
+        var merged = new IntermediateMesh
+        {
+            Name = name,
+            MaterialIndex = -1,
+            MaxInfluencesPerVertex = influences,
+        };
+
+        if (anyNormals) merged.Normals = new List<Float3>(totalVertices);
+        if (anyTangents) merged.Tangents = new List<Float4>(totalVertices);
+        if (anyColors) merged.Colors0 = new List<Color>(totalVertices);
+        for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
+            if (uvUsed[uv]) merged.UVs[uv] = new List<Float2>(totalVertices);
+
+        int[]? joints = anySkin ? new int[totalVertices * influences] : null;
+        float[]? weights = anySkin ? new float[totalVertices * influences] : null;
+
+        var shapeDeltas = new Float3[targetCount][];
+        var shapeNormals = new Float3[targetCount][];
+        var shapeTangents = new Float3[targetCount][];
+        var shapeNames = new string[targetCount];
+        var shapeHasNormals = new bool[targetCount];
+        var shapeHasTangents = new bool[targetCount];
+
+        for (int t = 0; t < targetCount; t++)
+        {
+            shapeDeltas[t] = new Float3[totalVertices];
+            foreach (var p in parts)
+            {
+                if (t >= p.BlendShapes.Count || p.BlendShapes[t].Frames.Count == 0) continue;
+                shapeNames[t] ??= p.BlendShapes[t].Name;
+                var frame = p.BlendShapes[t].Frames[0];
+                shapeHasNormals[t] |= frame.DeltaNormals is not null;
+                shapeHasTangents[t] |= frame.DeltaTangents is not null;
+            }
+            if (shapeHasNormals[t]) shapeNormals[t] = new Float3[totalVertices];
+            if (shapeHasTangents[t]) shapeTangents[t] = new Float3[totalVertices];
+        }
+
+        int offset = 0;
+        foreach (var part in parts)
+        {
+            int count = part.Positions.Count;
+            merged.Positions.AddRange(part.Positions);
+
+            AppendOrPad(merged.Normals, part.Normals, count, new Float3(0f, 1f, 0f));
+            AppendOrPad(merged.Tangents, part.Tangents, count, new Float4(1f, 0f, 0f, 1f));
+            AppendOrPad(merged.Colors0, part.Colors0, count, new Color(1f, 1f, 1f, 1f));
+            for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
+                AppendOrPad(merged.UVs[uv], part.UVs[uv], count, Float2.Zero);
+
+            if (joints is not null && weights is not null && part.VertexJoints is { } pj && part.VertexWeights is { } pw)
+            {
+                int partInfluences = part.MaxInfluencesPerVertex;
+                for (int v = 0; v < count; v++)
+                {
+                    int src = v * partInfluences;
+                    int dst = (offset + v) * influences;
+                    for (int k = 0; k < Math.Min(partInfluences, influences); k++)
+                    {
+                        joints[dst + k] = pj[src + k];
+                        weights[dst + k] = pw[src + k];
+                    }
+                }
+            }
+
+            for (int t = 0; t < targetCount && t < part.BlendShapes.Count; t++)
+            {
+                if (part.BlendShapes[t].Frames.Count == 0) continue;
+                var frame = part.BlendShapes[t].Frames[0];
+                Array.Copy(frame.DeltaPositions, 0, shapeDeltas[t], offset, Math.Min(frame.DeltaPositions.Length, count));
+                if (shapeNormals[t] is not null && frame.DeltaNormals is { } dn)
+                    Array.Copy(dn, 0, shapeNormals[t], offset, Math.Min(dn.Length, count));
+                if (shapeTangents[t] is not null && frame.DeltaTangents is { } dt)
+                    Array.Copy(dt, 0, shapeTangents[t], offset, Math.Min(dt.Length, count));
+            }
+
+            foreach (var face in part.Faces)
+            {
+                var shifted = new int[face.Indices.Length];
+                for (int k = 0; k < shifted.Length; k++)
+                    shifted[k] = face.Indices[k] + offset;
+
+                // The primitive's material becomes this face's, which is what makes the merged mesh
+                // resolve back into one sub-mesh per material at bake.
+                merged.Faces.Add(new IntermediateFace(shifted, part.MaterialIndex));
+            }
+
+            merged.PrimitiveKinds |= part.PrimitiveKinds;
+            offset += count;
+        }
+
+        merged.VertexJoints = joints;
+        merged.VertexWeights = weights;
+
+        for (int t = 0; t < targetCount; t++)
+        {
+            var shape = new IntermediateBlendShape { Name = shapeNames[t] ?? $"Target_{t}" };
+            shape.Frames.Add(new IntermediateBlendShapeFrame
+            {
+                Weight = 100f,
+                DeltaPositions = shapeDeltas[t],
+                DeltaNormals = shapeNormals[t],
+                DeltaTangents = shapeTangents[t],
+            });
+            merged.BlendShapes.Add(shape);
+        }
+
+        ctx.Log.Info(
+            $"Merged {parts.Count} primitives of mesh '{name}' into one mesh with per-face materials.",
+            "GltfMeshMapper");
+
+        return merged;
+    }
+
+    private static void AppendOrPad<T>(List<T>? target, List<T>? source, int count, T pad)
+    {
+        if (target is null) return;
+        if (source is not null) { target.AddRange(source); return; }
+        for (int i = 0; i < count; i++) target.Add(pad);
     }
 
     private static string[]? ResolveTargetNames(GltfMesh src)

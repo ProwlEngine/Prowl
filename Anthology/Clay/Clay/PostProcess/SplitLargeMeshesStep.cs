@@ -89,7 +89,7 @@ internal sealed class SplitLargeMeshesStep : IPostProcess
                 }
                 remapped[k] = nu;
             }
-            currentFaces.Add(new IntermediateFace(remapped));
+            currentFaces.Add(new IntermediateFace(remapped, face.Material));
         }
         Flush();
         return result;

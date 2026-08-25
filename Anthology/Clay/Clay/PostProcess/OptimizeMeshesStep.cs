@@ -67,6 +67,9 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         var m = scene.Meshes[node.MeshIndex];
         if (m.BlendShapes.Count > 0) return false;
         if (m.VertexJoints is not null) return false;
+        // Grouping below keys on the mesh's single material, which says nothing about a mesh whose
+        // faces carry their own. Merging those would need the key to be the whole material set.
+        if (m.HasMixedMaterials()) return false;
         return true;
     }
 
@@ -129,7 +132,9 @@ internal sealed class OptimizeMeshesStep : IPostProcess
             int[] shifted = new int[face.Indices.Length];
             for (int k = 0; k < face.Indices.Length; k++)
                 shifted[k] = face.Indices[k] + vertexOffset;
-            primary.Faces.Add(new IntermediateFace(shifted));
+            // Resolved rather than copied: the source may have been inheriting its own mesh material,
+            // which would silently become the primary's after the move.
+            primary.Faces.Add(new IntermediateFace(shifted, source.MaterialForFace(face)));
         }
     }
 
