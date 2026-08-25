@@ -36,6 +36,16 @@ public struct ModelImporterSettings
     /// <summary>Uniform scale applied to all vertex positions.</summary>
     public float UnitScale = 1.0f;
 
+    /// <summary>
+    /// Create a <see cref="Camera"/> for every camera the file defines. Imported cameras are added
+    /// disabled, since they describe viewpoints the author set up rather than the one the game
+    /// renders from.
+    /// </summary>
+    public bool ImportCameras = true;
+
+    /// <summary>Create a light component for every punctual light the file defines.</summary>
+    public bool ImportLights = true;
+
     /// <summary>Generate a lightmap UV set (UV2) for every mesh via Prowl.Unwrapper. Off by default
     /// (it's slow and some models ship their own UV2); the built-in default models force it on.</summary>
     public bool GenerateLightmapUVs = false;

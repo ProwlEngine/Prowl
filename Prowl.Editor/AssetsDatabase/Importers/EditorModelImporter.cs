@@ -16,7 +16,7 @@ public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
     // 8: normals now come from Clay, which splits vertices on hard edges.
-    private const int BaseVersion = 8;
+    private const int BaseVersion = 9;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     public override bool Import(ImportContext ctx)
@@ -38,6 +38,8 @@ public class EditorModelImporter : AssetImporter
                 importSettings.CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue;
                 importSettings.FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue;
                 importSettings.UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f;
+                importSettings.ImportCameras = !s.TryGet("importCameras", out var ic) || ic.BoolValue;
+                importSettings.ImportLights = !s.TryGet("importLights", out var il) || il.BoolValue;
                 // Off by default (slow; some models ship their own UV2). The importer runs the
                 // unwrap in its post-process so the baked UV2 is captured before serialization.
                 importSettings.GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
@@ -145,6 +147,8 @@ public class EditorModelImporter : AssetImporter
         s["calculateTangents"] = new EchoObject(true);
         s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);
+        s["importCameras"] = new EchoObject(true);
+        s["importLights"] = new EchoObject(true);
         s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;

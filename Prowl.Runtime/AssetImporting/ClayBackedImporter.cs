@@ -209,6 +209,18 @@ internal static class ClayBackedImporter
             }
         }
 
+        // 5b. Cameras and lights. Both are node-attached with no geometry, so they only need the
+        // component putting on the GameObject the node already produced.
+        if (settings.ImportCameras)
+            for (int i = 0; i < clayModel.Nodes.Count; i++)
+                if (clayModel.Nodes[i].CameraIndex is int ci and >= 0)
+                    BuildCamera(clayModel.Cameras[ci], nodeGOs[i]);
+
+        if (settings.ImportLights)
+            for (int i = 0; i < clayModel.Nodes.Count; i++)
+                if (clayModel.Nodes[i].LightIndex is int li and >= 0)
+                    BuildLight(clayModel.Lights[li], nodeGOs[i]);
+
         // 6. Animations.
         var animations = new List<PAnim>(clayModel.AnimationClips.Count);
         foreach (var clip in clayModel.AnimationClips)
@@ -346,6 +358,75 @@ internal static class ClayBackedImporter
         PrimitiveTopology.Points => Topology.Points,
         _ => Topology.Triangles,
     };
+
+    // ----------------------------------------------------------------------------------------
+    // Camera / light bake
+    // ----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Attaches a <see cref="Camera"/> matching the source lens. Orientation needs no handling here:
+    /// glTF aims a camera down its node's -Z, and Clay's coordinate conversion mirrors that to the
+    /// +Z the engine treats as forward.
+    /// </summary>
+    private static void BuildCamera(Clay.Camera src, GameObject go)
+    {
+        var cam = go.AddComponent<Camera>();
+
+        if (src.Projection == CameraProjection.Orthographic)
+        {
+            cam.ProjectionMode = Camera.ProjectionType.Orthographic;
+            cam.OrthographicSize = src.OrthographicHalfHeight;
+        }
+        else
+        {
+            cam.ProjectionMode = Camera.ProjectionType.Perspective;
+            cam.FieldOfView = src.VerticalFovRadians * (180f / MathF.PI);
+        }
+
+        cam.NearClipPlane = src.NearPlane;
+        // An absent far plane means an infinite projection, which Prowl's camera cannot express, so
+        // it gets a far distance rather than a broken one.
+        cam.FarClipPlane = src.FarPlane ?? 10000f;
+
+        // An imported camera is a viewpoint the file described, not the one the game renders from.
+        // Enabling it would fight whatever camera the scene already has.
+        cam.Enabled = false;
+    }
+
+    /// <summary>
+    /// Attaches the <see cref="Light"/> subclass matching the source type.
+    /// </summary>
+    /// <remarks>
+    /// glTF intensity is photometric (lux for directional, candela for point and spot) while Prowl's
+    /// is an arbitrary scale, so the value is carried across as-is and will usually want adjusting.
+    /// Converting it would need a scene-wide exposure convention Prowl does not have.
+    /// </remarks>
+    private static void BuildLight(Clay.Light src, GameObject go)
+    {
+        Light light = src.Type switch
+        {
+            Clay.LightType.Directional => go.AddComponent<DirectionalLight>(),
+            Clay.LightType.Spot => go.AddComponent<SpotLight>(),
+            _ => go.AddComponent<PointLight>(),
+        };
+
+        light.Color = src.Color;
+        light.Intensity = src.Intensity;
+
+        // Range is optional in glTF and means unlimited when absent, which no real-time light can
+        // do, so an absent one keeps the component's own default.
+        if (light is PointLight point && src.Range is { } pointRange)
+            point.Range = pointRange;
+
+        if (light is SpotLight spot)
+        {
+            if (src.Range is { } spotRange) spot.Range = spotRange;
+
+            // glTF measures cone angles from the axis; Prowl's are full cone angles.
+            spot.SpotAngle = src.OuterConeAngleRadians * 2f * (180f / MathF.PI);
+            spot.InnerSpotAngle = src.InnerConeAngleRadians * 2f * (180f / MathF.PI);
+        }
+    }
 
     // ----------------------------------------------------------------------------------------
     // Material bake
