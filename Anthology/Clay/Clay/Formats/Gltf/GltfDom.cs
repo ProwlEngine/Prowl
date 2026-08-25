@@ -35,6 +35,8 @@ internal sealed class GltfDom
     [JsonPropertyName("images")] public GltfImage[]? Images { get; set; }
     [JsonPropertyName("samplers")] public GltfSampler[]? Samplers { get; set; }
 
+    [JsonPropertyName("cameras")] public GltfCamera[]? Cameras { get; set; }
+
     [JsonPropertyName("skins")] public GltfSkin[]? Skins { get; set; }
     [JsonPropertyName("animations")] public GltfAnimation[]? Animations { get; set; }
 
@@ -207,6 +209,60 @@ internal sealed class GltfSampler
     [JsonPropertyName("wrapS")] public int? WrapS { get; set; }
     [JsonPropertyName("wrapT")] public int? WrapT { get; set; }
     [JsonPropertyName("name")] public string? Name { get; set; }
+}
+
+internal sealed class GltfCamera
+{
+    [JsonPropertyName("type")] public string Type { get; set; } = "perspective";
+    [JsonPropertyName("perspective")] public GltfPerspective? Perspective { get; set; }
+    [JsonPropertyName("orthographic")] public GltfOrthographic? Orthographic { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+}
+
+internal sealed class GltfPerspective
+{
+    [JsonPropertyName("aspectRatio")] public float? AspectRatio { get; set; }
+    [JsonPropertyName("yfov")] public float YFov { get; set; }
+    [JsonPropertyName("znear")] public float ZNear { get; set; }
+    // Absent means an infinite projection.
+    [JsonPropertyName("zfar")] public float? ZFar { get; set; }
+}
+
+internal sealed class GltfOrthographic
+{
+    [JsonPropertyName("xmag")] public float XMag { get; set; }
+    [JsonPropertyName("ymag")] public float YMag { get; set; }
+    [JsonPropertyName("znear")] public float ZNear { get; set; }
+    [JsonPropertyName("zfar")] public float ZFar { get; set; }
+}
+
+/// <summary>The <c>lights</c> array KHR_lights_punctual hangs off the document's extensions.</summary>
+internal sealed class GltfPunctualLights
+{
+    [JsonPropertyName("lights")] public GltfPunctualLight[]? Lights { get; set; }
+}
+
+internal sealed class GltfPunctualLight
+{
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("color")] public float[]? Color { get; set; }
+    [JsonPropertyName("intensity")] public float? Intensity { get; set; }
+    [JsonPropertyName("type")] public string Type { get; set; } = "point";
+    // Absent means the light reaches infinitely far.
+    [JsonPropertyName("range")] public float? Range { get; set; }
+    [JsonPropertyName("spot")] public GltfSpotLight? Spot { get; set; }
+}
+
+internal sealed class GltfSpotLight
+{
+    [JsonPropertyName("innerConeAngle")] public float? InnerConeAngle { get; set; }
+    [JsonPropertyName("outerConeAngle")] public float? OuterConeAngle { get; set; }
+}
+
+/// <summary>The <c>light</c> index KHR_lights_punctual hangs off a node's extensions.</summary>
+internal sealed class GltfNodeLightRef
+{
+    [JsonPropertyName("light")] public int Light { get; set; } = -1;
 }
 
 internal sealed class GltfSkin

@@ -50,7 +50,9 @@ internal sealed class OptimizeGraphStep : IPostProcess
 
         foreach (var node in scene.Nodes)
         {
-            if (node.MeshIndex >= 0 || node.SkinIndex >= 0)
+            // A camera or light node carries no geometry, so without this it reads as a pass-through
+            // and gets folded away along with the only transform that positioned it.
+            if (node.MeshIndex >= 0 || node.SkinIndex >= 0 || node.CameraIndex >= 0 || node.LightIndex >= 0)
                 keep.Add(node);
         }
 

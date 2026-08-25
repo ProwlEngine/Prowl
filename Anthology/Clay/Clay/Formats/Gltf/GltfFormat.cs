@@ -87,6 +87,8 @@ internal sealed class GltfFormat : IModelFormat
                 scene.RawExtensions[kvp.Key] = kvp.Value.Clone();
         }
 
+        GltfCameraLightMapper.MapCameras(dom, scene, context);
+        GltfCameraLightMapper.MapLights(dom, scene, context);
         GltfTextureMapper.MapAll(dom, buffers, scene, context);
         GltfMaterialMapper.MapAll(dom, scene, context);
         var meshMapping = GltfMeshMapper.MapAll(dom, accessor, scene, context);
@@ -181,6 +183,7 @@ internal sealed class GltfFormat : IModelFormat
         "KHR_materials_pbrSpecularGlossiness" or
         // Quantized attributes need no special handling: the accessor reader already decodes every
         // integer component type the extension permits, normalized or not.
+        "KHR_lights_punctual" or
         "KHR_mesh_quantization" => true,
         _ => false,
     };

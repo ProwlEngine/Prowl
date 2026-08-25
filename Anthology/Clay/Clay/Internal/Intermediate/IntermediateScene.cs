@@ -17,6 +17,8 @@ internal sealed class IntermediateScene
     public List<IntermediateMesh> Meshes { get; } = new();
     public List<IntermediateMaterial> Materials { get; } = new();
     public List<IntermediateTexture> Textures { get; } = new();
+    public List<IntermediateCamera> Cameras { get; } = new();
+    public List<IntermediateLight> Lights { get; } = new();
     public List<IntermediateSkin> Skins { get; } = new();
     public List<IntermediateAnimation> Animations { get; } = new();
 

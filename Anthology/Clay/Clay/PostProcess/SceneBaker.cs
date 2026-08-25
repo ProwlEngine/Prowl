@@ -34,6 +34,14 @@ internal static class SceneBaker
         foreach (var it in scene.Textures)
             bakedTextures.Add(BakeTexture(it));
 
+        var bakedCameras = new List<Camera>(scene.Cameras.Count);
+        foreach (var c in scene.Cameras)
+            bakedCameras.Add(BakeCamera(c));
+
+        var bakedLights = new List<Light>(scene.Lights.Count);
+        foreach (var l in scene.Lights)
+            bakedLights.Add(BakeLight(l));
+
         var bakedNodes = new ModelNode[scene.Nodes.Count];
         ModelNode? bakedRoot = null;
         for (int i = 0; i < scene.Nodes.Count; i++)
@@ -55,6 +63,8 @@ internal static class SceneBaker
                 WorldMatrix = world,
                 MeshIndex = src.MeshIndex,
                 SkinIndex = src.SkinIndex,
+                CameraIndex = src.CameraIndex,
+                LightIndex = src.LightIndex,
                 Metadata = src.Metadata.Count == 0
                     ? new Dictionary<string, object?>()
                     : new Dictionary<string, object?>(src.Metadata),
@@ -128,6 +138,8 @@ internal static class SceneBaker
             Meshes = bakedMeshes,
             Materials = bakedMaterials,
             Textures = bakedTextures,
+            Cameras = bakedCameras,
+            Lights = bakedLights,
             Skins = publicSkins,
             AnimationClips = bakedAnimations,
             Log = context.Log,
@@ -508,6 +520,29 @@ internal static class SceneBaker
             Scale = s.Scale,
             Rotation = s.Rotation,
         };
+
+    private static Camera BakeCamera(IntermediateCamera src) => new()
+    {
+        Name = src.Name,
+        Projection = src.Projection,
+        VerticalFovRadians = src.VerticalFovRadians,
+        AspectRatio = src.AspectRatio,
+        OrthographicHalfWidth = src.OrthographicHalfWidth,
+        OrthographicHalfHeight = src.OrthographicHalfHeight,
+        NearPlane = src.NearPlane,
+        FarPlane = src.FarPlane,
+    };
+
+    private static Light BakeLight(IntermediateLight src) => new()
+    {
+        Name = src.Name,
+        Type = src.Type,
+        Color = src.Color,
+        Intensity = src.Intensity,
+        Range = src.Range,
+        InnerConeAngleRadians = src.InnerConeAngleRadians,
+        OuterConeAngleRadians = src.OuterConeAngleRadians,
+    };
 
     private static Texture BakeTexture(IntermediateTexture src) => new()
     {

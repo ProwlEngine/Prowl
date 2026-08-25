@@ -48,6 +48,12 @@ public sealed class ModelNode
     /// <summary>Index into <see cref="Model.Skins"/> when this node is a <c>SkinnedMeshRenderer</c> host, otherwise -1.</summary>
     public int SkinIndex { get; init; } = -1;
 
+    /// <summary>Index into <see cref="Model.Cameras"/> for the camera on this node, or -1 for none.</summary>
+    public int CameraIndex { get; init; } = -1;
+
+    /// <summary>Index into <see cref="Model.Lights"/> for the light on this node, or -1 for none.</summary>
+    public int LightIndex { get; init; } = -1;
+
     /// <summary>
     /// Format-specific scalar metadata (FBX user properties, glTF <c>extras</c> object, etc.).
     /// Empty when the source did not attach any.

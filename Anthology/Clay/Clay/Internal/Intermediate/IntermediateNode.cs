@@ -21,6 +21,8 @@ internal sealed class IntermediateNode
 
     public int MeshIndex { get; set; } = -1;
     public int SkinIndex { get; set; } = -1;
+    public int CameraIndex { get; set; } = -1;
+    public int LightIndex { get; set; } = -1;
 
     public Dictionary<string, object?> Metadata { get; } = new();
 

@@ -34,6 +34,12 @@ public sealed class Model
     /// <summary>All textures referenced by materials.</summary>
     public required IReadOnlyList<Texture> Textures { get; init; }
 
+    /// <summary>All cameras defined by the source. Referenced by <see cref="ModelNode.CameraIndex"/>.</summary>
+    public required IReadOnlyList<Camera> Cameras { get; init; }
+
+    /// <summary>All punctual lights defined by the source. Referenced by <see cref="ModelNode.LightIndex"/>.</summary>
+    public required IReadOnlyList<Light> Lights { get; init; }
+
     /// <summary>All skins in the scene.</summary>
     public required IReadOnlyList<Skin> Skins { get; init; }
 

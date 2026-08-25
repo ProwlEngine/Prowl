@@ -35,7 +35,7 @@ internal static class GltfNodeMapper
         var built = new IntermediateNode[sourceNodes.Length];
 
         for (int i = 0; i < sourceNodes.Length; i++)
-            built[i] = BuildSingle(sourceNodes[i], i);
+            built[i] = BuildSingle(sourceNodes[i], i, scene, ctx);
 
         for (int i = 0; i < sourceNodes.Length; i++)
         {
@@ -96,12 +96,23 @@ internal static class GltfNodeMapper
         return dom.Scenes[sceneIdx].Nodes;
     }
 
-    private static IntermediateNode BuildSingle(GltfNode src, int sourceIndex)
+    private static IntermediateNode BuildSingle(GltfNode src, int sourceIndex, IntermediateScene scene, ImportContext ctx)
     {
+        int camera = src.Camera ?? -1;
+        if (camera >= scene.Cameras.Count)
+        {
+            ctx.Log.Warning(
+                $"Node '{src.Name ?? "(unnamed)"}' references camera {camera}, but the file declares {scene.Cameras.Count}.",
+                "GltfNodeMapper");
+            camera = -1;
+        }
+
         var node = new IntermediateNode
         {
             Name = src.Name ?? $"Node_{sourceIndex}",
             SkinIndex = src.Skin ?? -1,
+            CameraIndex = camera,
+            LightIndex = GltfCameraLightMapper.ReadNodeLight(src, scene.Lights.Count, ctx),
         };
 
         if (src.Matrix is { Length: 16 } m)
