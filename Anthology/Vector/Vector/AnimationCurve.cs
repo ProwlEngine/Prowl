@@ -522,6 +522,50 @@ public sealed class AnimationCurve : IReadOnlyList<Keyframe>
         return Quaternion.NormalizeSafe(result, Quaternion.Identity);
     }
 
+    /// <summary>
+    /// Flips whole keys so no two adjacent rotations are more than a half turn apart, treating the
+    /// curve as a sequence of quaternions.
+    /// </summary>
+    /// <remarks>
+    /// A quaternion and its negation are the same rotation, and exporters are free to emit either,
+    /// so a sign flip between adjacent keys is common and means nothing. It matters anyway:
+    /// <see cref="CurveInterpolation.CubicSpline"/> interpolates the four components independently,
+    /// and across a flip that sweeps the long way round instead of the short one. Slerp handles the
+    /// flip itself, so a purely linear curve does not need this, but calling it is harmless.
+    /// <para>
+    /// Tangents are flipped with their key, since a tangent is a rate of change of the value it
+    /// belongs to.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Thrown when the curve does not have four components.</exception>
+    public void EnsureQuaternionContinuity()
+    {
+        if (_dimension != 4)
+            throw new InvalidOperationException("EnsureQuaternionContinuity requires a four component curve.");
+
+        for (int i = 1; i < _count; i++)
+        {
+            int prev = (i - 1) * 4;
+            int cur = i * 4;
+
+            float dot = _values[prev] * _values[cur]
+                      + _values[prev + 1] * _values[cur + 1]
+                      + _values[prev + 2] * _values[cur + 2]
+                      + _values[prev + 3] * _values[cur + 3];
+
+            if (dot >= 0f) continue;
+
+            for (int c = 0; c < 4; c++)
+            {
+                _values[cur + c] = -_values[cur + c];
+                if (_inTangents != null) _inTangents[cur + c] = -_inTangents[cur + c];
+                if (_outTangents != null) _outTangents[cur + c] = -_outTangents[cur + c];
+            }
+        }
+
+        _version++;
+    }
+
     private Quaternion QuaternionAt(int index)
     {
         int offset = index * 4;
