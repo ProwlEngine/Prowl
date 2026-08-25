@@ -184,7 +184,12 @@ vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, floa
 
     for (int j = 0; j < 3; j++)
     {
-        float intersectionHeight = (pt0 * delta1 - pt1 * delta0) / (delta1 - delta0);
+        // Two equal deltas make the secant step 0/0, which would put NaN into the UV and carry it
+        // into every texture read that follows, albedo included.
+        float secantDenom = delta1 - delta0;
+        if (!(abs(secantDenom) > 1e-8)) break;
+
+        float intersectionHeight = (pt0 * delta1 - pt1 * delta0) / secantDenom;
         vCurrOffset = (1.0 - intersectionHeight) * finalStepSize * float(linearSteps);
 
         fCurrSampledHeight = textureGrad(heightTex, uv + vCurrOffset, dx, dy).g;

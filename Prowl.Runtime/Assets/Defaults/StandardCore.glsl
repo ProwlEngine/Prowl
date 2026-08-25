@@ -105,15 +105,22 @@ uniform vec2 _Offset;
 void ProwlBuildTangentFrame(vec3 worldNormal, out vec3 tangent, out vec3 bitangent)
 {
 #ifdef HAS_TANGENTS
+    // The handedness sign is only ever +1 or -1; reading it through a comparison keeps a garbage
+    // or NaN w in the vertex buffer from turning the whole bitangent into NaN.
+    float handedness = vertexTangent.w < 0.0 ? -1.0 : 1.0;
+
     tangent = TransformDirection(GetMorphedTangent(vertexTangent.xyz));
-    bitangent = cross(tangent, worldNormal) * vertexTangent.w;
-    // Degenerate frame (tangent parallel to the normal): rebuild from an arbitrary axis.
-    if (dot(bitangent, bitangent) < 0.000001)
+    bitangent = cross(tangent, worldNormal) * handedness;
+
+    // Degenerate frame (tangent parallel to the normal, or a zero tangent that TransformDirection
+    // substituted an axis for): rebuild from an arbitrary axis. Written as !(> eps) so a NaN that
+    // reached this far takes the rebuild instead of sliding past the comparison.
+    if (!(dot(bitangent, bitangent) > 0.000001))
     {
         tangent = abs(worldNormal.y) < 0.999
             ? normalize(cross(worldNormal, vec3(0.0, 1.0, 0.0)))
             : normalize(cross(worldNormal, vec3(1.0, 0.0, 0.0)));
-        bitangent = cross(tangent, worldNormal) * vertexTangent.w;
+        bitangent = cross(tangent, worldNormal) * handedness;
     }
 #else
     tangent = abs(worldNormal.y) < 0.999
