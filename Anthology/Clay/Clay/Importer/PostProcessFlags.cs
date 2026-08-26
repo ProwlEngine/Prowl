@@ -56,9 +56,6 @@ public enum PostProcessFlags : uint
     /// <summary>Apply <see cref="ModelImporterSettings.GlobalScale"/> to translations and positions.</summary>
     GlobalScale = 1u << 11,
 
-    /// <summary>Compute per-mesh and per-submesh AABBs.</summary>
-    GenerateBounds = 1u << 12,
-
     /// <summary>Read externally referenced textures into <see cref="Texture.EncodedBytes"/>.</summary>
     EmbedTextures = 1u << 13,
 
@@ -104,10 +101,9 @@ public static class PostProcessPresets
         PostProcessFlags.JoinIdenticalVertices |
         PostProcessFlags.LimitBoneWeights |
         PostProcessFlags.ConvertCoordinateSystem |
-        PostProcessFlags.GenerateBounds |
         PostProcessFlags.SortByPrimitiveType;
 
-    /// <summary>Default preset for typical game loading: tangents, smooth normals, bone limit, bounds.</summary>
+    /// <summary>Default preset for typical game loading: tangents, smooth normals, bone limit.</summary>
     public const PostProcessFlags GameQuality =
         PostProcessFlags.Triangulate |
         PostProcessFlags.JoinIdenticalVertices |
@@ -119,7 +115,6 @@ public static class PostProcessPresets
         PostProcessFlags.ConvertCoordinateSystem |
         PostProcessFlags.GlobalScale |
         PostProcessFlags.PopulateSkeletons |
-        PostProcessFlags.GenerateBounds |
         PostProcessFlags.SortByPrimitiveType;
 
     /// <summary>Editor preset, enabling validators, optimizers, and cache locality.</summary>

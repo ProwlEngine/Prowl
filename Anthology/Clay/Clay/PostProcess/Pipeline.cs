@@ -90,7 +90,6 @@ internal sealed class Pipeline
 
         // Bookkeeping.
         new EmbedTexturesStep(),
-        new GenerateBoundsStep(),
         new ValidateDataStructureStep(),
     };
 }
