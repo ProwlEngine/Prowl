@@ -133,6 +133,10 @@ internal static class GltfNodeMapper
             LightIndex = GltfCameraLightMapper.ReadNodeLight(src, scene.Lights.Count, ctx),
         };
 
+        if (GltfExtras.Read(src.Extras) is { } extras)
+            foreach (var entry in extras)
+                node.Metadata[entry.Key] = entry.Value;
+
         if (src.Matrix is { Length: 16 } m)
         {
             var matrix = new Float4x4(
