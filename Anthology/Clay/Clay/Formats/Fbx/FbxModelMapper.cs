@@ -77,6 +77,16 @@ internal static class FbxModelMapper
                 if (dst.ObjectType != "Model") continue;
                 var childNode = nodesByFbxId[src.Id];
                 var parentNode = nodesByFbxId[dst.Id];
+                if (ReferenceEquals(childNode, parentNode)) continue;
+                // A Model with OO connections to two Models would otherwise land in both children
+                // lists while its single Parent pointer names one of them, so the depth-first walk
+                // reaches it twice. The first connection wins.
+                if (childNode.Parent is not null)
+                {
+                    ctx.Log.Warning($"Model '{childNode.Name}' is connected to more than one parent; keeping the first.", "FbxModelMapper");
+                    continue;
+                }
+
                 childNode.Parent = parentNode;
                 parentNode.Children.Add(childNode);
             }
@@ -101,8 +111,10 @@ internal static class FbxModelMapper
             }
         }
 
+        NodeGraph.ValidateNoCycles(nodesByFbxId.Values);
+
         scene.Nodes.Clear();
-        AppendDepthFirst(root, scene.Nodes);
+        NodeGraph.Flatten(root, scene.Nodes);
 
         return new ModelMapping
         {
@@ -298,12 +310,5 @@ internal static class FbxModelMapper
             5 => qx * qy * qz,
             _ => qz * qy * qx,
         };
-    }
-
-    private static void AppendDepthFirst(IntermediateNode node, List<IntermediateNode> list)
-    {
-        list.Add(node);
-        foreach (var c in node.Children)
-            AppendDepthFirst(c, list);
     }
 }

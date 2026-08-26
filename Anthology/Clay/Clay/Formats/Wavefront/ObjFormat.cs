@@ -534,15 +534,8 @@ internal sealed class ObjFormat : IModelFormat
 
             _scene.Root = root;
             _scene.Nodes.Clear();
-            AppendDepthFirst(root, _scene.Nodes);
+            NodeGraph.Flatten(root, _scene.Nodes);
             return _scene;
-        }
-
-        private static void AppendDepthFirst(IntermediateNode node, List<IntermediateNode> list)
-        {
-            list.Add(node);
-            foreach (var c in node.Children)
-                AppendDepthFirst(c, list);
         }
     }
 }

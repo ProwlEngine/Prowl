@@ -45,7 +45,16 @@ internal static class GltfNodeMapper
             {
                 if ((uint)childIdx >= (uint)built.Length)
                     throw new ImportException($"Node {i} references missing child {childIdx}.");
+                if (childIdx == i)
+                    throw new ImportException($"Node {i} lists itself as a child.");
+
                 var childNode = built[childIdx];
+                // glTF nodes form a tree, so a second parent means the file is malformed. Linking it
+                // anyway leaves the node in two children lists with one Parent pointer, which the
+                // depth-first walk then visits twice under conflicting transforms.
+                if (childNode.Parent is not null)
+                    throw new ImportException($"Node {childIdx} is a child of more than one node.");
+
                 childNode.Parent = built[i];
                 built[i].Children.Add(childNode);
             }
@@ -58,6 +67,13 @@ internal static class GltfNodeMapper
             foreach (int idx in sceneRoots)
             {
                 if ((uint)idx >= (uint)built.Length) continue;
+                // The scene lists roots, so a node that already has a parent is reachable through it
+                // and adding it here too would make the walk visit it twice.
+                if (built[idx].Parent is not null)
+                {
+                    ctx.Log.Warning($"Scene lists node {idx}, which is already a child of another node.", "GltfNodeMapper");
+                    continue;
+                }
                 root.Children.Add(built[idx]);
                 built[idx].Parent = root;
             }
@@ -76,8 +92,10 @@ internal static class GltfNodeMapper
 
         AttachMeshes(sourceNodes, built, meshMapping, ctx);
 
+        NodeGraph.ValidateNoCycles(built);
+
         scene.Nodes.Clear();
-        AppendDepthFirst(root, scene.Nodes);
+        NodeGraph.Flatten(root, scene.Nodes);
 
         return new Result
         {
@@ -166,12 +184,4 @@ internal static class GltfNodeMapper
             built[i].MeshIndex = meshMapping.MeshIndex[mi.Value];
         }
     }
-
-    private static void AppendDepthFirst(IntermediateNode node, List<IntermediateNode> list)
-    {
-        list.Add(node);
-        foreach (var c in node.Children)
-            AppendDepthFirst(c, list);
-    }
-
 }

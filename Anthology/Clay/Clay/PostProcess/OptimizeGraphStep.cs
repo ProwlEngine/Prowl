@@ -39,7 +39,7 @@ internal sealed class OptimizeGraphStep : IPostProcess
         {
             // Rebuild scene.Nodes from the surviving hierarchy.
             scene.Nodes.Clear();
-            AppendDepthFirst(scene.Root, scene.Nodes);
+            NodeGraph.Flatten(scene.Root, scene.Nodes);
             context.Log.Info($"Collapsed {collapsed} pass-through node(s).", Name);
         }
     }
@@ -83,6 +83,8 @@ internal sealed class OptimizeGraphStep : IPostProcess
         return keep;
     }
 
+    // Recursion depth is one frame per hierarchy level, which the reader already capped at
+    // NodeGraph.MaxDepth when it flattened the scene.
     private static int CollapseRecursive(IntermediateNode node, HashSet<IntermediateNode> keep)
     {
         int collapsed = 0;
@@ -138,12 +140,5 @@ internal sealed class OptimizeGraphStep : IPostProcess
             gc.LocalRotation = r;
             gc.LocalScale = s;
         }
-    }
-
-    private static void AppendDepthFirst(IntermediateNode node, List<IntermediateNode> list)
-    {
-        list.Add(node);
-        foreach (var c in node.Children)
-            AppendDepthFirst(c, list);
     }
 }
