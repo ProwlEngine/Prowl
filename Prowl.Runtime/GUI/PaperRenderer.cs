@@ -213,6 +213,7 @@ public class PaperRenderer : ICanvasRenderer
             drawCall.GetTextureTransform(fbScale, out Float4 texXf, out Float2 texT);
             cmd.SetVector("textureTransform", texXf);
             cmd.SetVector("textureTranslation", texT);
+            cmd.SetVector("textureClamp", drawCall.TextureClamp);
 
             cmd.DrawIndexed(_vertexArrayObject, Topology.Triangles, (uint)drawCall.ElementCount, (uint)indexOffset, 0, true);
             indexOffset += drawCall.ElementCount;

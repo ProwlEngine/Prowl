@@ -151,6 +151,8 @@ public class UIImageEditor : CustomEditor
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(tx, ty) *
                     Prowl.Vector.Spatial.Transform2D.CreateScale(sx, sy));
+                // Keep the AA fringe from sampling the neighbouring atlas cell.
+                canvas.SetBrushTextureClamp(u0, v0, u0 + du, v0 + dv);
                 canvas.RectFilled(x, y, w, h, tint);
                 canvas.ClearBrushTexture();
             }));

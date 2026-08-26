@@ -69,6 +69,7 @@ Pass "UI"
 
         uniform vec4 textureTransform;
         uniform vec2 textureTranslation;
+        uniform vec4 textureClamp;         // uMin, vMin, uMax, vMax; uMax <= uMin = unclamped
 
         // Font atlas metrics, supplied by Quill rather than probed with textureSize and hardcoded.
         uniform vec2 atlasTexelSize;       // 1 / font atlas size
@@ -165,7 +166,13 @@ Pass "UI"
             // in fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
             float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
 
-            vec4 fill = color * texture(texture0, applyTransform(textureTransform, textureTranslation, fragPos));
+            // The AA fringe extends half a physical pixel past the nominal rect and this samples by fragPos,
+            // so without the clamp a sub-rect draw reads whatever is next to it in the atlas.
+            vec2 uv = applyTransform(textureTransform, textureTranslation, fragPos);
+            if (textureClamp.z > textureClamp.x)
+                uv = clamp(uv, textureClamp.xy, textureClamp.zw);
+
+            vec4 fill = color * texture(texture0, uv);
 
             // Backdrop blur: composite the fill over the blurred scene behind the shape.
             if (backdropBlurAmount > 0.0) {

@@ -113,6 +113,8 @@ public class SpriteAssetEditor : AssetImporterEditor
         canvas.SetBrushTextureTransform(
             Transform2D.CreateTranslation(drawX - u0 * sx, drawY + drawH - v0 * sy) *
             Transform2D.CreateScale(sx, sy));
+        // Keep the AA fringe from sampling the neighbouring atlas cell.
+        canvas.SetBrushTextureClamp(u0, v0, u1, v1);
         canvas.RectFilled(drawX, drawY, drawW, drawH, Color32.FromArgb(255, 255, 255, 255));
         canvas.ClearBrushTexture();
 
