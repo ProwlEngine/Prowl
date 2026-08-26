@@ -24,17 +24,56 @@ internal sealed class OptimizeMeshesStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        int mergedCount = 0;
+        var mergedAway = new HashSet<int>();
         foreach (var parent in scene.Nodes)
-            mergedCount += MergeChildren(parent, scene);
+            MergeChildren(parent, scene, mergedAway);
 
-        if (mergedCount > 0)
-            context.Log.Info($"Merged {mergedCount} mesh(es) into siblings.", Name);
+        if (mergedAway.Count == 0) return;
+
+        RemoveOrphanedMeshes(scene, mergedAway);
+        context.Log.Info($"Merged {mergedAway.Count} mesh(es) into siblings.", Name);
     }
 
-    private static int MergeChildren(IntermediateNode parent, IntermediateScene scene)
+    /// <summary>
+    /// Drops the merged-away meshes and renumbers what is left.
+    /// </summary>
+    /// <remarks>
+    /// Clearing the node's MeshIndex is not enough on its own: the mesh stays in the scene, reaches
+    /// <see cref="Model.Meshes"/>, and the editor registers every entry there as a sub-asset, so the
+    /// project gains dead mesh assets that nothing references.
+    /// </remarks>
+    private static void RemoveOrphanedMeshes(IntermediateScene scene, HashSet<int> mergedAway)
     {
-        int merged = 0;
+        // A merged-away mesh can still be referenced by another node, since one mesh may be
+        // instanced under several. Those are not orphans and have to stay.
+        foreach (var node in scene.Nodes)
+            mergedAway.Remove(node.MeshIndex);
+
+        if (mergedAway.Count == 0) return;
+
+        var remap = new int[scene.Meshes.Count];
+        var kept = new List<IntermediateMesh>(scene.Meshes.Count - mergedAway.Count);
+        for (int i = 0; i < scene.Meshes.Count; i++)
+        {
+            if (mergedAway.Contains(i))
+            {
+                remap[i] = -1;
+                continue;
+            }
+            remap[i] = kept.Count;
+            kept.Add(scene.Meshes[i]);
+        }
+
+        scene.Meshes.Clear();
+        scene.Meshes.AddRange(kept);
+
+        foreach (var node in scene.Nodes)
+            if (node.MeshIndex >= 0)
+                node.MeshIndex = remap[node.MeshIndex];
+    }
+
+    private static void MergeChildren(IntermediateNode parent, IntermediateScene scene, HashSet<int> mergedAway)
+    {
         var byMaterial = new Dictionary<int, IntermediateNode>();
 
         for (int i = 0; i < parent.Children.Count; i++)
@@ -53,10 +92,9 @@ internal sealed class OptimizeMeshesStep : IPostProcess
             if (!AreLayoutCompatible(primary, mesh)) continue;
 
             AppendMeshIntoPrimary(primary, primaryNode, mesh, child);
+            mergedAway.Add(child.MeshIndex);
             child.MeshIndex = -1;
-            merged++;
         }
-        return merged;
     }
 
     private static bool IsMergeCandidate(IntermediateNode node, IntermediateScene scene)
@@ -97,6 +135,11 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         // Normals need the inverse-transpose so they stay perpendicular under non-uniform scale/shear.
         Float4x4 normalMatrix = Float4x4.Transpose(Inverse(sourceToPrimary));
 
+        // A negative determinant means the transform mirrors. Handedness is baked into two places the
+        // vertex streams cannot express on their own, so both have to be flipped with it: the
+        // bitangent sign in tangent.W, and the triangle winding.
+        bool mirrored = Float4x4.Determinant(sourceToPrimary) < 0f;
+
         int vertexOffset = primary.Positions.Count;
 
         for (int i = 0; i < source.Positions.Count; i++)
@@ -114,7 +157,7 @@ internal sealed class OptimizeMeshesStep : IPostProcess
             {
                 var t = source.Tangents[i];
                 var xformed = TransformDirection(sourceToPrimary, new Float3(t.X, t.Y, t.Z));
-                primary.Tangents.Add(new Float4(xformed.X, xformed.Y, xformed.Z, t.W));
+                primary.Tangents.Add(new Float4(xformed.X, xformed.Y, xformed.Z, mirrored ? -t.W : t.W));
             }
         }
 
@@ -131,7 +174,10 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         {
             int[] shifted = new int[face.Indices.Length];
             for (int k = 0; k < face.Indices.Length; k++)
-                shifted[k] = face.Indices[k] + vertexOffset;
+            {
+                int src = mirrored ? face.Indices.Length - 1 - k : k;
+                shifted[k] = face.Indices[src] + vertexOffset;
+            }
             // Resolved rather than copied: the source may have been inheriting its own mesh material,
             // which would silently become the primary's after the move.
             primary.Faces.Add(new IntermediateFace(shifted, source.MaterialForFace(face)));
