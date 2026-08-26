@@ -113,6 +113,9 @@ public class PaperRenderer : ICanvasRenderer
     public Int2 GetTextureSize(object texture)
     {
         if (texture is not Texture2D tex) throw new ArgumentException("Invalid texture type");
+        // Quill asks at draw time, and a reimport can dispose the texture mid-frame while a panel
+        // still draws it; zero means "skip texel-precise padding" rather than letting Width throw.
+        if (!tex.IsValid()) return Int2.Zero;
         return new Int2((int)tex.Width, (int)tex.Height);
     }
 

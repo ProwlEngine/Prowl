@@ -113,6 +113,9 @@ public class SpriteAssetEditor : AssetImporterEditor
         canvas.SetBrushTextureTransform(
             Transform2D.CreateTranslation(drawX - u0 * sx, drawY + drawH - v0 * sy) *
             Transform2D.CreateScale(sx, sy));
+        // Window the brush to the sprite's cell; the inset is only needed for blending filters.
+        canvas.SetBrushTextureWindow(u0, v0, u1, v1,
+            insetHalfTexel: tex.MagFilter != TextureMag.Nearest || tex.MinFilter != TextureMin.Nearest);
         canvas.RectFilled(drawX, drawY, drawW, drawH, Color32.FromArgb(255, 255, 255, 255));
         canvas.ClearBrushTexture();
 

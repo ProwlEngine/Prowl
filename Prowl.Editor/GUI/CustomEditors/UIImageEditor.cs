@@ -151,6 +151,9 @@ public class UIImageEditor : CustomEditor
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(tx, ty) *
                     Prowl.Vector.Spatial.Transform2D.CreateScale(sx, sy));
+                // Window the brush to the sprite's cell; the inset is only needed for blending filters.
+                canvas.SetBrushTextureWindow(u0, v0, u0 + du, v0 + dv,
+                    insetHalfTexel: tex.MagFilter != TextureMag.Nearest || tex.MinFilter != TextureMin.Nearest);
                 canvas.RectFilled(x, y, w, h, tint);
                 canvas.ClearBrushTexture();
             }));
