@@ -56,13 +56,13 @@ internal static class GltfAnimationMapper
                 switch (channel.Target.Path)
                 {
                     case "translation":
-                        AddVecBinding(anim, nodes[nodeIdx], AnimatedProperty.Position, 0, interp, times, reader, sampler.Output, 3);
+                        AddVecBinding(anim, nodes[nodeIdx], AnimatedProperty.Position, 0, interp, times, reader, sampler.Output, 3, ctx);
                         break;
                     case "rotation":
-                        AddVecBinding(anim, nodes[nodeIdx], AnimatedProperty.Rotation, 0, interp, times, reader, sampler.Output, 4);
+                        AddVecBinding(anim, nodes[nodeIdx], AnimatedProperty.Rotation, 0, interp, times, reader, sampler.Output, 4, ctx);
                         break;
                     case "scale":
-                        AddVecBinding(anim, nodes[nodeIdx], AnimatedProperty.Scale, 0, interp, times, reader, sampler.Output, 3);
+                        AddVecBinding(anim, nodes[nodeIdx], AnimatedProperty.Scale, 0, interp, times, reader, sampler.Output, 3, ctx);
                         break;
                     case "weights":
                         AddWeightsBinding(anim, nodes, nodeIdx, meshMapping, interp, times, reader, sampler.Output, ctx);
@@ -90,14 +90,22 @@ internal static class GltfAnimationMapper
         float[] times,
         GltfAccessorReader reader,
         int outputAccessor,
-        int components)
+        int components,
+        ImportContext ctx)
     {
         float[] values = reader.ReadFloats1DComponents(outputAccessor, components);
         // Sanity: cubic spline triples the values per key.
         int expected = (interp == CurveInterpolation.CubicSpline ? 3 : 1) * times.Length * components;
         if (values.Length != expected)
-            throw new ImportException(
-                $"Animation output value count {values.Length} does not match expected {expected}.");
+        {
+            // Skipped rather than thrown: every other malformed channel in this mapper warns and
+            // moves on, and one bad channel is no reason to refuse the whole model.
+            ctx.Log.Warning(
+                $"Animation channel targeting '{target.Name}' has {values.Length} output values but its "
+                + $"{times.Length} keys need {expected}; skipping the channel.",
+                "GltfAnimationMapper");
+            return;
+        }
 
         var binding = new IntermediateAnimationBinding
         {
