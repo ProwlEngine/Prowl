@@ -68,5 +68,57 @@ internal static class GltfSkinMapper
 
             scene.Skins.Add(skin);
         }
+
+        AttachOrphanJoints(scene, ctx);
+    }
+
+    /// <summary>
+    /// Brings any joint that is not part of the scene graph into it, under the root.
+    /// </summary>
+    /// <remarks>
+    /// A joint index the file got wrong, and a joint belonging to a scene other than the one being
+    /// imported, both leave a bone node that never reaches <c>scene.Nodes</c>. Its BakeIndex stays
+    /// -1, that -1 lands in <see cref="Skin.BoneNodeIndices"/>, and the consumer indexes its node
+    /// array with it and throws. Attaching the node instead is what "substituting identity" was
+    /// supposed to mean: the bone exists, it just sits at the root.
+    /// </remarks>
+    private static void AttachOrphanJoints(IntermediateScene scene, ImportContext ctx)
+    {
+        var inScene = new HashSet<IntermediateNode>(scene.Nodes);
+
+        foreach (var skin in scene.Skins)
+        {
+            foreach (var bone in skin.BoneNodes)
+                Attach(bone);
+            if (skin.RootNode is { } root)
+                Attach(root);
+        }
+
+        void Attach(IntermediateNode node)
+        {
+            if (inScene.Contains(node)) return;
+
+            // Attach the whole detached branch rather than the joint alone, so the joint keeps the
+            // transforms its ancestors gave it.
+            var top = node;
+            while (top.Parent is { } parent && !inScene.Contains(parent))
+                top = parent;
+
+            if (top.Parent is null)
+            {
+                top.Parent = scene.Root;
+                scene.Root.Children.Add(top);
+            }
+
+            var subtree = new List<IntermediateNode>();
+            NodeGraph.Flatten(top, subtree);
+            foreach (var n in subtree)
+                if (inScene.Add(n))
+                    scene.Nodes.Add(n);
+
+            ctx.Log.Warning(
+                $"Skin joint '{node.Name}' was not part of the scene graph; attached it under the root.",
+                "GltfSkinMapper");
+        }
     }
 }
