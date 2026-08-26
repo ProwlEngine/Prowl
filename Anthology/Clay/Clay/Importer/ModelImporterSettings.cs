@@ -23,7 +23,12 @@ public sealed record ModelImporterSettings
     /// </summary>
     public bool RecalculateNormals { get; init; }
 
-    /// <summary>Maximum number of bone weights kept per vertex by <c>LimitBoneWeights</c>.</summary>
+    /// <summary>
+    /// Maximum number of bone weights kept per vertex by <c>LimitBoneWeights</c>. Values above
+    /// <see cref="BoneWeight.MaxInfluences"/> are honoured through the pipeline but not in the baked
+    /// <see cref="Model"/>, whose vertex layout holds four; the bake keeps the strongest four,
+    /// renormalises them, and says so in the log.
+    /// </summary>
     public int BoneWeightLimit { get; init; } = 4;
 
     /// <summary>Uniform scale applied by <c>GlobalScale</c> (defaults to 1.0 = no scaling).</summary>

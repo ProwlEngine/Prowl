@@ -24,7 +24,7 @@ internal static class SceneBaker
         var meshSkinIndex = BuildMeshToSkinMap(scene, bakedSkins);
         var bakedMeshes = new List<Mesh>(scene.Meshes.Count);
         for (int i = 0; i < scene.Meshes.Count; i++)
-            bakedMeshes.Add(BakeMesh(scene.Meshes[i], meshSkinIndex[i], bakedSkins));
+            bakedMeshes.Add(BakeMesh(scene.Meshes[i], meshSkinIndex[i], bakedSkins, context));
 
         var bakedMaterials = new List<Material>(scene.Materials.Count);
         foreach (var im in scene.Materials)
@@ -186,7 +186,7 @@ internal static class SceneBaker
             nodes[i].BakeIndex = i;
     }
 
-    private static Mesh BakeMesh(IntermediateMesh src, int skinIndex, List<BakedSkin> skins)
+    private static Mesh BakeMesh(IntermediateMesh src, int skinIndex, List<BakedSkin> skins, ImportContext context)
     {
         int vertexCount = src.Positions.Count;
 
@@ -198,14 +198,14 @@ internal static class SceneBaker
 
         var indicesList = new List<uint>(EstimateIndexCount(src));
         var submeshes = new List<SubMesh>(3);
-        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Triangles, hasTris);
-        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Lines, hasLines);
-        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Points, hasPoints);
+        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Triangles, hasTris, vertexCount);
+        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Lines, hasLines, vertexCount);
+        AppendSubMeshes(src, indicesList, submeshes, PrimitiveTopology.Points, hasPoints, vertexCount);
 
         uint[] indices = indicesList.ToArray();
         bool has32 = vertexCount > ushort.MaxValue;
 
-        BoneWeight[]? boneWeights = BakeBoneWeights(src);
+        BoneWeight[]? boneWeights = BakeBoneWeights(src, context);
         Float4x4[]? bindPoses = null;
         if (skinIndex >= 0 && skinIndex < skins.Count)
             bindPoses = skins[skinIndex].IntermediateSkin.InverseBindPoses.ToArray();
@@ -251,29 +251,100 @@ internal static class SceneBaker
         return mesh;
     }
 
-    private static BoneWeight[]? BakeBoneWeights(IntermediateMesh src)
+    /// <summary>
+    /// Reduces each vertex's influences to the fixed-four <see cref="BoneWeight"/> layout, keeping the
+    /// strongest and renormalising them.
+    /// </summary>
+    /// <remarks>
+    /// This used to take the first four in file order and leave the weights as they were. A vertex
+    /// with eight influences summing to 1 then reached the GPU summing to whatever those four
+    /// happened to be, and under linear blend skinning a vertex whose weights sum to less than 1
+    /// collapses toward the origin, so meshes visibly deflated.
+    /// </remarks>
+    private static BoneWeight[]? BakeBoneWeights(IntermediateMesh src, ImportContext context)
     {
         if (src.VertexJoints is null || src.VertexWeights is null)
             return null;
 
         int n = src.Positions.Count;
         int influences = src.MaxInfluencesPerVertex;
-        // The public BoneWeight is fixed-4. If influences > 4 here, LimitBoneWeights wasn't run;
-        // we still produce a result by truncating.
-        int copyCount = Math.Min(4, influences);
+        if (influences <= 0)
+            return null;
+
+        int expected = n * influences;
+        if (src.VertexJoints.Length < expected || src.VertexWeights.Length < expected)
+            throw new ImportException(
+                $"Mesh '{src.Name}' declares {influences} bone influences for {n} vertices, "
+                + $"which needs {expected} entries but only {Math.Min(src.VertexJoints.Length, src.VertexWeights.Length)} are present.");
+
+        if (influences > BoneWeight.MaxInfluences)
+            context.Log.Warning(
+                $"Mesh '{src.Name}' has {influences} bone influences per vertex; keeping the strongest "
+                + $"{BoneWeight.MaxInfluences}. Run the LimitBoneWeights step to control how this is reduced.",
+                "SceneBaker");
 
         var result = new BoneWeight[n];
+        Span<int> keptJoints = stackalloc int[BoneWeight.MaxInfluences];
+        Span<float> keptWeights = stackalloc float[BoneWeight.MaxInfluences];
+
         for (int v = 0; v < n; v++)
         {
             int b = v * influences;
-            var bw = new BoneWeight();
-            if (copyCount >= 1) { bw.Index0 = src.VertexJoints[b + 0]; bw.Weight0 = src.VertexWeights[b + 0]; }
-            if (copyCount >= 2) { bw.Index1 = src.VertexJoints[b + 1]; bw.Weight1 = src.VertexWeights[b + 1]; }
-            if (copyCount >= 3) { bw.Index2 = src.VertexJoints[b + 2]; bw.Weight2 = src.VertexWeights[b + 2]; }
-            if (copyCount >= 4) { bw.Index3 = src.VertexJoints[b + 3]; bw.Weight3 = src.VertexWeights[b + 3]; }
-            result[v] = bw;
+            keptJoints.Clear();
+            keptWeights.Clear();
+
+            SelectStrongest(src.VertexJoints, src.VertexWeights, b, influences, keptJoints, keptWeights);
+
+            // Only when influences were dropped, so a mesh that already fits keeps the weights the
+            // file authored rather than having the bake quietly rescale them.
+            if (influences > BoneWeight.MaxInfluences)
+                Renormalise(keptWeights);
+
+            result[v] = new BoneWeight
+            {
+                Index0 = keptJoints[0], Weight0 = keptWeights[0],
+                Index1 = keptJoints[1], Weight1 = keptWeights[1],
+                Index2 = keptJoints[2], Weight2 = keptWeights[2],
+                Index3 = keptJoints[3], Weight3 = keptWeights[3],
+            };
         }
         return result;
+    }
+
+    /// <summary>Fills the kept spans with the highest-weighted influences, strongest first.</summary>
+    private static void SelectStrongest(
+        int[] joints, float[] weights, int start, int count,
+        Span<int> keptJoints, Span<float> keptWeights)
+    {
+        int last = keptWeights.Length - 1;
+        for (int k = 0; k < count; k++)
+        {
+            float w = weights[start + k];
+            if (w <= keptWeights[last]) continue;
+
+            int slot = last;
+            while (slot > 0 && keptWeights[slot - 1] < w)
+                slot--;
+            for (int m = last; m > slot; m--)
+            {
+                keptWeights[m] = keptWeights[m - 1];
+                keptJoints[m] = keptJoints[m - 1];
+            }
+            keptWeights[slot] = w;
+            keptJoints[slot] = joints[start + k];
+        }
+    }
+
+    private static void Renormalise(Span<float> weights)
+    {
+        float sum = 0f;
+        for (int i = 0; i < weights.Length; i++)
+            sum += weights[i];
+        // A vertex with no influence at all has nothing to scale; inventing one would bind it to
+        // whichever bone happens to be index 0.
+        if (sum <= 1e-6f) return;
+        for (int i = 0; i < weights.Length; i++)
+            weights[i] /= sum;
     }
 
     private static BlendShape[] BakeBlendShapes(IntermediateMesh src)
@@ -444,7 +515,8 @@ internal static class SceneBaker
         List<uint> indicesList,
         List<SubMesh> submeshes,
         PrimitiveTopology topology,
-        bool include)
+        bool include,
+        int vertexCount)
     {
         if (!include) return;
 
@@ -472,7 +544,15 @@ internal static class SceneBaker
                 if (face.Indices.Length != indicesPerFace) continue;
                 if (src.MaterialForFace(face) != material) continue;
                 for (int k = 0; k < face.Indices.Length; k++)
-                    indicesList.Add((uint)face.Indices[k]);
+                {
+                    int index = face.Indices[k];
+                    // Checked here rather than left to the bounds pass below, which would fault on it
+                    // with nothing to say about which mesh the bad index came from.
+                    if ((uint)index >= (uint)vertexCount)
+                        throw new ImportException(
+                            $"Mesh '{src.Name}' has index {index} but only {vertexCount} vertices.");
+                    indicesList.Add((uint)index);
+                }
             }
 
             int count = indicesList.Count - start;

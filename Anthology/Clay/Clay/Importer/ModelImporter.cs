@@ -98,24 +98,43 @@ public static class ModelImporter
             _ => throw new ImportException($"Unsupported model format '{format}'.", sourcePath, format),
         };
 
-        IntermediateScene scene;
+        var scene = Guarded(() => reader.Read(stream, context), "read", sourcePath, format);
+
+        return Guarded(() =>
+        {
+            new Pipeline(context).Run(scene);
+            return SceneBaker.Bake(scene, context);
+        }, "process", sourcePath, format);
+    }
+
+    /// <summary>
+    /// Runs one stage of the import, turning anything it throws into an <see cref="ImportException"/>
+    /// carrying the source path and format.
+    /// </summary>
+    /// <remarks>
+    /// Every stage needs this, not just the format read. The bake indexes vertex arrays by the
+    /// indices the file supplied, so a malformed one used to surface as a bare
+    /// <see cref="IndexOutOfRangeException"/> naming neither the file nor the format, and callers
+    /// catching <see cref="ImportException"/> did not catch it at all.
+    /// </remarks>
+    private static T Guarded<T>(Func<T> stage, string what, string? sourcePath, string format)
+    {
         try
         {
-            scene = reader.Read(stream, context);
+            return stage();
         }
-        catch (ImportException)
+        catch (ImportException ex)
         {
+            throw ex.WithContext(sourcePath, format);
+        }
+        catch (OperationCanceledException)
+        {
+            // A cancelled import is not a malformed file, so it stays cancellation.
             throw;
         }
         catch (Exception ex)
         {
-            throw new ImportException($"Failed to read {format} model: {ex.Message}", sourcePath, format, ex);
+            throw new ImportException($"Failed to {what} {format} model: {ex.Message}", sourcePath, format, ex);
         }
-
-        var pipeline = new Pipeline(context);
-        pipeline.Run(scene);
-
-        var model = SceneBaker.Bake(scene, context);
-        return model;
     }
 }

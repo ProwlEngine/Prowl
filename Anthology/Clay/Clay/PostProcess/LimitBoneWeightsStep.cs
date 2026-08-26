@@ -38,6 +38,9 @@ internal sealed class LimitBoneWeightsStep : IPostProcess
             int vertexCount = mesh.Positions.Count;
             if (oldInfluences <= limit)
             {
+                // Sorted even though nothing is dropped, so BoneWeight.Index0 really is the strongest
+                // influence its documentation promises. The common four-influence glTF case lands here.
+                SortByWeightInPlace(mesh.VertexJoints, mesh.VertexWeights, vertexCount, oldInfluences);
                 NormaliseInPlace(mesh.VertexWeights, vertexCount, oldInfluences);
                 continue;
             }
@@ -108,6 +111,30 @@ internal sealed class LimitBoneWeightsStep : IPostProcess
             mesh.VertexJoints = newJoints;
             mesh.VertexWeights = newWeights;
             mesh.MaxInfluencesPerVertex = limit;
+        }
+    }
+
+    /// <summary>Orders each vertex's influences strongest first, keeping joints and weights paired.</summary>
+    private static void SortByWeightInPlace(int[] joints, float[] weights, int vertexCount, int influencesPerVertex)
+    {
+        // Insertion sort: influencesPerVertex is at most the bone weight limit, so a handful.
+        for (int v = 0; v < vertexCount; v++)
+        {
+            int b = v * influencesPerVertex;
+            for (int i = 1; i < influencesPerVertex; i++)
+            {
+                float w = weights[b + i];
+                int j = joints[b + i];
+                int k = i - 1;
+                while (k >= 0 && weights[b + k] < w)
+                {
+                    weights[b + k + 1] = weights[b + k];
+                    joints[b + k + 1] = joints[b + k];
+                    k--;
+                }
+                weights[b + k + 1] = w;
+                joints[b + k + 1] = j;
+            }
         }
     }
 

@@ -22,4 +22,23 @@ public sealed class ImportException : Exception
         SourcePath = sourcePath;
         Format = format;
     }
+
+    /// <summary>
+    /// Returns this exception with <paramref name="sourcePath"/> and <paramref name="format"/> filled
+    /// in, or itself when it already carries them.
+    /// </summary>
+    /// <remarks>
+    /// Code deep in a reader or post-process step knows what is wrong but not which file it came
+    /// from, so it throws without that context and the entry point attaches it on the way out.
+    /// </remarks>
+    internal ImportException WithContext(string? sourcePath, string? format)
+    {
+        string? path = SourcePath ?? sourcePath;
+        string? fmt = Format ?? format;
+        if (path == SourcePath && fmt == Format)
+            return this;
+
+        // Kept as the inner exception so the original throw site survives in the stack trace.
+        return new ImportException(Message, path, fmt, InnerException ?? this);
+    }
 }

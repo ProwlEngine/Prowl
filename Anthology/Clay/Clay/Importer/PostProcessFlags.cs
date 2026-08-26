@@ -96,10 +96,16 @@ public static class PostProcessPresets
     /// <summary>No post-processing - the raw importer output.</summary>
     public const PostProcessFlags Raw = PostProcessFlags.None;
 
-    /// <summary>Fast game-engine preset, prioritizing import speed.</summary>
+    /// <summary>
+    /// Fast game-engine preset, prioritizing import speed. Includes
+    /// <see cref="PostProcessFlags.LimitBoneWeights"/> because skipping it does not make a skinned
+    /// import faster in any way that matters, it just hands the bake more influences than the
+    /// four-slot vertex layout can carry.
+    /// </summary>
     public const PostProcessFlags GameFast =
         PostProcessFlags.Triangulate |
         PostProcessFlags.JoinIdenticalVertices |
+        PostProcessFlags.LimitBoneWeights |
         PostProcessFlags.ConvertCoordinateSystem |
         PostProcessFlags.GenerateBounds |
         PostProcessFlags.SortByPrimitiveType;

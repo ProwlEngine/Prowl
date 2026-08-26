@@ -13,6 +13,9 @@ namespace Prowl.Clay;
 /// </remarks>
 public struct BoneWeight : IEquatable<BoneWeight>
 {
+    /// <summary>Influences this layout holds. Vertices with more are reduced to the strongest four.</summary>
+    public const int MaxInfluences = 4;
+
     /// <summary>Bone index for the strongest influence.</summary>
     public int Index0;
     /// <summary>Bone index for the second-strongest influence.</summary>
