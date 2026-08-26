@@ -223,8 +223,8 @@ public class NavMeshCollectorTests : RuntimeTestBase
         scene.Add(go);
 
         const int res = 129;
-        var data = new TerrainData { HeightmapResolution = res, Size = TerrainSize, Height = height };
-        data.Heights = new short[res * res];
+        var data = new TerrainData { Size = TerrainSize, Height = height };
+        data.ResizeHeightmap(res);
         if (normalizedHeight != null)
         {
             float cell = TerrainSize / (res - 1);
