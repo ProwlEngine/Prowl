@@ -95,17 +95,10 @@ internal sealed class LimitBoneWeightsStep : IPostProcess
                     for (int s = 0; s < limit; s++)
                         newWeights[dstBase + s] /= sum;
                 }
-                else
-                {
-                    // No bone influence at all: bind to bone 0 with weight 1 to keep the math sane.
-                    newJoints[dstBase + 0] = 0;
-                    newWeights[dstBase + 0] = 1f;
-                    for (int s = 1; s < limit; s++)
-                    {
-                        newJoints[dstBase + s] = 0;
-                        newWeights[dstBase + s] = 0f;
-                    }
-                }
+                // A vertex with no influence is left with none. Binding it to bone 0 would snap
+                // genuinely unweighted geometry onto whichever joint happens to be listed first,
+                // whereas zero weights are what a skinning shader reads as "not skinned" and falls
+                // back to mesh local space for. The early-out path above leaves them alone too.
             }
 
             mesh.VertexJoints = newJoints;
