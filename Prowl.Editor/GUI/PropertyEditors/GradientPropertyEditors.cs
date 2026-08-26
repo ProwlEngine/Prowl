@@ -4,7 +4,7 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Widgets;
 using Prowl.PaperUI;
 
-using Gradient = Prowl.Runtime.Gradient;
+using Gradient = Prowl.Vector.Gradient;
 namespace Prowl.Editor.Inspector;
 
 // ================================================================

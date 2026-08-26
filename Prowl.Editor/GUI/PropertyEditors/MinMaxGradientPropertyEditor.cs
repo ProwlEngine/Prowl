@@ -6,7 +6,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
-using Gradient = Prowl.Runtime.Gradient;
+using Gradient = Prowl.Vector.Gradient;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Inspector;

@@ -175,11 +175,9 @@ public sealed class PhysicsDemo : Game
 
        // Configure Color over Lifetime (fade out)
        particleSystem.ColorOverLifetime.Enabled = true;
-       particleSystem.ColorOverLifetime.ColorGradient = new Gradient
-       {
-           ColorKeys = [new (Color.White, 0.0f), new (new Color(1, 0.8f, 0.6f, 1), 0.5f), new (new Color(0.5f, 0.3f, 0.2f, 1), 1.0f)],
-           AlphaKeys = [new (1.0f, 0.0f), new (0.8f, 0.5f), new (0.0f, 1.0f)]
-       };
+       particleSystem.ColorOverLifetime.ColorGradient = new Gradient(
+           [new (0.0f, Color.White), new (0.5f, new Color(1, 0.8f, 0.6f, 1)), new (1.0f, new Color(0.5f, 0.3f, 0.2f, 1))],
+           [new (0.0f, 1.0f), new (0.5f, 0.8f), new (1.0f, 0.0f)]);
 
        // Configure Rotation over Lifetime (still MinMaxCurve evaluated at spawn)
        particleSystem.RotationOverLifetime.Enabled = true;
