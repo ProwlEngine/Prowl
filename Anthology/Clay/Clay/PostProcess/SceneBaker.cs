@@ -21,7 +21,7 @@ internal static class SceneBaker
         var bakedSkins = BakeSkins(scene);
 
         // Bake meshes (need to know skin assignment per mesh to populate BindPoses + BoneWeights).
-        var meshSkinIndex = BuildMeshToSkinMap(scene, bakedSkins);
+        var meshSkinIndex = BuildMeshToSkinMap(scene, bakedSkins, context);
         var bakedMeshes = new List<Mesh>(scene.Meshes.Count);
         for (int i = 0; i < scene.Meshes.Count; i++)
             bakedMeshes.Add(BakeMesh(scene.Meshes[i], meshSkinIndex[i], bakedSkins, context));
@@ -100,7 +100,16 @@ internal static class SceneBaker
         {
             int[] boneIndices = new int[s.IntermediateSkin.BoneNodes.Count];
             for (int b = 0; b < boneIndices.Length; b++)
-                boneIndices[b] = s.IntermediateSkin.BoneNodes[b].BakeIndex;
+            {
+                // Consumers index their node array with these directly, so an unbaked bone would
+                // become an out-of-range read rather than anything they could check for.
+                int index = s.IntermediateSkin.BoneNodes[b].BakeIndex;
+                if (index < 0)
+                    throw new ImportException(
+                        $"Skin '{s.IntermediateSkin.Name ?? "(unnamed)"}' bone '{s.IntermediateSkin.BoneNodes[b].Name}' is not part of the scene graph.",
+                        context.SourcePath, context.Format);
+                boneIndices[b] = index;
+            }
 
             publicSkins.Add(new Skin
             {
@@ -164,7 +173,7 @@ internal static class SceneBaker
     /// For each IntermediateMesh, decide which Skin (if any) supplies its BindPoses array.
     /// We use the first node that references the mesh with a non-negative SkinIndex.
     /// </summary>
-    private static int[] BuildMeshToSkinMap(IntermediateScene scene, List<BakedSkin> skins)
+    private static int[] BuildMeshToSkinMap(IntermediateScene scene, List<BakedSkin> skins, ImportContext context)
     {
         var result = new int[scene.Meshes.Count];
         Array.Fill(result, -1);
@@ -175,7 +184,19 @@ internal static class SceneBaker
             if (node.MeshIndex < 0 || node.SkinIndex < 0) continue;
             if (node.MeshIndex >= result.Length) continue;
             if (result[node.MeshIndex] == -1)
+            {
                 result[node.MeshIndex] = node.SkinIndex;
+                continue;
+            }
+
+            // Bind poses are stored per mesh, but glTF lets two nodes point one mesh at two
+            // different skins. Only the first skin's poses can be kept, so say so rather than let
+            // the second node render with bind poses that are not its own.
+            if (result[node.MeshIndex] != node.SkinIndex)
+                context.Log.Warning(
+                    $"Mesh '{scene.Meshes[node.MeshIndex].Name}' is used with more than one skin; "
+                    + $"keeping the bind poses of skin {result[node.MeshIndex]}.",
+                    "SceneBaker");
         }
         return result;
     }
