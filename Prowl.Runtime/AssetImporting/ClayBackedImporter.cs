@@ -80,13 +80,27 @@ internal static class ClayBackedImporter
         if (s.CalculateTangentSpace) flags |= PostProcessFlags.CalcTangentSpace;
         else flags &= ~PostProcessFlags.CalcTangentSpace;
 
-        // FlipUVs: glTF stores UVs with V=0 at the top of the texture (top-left origin convention).
-        // FBX and OBJ store V=0 at the bottom (OpenGL convention) which is what Prowl's shaders
-        // expect post-import. So only flip when the source is glTF/GLB/VRM - flipping FBX or OBJ
-        // would invert UVs and ship textures upside down.
-        bool sourceNeedsFlip = fileExt is ".gltf" or ".glb" or ".vrm";
-        if (s.FlipUVs && sourceNeedsFlip) flags |= PostProcessFlags.FlipUVs;
+        // glTF stores UVs with V=0 at the top of the texture; FBX and OBJ store V=0 at the bottom,
+        // which is what Prowl's shaders expect post-import because Texture2D uploads bottom-up. So
+        // the flip is a property of the source format, not a preference: glTF always needs it and
+        // FBX and OBJ never do. It used to be a toggle, which could only ever produce upside-down
+        // textures on every glTF or do nothing at all.
+        if (fileExt is ".gltf" or ".glb" or ".vrm") flags |= PostProcessFlags.FlipUVs;
         else flags &= ~PostProcessFlags.FlipUVs;
+
+        if (s.OptimizeMeshes) flags |= PostProcessFlags.OptimizeMeshes;
+        else flags &= ~PostProcessFlags.OptimizeMeshes;
+
+        if (s.OptimizeHierarchy) flags |= PostProcessFlags.OptimizeGraph;
+        else flags &= ~PostProcessFlags.OptimizeGraph;
+
+        // No mesh splitting: a mesh that outgrows a 16-bit index buffer gets a 32-bit one, which
+        // the bake already picks per mesh from its vertex count. Cutting a model into pieces to fit
+        // an index width is a workaround for hardware Prowl does not target.
+        flags &= ~PostProcessFlags.SplitLargeMeshes;
+
+        // Strict validation needs the validator itself, which is not in the GameQuality preset.
+        if (s.StrictValidation) flags |= PostProcessFlags.ValidateDataStructure;
 
         return new ClaySettings
         {
@@ -95,6 +109,9 @@ internal static class ClayBackedImporter
             BoneWeightLimit = 4,
             SmoothNormalsAngleDeg = s.SmoothNormalsAngleDeg,
             RecalculateNormals = s.RecalculateNormals,
+            StrictValidation = s.StrictValidation,
+            OptimizeGraphPreserveNodeNames = s.PreserveNodeNames,
+            SceneIndex = s.SceneIndex,
         };
     }
 
@@ -120,13 +137,18 @@ internal static class ClayBackedImporter
         // supply one that only ever produces AssetRefs and never touches pixel data itself.
         var resolver = settings.TextureResolver ?? DefaultModelTextureResolver.Instance;
         var textureCache = new AssetRef<Texture2D>[clayModel.Textures.Count];
-        for (int i = 0; i < clayModel.Textures.Count; i++)
-            textureCache[i] = ResolveModelTexture(clayModel.Textures[i], resolver);
+        // Skipped wholesale when materials are off, so an import that wants no materials also does
+        // not decode or register the textures only those materials would have referenced.
+        if (settings.ImportMaterials)
+            for (int i = 0; i < clayModel.Textures.Count; i++)
+                textureCache[i] = ResolveModelTexture(clayModel.Textures[i], resolver);
 
-        // 2. Materials.
+        // 2. Materials. Left empty when the import does not want them, which makes every renderer
+        // fall back to the default material rather than to a material built from the file.
         var materials = new List<PMaterial>(clayModel.Materials.Count);
-        for (int i = 0; i < clayModel.Materials.Count; i++)
-            materials.Add(BuildMaterial(clayModel.Materials[i], textureCache));
+        if (settings.ImportMaterials)
+            for (int i = 0; i < clayModel.Materials.Count; i++)
+                materials.Add(BuildMaterial(clayModel.Materials[i], textureCache));
 
         // 3. Meshes (with per-submesh material index propagated).
         var meshes = new List<PMesh>(clayModel.Meshes.Count);
@@ -238,8 +260,9 @@ internal static class ClayBackedImporter
 
         // 6. Animations.
         var animations = new List<PAnim>(clayModel.AnimationClips.Count);
-        foreach (var clip in clayModel.AnimationClips)
-            animations.Add(BuildAnimationClip(clip, clayModel, nodeGOs, rootGO, settings.AnimationWrapMode));
+        if (settings.ImportAnimations)
+            foreach (var clip in clayModel.AnimationClips)
+                animations.Add(BuildAnimationClip(clip, clayModel, nodeGOs, rootGO, settings.AnimationWrapMode));
 
         if (animations.Count > 0)
         {
@@ -324,7 +347,7 @@ internal static class ClayBackedImporter
 
         // Blend shapes (morph targets). Clay already expands sparse deltas to full vertex count and
         // remaps them through vertex dedup, so the delta arrays line up 1:1 with dst.Vertices.
-        if (src.BlendShapes is { Length: > 0 })
+        if (settings.ImportBlendShapes && src.BlendShapes is { Length: > 0 })
         {
             var shapes = new PBlendShape[src.BlendShapes.Length];
             for (int i = 0; i < src.BlendShapes.Length; i++)

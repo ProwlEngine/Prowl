@@ -30,11 +30,48 @@ public struct ModelImporterSettings
     /// <summary>Generate tangent vectors for normal mapping.</summary>
     public bool CalculateTangentSpace = true;
 
-    /// <summary>Flip V texture coordinate (some formats use top-left origin).</summary>
-    public bool FlipUVs = true;
-
     /// <summary>Uniform scale applied to all vertex positions.</summary>
     public float UnitScale = 1.0f;
+
+    /// <summary>
+    /// Build the materials the file describes. Off makes every renderer fall back to the default
+    /// </summary>
+    public bool ImportMaterials = true;
+
+    /// <summary>Build the animation clips the file describes, and the component that plays them.</summary>
+    public bool ImportAnimations = true;
+
+    /// <summary>
+    /// Keep morph targets. Off drops them, which is worth doing for a model whose shapes the game
+    /// never drives: the deltas are a full extra copy of the vertex data per shape.
+    /// </summary>
+    public bool ImportBlendShapes = true;
+
+    /// <summary>
+    /// Merge sibling meshes that share a material into one. Reduces draw calls for models authored
+    /// as many small parts, at the cost of the parts no longer being separately addressable.
+    /// </summary>
+    public bool OptimizeMeshes = false;
+
+    /// <summary>
+    /// Collapse pass-through nodes, folding their transforms into their children. Sockets, markers,
+    /// bones, animated nodes and anything carrying metadata are kept regardless.
+    /// </summary>
+    public bool OptimizeHierarchy = false;
+
+    /// <summary>Node names <see cref="OptimizeHierarchy"/> must never collapse.</summary>
+    public string[] PreserveNodeNames = [];
+
+    /// <summary>
+    /// Fail the import when the file fails cross-reference validation, instead of warning and
+    /// importing whatever survived.
+    /// </summary>
+    public bool StrictValidation = false;
+
+    /// <summary>
+    /// Which scene to import from a file defining several, or -1 for the one the file nominates.
+    /// </summary>
+    public int SceneIndex = -1;
 
     /// <summary>
     /// Create a <see cref="Camera"/> for every camera the file defines. Imported cameras are added

@@ -16,8 +16,14 @@ public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
     // 8: normals now come from Clay, which splits vertices on hard edges.
-    private const int BaseVersion = 10;
+    private const int BaseVersion = 11;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
+
+    /// <summary>Splits the comma-separated preserve list the inspector stores as one field.</summary>
+    private static string[] SplitNodeNames(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public override bool Import(ImportContext ctx)
     {
@@ -36,8 +42,15 @@ public class EditorModelImporter : AssetImporter
                 importSettings.SmoothNormalsAngleDeg = s.TryGet("smoothNormalsAngle", out var sna) ? sna.FloatValue : 80f;
                 importSettings.RecalculateNormals = s.TryGet("recalculateNormals", out var rn) && rn.BoolValue;
                 importSettings.CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue;
-                importSettings.FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue;
                 importSettings.UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f;
+                importSettings.ImportMaterials = !s.TryGet("importMaterials", out var im) || im.BoolValue;
+                importSettings.ImportAnimations = !s.TryGet("importAnimations", out var ia) || ia.BoolValue;
+                importSettings.ImportBlendShapes = !s.TryGet("importBlendShapes", out var ibs) || ibs.BoolValue;
+                importSettings.OptimizeMeshes = s.TryGet("optimizeMeshes", out var om) && om.BoolValue;
+                importSettings.OptimizeHierarchy = s.TryGet("optimizeHierarchy", out var oh) && oh.BoolValue;
+                importSettings.PreserveNodeNames = SplitNodeNames(s.TryGet("preserveNodeNames", out var pnn) ? pnn.StringValue : null);
+                importSettings.StrictValidation = s.TryGet("strictValidation", out var sv) && sv.BoolValue;
+                importSettings.SceneIndex = s.TryGet("sceneIndex", out var si) ? si.IntValue : -1;
                 importSettings.ImportCameras = !s.TryGet("importCameras", out var ic) || ic.BoolValue;
                 importSettings.ImportLights = !s.TryGet("importLights", out var il) || il.BoolValue;
                 importSettings.AnimationWrapMode = (AnimationWrapMode)(s.TryGet("animationWrapMode", out var awm) ? awm.IntValue : (int)AnimationWrapMode.Loop);
