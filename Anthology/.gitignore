@@ -421,3 +421,10 @@ Slang/Native/lib
 # Wavefront meshes the Recast tests load at runtime - without them CI has no resources/
 # folder to find and those tests fail with a missing dungeon.obj.
 !Recast/Tests/resources/*.obj
+
+# Clay test meshes. Same story, but here it is the "[Oo]bj/" directory rule that catches them,
+# since the Wavefront fixtures live in a folder literally named obj/. Git cannot re-include a
+# file whose parent directory is excluded, so the directory has to be un-excluded first.
+!Clay/test-models/obj/
+!Clay/test-models/obj/*.obj
+!Clay/test-models/obj/*.mtl

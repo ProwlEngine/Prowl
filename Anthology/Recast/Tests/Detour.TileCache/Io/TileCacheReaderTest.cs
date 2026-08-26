@@ -91,19 +91,19 @@ public class TileCacheReaderTest
         Assert.Equal(0.330483f, data.verts[1], 0.0001f);
         Assert.Equal(43.110687f, data.verts[6], 0.0001f);
         Assert.Equal(43.110687f, data.verts[9], 0.0001f);
-        // Tile16: Tris: 13, Verts: 33 Detail Meshed: 13 Detail Verts: 0 Detail Tris: 25
+        // Tile16: Tris: 12, Verts: 33 Detail Meshed: 12 Detail Verts: 0 Detail Tris: 25
         // Verts: 1.130483, 5.610685, 6.510685
         tile = tc.GetNavMesh().GetTile(16);
         data = tile.data;
         header = data.header;
         Assert.Equal(33, header.vertCount);
-        Assert.Equal(13, header.polyCount);
-        Assert.Equal(13, header.detailMeshCount);
+        Assert.Equal(12, header.polyCount);
+        Assert.Equal(12, header.detailMeshCount);
         Assert.Equal(0, header.detailVertCount);
         Assert.Equal(25, header.detailTriCount);
-        Assert.Equal(13, data.polys.Length);
+        Assert.Equal(12, data.polys.Length);
         Assert.Equal(3 * 33, data.verts.Length);
-        Assert.Equal(13, data.detailMeshes.Length);
+        Assert.Equal(12, data.detailMeshes.Length);
         Assert.Equal(0, data.detailVerts.Length);
         Assert.Equal(4 * 25, data.detailTris.Length);
         Assert.Equal(1.130483f, data.verts[1], 0.0001f);

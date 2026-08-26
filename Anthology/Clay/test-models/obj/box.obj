@@ -1,0 +1,23 @@
+# Unit cube centred on the origin.
+# Positions only, no normals or texcoords, and one smoothing group so the generated normals are
+# averaged per corner rather than per face. That keeps the mesh at exactly 8 vertices; without
+# the group the importer flat shades and splits every corner three ways for 24.
+# Six quad faces triangulate to 36 indices.
+o box
+
+v -0.5 -0.5 -0.5
+v 0.5 -0.5 -0.5
+v 0.5 0.5 -0.5
+v -0.5 0.5 -0.5
+v -0.5 -0.5 0.5
+v 0.5 -0.5 0.5
+v 0.5 0.5 0.5
+v -0.5 0.5 0.5
+
+s 1
+f 5 6 7 8
+f 1 4 3 2
+f 1 5 8 4
+f 2 3 7 6
+f 4 8 7 3
+f 1 2 6 5
