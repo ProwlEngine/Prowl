@@ -1,4 +1,4 @@
-Shader "Default/Bloom"
+Shader "Hidden/Post Process/Bloom"
 
 Pass "Threshold"
 {

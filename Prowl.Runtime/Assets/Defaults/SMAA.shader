@@ -1,4 +1,4 @@
-Shader "Default/SMAA"
+Shader "Hidden/Post Process/SMAA"
 
 // Subpixel Morphological Anti-Aliasing (SMAA 1x), luma edge detection.
 // Three chained fullscreen passes driven by SMAAEffect:

@@ -7,6 +7,8 @@ using Prowl.Echo;
 using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -95,12 +97,7 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         // Shader reference
         Origami.Separator(paper, $"{id}_sep_shader").Show();
-        PropertyGridUtils.DrawField(paper, $"{id}_shader", "Shader", typeof(AssetRef<Shader>), material.ShaderRef,
-            newVal =>
-            {
-                material.ShaderRef = (AssetRef<Shader>)newVal!;
-                MarkDirty(material, entry);
-            }, 0);
+        DrawShaderPicker(paper, id, material, entry);
 
         // Shader properties one field per property declared by the shader. Values
         // are read live from the shader for non-overridden entries (see
@@ -128,6 +125,98 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         PreviewWidget.For(entry.Guid).Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
     }
+
+    // ============================================================
+    // Shader picker
+    // ============================================================
+    // A shader's menu path is declared in its own source, so the list is swept fresh from the
+    // embedded defaults plus the project's .shader files each time the popup opens rather than
+    // being derived from the asset database. Only one picker is open at a time, so the state is
+    // static and keyed by which material owns it.
+
+    private static Guid _shaderPickerOwner;
+    private static readonly MenuTreeState _shaderMenu = new();
+    private static List<MenuTreeEntry> _shaderEntries = [];
+
+    private void DrawShaderPicker(Paper paper, string id, Material material, AssetEntry entry)
+    {
+        var font = EditorTheme.DefaultFont;
+        Guid ownerGuid = entry.Guid;
+
+        EditorGUI.Row(paper, $"{id}_shader", "Shader", () =>
+        {
+            string none = Loc.Get("inspector.shader_none");
+            string label = EditorAssetBackend.Instance?.GetShaderMenuPath(material.ShaderRef.AssetID, none) ?? none;
+
+            var trigger = paper.Row($"{id}_shader_btn")
+                .Height(EditorTheme.RowHeight)
+                .Rounded(EditorTheme.Roundness)
+                .BackgroundColor(EditorTheme.Ink100)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+                .ChildLeft(8).ChildRight(8).RowBetween(6)
+                .OnClick(0, (_, _) => ToggleShaderPicker(ownerGuid));
+
+            using (trigger.Enter())
+            {
+                var trigHandle = paper.CurrentParent;
+
+                if (font != null)
+                {
+                    paper.Box($"{id}_shader_lbl")
+                        .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).IsNotInteractable()
+                        .Text(label, font).TextColor(EditorTheme.Ink500)
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+
+                    paper.Box($"{id}_shader_arw")
+                        .Width(12).Height(EditorTheme.RowHeight).IsNotInteractable()
+                        .Text(EditorIcons.ChevronDown, font).TextColor(EditorTheme.Ink300)
+                        .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
+                }
+
+                if (_shaderPickerOwner == ownerGuid)
+                {
+                    if (paper.IsKeyPressed(PaperKey.Escape))
+                    {
+                        CloseShaderPicker();
+                    }
+                    else
+                    {
+                        MenuTreePopup.Backdrop(paper, $"{id}_shader_pick", CloseShaderPicker);
+                        MenuTreePopup.Popover(paper, $"{id}_shader_pick", trigHandle, _shaderEntries, _shaderMenu,
+                            picked =>
+                            {
+                                if (picked.Tag is Guid guid && guid != material.ShaderRef.AssetID)
+                                {
+                                    material.ShaderRef = new AssetRef<Shader>(guid);
+                                    MarkDirty(material, entry);
+                                }
+                                CloseShaderPicker();
+                            },
+                            Loc.Get("popup.search_shaders"),
+                            Loc.Get("popup.no_shaders"));
+                    }
+                }
+            }
+        });
+    }
+
+    private static void ToggleShaderPicker(Guid owner)
+    {
+        if (_shaderPickerOwner == owner)
+        {
+            CloseShaderPicker();
+            return;
+        }
+
+        _shaderPickerOwner = owner;
+        _shaderMenu.Reset();
+        _shaderEntries = (EditorAssetBackend.Instance?.GetShaderCatalog() ?? [])
+            .Select(s => MenuTreeEntry.FromPath(s.MenuPath, s.IsBuiltIn ? EditorIcons.Cube : EditorIcons.FileCode, s.Guid))
+            .ToList();
+    }
+
+    private static void CloseShaderPicker() => _shaderPickerOwner = Guid.Empty;
 
     /// <summary>Record that <paramref name="material"/> has edits not yet written to disk.</summary>
     private void MarkDirty(Material material, AssetEntry entry)

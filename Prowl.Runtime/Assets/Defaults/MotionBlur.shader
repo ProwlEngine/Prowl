@@ -1,4 +1,4 @@
-Shader "Default/MotionBlur"
+Shader "Hidden/Post Process/Motion Blur"
 
 Properties
 {

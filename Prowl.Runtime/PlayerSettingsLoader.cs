@@ -134,6 +134,16 @@ public static class PlayerSettingsLoader
         {
             float vol = settings.TryGet("GlobalVolume", out var v) ? v!.FloatValue : 1f;
             AudioContext.MasterVolume = vol;
+
+            // Reopens the device only if the project asked for a format other than the one the game
+            // loop opened it with.
+            int rate = settings.TryGet("SampleRate", out var r) ? r!.IntValue : AudioContext.SampleRate;
+            int channels = settings.TryGet("Channels", out var c) ? c!.IntValue : AudioContext.Channels;
+            int buffer = settings.TryGet("BufferSize", out var b) ? b!.IntValue : AudioContext.PeriodSizeInFrames;
+
+            if (rate > 0 && channels > 0 && buffer > 0)
+                AudioContext.Restart((uint)rate, (uint)channels, (uint)buffer);
+
             Debug.Log("[PlayerSettings] Audio applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply audio: {ex.Message}"); }

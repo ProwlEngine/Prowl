@@ -1,4 +1,4 @@
-﻿Shader "Default/FXAA"
+﻿Shader "Hidden/Post Process/FXAA"
 
 Properties
 {

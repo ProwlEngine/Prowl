@@ -1,4 +1,4 @@
-Shader "Default/CinematicEffects"
+Shader "Hidden/Post Process/Cinematic Effects"
 
 Properties
 {

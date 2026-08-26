@@ -1,4 +1,4 @@
-Shader "Default/AutoExposure"
+Shader "Hidden/Post Process/Auto Exposure"
 
 // Pass 0: Extract log-luminance from HDR scene and downsample to half-res
 Pass "LuminanceExtract"

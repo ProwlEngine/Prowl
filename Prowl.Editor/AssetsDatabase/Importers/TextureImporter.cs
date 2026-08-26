@@ -13,7 +13,7 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.Importers;
 
-[ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr")]
+[ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr", ".tif", ".tiff")]
 public class TextureImporter : AssetImporter
 {
     // 5: sprite sub-asset GUIDs derive from the slice's persistent Id instead of its name.

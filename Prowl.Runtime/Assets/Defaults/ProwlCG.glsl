@@ -3,6 +3,12 @@
 
 #include "ShaderVariables"
 
+// A perceptual roughness of exactly 0 makes the GGX denominator vanish at the specular peak
+// (alpha = 0 with NdotH = 1), which is a 0/0. Specular anti-aliasing normally lifts roughness off
+// the floor, but a flat surface has no normal derivative for it to work with, so the value is
+// clamped at the source instead. Small enough to still read as a mirror.
+#define PROWL_MIN_ROUGHNESS 0.045
+
 #define PROWL_PI            3.14159265359
 #define PROWL_TWO_PI        6.28318530718
 #define PROWL_FOUR_PI       12.56637061436
@@ -276,12 +282,34 @@ bool IsReprojectionValid(vec2 prevUV, float currentDepth, float prevDepth, vec3 
 //   vec3 worldNormal = ApplyNormalMap(normalTex, uv, vNormal, vTangent, vBitangent);
 //
 // For shaders without normal maps, just use normalize(vNormal) directly.
+// A sampled normal of exactly (0.5, 0.5, 0.5) decodes to a zero vector, which normalize turns into
+// NaN and which then spreads through every lighting term. Happens when something that is not a
+// normal map ends up in the slot, or when the tangent-space XY is scaled all the way to flat.
+vec3 SafeNormalizeTangentSpace(vec3 normalTS, vec3 fallback)
+{
+    return dot(normalTS, normalTS) < 1e-12 ? fallback : normalize(normalTS);
+}
+
 vec3 ApplyNormalMap(sampler2D normalTex, vec2 uv, vec3 normal, vec3 tangent, vec3 bitangent)
 {
 #ifdef HAS_TANGENTS
     mat3 TBN = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
     vec3 normalTS = texture(normalTex, uv).rgb * 2.0 - 1.0;
-    return normalize(TBN * normalTS);
+    return SafeNormalizeTangentSpace(TBN * normalTS, normalize(normal));
+#else
+    return normalize(normal);
+#endif
+}
+
+// ApplyNormalMap with a strength multiplier on the tangent-space XY, matching the
+// glTF normalTexture.scale semantics. A scale of 0 flattens the map completely.
+vec3 ApplyNormalMapScaled(sampler2D normalTex, vec2 uv, vec3 normal, vec3 tangent, vec3 bitangent, float scale)
+{
+#ifdef HAS_TANGENTS
+    mat3 TBN = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
+    vec3 normalTS = texture(normalTex, uv).rgb * 2.0 - 1.0;
+    normalTS.xy *= scale;
+    return SafeNormalizeTangentSpace(TBN * normalTS, normalize(normal));
 #else
     return normalize(normal);
 #endif

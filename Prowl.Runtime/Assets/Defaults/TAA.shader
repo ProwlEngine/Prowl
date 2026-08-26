@@ -1,4 +1,4 @@
-Shader "Default/TAA"
+Shader "Hidden/Post Process/TAA"
 
 Properties
 {

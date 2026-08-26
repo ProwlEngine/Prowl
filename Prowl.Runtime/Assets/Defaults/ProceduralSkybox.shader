@@ -1,4 +1,4 @@
-﻿Shader "Default/ProceduralSkybox"
+﻿Shader "Skybox/Procedural"
 
 Properties
 {

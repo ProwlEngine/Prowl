@@ -121,7 +121,10 @@
 			float totalWeight = vertexBoneWeights.x + vertexBoneWeights.y + vertexBoneWeights.z + vertexBoneWeights.w;
 			if (totalWeight < 0.01)
 				skinnedNormal = normal;
-			return normalize(skinnedNormal);
+			// Opposing bone transforms can cancel to zero here; normalizing that is 0/0.
+			// Returned unnormalized in that case, for TransformDirection's guard to catch.
+			float lenSq = dot(skinnedNormal, skinnedNormal);
+			return !(lenSq > 1e-20) ? skinnedNormal : skinnedNormal * inversesqrt(lenSq);
 		}
 #endif
 
@@ -250,14 +253,22 @@ vec4 TransformClip(vec3 position)
 }
 
 // Transform a direction/normal to world space (applies skinning if active, then model rotation).
+//
+// The normalize is guarded because a zero-length input is not exotic: a vertex no triangle
+// references, one whose face normals cancel, or a degenerate-UV tangent all arrive here as exactly
+// zero, and normalize(vec3(0)) is 0/0. A single NaN normal or tangent spreads through the whole
+// tangent frame and every lighting term that touches it, so it is stopped at the source.
 vec3 TransformDirection(vec3 dir)
 {
 	mat4 model = GetModelMatrix();
 #ifdef SKINNED
-	return normalize(mat3(model) * GetSkinnedNormal(dir));
+	vec3 world = mat3(model) * GetSkinnedNormal(dir);
 #else
-	return normalize(mat3(model) * dir);
+	vec3 world = mat3(model) * dir;
 #endif
+	float lenSq = dot(world, world);
+	// Written as !(> eps) rather than (< eps) so a NaN input takes the fallback too.
+	return !(lenSq > 1e-20) ? vec3(0.0, 1.0, 0.0) : world * inversesqrt(lenSq);
 }
 
 // Get vertex color with per-instance tint applied.

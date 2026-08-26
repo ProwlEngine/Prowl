@@ -530,4 +530,45 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(0, b.Transform.LocalPosition.Y, 4);
         Assert.False(Undo.CanUndo); // one step for both targets
     }
+
+    // ---------------------------------------------------------------------
+    // A session that edits something other than the open scene borrows the history
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void PushContext_SetsTheHistoryAsideAndPopBringsItBack()
+    {
+        int value = 0;
+        Undo.RegisterAction("Scene Edit", () => value = 1, () => value = 2);
+        Undo.IncrementGroup();
+        Assert.True(Undo.CanUndo);
+
+        object saved = Undo.PushContext();
+        Assert.False(Undo.CanUndo); // the session starts with nothing behind it
+
+        int sessionValue = 0;
+        Undo.RegisterAction("Session Edit", () => sessionValue = 1, () => sessionValue = 2);
+        Undo.IncrementGroup();
+        Assert.True(Undo.CanUndo);
+
+        Undo.PopContext(saved);
+
+        // The session's own step is gone with it, and the scene's is back and still works.
+        Assert.True(Undo.CanUndo);
+        Undo.PerformUndo();
+        Assert.Equal(1, value);
+        Assert.Equal(0, sessionValue);
+        Assert.False(Undo.CanUndo);
+    }
+
+    [Fact]
+    public void PopContext_WithNothingSavedIsJustAClear()
+    {
+        Undo.RegisterAction("Edit", () => { }, () => { });
+        Undo.IncrementGroup();
+        Assert.True(Undo.CanUndo);
+
+        Undo.PopContext(null);
+        Assert.False(Undo.CanUndo);
+    }
 }

@@ -1,6 +1,8 @@
 #ifndef PBR_FUNCTIONS
 #define PBR_FUNCTIONS
 
+#include "ProwlCG"
+
 #ifndef MATH_PI
 #define MATH_PI
 const float PI = 3.14159265359;
@@ -14,6 +16,10 @@ const float PI = 3.14159265359;
 // Input roughness is perceptual roughness [0,1] squared internally to get alpha.
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
+    // Floored here as well as at the call sites: a caller passing a raw material roughness of 0
+    // would otherwise divide by zero at the specular peak and paint the highlight with NaN.
+    roughness = max(roughness, PROWL_MIN_ROUGHNESS);
+
     float a2 = roughness * roughness; // alpha = perceptualRoughness², a2 = alpha
     float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH * NdotH;
@@ -82,6 +88,12 @@ float DisneyDiffuse(float NdotV, float NdotL, float LdotH, float perceptualRough
 // mt and mb are SQUARED roughness values (mt = roughnessT², mb = roughnessB²)
 float DistributionGGXAniso(float TdotH, float BdotH, float NdotH, float mt, float mb)
 {
+    // Both a roughness of 0 and an anisotropy of 1 (which zeroes the bitangent roughness on its
+    // own, whatever the roughness is) land straight on a division by zero here.
+    const float minAlpha = PROWL_MIN_ROUGHNESS * PROWL_MIN_ROUGHNESS;
+    mt = max(mt, minAlpha);
+    mb = max(mb, minAlpha);
+
     float d = TdotH * TdotH / (mt * mt) + BdotH * BdotH / (mb * mb) + NdotH * NdotH;
     return 1.0 / (PI * mt * mb * d * d);
 }
@@ -172,7 +184,12 @@ vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, floa
 
     for (int j = 0; j < 3; j++)
     {
-        float intersectionHeight = (pt0 * delta1 - pt1 * delta0) / (delta1 - delta0);
+        // Two equal deltas make the secant step 0/0, which would put NaN into the UV and carry it
+        // into every texture read that follows, albedo included.
+        float secantDenom = delta1 - delta0;
+        if (!(abs(secantDenom) > 1e-8)) break;
+
+        float intersectionHeight = (pt0 * delta1 - pt1 * delta0) / secantDenom;
         vCurrOffset = (1.0 - intersectionHeight) * finalStepSize * float(linearSteps);
 
         fCurrSampledHeight = textureGrad(heightTex, uv + vCurrOffset, dx, dy).g;

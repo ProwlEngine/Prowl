@@ -1,4 +1,4 @@
-﻿Shader "Default/Gizmos"
+﻿Shader "Hidden/Gizmos"
 
 Properties
 {

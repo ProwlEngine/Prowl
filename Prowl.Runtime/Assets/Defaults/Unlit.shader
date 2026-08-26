@@ -8,106 +8,96 @@ Properties
     _Offset ("Offset", Vector2) = (0.0, 0.0)
 }
 
-Pass "Unlit"
+Pass "Forward"
 {
     Tags { "RenderOrder" = "Opaque" }
     Cull Back
+    GLSLPROGRAM
 
-	GLSLPROGRAM
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+        Shared
+        {
+            #define PROWL_UNLIT
+            #define PROWL_PASS_FORWARD
+        }
 
-			out vec2 texCoord0;
-			out vec3 worldPos;
-			out vec4 vColor;
+        Vertex
+        {
+            #define PROWL_VERTEX_STAGE
+            #include "StandardCore"
 
-			uniform vec2 _Tiling;
-			uniform vec2 _Offset;
+            void main() { ProwlVertex(); }
+        }
 
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition);
-				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
-				worldPos = TransformPosition(vertexPosition);
-				vColor = GetInstanceColor();
-			}
-		}
+        Fragment
+        {
+            #define PROWL_FRAGMENT_STAGE
+            #include "StandardCore"
 
-		Fragment
-		{
-            #include "ProwlCG"
-            #include "Lighting"
+            void main() { ProwlFragment(); }
+        }
 
-			layout (location = 0) out vec4 fragColor;
-
-			in vec2 texCoord0;
-			in vec3 worldPos;
-			in vec4 vColor;
-
-			uniform sampler2D _MainTex;
-			uniform vec4 _MainColor;
-
-			void main()
-			{
-				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
-				vec3 baseColor = gammaToLinearSpace(albedo.rgb);
-				baseColor = ApplyFog(baseColor, worldPos);
-				fragColor = vec4(baseColor, albedo.a);
-			}
-		}
-	ENDGLSL
+    ENDGLSL
 }
 
-Pass "UnlitPrepass"
+Pass "Prepass"
 {
     Tags { "LightMode" = "Prepass" }
     Cull Back
     ZWrite On
+    GLSLPROGRAM
 
-	GLSLPROGRAM
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+        Shared
+        {
+            #define PROWL_UNLIT
+            #define PROWL_PASS_PREPASS
+        }
 
-			out vec3 vNormal;
-			out vec4 vCurrClipNJ;
-			out vec4 vPrevClip;
+        Vertex
+        {
+            #define PROWL_VERTEX_STAGE
+            #include "StandardCore"
 
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition); // jittered, for raster + depth
-				vNormal = TransformDirection(vertexNormal);
+            void main() { ProwlVertex(); }
+        }
 
-				// Jitter-free current + previous clip positions for motion vectors.
-				vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
-				vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * worldPos;
-				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
-				vPrevClip = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
-			}
-		}
+        Fragment
+        {
+            #define PROWL_FRAGMENT_STAGE
+            #include "StandardCore"
 
-		Fragment
-		{
-            #include "ProwlCG"
+            void main() { ProwlFragment(); }
+        }
 
-			layout (location = 0) out vec4 normalOut;
-			layout (location = 1) out vec4 motionRM;
-			in vec3 vNormal;
-			in vec4 vCurrClipNJ;
-			in vec4 vPrevClip;
+    ENDGLSL
+}
 
-			void main()
-			{
-				normalOut = EncodeViewNormal(normalize(vNormal));
+Pass "ShadowCaster"
+{
+    Tags { "LightMode" = "ShadowCaster" }
+    Cull Back
+    GLSLPROGRAM
 
-				// Motion vectors (jitter-free). Unlit has no PBR material -> roughness/metallic 0.
-				vec2 currNDC = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;
-				vec2 prevNDC = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;
-				motionRM = vec4(currNDC - prevNDC, 0.0, 0.0);
-			}
-		}
-	ENDGLSL
+        Shared
+        {
+            #define PROWL_UNLIT
+            #define PROWL_PASS_SHADOW
+        }
+
+        Vertex
+        {
+            #define PROWL_VERTEX_STAGE
+            #include "StandardCore"
+
+            void main() { ProwlVertex(); }
+        }
+
+        Fragment
+        {
+            #define PROWL_FRAGMENT_STAGE
+            #include "StandardCore"
+
+            void main() { ProwlFragment(); }
+        }
+
+    ENDGLSL
 }

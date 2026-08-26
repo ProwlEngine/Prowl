@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -376,7 +377,7 @@ public class InspectorPanel : DockPanel
         // Check for custom asset editor
         if (entry?.MainAssetType != null)
         {
-            var assetEditor = EditorRegistries.GetAssetEditor(entry.MainAssetType);
+            var assetEditor = EditorRegistries.GetAssetEditor(entry);
             if (assetEditor != null)
             {
                 var asset = Runtime.AssetDatabase.Get(item.Guid != Guid.Empty ? item.Guid : entry.Guid);
@@ -395,7 +396,12 @@ public class InspectorPanel : DockPanel
             }
         }
 
-        // Fallback: generic asset info
+        // No editor is registered for this type, so show what the asset actually holds before its
+        // file metadata. Without this a custom EngineObject asset shows only its path and guid, and
+        // every field on it needs a hand-written editor before it can be seen or edited at all.
+        DrawAssetFieldsFallback(paper, item, entry);
+
+        // Generic asset info
         Origami.Header(paper, "insp_h_asset", Loc.Get("inspector.asset_info")).Show();
 
         Origami.Label(paper, "insp_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
@@ -521,18 +527,41 @@ public class InspectorPanel : DockPanel
         Origami.Label(paper, "insp_folder_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
 
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        if (Directory.Exists(absPath))
+        if (!Directory.Exists(absPath)) return;
+
+        var counts = GetFolderCounts(item.RelativePath, absPath);
+        if (counts == null) return;
+
+        Origami.Label(paper, "insp_folder_files", $"{Loc.Get("inspector.files")}: {counts.Value.Files}").Show();
+        Origami.Label(paper, "insp_folder_folders", $"{Loc.Get("inspector.subfolders")}: {counts.Value.Folders}").Show();
+    }
+
+    // Recursive folder counts are cached rather than walked every frame, since the inspector redraws
+    // continuously while a folder stays selected. Dropped whenever the asset database content moves.
+    private static readonly Dictionary<string, (int Files, int Folders)> _folderCounts = [];
+    private static int _folderCountsVersion = -1;
+
+    private static (int Files, int Folders)? GetFolderCounts(string relativePath, string absPath)
+    {
+        int version = EditorAssetBackend.Instance?.ContentVersion ?? -1;
+        if (_folderCountsVersion != version)
         {
-            try
-            {
-                int fileCount = Directory.GetFiles(absPath, "*", SearchOption.AllDirectories)
-                    .Count(f => !f.EndsWith(".meta"));
-                int folderCount = Directory.GetDirectories(absPath, "*", SearchOption.AllDirectories).Length;
-                Origami.Label(paper, "insp_folder_files", $"{Loc.Get("inspector.files")}: {fileCount}").Show();
-                Origami.Label(paper, "insp_folder_folders", $"{Loc.Get("inspector.subfolders")}: {folderCount}").Show();
-            }
-            catch { }
+            _folderCounts.Clear();
+            _folderCountsVersion = version;
         }
+
+        if (_folderCounts.TryGetValue(relativePath, out var cached)) return cached;
+
+        try
+        {
+            int files = Directory.GetFiles(absPath, "*", SearchOption.AllDirectories)
+                .Count(f => !f.EndsWith(".meta"));
+            int folders = Directory.GetDirectories(absPath, "*", SearchOption.AllDirectories).Length;
+            var counts = (files, folders);
+            _folderCounts[relativePath] = counts;
+            return counts;
+        }
+        catch { return null; }
     }
 
     private void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetBackend db)
@@ -682,6 +711,50 @@ public class InspectorPanel : DockPanel
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"Failed to extract sub-asset: {ex.Message}");
+        }
+    }
+
+    /// <summary>Assets with edits not yet written, so moving away and back keeps the Save button up.</summary>
+    private readonly HashSet<Guid> _unsavedAssets = [];
+
+    /// <summary>
+    /// Draws an asset's own serialized fields for types that have no editor of their own, which is
+    /// what makes a custom <see cref="EngineObject"/> asset editable without writing one.
+    /// </summary>
+    private void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
+    {
+        if (entry?.MainAssetType == null) return;
+        if (!typeof(EngineObject).IsAssignableFrom(entry.MainAssetType)) return;
+
+        Guid guid = item.Guid != Guid.Empty ? item.Guid : entry.Guid;
+        EngineObject? asset = Runtime.AssetDatabase.Get(guid);
+        if (asset.IsNotValid()) return;
+
+        Origami.Header(paper, "insp_h_fields", Loc.Get("inspector.properties")).Underline().Show();
+        PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid));
+
+        if (Origami.IsReadOnly || !_unsavedAssets.Contains(guid)) return;
+
+        var db = EditorAssetBackend.Instance;
+        if (db == null) return;
+
+        // Edits live on the cached instance until they are written, so leaving the asset selected
+        // does not lose them, but nothing else will write them either.
+        using (paper.Row("insp_asset_fields_bar").Height(UnitValue.Auto).RowBetween(8).Enter())
+        {
+            Origami.Button(paper, "insp_asset_fields_save",
+                $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
+                {
+                    db.SaveAsset(asset);
+                    _unsavedAssets.Remove(guid);
+                }).Show();
+
+            Origami.Button(paper, "insp_asset_fields_revert",
+                $"{EditorIcons.ArrowsRotate}  {Loc.Get("dialog.revert")}", () =>
+                {
+                    db.Reimport(guid);
+                    _unsavedAssets.Remove(guid);
+                }).Show();
         }
     }
 

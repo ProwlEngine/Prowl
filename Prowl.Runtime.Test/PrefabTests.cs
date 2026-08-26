@@ -9,7 +9,7 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>
-/// Tests for the Runtime prefab surface: <see cref="PrefabAsset.Instantiate"/> (cloning, prefab-id
+/// Tests for the Runtime prefab surface: <see cref="GameObject.InstantiateDetached"/> (cloning, prefab-id
 /// stamping, nested-prefab boundaries), GameObject prefab tracking, and prefab-data serialization.
 /// The editor-side override engine (apply/revert/detect) lives in Prowl.Editor and is out of scope here.
 /// </summary>
@@ -32,7 +32,7 @@ public class PrefabTests : RuntimeTestBase
     public void Instantiate_NullData_ReturnsNull()
     {
         var prefab = new PrefabAsset { GameObjectData = null };
-        Assert.Null(prefab.Instantiate());
+        Assert.Null(GameObject.InstantiateDetached(prefab));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class PrefabTests : RuntimeTestBase
         var id = Guid.NewGuid();
         var prefab = MakePrefab(CreateGameObject("Root"), id);
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         Assert.NotNull(instance);
         Assert.Equal(id, instance!.PrefabAssetId);
@@ -55,7 +55,7 @@ public class PrefabTests : RuntimeTestBase
         source.AddComponent<SerializableComponent>().IntField = 17;
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         var comp = instance!.GetComponent<SerializableComponent>();
         Assert.NotNull(comp);
@@ -71,7 +71,7 @@ public class PrefabTests : RuntimeTestBase
         child.SetParent(source);
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         Assert.Single(instance!.Children);
         Assert.Equal("Child", instance.Children[0].Name);
@@ -88,8 +88,8 @@ public class PrefabTests : RuntimeTestBase
         sourceChild.SetParent(source);
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var a = prefab.Instantiate()!;
-        var b = prefab.Instantiate()!;
+        var a = GameObject.InstantiateDetached(prefab)!;
+        var b = GameObject.InstantiateDetached(prefab)!;
 
         // Mutate instance A.
         a.GetComponent<SerializableComponent>()!.IntField = 999;
@@ -102,18 +102,90 @@ public class PrefabTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Instantiate_StampsComponentAndChildCounts()
+    public void Instantiate_InTheEditor_RecordsWhereEachComponentAndChildCameFrom()
     {
         var source = CreateGameObject("Root");
         source.AddComponent<SerializableComponent>();
-        var child = CreateGameObject("Child");
-        child.SetParent(source);
+        CreateGameObject("Child").SetParent(source);
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var instance = prefab.Instantiate();
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = true;
+        try
+        {
+            var instance = GameObject.InstantiateDetached(prefab)!;
 
-        Assert.Equal(1, instance!.PrefabComponentCount);
-        Assert.Equal(1, instance.PrefabChildCount);
+            // What tells a prefab-provided component from one the instance adds later. Position is
+            // not used, so reordering cannot reclassify anything.
+            MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
+            Assert.NotEqual(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
+            Assert.NotEqual(Guid.Empty, instance.Children[0].SourceIdentifier);
+        }
+        finally { Application.IsEditor = wasEditor; }
+    }
+
+    [Fact]
+    public void Instantiate_OutsideTheEditor_RecordsOnlyWhichPrefabItIs()
+    {
+        var source = CreateGameObject("Root");
+        source.AddComponent<SerializableComponent>();
+        CreateGameObject("Child").SetParent(source);
+        Guid assetId = Guid.NewGuid();
+        var prefab = MakePrefab(source, assetId);
+
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = false;
+        try
+        {
+            var instance = GameObject.InstantiateDetached(prefab)!;
+
+            // Which prefab an object came from is what a game can see and act on. Which prefab object
+            // it was is bookkeeping for matching overrides, which nothing outside the editor does, and
+            // which a built scene does not carry either.
+            Assert.True(instance.IsPrefabInstance);
+            Assert.Equal(assetId, instance.PrefabAssetId);
+            Assert.Equal(assetId, instance.Children[0].PrefabAssetId);
+
+            MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
+            Assert.Equal(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
+            Assert.Equal(Guid.Empty, instance.Children[0].SourceIdentifier);
+        }
+        finally { Application.IsEditor = wasEditor; }
+    }
+
+    [Fact]
+    public void Instantiate_OutsideTheEditor_StillGivesEveryInstanceItsOwnIdentifiers()
+    {
+        var source = CreateGameObject("Root");
+        source.AddComponent<SerializableComponent>();
+        var prefab = MakePrefab(source, Guid.NewGuid());
+
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = false;
+        try
+        {
+            var a = GameObject.InstantiateDetached(prefab)!;
+            var b = GameObject.InstantiateDetached(prefab)!;
+
+            // Skipping the bookkeeping must not mean two spawns wearing one identity.
+            Assert.NotEqual(a.Identifier, b.Identifier);
+            Assert.NotEqual(a.GetComponents<MonoBehaviour>().First().Identifier,
+                            b.GetComponents<MonoBehaviour>().First().Identifier);
+        }
+        finally { Application.IsEditor = wasEditor; }
+    }
+
+    [Fact]
+    public void Instantiate_ComponentAddedAfterwardsHasNoSource()
+    {
+        var source = CreateGameObject("Root");
+        source.AddComponent<SerializableComponent>();
+        var prefab = MakePrefab(source, Guid.NewGuid());
+
+        var instance = GameObject.InstantiateDetached(prefab)!;
+        MonoBehaviour added = instance.AddComponent<SerializableComponent>();
+
+        Assert.Equal(Guid.Empty, instance.GetComponentSourceIdentifier(added));
     }
 
     [Fact]
@@ -125,15 +197,20 @@ public class PrefabTests : RuntimeTestBase
         child.SetParent(source);
         var prefab = MakePrefab(source, id);
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         Assert.Equal(id, instance!.Children[0].PrefabAssetId);
     }
 
+    /// <summary>
+    /// Stamping stops at a child that already belongs to a different prefab, rather than overwriting
+    /// every descendant. The editor flattens prefabs on import, so data reaching this is not something
+    /// it writes any more, but the guard is what keeps stamping from running past a boundary it was
+    /// handed and is worth pinning on its own.
+    /// </summary>
     [Fact]
-    public void Instantiate_PreservesNestedPrefabId()
+    public void Instantiate_StampingStopsAtAForeignPrefabId()
     {
-        // A child that is itself a different prefab instance must keep its own PrefabAssetId.
         var outerId = Guid.NewGuid();
         var nestedId = Guid.NewGuid();
 
@@ -145,14 +222,14 @@ public class PrefabTests : RuntimeTestBase
         nested.SetParent(source);
 
         var prefab = MakePrefab(source, outerId);
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         var normalClone = instance!.Children.Single(c => c.Name == "Normal");
         var nestedClone = instance.Children.Single(c => c.Name == "Nested");
 
         Assert.Equal(outerId, instance.PrefabAssetId);
         Assert.Equal(outerId, normalClone.PrefabAssetId);
-        Assert.Equal(nestedId, nestedClone.PrefabAssetId); // boundary respected
+        Assert.Equal(nestedId, nestedClone.PrefabAssetId);
     }
 
     [Fact]
@@ -161,7 +238,7 @@ public class PrefabTests : RuntimeTestBase
         var prefab = MakePrefab(CreateGameObject("Root"), Guid.NewGuid());
         var scene = CreateScene(enable: true);
 
-        var instance = prefab.Instantiate()!;
+        var instance = GameObject.InstantiateDetached(prefab)!;
         scene.Add(instance);
 
         Assert.Same(scene, instance.Scene);
@@ -186,6 +263,30 @@ public class PrefabTests : RuntimeTestBase
     }
 
     [Fact]
+    public void AnOrdinaryGameObjectCarriesNoPrefabLink()
+    {
+        var go = CreateGameObject();
+
+        // The whole reason the data sits behind a reference: the overwhelming majority of objects in a
+        // scene are not prefab instances and should cost one null field.
+        Assert.Null(go.PrefabLink);
+        Assert.False(go.IsPrefabInstance);
+        Assert.False(go.HasPrefabOverrides);
+    }
+
+    [Fact]
+    public void AskingWhetherThereAreOverridesDoesNotAllocateALink()
+    {
+        var go = CreateGameObject();
+
+        // PrefabOverrides itself is the mutable accessor, so reading it does create the link. The
+        // cheap query is what callers sweeping a scene are meant to use, and it has to stay cheap or
+        // every object in the scene grows one.
+        Assert.False(go.HasPrefabOverrides);
+        Assert.Null(go.PrefabLink);
+    }
+
+    [Fact]
     public void PrefabOverrides_IsNeverNull()
     {
         var go = CreateGameObject();
@@ -198,16 +299,12 @@ public class PrefabTests : RuntimeTestBase
     {
         var go = CreateGameObject();
         go.PrefabAssetId = Guid.NewGuid();
-        go.PrefabComponentCount = 3;
-        go.PrefabChildCount = 2;
-        go.PrefabOverrides.Add(new PropertyOverride { Path = "$.X" });
+        go.PrefabOverrides.Add(new PropertyOverride { Path = $"{Guid.NewGuid()}/$/TagIndex" });
 
         go.ClearPrefabData();
 
         Assert.False(go.IsPrefabInstance);
         Assert.Equal(Guid.Empty, go.PrefabAssetId);
-        Assert.Equal(-1, go.PrefabComponentCount);
-        Assert.Equal(-1, go.PrefabChildCount);
         Assert.Empty(go.PrefabOverrides);
     }
 
@@ -254,19 +351,23 @@ public class PrefabTests : RuntimeTestBase
     public void PrefabInstance_RoundTrip_PreservesPrefabData()
     {
         var id = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
         var go = CreateGameObject("Instance");
         go.PrefabAssetId = id;
-        go.PrefabComponentCount = 2;
-        go.PrefabChildCount = 1;
-        go.PrefabOverrides.Add(new PropertyOverride { Path = "$.TagIndex", Value = Serializer.Serialize(5) });
+        go.PrefabOverrides.Add(new PropertyOverride
+        {
+            Path = $"{sourceId}/$/TagIndex",
+            Value = Serializer.Serialize(5)
+        });
 
         var clone = RoundTrip(go);
 
         Assert.Equal(id, clone.PrefabAssetId);
-        Assert.Equal(2, clone.PrefabComponentCount);
-        Assert.Equal(1, clone.PrefabChildCount);
         Assert.Single(clone.PrefabOverrides);
-        Assert.Equal("$.TagIndex", clone.PrefabOverrides[0].Path);
+        Assert.Equal($"{sourceId}/$/TagIndex", clone.PrefabOverrides[0].Path);
+
+        // The value has to survive too. A path with nothing behind it applies nothing.
+        Assert.Equal(5, Serializer.Deserialize<int>(clone.PrefabOverrides[0].Value));
     }
 
     [Fact]

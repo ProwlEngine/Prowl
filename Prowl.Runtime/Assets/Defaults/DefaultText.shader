@@ -1,4 +1,4 @@
-Shader "Default/DefaultText"
+Shader "UI/Text"
 
 Properties
 {

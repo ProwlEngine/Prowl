@@ -428,8 +428,8 @@ public class TerrainEditor : CustomEditor
         EditorGUI.SectionHeader(paper, $"{id}_mh", "Materials", first: true);
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), terrain.Material,
             v => terrain.Material = (AssetRef<Material>)v!, 0);
-        PropertyGridUtils.DrawField(paper, $"{id}_grassmat", "Grass Material", typeof(AssetRef<Material>), terrain.GrassMaterial,
-            v => { terrain.GrassMaterial = (AssetRef<Material>)v!; terrain.InvalidateGrassCache(); }, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_detailmat", "Detail Material", typeof(AssetRef<Material>), terrain.DetailMaterial,
+            v => { terrain.DetailMaterial = (AssetRef<Material>)v!; terrain.InvalidateDetailCache(); }, 0);
 
         EditorGUI.SectionHeader(paper, $"{id}_dh", "Dimensions");
         EditorGUI.Row(paper, $"{id}_size", "Terrain Size", () =>
@@ -438,7 +438,7 @@ public class TerrainEditor : CustomEditor
             Origami.NumericField<float>(paper, $"{id}_height_v", data.Height, v => { data.Height = MathF.Max(0.1f, v); _isDirty = true; }).Min(0.1f).Show());
         EditorGUI.Row(paper, $"{id}_interp", "Interpolation", () =>
             Origami.EnumDropdown(paper, $"{id}_interp_v", data.Interpolation,
-                v => { data.Interpolation = v; _isDirty = true; terrain.InvalidateGrassCache(); }).Show());
+                v => { data.Interpolation = v; _isDirty = true; terrain.InvalidateDetailCache(); }).Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_rh", "Resolutions");
         string[] hmOptions = ["33", "65", "129", "257", "513", "1025", "2049", "4097"];
@@ -467,6 +467,22 @@ public class TerrainEditor : CustomEditor
                         () => { data.ResizeSplatmap(newRes); _isDirty = true; });
             }, smOptions).Show());
 
+        string[] dmOptions = ["64", "128", "256", "512", "1024", "2048"];
+        int dmCurrent = Array.IndexOf(dmOptions, data.DetailResolution.ToString());
+        if (dmCurrent < 0) dmCurrent = 4; // default 1024
+        EditorGUI.Row(paper, $"{id}_dmres", "Detail Map", () =>
+            Origami.Dropdown(paper, $"{id}_dmres_v", dmCurrent, v =>
+            {
+                int newRes = int.Parse(dmOptions[v]);
+                if (newRes != data.DetailResolution)
+                {
+                    // Resampled rather than reset, so painted detail survives the change
+                    data.ResizeDetailMaps(newRes);
+                    _isDirty = true;
+                    terrain.InvalidateDetailCache();
+                }
+            }, dmOptions).Show());
+
         string[] meshOptions = ["16", "32", "64", "128"];
         int meshCurrent = Array.IndexOf(meshOptions, terrain.MeshResolution.ToString());
         if (meshCurrent < 0) meshCurrent = 0;
@@ -483,15 +499,16 @@ public class TerrainEditor : CustomEditor
                 v => { terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_vh", "Vegetation");
-        EditorGUI.Row(paper, $"{id}_grassdist", "Grass View Distance", () =>
-            Origami.Slider(paper, $"{id}_grassdist_v", terrain.GrassDistance,
-                v => { terrain.GrassDistance = MathF.Max(1f, v); }, 10f, 1000f).Format("F0").Show());
-        EditorGUI.Row(paper, $"{id}_grassfade", "Grass Fade Start", () =>
-            Origami.Slider(paper, $"{id}_grassfade_v", terrain.GrassFadeStart,
-                v => { terrain.GrassFadeStart = Math.Clamp(v, 0f, 0.99f); }, 0f, 0.99f).Format("F2").Show());
-        EditorGUI.Row(paper, $"{id}_grassdensity", "Grass Density", () =>
-            Origami.Slider(paper, $"{id}_grassdensity_v", terrain.GrassDensityMultiplier,
-                v => { terrain.GrassDensityMultiplier = MathF.Max(0f, v); terrain.InvalidateGrassCache(); }, 0f, 4f).Format("F2").Show());
+        EditorGUI.Row(paper, $"{id}_detaildist", "Detail Distance", () =>
+            Origami.Slider(paper, $"{id}_detaildist_v", terrain.DetailDistance,
+                v => { terrain.DetailDistance = MathF.Max(1f, v); }, 10f, 1000f).Format("F0").Show());
+        EditorGUI.Row(paper, $"{id}_detaildensity", "Detail Density", () =>
+            Origami.Slider(paper, $"{id}_detaildensity_v", terrain.DetailDensity,
+                v => { terrain.DetailDensity = MathF.Max(0.05f, v); }, 0.25f, 8f).Format("F2").Show());
+        EditorGUI.Row(paper, $"{id}_detailcascades", "Detail Cascades", () =>
+            Origami.IntSlider(paper, $"{id}_detailcascades_v", terrain.DetailCascades,
+                v => { terrain.DetailCascades = Math.Clamp(v, 1, TerrainDetailRenderer.kMaxCascades); },
+                1, TerrainDetailRenderer.kMaxCascades).Show());
         EditorGUI.Row(paper, $"{id}_treedist", "Tree View Distance", () =>
             Origami.Slider(paper, $"{id}_treedist_v", terrain.TreeDistance,
                 v => { terrain.TreeDistance = MathF.Max(1f, v); }, 50f, 2000f).Format("F0").Show());
@@ -733,8 +750,8 @@ public class TerrainEditor : CustomEditor
     {
         int res = data.HeightmapResolution;
         float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        int cx = (int)MathF.Round(uv.X * (res - 1));
+        int cz = (int)MathF.Round(uv.Y * (res - 1));
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)
@@ -800,9 +817,9 @@ public class TerrainEditor : CustomEditor
     private static void ApplySplatBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
     {
         int res = data.SplatmapResolution;
-        float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        float radiusPixels = BrushSize / data.Size * res;
+        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
+        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)
@@ -866,9 +883,9 @@ public class TerrainEditor : CustomEditor
         byte value = shiftHeld ? (byte)255 : (byte)0; // Shift = fill, normal = dig hole
 
         int res = data.SplatmapResolution;
-        float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        float radiusPixels = BrushSize / data.Size * res;
+        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
+        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)
@@ -896,9 +913,9 @@ public class TerrainEditor : CustomEditor
         float sign = shiftHeld ? -1f : 1f;
 
         int res = data.DetailResolution;
-        float radiusPixels = BrushSize / data.Size * (res - 1);
-        int cx = (int)(uv.X * (res - 1));
-        int cz = (int)(uv.Y * (res - 1));
+        float radiusPixels = BrushSize / data.Size * res;
+        int cx = Math.Clamp((int)(uv.X * res), 0, res - 1);
+        int cz = Math.Clamp((int)(uv.Y * res), 0, res - 1);
         int r = (int)MathF.Ceiling(radiusPixels);
 
         for (int z = cz - r; z <= cz + r; z++)
@@ -990,7 +1007,7 @@ public class TerrainEditor : CustomEditor
     private void MarkDetailsDirty()
     {
         _isDirty = true;
-        if (_terrain.IsValid()) _terrain.InvalidateGrassCache();
+        if (_terrain.IsValid()) _terrain.InvalidateDetailCache();
     }
 
     // Static accessor for the scene editor to find the active TerrainEditor instance
@@ -1042,7 +1059,7 @@ public class TerrainEditor : CustomEditor
             var terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain == null) continue;
 
-            terrain.InvalidateGrassCache();
+            terrain.InvalidateDetailCache();
 
             // Re-mark GPU textures as dirty so they regenerate
             var data = terrain.Data.Res;

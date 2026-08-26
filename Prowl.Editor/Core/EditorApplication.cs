@@ -21,6 +21,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.Core;
 
@@ -171,6 +172,10 @@ public class EditorApplication : Game
         {
             var eo = target as Runtime.EngineObject;
             if (eo.IsValid()) eo.OnValidate();
+
+            // Record the edit against the prefab it belongs to as it happens, rather than relying on
+            // something drawing this object again later.
+            PrefabUtility.NotifyEdited(target);
         };
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
@@ -344,10 +349,11 @@ public class EditorApplication : Game
         // (taken last frame) against the current state to detect changes.
         Undo.FlushFrame();
 
-        // Escape always unlocks cursor in editor
-        if (Input.GetKeyDown(KeyCode.Escape) && Input.CursorLocked)
+        // Escape always releases the cursor in editor.
+        if (Input.GetKeyDown(KeyCode.Escape) && (Input.CursorLockState != CursorLockMode.None || !Input.CursorVisible))
         {
             Input.UnlockCursor();
+            Input.CursorVisible = true;
         }
 
         // Global keyboard shortcuts
@@ -1520,11 +1526,24 @@ public class EditorApplication : Game
     {
         if (Application.IsPlaying) return;
 
+        // Playing the prefab editing scene would run the editor-only camera/light rig, and stopping
+        // restores it as the "editor scene", from where a save writes runtime state to the prefab.
+        if (PrefabEditingMode.IsEditing)
+        {
+            Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
+            return;
+        }
+
         var scene = Runtime.Resources.Scene.Current;
         if (scene == null) return;
 
         // Save active tab (to restore on stop)
         SaveActiveTab();
+
+        // An edit the inspector never saw is only a raw value on the objects, and stopping restores
+        // this snapshot and brings its instances back into line with their prefabs. Record it as an
+        // override first or the round trip through play mode is what drops it.
+        PrefabUtility.ReconcileOpenScene();
 
         // Serialize the current editor scene
         _savedEditorScene = Echo.Serializer.Serialize(scene);
@@ -1600,6 +1619,10 @@ public class EditorApplication : Game
             Undo.Clear();
             _savedEditorScene = null;
         }
+
+        // Don't inherit cursor state the game left behind
+        Input.CursorLockState = CursorLockMode.None;
+        Input.CursorVisible = true;
 
         // Pop play-mode input handler
         if (Input.Current is GameViewInputHandler)

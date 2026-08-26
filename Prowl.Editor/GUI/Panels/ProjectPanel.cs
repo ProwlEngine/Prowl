@@ -20,6 +20,7 @@ using Prowl.Editor.Utils;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -49,6 +50,23 @@ public class ProjectPanel : DockPanel
 
     // Handled Virtual (Placeholder) content to be displayed with normal objects
     public List<ContentItem> VirtualContentItems = new();
+
+    // The content model is rebuilt only when something it derives from moves, since the panel itself
+    // redraws every frame.
+    private List<ContentItem>? _contentCache;
+    private int _contentCacheVersion = -1;
+    private string _contentCacheFolder = "";
+    private string _contentCacheSearch = "";
+    private int _contentCacheVirtualCount = -1;
+    private SortMode _contentCacheSort;
+    private bool _contentCacheGroupByType;
+    private bool _contentCacheShowHidden;
+
+    // The folder tree depends only on the folder index. Expansion and selection live outside the nodes
+    // (Paper element storage and Selection), so they survive the nodes being reused.
+    private List<OrigamiUI.TreeNode>? _folderTreeNodes;
+    private List<object>? _folderTreeItems;
+    private int _folderTreeVersion = -1;
 
     public string CurrentFolder => _currentFolder;
     private string _currentFolder = ""; // Relative to Assets/, empty = Assets root
@@ -230,8 +248,10 @@ public class ProjectPanel : DockPanel
                 DragDrop.EndDrag();
                 break;
             case GameObjectDragPayload gp:
-                foreach (var go in gp.GameObjects)
-                    if (go != null) CreatePrefabInFolder(go, targetFolder);
+                // Roots only: making a prefab of a parent already captures its children, and making
+                // one of a child afterwards would tear that subtree back out of the parent's instance.
+                foreach (var go in GameObjectClipboard.FilterToRoots(gp.GameObjects.Where(g => g != null)))
+                    CreatePrefabInFolder(go, targetFolder);
                 DragDrop.EndDrag();
                 break;
         }
@@ -460,17 +480,7 @@ public class ProjectPanel : DockPanel
     /// (assets-relative; empty = root). Uniquifies the filename against what's already there.
     /// </summary>
     private static void CreatePrefabInFolder(GameObject go, string destRelFolder)
-    {
-        if (Project.Current == null) return;
-        string absFolder = string.IsNullOrEmpty(destRelFolder)
-            ? Project.Current.AssetsPath
-            : Path.Combine(Project.Current.AssetsPath, destRelFolder);
-        if (!Directory.Exists(absFolder)) return;
-
-        string uniqueName = AssetCreateMenu.FindUniqueName(absFolder, go.Name, ".prefab");
-        string relPath = string.IsNullOrEmpty(destRelFolder) ? uniqueName : destRelFolder + "/" + uniqueName;
-        Prefabs.PrefabUtility.CreatePrefab(go, relPath);
-    }
+        => AssetCreateMenu.CreatePrefabIn(go, destRelFolder);
 
     /// <summary>
     /// True when an <see cref="AssetDragPayload"/> could meaningfully land in
@@ -526,24 +536,36 @@ public class ProjectPanel : DockPanel
             // Right-click background show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_tree_bg_ctx");
 
-            // Build flat node list by walking directories recursively
-            var nodes = new List<OrigamiUI.TreeNode>();
-            BuildFolderNodes(nodes, "", "Assets", 0);
-
-            // Build a parallel ContentItem list for multi-select via Selection.HandleListClick
-            var folderItems = new List<object>();
-            foreach (var n in nodes)
+            // Flat node list from a recursive walk, plus a parallel ContentItem list for multi-select
+            // via Selection.HandleListClick. Both depend only on the folder index, so they are rebuilt
+            // when it moves rather than every frame.
+            int treeVersion = EditorAssetBackend.Instance?.ContentVersion ?? -1;
+            if (_folderTreeNodes == null || _folderTreeVersion != treeVersion)
             {
-                string relPath = (string)n.UserData!;
-                folderItems.Add(new ContentItem
+                var builtNodes = new List<OrigamiUI.TreeNode>();
+                BuildFolderNodes(builtNodes, "", "Assets", 0);
+
+                var builtItems = new List<object>(builtNodes.Count);
+                foreach (var n in builtNodes)
                 {
-                    Name = n.Label,
-                    RelativePath = relPath,
-                    IsFolder = true,
-                    Icon = EditorIcons.Folder,
-                    TypeLabel = "Folder"
-                });
+                    string relPath = (string)n.UserData!;
+                    builtItems.Add(new ContentItem
+                    {
+                        Name = n.Label,
+                        RelativePath = relPath,
+                        IsFolder = true,
+                        Icon = EditorIcons.Folder,
+                        TypeLabel = "Folder"
+                    });
+                }
+
+                _folderTreeNodes = builtNodes;
+                _folderTreeItems = builtItems;
+                _folderTreeVersion = treeVersion;
             }
+
+            var nodes = _folderTreeNodes;
+            var folderItems = _folderTreeItems!;
 
             Origami.Tree(paper, "proj_tree", FolderTreeWidth, height)
                 .Nodes(nodes)
@@ -1470,6 +1492,32 @@ public class ProjectPanel : DockPanel
     // ================================================================
 
     private List<ContentItem> GetContentEntries(EditorAssetBackend db)
+    {
+        if (_contentCache != null
+            && _contentCacheVersion == db.ContentVersion
+            && _contentCacheFolder == _currentFolder
+            && _contentCacheSearch == _searchText
+            && _contentCacheVirtualCount == VirtualContentItems.Count
+            && _contentCacheSort == _sortBy
+            && _contentCacheGroupByType == _groupByType
+            && _contentCacheShowHidden == _showHidden)
+            return _contentCache;
+
+        var built = BuildContentEntries(db);
+
+        _contentCache = built;
+        _contentCacheVersion = db.ContentVersion;
+        _contentCacheFolder = _currentFolder;
+        _contentCacheSearch = _searchText;
+        _contentCacheVirtualCount = VirtualContentItems.Count;
+        _contentCacheSort = _sortBy;
+        _contentCacheGroupByType = _groupByType;
+        _contentCacheShowHidden = _showHidden;
+
+        return built;
+    }
+
+    private List<ContentItem> BuildContentEntries(EditorAssetBackend db)
     {
         // Folders and files come from the asset database's cached index (single source of truth),
         // not per-frame filesystem calls.

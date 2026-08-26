@@ -1,4 +1,4 @@
-Shader "Default/GradientSkybox"
+Shader "Skybox/Gradient"
 
 Properties
 {

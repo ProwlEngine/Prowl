@@ -1,4 +1,4 @@
-Shader "Default/EnhancedBokehdoF"
+Shader "Hidden/Post Process/Depth of Field"
 
 Properties
 {

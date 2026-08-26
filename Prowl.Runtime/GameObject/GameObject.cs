@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -19,16 +20,18 @@ namespace Prowl.Runtime;
 /// The Base Class for all Object/Entities in a Scene.
 /// Holds a collection of Components that contain the logic for this Object/Entity
 /// </summary>
-public class GameObject : EngineObject, ISerializable
+public partial class GameObject : EngineObject, ISerializable
 {
     #region Private Fields/Properties
 
     // The hot reload walk migrates this list in place; a removed-type component becomes null and is cleaned up
     // in OnHotReload.
+    [ManuallyCloned]
     internal List<MonoBehaviour> _components = [];
     // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
-    [ReloadIgnore] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
+    [ReloadIgnore, ManuallyCloned] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
     private bool _static = false;
@@ -38,19 +41,18 @@ public class GameObject : EngineObject, ISerializable
 
     // We don't serialize parent, since if we want to serialize X object who is a child to Y object, we don't want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
+    [ManuallyCloned]
     private GameObject? _parent;
 
     [SerializeField]
     private Transform _transform = new();
 
-    [SerializeIgnore]
+    [SerializeIgnore, ManuallyCloned]
     private WeakReference<Scene> _scene;
 
-    // Prefab instance data (inert when _prefabAssetId == Guid.Empty)
-    private Guid _prefabAssetId = Guid.Empty;
-    private List<PropertyOverride>? _prefabOverrides;
-    private int _prefabComponentCount = -1; // Number of components in prefab source (-1 = not prefab)
-    private int _prefabChildCount = -1;     // Number of children in prefab source (-1 = not prefab)
+    // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
+    // than a copy of each value on every GameObject in the scene.
+    private PrefabLink? _prefabLink;
 
     #endregion
 
@@ -102,10 +104,12 @@ public class GameObject : EngineObject, ISerializable
     /// <summary>Set the identifier. Used by Scene to restore stable identities after deserialization.</summary>
     internal void SetIdentifier(Guid id) => _identifier = id;
 
+
     /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? Parent => _parent;
 
     /// <summary> A List of all children of this GameObject </summary>
+    [ManuallyCloned]
     public List<GameObject> Children = [];
 
     public int ChildCount => Children.Count;
@@ -122,48 +126,70 @@ public class GameObject : EngineObject, ISerializable
         internal set => _scene = new(value);
     }
 
-    /// <summary>Is this GameObject a prefab instance?</summary>
-    public bool IsPrefabInstance => _prefabAssetId != Guid.Empty;
+    /// <summary>
+    /// What ties this object to a prefab, or null when it is not a prefab instance. Internal, along
+    /// with everything below that writes to it: these values only mean anything as a set, and
+    /// nothing here can check one against another. Read them through the properties below.
+    /// </summary>
+    internal PrefabLink? PrefabLink => _prefabLink;
+
+    /// <summary>
+    /// Whether this one object carries a link to a prefab. The weakest of the questions that can be
+    /// asked, and the wrong one for anything that goes on to act on the instance as a whole: see the
+    /// note above the queries in <c>PrefabUtility</c> for which to ask instead.
+    /// </summary>
+    public bool IsPrefabInstance => _prefabLink != null && _prefabLink.AssetId != Guid.Empty;
+
+    /// <summary>Creates the prefab link if this object does not have one yet.</summary>
+    internal PrefabLink EnsurePrefabLink() => _prefabLink ??= new PrefabLink();
 
     /// <summary>The prefab asset GUID, or Guid.Empty if not a prefab instance.</summary>
     public Guid PrefabAssetId
     {
-        get => _prefabAssetId;
-        set => _prefabAssetId = value;
+        get => _prefabLink?.AssetId ?? Guid.Empty;
+        internal set { if (value != Guid.Empty || _prefabLink != null) EnsurePrefabLink().AssetId = value; }
     }
 
-    /// <summary>Per-instance property overrides for this prefab instance.</summary>
-    public List<PropertyOverride> PrefabOverrides
+    /// <summary>
+    /// The identifier of the object in the prefab this one was built from. Empty when this is not a
+    /// prefab instance.
+    /// </summary>
+    public Guid SourceIdentifier
     {
-        get => _prefabOverrides ??= new();
-        set => _prefabOverrides = value;
+        get => _prefabLink?.SourceIdentifier ?? Guid.Empty;
+        internal set { if (value != Guid.Empty || _prefabLink != null) EnsurePrefabLink().SourceIdentifier = value; }
     }
 
-    /// <summary>Number of components in the prefab source. Used for structure enforcement.</summary>
-    public int PrefabComponentCount
+    /// <summary>
+    /// Per-instance property overrides for this prefab instance. The list is handed out live, so this
+    /// is internal in both directions; <c>PrefabUtility.GetPropertyModifications</c> is how anything
+    /// else reads them.
+    /// </summary>
+    internal List<PropertyOverride> PrefabOverrides
     {
-        get => _prefabComponentCount;
-        set => _prefabComponentCount = value;
+        get => EnsurePrefabLink().Overrides;
+        set => EnsurePrefabLink().Overrides = value;
     }
 
-    /// <summary>Number of children in the prefab source. Used for structure enforcement.</summary>
-    public int PrefabChildCount
-    {
-        get => _prefabChildCount;
-        set => _prefabChildCount = value;
-    }
+    /// <summary>Overrides without creating a link for an object that has none.</summary>
+    public bool HasPrefabOverrides => _prefabLink is { Overrides.Count: > 0 };
 
-    /// <summary>Clear all prefab tracking data on this GameObject.</summary>
-    public void ClearPrefabData()
+    /// <summary>The identifier of the component in the prefab that <paramref name="component"/> came
+    /// from, or Guid.Empty when it is not part of the prefab. The component itself holds this; the
+    /// method stays because callers read it while walking an object's components.</summary>
+    public Guid GetComponentSourceIdentifier(MonoBehaviour component) => component.SourceIdentifier;
+
+    /// <summary>Clear all prefab tracking data on this GameObject and its components.</summary>
+    internal void ClearPrefabData()
     {
-        _prefabAssetId = Guid.Empty;
-        _prefabOverrides = null;
-        _prefabComponentCount = -1;
-        _prefabChildCount = -1;
+        _prefabLink = null;
+        foreach (MonoBehaviour component in _components)
+            if (component.IsValid())
+                component.SourceIdentifier = Guid.Empty;
     }
 
     /// <summary>Clear all prefab data on this GameObject and all descendants.</summary>
-    public void ClearPrefabDataRecursive()
+    internal void ClearPrefabDataRecursive()
     {
         ClearPrefabData();
         foreach (var child in Children)
@@ -659,17 +685,47 @@ public class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <typeparam name="T">The type of component to remove.</typeparam>
     /// <param name="component">The component instance to remove.</param>
-    public void RemoveComponent<T>(T component) where T : MonoBehaviour
+    /// <inheritdoc cref="RemoveComponent(MonoBehaviour)"/>
+    public bool RemoveComponent<T>(T component) where T : MonoBehaviour
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
-        RemoveComponent((MonoBehaviour)component);
+        return RemoveComponent((MonoBehaviour)component);
     }
 
     /// <summary>
     /// Removes a specific component from the GameObject.
+    /// <para/>
+    /// A component the prefab provides is not the instance's to remove while the editor is the thing
+    /// holding it: nothing records that it went, so the next time the instance is brought back into
+    /// line with its prefab it would simply reappear. Unpack the instance, or take the component off
+    /// the prefab. In play mode and in a player nothing refreshes an instance, so nothing stands in
+    /// the way there.
     /// </summary>
     /// <param name="component">The component instance to remove.</param>
-    public void RemoveComponent(MonoBehaviour component)
+    /// <returns>
+    /// Whether it was removed. False means the prefab provides it, which is the one case this refuses,
+    /// and a caller that needs it gone has to break the link or change the prefab first.
+    /// </returns>
+    public bool RemoveComponent(MonoBehaviour component)
+    {
+        ArgumentNullException.ThrowIfNull(component, nameof(component));
+
+        if (!Application.IsPlaying && IsPrefabInstance && GetComponentSourceIdentifier(component) != Guid.Empty)
+        {
+            Debug.LogWarning($"[Prefab] '{component.GetType().Name}' on '{Name}' comes from a prefab, " +
+                "so it cannot be removed from this instance. Unpack the instance, or remove it from the prefab.");
+            return false;
+        }
+
+        RemoveComponentInternal(component);
+        return true;
+    }
+
+    /// <summary>
+    /// Removes a component without asking where it came from. For teardown, and for the prefab
+    /// machinery taking one away precisely because the prefab stopped providing it.
+    /// </summary>
+    internal void RemoveComponentInternal(MonoBehaviour component)
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
         if (component.CanDestroy() == false) return;
@@ -707,11 +763,11 @@ public class GameObject : EngineObject, ISerializable
     /// Removes a specific component from the GameObject By its Identifier.
     /// </summary>
     /// <param name="component">The component identifier to remove.</param>
-    public void RemoveComponent(Guid component)
+    /// <inheritdoc cref="RemoveComponent(MonoBehaviour)"/>
+    public bool RemoveComponent(Guid component)
     {
         MonoBehaviour? comp = GetComponentByIdentifier(component);
-        if (comp.IsValid())
-            RemoveComponent(comp);
+        return comp.IsValid() && RemoveComponent(comp!);
     }
 
     /// <summary>
@@ -1177,17 +1233,10 @@ public class GameObject : EngineObject, ISerializable
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
         compoundTag.Add("Children", children);
 
-        // Prefab data (only written for prefab instances)
-        if (_prefabAssetId != Guid.Empty)
-        {
-            compoundTag.Add("PrefabAssetId", new EchoObject(_prefabAssetId.ToString()));
-            if (_prefabOverrides is { Count: > 0 })
-                compoundTag.Add("PrefabOverrides", Serializer.Serialize(typeof(object), _prefabOverrides, ctx));
-            if (_prefabComponentCount >= 0)
-                compoundTag.Add("PrefabComponentCount", new EchoObject(_prefabComponentCount));
-            if (_prefabChildCount >= 0)
-                compoundTag.Add("PrefabChildCount", new EchoObject(_prefabChildCount));
-        }
+        // One block, absent entirely for an ordinary GameObject, and a build can drop the editor-only
+        // parts of it without hunting for keys scattered across the object.
+        if (_prefabLink != null)
+            compoundTag.Add("Prefab", Serializer.Serialize(typeof(PrefabLink), _prefabLink, ctx));
     }
 
     /// <summary>
@@ -1201,8 +1250,13 @@ public class GameObject : EngineObject, ISerializable
     {
         DeserializeHeader(value);
 
-        // Always generate fresh identifier Scene restores them after deserialization
-        _identifier = Guid.NewGuid();
+        // Always a fresh identity - Scene restores the real one by index once the whole graph has
+        // loaded, and a copy of an object must not come back wearing the original's identifier.
+        // Unless the caller asked for the stored ones, which is how a load can be told which
+        // serialized object each live one came from.
+        _identifier = PreservingIdentifiers && Guid.TryParse(value["Identifier"]?.StringValue, out Guid storedId)
+            ? storedId
+            : Guid.NewGuid();
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;
@@ -1210,15 +1264,10 @@ public class GameObject : EngineObject, ISerializable
         LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
         HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
 
-        // Prefab data
-        if (Guid.TryParse(value.Get("PrefabAssetId")?.StringValue, out Guid prefabId))
-            _prefabAssetId = prefabId;
-        if (value.TryGet("PrefabOverrides", out var overridesTag))
-            _prefabOverrides = Serializer.Deserialize<List<PropertyOverride>>(overridesTag, ctx);
-        if (value.TryGet("PrefabComponentCount", out var compCount))
-            _prefabComponentCount = compCount.IntValue;
-        if (value.TryGet("PrefabChildCount", out var childCount))
-            _prefabChildCount = childCount.IntValue;
+        // Absent for an ordinary GameObject, which then allocates nothing for it.
+        _prefabLink = value.TryGet("Prefab", out var linkTag)
+            ? Serializer.Deserialize<PrefabLink>(linkTag, ctx)
+            : null;
 
         // A GameObject always needs a Transform. If the serialized one can't be restored (e.g. an
         // unresolved forward $id reference from a scene's flat-array + nested-children encoding), fall

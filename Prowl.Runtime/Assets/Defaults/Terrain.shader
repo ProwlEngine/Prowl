@@ -96,8 +96,8 @@ Pass "Terrain"
                 vec2 texSize = vec2(textureSize(_Heightmap, 0));
                 vec2 invTexSize = 1.0 / texSize;
 
-                // Transform to texel space
-                vec2 coord = uv * texSize - 0.5;
+                // Transform to sample grid space (heights are a vertex grid)
+                vec2 coord = uv * (texSize - 1.0);
                 vec2 f = fract(coord);
                 coord -= f;
 
@@ -114,15 +114,16 @@ Pass "Terrain"
                 vec2 w2 = -1.5 * f3 + 2.0 * f2 + 0.5 * f;
                 vec2 w3 =  0.5 * f3 - 0.5 * f2;
 
-                // Combine pairs for 4-tap bilinear trick
-                vec2 s0 = w0 + w1;
-                vec2 s1 = w2 + w3;
+                // Combine pairs for 4-tap bilinear trick. Both sums reach zero on sample-aligned
+                // coords, so they are floored to keep the tap positions finite.
+                vec2 s0 = max(w0 + w1, vec2(1e-5));
+                vec2 s1 = max(w2 + w3, vec2(1e-5));
                 vec2 f0 = w1 / s0;
                 vec2 f1 = w3 / s1;
 
-                // Compute the 4 sample positions (leveraging bilinear filtering)
-                vec2 t0 = (coord - 0.5 + f0) * invTexSize + 0.5 * invTexSize;
-                vec2 t1 = (coord + 1.5 + f1) * invTexSize + 0.5 * invTexSize;
+                // Texel-center UV of the two bilinear taps per axis
+                vec2 t0 = (coord - 0.5 + f0) * invTexSize;
+                vec2 t1 = (coord + 1.5 + f1) * invTexSize;
 
                 // 4 bilinear taps
                 float h00 = texture(_Heightmap, vec2(t0.x, t0.y)).r;
@@ -442,7 +443,7 @@ Pass "TerrainShadow"
             {
                 vec2 texSize = vec2(textureSize(_Heightmap, 0));
                 vec2 invTexSize = 1.0 / texSize;
-                vec2 coord = uv * texSize - 0.5;
+                vec2 coord = uv * (texSize - 1.0);
                 vec2 f = fract(coord);
                 coord -= f;
                 vec2 f2 = f * f; vec2 f3 = f2 * f;
@@ -450,10 +451,10 @@ Pass "TerrainShadow"
                 vec2 w1 = 1.5*f3 - 2.5*f2 + 1.0;
                 vec2 w2 = -1.5*f3 + 2.0*f2 + 0.5*f;
                 vec2 w3 = 0.5*f3 - 0.5*f2;
-                vec2 s0 = w0+w1; vec2 s1 = w2+w3;
+                vec2 s0 = max(w0+w1, vec2(1e-5)); vec2 s1 = max(w2+w3, vec2(1e-5));
                 vec2 f0 = w1/s0; vec2 f1 = w3/s1;
-                vec2 t0 = (coord-0.5+f0)*invTexSize + 0.5*invTexSize;
-                vec2 t1 = (coord+1.5+f1)*invTexSize + 0.5*invTexSize;
+                vec2 t0 = (coord-0.5+f0)*invTexSize;
+                vec2 t1 = (coord+1.5+f1)*invTexSize;
                 float h00=texture(_Heightmap,vec2(t0.x,t0.y)).r;
                 float h10=texture(_Heightmap,vec2(t1.x,t0.y)).r;
                 float h01=texture(_Heightmap,vec2(t0.x,t1.y)).r;
@@ -545,7 +546,7 @@ Pass "TerrainPrepass"
             {
                 vec2 texSize = vec2(textureSize(_Heightmap, 0));
                 vec2 invTexSize = 1.0 / texSize;
-                vec2 coord = uv * texSize - 0.5;
+                vec2 coord = uv * (texSize - 1.0);
                 vec2 f = fract(coord);
                 coord -= f;
                 vec2 f2 = f * f; vec2 f3 = f2 * f;
@@ -553,10 +554,10 @@ Pass "TerrainPrepass"
                 vec2 w1 = 1.5*f3 - 2.5*f2 + 1.0;
                 vec2 w2 = -1.5*f3 + 2.0*f2 + 0.5*f;
                 vec2 w3 = 0.5*f3 - 0.5*f2;
-                vec2 s0 = w0+w1; vec2 s1 = w2+w3;
+                vec2 s0 = max(w0+w1, vec2(1e-5)); vec2 s1 = max(w2+w3, vec2(1e-5));
                 vec2 f0 = w1/s0; vec2 f1 = w3/s1;
-                vec2 t0 = (coord-0.5+f0)*invTexSize + 0.5*invTexSize;
-                vec2 t1 = (coord+1.5+f1)*invTexSize + 0.5*invTexSize;
+                vec2 t0 = (coord-0.5+f0)*invTexSize;
+                vec2 t1 = (coord+1.5+f1)*invTexSize;
                 float h00=texture(_Heightmap,vec2(t0.x,t0.y)).r;
                 float h10=texture(_Heightmap,vec2(t1.x,t0.y)).r;
                 float h01=texture(_Heightmap,vec2(t0.x,t1.y)).r;

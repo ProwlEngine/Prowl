@@ -41,21 +41,23 @@ public class TerrainComponent : MonoBehaviour
     /// </summary>
     public float LODQuality = 1f;
 
-    /// <summary>Grass material override. If null, uses built-in Grass material.</summary>
-    public AssetRef<Material> GrassMaterial;
+    /// <summary>Detail material override. If null, uses the built-in Grass material.</summary>
+    public AssetRef<Material> DetailMaterial;
 
-    /// <summary>Maximum render distance for grass.</summary>
-    public float GrassDistance = 150f;
+    /// <summary>How far details are drawn, in world units.</summary>
+    public float DetailDistance = 150f;
 
     /// <summary>
-    /// Normalized start of the grass blade fade-out (0..1, fraction of <see cref="GrassDistance"/>).
-    /// Blades inside this radius are full size; between it and GrassDistance they shrink to zero,
-    /// hiding the hard pop that the per-patch cutoff used to show.
+    /// Detail cells per metre. 1 gives one cell every metre, so one blade per square metre where
+    /// the detail map is painted solid; 2 gives four. Cost scales with the square of this.
     /// </summary>
-    public float GrassFadeStart = 0.6f;
+    public float DetailDensity = 2f;
 
-    /// <summary>Global grass density multiplier.</summary>
-    public float GrassDensityMultiplier = 1f;
+    /// <summary>
+    /// Quality bands between the camera and <see cref="DetailDistance"/>, split evenly. Each band
+    /// out doubles its cell size, drawing a quarter as many blades as the one before it.
+    /// </summary>
+    public int DetailCascades = 4;
 
     /// <summary>Maximum render distance for trees.</summary>
     public float TreeDistance = 500f;
@@ -71,15 +73,20 @@ public class TerrainComponent : MonoBehaviour
 
     // Material instances (cloned from assets each frame so edits propagate immediately)
     [NonSerialized] private Material? _materialInstance;
-    [NonSerialized] private Material? _grassMaterialInstance;
+    [NonSerialized] private Material? _detailMaterialInstance;
 
     // Vegetation renderers
-    [NonSerialized] private TerrainGrassRenderer? _grassRenderer;
+    [NonSerialized] private TerrainMeshDetailRenderer? _meshDetailRenderer;
+    [NonSerialized] private TerrainDetailRenderer? _detailRenderer;
     [NonSerialized] private TerrainTreeRenderer? _treeRenderer;
+
+    // Wind zones nearest the camera, refreshed each frame
+    [NonSerialized] private readonly WindZone?[] _windZones = new WindZone?[WindZone.kMaxShaderZones];
+    [NonSerialized] private int _windZoneCount;
 
     // Cached default materials and textures (avoid LoadDefault every frame)
     [NonSerialized] private static Material? s_defaultTerrainMat;
-    [NonSerialized] private static Material? s_defaultGrassMat;
+    [NonSerialized] private static Material? s_defaultDetailMat;
     [NonSerialized] private static Texture2D? s_defaultWhite;
     [NonSerialized] private static Texture2D? s_defaultNormal;
 
@@ -96,8 +103,31 @@ public class TerrainComponent : MonoBehaviour
 
     #region Public Accessors
 
-    /// <summary>Invalidate cached grass patches (call after painting grass density).</summary>
-    public void InvalidateGrassCache() => _grassRenderer?.InvalidateCache();
+    /// <summary>Invalidate cached mesh-detail patches (call after painting detail density).</summary>
+    public void InvalidateDetailCache() => _meshDetailRenderer?.InvalidateCache();
+
+    /// <summary>Apply the wind zones picked this frame to a grass material.</summary>
+    internal void ApplyWindZones(Material material) => WindZone.SetMaterialUniforms(material, _windZones, _windZoneCount);
+
+    /// <summary>Push terrain transform, heightmap and wind state onto a grass material.</summary>
+    internal void ApplyDetailUniforms(Material material)
+    {
+        var data = Data.Res;
+        if (data == null) return;
+
+        Float4x4 terrainToWorld = Transform.LocalToWorldMatrix;
+        Float3 terrainUp = Float3.Normalize(Float4x4.TransformPoint(Float3.UnitY, terrainToWorld) - Float4x4.TransformPoint(Float3.Zero, terrainToWorld));
+
+        material.SetVector("_TerrainUp", terrainUp);
+        material.SetMatrix("_TerrainWorldToLocal", Transform.WorldToLocalMatrix);
+        material.SetMatrix("_TerrainLocalToWorld", terrainToWorld);
+        material.SetFloat("_TerrainSize", data.Size);
+        material.SetFloat("_TerrainHeight", data.Height);
+        var heightmap = data.GetHeightmapTexture();
+        if (heightmap != null) material.SetTexture("_Heightmap", heightmap);
+
+        ApplyWindZones(material);
+    }
 
     /// <summary>Shortcut to terrain size from the data asset.</summary>
     public float TerrainSize { get { var d = Data.Res; return d.IsValid() ? d.Size : 1024f; } }
@@ -117,8 +147,9 @@ public class TerrainComponent : MonoBehaviour
         if (_quadtree == null)
             _quadtree = new TerrainQuadtree(Float3.Zero, TerrainSize, MaxLODLevel);
 
-        _grassRenderer ??= new TerrainGrassRenderer();
-        _grassRenderer.Initialize();
+        _meshDetailRenderer ??= new TerrainMeshDetailRenderer();
+        _detailRenderer ??= new TerrainDetailRenderer();
+        _detailRenderer.Initialize();
         _treeRenderer ??= new TerrainTreeRenderer();
     }
 
@@ -128,9 +159,11 @@ public class TerrainComponent : MonoBehaviour
         if (_baseMesh.IsValid()) _baseMesh.Dispose();
         _baseMesh = null;
         _materialInstance = null;
-        _grassMaterialInstance = null;
-        _grassRenderer?.Dispose();
-        _grassRenderer = null;
+        _detailMaterialInstance = null;
+        _meshDetailRenderer?.Dispose();
+        _meshDetailRenderer = null;
+        _detailRenderer?.Dispose();
+        _detailRenderer = null;
         _treeRenderer = null;
     }
 
@@ -230,26 +263,15 @@ public class TerrainComponent : MonoBehaviour
             layer: GameObject.LayerIndex,
             properties: _properties, bounds: bounds);
 
-        // Grass
-        var grassMat = GetGrassMaterialInstance();
+        // Details
+        var grassMat = GetDetailMaterialInstance();
         if (grassMat != null && terrainData.DetailPrototypes.Count > 0)
         {
-            // Pass terrain transform info to grass shader
-            Float3 terrainUp = Float3.Normalize(Float4x4.TransformPoint(Float3.UnitY, terrainToWorld) - Float4x4.TransformPoint(Float3.Zero, terrainToWorld));
-            grassMat.SetVector("_TerrainUp", terrainUp);
-            grassMat.SetMatrix("_TerrainWorldToLocal", worldToTerrain);
-            grassMat.SetMatrix("_TerrainLocalToWorld", terrainToWorld);
-            grassMat.SetFloat("_TerrainSize", terrainSize);
-            grassMat.SetFloat("_TerrainHeight", terrainData.Height);
-            // Distance fade: blades scale from 1 at FadeStart*Distance down to 0 at Distance,
-            // smoothing the per-patch cutoff in TerrainGrassRenderer.
-            float fadeStartWorld = GrassDistance * Math.Clamp(GrassFadeStart, 0f, 0.99f);
-            grassMat.SetFloat("_GrassDistance", GrassDistance);
-            grassMat.SetFloat("_GrassFadeStart", fadeStartWorld);
-            var htex = terrainData.GetHeightmapTexture();
-            if (htex != null) grassMat.SetTexture("_Heightmap", htex);
+            _windZoneCount = WindZone.GetNearest(camera.Transform.Position, _windZones);
+            ApplyDetailUniforms(grassMat);
 
-            _grassRenderer?.CollectRenderables(terrainData, this, camera, grassMat, GrassDistance, GrassDensityMultiplier, renderables);
+            _detailRenderer?.CollectRenderables(terrainData, this, camera, grassMat, renderables);
+            _meshDetailRenderer?.CollectRenderables(terrainData, this, camera, renderables);
         }
 
         // Trees
@@ -281,20 +303,20 @@ public class TerrainComponent : MonoBehaviour
         return _materialInstance;
     }
 
-    private Material? GetGrassMaterialInstance()
+    private Material? GetDetailMaterialInstance()
     {
-        var sourceMat = GrassMaterial.Res;
+        var sourceMat = DetailMaterial.Res;
         if (sourceMat == null)
         {
-            if (s_defaultGrassMat.IsNotValid()) s_defaultGrassMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
-            sourceMat = s_defaultGrassMat;
+            if (s_defaultDetailMat.IsNotValid()) s_defaultDetailMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
+            sourceMat = s_defaultDetailMat;
         }
         if (sourceMat == null) return null;
 
         // Re-clone from source each frame so edits to the material asset
         // are reflected immediately.
-        _grassMaterialInstance = sourceMat.Clone();
-        return _grassMaterialInstance;
+        _detailMaterialInstance = sourceMat.Clone();
+        return _detailMaterialInstance;
     }
 
     #endregion

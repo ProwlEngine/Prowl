@@ -101,7 +101,7 @@ public sealed class AudioDemoGame : Game
         // Create visual markers for audio sources
         CreateVisualMarkers();
 
-        Input.SetCursorVisible(false);
+        Input.LockCursor();
         Scene.Load(scene);
     }
 
@@ -185,7 +185,7 @@ public sealed class AudioDemoGame : Game
             maxDistance: 10
         );
         staticSource.Clip = ambientClip ?? engineClip ?? musicClip;
-        staticSource.AddEffect(new ReverbEffect(44100, 2) { RoomSize = 1f });
+        staticSource.AddEffect(new ReverbEffect { RoomSize = 1f });
 
         // 2. Moving source with Doppler effect (orbiting far out)
         var moving = CreateAudioSourceAt(
@@ -356,7 +356,7 @@ public sealed class AudioDemoGame : Game
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))
-            Input.SetCursorVisible(true);
+            Input.UnlockCursor();
     }
 
     private void AnimateMovingSources()

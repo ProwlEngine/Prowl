@@ -16,7 +16,8 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".prefab")]
 public class PrefabImporter : AssetImporter
 {
-    public override int Version => 1;
+    // 2: PrefabAsset stores its tree in a backing field, so cached payloads from v1 no longer bind.
+    public override int Version => 2;
 
     public override bool Import(ImportContext ctx)
     {
@@ -24,6 +25,17 @@ public class PrefabImporter : AssetImporter
         {
             string text = File.ReadAllText(ctx.AbsolutePath);
             var goEcho = EchoObject.ReadFromString(text);
+
+            if (!DescribesGameObject(goEcho))
+            {
+                Debug.LogError($"Prefab does not contain a GameObject hierarchy: {ctx.AbsolutePath}");
+                return false;
+            }
+
+            // Prefabs do not nest. An asset written before that was enforced still carries the link,
+            // so it is dropped here and those objects load as ordinary content of this prefab. Every
+            // link in a prefab file is nested by definition: the asset's own root carries none.
+            ImportHelper.FlattenNestedPrefabLinks(goEcho, insideInstance: true);
 
             var dependencies = new HashSet<Guid>();
             ImportHelper.CollectAssetDependencies(goEcho, dependencies);
@@ -43,4 +55,11 @@ public class PrefabImporter : AssetImporter
         }
         return true;
     }
+
+    /// <summary>
+    /// Cheap shape check so a file that parses as Echo but isn't a GameObject fails at import,
+    /// where the path is reported, rather than as a null at some later Instantiate call.
+    /// </summary>
+    private static bool DescribesGameObject(EchoObject? echo)
+        => echo is { TagType: EchoType.Compound } && echo.TryGet("Transform", out _) && echo.TryGet("Components", out _);
 }

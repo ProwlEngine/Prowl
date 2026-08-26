@@ -1,4 +1,4 @@
-Shader "Default/GizmoIcon"
+Shader "Hidden/Gizmo Icon"
 
 Properties
 {

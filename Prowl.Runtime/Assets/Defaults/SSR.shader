@@ -1,4 +1,4 @@
-Shader "Default/SSR"
+Shader "Hidden/Post Process/Screen Space Reflections"
 
 // Stochastic screen-space reflections.
 //   RayCast   : per-pixel GGX importance-sampled reflection ray -> hit UV + pdf + mask
