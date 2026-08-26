@@ -41,6 +41,7 @@ uniform float2 brushParams2;
 
 uniform float4 textureTransform;
 uniform float2 textureTranslation;
+uniform float4 textureClamp;    // uMin, vMin, uMax, vMax; uMax <= uMin = unclamped
 
 // 1 / font atlas size, so the text distance-field screen range is correct at any zoom.
 uniform float2 atlasTexelSize;
@@ -161,7 +162,13 @@ float4 Fragment(VertexOutput input) : SV_Target
     // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
     float edgeAlpha = clamp(input.fragTexCoord.x, 0.0, 1.0);
 
-    float4 fill = color * texture0.Sample(applyTransform(textureTransform, textureTranslation, input.fragPos));
+    // The AA fringe extends half a physical pixel past the nominal rect and this samples by fragPos,
+    // so without the clamp a sub-rect draw reads whatever is next to it in the atlas.
+    float2 texUV = applyTransform(textureTransform, textureTranslation, input.fragPos);
+    if (textureClamp.z > textureClamp.x)
+        texUV = clamp(texUV, textureClamp.xy, textureClamp.zw);
+
+    float4 fill = color * texture0.Sample(texUV);
 
     // Backdrop blur: composite the fill over the blurred framebuffer behind the shape.
     if (backdropBlurAmount > 0.0)
