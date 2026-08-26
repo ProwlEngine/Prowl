@@ -151,9 +151,6 @@ namespace Prowl.Quill
         public void GetTextureTransform(float framebufferScale, out Float4 transform, out Float2 translation)
             => ToAffine(in textureInverse, framebufferScale, out transform, out translation);
 
-        /// <summary>UV-space sampling bounds for the brush texture, (uMin, vMin, uMax, vMax). uMax &lt;= uMin means unclamped.</summary>
-        public Float4 TextureClamp => Brush.TextureClamp;
-
         /// <summary>
         /// Packs a Transform2D as (A, C, B, D) plus (E, F), so the shader evaluates it as two dot
         /// products and an add. Dividing the linear part by the framebuffer scale folds in the
@@ -317,18 +314,6 @@ namespace Prowl.Quill
         public Transform2D TextureTransform;
 
         /// <summary>
-        /// UV-space bounds the brush texture may be sampled within, as (uMin, vMin, uMax, vMax).
-        /// A sub-rect draw sets this to its own UV window so the AA fringe - which extends half a physical
-        /// pixel past the nominal rect and samples by fragment position - cannot read the neighbouring
-        /// region of an atlas.
-        ///
-        /// uMax &lt;= uMin means UNCLAMPED, so a default-constructed Brush is unclamped and tiling brushes
-        /// are unaffected. Deliberately not a (0,0,1,1) default: that would break Repeat wrapping, and it
-        /// would depend on every construction site remembering to set it.
-        /// </summary>
-        public Float4 TextureClamp;
-
-        /// <summary>
         /// The type of brush (None, Linear, Radial, or Box gradient).
         /// </summary>
         public BrushType Type;
@@ -407,7 +392,6 @@ namespace Prowl.Quill
                 && BackdropBlur == other.BackdropBlur
                 && DrawCall.SameTransform(in Transform, in other.Transform)
                 && DrawCall.SameTransform(in TextureTransform, in other.TextureTransform)
-                && TextureClamp.Equals(other.TextureClamp)
                 && (Shader == null || SameUniforms(Uniforms, other.Uniforms));
         }
 
@@ -434,7 +418,6 @@ namespace Prowl.Quill
                 hash = hash * 31 + Transform.GetHashCode();
                 hash = hash * 31 + (Texture?.GetHashCode() ?? 0);
                 hash = hash * 31 + TextureTransform.GetHashCode();
-                hash = hash * 31 + TextureClamp.GetHashCode();
                 if (Shader != null)
                 {
                     hash = hash * 31 + Shader.GetHashCode();
@@ -496,7 +479,6 @@ namespace Prowl.Quill
             brush = new Brush();
             brush.Transform = Transform2D.Identity;
             brush.TextureTransform = Transform2D.Identity;
-            brush.TextureClamp = default;   // (0,0,0,0) = unclamped
             brush.Texture = null;
             brush.Shader = null;
             brush.Uniforms = null;
@@ -884,42 +866,6 @@ namespace Prowl.Quill
         }
 
         /// <summary>
-        /// Bounds brush texture sampling to a UV window. Pass the same window the texture transform maps onto
-        /// the destination rect, and the AA fringe samples the window's own edge texels instead of whatever
-        /// lies beyond it - the result ClampToEdge gives at a real texture border, but at a sub-rect border.
-        /// Call after <see cref="SetBrushTexture"/>: the stored window is inset by half a texel, which needs
-        /// the texture's size.
-        /// </summary>
-        /// <param name="uMin">Left edge in UV space. Pass uMax &lt;= uMin to disable.</param>
-        public void SetBrushTextureClamp(float uMin, float vMin, float uMax, float vMax)
-        {
-            _state.brush.TextureClamp = InsetClampHalfTexel(_state.brush.Texture, uMin, vMin, uMax, vMax);
-            InvalidateDrawState();
-        }
-
-        /// <summary>
-        /// Insets a clamp window by half a texel. Clamping to the raw window still bleeds: the window
-        /// boundary is the shared texel edge with the neighbouring atlas region, where a bilinear tap
-        /// blends 50/50 with the neighbour and a nearest tap floors into it. Half a texel in, both
-        /// filters resolve to the window's own edge texel. Windows narrower than a texel collapse to
-        /// their centre instead of inverting.
-        /// </summary>
-        private Float4 InsetClampHalfTexel(object? texture, float uMin, float vMin, float uMax, float vMax)
-        {
-            if (texture == null || uMax <= uMin || vMax <= vMin)
-                return new Float4(uMin, vMin, uMax, vMax);
-
-            var size = _renderer.GetTextureSize(texture);
-            float hx = size.X > 0 ? 0.5f / size.X : 0f;
-            float hy = size.Y > 0 ? 0.5f / size.Y : 0f;
-            float cx = (uMin + uMax) * 0.5f;
-            float cy = (vMin + vMax) * 0.5f;
-            return new Float4(
-                Maths.Min(uMin + hx, cx), Maths.Min(vMin + hy, cy),
-                Maths.Max(uMax - hx, cx), Maths.Max(vMax - hy, cy));
-        }
-
-        /// <summary>
         /// Clears the brush texture, reverting to solid color or gradient rendering.
         /// </summary>
         public void ClearBrushTexture()
@@ -927,7 +873,6 @@ namespace Prowl.Quill
             _state.brush.Type = BrushType.None;
             _state.brush.Texture = null;
             _state.brush.TextureTransform = Transform2D.Identity;
-            _state.brush.TextureClamp = default;
             InvalidateDrawState();
         }
 
@@ -2736,7 +2681,6 @@ namespace Prowl.Quill
             // Configure brush to draw the texture mapped to this rectangle
             _state.brush.Texture = texture;
             _state.brush.TextureTransform = _state.transform * Transform2D.CreateTranslation(x, y) * Transform2D.CreateScale(width, height);
-            _state.brush.TextureClamp = InsetClampHalfTexel(texture, 0, 0, 1, 1);  // whole texture; keeps the AA fringe from wrapping on Repeat samplers
             _state.brush.Type = BrushType.None;
             _state.brush.Shader = null;
             _state.brush.Uniforms = null;
@@ -2764,7 +2708,6 @@ namespace Prowl.Quill
             var savedBrush = _state.brush;
             _state.brush.Texture = texture;
             _state.brush.TextureTransform = _state.transform * Transform2D.CreateTranslation(x, y) * Transform2D.CreateScale(width, height);
-            _state.brush.TextureClamp = InsetClampHalfTexel(texture, 0, 0, 1, 1);
             _state.brush.Type = BrushType.None;
             _state.brush.Shader = null;
             _state.brush.Uniforms = null;
