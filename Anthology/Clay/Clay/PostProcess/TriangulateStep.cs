@@ -100,6 +100,14 @@ internal sealed class TriangulateStep : IPostProcess
         }
         bool reversed = signedArea < 0f;
 
+        // The reversed list walks the polygon backwards, so emitting in traversal order hands back a
+        // triangle wound opposite to the source polygon, flipping its normal. Which case a polygon
+        // lands in depends only on whether its normal points along the negative side of the axis the
+        // projection dropped, so this is not a rare shape: it is half of them.
+        void Emit(int p, int q, int r) => output.Add(reversed
+            ? new IntermediateFace(new[] { poly[r], poly[q], poly[p] }, material)
+            : new IntermediateFace(new[] { poly[p], poly[q], poly[r] }, material));
+
         // Build the working linked list (prev/next), respecting the desired winding direction.
         var prev = new int[n];
         var next = new int[n];
@@ -124,7 +132,7 @@ internal sealed class TriangulateStep : IPostProcess
 
             if (IsEar(pts2[p], pts2[q], pts2[r], pts2, prev, next, p, q, r))
             {
-                output.Add(new IntermediateFace(new[] { poly[p], poly[q], poly[r] }, material));
+                Emit(p, q, r);
                 next[p] = r;
                 prev[r] = p;
                 remaining--;
@@ -139,7 +147,7 @@ internal sealed class TriangulateStep : IPostProcess
         if (remaining == 3)
         {
             int p = prev[cur], q = cur, r = next[cur];
-            output.Add(new IntermediateFace(new[] { poly[p], poly[q], poly[r] }, material));
+            Emit(p, q, r);
             return;
         }
 
@@ -149,15 +157,13 @@ internal sealed class TriangulateStep : IPostProcess
         if (remaining > 3)
         {
             int[] survivors = new int[remaining];
-            int s = 0;
             int walk = cur;
             for (int i = 0; i < remaining; i++) { survivors[i] = walk; walk = next[walk]; }
             for (int i = 1; i + 1 < remaining; i++)
-                output.Add(new IntermediateFace(new[] { poly[survivors[0]], poly[survivors[i]], poly[survivors[i + 1]] }, material));
+                Emit(survivors[0], survivors[i], survivors[i + 1]);
             ctx.Log.Info(
                 $"Triangulate: fan-triangulated a {n}-gon after ear-clipping stalled on {remaining} remaining vertices.",
                 "Triangulate");
-            _ = s;
         }
     }
 
