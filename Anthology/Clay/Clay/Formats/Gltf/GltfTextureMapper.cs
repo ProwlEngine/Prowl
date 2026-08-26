@@ -19,6 +19,11 @@ internal static class GltfTextureMapper
         if (dom.Textures is null)
             return;
 
+        // Two textures may reference one image with different samplers, and decoding or copying the
+        // encoded bytes per texture doubles peak memory on a GLB with large embedded images for
+        // nothing. The bytes are immutable from here on, so the copies can be shared.
+        var imageCache = new Dictionary<int, ResolvedImage>();
+
         for (int t = 0; t < dom.Textures.Length; t++)
         {
             var tex = dom.Textures[t];
@@ -32,7 +37,15 @@ internal static class GltfTextureMapper
             {
                 var image = images[sourceIndex];
                 inter.Name ??= image.Name;
-                ResolveImage(image, buffers, ctx, inter);
+
+                if (!imageCache.TryGetValue(sourceIndex, out var resolved))
+                {
+                    resolved = ResolveImage(image, buffers, ctx);
+                    imageCache[sourceIndex] = resolved;
+                }
+                inter.EncodedBytes = resolved.EncodedBytes;
+                inter.SourcePath = resolved.SourcePath;
+                inter.MimeType = resolved.MimeType;
             }
             else
             {
@@ -43,45 +56,41 @@ internal static class GltfTextureMapper
         }
     }
 
-    private static void ResolveImage(GltfImage image, GltfBufferStore buffers, ImportContext ctx, IntermediateTexture inter)
+    /// <summary>Where one glTF image's pixels came from, shared by every texture referencing it.</summary>
+    private readonly record struct ResolvedImage(byte[]? EncodedBytes, string? SourcePath, string? MimeType);
+
+    private static ResolvedImage ResolveImage(GltfImage image, GltfBufferStore buffers, ImportContext ctx)
     {
         if (image.Uri is string uri)
         {
             if (DataUri.TryDecode(uri, out string mime, out byte[] data))
-            {
-                inter.EncodedBytes = data;
-                inter.MimeType = !string.IsNullOrEmpty(image.MimeType) ? image.MimeType : mime;
-                return;
-            }
+                return new ResolvedImage(data, null, !string.IsNullOrEmpty(image.MimeType) ? image.MimeType : mime);
 
             if (ctx.SourcePath is null)
             {
                 ctx.Log.Warning($"Texture image '{uri}' is external but no source path is set; image bytes unavailable.",
                     "GltfTextureMapper");
-                return;
+                return default;
             }
 
             string? resolved = ctx.Resolver.Resolve(ctx.SourcePath, Uri.UnescapeDataString(uri));
             if (resolved is null)
             {
                 ctx.Log.Warning($"Could not resolve image '{uri}'.", "GltfTextureMapper");
-                return;
+                return default;
             }
 
-            inter.SourcePath = resolved;
-            inter.MimeType = image.MimeType ?? GuessMime(resolved);
-            return;
+            return new ResolvedImage(null, resolved, image.MimeType ?? GuessMime(resolved));
         }
 
         if (image.BufferView is { } viewIndex)
         {
             var view = buffers.GetBufferView(viewIndex);
-            inter.EncodedBytes = buffers.GetBufferView(view).ToArray();
-            inter.MimeType = image.MimeType;
-            return;
+            return new ResolvedImage(buffers.GetBufferView(view).ToArray(), null, image.MimeType);
         }
 
         ctx.Log.Warning("Image has neither URI nor bufferView.", "GltfTextureMapper");
+        return default;
     }
 
     private static IntermediateTextureSampler MapSampler(GltfDom dom, int? samplerIndex)
