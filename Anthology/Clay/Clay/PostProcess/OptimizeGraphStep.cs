@@ -8,13 +8,15 @@ using Prowl.Vector;
 namespace Prowl.Clay.PostProcess;
 
 /// <summary>
-/// Collapses pass-through nodes (no mesh, no skin, not a joint, not animated, not on the
-/// preserve list). Each collapsed node's local transform is folded into its parent's children's
-/// transforms.
+/// Collapses pass-through nodes (no mesh, no skin, not a joint, not animated, no metadata, uniform
+/// scale, has children, not on the preserve list). Each collapsed node's local transform is folded
+/// into its children's transforms.
 /// </summary>
 /// <remarks>
 /// Significantly reduces hierarchy depth for content authored in DCC tools that use lots of
-/// grouping nodes (Blender empties, Maya transform groups, etc.).
+/// grouping nodes (Blender empties, Maya transform groups, etc.). Nodes are only ever lifted out of
+/// the hierarchy, never deleted: a node with nothing under it contributes no depth to remove, and
+/// deleting one throws away a socket or marker that the file exists to carry.
 /// </remarks>
 internal sealed class OptimizeGraphStep : IPostProcess
 {
@@ -54,6 +56,17 @@ internal sealed class OptimizeGraphStep : IPostProcess
             // and gets folded away along with the only transform that positioned it.
             if (node.MeshIndex >= 0 || node.SkinIndex >= 0 || node.CameraIndex >= 0 || node.LightIndex >= 0)
                 keep.Add(node);
+
+            // FBX user properties and glTF extras live here, and folding the node away takes them
+            // with it.
+            if (node.Metadata.Count > 0)
+                keep.Add(node);
+
+            // Folding a non-uniform scale into a rotated child produces shear, which TRS cannot
+            // represent and DecomposeMatrix silently drops, deforming the subtree with no warning.
+            // Uniform scale commutes with rotation, so those collapse exactly.
+            if (!IsUniformScale(node.LocalScale))
+                keep.Add(node);
         }
 
         // Animation targets must be kept; we'd lose the curve mapping otherwise.
@@ -83,6 +96,12 @@ internal sealed class OptimizeGraphStep : IPostProcess
         return keep;
     }
 
+    private static bool IsUniformScale(Float3 scale)
+    {
+        const float Epsilon = 1e-5f;
+        return MathF.Abs(scale.X - scale.Y) <= Epsilon && MathF.Abs(scale.Y - scale.Z) <= Epsilon;
+    }
+
     // Recursion depth is one frame per hierarchy level, which the reader already capped at
     // NodeGraph.MaxDepth when it flattened the scene.
     private static int CollapseRecursive(IntermediateNode node, HashSet<IntermediateNode> keep)
@@ -97,14 +116,10 @@ internal sealed class OptimizeGraphStep : IPostProcess
             // First recurse so grand-children stabilize before we look at child.
             collapsed += CollapseRecursive(child, keep);
 
-            if (!keep.Contains(child) && child.Children.Count == 0)
-            {
-                node.Children.RemoveAt(i);
-                collapsed++;
-                continue;
-            }
-
-            if (!keep.Contains(child))
+            // A childless empty is an attachment point or a marker, which is most of why an artist
+            // puts an empty in a file at all, and collapsing one saves no depth because it has no
+            // subtree to lift. Only pass-through nodes with children are worth removing.
+            if (!keep.Contains(child) && child.Children.Count > 0)
             {
                 // Fold child's local transform into each grand-child's local transform, then
                 // promote grand-children to siblings.
