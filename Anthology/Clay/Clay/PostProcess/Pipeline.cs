@@ -80,7 +80,6 @@ internal sealed class Pipeline
         // Skin / animation finalize.
         new LimitBoneWeightsStep(),
         new DeboneStep(),
-        new SplitByBoneCountStep(),
         new PopulateSkeletonsStep(),
 
         // Graph / mesh optimizers.

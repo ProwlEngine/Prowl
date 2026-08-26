@@ -74,9 +74,6 @@ public enum PostProcessFlags : uint
     /// <summary>Reorder triangle indices for better vertex-cache locality.</summary>
     ImproveCacheLocality = 1u << 17,
 
-    /// <summary>Split meshes with too many bones into sub-meshes.</summary>
-    SplitByBoneCount = 1u << 18,
-
     /// <summary>Split meshes that exceed the configured vertex limit.</summary>
     SplitLargeMeshes = 1u << 19,
 
