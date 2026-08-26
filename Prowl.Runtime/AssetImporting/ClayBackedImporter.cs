@@ -161,6 +161,12 @@ internal static class ClayBackedImporter
         var rootGO = nodeGOs[clayModel.Root.Index];
 
         // 5. Renderers + skin wiring.
+        // Bind poses and bone names live on the Mesh, but a model may point one mesh at two
+        // different skins. Writing both onto the shared mesh would leave whichever node came last
+        // deciding the skinning for all of them, so a second skin gets its own copy of the mesh.
+        var meshSkin = new int[clayModel.Meshes.Count];
+        Array.Fill(meshSkin, UnclaimedMesh);
+
         for (int i = 0; i < clayModel.Nodes.Count; i++)
         {
             var n = clayModel.Nodes[i];
@@ -171,6 +177,17 @@ internal static class ClayBackedImporter
 
             if (n.SkinIndex >= 0)
             {
+                if (meshSkin[n.MeshIndex] == UnclaimedMesh)
+                {
+                    meshSkin[n.MeshIndex] = n.SkinIndex;
+                }
+                else if (meshSkin[n.MeshIndex] != n.SkinIndex)
+                {
+                    (mesh, _) = BuildMesh(clayModel.Meshes[n.MeshIndex], settings);
+                    mesh.Name = $"{mesh.Name}_Skin{n.SkinIndex}";
+                    meshes.Add(mesh);
+                }
+
                 var clayskin = clayModel.Skins[n.SkinIndex];
                 // Mirror Clay.Skin -> Prowl Mesh.BindPoses + Mesh.BoneNames (relative paths).
                 mesh.BindPoses = clayskin.InverseBindPoses.ToArray();
@@ -239,6 +256,9 @@ internal static class ClayBackedImporter
             Animations = animations,
         };
     }
+
+    /// <summary>No node has claimed this mesh for a skin yet.</summary>
+    private const int UnclaimedMesh = -1;
 
     private static List<AssetRef<PMaterial>> BuildMatRefs(int[] submeshMatIndices, List<PMaterial> materials)
     {
