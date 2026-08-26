@@ -88,6 +88,10 @@ internal sealed class OptimizeMeshesStep : IPostProcess
                 continue;
             }
 
+            // Two nodes instancing one mesh have nothing to merge, and appending a mesh into itself
+            // walks a list that grows with every append.
+            if (primaryNode.MeshIndex == child.MeshIndex) continue;
+
             var primary = scene.Meshes[primaryNode.MeshIndex];
             if (!AreLayoutCompatible(primary, mesh)) continue;
 
