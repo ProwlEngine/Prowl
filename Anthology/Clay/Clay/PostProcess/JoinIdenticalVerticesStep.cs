@@ -33,9 +33,12 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         if (oldCount == 0)
             return;
 
-        // Meshes that carry morph targets need their delta-position arrays remapped too. Two
-        // vertices that differ only in their morph deltas must stay distinct, so we include
-        // the deltas in the hash/equality check.
+        // Two vertices that differ only in their morph deltas have to stay distinct, so the deltas
+        // are part of the merge predicate. They are deliberately not part of the hash: hashing them
+        // reads every shape and frame for every vertex, which on a face mesh with fifty-odd ARKit
+        // shapes is the dominant cost of the whole step. Leaving them out only makes the hash
+        // coarser, and the delta comparison then runs solely for the candidates that already match
+        // on everything else, which is the handful of seam duplicates rather than all of them.
         bool hasMorph = mesh.BlendShapes.Count > 0;
 
         // Output buffers (we'll swap them in at the end).
@@ -56,7 +59,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
 
         for (int i = 0; i < oldCount; i++)
         {
-            int hash = HashVertex(mesh, i, hasMorph);
+            int hash = HashVertex(mesh, i);
             if (!buckets.TryGetValue(hash, out var bucket))
             {
                 bucket = new List<int>(1);
@@ -137,13 +140,22 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
             }
         }
 
-        // Rewrite faces with the new indices.
+        // Rewrite faces with the new indices, dropping any the weld collapsed. A thin triangle whose
+        // two ends merge becomes a face naming one vertex twice, which is not a face at all, and the
+        // degenerate pass runs before this step rather than after, so nothing else would catch it.
+        int keptFaces = 0;
         for (int fi = 0; fi < mesh.Faces.Count; fi++)
         {
             var face = mesh.Faces[fi];
             for (int k = 0; k < face.Indices.Length; k++)
                 face.Indices[k] = oldToNew[face.Indices[k]];
+
+            if (HasRepeatedIndex(face.Indices)) continue;
+
+            mesh.Faces[keptFaces++] = face;
         }
+        if (keptFaces < mesh.Faces.Count)
+            mesh.Faces.RemoveRange(keptFaces, mesh.Faces.Count - keptFaces);
 
         // Swap buffers in.
         mesh.Positions.Clear();
@@ -162,7 +174,17 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
 
     }
 
-    private static int HashVertex(IntermediateMesh m, int i, bool includeMorph)
+    /// <summary>True when a face names the same vertex twice, which only a point can survive.</summary>
+    private static bool HasRepeatedIndex(int[] indices)
+    {
+        for (int i = 0; i < indices.Length; i++)
+            for (int j = i + 1; j < indices.Length; j++)
+                if (indices[i] == indices[j])
+                    return true;
+        return false;
+    }
+
+    private static int HashVertex(IntermediateMesh m, int i)
     {
         var hc = new HashCode();
         hc.Add(m.Positions[i]);
@@ -178,20 +200,6 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
             {
                 hc.Add(vj[i * influences + k]);
                 hc.Add(vw[i * influences + k]);
-            }
-        }
-        if (includeMorph)
-        {
-            for (int b = 0; b < m.BlendShapes.Count; b++)
-            {
-                var bs = m.BlendShapes[b];
-                for (int f = 0; f < bs.Frames.Count; f++)
-                {
-                    var frame = bs.Frames[f];
-                    hc.Add(frame.DeltaPositions[i]);
-                    if (frame.DeltaNormals is { } dn) hc.Add(dn[i]);
-                    if (frame.DeltaTangents is { } dt) hc.Add(dt[i]);
-                }
             }
         }
         return hc.ToHashCode();
