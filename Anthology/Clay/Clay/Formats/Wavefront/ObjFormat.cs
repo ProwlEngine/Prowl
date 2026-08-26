@@ -175,8 +175,12 @@ internal sealed class ObjFormat : IModelFormat
                 state.LoadMtlLibrary(tok.NextToken().ToString());
             return;
         }
-        if (keyword.SequenceEqual("s") ||
-            keyword.SequenceEqual("vp") ||
+        if (keyword.SequenceEqual("s"))
+        {
+            state.SetSmoothingGroup(tok.Rest().ToString());
+            return;
+        }
+        if (keyword.SequenceEqual("vp") ||
             keyword.SequenceEqual("cstype") || keyword.SequenceEqual("deg") ||
             keyword.SequenceEqual("bmat") || keyword.SequenceEqual("step") ||
             keyword.SequenceEqual("curv") || keyword.SequenceEqual("curv2") ||
@@ -217,6 +221,10 @@ internal sealed class ObjFormat : IModelFormat
         private string _objectName = "default";
         private string _materialName = "default";
 
+        // Until an s directive appears the file has said nothing, which is not the same as saying
+        // "no smoothing": that leaves the decision to the smoothing angle.
+        private int _smoothingGroup = IntermediateFace.NoSmoothingGroup;
+
         public ParserState(ImportContext ctx)
         {
             _ctx = ctx;
@@ -256,6 +264,26 @@ internal sealed class ObjFormat : IModelFormat
         public void SetMaterial(string name)
         {
             _materialName = string.IsNullOrWhiteSpace(name) ? "default" : name.Trim();
+        }
+
+        /// <summary>
+        /// Handles the <c>s</c> directive: a group number, or <c>off</c>/<c>0</c> for no smoothing.
+        /// </summary>
+        /// <remarks>
+        /// This is the only thing an OBJ can say about how it wants to be shaded, and an OBJ with no
+        /// vn records has nothing else to go on. Dropping it left the whole file to one global
+        /// smoothing angle, so a model authored with hard and smooth sections came in as all one or
+        /// all the other.
+        /// </remarks>
+        public void SetSmoothingGroup(string argument)
+        {
+            string value = argument.Trim();
+            if (value.Length == 0 || value.Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                _smoothingGroup = 0;
+                return;
+            }
+            _smoothingGroup = int.TryParse(value, out int group) ? group : 0;
         }
 
         public void LoadMtlLibrary(string fileRef)
@@ -357,20 +385,20 @@ internal sealed class ObjFormat : IModelFormat
                 case PrimitiveKind.Point:
                     mesh.PrimitiveKinds |= PrimitiveKind.Point;
                     foreach (int v in faceIndices)
-                        mesh.Faces.Add(new IntermediateFace(new[] { v }));
+                        mesh.Faces.Add(new IntermediateFace(new[] { v }, IntermediateFace.InheritMaterial, _smoothingGroup));
                     break;
 
                 case PrimitiveKind.Line:
                     mesh.PrimitiveKinds |= PrimitiveKind.Line;
                     for (int i = 0; i + 1 < faceIndices.Count; i++)
-                        mesh.Faces.Add(new IntermediateFace(new[] { faceIndices[i], faceIndices[i + 1] }));
+                        mesh.Faces.Add(new IntermediateFace(new[] { faceIndices[i], faceIndices[i + 1] }, IntermediateFace.InheritMaterial, _smoothingGroup));
                     break;
 
                 default:
                     if (faceIndices.Count == 3)
                     {
                         mesh.PrimitiveKinds |= PrimitiveKind.Triangle;
-                        mesh.Faces.Add(new IntermediateFace(faceIndices.ToArray()));
+                        mesh.Faces.Add(new IntermediateFace(faceIndices.ToArray(), IntermediateFace.InheritMaterial, _smoothingGroup));
                     }
                     else if (faceIndices.Count < 3)
                     {
@@ -380,7 +408,7 @@ internal sealed class ObjFormat : IModelFormat
                     {
                         // Polygon - mark and let TriangulateStep break it up.
                         mesh.PrimitiveKinds |= PrimitiveKind.Polygon;
-                        mesh.Faces.Add(new IntermediateFace(faceIndices.ToArray()));
+                        mesh.Faces.Add(new IntermediateFace(faceIndices.ToArray(), IntermediateFace.InheritMaterial, _smoothingGroup));
                     }
                     break;
             }

@@ -46,12 +46,12 @@ internal sealed class TriangulateStep : IPostProcess
                 if (n == 4 && IsConvexQuad(mesh, face.Indices))
                 {
                     int a = face.Indices[0], b = face.Indices[1], c = face.Indices[2], d = face.Indices[3];
-                    newFaces.Add(new IntermediateFace(new[] { a, b, c }, face.Material));
-                    newFaces.Add(new IntermediateFace(new[] { a, c, d }, face.Material));
+                    newFaces.Add(face.WithIndices(new[] { a, b, c }));
+                    newFaces.Add(face.WithIndices(new[] { a, c, d }));
                     continue;
                 }
 
-                EarClip(mesh, face.Indices, face.Material, newFaces, context);
+                EarClip(mesh, face, newFaces, context);
             }
 
             mesh.Faces.Clear();
@@ -76,8 +76,9 @@ internal sealed class TriangulateStep : IPostProcess
         return Float3.Dot(n0, n1) > 0f && Float3.Dot(n1, n2) > 0f && Float3.Dot(n2, n3) > 0f;
     }
 
-    private static void EarClip(IntermediateMesh mesh, int[] poly, int material, List<IntermediateFace> output, ImportContext ctx)
+    private static void EarClip(IntermediateMesh mesh, IntermediateFace source, List<IntermediateFace> output, ImportContext ctx)
     {
+        int[] poly = source.Indices;
         int n = poly.Length;
         Float3 normal = PolygonNormal(mesh, poly);
         (int axisU, int axisV) = PickProjectionAxes(normal);
@@ -104,9 +105,9 @@ internal sealed class TriangulateStep : IPostProcess
         // triangle wound opposite to the source polygon, flipping its normal. Which case a polygon
         // lands in depends only on whether its normal points along the negative side of the axis the
         // projection dropped, so this is not a rare shape: it is half of them.
-        void Emit(int p, int q, int r) => output.Add(reversed
-            ? new IntermediateFace(new[] { poly[r], poly[q], poly[p] }, material)
-            : new IntermediateFace(new[] { poly[p], poly[q], poly[r] }, material));
+        void Emit(int p, int q, int r) => output.Add(source.WithIndices(reversed
+            ? new[] { poly[r], poly[q], poly[p] }
+            : new[] { poly[p], poly[q], poly[r] }));
 
         // Build the working linked list (prev/next), respecting the desired winding direction.
         var prev = new int[n];

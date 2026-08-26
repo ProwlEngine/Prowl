@@ -80,7 +80,7 @@ internal static class NormalGeneration
                 continue;
             }
 
-            PartitionIntoSmoothingGroups(faces, faceNormals, cosThreshold, groupOf, out int groupCount);
+            PartitionIntoSmoothingGroups(mesh, faces, faceNormals, cosThreshold, groupOf, out int groupCount);
 
             // One angle-weighted normal per group. Weighting by the interior angle at this corner is
             // what keeps a vertex shared by one large and several small faces from being dragged
@@ -154,8 +154,29 @@ internal static class NormalGeneration
     /// Groups a vertex's adjacent faces so that any two faces within the threshold of each other
     /// share a group. Small union-find over what is normally a handful of faces.
     /// </summary>
+    /// <summary>
+    /// Decides whether two adjacent faces shade as one surface.
+    /// </summary>
+    /// <remarks>
+    /// A source that stated smoothing groups is taken at its word, because that statement is the
+    /// author's shading intent and the angle threshold is only ever a guess at it. Faces in the same
+    /// non-zero group smooth however sharp the edge between them, faces in different groups never
+    /// do, and group 0 means this face smooths with nothing. Only when at least one side said
+    /// nothing does the angle decide.
+    /// </remarks>
+    private static bool Smooths(IntermediateMesh mesh, int faceA, int faceB, Float3[] faceNormals, float cosThreshold)
+    {
+        int a = mesh.Faces[faceA].SmoothingGroup;
+        int b = mesh.Faces[faceB].SmoothingGroup;
+
+        if (a != IntermediateFace.NoSmoothingGroup && b != IntermediateFace.NoSmoothingGroup)
+            return a == b && a != 0;
+
+        return Float3.Dot(faceNormals[faceA], faceNormals[faceB]) >= cosThreshold;
+    }
+
     private static void PartitionIntoSmoothingGroups(
-        List<int> faces, Float3[] faceNormals, float cosThreshold,
+        IntermediateMesh mesh, List<int> faces, Float3[] faceNormals, float cosThreshold,
         Dictionary<int, int> groupOf, out int groupCount)
     {
         int n = faces.Count;
@@ -172,7 +193,7 @@ internal static class NormalGeneration
         {
             for (int j = i + 1; j < n; j++)
             {
-                if (Float3.Dot(faceNormals[faces[i]], faceNormals[faces[j]]) < cosThreshold) continue;
+                if (!Smooths(mesh, faces[i], faces[j], faceNormals, cosThreshold)) continue;
                 int ri = Find(parent, i), rj = Find(parent, j);
                 if (ri != rj) parent[ri] = rj;
             }

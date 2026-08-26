@@ -138,12 +138,12 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
             {
                 if (triRead < triCount)
                 {
-                    newFaces.Add(new IntermediateFace(new[]
+                    newFaces.Add(mesh.Faces[triIndex[outTriSource[triRead]]].WithIndices(new[]
                     {
                         outIndices[triRead * 3 + 0],
                         outIndices[triRead * 3 + 1],
                         outIndices[triRead * 3 + 2],
-                    }, mesh.Faces[triIndex[outTriSource[triRead]]].Material));
+                    }));
                     triRead++;
                 }
             }

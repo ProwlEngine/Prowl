@@ -184,7 +184,7 @@ internal sealed class OptimizeMeshesStep : IPostProcess
             }
             // Resolved rather than copied: the source may have been inheriting its own mesh material,
             // which would silently become the primary's after the move.
-            primary.Faces.Add(new IntermediateFace(shifted, source.MaterialForFace(face)));
+            primary.Faces.Add(new IntermediateFace(shifted, source.MaterialForFace(face), face.SmoothingGroup));
         }
     }
 

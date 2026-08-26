@@ -79,14 +79,45 @@ internal struct IntermediateFace
     /// Distinct from -1, which is a real value meaning the face has no material at all.</summary>
     public const int InheritMaterial = int.MinValue;
 
+    /// <summary>Sentinel for "the source said nothing about smoothing", which leaves the decision to
+    /// the smoothing angle. Distinct from 0, which is an author saying this face smooths with nothing.</summary>
+    public const int NoSmoothingGroup = -1;
+
     public int[] Indices;
 
     /// <summary>Material index for this face, or <see cref="InheritMaterial"/> to use the mesh's.</summary>
     public int Material;
 
-    public IntermediateFace(int[] indices) { Indices = indices; Material = InheritMaterial; }
+    /// <summary>
+    /// Smoothing group the source assigned, or <see cref="NoSmoothingGroup"/>. Faces sharing a
+    /// non-zero group are smoothed together whatever the angle between them; faces in different
+    /// groups never are.
+    /// </summary>
+    public int SmoothingGroup;
 
-    public IntermediateFace(int[] indices, int material) { Indices = indices; Material = material; }
+    public IntermediateFace(int[] indices)
+    {
+        Indices = indices;
+        Material = InheritMaterial;
+        SmoothingGroup = NoSmoothingGroup;
+    }
+
+    public IntermediateFace(int[] indices, int material)
+    {
+        Indices = indices;
+        Material = material;
+        SmoothingGroup = NoSmoothingGroup;
+    }
+
+    public IntermediateFace(int[] indices, int material, int smoothingGroup)
+    {
+        Indices = indices;
+        Material = material;
+        SmoothingGroup = smoothingGroup;
+    }
+
+    /// <summary>Carries this face's material and smoothing group onto a new set of indices.</summary>
+    public readonly IntermediateFace WithIndices(int[] indices) => new(indices, Material, SmoothingGroup);
 }
 
 [Flags]
