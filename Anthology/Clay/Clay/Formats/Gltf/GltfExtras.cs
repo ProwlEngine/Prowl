@@ -35,7 +35,9 @@ internal static class GltfExtras
         JsonValueKind.True => true,
         JsonValueKind.False => false,
         // Integers keep their exactness, which matters for the ids and indices that turn up here.
-        JsonValueKind.Number => value.TryGetInt64(out long i) ? i : value.GetDouble(),
+        // Cast to object per branch, or the ternary unifies long and double and boxes everything
+        // as double.
+        JsonValueKind.Number => value.TryGetInt64(out long i) ? (object)i : value.GetDouble(),
         _ => null,
     };
 }
