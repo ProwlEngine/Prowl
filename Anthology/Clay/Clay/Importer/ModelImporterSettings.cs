@@ -43,6 +43,12 @@ public sealed record ModelImporterSettings
     /// </summary>
     public bool StrictValidation { get; init; }
 
+    /// <summary>
+    /// Index of the scene to import from a file that defines several, or -1 for the one the file
+    /// nominates as its default. Out-of-range values fall back to the default with a warning.
+    /// </summary>
+    public int SceneIndex { get; init; } = -1;
+
     /// <summary>Names of nodes the <c>OptimizeGraph</c> step must never collapse.</summary>
     public IReadOnlyList<string> OptimizeGraphPreserveNodeNames { get; init; } = Array.Empty<string>();
 

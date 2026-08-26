@@ -61,7 +61,7 @@ internal static class GltfNodeMapper
         }
 
         var root = new IntermediateNode { Name = "<RootNode>" };
-        int[]? sceneRoots = ResolveSceneRoots(dom);
+        int[]? sceneRoots = ResolveSceneRoots(dom, ctx);
         if (sceneRoots is not null)
         {
             foreach (int idx in sceneRoots)
@@ -104,10 +104,22 @@ internal static class GltfNodeMapper
         };
     }
 
-    private static int[]? ResolveSceneRoots(GltfDom dom)
+    private static int[]? ResolveSceneRoots(GltfDom dom, ImportContext ctx)
     {
         if (dom.Scenes is null || dom.Scenes.Length == 0)
             return null;
+
+        int requested = ctx.Settings.SceneIndex;
+        if (requested >= 0)
+        {
+            if ((uint)requested < (uint)dom.Scenes.Length)
+                return dom.Scenes[requested].Nodes;
+
+            ctx.Log.Warning(
+                $"Scene {requested} was requested but the file defines {dom.Scenes.Length}; using the default scene.",
+                "GltfNodeMapper");
+        }
+
         int sceneIdx = dom.DefaultScene ?? 0;
         if ((uint)sceneIdx >= (uint)dom.Scenes.Length)
             sceneIdx = 0;
