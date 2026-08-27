@@ -57,6 +57,8 @@
   "toast.cursor_locked_msg": "Pulse Escape para liberar.",
   "toast.cursor_lock_failed": "Bloqueo de cursor fallido",
   "toast.cursor_lock_failed_msg": "No hay vista de juego disponible.",
+  "toast.drop_imported": "Assets importados",
+  "toast.drop_imported_msg": "{{count}} archivo(s) importado(s) en '{{folder}}'.",
   "toast.prefab_create_failed": "Prefab no creado",
   "toast.prefab_create_failed_body": "No se pudo guardar '{name}' como prefab. Consulta la consola.",
   "toast.rename_exists": "Ya existe un archivo o carpeta con el nombre '{{name}}'.",
