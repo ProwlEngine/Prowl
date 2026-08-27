@@ -22,47 +22,80 @@ namespace Prowl.Editor;
 /// </summary>
 public static class ExternalAssetDrop
 {
-    private static readonly ConcurrentQueue<string[]> s_pending = new();
-    private static DateTime s_forceProcessUntil = DateTime.MinValue;
+    private static readonly ConcurrentQueue<string[]> _pending = new();
+    private static DateTime _forceProcessUntil = DateTime.MinValue;
+    private static string[]? _resolving;
+    private static int _resolveFrames;
+    private static readonly List<(EditorAssetBackend Db, Action<string[]> Handler, DateTime Deadline)> _reveals = new();
 
     /// <summary>
     /// True briefly after a drop, so the import pump runs even when ReimportOnFocusOnly
     /// gates it - a drop does not necessarily focus the window.
     /// </summary>
-    public static bool ForceProcessActive => DateTime.UtcNow < s_forceProcessUntil;
+    public static bool ForceProcessActive => DateTime.UtcNow < _forceProcessUntil;
 
-    public static void Enqueue(string[] paths) => s_pending.Enqueue(paths);
+    /// <summary>
+    /// True while a dropped batch waits for Paper's hover pass to identify the folder under
+    /// the drop point - opens the ProjectPanel hover gates without an internal drag.
+    /// </summary>
+    public static bool IsResolvingDropTarget => _resolving != null;
+
+    public static void Enqueue(string[] paths) => _pending.Enqueue(paths);
 
     /// <summary>Called once per frame from the editor update loop.</summary>
     public static void ProcessPending()
     {
-        if (s_pending.IsEmpty) return;
+        SweepReveals();
+
+        if (_resolving == null && _pending.IsEmpty) return;
 
         if (Project.Current == null || ProjectLauncher.IsOpen || EditorAssetBackend.Instance == null)
         {
-            while (s_pending.TryDequeue(out _)) { }
+            _resolving = null;
+            _pending.Clear();
             return;
         }
 
-        while (s_pending.TryDequeue(out string[]? paths))
+        // One batch at a time: GLFW moves the cursor to the drop point before raising the drop,
+        // so holding a few frames lets the panel's hover callbacks resolve the folder under it.
+        if (_resolving == null)
         {
-            try { HandleDrop(paths); }
-            catch (Exception ex) { Runtime.Debug.LogError($"Failed to process dropped files: {ex.Message}"); }
+            if (!_pending.TryDequeue(out _resolving)) return;
+            _resolveFrames = 0;
+            ProjectPanel.Instance?.ClearDropHover();
         }
+        if (++_resolveFrames < 3) return;
+
+        string[] paths = _resolving;
+        _resolving = null;
+        try { HandleDrop(paths, ProjectPanel.Instance?.ExternalDropHoverFolder); }
+        catch (Exception ex) { Runtime.Debug.LogError($"Failed to process dropped files: {ex.Message}"); }
     }
 
-    private static void HandleDrop(string[] paths)
+    private static void HandleDrop(string[] paths, string? targetFolder)
     {
         var db = EditorAssetBackend.Instance!;
         string assetsPath = Project.Current!.AssetsPath;
 
-        string destRel = ProjectPanel.Instance?.CurrentFolder ?? "";
+        string destRel = targetFolder ?? ProjectPanel.Instance?.CurrentFolder ?? "";
         if (!string.IsNullOrEmpty(destRel) && !Directory.Exists(Path.Combine(assetsPath, destRel)))
             destRel = "";
 
         CopyPlan plan = PlanCopy(paths, assetsPath, destRel);
 
-        // Sources already inside Assets/ are not copied; just reveal the first one.
+        // Before the no-files return, so dropping an empty folder still creates it.
+        foreach (string dir in plan.Directories)
+        {
+            try
+            {
+                Directory.CreateDirectory(dir);
+                // The watcher ignores directory events, so folder metas are created here.
+                MetaFile.EnsureMeta(dir, "DefaultImporter");
+            }
+            catch (Exception ex) { Runtime.Debug.LogError($"Failed to create folder '{dir}': {ex.Message}"); }
+        }
+
+        // In-project sources aren't copied - only revealed.
         if (plan.Files.Count == 0)
         {
             if (plan.AlreadyInProject.Count > 0)
@@ -71,14 +104,6 @@ public static class ExternalAssetDrop
                 if (existing != Guid.Empty) Selection.Ping(existing);
             }
             return;
-        }
-
-        foreach (string dir in plan.Directories)
-        {
-            Directory.CreateDirectory(dir);
-            // The watcher ignores directory events, so folder metas are created here.
-            try { MetaFile.EnsureMeta(dir, "DefaultImporter"); }
-            catch (Exception ex) { Runtime.Debug.LogError($"Failed to create folder meta for '{dir}': {ex.Message}"); }
         }
 
         var copied = new List<string>();
@@ -99,7 +124,7 @@ public static class ExternalAssetDrop
 
         // No import here. The watcher registers the whole batch before importing any of it
         // (so a model finds its sibling textures), and importing now would import twice.
-        s_forceProcessUntil = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        _forceProcessUntil = DateTime.UtcNow + TimeSpan.FromSeconds(5);
         RegisterReveal(db, destRel, copied);
     }
 
@@ -114,14 +139,32 @@ public static class ExternalAssetDrop
             if (first == null) return;
 
             db.OnAssetsImported -= onImported;
+            _reveals.RemoveAll(r => r.Handler == onImported);
+            // Ping only when the user is already viewing the destination - pinging navigates,
+            // and a drop targeted at another folder shouldn't yank them there.
             Guid guid = db.PathToGuid(first);
-            if (guid != Guid.Empty) Selection.Ping(guid);
+            if (guid != Guid.Empty && string.Equals(ProjectPanel.Instance?.CurrentFolder ?? "", destRel, StringComparison.OrdinalIgnoreCase))
+                Selection.Ping(guid);
             Toasts.Show(
                 Loc.Get("toast.drop_imported"),
                 Loc.Get("toast.drop_imported_msg", new { count = copied.Count, folder = string.IsNullOrEmpty(destRel) ? "Assets" : destRel }),
                 ToastType.Success);
         };
         db.OnAssetsImported += onImported;
+        _reveals.Add((db, onImported, DateTime.UtcNow + TimeSpan.FromMinutes(2)));
+    }
+
+    /// <summary>Detach reveals whose backend was replaced (its event will never fire again)
+    /// or whose files never imported before the deadline.</summary>
+    private static void SweepReveals()
+    {
+        for (int i = _reveals.Count - 1; i >= 0; i--)
+        {
+            var (db, handler, deadline) = _reveals[i];
+            if (ReferenceEquals(db, EditorAssetBackend.Instance) && DateTime.UtcNow < deadline) continue;
+            db.OnAssetsImported -= handler;
+            _reveals.RemoveAt(i);
+        }
     }
 
     internal sealed class CopyPlan
@@ -135,38 +178,43 @@ public static class ExternalAssetDrop
     internal static CopyPlan PlanCopy(IEnumerable<string> sources, string assetsPath, string destRel)
     {
         var plan = new CopyPlan();
-        string destAbs = string.IsNullOrEmpty(destRel) ? assetsPath : Path.Combine(assetsPath, destRel);
+        string destAbs = Path.Combine(assetsPath, destRel);
         var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (string raw in sources)
         {
-            string src;
-            try { src = Path.GetFullPath(raw).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
-            catch { continue; }
-
-            string name = Path.GetFileName(src);
-            if (ShouldSkip(name)) continue;
-
-            if (IsSameOrUnder(assetsPath, src))
+            // One unreadable source (ACLs, cycles, malformed path) skips that item, not the batch.
+            try
             {
-                plan.AlreadyInProject.Add(Path.GetRelativePath(assetsPath, src).Replace('\\', '/'));
-                continue;
-            }
+                string src = Path.GetFullPath(raw).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string name = Path.GetFileName(src);
+                if (ShouldSkip(name)) continue;
 
-            if (Directory.Exists(src))
-            {
-                if (IsSameOrUnder(src, destAbs))
+                if (IsSameOrUnder(assetsPath, src))
                 {
-                    Runtime.Debug.LogWarning($"Skipped dropped folder '{src}': it contains the destination.");
+                    plan.AlreadyInProject.Add(Path.GetRelativePath(assetsPath, src).Replace('\\', '/'));
                     continue;
                 }
-                string unique = UniqueName(destAbs, name, "", claimed);
-                AddTree(plan, src, Path.Combine(destAbs, unique), CombineRel(destRel, unique));
+
+                if (Directory.Exists(src))
+                {
+                    if (IsSameOrUnder(src, destAbs))
+                    {
+                        Runtime.Debug.LogWarning($"Skipped dropped folder '{src}': it contains the destination.");
+                        continue;
+                    }
+                    string unique = UniqueName(destAbs, name, "", claimed);
+                    AddTree(plan, src, Path.Combine(destAbs, unique), CombineRel(destRel, unique));
+                }
+                else if (File.Exists(src))
+                {
+                    string unique = UniqueName(destAbs, Path.GetFileNameWithoutExtension(name), Path.GetExtension(name), claimed);
+                    plan.Files.Add((src, Path.Combine(destAbs, unique), CombineRel(destRel, unique)));
+                }
             }
-            else if (File.Exists(src))
+            catch (Exception ex)
             {
-                string unique = UniqueName(destAbs, Path.GetFileNameWithoutExtension(name), Path.GetExtension(name), claimed);
-                plan.Files.Add((src, Path.Combine(destAbs, unique), CombineRel(destRel, unique)));
+                Runtime.Debug.LogError($"Skipped dropped item '{raw}': {ex.Message}");
             }
         }
 
@@ -181,14 +229,16 @@ public static class ExternalAssetDrop
         {
             string name = Path.GetFileName(file);
             if (ShouldSkip(name)) continue;
-            plan.Files.Add((file, Path.Combine(destDir, name), destRel + "/" + name));
+            plan.Files.Add((file, Path.Combine(destDir, name), CombineRel(destRel, name)));
         }
 
         foreach (string dir in Directory.EnumerateDirectories(srcDir))
         {
             string name = Path.GetFileName(dir);
             if (name.StartsWith('.')) continue;
-            AddTree(plan, dir, Path.Combine(destDir, name), destRel + "/" + name);
+            // Junctions/symlinks can cycle back into an ancestor.
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) continue;
+            AddTree(plan, dir, Path.Combine(destDir, name), CombineRel(destRel, name));
         }
     }
 

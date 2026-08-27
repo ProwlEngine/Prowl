@@ -139,4 +139,34 @@ public class ExternalAssetDropTests : IDisposable
         Assert.Empty(plan.Files);
         Assert.Empty(plan.Directories);
     }
+
+    [Fact]
+    public void EmptyFolder_StillPlansDirectory()
+    {
+        Directory.CreateDirectory(Path.Combine(_external, "Empty"));
+
+        var plan = ExternalAssetDrop.PlanCopy([Path.Combine(_external, "Empty")], _assets, "");
+
+        Assert.Equal(Path.Combine(_assets, "Empty"), Assert.Single(plan.Directories));
+        Assert.Empty(plan.Files);
+    }
+
+    [Fact]
+    public void JunctionCycle_DoesNotRecurse()
+    {
+        string pack = Path.Combine(_external, "Cycle");
+        Directory.CreateDirectory(pack);
+        File.WriteAllText(Path.Combine(pack, "A.png"), "x");
+
+        // mklink /J works unelevated; skip silently where it can't (the guard is attribute-based either way)
+        var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+            $"/c mklink /J \"{Path.Combine(pack, "loop")}\" \"{pack}\"") { CreateNoWindow = true, UseShellExecute = false });
+        mklink!.WaitForExit();
+        if (!Directory.Exists(Path.Combine(pack, "loop"))) return;
+
+        var plan = ExternalAssetDrop.PlanCopy([pack], _assets, "");
+
+        Assert.Equal(Path.Combine(_assets, "Cycle"), Assert.Single(plan.Directories));
+        Assert.Single(plan.Files);
+    }
 }
