@@ -1617,6 +1617,10 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
+        // Before the play copy is built, so it resolves its own instances rather than adopting the ones
+        // the editor scene had.
+        DropLoadedAssets();
+
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         var playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
@@ -1673,6 +1677,8 @@ public class EditorApplication : Game
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
         {
+            DropLoadedAssets();
+
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
             if (restoredScene != null)
@@ -1701,6 +1707,18 @@ public class EditorApplication : Game
         RestoreActiveTab();
 
         Runtime.Debug.Log("Exited play mode.");
+    }
+
+    /// <summary>
+    /// Drops every loaded asset instance, so the scene about to be built resolves fresh ones and
+    /// nothing a play session did to an asset outlives it.
+    /// </summary>
+    private static void DropLoadedAssets()
+    {
+        int dropped = EditorAssetBackend.Instance?.UnloadAll() ?? 0;
+
+        if (dropped > 0)
+            Runtime.Debug.Log($"[Assets] Dropped {dropped} loaded asset instances, so both sides of the play session read from disk.");
     }
 
     private void TogglePause()

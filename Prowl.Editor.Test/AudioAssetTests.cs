@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Echo;
@@ -238,6 +238,68 @@ public class AudioAssetTests : EditorTestHarness
     #endregion
 
     #region Mixer assets
+
+    // Assets are shared instances, so a script setting a mixer group's volume at run time writes to
+    // the project's copy of it. Dropping the loaded instances is what stops that outliving the play
+    // session, and it is what both sides of a play mode transition do.
+    [Fact]
+    public void UnloadAll_ThrowsAwayRuntimeChangesToAnAsset()
+    {
+        var mixer = new AudioMixer();
+        mixer.AddGroup("Music");
+
+        Guid guid = CreateMixer(mixer);
+
+        var loaded = Assets.Get(guid) as AudioMixer;
+        Assert.NotNull(loaded);
+
+        AudioMixerGroup music = loaded!.FindGroup("Music")!;
+        Assert.Equal(0f, music.VolumeDB);
+
+        // What a gameplay script does to a mixer it was handed.
+        music.VolumeDB = -24f;
+        Assert.Equal(-24f, loaded.FindGroup("Music")!.VolumeDB);
+
+        Assert.True(Assets.UnloadAll() > 0);
+
+        var reloaded = Assets.Get(guid) as AudioMixer;
+
+        Assert.NotNull(reloaded);
+        Assert.NotSame(loaded, reloaded);
+        Assert.Equal(0f, reloaded!.FindGroup("Music")!.VolumeDB);
+    }
+
+    // A pinned asset is pinned because something needs that exact instance to survive, which is the
+    // one thing the drop has to respect.
+    [Fact]
+    public void UnloadAll_LeavesPinnedAssetsAlone()
+    {
+        Guid pinned = CreateMixer(new AudioMixer(), "Pinned.audiomixer");
+        Guid ordinary = CreateMixer(new AudioMixer(), "Ordinary.audiomixer");
+
+        var pinnedAsset = Assets.Get(pinned) as AudioMixer;
+        var ordinaryAsset = Assets.Get(ordinary) as AudioMixer;
+
+        Assert.NotNull(pinnedAsset);
+        Assert.NotNull(ordinaryAsset);
+
+        AssetDatabase.LockPermanent(pinned);
+
+        try
+        {
+            Assets.UnloadAll();
+
+            Assert.False(pinnedAsset!.IsDisposed);
+            Assert.Same(pinnedAsset, Assets.Get(pinned));
+
+            Assert.True(ordinaryAsset!.IsDisposed);
+            Assert.NotSame(ordinaryAsset, Assets.Get(ordinary));
+        }
+        finally
+        {
+            AssetDatabase.Unlock(pinned);
+        }
+    }
 
     [Fact]
     public void ImportedMixer_RegistersEachGroupAsASubAsset()
