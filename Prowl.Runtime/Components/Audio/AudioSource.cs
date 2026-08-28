@@ -128,6 +128,11 @@ public sealed class AudioSource : MonoBehaviour
 
     private Float3 _previousPosition;
     private Float3 _velocity;
+
+    // What the engine was last told. Pushing all of it every frame is five calls across the native
+    // boundary per source per frame for a scene full of emitters that mostly stand still.
+    private Float3 _pushedForward;
+    private Float3 _pushedVelocity;
     private ma_effect_node_process_proc _onEffectNodeProcess;
     private ma_procedural_data_source_proc _proceduralProcessCallback;
 
@@ -140,7 +145,10 @@ public sealed class AudioSource : MonoBehaviour
     // audio thread never sees a half-edited chain and never needs a lock to walk one.
     private readonly AudioEffectChain _chain = new();
 
+    // Built the first time something asks for the post effect audio. Most sources are never asked,
+    // and the buffer is 32 KB that the audio thread would otherwise fill for nobody.
     private AudioBuffer _outputBuffer;
+    private bool _captureOutput;
 
     // Latched so a failing audio callback reports itself once instead of every block.
     private bool _effectProcessFailed;
@@ -148,8 +156,28 @@ public sealed class AudioSource : MonoBehaviour
 
     // Events
     public event AudioEndEvent End;
-    public event AudioProcessEvent Process;
     public event AudioReadEvent Read;
+
+    private AudioProcessEvent _process;
+
+    /// <summary>
+    /// Raised for every block this source produces, after its effects have run, on the audio thread.
+    /// A handler must not allocate, block or touch the scene: it is running against the mix, where a
+    /// collection or a contended lock is an audible dropout.
+    /// </summary>
+    /// <remarks>
+    /// Subscribing builds the node that runs the chain if this source did not already have one, so a
+    /// source nobody is listening to and that has no effects does not pay for either.
+    /// </remarks>
+    public event AudioProcessEvent Process
+    {
+        add
+        {
+            _process += value;
+            EnsureEffectNode();
+        }
+        remove => _process -= value;
+    }
 
     #region Properties
 
@@ -546,7 +574,6 @@ public sealed class AudioSource : MonoBehaviour
 
         // Initialize native resources
         _previousPosition = Transform.Position;
-        _outputBuffer = new AudioBuffer(8192);
         _proceduralProcessCallback = OnProceduralProcess;
 
         // Create sound group
@@ -560,36 +587,18 @@ public sealed class AudioSource : MonoBehaviour
             _mainSource.atEnd = false;
             MiniAudioExNative.ma_ex_audio_source_set_group(_mainSource.handle, _soundGroup.pointer);
 
-            // Setup effect node
-            _effectNode = new ma_effect_node_ptr(true);
-            _onEffectNodeProcess = OnEffectProcess;
-
-            ma_effect_node_config effectNodeConfig = MiniAudioNative.ma_effect_node_config_init(
-                (UInt32)AudioContext.Channels,
-                (UInt32)AudioContext.SampleRate,
-                _onEffectNodeProcess,
-                IntPtr.Zero
-            );
-
-            ma_engine_ptr pEngine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(AudioContext.NativeContext));
-
-            _effectNodeReady = MiniAudioNative.ma_effect_node_init(MiniAudioNative.ma_engine_get_node_graph(pEngine), ref effectNodeConfig, _effectNode) == ma_result.success;
-
-            if (_effectNodeReady)
-            {
-                MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_soundGroup.pointer), 0, new ma_node_ptr(_effectNode.pointer), 0);
-            }
-            else
-            {
-                Debug.LogError($"[{Name}] Could not create the audio effect node. This source will be heard, but its effects will not be applied.");
-            }
-
-            // Either way: routing is what decides which bus this source feeds, and losing the effect
-            // node should not quietly cost it that as well.
             RouteToOutputGroup();
 
             // Apply all serialized settings
             ApplySettings();
+
+            // Pushed in full once, because from here on only what changes is sent, and because a
+            // source that starts playing before its first update has to be heard where it is rather
+            // than wherever the engine last had it.
+            if (_spatial)
+                PushSpatialState(Transform.Position, Transform.Forward, Float3.Zero);
+
+            // Publishes the chain, and builds the node to run it on if anything wants one.
             RefreshEffects();
 
             // Handle playback. If the clip is still streaming in (async loading), defer the
@@ -597,6 +606,83 @@ public sealed class AudioSource : MonoBehaviour
             if (!TryAutoPlay() && _playOnStart)
                 _pendingAutoPlay = true;
         }
+    }
+
+    /// <summary>Sends the whole spatial state across and records what was sent.</summary>
+    private void PushSpatialState(Float3 position, Float3 forward, Float3 velocity)
+    {
+        if (_soundGroup.pointer == IntPtr.Zero)
+            return;
+
+        Float3 audioPosition = AudioContext.ToAudioSpace(position);
+        MiniAudioNative.ma_sound_group_set_position(_soundGroup, audioPosition.X, audioPosition.Y, audioPosition.Z);
+
+        Float3 audioForward = AudioContext.ToAudioSpace(forward);
+        MiniAudioNative.ma_sound_group_set_direction(_soundGroup, audioForward.X, audioForward.Y, audioForward.Z);
+
+        Float3 audioVelocity = AudioContext.ToAudioSpace(velocity);
+        MiniAudioNative.ma_sound_group_set_velocity(_soundGroup, audioVelocity.X, audioVelocity.Y, audioVelocity.Z);
+
+        _previousPosition = position;
+        _pushedForward = forward;
+        _pushedVelocity = velocity;
+    }
+
+    /// <summary>
+    /// True when something wants the block this source produces: an effect to run over it, a handler
+    /// to see it, or a caller asking for the audio back.
+    /// </summary>
+    private bool WantsEffectNode => _effects.Count > 0 || _process != null || _captureOutput;
+
+    /// <summary>
+    /// Builds the node that runs this source's chain, if anything needs one and there is not one
+    /// already.
+    /// </summary>
+    /// <remarks>
+    /// Built on demand rather than for every source. The node is a managed callback across the
+    /// native boundary for every block, plus a copy through the chain and another into the capture
+    /// buffer, and most sources in a scene have no effects and nobody listening. That was being paid
+    /// per source per block on the audio thread to move audio from one buffer to an identical one.
+    ///
+    /// Kept once built. Taking it back out would mean detaching the graph under a sounding voice to
+    /// save a copy, and anything that wanted it once usually wants it again.
+    /// </remarks>
+    private void EnsureEffectNode()
+    {
+        if (_soundGroup.pointer == IntPtr.Zero || _effectNodeReady || !WantsEffectNode)
+            return;
+
+        if (!AudioContext.IsInitialized || _deviceGeneration != AudioContext.DeviceGeneration)
+            return;
+
+        _effectNode = new ma_effect_node_ptr(true);
+        _onEffectNodeProcess = OnEffectProcess;
+
+        ma_effect_node_config effectNodeConfig = MiniAudioNative.ma_effect_node_config_init(
+            (UInt32)AudioContext.Channels,
+            (UInt32)AudioContext.SampleRate,
+            _onEffectNodeProcess,
+            IntPtr.Zero
+        );
+
+        var pEngine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(AudioContext.NativeContext));
+
+        _effectNodeReady = MiniAudioNative.ma_effect_node_init(MiniAudioNative.ma_engine_get_node_graph(pEngine), ref effectNodeConfig, _effectNode) == ma_result.success;
+
+        if (!_effectNodeReady)
+        {
+            Debug.LogError($"[{Name}] Could not create the audio effect node. This source will be heard, but its effects will not be applied.");
+            _effectNode.Free();
+            return;
+        }
+
+        MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_soundGroup.pointer), 0, new ma_node_ptr(_effectNode.pointer), 0);
+
+        // The node is now what feeds the bus, so the attachment that was made from the sound group
+        // has to be made again from here. Cleared because the target has not changed, only the thing
+        // arriving at it, which is the one thing the routing cache cannot see.
+        _routedTo = IntPtr.Zero;
+        RouteToOutputGroup();
     }
 
     /// <summary>Perform the OnEnable play-on-start if the clip is loaded.
@@ -642,11 +728,20 @@ public sealed class AudioSource : MonoBehaviour
             }
 
             Float3 pos = Transform.Position;
-            Float3 audioPos = AudioContext.ToAudioSpace(pos);
-            MiniAudioNative.ma_sound_group_set_position(_soundGroup, audioPos.X, audioPos.Y, audioPos.Z);
+            Float3 forward = Transform.Forward;
 
-            Float3 forward = AudioContext.ToAudioSpace(Transform.Forward);
-            MiniAudioNative.ma_sound_group_set_direction(_soundGroup, forward.X, forward.Y, forward.Z);
+            if (pos != _previousPosition)
+            {
+                Float3 audioPos = AudioContext.ToAudioSpace(pos);
+                MiniAudioNative.ma_sound_group_set_position(_soundGroup, audioPos.X, audioPos.Y, audioPos.Z);
+            }
+
+            if (forward != _pushedForward)
+            {
+                Float3 audioForward = AudioContext.ToAudioSpace(forward);
+                MiniAudioNative.ma_sound_group_set_direction(_soundGroup, audioForward.X, audioForward.Y, audioForward.Z);
+                _pushedForward = forward;
+            }
 
             // Velocity for doppler, against the same wall clock the listener uses. Doppler is the
             // difference between the two, so a source measured in scaled time and a listener measured
@@ -655,8 +750,15 @@ public sealed class AudioSource : MonoBehaviour
             if (deltaTime > 0)
             {
                 _velocity = (pos - _previousPosition) / deltaTime;
-                Float3 velocity = AudioContext.ToAudioSpace(_velocity);
-                MiniAudioNative.ma_sound_group_set_velocity(_soundGroup, velocity.X, velocity.Y, velocity.Z);
+
+                // Sent when it changes, which includes the frame a source comes to rest: leaving the
+                // last velocity in place would keep shifting the pitch of something standing still.
+                if (_velocity != _pushedVelocity)
+                {
+                    Float3 velocity = AudioContext.ToAudioSpace(_velocity);
+                    MiniAudioNative.ma_sound_group_set_velocity(_soundGroup, velocity.X, velocity.Y, velocity.Z);
+                    _pushedVelocity = _velocity;
+                }
             }
 
             _previousPosition = pos;
@@ -1153,6 +1255,7 @@ public sealed class AudioSource : MonoBehaviour
         _effects.Add(effect);
         effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
         _chain.Publish(_effects);
+        EnsureEffectNode();
     }
 
     /// <summary>
@@ -1234,6 +1337,7 @@ public sealed class AudioSource : MonoBehaviour
         }
 
         _chain.Publish(_effects);
+        EnsureEffectNode();
     }
 
     /// <summary>
@@ -1280,14 +1384,18 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public bool GetOutputBuffer(ref float[] buffer, out int length)
     {
-        if (_outputBuffer != null)
+        // Asking is what turns the capture on, so a source nobody asks does not spend the audio
+        // thread's time filling a buffer for no one. Nothing has been captured yet at that point, so
+        // the first call answers with nothing and the next one has a block to give.
+        if (!_captureOutput)
         {
-            length = _outputBuffer.Read(ref buffer);
-            return length > 0;
+            _captureOutput = true;
+            _outputBuffer ??= new AudioBuffer(8192);
+            EnsureEffectNode();
         }
 
-        length = 0;
-        return false;
+        length = _outputBuffer.Read(ref buffer);
+        return length > 0;
     }
 
     #endregion
@@ -1449,12 +1557,12 @@ public sealed class AudioSource : MonoBehaviour
         {
             UInt32 countOut = _chain.Process(framesIn[0], *frameCountIn, framesOut[0], *frameCountOut, channels);
 
-            if (Process != null)
+            if (_process != null)
             {
                 var bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
                 var bufferOut = new NativeArray<float>(framesOut[0], (int)(countOut * channels));
 
-                Process.Invoke(bufferIn, *frameCountIn, bufferOut, ref countOut, channels);
+                _process.Invoke(bufferIn, *frameCountIn, bufferOut, ref countOut, channels);
 
                 // A subscriber gets the same say an effect does, within the same limit.
                 if (countOut > *frameCountOut)
@@ -1463,7 +1571,10 @@ public sealed class AudioSource : MonoBehaviour
 
             *frameCountOut = countOut;
 
-            _outputBuffer.Write(new NativeArray<float>(framesOut[0], (int)(countOut * channels)));
+            AudioBuffer capture = _outputBuffer;
+
+            if (capture != null)
+                capture.Write(new NativeArray<float>(framesOut[0], (int)(countOut * channels)));
         }
         catch (Exception ex)
         {
