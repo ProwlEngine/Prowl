@@ -94,30 +94,32 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
             renderable.GetCullingData(out bool isRenderable, out _);
             if (!isRenderable)
             {
-                EmitRenderable(cmd, renderable, "", "", culled: true, drawCallCount: 0);
+                EmitRenderable(cmd, renderable, "", "", culled: true);
                 continue;
             }
 
             renderable.GetRenderingData(viewer, out PropertySet properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData);
             if (instanceData != null && instanceData.Length > 0)
             {
-                EmitRenderable(cmd, renderable, "", "", culled: true, drawCallCount: 0);
+                EmitRenderable(cmd, renderable, "", "", culled: true);
                 continue;
             }
 
             Material material = renderable.GetMaterial();
             if (mesh.IsNotValid() || material.IsNotValid())
             {
-                EmitRenderable(cmd, renderable, material.IsValid() ? material.Name : "", "", culled: true, drawCallCount: 0);
+                EmitRenderable(cmd, renderable, material.IsValid() ? material.Name : "", "", culled: true);
                 continue;
             }
 
+            // Metadata attaches to every draw since this call (see CommandBuffer.RecordMetadata), so
+            // it must be recorded before the draw it's tagging, not after.
+            EmitRenderable(cmd, renderable, material.Name, mesh.Name, culled: false);
             cmd.DrawMesh(mesh, material, 0, model, properties);
-            EmitRenderable(cmd, renderable, material.Name, mesh.Name, culled: false, drawCallCount: 1);
         }
     }
 
-    internal static void EmitRenderable(CommandBuffer cmd, IRenderable renderable, string materialName, string meshName, bool culled, int drawCallCount)
+    private static void EmitRenderable(CommandBuffer cmd, IRenderable renderable, string materialName, string meshName, bool culled)
     {
         if (!cmd.WantsMetadata)
             return;
@@ -129,7 +131,6 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
             Layer = renderable.GetLayer(),
             Position = renderable.GetPosition(),
             Culled = culled,
-            DrawCallCount = drawCallCount,
         });
     }
 

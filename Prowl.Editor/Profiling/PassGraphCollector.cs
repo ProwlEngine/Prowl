@@ -164,8 +164,26 @@ public sealed class PassGraphCollector
         }
     }
 
-    /// <summary>Bumps DispatchCallCount on the view/pass a dispatch landed in - always-on, unlike
-    /// DrawCallCount which comes from scene RenderableMetadata (dispatches aren't scene renderables).</summary>
+    /// <summary>Bumps DrawCallCount on the view/pass/command-buffer a draw landed in - always-on, off the
+    /// raw draw event itself, so passes with no scene renderables (e.g. the UI pass) still get counted.
+    /// RenderableMetadata only adds the object-level breakdown on top of this.</summary>
+    public void OnDraw(string currentView, in CommandBufferInfo cb, in DrawCallInfo info)
+    {
+        if (_frame == null || cb.Pass is not { } pass)
+            return;
+
+        _touchedViews.Add(currentView);
+        ProfiledView view = _frame.View(currentView);
+        ProfiledPass passObj = view.Pass(pass.Index, pass.Name);
+        ProfiledCommandBuffer node = passObj.CommandBuffer(cb.Id, cb.Name);
+        int count = (int)info.DrawCount;
+        node.AddDrawCalls(count);
+        passObj.AddDrawCalls(count);
+        view.AddDrawCalls(count);
+        _timing.Track(cb.Id, _frame.FrameIndex, node);
+    }
+
+    /// <summary>Bumps DispatchCallCount on the view/pass a dispatch landed in - always-on, mirroring OnDraw.</summary>
     public void OnDispatch(string currentView, in CommandBufferInfo cb)
     {
         if (_frame == null || cb.Pass is not { } pass)

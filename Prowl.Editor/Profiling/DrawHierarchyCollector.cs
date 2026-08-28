@@ -35,16 +35,13 @@ public sealed class DrawHierarchyCollector
 
         ViewState state = GetOrCreateView(currentView);
 
+        // DrawCallCount itself is bumped unconditionally off the raw draw events by
+        // PassGraphCollector.OnDraw - this metadata only adds the object-level breakdown
+        // (RegisteredObjects/CulledObjects here, per-object draw ranges below).
         ProfiledView? view = _frame?.View(currentView);
         view?.AddObjectCounts(r.Culled);
         if (commandBuffer.Pass is { } pass)
-        {
-            ProfiledPass? passObj = view?.Pass(pass.Index, pass.Name);
-            passObj?.AddObjectCounts(r.Culled);
-            passObj?.CommandBuffer(commandBuffer.Id, commandBuffer.Name).AddDrawCalls(r.DrawCallCount);
-            passObj?.AddDrawCalls(r.DrawCallCount);
-            view?.AddDrawCalls(r.DrawCallCount);
-        }
+            view?.Pass(pass.Index, pass.Name).AddObjectCounts(r.Culled);
 
         if (state.Pending.Count == state.Boundary || state.CurrentSwitch == null)
         {

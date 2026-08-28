@@ -320,6 +320,7 @@ public sealed class EditorProfiler : IProfiler
         if (!ShouldRecord)
             return;
         _passGraph.OnCommandBufferSeen(_currentView, in commandBuffer);
+        _passGraph.OnDraw(_currentView, in commandBuffer, in info);
         _counters.OnDraw(in info);
         DrawHierarchy.OnDraw(_currentView, in info);
     }
