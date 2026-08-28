@@ -621,6 +621,15 @@ internal sealed class CommandExecutor
                     unsafe { tex.GetTexImage(mip, (void*)(nint)raw); }
                     break;
                 }
+                case CommandOpcode.Screenshot:
+                {
+                    var texture = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    int width = ReadI32(stream, ref pos);
+                    int height = ReadI32(stream, ref pos);
+                    texture.Bind();
+                    Graphics.GL.CopyTexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, 0, 0, (uint)width, (uint)height, 0);
+                    break;
+                }
                 case CommandOpcode.CreateVertexArrayOp:
                 {
                     var vao = (GraphicsVertexArray)objects[ReadU16(stream, ref pos)]!;
