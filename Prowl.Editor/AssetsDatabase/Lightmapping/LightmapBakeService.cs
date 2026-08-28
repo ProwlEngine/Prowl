@@ -68,10 +68,8 @@ public sealed class LightmapBakeService
         baker.Options.IncludeDirectLighting = true;
         baker.Options.DoBackfaceCull = settings.DoBackfaceCull;
         baker.Options.DilatePixels = settings.DilatePixels;
-        baker.Options.RussianRoulette = settings.RussianRoulette;
-        baker.Options.IgnoreAlbedo = settings.IgnoreAlbedo;
-        baker.Options.Denoise = settings.Denoise;
-        baker.Options.DenoiseIterations = Math.Max(1, settings.DenoiseRadius);
+        baker.Options.SparseStride = Math.Max(1, settings.SparseStride);
+        baker.Options.Diagnostics.IgnoreAlbedo = settings.IgnoreAlbedo;
         if (settings.BakeSkyLighting)
             baker.Options.SkyColor = SceneSkyRadiance(scene);
 
@@ -247,9 +245,7 @@ public sealed class LightmapBakeService
         var atlas = _atlas!;
         var scene = _scene!;
         baker.Cancel();        // stop the progressive job
-        baker.Job?.Wait();     // ensure the worker stopped writing before we post-process
-        if (_settings.Denoise) Status = "Denoising…";
-        baker.Job?.Denoise();  // edge-avoiding denoise + re-dilate (no-op unless enabled); atlas buffers are now final
+        baker.Job?.Wait();     // ensure the worker stopped writing before we read the atlas buffers
 
         var db = EditorAssetBackend.Instance;
         string scenePath = EditorSceneManager.CurrentScenePath ?? "";

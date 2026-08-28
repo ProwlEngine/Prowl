@@ -395,11 +395,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public int Samples = 64;              // progressive indirect iterations before finalize
         public int ProbeSamples = 256;
         public bool DoBackfaceCull = false;   // cull back faces on all bake rays (matches Prowl's backface-culled rendering)
-        public float RussianRoulette = 0f;    // 0 = off
 
-        // Edge-avoiding denoiser (runs once at finalize); geometry-guided only.
-        public bool Denoise = false;
-        public int DenoiseRadius = 5;         // a-trous pass count; each step ~doubles the smoothing reach (~2^N texels)
+        // Trace one texel per NxN atlas cell and interpolate the rest. 1 traces everything; higher
+        // values converge far faster and cost fine indirect detail. Contacts and corners always trace.
+        public int SparseStride = 1;
 
         // Feed the scene's ambient colour in as ray-miss (sky) radiance.
         public bool BakeSkyLighting = false;
