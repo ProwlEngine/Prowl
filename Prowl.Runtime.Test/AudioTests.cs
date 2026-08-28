@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Reflection;
@@ -248,6 +248,32 @@ public class AudioTests : RuntimeTestBase
             stop.Cancel();
             writer.Join(TimeSpan.FromSeconds(5));
         }
+    }
+
+    // The destination is grown to hold the block, not to the largest block the buffer could ever
+    // hold. A caller wanting a few hundred samples for a meter was handed 32 KB.
+    [Fact]
+    public unsafe void AudioBuffer_Read_SizesToWhatWasWritten()
+    {
+        var buffer = new AudioBuffer(1024);
+        float[] source = new float[16];
+
+        for (int i = 0; i < source.Length; i++)
+            source[i] = i + 1;
+
+        fixed (float* pSource = source)
+            buffer.Write(new NativeArray<float>(pSource, source.Length));
+
+        float[] output = null!;
+
+        Assert.Equal(16, buffer.Read(ref output));
+        Assert.Equal(16, output.Length);
+        Assert.Equal(source, output);
+
+        // An array that is already big enough is kept rather than replaced.
+        float[] roomy = new float[64];
+        Assert.Equal(16, buffer.Read(ref roomy));
+        Assert.Equal(64, roomy.Length);
     }
 
     // Write sized its destination from the source, so the bounds check compared the source against
