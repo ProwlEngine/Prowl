@@ -1,4 +1,4 @@
-Shader "Skybox/Gradient"
+﻿Shader "Skybox/Gradient"
 
 Properties
 {
@@ -31,7 +31,7 @@ Pass "GradientSkybox"
                 viewNoTranslation[3][1] = 0.0;
                 viewNoTranslation[3][2] = 0.0;
 
-                vec4 pos = PROWL_MATRIX_P * viewNoTranslation * vec4(vertexPosition, 1.0);
+                vec4 pos = prowlSkyProjection() * viewNoTranslation * vec4(vertexPosition, 1.0);
                 gl_Position = pos.xyww; // depth = 1.0 (far plane)
 
                 vDirection = normalize(vertexPosition);
