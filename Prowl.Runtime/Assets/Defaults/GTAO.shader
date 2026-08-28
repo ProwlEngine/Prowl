@@ -224,7 +224,11 @@ Pass "Blur"
         void main()
         {
             vec2 texelSize = 1.0 / _ScreenParams.xy;
-            float centerDepth = texture(_CameraDepthTexture, TexCoords).r;
+            // Linear, and compared as a fraction of the centre's own depth. A raw-depth difference
+            // means a different world distance at every depth under perspective and a constant one
+            // under orthographic, so the same falloff would vary with both distance and projection.
+            // Same shape the fog upsample uses.
+            float centerDepth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).r);
 
             vec4 result = texture(_MainTex, TexCoords);
             float totalWeight = 1.0;
@@ -236,8 +240,8 @@ Pass "Blur"
                 float offset = float(i) * _BlurRadius;
                 vec2 sampleUV = TexCoords + _BlurDirection * texelSize * offset;
 
-                float sampleDepth = texture(_CameraDepthTexture, sampleUV).r;
-                float depthDiff = abs(centerDepth - sampleDepth);
+                float sampleDepth = linearizeDepthFromProjection(texture(_CameraDepthTexture, sampleUV).r);
+                float depthDiff = abs(centerDepth - sampleDepth) / max(centerDepth, 1e-4);
 
                 // Weight based on depth similarity
                 float weight = exp(-depthDiff * 100.0) * exp(-0.5 * float(i * i) / 2.0);
