@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -69,6 +69,7 @@ public class InspectorPanel : DockPanel
         if (_subscribed)
         {
             Selection.OnSelectionChanged -= OnSelectionChanged;
+            EditorApplication.PlayModeRequested -= OnPlayModeRequested;
             _subscribed = false;
         }
     }
@@ -111,6 +112,24 @@ public class InspectorPanel : DockPanel
 
         if (!editor.HasPendingChanges(entry, asset)) return false;
 
+        // Navigating away has already happened by the time this is asked, so dismissing it has to
+        // mean something: it reverts, the same as the button does.
+        RaiseUnappliedPrompt(editor, entry, asset, onResolved: null, cancellable: false);
+        return true;
+    }
+
+    /// <summary>
+    /// Raises the Apply/Revert choice for an editor holding unwritten changes.
+    /// </summary>
+    /// <param name="onResolved">Run once the user has chosen, for a caller that is waiting on the answer.</param>
+    /// <param name="cancellable">
+    /// Offers a way out that leaves the changes exactly as they are. For a prompt that is holding
+    /// something up rather than reacting to something that has already happened, since backing out of
+    /// pressing play should not be the same as throwing away what is in the inspector.
+    /// </param>
+    private void RaiseUnappliedPrompt(AssetImporterEditor editor, AssetEntry entry, EngineObject? asset,
+        Action? onResolved, bool cancellable)
+    {
         _promptOpen = true;
 
         string name = Path.GetFileName(entry.Path);
@@ -119,18 +138,74 @@ public class InspectorPanel : DockPanel
 
         dialog.CloseOnEscape = true;
         dialog.CloseOnBackdrop = false;
+
         dialog.OnDismissed = _ =>
         {
             _promptOpen = false;
-            editor.RevertPendingChanges(entry, asset);
+
+            // Escaping a prompt that is holding something up means "not now", so it leaves both the
+            // changes and whatever was waiting alone.
+            if (!cancellable)
+                editor.RevertPendingChanges(entry, asset);
         };
 
         dialog.Button(Loc.Get("dialog.apply"),
-                () => { _promptOpen = false; editor.ApplyPendingChanges(entry, asset); Modal.Pop(); }, OrigamiVariant.Primary)
+                () =>
+                {
+                    _promptOpen = false;
+                    editor.ApplyPendingChanges(entry, asset);
+                    Modal.Pop();
+                    onResolved?.Invoke();
+                }, OrigamiVariant.Primary)
             .Button(Loc.Get("dialog.revert"),
-                () => { _promptOpen = false; editor.RevertPendingChanges(entry, asset); Modal.Pop(); });
+                () =>
+                {
+                    _promptOpen = false;
+                    editor.RevertPendingChanges(entry, asset);
+                    Modal.Pop();
+                    onResolved?.Invoke();
+                });
 
-        return true;
+        if (cancellable)
+            dialog.Button(Loc.Get("common.cancel"), () => { _promptOpen = false; Modal.Pop(); });
+    }
+
+    /// <summary>
+    /// Holds a play mode transition while the inspector has edits nobody has decided about.
+    /// </summary>
+    /// <remarks>
+    /// Both sides of a play session drop every loaded asset instance, so that a session starts from
+    /// what is on disk and cannot leave anything behind. Unwritten inspector edits live in those
+    /// instances, so without this they would go with them, and the only sign would be an inspector
+    /// that quietly reads differently afterwards.
+    /// </remarks>
+    private void OnPlayModeRequested(PlayModeRequest request)
+    {
+        if (_promptOpen)
+        {
+            request.Defer("a choice about unapplied changes");
+            return;
+        }
+
+        if (_openEditor == null || _openEntry == null) return;
+        if (!_openEditor.HasPendingChanges(_openEntry, _openAsset)) return;
+
+        AssetImporterEditor editor = _openEditor;
+        AssetEntry entry = _openEntry;
+        EngineObject? asset = _openAsset;
+        bool entering = request.Entering;
+
+        request.Defer($"unapplied changes to '{Path.GetFileName(entry.Path)}'");
+
+        // Asking again rather than resuming a held transition: the answer runs every handler afresh,
+        // so a second panel with something outstanding gets its turn instead of being skipped.
+        RaiseUnappliedPrompt(editor, entry, asset,
+            onResolved: () =>
+            {
+                if (entering) EditorApplication.RequestPlayMode();
+                else EditorApplication.RequestExitPlayMode();
+            },
+            cancellable: true);
     }
 
     private void OnSelectionChanged()
@@ -153,6 +228,7 @@ public class InspectorPanel : DockPanel
         if (!_subscribed)
         {
             Selection.OnSelectionChanged += OnSelectionChanged;
+            EditorApplication.PlayModeRequested += OnPlayModeRequested;
             _subscribed = true;
         }
 
