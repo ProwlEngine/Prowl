@@ -113,18 +113,10 @@ public class EditorModelImporter : AssetImporter
     }
 
     /// <summary>
-    /// Gives every object identities derived from where it sits rather than from its constructor, so
-    /// importing the same file twice produces the same ones.
-    /// <para/>
-    /// This is what lets an instance survive a reimport. Every override names the object and component it
-    /// is on by the identity the asset holds them under, so handing out fresh identities would leave
-    /// every instance in the project addressing objects that no longer exist: overrides dropped, objects
-    /// below the instance root destroyed and rebuilt, references to them dead. A model is reimported
-    /// whenever its file or any of its settings change, so that is otherwise a routine loss.
-    /// <para/>
-    /// Keying on position means renaming or moving a node reads as a different object and orphans the
-    /// overrides on it, which is unavoidable while the source file carries no identities of its own. The
-    /// root is keyed as itself rather than by name, since the importer names it after the asset file.
+    /// Gives every object an identity derived from where it sits rather than from its constructor, so
+    /// importing the same file twice produces the same ones and instances keep their overrides across a
+    /// reimport. Renaming or moving a node therefore reads as a different object and orphans its
+    /// overrides, which is unavoidable while the source file carries no identities of its own.
     /// </summary>
     internal static void StabilizeIdentities(GameObject go, string path = "$Root")
     {

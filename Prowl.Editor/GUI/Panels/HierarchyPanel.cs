@@ -565,9 +565,7 @@ public class HierarchyPanel : DockPanel
 
     private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
     {
-        // Moving prefab content out of its instance is not something an instance can record, so it asks
-        // and unlinks rather than refusing. Captured into a list first: the drag is over by the time the
-        // answer comes back.
+        // Captured into a list first: the drag is over by the time the answer comes back.
         List<GameObject> dragged = ExcludeNestedSelections(goDrop.GameObjects).ToList();
         if (PrefabUtility.NeedsBreaking(dragged))
         {
@@ -1143,9 +1141,8 @@ public class HierarchyPanel : DockPanel
     internal static void DeleteGameObject(GameObject go) => DeleteGameObjects([go]);
 
     /// <summary>
-    /// Delete a set of GameObjects as one action. Deleting an object a prefab provides is not something
-    /// an instance can record, so that asks once for the whole set and unlinks what it touches, rather
-    /// than refusing or asking once per object.
+    /// Delete a set of GameObjects as one action, asking once for the whole set when any of them is
+    /// structure a prefab provides.
     /// </summary>
     internal static void DeleteGameObjects(IReadOnlyList<GameObject> gameObjects)
     {
@@ -1336,9 +1333,8 @@ public class HierarchyPanel : DockPanel
         }
         else if (asset is PrefabAsset)
         {
-            // A prefab cannot contain another prefab, so inside a prefab editing session the only thing
-            // this can mean is "add these objects to what I am editing". Asked rather than assumed,
-            // because the link is what the user would be giving up.
+            // A prefab cannot contain another prefab, so inside a session this can only mean "add these
+            // objects to what I am editing".
             if (PrefabEditingMode.IsEditing)
             {
                 Origami.Confirm(
@@ -1356,10 +1352,7 @@ public class HierarchyPanel : DockPanel
         }
     }
 
-    /// <summary>
-    /// Put a prefab into the scene, either as an instance of it or as a copy of its contents with no
-    /// link, which is what a prefab editing session can hold.
-    /// </summary>
+    /// <summary>Put a prefab into the scene, as an instance or as a copy of its contents with no link.</summary>
     private static void SpawnPrefab(AssetDragPayload payload, GameObject? parent, Float3 position,
         Runtime.Resources.Scene scene, bool flatten)
     {

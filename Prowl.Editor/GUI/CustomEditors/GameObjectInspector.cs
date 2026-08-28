@@ -984,9 +984,8 @@ public static class GameObjectInspector
 
         builder.Separator();
 
-        // A component the prefab provides can still be removed, but not while the object is an instance:
-        // nothing records the removal, so the next refresh would put it straight back. Taking it away
-        // therefore asks first and unlinks the instance.
+        // Nothing records the removal of a component the prefab provides, so the next refresh would put
+        // it back. Removing one therefore asks first and unlinks the instance.
         builder.Item(Loc.Get("inspector.remove_component"), () =>
         {
             if (PrefabUtility.NeedsBreaking(comp))
@@ -1350,9 +1349,8 @@ public static class GameObjectInspector
     }
 
     /// <summary>
-    /// The component an entry is on, by the identity the entry was described with. Searched inside this
-    /// instance rather than across the scene: two instances of one prefab have identically named objects
-    /// carrying identically named components, and a search by name lands on whichever comes first.
+    /// The component an entry is on, by identity and inside this instance. Two instances of one prefab
+    /// have identically named objects, so a search by name lands on whichever comes first.
     /// </summary>
     private static MonoBehaviour? ComponentFor(GameObject root, PrefabUtility.OverrideDescription entry)
     {

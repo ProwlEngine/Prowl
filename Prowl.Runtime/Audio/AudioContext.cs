@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -246,6 +246,7 @@ public static class AudioContext
         unsafe
         {
             deviceDataProc = &OnDeviceDataProc;
+            contextConfig.deviceDataProc = deviceDataProc;
         }
 
         audioContext = MiniAudioExNative.ma_ex_context_init(ref contextConfig);

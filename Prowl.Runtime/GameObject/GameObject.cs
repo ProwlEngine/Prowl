@@ -697,9 +697,9 @@ public partial class GameObject : EngineObject, ISerializable
     /// <para/>
     /// A component the prefab provides is not the instance's to remove while the editor is the thing
     /// holding it: nothing records that it went, so the next time the instance is brought back into
-    /// line with its prefab it would simply reappear. Unpack the instance, or take the component off
-    /// the prefab. In play mode and in a player nothing refreshes an instance, so nothing stands in
-    /// the way there.
+    /// line with its prefab it would simply reappear. The editor's own remove offers to break the
+    /// connection first and then comes back here. In play mode and in a player nothing refreshes an
+    /// instance, so nothing stands in the way there.
     /// </summary>
     /// <param name="component">The component instance to remove.</param>
     /// <returns>
@@ -713,7 +713,7 @@ public partial class GameObject : EngineObject, ISerializable
         if (!Application.IsPlaying && IsPrefabInstance && GetComponentSourceIdentifier(component) != Guid.Empty)
         {
             Debug.LogWarning($"[Prefab] '{component.GetType().Name}' on '{Name}' comes from a prefab, " +
-                "so it cannot be removed from this instance. Unpack the instance, or remove it from the prefab.");
+                "so removing it means breaking the connection to that prefab first.");
             return false;
         }
 

@@ -716,7 +716,6 @@ public class PrefabTests : EditorTestHarness
         Assert.DoesNotContain("Overrides", text);
         Assert.DoesNotContain("SourceComponentCount", text);
         Assert.DoesNotContain("SourceChildCount", text);
-        Assert.DoesNotContain("ComponentSources", text);
         Assert.DoesNotContain("SourceIdentifier", text);
         // Each component records where it came from on itself, and that goes the same way.
         Assert.DoesNotContain("_prefabTemplateIdentity", text);
@@ -5099,7 +5098,7 @@ public class PrefabTests : EditorTestHarness
     #region Values that belong to the object, not to the prefab
 
     [Fact]
-    public void PerInstanceStateFields_AreNeverRecordedAsOverrides()
+    public void FieldsTheCloneNeverCopies_AreNeverRecordedAsOverrides()
     {
         var root = new GameObject("Root");
         root.AddComponent<BakedComp>();

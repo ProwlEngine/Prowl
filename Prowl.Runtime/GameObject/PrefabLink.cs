@@ -11,15 +11,12 @@ namespace Prowl.Runtime;
 /// objects that actually are prefab instances, so an ordinary GameObject carries one null field
 /// rather than a copy of every prefab-related value.
 /// <para/>
-/// Internal, and its fields stay public inside that: none of these values mean anything on their
-/// own, and there is no setter that can check them against each other. An asset id with no source
-/// identity is a state no operation produces and every operation would then have to survive. What a
-/// prefab instance is gets changed through <c>PrefabUtility</c> and the instantiate path, and read
-/// through the properties on <see cref="GameObject"/>.
+/// Internal, and its fields stay public inside that: these values only mean anything as a set, and
+/// nothing here can check one against another. Changed through <c>PrefabUtility</c> and the instantiate
+/// path, read through the properties on <see cref="GameObject"/>.
 /// <para/>
-/// Only what belongs to the object as a whole lives here. Which component of the prefab a component came
-/// from is on <see cref="MonoBehaviour.SourceIdentifier"/>, because anything keyed on a component's
-/// identifier goes stale the moment that identifier is handed out fresh by a load.
+/// Only what belongs to the object as a whole. Which component of the prefab a component came from is on
+/// <see cref="MonoBehaviour.SourceIdentifier"/>.
 /// </summary>
 internal sealed class PrefabLink
 {
