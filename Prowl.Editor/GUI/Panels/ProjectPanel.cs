@@ -111,6 +111,14 @@ public class ProjectPanel : DockPanel
 
     private bool IsListView => _thumbnailSize < ListThreshold;
 
+    // An OS file drop carries no drag payload, so the hover gates open for it too.
+    private static bool DropHoverTrackingActive
+        => DragDrop.IsDragging || DragDrop.IsDropFrame || ExternalAssetDrop.IsResolvingDropTarget;
+
+    // Drop target for an OS file drop, cleared before each one resolves.
+    internal string? ExternalDropHoverFolder => _dragHoverFolderNext ?? _dragHoverFolder;
+    internal void ClearDropHover() { _dragHoverFolder = null; _dragHoverFolderNext = null; }
+
     public void NavigateTo(string folder)
     {
         if (folder == _currentFolder) return;
@@ -139,8 +147,8 @@ public class ProjectPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null || Project.Current == null) return;
 
-        // Sets itself as instance on start
-        Instance ??= this;
+        // Last-drawn wins, so a re-created panel replaces its dead predecessor.
+        Instance = this;
 
         // Detect new ping and navigate to the pinged asset's folder
         if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastPingedGuid)
@@ -592,7 +600,7 @@ public class ProjectPanel : DockPanel
                 })
                 .OnHover((n, normY) =>
                 {
-                    if (DragDrop.IsDragging || DragDrop.IsDropFrame)
+                    if (DropHoverTrackingActive)
                         _dragHoverFolderNext = (string)n.UserData!;
                 })
                 .CustomRowContent((p, node, isSel, isExp) =>
@@ -845,7 +853,7 @@ public class ProjectPanel : DockPanel
             .OnRowHover((i, _) =>
             {
                 var it = visible[i].item;
-                if (it.IsFolder && (DragDrop.IsDragging || DragDrop.IsDropFrame)) _dragHoverFolderNext = it.RelativePath;
+                if (it.IsFolder && DropHoverTrackingActive) _dragHoverFolderNext = it.RelativePath;
             })
             .IsPinged(i => { var g = visible[i].item.Guid; return g != Guid.Empty && g == Selection.PingedGuid; })
             .PingAlpha(() => Selection.GetPingAlpha())
@@ -1342,7 +1350,7 @@ public class ProjectPanel : DockPanel
             .OnHover(item, (it, _) =>
             {
                 if (!it.IsFolder) return;
-                if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolderNext = it.RelativePath;
+                if (DropHoverTrackingActive) _dragHoverFolderNext = it.RelativePath;
             })
             .Tooltip(item.Name)
             .OnPostLayout((handle, rect) =>
