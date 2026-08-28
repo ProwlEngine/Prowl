@@ -146,11 +146,6 @@ public static class SelectorModal
     {
         using (paper.Row("sel_searchrow").Height(30).Margin(6, 6, 6, 0).RowBetween(4).Enter())
         {
-            paper.Box("sel_search_ico")
-                .Width(18).Height(24)
-                .Text(EditorIcons.MagnifyingGlass, font).TextColor(EditorTheme.Ink400)
-                .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
-
             Origami.SearchField(paper, "sel_search", _searchText, v => _searchText = v).Show();
         }
     }

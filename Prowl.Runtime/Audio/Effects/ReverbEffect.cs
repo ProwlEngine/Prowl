@@ -1,14 +1,20 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio.Native;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Audio.Effects;
 
 /// <summary>Freeverb style reverb. Supports mono and stereo chains only.</summary>
+/// <remarks>
+/// An insert, so it defaults to the untouched signal with a tail on top of it. Sending a source to a
+/// reverb and hearing back only the tail is what a send bus is for, and this chain is not one: with
+/// no dry signal, as this used to default, dropping a reverb on a source removed the sound.
+/// </remarks>
 public sealed class ReverbEffect : AudioEffect
 {
     [SerializeField, Range(0f, 1f), Tooltip("Apparent size of the space.")]
@@ -18,7 +24,7 @@ public sealed class ReverbEffect : AudioEffect
     [SerializeField, Range(0f, 1f), Tooltip("Level of the reverberated signal.")]
     private float _wet = 1.0f / 3.0f;
     [SerializeField, Range(0f, 1f), Tooltip("Level of the untouched signal.")]
-    private float _dry = 0.0f;
+    private float _dry = 1.0f;
     [SerializeField, Range(0f, 1f), Tooltip("Stereo spread of the reverb tail.")]
     private float _width = 1.0f;
     [SerializeField, Tooltip("Widens or narrows the stereo image going in. 0 sums it to mono.")]
@@ -31,37 +37,37 @@ public sealed class ReverbEffect : AudioEffect
     public float RoomSize
     {
         get => _roomSize;
-        set { _roomSize = value; if (_reverb != null) _reverb.RoomSize = value; }
+        set { _roomSize = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.RoomSize = _roomSize; }
     }
 
     public float Damping
     {
         get => _damping;
-        set { _damping = value; if (_reverb != null) _reverb.Damping = value; }
+        set { _damping = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Damping = _damping; }
     }
 
     public float Wet
     {
         get => _wet;
-        set { _wet = value; if (_reverb != null) _reverb.Wet = value; }
+        set { _wet = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Wet = _wet; }
     }
 
     public float Dry
     {
         get => _dry;
-        set { _dry = value; if (_reverb != null) _reverb.Dry = value; }
+        set { _dry = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Dry = _dry; }
     }
 
     public float Width
     {
         get => _width;
-        set { _width = value; if (_reverb != null) _reverb.Width = value; }
+        set { _width = Maths.Clamp(value, 0.0f, 1.0f); if (_reverb != null) _reverb.Width = _width; }
     }
 
     public float InputWidth
     {
         get => _inputWidth;
-        set { _inputWidth = value; if (_reverb != null) _reverb.InputWidth = value; }
+        set { _inputWidth = Maths.Max(0.0f, value); if (_reverb != null) _reverb.InputWidth = _inputWidth; }
     }
 
     /// <summary>Holds the tail forever instead of letting it decay.</summary>
@@ -105,7 +111,7 @@ public sealed class ReverbEffect : AudioEffect
         _reverb.Mode = _freeze ? 1.0f : 0.0f;
     }
 
-    public override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    protected override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
     {
         if (_reverb == null)
             return;

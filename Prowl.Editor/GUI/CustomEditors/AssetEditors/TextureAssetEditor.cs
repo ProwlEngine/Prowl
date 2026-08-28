@@ -47,8 +47,9 @@ public class TextureAssetEditor : ImportSettingsEditor
         if (font == null) return;
         var m = Origami.Current.Metrics;
         AssetRef<Texture2D> texture = (AssetRef<Texture2D>)(Texture2D)asset;
+        Texture2D? tex = texture.Res;
 
-        if (texture != null)
+        if (tex.IsValid())
         {
             // Preview card: checkerboard behind the image so alpha reads clearly.
             paper.Box($"{id}_preview")
@@ -72,15 +73,17 @@ public class TextureAssetEditor : ImportSettingsEditor
                             canvas.RectFilled(px, py, cw, ch, ((cx + cy) & 1) == 0 ? ca : cb);
                         }
 
+                    if (tex.IsNotValid()) return;
+
                     float maxW = (float)r.Size.X - 16, maxH = (float)r.Size.Y - 16;
-                    float aspect = texture.Res.Width / MathF.Max(1f, texture.Res.Height);
+                    float aspect = tex.Width / MathF.Max(1f, tex.Height);
                     float drawW = maxW, drawH = drawW / aspect;
                     if (drawH > maxH) { drawH = maxH; drawW = drawH * aspect; }
                     float drawX = (float)r.Min.X + ((float)r.Size.X - drawW) / 2f;
                     float drawY = (float)r.Min.Y + ((float)r.Size.Y - drawH) / 2f;
 
                     // Flip V (textures are stored Y-up), same idiom the scene view uses for its RT.
-                    canvas.SetBrushTexture(texture.Res);
+                    canvas.SetBrushTexture(tex);
                     canvas.SetBrushTextureTransform(
                         Transform2D.CreateTranslation(drawX, drawY + drawH) *
                         Transform2D.CreateScale(drawW, -drawH));
@@ -92,9 +95,9 @@ public class TextureAssetEditor : ImportSettingsEditor
             using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
             {
-                EditorGUI.StatChip(paper, $"{id}_st_size", $"{texture.Res.Width} x {texture.Res.Height}", font);
-                EditorGUI.StatChip(paper, $"{id}_st_fmt", texture.Res.ImageFormat.ToString(), font);
-                EditorGUI.StatChip(paper, $"{id}_st_mip", texture.Res.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
+                EditorGUI.StatChip(paper, $"{id}_st_size", $"{tex.Width} x {tex.Height}", font);
+                EditorGUI.StatChip(paper, $"{id}_st_fmt", tex.ImageFormat.ToString(), font);
+                EditorGUI.StatChip(paper, $"{id}_st_mip", tex.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
                 paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
             }
         }
@@ -105,7 +108,7 @@ public class TextureAssetEditor : ImportSettingsEditor
         // Read once and kept live per asset by the base; edits stay put while you look at something else.
         EchoObject settings = Settings(entry);
 
-        EditorGUI.SectionHeader(paper, $"{id}_settings_hdr", "Import Settings", first: texture == null);
+        EditorGUI.SectionHeader(paper, $"{id}_settings_hdr", "Import Settings", first: tex.IsNotValid());
 
         bool genMips = settings.TryGet("generateMipmaps", out var mipTag) && mipTag.BoolValue;
         EditorGUI.SettingsToggle(paper, $"{id}_mips", "Generate Mipmaps", genMips,

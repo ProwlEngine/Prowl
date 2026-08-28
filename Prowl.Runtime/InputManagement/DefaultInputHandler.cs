@@ -83,7 +83,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     private Queue<char> pressedChars { get; set; } = new();
 
     // Characters typed this frame, accumulated as KeyChar events arrive (during DoEvents) and cleared at
-    // the frame boundary (LateUpdate). Unlike the pressedChars queue this is read non-destructively, so
+    // the frame boundary (BeginFrame). Unlike the pressedChars queue this is read non-destructively, so
     // any number of consumers - Paper, GameObject UI, user UI - can all see the same input each frame.
     private string _inputString = string.Empty;
 
@@ -144,12 +144,22 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         }
     }
 
-    internal void LateUpdate()
+    /// <summary>
+    /// Drops the previous frame's typed characters, before DoEvents appends this frame's. Clearing here
+    /// rather than in LateUpdate is what lets them survive the whole frame - the editor pumps the Game
+    /// View's Paper during Render, which is after LateUpdate, so a clear there dropped every character
+    /// before that Paper could see one.
+    /// </summary>
+    internal void BeginFrame()
     {
-        // Typed characters live for exactly one frame: they arrive during DoEvents, are read (non
-        // destructively) by every consumer during Update, and are cleared here at the frame boundary.
         _inputString = string.Empty;
         pressedChars.Clear();
+    }
+
+    internal void LateUpdate()
+    {
+        // Before sampling, so this frame reports the clamped position and the delta at the wall is zero
+        ConfineCursor();
 
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
@@ -260,7 +270,37 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     public bool GetMouseButtonUp(int button) => !Down(isMousePressed, (MouseButton)button) && Down(wasMousePressed, (MouseButton)button);
 
-    public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
+    public void ApplyCursorState(bool visible, CursorLockMode mode)
+    {
+        ICursor cursor = Mice[0].Cursor;
+        CursorMode previous = cursor.CursorMode;
+        CursorMode next = mode == CursorLockMode.Locked
+            ? CursorMode.Disabled
+            : visible ? CursorMode.Normal : CursorMode.Hidden;
+
+        if (previous == next)
+            return;
+
+        cursor.CursorMode = next;
+
+        // Leaving Disabled restores the real position, but the cached ones still hold the unbounded
+        // virtual coordinate from while it was locked - without this the next MouseDelta is that jump.
+        if (previous == CursorMode.Disabled)
+            _prevMousePos = _currentMousePos = (Int2)(Float2)Mice[0].Position;
+    }
+
+    // GLFW has no hidden-and-confined mode, so hold the cursor inside the bounds ourselves. Skipped
+    // while unfocused so alt-tabbing away doesn't fight the user for the pointer.
+    private void ConfineCursor()
+    {
+        if (Input.CursorLockState != CursorLockMode.Confined || !Window.IsFocused)
+            return;
+
+        Int2 pos = (Int2)(Float2)Mice[0].Position;
+        Int2 clamped = Input.CursorConfineBounds.ClosestPointTo(pos);
+        if (!clamped.Equals(pos))
+            Mice[0].Position = (Float2)clamped;
+    }
 
     public void SetCursorShape(PaperCursor shape, int miceIndex = 0)
     {
@@ -287,7 +327,20 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     }
 
     // Gamepad methods implementation
-    public int GetGamepadCount() => Context.Gamepads.Count;
+
+    // Backends expose a fixed block of slots (16 under GLFW) whether or not anything is plugged into
+    // them, so Context.Gamepads.Count is a capacity rather than a device count. Every other method here
+    // already gates on IsGamepadConnected; this one now agrees with them.
+    public int GetGamepadCount()
+    {
+        int count = 0;
+        for (int i = 0; i < Context.Gamepads.Count; i++)
+            if (Context.Gamepads[i].IsConnected)
+                count++;
+        return count;
+    }
+
+    public int GetGamepadSlotCount() => Context.Gamepads.Count;
 
     public bool IsGamepadConnected(int gamepadIndex)
     {

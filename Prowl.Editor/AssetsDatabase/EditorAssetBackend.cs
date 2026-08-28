@@ -12,6 +12,7 @@ using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor;
 
@@ -82,6 +83,24 @@ public class EditorAssetBackend : AssetBackendBase
         // tries to import a file - idempotent, so this is cheap on every call after the first.
         EditorRegistries.Initialize();
 
+        // A prefab that changed on disk - edited elsewhere, pulled from source control, or a model
+        // whose import settings were changed - has to reach the instances already in the open scene.
+        // Hooked here rather than at each construction site so every backend, including the ones
+        // tests build, behaves the same. Detached first: Initialize is documented as idempotent, and
+        // subscribing twice would refresh every instance twice per import.
+        OnAssetsImported -= PrefabUtility.OnAssetsImported;
+        OnAssetsImported += PrefabUtility.OnAssetsImported;
+
+        // A deleted prefab must stop being the baseline instances are compared against, or an edit to
+        // an instance keeps recording overrides against contents that no longer exist anywhere.
+        OnAssetsDeleted -= PrefabUtility.OnAssetsDeleted;
+        OnAssetsDeleted += PrefabUtility.OnAssetsDeleted;
+
+        // The notification above only reaches the scene that was open when the import happened, so a
+        // scene opened afterwards has to catch up on whatever changed while it was closed.
+        Runtime.Resources.Scene.OnSceneLoaded -= PrefabUtility.OnSceneLoaded;
+        Runtime.Resources.Scene.OnSceneLoaded += PrefabUtility.OnSceneLoaded;
+
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.
         CleanupOrphanedMetaTempFiles();
@@ -133,6 +152,10 @@ public class EditorAssetBackend : AssetBackendBase
         // triggers a recompile / package restore, the same as editing the Packages UI used to.
         StartBuildPropsWatcher();
 
+        // Read every tracked shader's declared menu path now that the scan and import have settled,
+        // so the material inspector's shader picker opens against a warm catalog.
+        RebuildShaderMenuPaths();
+
         Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
 
         // Initialize GameResources mapping for editor play mode
@@ -164,20 +187,21 @@ public class EditorAssetBackend : AssetBackendBase
     }
 
     /// <summary>
-    /// Delete leftover ".meta.tmp" files from a previous session's write that never got
-    /// renamed into place (e.g. the editor crashed mid-write). These are always incomplete
-    /// data never valid on their own so ScanAssets must not pick them up as real asset files.
+    /// Delete leftover temp files from a previous session's write that never got renamed into place
+    /// (e.g. the editor crashed mid-write). These are always incomplete data never valid on their
+    /// own so ScanAssets must not pick them up as real asset files.
     /// </summary>
     private void CleanupOrphanedMetaTempFiles()
     {
         var assetsPath = _project.AssetsPath;
         if (!Directory.Exists(assetsPath)) return;
 
-        foreach (var tmp in Directory.EnumerateFiles(assetsPath, "*.meta.tmp", SearchOption.AllDirectories))
-        {
-            try { File.Delete(tmp); }
-            catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to delete orphaned meta temp file '{tmp}': {ex.Message}"); }
-        }
+        foreach (string pattern in new[] { "*.meta.tmp", "*.prefab.tmp" })
+            foreach (var tmp in Directory.EnumerateFiles(assetsPath, pattern, SearchOption.AllDirectories))
+            {
+                try { File.Delete(tmp); }
+                catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to delete orphaned temp file '{tmp}': {ex.Message}"); }
+            }
     }
 
     /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>
@@ -663,6 +687,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         if (succeeded.Count > 0)
         {
+            ContentVersion++;
             OnAssetsImported?.Invoke(succeeded.ToArray());
             ReclaimMemory();
         }
@@ -688,7 +713,18 @@ public class EditorAssetBackend : AssetBackendBase
     // reads them from its own thread. Unsynchronized, a load either fails on a sharing violation or
     // reads a file mid-replace, and the replace itself can lose to the reader and leave the previous
     // cache in place. Re-entrant, so LoadFresh's own on-demand import path still works.
-    private bool RunImport(AssetEntry entry) { lock (_loadLock) return RunImportCore(entry); }
+    private bool RunImport(AssetEntry entry)
+    {
+        bool imported;
+        lock (_loadLock) imported = RunImportCore(entry);
+
+        // Every add and every reimport funnels through here, so this is the one place the shader
+        // catalog has to react to a declaration having possibly changed.
+        if (IsShaderPath(entry.Path))
+            InvalidateShaderMenuPath(entry.Guid);
+
+        return imported;
+    }
 
     private bool RunImportCore(AssetEntry entry)
     {
@@ -1001,6 +1037,190 @@ public class EditorAssetBackend : AssetBackendBase
         => _pathToGuid.Keys.ToArray();
 
     // ================================================================
+    //  Shader menu paths
+    // ================================================================
+    // A shader's menu path is the `Shader "Some/Path"` declaration at the top of its own source,
+    // which is not something the importer records anywhere. The database reads it directly and
+    // keeps it beside the entry index: the built-ins are compiled in and read once, project
+    // shaders are re-read whenever they import and are validated against the live entries so a
+    // deleted one stops being offered.
+
+    /// <summary>
+    /// Menu-path prefix for shaders the engine drives itself (post-process, gizmos, blits) rather
+    /// than ones a material would be assigned. Excluded from <see cref="GetShaderCatalog"/> by default.
+    /// </summary>
+    public const string HiddenShaderPrefix = "Hidden/";
+
+    // Kept apart from the project cache below: these are compiled into the runtime assembly, so
+    // they are read once and never invalidated, and crucially they are never subject to the
+    // liveness check (they have no asset entry to be live against).
+    private readonly Dictionary<Guid, string> _builtInShaderPaths = new();
+
+    // Written from the import path and read from the inspector, so this carries its own lock
+    // rather than borrowing _loadLock (which is held across a whole import).
+    private readonly Dictionary<Guid, string> _projectShaderPaths = new();
+    private readonly object _shaderMenuLock = new();
+
+    /// <summary>One assignable shader and the menu path it declares.</summary>
+    public readonly struct ShaderMenuEntry
+    {
+        /// <summary>Asset GUID to assign, built-in or project.</summary>
+        public Guid Guid { get; init; }
+        /// <summary>The declared menu path, e.g. <c>"Default/Cutout/Standard"</c>.</summary>
+        public string MenuPath { get; init; }
+        /// <summary>True for the shaders embedded in the runtime assembly.</summary>
+        public bool IsBuiltIn { get; init; }
+    }
+
+    /// <summary>
+    /// Every shader the editor can assign, built-in and project, sorted by menu path.
+    /// </summary>
+    public List<ShaderMenuEntry> GetShaderCatalog(bool includeHidden = false)
+    {
+        var result = new List<ShaderMenuEntry>();
+
+        lock (_shaderMenuLock)
+        {
+            SeedBuiltInShaderPaths();
+
+            foreach (var (guid, path) in _builtInShaderPaths)
+            {
+                if (!includeHidden && path.StartsWith(HiddenShaderPrefix, StringComparison.Ordinal)) continue;
+                result.Add(new ShaderMenuEntry { Guid = guid, MenuPath = path, IsBuiltIn = true });
+            }
+
+            // Driven off the live entries rather than the cache, so a shader whose entry has gone
+            // stops being offered whether or not its cached path has been pruned yet.
+            foreach (var entry in _guidToEntry.Values)
+            {
+                if (!IsShaderPath(entry.Path)) continue;
+
+                string path = GetOrReadProjectShaderPath(entry.Guid, entry.Path);
+                if (!includeHidden && path.StartsWith(HiddenShaderPrefix, StringComparison.Ordinal)) continue;
+                result.Add(new ShaderMenuEntry { Guid = entry.Guid, MenuPath = path, IsBuiltIn = false });
+            }
+        }
+
+        result.Sort((a, b) => string.Compare(a.MenuPath, b.MenuPath, StringComparison.OrdinalIgnoreCase));
+        return result;
+    }
+
+    /// <summary>
+    /// The menu path a shader GUID declares, or <paramref name="fallback"/> when it is not a shader
+    /// this database knows about.
+    /// </summary>
+    public string GetShaderMenuPath(Guid guid, string fallback)
+    {
+        if (guid == Guid.Empty) return fallback;
+
+        lock (_shaderMenuLock)
+        {
+            SeedBuiltInShaderPaths();
+            if (_builtInShaderPaths.TryGetValue(guid, out string? builtIn)) return builtIn;
+
+            if (_guidToEntry.TryGetValue(guid, out var entry) && IsShaderPath(entry.Path))
+                return GetOrReadProjectShaderPath(guid, entry.Path);
+
+            // Not a live shader any more (deleted, or never one). Drop whatever was cached so the
+            // GUID does not keep reporting a path for an asset that is gone.
+            _projectShaderPaths.Remove(guid);
+            return fallback;
+        }
+    }
+
+    private static bool IsShaderPath(string relativePath)
+        => relativePath.EndsWith(".shader", StringComparison.OrdinalIgnoreCase);
+
+    private void SeedBuiltInShaderPaths()
+    {
+        if (_builtInShaderPaths.Count > 0) return;
+
+        foreach (Runtime.Resources.DefaultShader shader in Enum.GetValues<Runtime.Resources.DefaultShader>())
+        {
+            string path;
+            try
+            {
+                path = Runtime.Resources.Shader.ReadDeclaredPath(Runtime.Resources.Shader.GetDefaultSource(shader))
+                       ?? shader.ToString();
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogWarning($"Could not read the declared path of built-in shader '{shader}': {ex.Message}");
+                path = shader.ToString();
+            }
+
+            _builtInShaderPaths[Runtime.BuiltInAssets.GuidFor(shader)] = path;
+        }
+    }
+
+    /// <summary>
+    /// The cached menu path for a project shader, reading it off disk the first time. Import drops
+    /// the cached value, so an edited declaration is picked up on the next read.
+    /// </summary>
+    private string GetOrReadProjectShaderPath(Guid guid, string relativePath)
+    {
+        if (_projectShaderPaths.TryGetValue(guid, out string? existing)) return existing;
+
+        string path = ReadDeclaredShaderPath(Path.Combine(_project.AssetsPath, relativePath))
+            ?? Path.GetFileNameWithoutExtension(relativePath);
+
+        _projectShaderPaths[guid] = path;
+        return path;
+    }
+
+    /// <summary>
+    /// Called after a shader is imported so the next catalog read picks up an edited declaration.
+    /// </summary>
+    private void InvalidateShaderMenuPath(Guid guid)
+    {
+        lock (_shaderMenuLock)
+            _projectShaderPaths.Remove(guid);
+    }
+
+    /// <summary>
+    /// Reads every tracked shader's declaration and drops cached paths whose asset is gone. Run once
+    /// the initial scan and import have settled, so the catalog is warm before anything asks for it.
+    /// </summary>
+    private void RebuildShaderMenuPaths()
+    {
+        lock (_shaderMenuLock)
+        {
+            SeedBuiltInShaderPaths();
+
+            var live = new HashSet<Guid>();
+            foreach (var entry in _guidToEntry.Values)
+            {
+                if (!IsShaderPath(entry.Path)) continue;
+                live.Add(entry.Guid);
+                GetOrReadProjectShaderPath(entry.Guid, entry.Path);
+            }
+
+            foreach (Guid guid in _projectShaderPaths.Keys.ToList())
+                if (!live.Contains(guid))
+                    _projectShaderPaths.Remove(guid);
+        }
+    }
+
+    // Only the head of the file matters - the declaration sits at the top and a shader can be tens
+    // of kilobytes of GLSL below it.
+    private static string? ReadDeclaredShaderPath(string absolutePath)
+    {
+        const int HeadChars = 8 * 1024;
+        try
+        {
+            using var reader = new StreamReader(absolutePath);
+            char[] buffer = new char[HeadChars];
+            int read = reader.ReadBlock(buffer, 0, HeadChars);
+            return Runtime.Resources.Shader.ReadDeclaredPath(new string(buffer, 0, read));
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Could not read shader '{absolutePath}': {ex.Message}");
+            return null;
+        }
+    }
+
+    // ================================================================
     //  Folder / file structure (cached tree the Project Panel reads)
     // ================================================================
 
@@ -1039,8 +1259,18 @@ public class EditorAssetBackend : AssetBackendBase
             ? c.Files : Array.Empty<FileRecord>();
     }
 
+    /// <summary>
+    /// Bumped every time the folder/file index is invalidated or an asset is imported, deleted or moved.
+    /// Lets views that rebuild a model from the index cache it and rebuild only when this changes.
+    /// </summary>
+    public int ContentVersion { get; private set; }
+
     /// <summary>Force the folder/file index to rebuild on next query. Driven by the asset watcher.</summary>
-    public void InvalidateFolderIndex() => _folderIndexDirty = true;
+    public void InvalidateFolderIndex()
+    {
+        _folderIndexDirty = true;
+        ContentVersion++;
+    }
 
     private void EnsureFolderIndex()
     {
@@ -1184,7 +1414,7 @@ public class EditorAssetBackend : AssetBackendBase
         };
         _guidToEntry[meta.Guid] = entry;
         _pathToGuid[relativePath] = meta.Guid;
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -1238,7 +1468,7 @@ public class EditorAssetBackend : AssetBackendBase
         };
         _guidToEntry[meta.Guid] = entry;
         _pathToGuid[relativePath] = meta.Guid;
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         return meta.Guid;
@@ -1331,7 +1561,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetsDeleted?.Invoke(new[] { relativePath });
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         if (AffectsCompilation(relativePath))
             ScriptAssemblyManager.RequestRecompile();
@@ -1423,7 +1653,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         if (AffectsCompilation(oldRelativePath) || AffectsCompilation(newRelativePath))
             ScriptAssemblyManager.RequestRecompile();
@@ -1508,11 +1738,28 @@ public class EditorAssetBackend : AssetBackendBase
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
 
         if (recompile)
             ScriptAssemblyManager.RequestRecompile();
         return true;
+    }
+
+    /// <summary>
+    /// Drops every loaded asset instance that is not locked to a scene or held permanently, so the
+    /// next access re-resolves fresh from disk instead of the runtime-mutated instance. Returns how
+    /// many were dropped.
+    /// </summary>
+    public int UnloadAll()
+    {
+        int dropped = 0;
+        foreach (var guid in _loadedAssets.Keys.ToList())
+        {
+            if (AssetDatabase.IsLocked(guid)) continue;
+            DisposeAndRemove(guid);
+            dropped++;
+        }
+        return dropped;
     }
 
     /// <summary>
@@ -1553,6 +1800,7 @@ public class EditorAssetBackend : AssetBackendBase
             entry.NeedsReimport = true;
             RunImport(entry);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            ContentVersion++;
             OnAssetsImported?.Invoke(new[] { entry.Path });
 
             // Reload the asset and enqueue thumbnail regeneration
@@ -1583,7 +1831,12 @@ public class EditorAssetBackend : AssetBackendBase
     // ================================================================
 
     /// <summary>Import a newly created or modified file, tracking it if it isn't already.</summary>
-    private void ImportFileChange(string absolutePath, string relativePath, List<string> imported)
+    /// <summary>
+    /// Give a changed file its .meta and its entry, and queue it for import. Registration only:
+    /// an importer that resolves a sibling by path (a model looking up its textures) must find every
+    /// file in the batch already tracked, whatever order the watcher delivered the events in.
+    /// </summary>
+    private void RegisterFileChange(string absolutePath, string relativePath, List<AssetEntry> toImport)
     {
         string ext = Path.GetExtension(absolutePath);
         string importerName = EditorRegistries.GetImporterTypeName(ext);
@@ -1606,20 +1859,27 @@ public class EditorAssetBackend : AssetBackendBase
             _guidToEntry[meta.Guid].NeedsReimport = true;
         }
 
+        var existingEntry = _guidToEntry[meta.Guid];
+        if (!toImport.Contains(existingEntry))
+            toImport.Add(existingEntry);
+    }
+
+    /// <summary>Import a file that was registered earlier in this batch.</summary>
+    private void ImportRegisteredChange(AssetEntry entry, List<string> imported)
+    {
         // Dispose previous main + sub-asset instances so any holding
         // AssetRef detects them as invalid and re-resolves to the freshly
         // imported instance. The Reimport() entry-point already does this;
         // the watcher path needs to match or downstream refs (e.g. a
         // Material pointing at a regenerated shader sub-asset) keep the
         // stale instance until the user manually reimports.
-        var existingEntry = _guidToEntry[meta.Guid];
-        DisposeAndRemove(meta.Guid);
-        if (existingEntry.SubAssets != null)
-            foreach (var sub in existingEntry.SubAssets)
+        DisposeAndRemove(entry.Guid);
+        if (entry.SubAssets != null)
+            foreach (var sub in entry.SubAssets)
                 DisposeAndRemove(sub.Guid);
 
-        RunImport(existingEntry);
-        imported.Add(relativePath);
+        RunImport(entry);
+        imported.Add(entry.Path);
     }
 
     /// <param name="force">Drain the watcher immediately instead of waiting out its debounce window.</param>
@@ -1632,18 +1892,29 @@ public class EditorAssetBackend : AssetBackendBase
 
         var imported = new List<string>();
         var deleted = new List<string>();
+        var toImport = new List<AssetEntry>();
 
+        // Two passes, matching what startup already does (ScanAssets before ImportDirty). Registering
+        // the whole batch first means a file's importer sees every other file in the batch as a
+        // tracked asset it can reference, instead of depending on which watcher event arrived first.
         foreach (var evt in events)
         {
             // One bad file (unreadable .meta, broken importer) must not drop the rest of this batch of
             // events on the floor - those changes would never be seen again until a full rescan.
-            try { ProcessFileEvent(evt, imported, deleted); }
+            try { ProcessFileEvent(evt, toImport, deleted); }
             catch (Exception ex) { Runtime.Debug.LogError($"Failed to process change to '{evt.Path}': {ex.Message}"); }
+        }
+
+        foreach (var entry in toImport)
+        {
+            try { ImportRegisteredChange(entry, imported); }
+            catch (Exception ex) { Runtime.Debug.LogError($"Failed to import '{entry.Path}': {ex.Message}"); }
         }
 
         if (imported.Count > 0 || deleted.Count > 0)
         {
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            ContentVersion++;
             if (imported.Count > 0) OnAssetsImported?.Invoke(imported.ToArray());
             if (deleted.Count > 0) OnAssetsDeleted?.Invoke(deleted.ToArray());
 
@@ -1654,13 +1925,13 @@ public class EditorAssetBackend : AssetBackendBase
         }
     }
 
-    private void ProcessFileEvent(FileEvent evt, List<string> imported, List<string> deleted)
+    private void ProcessFileEvent(FileEvent evt, List<AssetEntry> toImport, List<string> deleted)
     {
             // Any change to a real (non-.meta) file or folder can add/remove/rename an entry or
             // change a file's size/date, so the cached folder index the Project Panel reads is stale.
             // .meta files are ours and don't affect the displayed structure.
             if (!evt.Path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
-                _folderIndexDirty = true;
+                InvalidateFolderIndex();
 
             // Skip directory events - ScanAssets handles directory .meta creation
             if (Directory.Exists(evt.Path))
@@ -1680,7 +1951,7 @@ public class EditorAssetBackend : AssetBackendBase
             {
                 case FileEventType.Created:
                 case FileEventType.Modified:
-                    ImportFileChange(evt.Path, relativePath, imported);
+                    RegisterFileChange(evt.Path, relativePath, toImport);
                     break;
 
                 case FileEventType.Deleted:
@@ -1730,7 +2001,7 @@ public class EditorAssetBackend : AssetBackendBase
                                 // debounce window before the temp file is ever imported. Treat the
                                 // destination as a brand-new file instead of silently dropping it until
                                 // the next full rescan.
-                                ImportFileChange(evt.Path, relativePath, imported);
+                                RegisterFileChange(evt.Path, relativePath, toImport);
                             }
                             else
                             {
@@ -1760,13 +2031,8 @@ public class EditorAssetBackend : AssetBackendBase
                                     renamedEntry.ImporterType = newImporterName;
                                     renamedEntry.NeedsReimport = true;
 
-                                    DisposeAndRemove(guid);
-                                    if (renamedEntry.SubAssets != null)
-                                        foreach (var sub in renamedEntry.SubAssets)
-                                            DisposeAndRemove(sub.Guid);
-
-                                    RunImport(renamedEntry);
-                                    imported.Add(relativePath);
+                                    if (!toImport.Contains(renamedEntry))
+                                        toImport.Add(renamedEntry);
                                 }
 
                                 OnAssetMoved?.Invoke(oldRelative, relativePath);
@@ -1799,7 +2065,7 @@ public class EditorAssetBackend : AssetBackendBase
         ImportDirty();
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         RefreshResourcesMap();
-        _folderIndexDirty = true;
+        InvalidateFolderIndex();
     }
 
     // ================================================================

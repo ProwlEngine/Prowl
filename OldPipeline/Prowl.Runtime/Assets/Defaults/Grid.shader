@@ -1,4 +1,4 @@
-Shader "Default/Grid"
+Shader "Hidden/Grid"
 
 Properties
 {

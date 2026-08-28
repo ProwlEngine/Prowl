@@ -17,103 +17,104 @@ gated by the same Resume/Pause switch as `TrianglesDrawn`).
 - [x] `int TimelineElementCount` / `GetTimelineElement(int, out ProfiledView?, out ProfiledCommandBuffer?)`
   / `EnumerateTimeline()` - single ordered walk of views and free command buffers by first-touch order.
 - [x] `double GpuMilliseconds` - sum of every view's plus every free command buffer's.
-- [ ] `bool HasVramBudget` / `ulong VramBudgetBytes` / `ulong VramUsedBytes` - driver-reported VRAM
-  budget/usage (`VK_EXT_memory_budget`), polled once per frame from `GraphicsDevice.GetMemoryBudget()`.
-  `HasVramBudget` false (both byte fields `0`) if the extension is unavailable.
-- [ ] `ulong TrianglesDrawn` - sum of every view's TrianglesDrawn.
-- [ ] `ulong InputAssemblyVertices` - sum of every view's plus every free command buffer's.
-- [ ] `int DrawCallCount` - sum of every view's DrawCallCount.
-- [ ] `int DispatchCallCount` - sum of every view's DispatchCallCount.
+- [x] `bool HasVramBudget` / `ulong VramBudgetBytes` / `ulong VramUsedBytes` - driver-reported VRAM
+  budget/usage
+- [x] `ulong TrianglesDrawn` - sum of every view's TrianglesDrawn.
+- [x] `ulong InputAssemblyVertices` - sum of every view's plus every free command buffer's.
+- [x] `int DrawCallCount` - sum of every view's DrawCallCount.
+- [x] `int DispatchCallCount` - sum of every view's DispatchCallCount.
+- [x] `int PipelineSwitchCount` - sum of every view's plus every free command buffer's.
 - [x] `int ViewCount` - `Views.Count`.
-- [ ] `int PassCount` - sum of every view's pass count.
-- [ ] `int CommandBufferCount` - sum of every pass's command buffer count plus FreeCommandBuffers; also the frame's total submit count.
+- [x] `int PassCount` - sum of every view's pass count.
+- [x] `int CommandBufferCount` - sum of every pass's command buffer count plus FreeCommandBuffers; also the frame's total submit count.
 
-- [ ] `IReadOnlyList<CounterValue> Counters` - see Counters below
+- [x] `IReadOnlyList<CounterValue> Counters` - see Counters below
 
 ### View (`ProfiledView`)
-- [ ] `double GpuMilliseconds`
-- [ ] `int RegisteredObjects` / `int CulledObjects` / `int TotalObjects` / `int RenderedObjects`
-- [ ] `int DrawCallCount`
-- [ ] `int DispatchCallCount` - always-on, unlike DrawCallCount, since dispatches aren't scene renderables.
-- [ ] `ulong TrianglesDrawn` (summed from Pass level)
-- [ ] `ulong InputAssemblyVertices` - sum of this view's passes' InputAssemblyVertices.
-- [ ] `ulong FragmentShaderInvocations` - sum of this view's passes' FragmentShaderInvocations.
-- [ ] `double Overdraw` - `FragmentShaderInvocations / (PixelWidth * PixelHeight)`; `0` if PixelWidth/
+- [x] `double GpuMilliseconds`
+- [x] `int RegisteredObjects` / `int CulledObjects` / `int RenderedObjects`
+- [x] `int DrawCallCount`
+- [x] `int DispatchCallCount` - always-on, unlike DrawCallCount, since dispatches aren't scene renderables.
+- [x] `ulong TrianglesDrawn` (summed from Pass level)
+- [x] `ulong InputAssemblyVertices` - sum of this view's passes' InputAssemblyVertices.
+- [x] `ulong FragmentShaderInvocations` - sum of this view's passes' FragmentShaderInvocations.
+- [x] `int PipelineSwitchCount` - sum of this view's passes' PipelineSwitchCount.
+- [x] `double Overdraw` - `FragmentShaderInvocations / (PixelWidth * PixelHeight)`; `0` if PixelWidth/
   Height unset. 1.0 = every pixel shaded exactly once.
-- [ ] `uint PixelWidth` / `uint PixelHeight` - render target size this view drew at, from
+- [x] `uint PixelWidth` / `uint PixelHeight` - render target size this view drew at, from
   `ViewInfo.PixelWidth`/`PixelHeight`, stamped every `BeginView`.
 - [ ] `IReadOnlyList<ProfiledPass> Passes`
 - [ ] `IReadOnlyList<PassEdge> Edges` - `int FromPass`, `int ToPass`, `ResourceRef Resource` (producer ->
   consumer between passes)
-- [ ] `string Name`
+- [x] `string Name`
 
 ### Pass (`ProfiledPass`, keyed by render-graph index)
-- [ ] `double GpuMilliseconds`
-- [ ] `ulong TrianglesDrawn` - sum of command buffers' `ClippingPrimitives`, from
+- [x] `double GpuMilliseconds`
+- [x] `ulong TrianglesDrawn` - sum of command buffers' `ClippingPrimitives`, from
   `VK_QUERY_TYPE_PIPELINE_STATISTICS`. Real hardware count: includes indirect draws, excludes
   clipped/backface-culled geometry. Reads `0` if not recording or `pipelineStatisticsQuery`
   unsupported
-- [ ] `ulong InputAssemblyVertices` - sum of this pass's command buffers' InputAssemblyVertices.
-- [ ] `ulong FragmentShaderInvocations` - sum of command buffers' `FragmentShaderInvocations`, from the
+- [x] `ulong InputAssemblyVertices` - sum of this pass's command buffers' InputAssemblyVertices.
+- [x] `ulong FragmentShaderInvocations` - sum of command buffers' `FragmentShaderInvocations`, from the
   same `VK_QUERY_TYPE_PIPELINE_STATISTICS` query as `TrianglesDrawn`. Numerator for `ProfiledView.Overdraw`.
-- [ ] `int PipelineSwitchCount` - sum of command buffers' `PipelineSwitchCount`; no shader/material
+- [x] `int PipelineSwitchCount` - sum of command buffers' `PipelineSwitchCount`; no shader/material
   identity, just a count
-- [ ] `int RegisteredObjects` / `int CulledObjects` / `int TotalObjects` / `int RenderedObjects` - same shape as View, tracked per pass too.
-- [ ] `int DrawCallCount` - same shape as View, tracked per pass too.
-- [ ] `int DispatchCallCount` - same shape as View, tracked per pass too.
+- [x] `int RegisteredObjects` / `int CulledObjects` / `int RenderedObjects` - same shape as View, tracked per pass too.
+- [x] `int DrawCallCount` - same shape as View, tracked per pass too.
+- [x] `int DispatchCallCount` - same shape as View, tracked per pass too.
 - [ ] `IReadOnlyList<ResourceRef> Inputs` / `IReadOnlyList<ResourceRef> Outputs` - `uint Id`,
   `string Name`, `ResourceRefKind Kind` (`Texture`/`Buffer`/`Unknown`), `SnapshotResourceID Resource`
   (always `Invalid` on a live frame)
 - [ ] `IReadOnlyList<ProfiledCommandBuffer> CommandBuffers`
-- [ ] `int Index` / `string Name`
+- [x] `int Index` / `string Name`
 
 ### CommandBuffer (`ProfiledCommandBuffer`)
-- [ ] `double GpuMilliseconds`
-- [ ] `ulong ClippingPrimitives`
-- [ ] `ulong InputAssemblyVertices` / `ulong InputAssemblyPrimitives` / `ulong ClippingInvocations`
-- [ ] `ulong FragmentShaderInvocations` - from the pipeline-statistics query's `FragmentShaderInvocationsBit`.
-- [ ] `int PipelineSwitchCount` - incremented once per `RecordPipelineSwitch` call on this command
+- [x] `double GpuMilliseconds`
+- [x] `ulong ClippingPrimitives`
+- [x] `ulong InputAssemblyVertices` / `ulong InputAssemblyPrimitives` / `ulong ClippingInvocations`
+- [x] `ulong FragmentShaderInvocations` - from the pipeline-statistics query's `FragmentShaderInvocationsBit`.
+- [x] `int PipelineSwitchCount` - incremented once per `RecordPipelineSwitch` call on this command
   buffer, always-on regardless of capture. Shader name/material/state for each switch stays
   capture-tier only (`ProfiledPipelineSwitch`, gated on `_armed` in `DrawHierarchyCollector`) since
   that needs string/id retention this counter doesn't
-- [ ] `string Name` / `ulong Id` (`Id` not stable frame-to-frame, see `PROFILING_MODEL.md`)
+- [x] `int DrawCallCount`
+- [x] `int DispatchCallCount`
+- [x] `string Name` / `ulong Id` (`Id` not stable frame-to-frame, see `PROFILING_MODEL.md`)
 - [ ] `IReadOnlyList<ProfiledPipelineSwitch> Switches` - empty on a live frame, capture-tier only, see
   `SnapshotViewerDesign.md`
 
 ### Counters (`CountersCollector.Registry`, flat per-frame array of `CounterValue`: `string Name`,
 `CounterCategory Category`, `CounterUnit Unit`, `double Value`)
-- [ ] `Live/{bin}` (EngineObject, count) - object count, tracked for every `AllocBin`
+- [x] `Live/{bin}` (EngineObject, count) - object count, tracked for every `AllocBin`
   - `DeviceBuffer`, `Texture`, `TextureView`, `Sampler`, `Framebuffer`, `Pipeline`, `Shader`,
     `ResourceLayout`, `ResourceSet`, `CommandBuffer`
-- [ ] `Resident/{bin}` (EngineObject, bytes) - only bins whose allocation call passes a real byte size;
+- [x] `Resident/{bin}` (EngineObject, bytes) - only bins whose allocation call passes a real byte size;
   the rest always allocate/free with `0` bytes and stay zeroed
   - `DeviceBuffer`, `Texture`, `Shader`
-- [ ] `Resident/{role}` (BufferMemory, per buffer usage class) - `RecordBufferAllocation`/`RecordBufferFree`
+- [x] `Resident/{role}` (BufferMemory, per buffer usage class) - `RecordBufferAllocation`/`RecordBufferFree`
   fan a buffer's real byte size out to every usage-flag role it matches, so all roles contribute
   - `Vertex`, `Index`, `Uniform`, `StructuredReadOnly`, `StructuredReadWrite`, `Indirect`, `Staging`,
     `Dynamic`
-- [ ] `Draw/Count`, `Dispatch/Count` (DrawDispatch)
-- [ ] `Alloc/{bin}`, `Free/{bin}` (AllocFree, count) - same set as `Live/{bin}`, every `AllocBin`
+- [x] `Draw/Count`, `Dispatch/Count` (DrawDispatch)
+- [x] `Submit/Graphics`, `Submit/Transfer` 
+- [x] `Alloc/{bin}`, `Free/{bin}` (AllocFree, count) - same set as `Live/{bin}`, every `AllocBin`
   - `DeviceBuffer`, `Texture`, `TextureView`, `Sampler`, `Framebuffer`, `Pipeline`, `Shader`,
     `ResourceLayout`, `ResourceSet`, `CommandBuffer`
-- [ ] `BufferOp/{op}` (BufferUpdate, count) - all `BufferOpBin` values
+- [x] `BufferOp/{op}` (BufferUpdate, count) - all `BufferOpBin` values
   - `Map`, `Unmap`, `Update`, `Copy`
-- [ ] `BufferOpBytes/{op}` (BufferUpdate, bytes) - `Unmap` always records `0` bytes and stays zeroed
+- [x] `BufferOpBytes/{op}` (BufferUpdate, bytes) - `Unmap` always records `0` bytes and stays zeroed
   - `Map`, `Update`, `Copy`
-- [ ] `Submit/Graphics`, `Submit/Transfer` 
-- [ ] `ResourceSet/Binds`
-- [ ] `Swap/{bin}` (Swapchain) - all `SwapBin` values
+- [x] `ResourceSet/Binds`
+- [x] `Swap/{bin}` (Swapchain) - all `SwapBin` values
   - `Present`, `Resize`, `Acquire`
-- [ ] `Barrier/{bin}` - all `BarrierBin` values
+- [x] `Barrier/{bin}` - all `BarrierBin` values
   - `TextureTransition`, `BufferTransition`, `MemoryBarrier`
 
 ## Derived (computed on read, no storage)
 
-- [ ] Frame budget usage % = `FrameMilliseconds / target frame time`
-- [ ] Culled % / Registered % per view = `CulledObjects / TotalObjects`, `RegisteredObjects / TotalObjects`
+- [x] Frame budget usage % = `FrameMilliseconds / target frame time`
+- [x] Culled % per view = `CulledObjects / RegisteredObjects`
 - [ ] Net Live delta between frames = `Live/{bin}[N] - Live/{bin}[N-1]` (via `EditorProfiler.History`)
-- [ ] Pass % of view GPU time = `pass.GpuMilliseconds / view.GpuMilliseconds`
-- [ ] View % of frame GPU time = `view.GpuMilliseconds / Frame.FrameMilliseconds`
 - [ ] Average draw calls per rendered object = `DrawCallCount / RenderedObjects`
 - [ ] Average bytes per buffer op = `BufferOpBytes/{op} / BufferOp/{op}`
 - [ ] Total resident memory = sum of all `Resident/{bin}` + `Resident/{role}`
@@ -133,7 +134,9 @@ gated by the same Resume/Pause switch as `TrianglesDrawn`).
 `IProfiler.RecordPipelineSwitch` (`EditorProfiler.cs:375`) fires every `ShouldRecord` frame - gated
 on `!_paused`, not on capture-armed. `PassGraphCollector.OnPipelineSwitch` increments
 `ProfiledCommandBuffer.PipelineSwitchCount` on every call, always-on; `ProfiledPass.PipelineSwitchCount`
-sums it per pass. Both are plain `int` counters - no shader name, material name, or state retained.
+sums it per pass, `ProfiledView.PipelineSwitchCount` sums it per view, and `ProfiledFrame.PipelineSwitchCount`
+sums every view's plus every free command buffer's. All are plain `int` counters - no shader name,
+material name, or state retained.
 
 `DrawHierarchy.OnPipelineSwitch` (`DrawHierarchyCollector.cs:142`) still early-returns on `!_armed` -
 shader/material identity (`ProfiledPipelineSwitch.ShaderName`/`MaterialName`/`State`) is still
@@ -145,15 +148,6 @@ be the next always-on step here if wanted, but isn't wired yet.
 
 - CPU-side GPU-wait/stall time (fence/`WaitForIdle` blocking) - not tracked anywhere
 - Command buffer submit-to-execute latency - only total GPU ms is measured, not queue wait time
-
-## Closed, not planned
-
-- GPU memory bandwidth per frame - not derivable from any CPU-observable data (no vertex stride
-  tracked, texture sample bytes depend on runtime GPU state, and render-target bandwidth needs actual
-  byte-width-per-pixel math on top of `ProfiledView.Overdraw`, not just the invocation count itself).
-  `BufferOp`/`BufferOpBytes` are CPU-side map/update/copy traffic only. A real number needs
-  vendor-specific hardware counters
-  (`VK_KHR_performance_query`, AMD GPUPerfAPI, Nsight Perf SDK) - out of scope for this profiler.
 
 ## Triangle count: two tiers
 

@@ -8,10 +8,30 @@ namespace Prowl.Runtime.Resources;
 /// </summary>
 public enum DefaultShader
 {
+    // Standard PBR family. One shader per alpha mode and cull mode combination, the way the
+    // legacy fixed-function sets were split, so render state stays static per shader.
     Standard,
+    StandardDoubleSided,
+    StandardCutout,
+    StandardCutoutDoubleSided,
     StandardTransparent,
+    StandardTransparentDoubleSided,
+    // Anisotropic specular (brushed metal, hair), same split.
     StandardAnisotropic,
+    StandardAnisotropicDoubleSided,
+    StandardAnisotropicCutout,
+    StandardAnisotropicCutoutDoubleSided,
+    StandardAnisotropicTransparent,
+    StandardAnisotropicTransparentDoubleSided,
+
+    // Unlit family, same split.
     Unlit,
+    UnlitDoubleSided,
+    UnlitCutout,
+    UnlitCutoutDoubleSided,
+    UnlitTransparent,
+    UnlitTransparentDoubleSided,
+
     Sprite,
     Line,
     Invalid,
@@ -122,7 +142,7 @@ public enum DefaultShaderInclude
     VertexAttributes,
     Lighting,
     LightBVH,
-    StandardSurface,
+    StandardCore,
     FastNoiseLite,
     SimplexNoise4D
 }

@@ -823,9 +823,12 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
         for (int i = 0; i < vertices.Length; i++)
         {
-            normals[i] = Float3.Normalize(normals[i]);
-            if (float.IsNaN(normals[i].X) || float.IsNaN(normals[i].Y) || float.IsNaN(normals[i].Z))
-                normals[i] = Float3.UnitY;
+            // Float3.Normalize returns Zero (not NaN) for a zero-length vector, which a vertex no
+            // triangle references - or one whose face normals cancel - ends up with. A zero normal
+            // reaching the GPU becomes NaN at the shader's normalize and poisons every lighting
+            // term downstream, so length is what has to be tested, not NaN.
+            Float3 n = Float3.Normalize(normals[i]);
+            normals[i] = Float3.LengthSquared(n) > 1e-12f ? n : Float3.UnitY;
         }
 
         Normals = normals;
@@ -882,9 +885,14 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             Float3 t = tan1[i];
 
             // Gram-Schmidt orthogonalize: t' = normalize(t - n * dot(n, t))
+            // Same trap as RecalculateNormals: a vertex whose incident triangles were all skipped as
+            // degenerate-UV accumulates a zero tangent, and Float3.Normalize hands back Zero rather
+            // than NaN, so a NaN test misses it and the zero survives to the GPU as a NaN frame.
             Float3 orthoT = Float3.Normalize(t - n * Float3.Dot(n, t));
-            if (float.IsNaN(orthoT.X) || float.IsNaN(orthoT.Y) || float.IsNaN(orthoT.Z))
-                orthoT = Float3.UnitX;
+            if (!(Float3.LengthSquared(orthoT) > 1e-12f))
+                orthoT = MathF.Abs(n.Y) < 0.999f
+                    ? Float3.Normalize(Float3.Cross(n, Float3.UnitY))
+                    : Float3.Normalize(Float3.Cross(n, Float3.UnitX));
 
             // Handedness: sign of dot(cross(n, t), bitangent)
             float w = Float3.Dot(Float3.Cross(t, n), tan2[i]) < 0.0f ? -1.0f : 1.0f;

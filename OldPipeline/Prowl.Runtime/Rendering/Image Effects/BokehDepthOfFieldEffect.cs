@@ -21,9 +21,11 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
 
     public bool UseAutoFocus = true;
     public float ManualFocusPoint = 0.5f;
-    public float FocusStrength = 200.0f;
-    public float MaxBlurRadius = 4.0f;
-    public ResolutionMode Resolution = ResolutionMode.Quarter;
+    // Retuned for a circle of confusion measured in linear view depth. The old values were set
+    // against raw depth-buffer samples, where the same difference meant something very different.
+    public float FocusStrength = 1.0f;
+    public float MaxBlurRadius = 2.0f;
+    public ResolutionMode Resolution = ResolutionMode.Half;
 
     private Material _mat;
 

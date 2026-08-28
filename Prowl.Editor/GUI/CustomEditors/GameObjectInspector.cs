@@ -47,13 +47,13 @@ public static class GameObjectInspector
         EditorGUI.Divider(paper, "gi_sep_transform", 6f);
         DrawComponents(paper, font, go);
 
-        // Only show Add Component if not a prefab instance (structure is fixed)
-        if (!go.IsPrefabInstance || Application.IsPlaying)
-            DrawAddComponentButton(paper, font, go);
+        // Prefab instances included: a component added to an instance belongs to that instance and
+        // is carried across refreshes. What a prefab instance cannot do is restructure the source.
+        DrawAddComponentButton(paper, font, go);
 
         // Detect GO-level overrides (Name, Tag, Transform, etc.)
         if (go.IsPrefabInstance)
-            PrefabUtility.DetectGOOverrides(go);
+            PrefabUtility.RecordGameObjectOverrides(go);
 
         paper.Box("gi_bottom_pad").Height(20);
     }
@@ -881,12 +881,7 @@ public static class GameObjectInspector
                 // Set overridden field names for PropertyGrid highlighting
                 if (go.IsPrefabInstance)
                 {
-                    string goPath = PrefabUtility.BuildGOPath(go);
-                    var allComps = go.GetComponents<MonoBehaviour>().ToList();
-                    int compIdx = allComps.IndexOf(comp);
-                    string pathPrefix = string.IsNullOrEmpty(goPath)
-                        ? $"c{compIdx}."
-                        : $"{goPath}.c{compIdx}.";
+                    string pathPrefix = PrefabUtility.GetOverridePath(go, comp, "");
 
                     var overridden = new HashSet<string>();
                     // Overrides are stored on the instance root with root-relative paths.
@@ -927,72 +922,94 @@ public static class GameObjectInspector
 
             // Auto-detect overrides by comparing against prefab source (index-based)
             if (go.IsPrefabInstance)
-                PrefabUtility.DetectComponentOverrides(go, comp);
+                PrefabUtility.RecordComponentOverrides(go, comp);
 
             EditorGUI.Divider(paper, $"{compId}_sep", 6f);
         }
     }
 
+    /// <summary>Take a component off its object, undoably, restoring it where it sat.</summary>
+    private static void RemoveComponentWithUndo(MonoBehaviour comp)
+    {
+        GameObject go = comp.GameObject;
+        if (go.IsNotValid()) return;
+
+        var serialized = Echo.Serializer.Serialize(comp.GetType(), comp);
+        Type compType = comp.GetType();
+        Guid compId = comp.Identifier;
+        int compIndex = comp.GetSiblingIndex() ?? 0;
+        Guid goId = go.Identifier;
+
+        Undo.RegisterAction("Remove Component",
+            undo: () =>
+            {
+                var g = Undo.FindGO(goId);
+                if (g == null) return;
+                if (Echo.Serializer.Deserialize(serialized, compType) is not MonoBehaviour restored) return;
+
+                restored.Identifier = compId;
+                g.AddComponent(restored);
+                restored.SetSiblingIndex(compIndex);
+            },
+            redo: () =>
+            {
+                var g = Undo.FindGO(goId);
+                if (g.IsNotValid()) return;
+
+                var c = g!.GetComponentByIdentifier(compId);
+                if (c != null) g.RemoveComponent(c);
+            });
+
+        go.RemoveComponent(comp);
+    }
+
     private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
     {
-        builder.Item(Loc.Get("inspector.reset"), () =>
+        // On an instance, what this component is supposed to be is whatever the prefab says, so Reset
+        // means go back to that. Everywhere else there is nothing to go back to but the values a new
+        // one of its type would have.
+        bool provided = go.IsPrefabInstance && go.GetComponentSourceIdentifier(comp) != Guid.Empty;
+
+        builder.Item(Loc.Get(provided ? "inspector.revert_component" : "inspector.reset"), () =>
         {
-            // TODO: Reset to default values
-            Runtime.Debug.Log($"Reset {comp.GetType().Name}");
-        }, icon: EditorIcons.ArrowsRotate);
+            if (provided) PrefabUtility.RevertComponentOverrides(go, comp);
+            else PrefabUtility.ResetComponentToDefaults(go, comp);
+        }, icon: EditorIcons.ArrowsRotate, enabled: !provided || PrefabUtility.HasComponentOverrides(go, comp));
+
+        // Pushing one component back to the prefab, at the scale the user is working at rather than
+        // the whole instance at once.
+        if (provided && PrefabUtility.IsEditablePrefab(go.PrefabAssetId))
+            builder.Item(Loc.Get("inspector.apply_component"), () => PrefabUtility.ApplyComponentOverrides(go, comp),
+                icon: EditorIcons.Check, enabled: PrefabUtility.HasComponentOverrides(go, comp));
 
         builder.Separator();
 
-        bool canRemove = comp.CanDestroy();
-        // Block removing prefab components in editor
-        if (go.IsPrefabInstance && go.PrefabComponentCount >= 0)
-        {
-            int compIdx = go._components.IndexOf(comp);
-            if (compIdx >= 0 && compIdx < go.PrefabComponentCount)
-                canRemove = false;
-        }
+        // Nothing records the removal of a component the prefab provides, so the next refresh would put
+        // it back. Removing one therefore asks first and unlinks the instance.
         builder.Item(Loc.Get("inspector.remove_component"), () =>
         {
-            var serialized = Echo.Serializer.Serialize(comp.GetType(), comp);
-            var compType = comp.GetType();
-            var compId = comp.Identifier;
-            var compIndex = index;
-            var goId = go.Identifier;
-            Undo.RegisterAction("Remove Component",
-                undo: () =>
-                {
-                    var g = Undo.FindGO(goId);
-                    if (g == null) return;
-                    var restored = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour;
-                    if (restored != null)
-                    {
-                        restored.Identifier = compId;
-                        g.AddComponent(restored);
-                        restored.SetSiblingIndex(compIndex);
-                    }
-                },
-                redo: () =>
-                {
-                    var g = Undo.FindGO(goId);
-                    if (g == null) return;
-                    var c = g.GetComponentByIdentifier(compId);
-                    if (c != null) g.RemoveComponent(c);
-                });
-            go.RemoveComponent(comp);
-        }, icon: EditorIcons.Trash, enabled: canRemove);
+            if (PrefabUtility.NeedsBreaking(comp))
+            {
+                MonoBehaviour target = comp;
+                PrefabUtility.BreakThenRun([go], () => RemoveComponentWithUndo(target));
+                return;
+            }
+
+            RemoveComponentWithUndo(comp);
+        }, icon: EditorIcons.Trash, enabled: comp.CanDestroy());
+
 
         builder.Separator();
 
         builder.Item(Loc.Get("inspector.copy_component"), () => ComponentClipboard.Copy(comp),
             icon: EditorIcons.Copy);
 
-        // Structure is fixed on prefab instances (Add Component is hidden for the same reason), so
-        // pasting a whole new component is only offered where adding one is.
-        bool canAddToGO = !go.IsPrefabInstance || Application.IsPlaying;
+        // Pasting a whole component is adding one, so it follows the same rule: allowed on a prefab
+        // instance, where it becomes part of that instance rather than of the prefab.
         builder.Item(Loc.Get("inspector.paste_component_as_new"), () => ComponentClipboard.PasteAsNew(go),
-            icon: EditorIcons.Paste, enabled: canAddToGO && ComponentClipboard.CanPasteAsNew());
+            icon: EditorIcons.Paste, enabled: ComponentClipboard.CanPasteAsNew());
 
-        // Values-only paste is fine on a prefab instance - DetectComponentOverrides picks the
+        // Values-only paste is fine on a prefab instance - RecordComponentOverrides picks the
         // changed fields up as overrides on the next frame.
         builder.Item(Loc.Get("inspector.paste_component_values"), () => ComponentClipboard.PasteValues(comp),
             icon: EditorIcons.ClipboardCheck, enabled: ComponentClipboard.CanPasteValues(comp.GetType()));
@@ -1083,7 +1100,7 @@ public static class GameObjectInspector
                         CloseAddComponentPopup();
                     else
                     {
-                        RenderAddComponentBackdrop(paper);
+                        MenuTreePopup.Backdrop(paper, "gi_acp", CloseAddComponentPopup);
                         RenderAddComponentPopover(paper, trigHandle);
                     }
                 }
@@ -1104,6 +1121,7 @@ public static class GameObjectInspector
 
         var entry = EditorAssetBackend.Instance?.GetEntry(go.PrefabAssetId);
         bool isMissing = entry == null;
+        bool canApply = !isMissing && PrefabUtility.IsEditablePrefab(go.PrefabAssetId);
         string prefabName = isMissing ? Loc.Get("inspector.missing") : System.IO.Path.GetFileNameWithoutExtension(entry!.Path);
 
         string label = isMissing ? Loc.Get("inspector.missing_prefab")
@@ -1134,7 +1152,14 @@ public static class GameObjectInspector
                     .TextColor(textColor)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
-                if (!isMissing)
+                if (isMissing)
+                {
+                    // The asset is gone, so there is nothing to select, revert to or apply against.
+                    // Unpacking is the only way out, and it was previously offered nowhere.
+                    Origami.Button(paper, "gi_prefab_unpack", Loc.Get("inspector.unpack_prefab"),
+                        () => { if (root != null) PrefabUtility.UnpackPrefabInstance(root); }).Width(80).Show();
+                }
+                else
                 {
                     Origami.Button(paper, "gi_prefab_select", Loc.Get("inspector.select"), () => { Selection.Ping(go.PrefabAssetId); }).Width(55).Show();
 
@@ -1142,13 +1167,17 @@ public static class GameObjectInspector
                     {
                         Origami.Button(paper, "gi_prefab_revert", Loc.Get("inspector.revert"), () => { if (root != null) PrefabUtility.RevertOverrides(root); }).Width(55).Show();
 
-                        Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
+                        // A generated prefab (a model) is rebuilt from its source file on every
+                        // import, so there is nothing to apply to.
+                        if (canApply)
+                            Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
                     }
                 }
             }
 
-            // Overrides list inline
-            if (hasOverrides)
+            // What makes this instance differ from its prefab, whether by a changed value or by
+            // something it has that the prefab does not.
+            if (hasOverrides || PrefabUtility.HasAnyAdditions(go))
             {
                 paper.Box("gi_prefab_ov_sep").Height(1)
                     .BackgroundColor(borderColor).Margin(0, 2, 0, 2);
@@ -1158,92 +1187,199 @@ public static class GameObjectInspector
         }
     }
 
+    /// <summary>
+    /// What this instance overrides, grouped by the object and component each one is on, with what
+    /// the prefab says beside what the instance says.
+    /// <para/>
+    /// The stored path is three source identifiers, which is the right thing to write down and
+    /// unreadable to anyone looking at it, so nothing here shows the path itself.
+    /// </summary>
     private static void DrawOverridesContent(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
-        float fs = EditorTheme.FontSize;
         // Overrides for the whole prefab instance are stored on its root.
         var prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
         go = prefabRoot.IsValid() ? prefabRoot : go;
-        var overrides = go.PrefabOverrides;
+        bool canApply = PrefabUtility.IsEditablePrefab(go.PrefabAssetId);
+
+        var described = PrefabUtility.DescribeOverrides(go);
+        var additions = PrefabUtility.DescribeAdditions(go);
+        if (described.Count == 0 && additions.Count == 0) return;
 
         using (paper.Column("gi_prefab_ov_list")
             .Height(UnitValue.Auto)
             .Margin(8, 0, 4, 4)
             .Enter())
         {
-            for (int i = 0; i < overrides.Count; i++)
+            DrawOverridesToolbar(paper, font, go, described.Count, canApply);
+
+            int key = 0;
+            foreach (var group in described.GroupBy(d => d.Group))
             {
-                int idx = i;
-                var ov = overrides[i];
+                DrawOverrideGroupHeader(paper, font, go, group.Key, group.First(), canApply, key++);
 
-                // A path that no longer resolves cannot be applied or reverted, so it is shown as
-                // broken and offers removal instead. Otherwise it sits in the list forever, keeping
-                // the instance permanently "modified".
-                bool resolvable = PrefabUtility.IsOverrideResolvable(go, ov.Path);
+                foreach (var entry in group)
+                    DrawOverrideRow(paper, font, go, entry, canApply, key++);
+            }
 
-                using (paper.Row($"gi_ov_{i}")
-                    .Height(EditorTheme.RowHeight)
-                    .BackgroundColor(EditorTheme.Neutral300)
-                    .Rounded(3).Margin(0, 0, 0, 1)
-                    .ChildLeft(6).RowBetween(4)
-                    .Enter())
-                {
-                    // Override path
-                    paper.Box($"gi_ov_path_{i}")
-                        .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                        .Text(resolvable ? ov.Path : $"{ov.Path}  ({Loc.Get("inspector.override_missing")})", font)
-                        .TextColor(resolvable ? EditorTheme.Purple400 : EditorTheme.Red400)
-                        .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+            foreach (var addition in additions)
+                DrawAdditionRow(paper, font, go, addition, canApply, key++);
+        }
+    }
 
-                    if (resolvable)
-                    {
-                        // Revert single
-                        paper.Box($"gi_ov_revert_{i}")
-                            .Width(50).Height(EditorTheme.RowHeight).Rounded(3)
-                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                            .Text(Loc.Get("inspector.revert"), font).TextColor(EditorTheme.Ink400)
-                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                            .OnClick((go, idx), (cap, _) =>
-                            {
-                                if (cap.idx < cap.go.PrefabOverrides.Count)
-                                {
-                                    var overridePath = cap.go.PrefabOverrides[cap.idx].Path;
-                                    PrefabUtility.RevertSingleOverride(cap.go, overridePath);
-                                }
-                            });
+    /// <summary>
+    /// Something the instance has that the prefab does not. A refresh keeps it and an apply leaves it
+    /// behind, both correctly, and neither said it was there.
+    /// </summary>
+    private static void DrawAdditionRow(Paper paper, Prowl.Scribe.FontFile font, GameObject root,
+        PrefabUtility.AdditionDescription addition, bool canApply, int key)
+    {
+        float fs = EditorTheme.FontSize;
 
-                        // Apply single
-                        paper.Box($"gi_ov_apply_{i}")
-                            .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
-                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                            .Text(Loc.Get("inspector.apply"), font).TextColor(EditorTheme.Ink400)
-                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                            .OnClick((go, idx), (cap, _) =>
-                            {
-                                if (cap.idx < cap.go.PrefabOverrides.Count)
-                                {
-                                    var singleOv = cap.go.PrefabOverrides[cap.idx];
-                                    PrefabUtility.ApplySingleOverride(cap.go, singleOv);
-                                }
-                            });
-                    }
-                    else
-                    {
-                        paper.Box($"gi_ov_remove_{i}")
-                            .Width(95).Height(EditorTheme.RowHeight).Rounded(3)
-                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                            .Text(Loc.Get("inspector.remove_override"), font).TextColor(EditorTheme.Ink400)
-                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                            .OnClick((go, idx), (cap, _) =>
-                            {
-                                if (cap.idx < cap.go.PrefabOverrides.Count)
-                                    PrefabUtility.RemoveOverride(cap.go, cap.go.PrefabOverrides[cap.idx].Path);
-                            });
-                    }
-                }
+        using (paper.Row($"gi_add_{key}")
+            .Height(EditorTheme.RowHeight)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .Rounded(3).Margin(0, 0, 0, 1)
+            .ChildLeft(6).RowBetween(4)
+            .Enter())
+        {
+            paper.Box($"gi_add_name_{key}")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text($"{Loc.Get("inspector.added")}  {addition.Label}", font)
+                .TextColor(EditorTheme.Green400)
+                .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+
+            OverrideButton(paper, font, $"gi_add_remove_{key}", Loc.Get("inspector.remove"), 55,
+                root, r => PrefabUtility.RemoveAddition(r, addition));
+
+            if (canApply)
+                OverrideButton(paper, font, $"gi_add_apply_{key}", Loc.Get("inspector.apply"), 45,
+                    root, r => PrefabUtility.ApplyAddition(r, addition));
+        }
+    }
+
+    /// <summary>Everything at once, so a whole instance can be settled without walking the list.</summary>
+    private static void DrawOverridesToolbar(Paper paper, Prowl.Scribe.FontFile font, GameObject root, int count, bool canApply)
+    {
+        using (paper.Row("gi_ov_bar").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        {
+            paper.Box("gi_ov_count")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text(Loc.Get("inspector.override_count", new { count }), font)
+                .TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+
+            OverrideButton(paper, font, "gi_ov_revert_all", Loc.Get("inspector.revert_all"), 70,
+                root, r => PrefabUtility.RevertOverrides(r));
+
+            if (canApply)
+                OverrideButton(paper, font, "gi_ov_apply_all", Loc.Get("inspector.apply_all"), 65,
+                    root, r => PrefabUtility.ApplyOverrides(r));
+        }
+    }
+
+    /// <summary>One heading per object, or per component of one, with the actions for all of it.</summary>
+    private static void DrawOverrideGroupHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject root,
+        string title, PrefabUtility.OverrideDescription first, bool canApply, int key)
+    {
+        using (paper.Row($"gi_ovg_{key}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        {
+            paper.Box($"gi_ovg_name_{key}")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text(title, EditorTheme.FontSemiBold ?? font)
+                .TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+
+            // Component level actions belong to the component, so a group standing for one offers
+            // them here rather than making the user revert its members one at a time.
+            if (string.IsNullOrEmpty(first.ComponentName)) return;
+
+            MonoBehaviour? component = ComponentFor(root, first);
+            if (component.IsNotValid()) return;
+
+            OverrideButton(paper, font, $"gi_ovg_revert_{key}", Loc.Get("inspector.revert"), 50,
+                root, _ => PrefabUtility.RevertComponentOverrides(component!.GameObject, component!));
+
+            if (canApply)
+                OverrideButton(paper, font, $"gi_ovg_apply_{key}", Loc.Get("inspector.apply"), 45,
+                    root, _ => PrefabUtility.ApplyComponentOverrides(component!.GameObject, component!));
+        }
+    }
+
+    private static void DrawOverrideRow(Paper paper, Prowl.Scribe.FontFile font, GameObject root,
+        PrefabUtility.OverrideDescription entry, bool canApply, int key)
+    {
+        float fs = EditorTheme.FontSize;
+        string path = entry.Path;
+
+        using (paper.Row($"gi_ov_{key}")
+            .Height(EditorTheme.RowHeight)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .Rounded(3).Margin(12, 0, 0, 1)
+            .ChildLeft(6).RowBetween(4)
+            .Enter())
+        {
+            paper.Box($"gi_ov_member_{key}")
+                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .Text(entry.Resolvable ? entry.MemberName : $"{entry.MemberName}  ({Loc.Get("inspector.override_missing")})", font)
+                .TextColor(entry.Resolvable ? EditorTheme.Purple400 : EditorTheme.Red400)
+                .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+
+            if (entry.Resolvable)
+            {
+                // What it was against what it is, which is the question the list is read to answer.
+                paper.Box($"gi_ov_value_{key}")
+                    .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                    .Text($"{entry.SourceValue}  {EditorIcons.ArrowRight}  {entry.InstanceValue}", font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+
+                OverrideButton(paper, font, $"gi_ov_revert_{key}", Loc.Get("inspector.revert"), 50,
+                    root, r => PrefabUtility.RevertSingleOverride(r, path));
+
+                if (canApply)
+                    OverrideButton(paper, font, $"gi_ov_apply_{key}", Loc.Get("inspector.apply"), 45,
+                        root, r => PrefabUtility.ApplySingleOverride(r, path));
+            }
+            else
+            {
+                OverrideButton(paper, font, $"gi_ov_remove_{key}", Loc.Get("inspector.remove_override"), 95,
+                    root, r => PrefabUtility.RemoveOverride(r, path));
             }
         }
     }
+
+    /// <summary>
+    /// The component an entry is on, by identity and inside this instance. Two instances of one prefab
+    /// have identically named objects, so a search by name lands on whichever comes first.
+    /// </summary>
+    private static MonoBehaviour? ComponentFor(GameObject root, PrefabUtility.OverrideDescription entry)
+    {
+        if (entry.ComponentIdentifier == Guid.Empty) return null;
+        return root.GetComponentInChildrenByIdentifier(entry.ComponentIdentifier);
+    }
+
+    /// <summary>
+    /// A small text button that acts on the instance root, looked up when it is clicked rather than
+    /// captured: these operations replace what they touch, so a handler holding an object would be
+    /// holding a dead one by the time it ran.
+    /// </summary>
+    private static void OverrideButton(Paper paper, Prowl.Scribe.FontFile font, string id, string label,
+        float width, GameObject root, Action<GameObject> act)
+    {
+        Guid rootId = root.Identifier;
+
+        paper.Box(id)
+            .Width(width).Height(EditorTheme.RowHeight).Rounded(3)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(label, font).TextColor(EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter)
+            .OnClick((rootId, act), (cap, _) =>
+            {
+                var live = Undo.FindGO(cap.rootId);
+                if (live.IsValid()) cap.act(live!);
+            });
+    }
+
 
     // ================================================================
     //  Helpers
@@ -1309,24 +1445,10 @@ public static class GameObjectInspector
     //  Add Component Popup
     // ================================================================
 
-    private struct ComponentEntry
-    {
-        public string Path;     // Full path e.g. "Physics/Colliders/Box Collider"
-        public string Category; // e.g. "Physics/Colliders"
-        public string Name;     // e.g. "Box Collider"
-        public string Icon;
-        public Type Type;
-    }
-
     private static bool _addComponentOpen;
     private static GameObject? _addComponentTarget;
-    private static string _addComponentSearch = "";
-    private static List<string> _addComponentNavStack = [];
-    private static List<ComponentEntry>? _cachedComponents;
-
-    // Matches Origami's DropdownBuilder default popover cap (Widgets/Dropdown.cs), so the Add
-    // Component popover scrolls the same way any other dropdown in the editor does.
-    private const float PopoverMaxListHeight = 320f;
+    private static readonly MenuTreeState _addComponentMenu = new();
+    private static List<MenuTreeEntry>? _cachedComponents;
 
     /// <summary>
     /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
@@ -1343,8 +1465,7 @@ public static class GameObjectInspector
         }
 
         _addComponentTarget = target;
-        _addComponentSearch = "";
-        _addComponentNavStack = [];
+        _addComponentMenu.Reset();
         _cachedComponents ??= GatherComponents();
         _addComponentOpen = true;
     }
@@ -1355,212 +1476,19 @@ public static class GameObjectInspector
         _addComponentTarget = null;
     }
 
-    // Fullscreen, invisible click-catcher so clicking anywhere outside the popover closes it -
-    // the same click-outside behaviour Origami's dropdowns use (see DropdownInternal.RenderBackdrop).
-    private static void RenderAddComponentBackdrop(Paper paper)
-    {
-        paper.Box("gi_acp_backdrop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(-9999, -9999)
-            .Size(99999, 99999)
-            .Layer(Layer.Overlay)
-            .StopEventPropagation()
-            .OnClick(0, (_, _) => CloseAddComponentPopup());
-    }
-
-    // Popover anchored directly below the Add Component button, styled like Origami's dropdown
-    // popovers - same background, border, shadow, rounding and row hover, sourced from EditorTheme.
     private static void RenderAddComponentPopover(Paper paper, ElementHandle trigHandle)
     {
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
-
-        float triggerWidth = trigHandle.Data.LayoutRect.Size.X > 0 ? (float)trigHandle.Data.LayoutRect.Size.X : 280f;
-        float triggerHeight = trigHandle.Data.LayoutRect.Size.Y > 0 ? (float)trigHandle.Data.LayoutRect.Size.Y : 28f;
-
-        const float padX = 5f, padY = 5f, searchH = 28f, searchGap = 4f;
-
-        using (paper.Column("gi_acp_pop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, triggerHeight + 4f)
-            .Width(triggerWidth)
-            .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.Popover)
-            .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
-            .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
-            .Rounded(EditorTheme.Roundness + 2f)
-            .Padding(padX, padX, padY, padY)
-            .ColBetween(searchGap)
-            .HookToParent()
-            .Layer(Layer.Topmost)
-            .ClampToScreen()
-            .StopEventPropagation()
-            .Enter())
-        {
-            using (paper.Row("gi_acp_search_row").Height(searchH).Enter())
+        MenuTreePopup.Popover(paper, "gi_acp", trigHandle, _cachedComponents ?? [], _addComponentMenu,
+            entry =>
             {
-                Origami.SearchField(paper, "gi_acp_search", _addComponentSearch, v => _addComponentSearch = v, Loc.Get("popup.search_components")).Show();
-            }
-
-            var components = _cachedComponents ?? [];
-
-            Origami.ScrollView(paper, "gi_acp_scroll", triggerWidth - padX * 2, PopoverMaxListHeight)
-                .Padding(0)
-                .Body(() =>
-            {
-                if (!string.IsNullOrEmpty(_addComponentSearch))
-                    DrawAddComponentSearchResults(paper, font, components);
-                else
-                    DrawAddComponentBrowseLevel(paper, font, components);
-            });
-        }
-    }
-
-    // Flat, globally-filtered list shown while the search box has text (ignores current folder).
-    private static void DrawAddComponentSearchResults(Paper paper, Prowl.Scribe.FontFile font, List<ComponentEntry> components)
-    {
-        var filtered = components.Where(c =>
-            c.Name.Contains(_addComponentSearch, StringComparison.OrdinalIgnoreCase) ||
-            c.Path.Contains(_addComponentSearch, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (filtered.Count == 0)
-        {
-            paper.Box("acp_empty").Height(40)
-                .Text(Loc.Get("popup.no_components"), font)
-                .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-            return;
-        }
-
-        for (int i = 0; i < filtered.Count; i++)
-            DrawComponentItem(paper, font, $"acp_item_{i}", filtered[i]);
-    }
-
-    // Unity-style click-to-navigate browser: the current folder's subfolders and components,
-    // with a "Back" row when nested. Clicking a folder drills in; clicking Back steps back out.
-    private static void DrawAddComponentBrowseLevel(Paper paper, Prowl.Scribe.FontFile font, List<ComponentEntry> components)
-    {
-        string prefix = string.Join("/", _addComponentNavStack);
-        var (leaves, subfolders) = SplitComponentLevel(components, prefix);
-
-        if (_addComponentNavStack.Count > 0)
-        {
-            string currentName = _addComponentNavStack[^1];
-            using (paper.Row("acp_back")
-                .Height(EditorTheme.RowHeight)
-                .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
-                .OnClick(0, (_, _) => _addComponentNavStack.RemoveAt(_addComponentNavStack.Count - 1))
-                .Enter())
-            {
-                paper.Box("acp_back_ico").Width(16).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.ChevronLeft, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-                paper.Box("acp_back_name").Height(EditorTheme.RowHeight)
-                    .Text(currentName, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-            }
-
-            paper.Box("acp_back_sep").Height(1).Margin(8, 3, 8, 3).BackgroundColor(EditorTheme.BorderSoft);
-        }
-
-        foreach (var folder in subfolders)
-        {
-            var captured = folder;
-            using (paper.Row($"acp_folder_{folder}")
-                .Height(EditorTheme.RowHeight)
-                .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
-                .OnClick(0, (_, _) => _addComponentNavStack.Add(captured))
-                .Enter())
-            {
-                paper.Box($"acp_folder_{folder}_ico").Width(16).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.Folder, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-
-                paper.Box($"acp_folder_{folder}_name")
-                    .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                    .Text(folder, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-
-                paper.Box($"acp_folder_{folder}_arw").Width(16).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.ChevronRight, font).TextColor(EditorTheme.Ink300)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-            }
-        }
-
-        if (subfolders.Count > 0 && leaves.Count > 0)
-            paper.Box("acp_level_sep").Height(1).Margin(8, 3, 8, 3).BackgroundColor(EditorTheme.BorderSoft);
-
-        foreach (var comp in leaves)
-            DrawComponentItem(paper, font, $"acp_item_{comp.Type.Name}", comp);
-
-        if (subfolders.Count == 0 && leaves.Count == 0)
-        {
-            paper.Box("acp_empty").Height(40)
-                .Text(Loc.Get("popup.no_components"), font)
-                .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-        }
-    }
-
-    // Splits components into this level's direct items (Category == prefix) and its immediate
-    // subfolder names (the next path segment past prefix), so browsing can drill in one segment
-    // at a time regardless of how deep the full category path goes.
-    private static (List<ComponentEntry> Leaves, List<string> Subfolders) SplitComponentLevel(List<ComponentEntry> components, string prefix)
-    {
-        var leaves = new List<ComponentEntry>();
-        var subfolders = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var c in components)
-        {
-            if (c.Category == prefix)
-            {
-                leaves.Add(c);
-                continue;
-            }
-
-            if (prefix.Length > 0 && !c.Category.StartsWith(prefix + "/", StringComparison.Ordinal))
-                continue;
-
-            string rel = prefix.Length > 0 ? c.Category[(prefix.Length + 1)..] : c.Category;
-            int slash = rel.IndexOf('/');
-            subfolders.Add(slash < 0 ? rel : rel[..slash]);
-        }
-
-        var sortedSubfolders = subfolders.ToList();
-        sortedSubfolders.Sort(StringComparer.OrdinalIgnoreCase);
-        leaves.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        return (leaves, sortedSubfolders);
-    }
-
-    private static void DrawComponentItem(Paper paper, Prowl.Scribe.FontFile font, string id, ComponentEntry comp)
-    {
-        using (paper.Row(id)
-            .Height(EditorTheme.RowHeight)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
-            .OnClick(comp.Type, (type, _) =>
-            {
-                if (_addComponentTarget != null)
+                if (_addComponentTarget != null && entry.Tag is Type type)
                 {
                     AddComponentWithUndo(_addComponentTarget, type);
                     CloseAddComponentPopup();
                 }
-            })
-            .Enter())
-        {
-            paper.Box($"{id}_ico")
-                .Width(16).Height(EditorTheme.RowHeight)
-                .Text(comp.Icon, font).TextColor(EditorTheme.Ink400)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-
-            paper.Box($"{id}_name")
-                .Height(EditorTheme.RowHeight)
-                .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-        }
+            },
+            Loc.Get("popup.search_components"),
+            Loc.Get("popup.no_components"));
     }
 
     /// <summary>
@@ -1583,9 +1511,9 @@ public static class GameObjectInspector
         return addedComp;
     }
 
-    private static List<ComponentEntry> GatherComponents()
+    private static List<MenuTreeEntry> GatherComponents()
     {
-        var result = new List<ComponentEntry>();
+        var result = new List<MenuTreeEntry>();
 
         foreach (var type in EditorUtils.GetAllTypes())
         {
@@ -1599,7 +1527,6 @@ public static class GameObjectInspector
 
             int lastSlash = path.LastIndexOf('/');
             string category = lastSlash >= 0 ? path[..lastSlash] : "";
-            string name = lastSlash >= 0 ? path[(lastSlash + 1)..] : path;
 
             if (string.IsNullOrEmpty(icon))
             {
@@ -1618,14 +1545,7 @@ public static class GameObjectInspector
                 };
             }
 
-            result.Add(new ComponentEntry
-            {
-                Path = path,
-                Category = category,
-                Name = name,
-                Icon = icon,
-                Type = type
-            });
+            result.Add(MenuTreeEntry.FromPath(path, icon, type));
         }
 
         return result;

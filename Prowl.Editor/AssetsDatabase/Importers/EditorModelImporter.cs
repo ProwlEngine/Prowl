@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
@@ -13,8 +14,16 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".gltf", ".glb", ".obj", ".fbx")]
 public class EditorModelImporter : AssetImporter
 {
-    private const int BaseVersion = 6;
+    // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
+    // 8: normals now come from Clay, which splits vertices on hard edges.
+    private const int BaseVersion = 11;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
+
+    /// <summary>Splits the comma-separated preserve list the inspector stores as one field.</summary>
+    private static string[] SplitNodeNames(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public override bool Import(ImportContext ctx)
     {
@@ -30,10 +39,21 @@ public class EditorModelImporter : AssetImporter
                 var s = ctx.Settings;
                 importSettings.GenerateNormals = !s.TryGet("generateNormals", out var gn) || gn.BoolValue;
                 importSettings.GenerateSmoothNormals = !s.TryGet("generateSmoothNormals", out var gsn) || gsn.BoolValue;
+                importSettings.SmoothNormalsAngleDeg = s.TryGet("smoothNormalsAngle", out var sna) ? sna.FloatValue : 80f;
                 importSettings.RecalculateNormals = s.TryGet("recalculateNormals", out var rn) && rn.BoolValue;
                 importSettings.CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue;
-                importSettings.FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue;
                 importSettings.UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f;
+                importSettings.ImportMaterials = !s.TryGet("importMaterials", out var im) || im.BoolValue;
+                importSettings.ImportAnimations = !s.TryGet("importAnimations", out var ia) || ia.BoolValue;
+                importSettings.ImportBlendShapes = !s.TryGet("importBlendShapes", out var ibs) || ibs.BoolValue;
+                importSettings.OptimizeMeshes = s.TryGet("optimizeMeshes", out var om) && om.BoolValue;
+                importSettings.OptimizeHierarchy = s.TryGet("optimizeHierarchy", out var oh) && oh.BoolValue;
+                importSettings.PreserveNodeNames = SplitNodeNames(s.TryGet("preserveNodeNames", out var pnn) ? pnn.StringValue : null);
+                importSettings.StrictValidation = s.TryGet("strictValidation", out var sv) && sv.BoolValue;
+                importSettings.SceneIndex = s.TryGet("sceneIndex", out var si) ? si.IntValue : -1;
+                importSettings.ImportCameras = !s.TryGet("importCameras", out var ic) || ic.BoolValue;
+                importSettings.ImportLights = !s.TryGet("importLights", out var il) || il.BoolValue;
+                importSettings.AnimationWrapMode = (AnimationWrapMode)(s.TryGet("animationWrapMode", out var awm) ? awm.IntValue : (int)AnimationWrapMode.Loop);
                 // Off by default (slow; some models ship their own UV2). The importer runs the
                 // unwrap in its post-process so the baked UV2 is captured before serialization.
                 importSettings.GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
@@ -65,18 +85,24 @@ public class EditorModelImporter : AssetImporter
                 MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx, meshIdentities[i]);
 
             // 3. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
-            //    Tracked (matching SceneImporter/PrefabImporter) so the Model's own dependency list
+            //    Tracked (matching SceneImporter/PrefabImporter) so the prefab's own dependency list
             //    reflects what its GameObject hierarchy actually references.
-            var model = new Model(ctx.FileName);
+            //    A model is a prefab: dropping one into a scene produces an instance linked back here,
+            //    so changing import settings and reimporting updates those instances in place.
+            var prefab = new PrefabAsset { Name = ctx.FileName, InstanceType = PrefabInstanceType.Model };
             if (data.RootGO != null)
             {
+                // The tree is built fresh from the file on every import, so its identities would be new
+                // every time and every instance in the project would lose its overrides on any reimport.
+                StabilizeIdentities(data.RootGO);
+
                 var goSerCtx = ImportHelper.CreateTrackingContext(out var goDependencies);
-                model.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO, goSerCtx);
+                prefab.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO, goSerCtx);
                 foreach (var dep in goDependencies)
                     ctx.AddDependency(dep);
             }
 
-            ctx.SetMainAsset(model);
+            ctx.SetMainAsset(prefab);
             return true;
         }
         catch (Exception ex)
@@ -86,15 +112,50 @@ public class EditorModelImporter : AssetImporter
         }
     }
 
+    /// <summary>
+    /// Gives every object an identity derived from where it sits rather than from its constructor, so
+    /// importing the same file twice produces the same ones and instances keep their overrides across a
+    /// reimport. Renaming or moving a node therefore reads as a different object and orphans its
+    /// overrides, which is unavoidable while the source file carries no identities of its own.
+    /// </summary>
+    internal static void StabilizeIdentities(GameObject go, string path = "$Root")
+    {
+        go.SetIdentifier(BuiltInAssets.DeterministicGuid($"$GeneratedPrefab/{path}"));
+
+        var perType = new Dictionary<string, int>();
+        foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
+        {
+            string type = component.GetType().FullName ?? component.GetType().Name;
+            perType.TryGetValue(type, out int ordinal);
+            perType[type] = ordinal + 1;
+
+            component.Identifier = BuiltInAssets.DeterministicGuid($"$GeneratedPrefab/{path}#{type}#{ordinal}");
+        }
+
+        // Siblings can share a name, so the key says which one of those this is.
+        var perName = new Dictionary<string, int>();
+        foreach (GameObject child in go.Children)
+        {
+            perName.TryGetValue(child.Name, out int ordinal);
+            perName[child.Name] = ordinal + 1;
+
+            StabilizeIdentities(child, ordinal == 0 ? $"{path}/{child.Name}" : $"{path}/{child.Name}[{ordinal}]");
+        }
+    }
+
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();
         s["generateNormals"] = new EchoObject(true);
         s["generateSmoothNormals"] = new EchoObject(true);
+        s["smoothNormalsAngle"] = new EchoObject(80.0f);
         s["recalculateNormals"] = new EchoObject(false);
         s["calculateTangents"] = new EchoObject(true);
         s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);
+        s["importCameras"] = new EchoObject(true);
+        s["importLights"] = new EchoObject(true);
+        s["animationWrapMode"] = new EchoObject((int)AnimationWrapMode.Loop);
         s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;

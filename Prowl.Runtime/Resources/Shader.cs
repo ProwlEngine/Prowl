@@ -162,6 +162,59 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         return new Shader(blob.Definition.Name ?? shader.ToString(), properties, blob.Definition, blob.Snapshot);
     }
 
+    /// <summary>
+    /// Raw source text of an embedded default shader. Tooling that only needs the declared
+    /// <c>Shader "path"</c> can read it from here without paying for a full parse.
+    /// </summary>
+    public static string GetDefaultSource(DefaultShader shader) =>
+        EmbeddedResources.ReadAllText($"Assets/Defaults/{shader}.shader");
+
+    /// <summary>
+    /// Pulls the declared path out of the <c>Shader "Some/Path"</c> line at the top of a shader
+    /// source, without running the parser. Leading comments and blank lines are skipped, so this
+    /// works on files that open with a header comment. Returns <c>null</c> when no declaration is
+    /// found in the first few lines.
+    /// </summary>
+    public static string? ReadDeclaredPath(string source)
+    {
+        if (string.IsNullOrEmpty(source)) return null;
+
+        int i = 0;
+        const char byteOrderMark = (char)0xFEFF; // shader files are often BOM-prefixed
+        while (i < source.Length && source[i] == byteOrderMark) i++;
+
+        while (i < source.Length)
+        {
+            // Skip whitespace and any line comment ahead of the declaration.
+            while (i < source.Length && char.IsWhiteSpace(source[i])) i++;
+            if (i + 1 < source.Length && source[i] == '/' && source[i + 1] == '/')
+            {
+                while (i < source.Length && source[i] != '\n') i++;
+                continue;
+            }
+            if (i + 1 < source.Length && source[i] == '/' && source[i + 1] == '*')
+            {
+                int end = source.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                if (end < 0) return null;
+                i = end + 2;
+                continue;
+            }
+            break;
+        }
+
+        const string keyword = "Shader";
+        if (i + keyword.Length >= source.Length) return null;
+        if (string.CompareOrdinal(source, i, keyword, 0, keyword.Length) != 0) return null;
+        i += keyword.Length;
+
+        while (i < source.Length && char.IsWhiteSpace(source[i])) i++;
+        if (i >= source.Length || source[i] != '"') return null;
+
+        int start = ++i;
+        while (i < source.Length && source[i] != '"') i++;
+        return i < source.Length ? source[start..i] : null;
+    }
+
     public void OnBeforeSerialize() { }
 
     public void OnAfterDeserialize() { }

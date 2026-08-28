@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -22,7 +23,17 @@ namespace Prowl.Runtime;
 public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
+
+    // On the component rather than in a table keyed by component identifier: identifiers are handed out
+    // fresh by every load, so such a table goes stale wherever a copy forgets to rewrite its keys.
+    // Written out only when set, so an ordinary component costs nothing in a scene file.
+    [SerializeField, HideInInspector, SerializeIf(nameof(IsFromPrefab))]
+    private Guid _prefabTemplateIdentity;
+
+    /// <summary>Whether this component came from a prefab.</summary>
+    public bool IsFromPrefab => _prefabTemplateIdentity != Guid.Empty;
 
     [SerializeField, HideInInspector]
     protected internal bool _enabled = true;
@@ -84,6 +95,16 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// Generally shouldnt be set manually
     /// </summary>
     public Guid Identifier { get => _identifier; set => _identifier = value; }
+
+    /// <summary>
+    /// The identifier of the component in the prefab this one came from, or Guid.Empty when it is not
+    /// part of a prefab.
+    /// </summary>
+    public Guid SourceIdentifier
+    {
+        get => _prefabTemplateIdentity;
+        internal set => _prefabTemplateIdentity = value;
+    }
 
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.
@@ -489,17 +510,30 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerExit() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
+    // Implemented explicitly so the identity rules below always run. They used to live in the virtual
+    // OnAfterDeserialize, where a component that overrode it without calling base kept the identifier
+    // stored in the data - and every instance of that prefab then shared one identifier, so anything
+    // resolving a component by id found whichever instance came first.
+    void ISerializationCallbackReceiver.OnBeforeSerialize() => OnBeforeSerialize();
+
+    void ISerializationCallbackReceiver.OnAfterDeserialize()
+    {
+        // A fresh identity every time: a copy of a component must not come back wearing the
+        // original's identifier. Which source component this came from is recorded on the owning
+        // GameObject's prefab link instead.
+        if (!GameObject.PreservingIdentifiers)
+            _identifier = Guid.NewGuid();
+
+        OnAfterDeserialize();
+    }
+
     /// <summary>Called right before this component is serialized. Override to refresh serialized
-    /// fields from live state. Always call base.</summary>
+    /// fields from live state.</summary>
     public virtual void OnBeforeSerialize() { }
 
     /// <summary>Called right after this component is deserialized, before any lifecycle callback.
-    /// Override to react to freshly loaded values. Always call base.</summary>
-    public virtual void OnAfterDeserialize()
-    {
-        // Always generate fresh identifier Scene restores them after deserialization
-        _identifier = Guid.NewGuid();
-    }
+    /// Override to react to freshly loaded values.</summary>
+    public virtual void OnAfterDeserialize() { }
 
     /// <summary>
     /// Called when the MonoBehaviour will be destroyed.
@@ -507,8 +541,9 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// </summary>
     protected override void OnDispose()
     {
+        // Teardown, not an edit, so it goes through regardless of whether a prefab provided this.
         if (GameObject.IsValid())
-            GameObject.RemoveComponent(this);
+            GameObject.RemoveComponentInternal(this);
     }
 
     #endregion

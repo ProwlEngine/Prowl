@@ -68,10 +68,8 @@ public sealed class LightmapBakeService
         baker.Options.IncludeDirectLighting = true;
         baker.Options.DoBackfaceCull = settings.DoBackfaceCull;
         baker.Options.DilatePixels = settings.DilatePixels;
-        baker.Options.RussianRoulette = settings.RussianRoulette;
-        baker.Options.IgnoreAlbedo = settings.IgnoreAlbedo;
-        baker.Options.Denoise = settings.Denoise;
-        baker.Options.DenoiseIterations = Math.Max(1, settings.DenoiseRadius);
+        baker.Options.SparseStride = Math.Max(1, settings.SparseStride);
+        baker.Options.Diagnostics.IgnoreAlbedo = settings.IgnoreAlbedo;
         if (settings.BakeSkyLighting)
             baker.Options.SkyColor = SceneSkyRadiance(scene);
 
@@ -222,14 +220,10 @@ public sealed class LightmapBakeService
             try { if (Directory.Exists(lmFolderAbs)) Directory.Delete(lmFolderAbs, true); } catch { }
         }
 
+        // Everything the bake produced lives on the scene, so clearing is dropping it. Nothing has to be
+        // walked and reset object by object.
         scene.BakedLighting = new Scene.BakedLightingData();
         scene.InvalidateProbeVolume();
-
-        foreach (var go in scene.AllObjects)
-        {
-            if (go.GetComponent<MeshRenderer>() is { } mr) { mr.LightmapIndex = -1; mr.LightmapScaleOffset = new Float4(1, 1, 0, 0); }
-            if (go.GetComponent<SkinnedMeshRenderer>() is { } smr) { smr.LightmapIndex = -1; smr.LightmapScaleOffset = new Float4(1, 1, 0, 0); }
-        }
 
         EditorSceneManager.Save();
         Status = "Cleared";
@@ -251,9 +245,7 @@ public sealed class LightmapBakeService
         var atlas = _atlas!;
         var scene = _scene!;
         baker.Cancel();        // stop the progressive job
-        baker.Job?.Wait();     // ensure the worker stopped writing before we post-process
-        if (_settings.Denoise) Status = "Denoising…";
-        baker.Job?.Denoise();  // edge-avoiding denoise + re-dilate (no-op unless enabled); atlas buffers are now final
+        baker.Job?.Wait();     // ensure the worker stopped writing before we read the atlas buffers
 
         var db = EditorAssetBackend.Instance;
         string scenePath = EditorSceneManager.CurrentScenePath ?? "";
@@ -287,14 +279,22 @@ public sealed class LightmapBakeService
         }
         scene.BakedLighting.Lightmaps = lightmaps;
 
-        // Assign per-renderer index + scale/offset.
+        // Record where each baked surface landed, against the object it is on. A rebake replaces the
+        // whole set, so a renderer that is no longer baked simply has no placement.
+        scene.BakedLighting.Placements.Clear();
         for (int i = 0; i < _renderers.Count && i < atlas.Instances.Length; i++)
         {
+            if (_renderers[i] is not MonoBehaviour renderer || renderer.IsNotValid()) continue;
+
+            GameObject owner = renderer.GameObject;
+            if (owner.IsNotValid()) continue;
+
             var inst = atlas.Instances[i];
-            int atlasIndex = atlas.Placements[i].AtlasIndex;
-            var so = new Float4(inst.UVScale.X, inst.UVScale.Y, inst.UVOffset.X, inst.UVOffset.Y);
-            if (_renderers[i] is MeshRenderer mr) { mr.LightmapIndex = atlasIndex; mr.LightmapScaleOffset = so; }
-            else if (_renderers[i] is SkinnedMeshRenderer smr) { smr.LightmapIndex = atlasIndex; smr.LightmapScaleOffset = so; }
+            scene.BakedLighting.Placements[owner.Identifier] = new Scene.LightmapPlacement
+            {
+                Index = atlas.Placements[i].AtlasIndex,
+                ScaleOffset = new Float4(inst.UVScale.X, inst.UVScale.Y, inst.UVOffset.X, inst.UVOffset.Y)
+            };
         }
 
         // Probes: bake SH + tetrahedralize.

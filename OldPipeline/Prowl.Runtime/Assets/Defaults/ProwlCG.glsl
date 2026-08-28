@@ -3,6 +3,12 @@
 
 #include "ShaderVariables"
 
+// A perceptual roughness of exactly 0 makes the GGX denominator vanish at the specular peak
+// (alpha = 0 with NdotH = 1), which is a 0/0. Specular anti-aliasing normally lifts roughness off
+// the floor, but a flat surface has no normal derivative for it to work with, so the value is
+// clamped at the source instead. Small enough to still read as a mirror.
+#define PROWL_MIN_ROUGHNESS 0.045
+
 #define PROWL_PI            3.14159265359
 #define PROWL_TWO_PI        6.28318530718
 #define PROWL_FOUR_PI       12.56637061436
@@ -26,14 +32,64 @@ vec3 gammaToLinearSpace(vec3 gamma)
 }
 // ============================================================================
 
-float linearizeDepth(float depth, float near, float far) 
+// A projection matrix already says which kind it is, in the row that produces w. A perspective one
+// puts view-space z there so the divide happens (m[2][3] = 1, m[3][3] = 0); an orthographic one
+// leaves w at 1 so it does not (m[2][3] = 0, m[3][3] = 1). Reading it costs one compare and needs no
+// uniform of its own, which also means it cannot fall out of step with the matrix actually in use.
+bool isOrthographic(mat4 proj) { return proj[3][3] > 0.5; }
+bool isPerspective(mat4 proj) { return proj[3][3] <= 0.5; }
+
+bool isOrthographic() { return isOrthographic(prowl_MatP); }
+bool isPerspective() { return isPerspective(prowl_MatP); }
+
+// Depth as sampled is what OpenGL's viewport transform wrote. Prowl's projections are DirectX style
+// and emit clip z in [0, w], so that transform lands them in [0.5, 1] rather than filling the buffer;
+// undoing it is the first step of reconstructing anything from a depth sample, and it is the same
+// remap getNDCFromScreenPos applies.
+float screenDepthToNDC(float depth) { return depth * 2.0 - 1.0; }
+
+// Perspective depth is hyperbolic, spending most of its range close to the camera.
+float linearizeDepth(float depth, float near, float far)
 {
-    float z = depth * 2.0 - 1.0; // Back to NDC [-1,1] range
-    return (2.0 * near * far) / (far + near - z * (far - near));
+    float ndc = screenDepthToNDC(depth);
+    return (near * far) / (far - ndc * (far - near));
 }
 
-float linearizeDepthFromProjection(float depth) {
-    return linearizeDepth(depth, _ProjectionParams.y, _ProjectionParams.z);
+// Orthographic depth is already linear in view space, so it only needs its range put back. Running
+// it through the perspective reconstruction instead reports a curve where the buffer holds a line.
+float linearizeDepthOrtho(float depth, float near, float far)
+{
+    return near + screenDepthToNDC(depth) * (far - near);
+}
+
+float linearizeDepthFromProjection(float depth)
+{
+    return isOrthographic()
+        ? linearizeDepthOrtho(depth, _ProjectionParams.y, _ProjectionParams.z)
+        : linearizeDepth(depth, _ProjectionParams.y, _ProjectionParams.z);
+}
+
+// Vertical field of view the sky falls back to when the camera has none of its own.
+#define PROWL_SKY_ORTHO_FOV 1.0471975512
+
+// The sky is a set of directions, and an orthographic projection has none: every ray through it is
+// parallel, so the honest result is a single flat colour. Drawing the dome through it instead gives
+// the dome at its true world size, which is a small ball in the middle of the screen. Substituting a
+// perspective projection is what makes the sky read as sky at all. Only the two scale terms and the
+// w row are needed, because the sky forces its own depth to the far plane and discards z.
+mat4 prowlSkyProjection()
+{
+    if (isPerspective(prowl_MatP)) return prowl_MatP;
+
+    // Aspect survives in an orthographic matrix as the ratio of its two scales.
+    float aspect = prowl_MatP[1][1] / max(1e-6, prowl_MatP[0][0]);
+    float f = 1.0 / tan(PROWL_SKY_ORTHO_FOV * 0.5);
+
+    mat4 p = mat4(0.0);
+    p[0][0] = f / aspect;
+    p[1][1] = f;
+    p[2][3] = 1.0;
+    return p;
 }
 
 float getFovFromProjectionMatrix(mat4 proj)
@@ -276,12 +332,34 @@ bool IsReprojectionValid(vec2 prevUV, float currentDepth, float prevDepth, vec3 
 //   vec3 worldNormal = ApplyNormalMap(normalTex, uv, vNormal, vTangent, vBitangent);
 //
 // For shaders without normal maps, just use normalize(vNormal) directly.
+// A sampled normal of exactly (0.5, 0.5, 0.5) decodes to a zero vector, which normalize turns into
+// NaN and which then spreads through every lighting term. Happens when something that is not a
+// normal map ends up in the slot, or when the tangent-space XY is scaled all the way to flat.
+vec3 SafeNormalizeTangentSpace(vec3 normalTS, vec3 fallback)
+{
+    return dot(normalTS, normalTS) < 1e-12 ? fallback : normalize(normalTS);
+}
+
 vec3 ApplyNormalMap(sampler2D normalTex, vec2 uv, vec3 normal, vec3 tangent, vec3 bitangent)
 {
 #ifdef HAS_TANGENTS
     mat3 TBN = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
     vec3 normalTS = texture(normalTex, uv).rgb * 2.0 - 1.0;
-    return normalize(TBN * normalTS);
+    return SafeNormalizeTangentSpace(TBN * normalTS, normalize(normal));
+#else
+    return normalize(normal);
+#endif
+}
+
+// ApplyNormalMap with a strength multiplier on the tangent-space XY, matching the
+// glTF normalTexture.scale semantics. A scale of 0 flattens the map completely.
+vec3 ApplyNormalMapScaled(sampler2D normalTex, vec2 uv, vec3 normal, vec3 tangent, vec3 bitangent, float scale)
+{
+#ifdef HAS_TANGENTS
+    mat3 TBN = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
+    vec3 normalTS = texture(normalTex, uv).rgb * 2.0 - 1.0;
+    normalTS.xy *= scale;
+    return SafeNormalizeTangentSpace(TBN * normalTS, normalize(normal));
 #else
     return normalize(normal);
 #endif

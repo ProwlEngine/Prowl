@@ -1,4 +1,4 @@
-Shader "Default/SSR"
+﻿Shader "Hidden/Post Process/Screen Space Reflections"
 
 // Stochastic screen-space reflections.
 //   RayCast   : per-pixel GGX importance-sampled reflection ray -> hit UV + pdf + mask
@@ -118,7 +118,10 @@ Pass "RayCast"
             float roughness = texture(_CameraMotionVectorsTexture, TexCoords).b;
 
             vec3 viewPos = getViewPos(TexCoords, depth);
-            vec3 V = normalize(viewPos); // camera -> surface
+            // Camera to surface. Under an orthographic projection every one of those is the same
+            // direction, rather than fanning out from the eye, so deriving it from the surface's own
+            // position tilts the reflection further off-axis the further a pixel is from the centre.
+            vec3 V = isOrthographic() ? vec3(0.0, 0.0, 1.0) : normalize(viewPos);
 
             // Blue noise (R channel) for the stochastic sample, tiled + per-frame offset.
             vec2 Xi = texture(_Noise, (TexCoords + _JitterSizeAndOffset.zw) * _JitterSizeAndOffset.xy).rg;

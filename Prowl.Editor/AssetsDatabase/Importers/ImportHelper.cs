@@ -26,6 +26,13 @@ public static class ImportHelper
     /// Reads the file, deserializes as T with dependency tracking, sets it as the main asset,
     /// and forwards all discovered dependencies to ctx. Returns false and logs on any error.
     /// </summary>
+    /// <summary>
+    /// Import an Echo file whose concrete type is written in the file itself, for assets the editor
+    /// has no specific importer for. Same as <see cref="ImportEcho{T}"/> without naming the type up front.
+    /// </summary>
+    public static bool ImportEchoObject(ImportContext ctx, string errorLabel)
+        => ImportEcho<EngineObject>(ctx, errorLabel);
+
     public static bool ImportEcho<T>(ImportContext ctx, string errorLabel) where T : EngineObject
     {
         try
@@ -66,7 +73,11 @@ public static class ImportHelper
                 && Guid.TryParse(assetIdTag.StringValue, out var assetGuid) && assetGuid != Guid.Empty)
                 deps.Add(assetGuid);
 
-            if (echo.TryGet("PrefabAssetId", out var prefabIdTag)
+            // A nested prefab instance keeps its link, which is what the outer prefab depends on. Read
+            // from inside the link rather than matching a bare "AssetId" anywhere, which would pick up
+            // unrelated fields of the same name.
+            if (echo.TryGet("Prefab", out var linkTag) && linkTag.TagType == EchoType.Compound
+                && linkTag.TryGet("AssetId", out var prefabIdTag)
                 && Guid.TryParse(prefabIdTag.StringValue, out var prefabGuid) && prefabGuid != Guid.Empty)
                 deps.Add(prefabGuid);
 
@@ -79,4 +90,40 @@ public static class ImportHelper
                 CollectAssetDependencies(item, deps);
         }
     }
+
+    /// <summary>
+    /// Removes the prefab link from any GameObject sitting inside another prefab instance. Prefabs do
+    /// not nest, so such a link is left over from an asset written before that was enforced, and
+    /// keeping it would have a player disagree with the editor about what is an instance.
+    /// </summary>
+    public static bool FlattenNestedPrefabLinks(EchoObject echo, bool insideInstance = false)
+    {
+        bool removed = false;
+
+        if (echo.TagType == EchoType.Compound)
+        {
+            bool isInstance = false;
+
+            if (echo.TryGet("Prefab", out var link) && link.TagType == EchoType.Compound
+                && link.TryGet("AssetId", out var idTag)
+                && Guid.TryParse(idTag.StringValue, out Guid assetId) && assetId != Guid.Empty)
+            {
+                if (insideInstance)
+                    removed |= echo.Remove("Prefab");
+                else
+                    isInstance = true;
+            }
+
+            foreach (var child in echo.Tags.Values)
+                removed |= FlattenNestedPrefabLinks(child, insideInstance || isInstance);
+        }
+        else if (echo.TagType == EchoType.List && echo.List != null)
+        {
+            foreach (var item in echo.List)
+                removed |= FlattenNestedPrefabLinks(item, insideInstance);
+        }
+
+        return removed;
+    }
+
 }

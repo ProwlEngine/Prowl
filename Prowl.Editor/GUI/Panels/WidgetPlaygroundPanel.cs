@@ -28,8 +28,8 @@ public class WidgetPlaygroundPanel : DockPanel
     private TestEnum _testEnum = TestEnum.Option2;
     private TextAlign _textAlign = TextAlign.CenterLeft;
 
-    private Runtime.AnimationCurve _curve = new();
-    private Runtime.Gradient _gradient = new();
+    private Vector.AnimationCurve _curve = new();
+    private Vector.Gradient _gradient = new();
     private TestComponent _testObject = new();
     private float _settingsSliderValue = 0.5f;
     private string _settingsColorHex = "#7C5CFF";
@@ -72,7 +72,7 @@ public class WidgetPlaygroundPanel : DockPanel
         public System.Guid Id = System.Guid.NewGuid();
 
         // AnimationCurve
-        public Runtime.AnimationCurve SpeedCurve = new();
+        public Vector.AnimationCurve SpeedCurve = new();
 
         // Collections
         public List<float> Scores = new() { 10.5f, 20.3f, 30.1f };

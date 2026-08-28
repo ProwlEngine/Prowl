@@ -3,6 +3,8 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
@@ -12,6 +14,9 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Core.Tasks;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+
+using Prowl.Editor.GUI;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor;
 
@@ -23,6 +28,44 @@ public static class AssetCreateMenu
         var task = new CreateAssetTask();
         task.TaskType = CreateAssetTask.AssetType.Folder;
         task.BeginCreateTask(new AssetMenuEntry { Name = "New Folder", Extension = "", Icon = EditorRegistries.GetFileIconForExtension("") }, GetCurrentFolder());
+    }
+
+    [MenuItem("Assets/Create/Prefab From Selection", priority: 100, Icon = EditorIcons.Cubes, Separator = true)]
+    static void CreatePrefabFromSelectionItem()
+    {
+        var selected = Selection.GetSelected<GameObject>().ToList();
+        if (selected.Count == 0)
+        {
+            Runtime.Debug.LogWarning("[Prefab] Select a GameObject in the scene to make a prefab from it.");
+            return;
+        }
+
+        // Roots only, so a prefab of a parent is not immediately torn apart by making one of its child.
+        foreach (var go in GameObjectClipboard.FilterToRoots(selected))
+            CreatePrefabIn(go, GetCurrentFolder());
+    }
+
+    /// <summary>
+    /// Save a GameObject as a new prefab in a project folder, named so it does not collide with what
+    /// is already there.
+    /// <para/>
+    /// Shared by the three places that offer this, which each worked out the same name and path and
+    /// each threw away the result. A refused write reached the console and nowhere else, so the user
+    /// saw a menu item do nothing at all.
+    /// </summary>
+    internal static bool CreatePrefabIn(GameObject go, string relativeFolder)
+    {
+        string absoluteFolder = GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absoluteFolder)) return false;
+
+        string name = FindUniqueName(absoluteFolder, go.Name, ".prefab");
+        string relativePath = string.IsNullOrEmpty(relativeFolder) ? name : $"{relativeFolder}/{name}";
+
+        if (PrefabUtility.SaveAsPrefabAssetAndConnect(go, relativePath)) return true;
+
+        Toasts.Show(Loc.Get("toast.prefab_create_failed"),
+            Loc.Get("toast.prefab_create_failed_body", new { name = go.Name }), ToastType.Error, 4f);
+        return false;
     }
 
     [MenuItem("Assets/Create/Shader", priority: 1000, Icon = EditorIcons.WandMagicSparkles, Separator = true)]
@@ -142,8 +185,12 @@ Properties
     _MainTex (""Albedo"", Texture2D) = ""white""
     _MainColor (""Tint"", Color) = (1.0, 1.0, 1.0, 1.0)
     _NormalTex (""Normal"", Texture2D) = ""normal""
-    _SurfaceTex (""Surface (AO, Roughness, Metallic)"", Texture2D) = ""surface""
+    _SurfaceTex (""Surface (G Roughness, B Metallic)"", Texture2D) = ""surface""
+    _Metallic (""Metallic"", Range(0.0, 1.0)) = 1.0
+    _Roughness (""Roughness"", Range(0.0, 1.0)) = 1.0
+    _OcclusionTex (""Occlusion (R)"", Texture2D) = ""white""
     _EmissionTex (""Emission"", Texture2D) = ""emission""
+    _EmissiveColor (""Emissive Color"", Color) = (1.0, 1.0, 1.0, 1.0)
     _EmissionIntensity (""Emission Intensity"", Float) = 1.0
 }
 
@@ -198,27 +245,35 @@ Pass ""Default""
             uniform sampler2D _MainTex;
             uniform sampler2D _NormalTex;
             uniform sampler2D _SurfaceTex;
+            uniform float _Metallic;
+            uniform float _Roughness;
+            uniform sampler2D _OcclusionTex;
             uniform sampler2D _EmissionTex;
+            uniform vec4 _EmissiveColor;
             uniform float _EmissionIntensity;
             uniform vec4 _MainColor;
 
             void main()
             {
-                // Albedo
-                vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
-                vec3 baseColor = gammaToLinearSpace(albedo.rgb);
+                // Albedo. Colour textures are sRGB and get decoded here; _MainColor and the vertex
+                // colour are linear and multiply in afterwards.
+                vec4 albedoTexel = texture(_MainTex, texCoord0);
+                vec3 baseColor = gammaToLinearSpace(albedoTexel.rgb) * _MainColor.rgb * vColor.rgb;
+                float alpha = albedoTexel.a * _MainColor.a * vColor.a;
 
                 // Normal mapping
                 vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
 
-                // Surface: R = AO, G = Roughness, B = Metallic
+                // Surface: G = Roughness, B = Metallic, each scaled by its factor
                 vec4 surface = texture(_SurfaceTex, texCoord0);
-                float ao = 1.0 - surface.r;
-                float roughness = surface.g;
-                float metallic = surface.b;
+                float roughness = clamp(surface.g * _Roughness, 0.0, 1.0);
+                float metallic = clamp(surface.b * _Metallic, 0.0, 1.0);
+
+                // Ambient occlusion: R channel, 1 = unoccluded
+                float ao = texture(_OcclusionTex, texCoord0).r;
 
                 // Emission
-                vec3 emission = texture(_EmissionTex, texCoord0).rgb * _EmissionIntensity;
+                vec3 emission = gammaToLinearSpace(texture(_EmissionTex, texCoord0).rgb) * _EmissiveColor.rgb * _EmissionIntensity;
 
                 // PBR lighting + ambient + fog
                 vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
@@ -227,17 +282,18 @@ Pass ""Default""
                 vec3 ambient = CalculateAmbient(worldNormal) * baseColor * ao * _AmbientStrength;
                 vec3 color = ApplyFog(ambient + lighting + emission, worldPos);
 
-                fragColor = vec4(color, albedo.a);
+                fragColor = vec4(color, alpha);
             }
         }
     ENDGLSL
 }
 
-// === Depth + Normals Pre-Pass (for GTAO, SSR) ===
-Pass ""DepthNormals""
+// === Depth + Normals Pre-Pass (feeds GTAO, SSR, TAA and motion blur) ===
+Pass ""Prepass""
 {
-    Tags { ""LightMode"" = ""DepthNormals"" }
+    Tags { ""LightMode"" = ""Prepass"" }
     Cull Back
+    ZWrite On
 
     GLSLPROGRAM
 
@@ -250,16 +306,24 @@ Pass ""DepthNormals""
             out vec3 vTangent;
             out vec3 vBitangent;
             out vec2 texCoord0;
+            out vec4 vCurrClipNJ;
+            out vec4 vPrevClip;
 
             void main()
             {
-                gl_Position = TransformClip(vertexPosition);
+                gl_Position = TransformClip(vertexPosition); // jittered, for raster + depth
                 vNormal     = TransformDirection(vertexNormal);
 #ifdef HAS_TANGENTS
                 vTangent    = TransformDirection(vertexTangent.xyz);
                 vBitangent  = cross(vNormal, vTangent);
 #endif
                 texCoord0   = vertexTexCoord0;
+
+                // Jitter-free current and previous clip positions for motion vectors.
+                vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
+                vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * worldPos;
+                vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
+                vPrevClip = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
             }
         }
 
@@ -268,17 +332,33 @@ Pass ""DepthNormals""
             #include ""ProwlCG""
 
             layout (location = 0) out vec4 normalOut;
+            layout (location = 1) out vec4 motionRM;
+
             in vec3 vNormal;
             in vec3 vTangent;
             in vec3 vBitangent;
             in vec2 texCoord0;
+            in vec4 vCurrClipNJ;
+            in vec4 vPrevClip;
 
             uniform sampler2D _NormalTex;
+            uniform sampler2D _SurfaceTex;
+            uniform float _Metallic;
+            uniform float _Roughness;
 
             void main()
             {
                 vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
                 normalOut = EncodeViewNormal(worldNormal);
+
+                // Motion vectors plus the roughness/metallic SSR samples. These must match the
+                // forward pass or reflections come off the wrong surface.
+                vec2 currNDC = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;
+                vec2 prevNDC = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;
+                vec4 surface = texture(_SurfaceTex, texCoord0);
+                motionRM = vec4(currNDC - prevNDC,
+                                clamp(surface.g * _Roughness, 0.0, 1.0),
+                                clamp(surface.b * _Metallic, 0.0, 1.0));
             }
         }
     ENDGLSL

@@ -125,7 +125,10 @@ public class AnimationComponent : MonoBehaviour
                 break;
         }
 
-        ApplyPose(CurrentClip, Time);
+        // Time is a playhead from zero, but a clip's keys sit at whatever times the source authored,
+        // which is not necessarily zero. Offsetting here is what lets a clip cut from a shared
+        // timeline play from its first key instead of holding that pose until the playhead catches up.
+        ApplyPose(CurrentClip, CurrentClip.StartTime + Time);
     }
 
     /// <summary>Play a specific animation clip from the beginning.</summary>

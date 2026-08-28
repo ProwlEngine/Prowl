@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Echo;
@@ -32,7 +32,12 @@ public class Camera : MonoBehaviour
     public ProjectionType ProjectionMode = ProjectionType.Perspective;
 
     public float FieldOfView = 60f;
-    public float OrthographicSize = 0.5f;
+
+    /// <summary>
+    /// Half the height of the orthographic view, in world units, so the view spans twice this from
+    /// top to bottom and as much across as the target's aspect calls for.
+    /// </summary>
+    public float OrthographicSize = 5f;
     public float NearClipPlane = 0.1f;
     public float FarClipPlane = 100f;
     //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
@@ -294,7 +299,9 @@ public class Camera : MonoBehaviour
         Float4x4 proj;
 
         if (ProjectionMode == ProjectionType.Orthographic)
-            proj = Float4x4.CreateOrtho(OrthographicSize, OrthographicSize, NearClipPlane, FarClipPlane);
+            // CreateOrtho takes the full extents, and the width has to follow the aspect: passing the
+            // size for both squares the view, so anything but a square target came out squashed.
+            proj = Float4x4.CreateOrtho(OrthographicSize * 2f * aspect, OrthographicSize * 2f, NearClipPlane, FarClipPlane);
         else
             proj = Float4x4.CreatePerspectiveFov(Maths.ToRadians(FieldOfView), aspect, NearClipPlane, FarClipPlane);
 

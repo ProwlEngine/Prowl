@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Vector;
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
 
@@ -289,9 +290,9 @@ public class SerializationTests : RuntimeTestBase
         clip.AddBone(new AnimationClip.AnimBone
         {
             BoneName = "Root",
-            PosX = new AnimationCurve([new KeyFrame(0f, 5f), new KeyFrame(1f, 5f)]),
-            PosY = new AnimationCurve([new KeyFrame(0f, 0f)]),
-            PosZ = new AnimationCurve([new KeyFrame(0f, 0f)]),
+            Position = new Vector.AnimationCurve(3,
+                new Keyframe(0f, new Float3(5f, 0f, 0f)),
+                new Keyframe(1f, new Float3(5f, 0f, 0f))),
         });
 
         var clone = RoundTrip(clip);

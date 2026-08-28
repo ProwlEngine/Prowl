@@ -256,7 +256,9 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 vie
     //   (1 - (d/r)^4)^2   smooth cutoff to 0 at d == Range
     // Range here is purely the cutoff distance, not a scale Intensity is what you tune for
     // visual brightness, in roughly physical units.
-    float invR2 = 1.0 / (L.Range * L.Range);
+    // A Range of 0 is an authoring mistake rather than an impossibility, and it makes invR2 infinite;
+    // multiplied by a dist2 of 0 (fragment sitting on the light) that is Inf * 0 = NaN.
+    float invR2 = 1.0 / max(L.Range * L.Range, 1e-6);
     float factor = dist2 * invR2;            // (d / r)^2
     float window = clamp(1.0 - factor * factor, 0.0, 1.0);
     window *= window;                          // (1 - (d/r)^4)^2
@@ -326,7 +328,9 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
     if (NdotL <= 0.0) return vec3(0.0);
 
     // Physical inverse-square + smooth window cutoff. See EvaluateLocalLight.
-    float invR2 = 1.0 / (L.Range * L.Range);
+    // A Range of 0 is an authoring mistake rather than an impossibility, and it makes invR2 infinite;
+    // multiplied by a dist2 of 0 (fragment sitting on the light) that is Inf * 0 = NaN.
+    float invR2 = 1.0 / max(L.Range * L.Range, 1e-6);
     float factor = dist2 * invR2;
     float window = clamp(1.0 - factor * factor, 0.0, 1.0);
     window *= window;
@@ -563,7 +567,9 @@ vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNorma
         if (spotAxisCos <= L.SpotCos) return vec3(0.0);
     }
 
-    float invR2 = 1.0 / (L.Range * L.Range);
+    // A Range of 0 is an authoring mistake rather than an impossibility, and it makes invR2 infinite;
+    // multiplied by a dist2 of 0 (fragment sitting on the light) that is Inf * 0 = NaN.
+    float invR2 = 1.0 / max(L.Range * L.Range, 1e-6);
     float factor = dist2 * invR2;
     float window = clamp(1.0 - factor * factor, 0.0, 1.0);
     window *= window;

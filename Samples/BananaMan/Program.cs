@@ -77,7 +77,7 @@ public sealed class MyGame : Game
         // Load and create BananaMan
         CreateBananaMan();
 
-        Input.SetCursorVisible(false);
+        Input.LockCursor();
         Scene.Load(scene);
     }
 
@@ -201,6 +201,6 @@ public sealed class MyGame : Game
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))
-            Input.SetCursorVisible(true);
+            Input.UnlockCursor();
     }
 }

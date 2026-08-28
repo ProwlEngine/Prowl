@@ -37,7 +37,7 @@ public class TerrainSceneEditor : SceneTool
     private short[]? _preStrokeHeights;
     private float[]? _preStrokeSplats;
     private byte[]? _preStrokeHoles;
-    private List<float[]>? _preStrokeDetails;
+    private List<byte[]>? _preStrokeDetails;
 
     public int Priority => 0;
 
@@ -253,7 +253,7 @@ public class TerrainSceneEditor : SceneTool
 
                 if (hChanged || sChanged || gChanged || hoChanged)
                 {
-                    if (hChanged || gChanged) _terrain.InvalidateGrassCache();
+                    if (hChanged || gChanged) _terrain.InvalidateDetailCache();
                     TerrainEditor.ActiveInstance?.MarkDirty();
                     EditorSceneManager.MarkDirty();
                 }
@@ -291,7 +291,7 @@ public class TerrainSceneEditor : SceneTool
         {
             int idx = TerrainEditor.ActiveDetailIndex;
             if (idx >= 0 && idx < data.DetailLayers.Count && data.DetailLayers[idx] != null)
-                _preStrokeDetails = [(float[])data.DetailLayers[idx].Clone()];
+                _preStrokeDetails = [(byte[])data.DetailLayers[idx].Clone()];
         }
     }
 
@@ -370,6 +370,40 @@ public class TerrainSceneEditor : SceneTool
             }
             _preStrokeDetails = null;
         }
+    }
+
+    // byte[] overloads for detail-density undo
+    private static void FindChangedRect(byte[] a, byte[] b, int res, int rowStride,
+        out int minX, out int minZ, out int maxX, out int maxZ)
+    {
+        minX = int.MaxValue; minZ = int.MaxValue;
+        maxX = int.MinValue; maxZ = int.MinValue;
+        for (int z = 0; z < res; z++)
+            for (int x = 0; x < res; x++)
+            {
+                int idx = z * res + x;
+                if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
+                {
+                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                    minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
+                }
+            }
+    }
+
+    private static byte[] CopyRect(byte[] src, int res, int minX, int minZ, int maxX, int maxZ)
+    {
+        int w = maxX - minX + 1, h = maxZ - minZ + 1;
+        var rect = new byte[w * h];
+        for (int z = 0; z < h; z++)
+            Array.Copy(src, (minZ + z) * res + minX, rect, z * w, w);
+        return rect;
+    }
+
+    private static void PasteRect(byte[] dst, int res, int minX, int minZ, int maxX, int maxZ, byte[] rect)
+    {
+        int w = maxX - minX + 1, h = maxZ - minZ + 1;
+        for (int z = 0; z < h; z++)
+            Array.Copy(rect, z * w, dst, (minZ + z) * res + minX, w);
     }
 
     // short[] overloads for 16-bit heightmap undo

@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -68,6 +69,7 @@ public class InspectorPanel : DockPanel
         if (_subscribed)
         {
             Selection.OnSelectionChanged -= OnSelectionChanged;
+            EditorApplication.PlayModeRequested -= OnPlayModeRequested;
             _subscribed = false;
         }
     }
@@ -110,6 +112,24 @@ public class InspectorPanel : DockPanel
 
         if (!editor.HasPendingChanges(entry, asset)) return false;
 
+        // Navigating away has already happened by the time this is asked, so dismissing it has to
+        // mean something: it reverts, the same as the button does.
+        RaiseUnappliedPrompt(editor, entry, asset, onResolved: null, cancellable: false);
+        return true;
+    }
+
+    /// <summary>
+    /// Raises the Apply/Revert choice for an editor holding unwritten changes.
+    /// </summary>
+    /// <param name="onResolved">Run once the user has chosen, for a caller that is waiting on the answer.</param>
+    /// <param name="cancellable">
+    /// Offers a way out that leaves the changes exactly as they are. For a prompt that is holding
+    /// something up rather than reacting to something that has already happened, since backing out of
+    /// pressing play should not be the same as throwing away what is in the inspector.
+    /// </param>
+    private void RaiseUnappliedPrompt(AssetImporterEditor editor, AssetEntry entry, EngineObject? asset,
+        Action? onResolved, bool cancellable)
+    {
         _promptOpen = true;
 
         string name = Path.GetFileName(entry.Path);
@@ -118,18 +138,74 @@ public class InspectorPanel : DockPanel
 
         dialog.CloseOnEscape = true;
         dialog.CloseOnBackdrop = false;
+
         dialog.OnDismissed = _ =>
         {
             _promptOpen = false;
-            editor.RevertPendingChanges(entry, asset);
+
+            // Escaping a prompt that is holding something up means "not now", so it leaves both the
+            // changes and whatever was waiting alone.
+            if (!cancellable)
+                editor.RevertPendingChanges(entry, asset);
         };
 
         dialog.Button(Loc.Get("dialog.apply"),
-                () => { _promptOpen = false; editor.ApplyPendingChanges(entry, asset); Modal.Pop(); }, OrigamiVariant.Primary)
+                () =>
+                {
+                    _promptOpen = false;
+                    editor.ApplyPendingChanges(entry, asset);
+                    Modal.Pop();
+                    onResolved?.Invoke();
+                }, OrigamiVariant.Primary)
             .Button(Loc.Get("dialog.revert"),
-                () => { _promptOpen = false; editor.RevertPendingChanges(entry, asset); Modal.Pop(); });
+                () =>
+                {
+                    _promptOpen = false;
+                    editor.RevertPendingChanges(entry, asset);
+                    Modal.Pop();
+                    onResolved?.Invoke();
+                });
 
-        return true;
+        if (cancellable)
+            dialog.Button(Loc.Get("common.cancel"), () => { _promptOpen = false; Modal.Pop(); });
+    }
+
+    /// <summary>
+    /// Holds a play mode transition while the inspector has edits nobody has decided about.
+    /// </summary>
+    /// <remarks>
+    /// Both sides of a play session drop every loaded asset instance, so that a session starts from
+    /// what is on disk and cannot leave anything behind. Unwritten inspector edits live in those
+    /// instances, so without this they would go with them, and the only sign would be an inspector
+    /// that quietly reads differently afterwards.
+    /// </remarks>
+    private void OnPlayModeRequested(PlayModeRequest request)
+    {
+        if (_promptOpen)
+        {
+            request.Defer("a choice about unapplied changes");
+            return;
+        }
+
+        if (_openEditor == null || _openEntry == null) return;
+        if (!_openEditor.HasPendingChanges(_openEntry, _openAsset)) return;
+
+        AssetImporterEditor editor = _openEditor;
+        AssetEntry entry = _openEntry;
+        EngineObject? asset = _openAsset;
+        bool entering = request.Entering;
+
+        request.Defer($"unapplied changes to '{Path.GetFileName(entry.Path)}'");
+
+        // Asking again rather than resuming a held transition: the answer runs every handler afresh,
+        // so a second panel with something outstanding gets its turn instead of being skipped.
+        RaiseUnappliedPrompt(editor, entry, asset,
+            onResolved: () =>
+            {
+                if (entering) EditorApplication.RequestPlayMode();
+                else EditorApplication.RequestExitPlayMode();
+            },
+            cancellable: true);
     }
 
     private void OnSelectionChanged()
@@ -152,6 +228,7 @@ public class InspectorPanel : DockPanel
         if (!_subscribed)
         {
             Selection.OnSelectionChanged += OnSelectionChanged;
+            EditorApplication.PlayModeRequested += OnPlayModeRequested;
             _subscribed = true;
         }
 
@@ -376,7 +453,7 @@ public class InspectorPanel : DockPanel
         // Check for custom asset editor
         if (entry?.MainAssetType != null)
         {
-            var assetEditor = EditorRegistries.GetAssetEditor(entry.MainAssetType);
+            var assetEditor = EditorRegistries.GetAssetEditor(entry);
             if (assetEditor != null)
             {
                 var asset = Runtime.AssetDatabase.Get(item.Guid != Guid.Empty ? item.Guid : entry.Guid);
@@ -395,7 +472,12 @@ public class InspectorPanel : DockPanel
             }
         }
 
-        // Fallback: generic asset info
+        // No editor is registered for this type, so show what the asset actually holds before its
+        // file metadata. Without this a custom EngineObject asset shows only its path and guid, and
+        // every field on it needs a hand-written editor before it can be seen or edited at all.
+        DrawAssetFieldsFallback(paper, item, entry);
+
+        // Generic asset info
         Origami.Header(paper, "insp_h_asset", Loc.Get("inspector.asset_info")).Show();
 
         Origami.Label(paper, "insp_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
@@ -521,18 +603,41 @@ public class InspectorPanel : DockPanel
         Origami.Label(paper, "insp_folder_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
 
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        if (Directory.Exists(absPath))
+        if (!Directory.Exists(absPath)) return;
+
+        var counts = GetFolderCounts(item.RelativePath, absPath);
+        if (counts == null) return;
+
+        Origami.Label(paper, "insp_folder_files", $"{Loc.Get("inspector.files")}: {counts.Value.Files}").Show();
+        Origami.Label(paper, "insp_folder_folders", $"{Loc.Get("inspector.subfolders")}: {counts.Value.Folders}").Show();
+    }
+
+    // Recursive folder counts are cached rather than walked every frame, since the inspector redraws
+    // continuously while a folder stays selected. Dropped whenever the asset database content moves.
+    private static readonly Dictionary<string, (int Files, int Folders)> _folderCounts = [];
+    private static int _folderCountsVersion = -1;
+
+    private static (int Files, int Folders)? GetFolderCounts(string relativePath, string absPath)
+    {
+        int version = EditorAssetBackend.Instance?.ContentVersion ?? -1;
+        if (_folderCountsVersion != version)
         {
-            try
-            {
-                int fileCount = Directory.GetFiles(absPath, "*", SearchOption.AllDirectories)
-                    .Count(f => !f.EndsWith(".meta"));
-                int folderCount = Directory.GetDirectories(absPath, "*", SearchOption.AllDirectories).Length;
-                Origami.Label(paper, "insp_folder_files", $"{Loc.Get("inspector.files")}: {fileCount}").Show();
-                Origami.Label(paper, "insp_folder_folders", $"{Loc.Get("inspector.subfolders")}: {folderCount}").Show();
-            }
-            catch { }
+            _folderCounts.Clear();
+            _folderCountsVersion = version;
         }
+
+        if (_folderCounts.TryGetValue(relativePath, out var cached)) return cached;
+
+        try
+        {
+            int files = Directory.GetFiles(absPath, "*", SearchOption.AllDirectories)
+                .Count(f => !f.EndsWith(".meta"));
+            int folders = Directory.GetDirectories(absPath, "*", SearchOption.AllDirectories).Length;
+            var counts = (files, folders);
+            _folderCounts[relativePath] = counts;
+            return counts;
+        }
+        catch { return null; }
     }
 
     private void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetBackend db)
@@ -682,6 +787,50 @@ public class InspectorPanel : DockPanel
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"Failed to extract sub-asset: {ex.Message}");
+        }
+    }
+
+    /// <summary>Assets with edits not yet written, so moving away and back keeps the Save button up.</summary>
+    private readonly HashSet<Guid> _unsavedAssets = [];
+
+    /// <summary>
+    /// Draws an asset's own serialized fields for types that have no editor of their own, which is
+    /// what makes a custom <see cref="EngineObject"/> asset editable without writing one.
+    /// </summary>
+    private void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
+    {
+        if (entry?.MainAssetType == null) return;
+        if (!typeof(EngineObject).IsAssignableFrom(entry.MainAssetType)) return;
+
+        Guid guid = item.Guid != Guid.Empty ? item.Guid : entry.Guid;
+        EngineObject? asset = Runtime.AssetDatabase.Get(guid);
+        if (asset.IsNotValid()) return;
+
+        Origami.Header(paper, "insp_h_fields", Loc.Get("inspector.properties")).Underline().Show();
+        PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid));
+
+        if (Origami.IsReadOnly || !_unsavedAssets.Contains(guid)) return;
+
+        var db = EditorAssetBackend.Instance;
+        if (db == null) return;
+
+        // Edits live on the cached instance until they are written, so leaving the asset selected
+        // does not lose them, but nothing else will write them either.
+        using (paper.Row("insp_asset_fields_bar").Height(UnitValue.Auto).RowBetween(8).Enter())
+        {
+            Origami.Button(paper, "insp_asset_fields_save",
+                $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
+                {
+                    db.SaveAsset(asset);
+                    _unsavedAssets.Remove(guid);
+                }).Show();
+
+            Origami.Button(paper, "insp_asset_fields_revert",
+                $"{EditorIcons.ArrowsRotate}  {Loc.Get("dialog.revert")}", () =>
+                {
+                    db.Reimport(guid);
+                    _unsavedAssets.Remove(guid);
+                }).Show();
         }
     }
 

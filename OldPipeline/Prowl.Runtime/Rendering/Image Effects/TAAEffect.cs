@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -73,15 +73,26 @@ public sealed class TAAEffect : ImageEffect
         // NonJitteredProjectionMatrix is used by the pipeline for motion vectors.
         camera.NonJitteredProjectionMatrix = camera.ProjectionMatrix;
 
-        // Apply jitter as sub-pixel offset to the projection matrix.
-        // Column-major layout: c2 is the third column. c2.X = row0/col2, c2.Y = row1/col2.
+        // Apply jitter as sub-pixel offset to the projection matrix, in whichever column carries the
+        // constant term after the divide. A perspective matrix divides by view-space z, so the offset
+        // has to ride on column 2 (the z column) to survive it as a constant; an orthographic one
+        // never divides, so its constant lives in column 3. Putting it on column 2 regardless scales
+        // the offset by depth in an orthographic view, which shears the image along z instead of
+        // nudging it by a fraction of a pixel.
         Float4x4 proj = camera.ProjectionMatrix;
-        float pixelWidth = camera.PixelWidth;
-        float pixelHeight = camera.PixelHeight;
+        float offsetX = _jitter.X * (2.0f / camera.PixelWidth);
+        float offsetY = _jitter.Y * (2.0f / camera.PixelHeight);
 
-        // Convert pixel offset to NDC offset (2/width, 2/height because NDC is [-1,1])
-        proj.c2.X += _jitter.X * (2.0f / pixelWidth);
-        proj.c2.Y += _jitter.Y * (2.0f / pixelHeight);
+        if (camera.IsOrthographic)
+        {
+            proj.c3.X += offsetX;
+            proj.c3.Y += offsetY;
+        }
+        else
+        {
+            proj.c2.X += offsetX;
+            proj.c2.Y += offsetY;
+        }
         camera.ProjectionMatrix = proj;
 
         // Upload jitter to global uniforms so shaders can unjitter if needed

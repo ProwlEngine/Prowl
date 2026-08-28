@@ -12,9 +12,9 @@ namespace Prowl.Runtime.ParticleSystem.Modules;
 [Serializable]
 public class VelocityOverLifetimeModule : ParticleSystemModule
 {
-    public AnimationCurve VelocityX = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
-    public AnimationCurve VelocityY = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
-    public AnimationCurve VelocityZ = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
+    public AnimationCurve VelocityX = new([new Keyframe(0f, 0f), new Keyframe(1f, 0f)]);
+    public AnimationCurve VelocityY = new([new Keyframe(0f, 0f), new Keyframe(1f, 0f)]);
+    public AnimationCurve VelocityZ = new([new Keyframe(0f, 0f), new Keyframe(1f, 0f)]);
 
     public override void OnParticleUpdate(ref Particle particle, float deltaTime)
     {

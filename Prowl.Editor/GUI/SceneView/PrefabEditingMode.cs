@@ -31,6 +31,9 @@ public static class PrefabEditingMode
     // The scene's own dirty flag, parked while the prefab session borrows it. Without this the
     // prefab and the scene share one flag, so each makes the other look unsaved.
     private static bool _savedSceneDirty;
+    // The scene's undo history, parked the same way. The session's own steps address objects that
+    // stop existing when it ends, so the two histories cannot be one.
+    private static object? _savedSceneUndo;
     // Tracked so Save() can serialize the prefab root specifically, skipping the
     // editor-only camera/light/etc. that we add for visibility.
     private static GameObject? _editingRoot;
@@ -75,14 +78,24 @@ public static class PrefabEditingMode
             return;
         }
 
+        // Saving writes the edited tree back over the asset's own file, which for an imported prefab
+        // is the model it came from.
+        if (!PrefabUtility.IsEditablePrefab(prefabGuid))
+        {
+            Debug.LogWarning("[Prefab] Cannot edit an imported prefab; it is generated from its source file.");
+            return;
+        }
+
         var db = EditorAssetBackend.Instance;
         var entry = db?.GetEntry(prefabGuid);
         EditingPrefabPath = entry?.Path;
 
-        // Save current scene
+        // Save current scene. Reconciled first: the session ends by restoring this snapshot and
+        // refreshing its instances, which would otherwise drop any edit nothing had recorded yet.
         var currentScene = Scene.Current;
         if (currentScene != null)
         {
+            PrefabUtility.ReconcileOpenScene();
             OriginalSceneName = currentScene.Name;
             _savedSceneState = Serializer.Serialize(currentScene);
             _savedScenePath = EditorSceneManager.CurrentScenePath;
@@ -93,16 +106,28 @@ public static class PrefabEditingMode
         var editScene = new Scene();
         editScene.Name = $"Editing: {prefab.Name}";
 
-        var go = prefab.Instantiate();
+        var go = GameObject.InstantiateDetached(prefab);
         if (go == null)
         {
+            // The scene snapshot above is only meaningful to a session that started. Dropped here, or
+            // the next session would restore a scene from whenever this failed.
+            _savedSceneState = null;
+            _savedScenePath = null;
+            _savedSceneDirty = false;
+            OriginalSceneName = null;
             Debug.LogWarning("[Prefab] Failed to instantiate prefab for editing.");
             return;
         }
 
         // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
         // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
-        PrefabUtility.StripPrefabDataWithinBoundary(go, prefabGuid);
+        // The objects keep their record of which source object each one is, which is what Save writes
+        // back and what instances match against.
+        PrefabUtility.StripInstanceDataForEditing(go, prefabGuid);
+
+        // Adopt the identifiers the asset is written with for the whole session, so the ids that undo
+        // records and that Save writes back are the ones instances already match against.
+        PrefabUtility.StabilizeSourceIdentifiers(go);
 
         editScene.Add(go);
         _editingRoot = go;
@@ -112,7 +137,7 @@ public static class PrefabEditingMode
         var camGo = new GameObject("PrefabEdit Camera");
         camGo.Tag = "Main Camera";
         camGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        camGo.Transform.Position = new Float3(0, 2, -5);
+        camGo.Transform.Position = FramingPositionFor(go);
         camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
         var cam = camGo.AddComponent<Camera>();
         cam.Depth = -1;
@@ -127,7 +152,7 @@ public static class PrefabEditingMode
         editScene.Add(lightGo);
 
         Scene.Load(editScene);
-        Undo.Clear();
+        _savedSceneUndo = Undo.PushContext();
 
         EditingPrefabGuid = prefabGuid;
         IsEditing = true;
@@ -135,6 +160,27 @@ public static class PrefabEditingMode
         EditorSceneManager.IsDirty = false; // the prefab session starts clean
 
         Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
+    }
+
+    /// <summary>
+    /// Where to put the editing camera so the prefab fills the view: back off along its own tilt by
+    /// enough to take in its bounds. A prefab that draws nothing keeps the old fixed spot, which is
+    /// as good a guess as any for something with no extent.
+    /// </summary>
+    private static Float3 FramingPositionFor(GameObject go)
+    {
+        if (!Panels.SceneViewPanel.TryGetWorldBounds(go, out Float3 min, out Float3 max))
+            return new Float3(0, 2, -5);
+
+        Float3 center = (min + max) * 0.5f;
+        Float3 extents = (max - min) * 0.5f;
+
+        // Far enough that the largest axis is comfortably inside the view, with a floor so a tiny
+        // object is not framed from a millimetre away.
+        float radius = MathF.Max(MathF.Max((float)extents.X, (float)extents.Y), (float)extents.Z);
+        float distance = MathF.Max(radius * 3.5f, 1.5f);
+
+        return center + new Float3(0, distance * 0.35f, -distance);
     }
 
     /// <summary>
@@ -152,15 +198,17 @@ public static class PrefabEditingMode
         var scene = Scene.Current;
         if (scene == null) return false;
 
-        // Use the tracked prefab root so we skip the editor-only camera/light we added
-        // to light the scene during editing. Fall back to the first non-HideAndDontSave
-        // root if the tracked reference is stale.
-        var root = _editingRoot;
-        if (root == null || root.Scene != scene)
+        // The tracked prefab root, and only that: it is what skips the editor-only camera and light.
+        // If it is no longer the session's own object then something replaced the scene underneath us,
+        // and whatever is in the scene now is not this prefab. Writing it would overwrite the asset
+        // with an unrelated object, so this refuses instead.
+        GameObject? root = _editingRoot;
+        if (root.IsNotValid() || root!.Scene != scene)
         {
-            root = scene.RootObjects.FirstOrDefault(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+            Debug.LogError("[Prefab] The prefab being edited is no longer in the open scene, so there is " +
+                "nothing to save. Exit prefab editing mode; the asset has been left untouched.");
+            return false;
         }
-        if (root == null) return false;
 
         // A prefab has exactly one root, so anything else the user created at the top level is not
         // going to be saved. Say so rather than dropping it silently.
@@ -176,21 +224,25 @@ public static class PrefabEditingMode
 
         // Serialize to .prefab file. The editor-only camera and light live in this scene too, so
         // anything the prefab references outside itself is linked rather than copied into the asset.
-        var echo = Serializer.Serialize(typeof(object), root, PrefabUtility.TreeValueContext(root));
+        var writeContext = PrefabUtility.TreeValueContext(root);
+        var echo = Serializer.Serialize(typeof(object), root, writeContext);
         if (echo == null) return false;
+
+        PrefabUtility.ReportDroppedSceneReferences(writeContext, "Saving this prefab");
+
+        // Prefabs do not nest, and the importer drops any link inside the asset on the way in. Doing
+        // it here as well is what stops the file on disk from claiming something the asset built from
+        // it does not. The links come off the copy being written, not off the session's own objects,
+        // which keep theirs for as long as the session lasts.
+        Importers.ImportHelper.FlattenNestedPrefabLinks(echo, insideInstance: true);
 
         if (EditingPrefabPath != null && Project.Current != null)
         {
             string absolutePath = Path.Combine(Project.Current.AssetsPath, EditingPrefabPath);
-            try
-            {
-                File.WriteAllText(absolutePath, echo.WriteToString());
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[Prefab] Failed to write '{absolutePath}': {ex.Message}");
+            if (!PrefabUtility.TryWriteFile(absolutePath, echo.WriteToString()))
                 return false;
-            }
+
+            PrefabUtility.RaisePrefabSaved(EditingPrefabGuid);
             EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
             EditorSceneManager.IsDirty = false;
@@ -218,7 +270,7 @@ public static class PrefabEditingMode
         var prefabGuid = EditingPrefabGuid;
 
         // Restore original scene
-        RestoreScene();
+        bool restored = RestoreScene();
 
         // The restore only queues the swap, so refresh instances once that scene is actually current.
         Action? onLoaded = null;
@@ -229,7 +281,7 @@ public static class PrefabEditingMode
         };
         Scene.OnSceneLoaded += onLoaded;
 
-        Cleanup();
+        Cleanup(restored);
         Debug.Log("[Prefab] Saved and exited editing mode.");
     }
 
@@ -263,13 +315,13 @@ public static class PrefabEditingMode
     {
         if (!IsEditing) return;
 
-        RestoreScene();
-        Cleanup();
+        Cleanup(RestoreScene());
 
         Debug.Log("[Prefab] Exited editing mode.");
     }
 
-    private static void RestoreScene()
+    /// <summary>Puts the scene back, reporting whether it is the one that was there before.</summary>
+    private static bool RestoreScene()
     {
         if (_savedSceneState != null)
         {
@@ -277,22 +329,18 @@ public static class PrefabEditingMode
             if (restoredScene != null)
             {
                 Scene.Load(restoredScene);
-                Undo.Clear();
                 EditorSceneManager.CurrentScenePath = _savedScenePath;
+                return true;
             }
-            else
-            {
-                Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
-                EditorSceneManager.CreateAndLoadDefaultScene();
-            }
+
+            Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
         }
-        else
-        {
-            EditorSceneManager.CreateAndLoadDefaultScene();
-        }
+
+        EditorSceneManager.CreateAndLoadDefaultScene();
+        return false;
     }
 
-    private static void Cleanup()
+    private static void Cleanup(bool sceneRestored)
     {
         IsEditing = false;
         EditingPrefabGuid = Guid.Empty;
@@ -301,6 +349,15 @@ public static class PrefabEditingMode
         _savedSceneState = null;
         _savedScenePath = null;
         _editingRoot = null;
+
+        // The scene's own history addresses its objects by identifier, and the restore brings those
+        // back, so the steps still resolve. If the scene could not be restored they address nothing.
+        if (sceneRestored)
+            Undo.PopContext(_savedSceneUndo);
+        else
+            Undo.Clear();
+        _savedSceneUndo = null;
+
         EditorSceneManager.IsDirty = _savedSceneDirty;
         _savedSceneDirty = false;
     }

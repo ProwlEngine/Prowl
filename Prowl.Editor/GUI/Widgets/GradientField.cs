@@ -13,7 +13,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
-using Gradient = Prowl.Runtime.Gradient;
+using Gradient = Prowl.Vector.Gradient;
 using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Widgets;
@@ -213,38 +213,31 @@ internal sealed class GradientEditorModal : IModal
                 if (relY < MarkerH)
                 {
                     // Color marker area - select or add
-                    int hit = FindKey(gradient.ColorKeys, k => k.Time, t, threshold);
+                    int hit = gradient.FindColorKey(t, threshold);
+                    _selectedIsColor = true;
                     if (hit >= 0)
                     {
-                        _selectedIsColor = true;
                         _selectedKey = hit;
                     }
                     else
                     {
                         var col = gradient.Evaluate(t);
-                        gradient.ColorKeys.Add(new GradientColorKey(new VColor(col.R, col.G, col.B, 1), t));
-                        gradient.ColorKeys.Sort((a, b) => a.Time.CompareTo(b.Time));
-                        _selectedIsColor = true;
-                        _selectedKey = gradient.ColorKeys.FindIndex(k => MathF.Abs(k.Time - t) < 0.001f);
+                        _selectedKey = gradient.AddColorKey(t, new VColor(col.R, col.G, col.B, 1));
                         _setter(gradient);
                     }
                 }
                 else if (relY > MarkerH + BarHeight)
                 {
                     // Alpha marker area - select or add
-                    int hit = FindKey(gradient.AlphaKeys, k => k.Time, t, threshold);
+                    int hit = gradient.FindAlphaKey(t, threshold);
+                    _selectedIsColor = false;
                     if (hit >= 0)
                     {
-                        _selectedIsColor = false;
                         _selectedKey = hit;
                     }
                     else
                     {
-                        var col = gradient.Evaluate(t);
-                        gradient.AlphaKeys.Add(new GradientAlphaKey(col.A, t));
-                        gradient.AlphaKeys.Sort((a, b) => a.Time.CompareTo(b.Time));
-                        _selectedIsColor = false;
-                        _selectedKey = gradient.AlphaKeys.FindIndex(k => MathF.Abs(k.Time - t) < 0.001f);
+                        _selectedKey = gradient.AddAlphaKey(t, gradient.EvaluateAlpha(t));
                         _setter(gradient);
                     }
                 }
@@ -336,9 +329,7 @@ internal sealed class GradientEditorModal : IModal
             {
                 var k = gradient.ColorKeys[idx];
                 k.Time = v;
-                gradient.ColorKeys[idx] = k;
-                gradient.ColorKeys.Sort((a, b) => a.Time.CompareTo(b.Time));
-                _selectedKey = gradient.ColorKeys.FindIndex(k2 => MathF.Abs(k2.Time - v) < 0.001f);
+                _selectedKey = gradient.SetColorKey(idx, k);
                 _setter(gradient);
             }, 0f, 1f).Format("F3").Show();
 
@@ -347,7 +338,7 @@ internal sealed class GradientEditorModal : IModal
             {
                 var k = gradient.ColorKeys[idx];
                 k.Color = v;
-                gradient.ColorKeys[idx] = k;
+                gradient.SetColorKey(idx, k);
                 _setter(gradient);
             }).Show();
 
@@ -356,7 +347,7 @@ internal sealed class GradientEditorModal : IModal
             {
                 Origami.Button(paper, $"{_id}_gdel", $"{EditorIcons.Trash} Remove", () =>
                 {
-                    gradient.ColorKeys.RemoveAt(idx);
+                    gradient.RemoveColorKey(idx);
                     _selectedKey = -1;
                     _setter(gradient);
                 }).Danger().Show();
@@ -372,9 +363,7 @@ internal sealed class GradientEditorModal : IModal
             {
                 var k = gradient.AlphaKeys[idx];
                 k.Time = v;
-                gradient.AlphaKeys[idx] = k;
-                gradient.AlphaKeys.Sort((a, b) => a.Time.CompareTo(b.Time));
-                _selectedKey = gradient.AlphaKeys.FindIndex(k2 => MathF.Abs(k2.Time - v) < 0.001f);
+                _selectedKey = gradient.SetAlphaKey(idx, k);
                 _setter(gradient);
             }, 0f, 1f).Format("F3").Show();
 
@@ -383,7 +372,7 @@ internal sealed class GradientEditorModal : IModal
             {
                 var k = gradient.AlphaKeys[idx];
                 k.Alpha = v;
-                gradient.AlphaKeys[idx] = k;
+                gradient.SetAlphaKey(idx, k);
                 _setter(gradient);
             }, 0f, 1f).Format("F2").Show();
 
@@ -392,7 +381,7 @@ internal sealed class GradientEditorModal : IModal
             {
                 Origami.Button(paper, $"{_id}_adel", $"{EditorIcons.Trash} Remove", () =>
                 {
-                    gradient.AlphaKeys.RemoveAt(idx);
+                    gradient.RemoveAlphaKey(idx);
                     _selectedKey = -1;
                     _setter(gradient);
                 }).Danger().Show();
@@ -400,11 +389,4 @@ internal sealed class GradientEditorModal : IModal
         }
     }
 
-    private static int FindKey<T>(List<T> keys, Func<T, float> getTime, float t, float threshold)
-    {
-        for (int i = 0; i < keys.Count; i++)
-            if (MathF.Abs(getTime(keys[i]) - t) < threshold)
-                return i;
-        return -1;
-    }
 }

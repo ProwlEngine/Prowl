@@ -164,15 +164,13 @@ public sealed class PhysicsDemo : Game
        // Size starts at 1.0, grows to 1.5 at middle, then shrinks to 0 at end
        particleSystem.SizeOverLifetime.Enabled = true;
        particleSystem.SizeOverLifetime.SizeCurve = new AnimationCurve(
-           [new KeyFrame(0.0f, 1.0f), new KeyFrame(0.5f, 1.5f), new KeyFrame(1.0f, 0.0f)]);
+           [new Keyframe(0.0f, 1.0f), new Keyframe(0.5f, 1.5f), new Keyframe(1.0f, 0.0f)]);
 
        // Configure Color over Lifetime (fade out)
        particleSystem.ColorOverLifetime.Enabled = true;
-       particleSystem.ColorOverLifetime.ColorGradient = new Gradient
-       {
-           ColorKeys = [new (Color.White, 0.0f), new (new Color(1, 0.8f, 0.6f, 1), 0.5f), new (new Color(0.5f, 0.3f, 0.2f, 1), 1.0f)],
-           AlphaKeys = [new (1.0f, 0.0f), new (0.8f, 0.5f), new (0.0f, 1.0f)]
-       };
+       particleSystem.ColorOverLifetime.ColorGradient = new Gradient(
+           [new (0.0f, Color.White), new (0.5f, new Color(1, 0.8f, 0.6f, 1)), new (1.0f, new Color(0.5f, 0.3f, 0.2f, 1))],
+           [new (0.0f, 1.0f), new (0.5f, 0.8f), new (1.0f, 0.0f)]);
 
        // Configure Rotation over Lifetime (still MinMaxCurve evaluated at spawn)
        particleSystem.RotationOverLifetime.Enabled = true;
@@ -186,7 +184,7 @@ public sealed class PhysicsDemo : Game
        // Configure Velocity over Lifetime (simulate wind/drift)
        particleSystem.VelocityOverLifetime.Enabled = true;
        particleSystem.VelocityOverLifetime.VelocityX = new AnimationCurve(
-           [new KeyFrame(0.0f, 0.0f), new KeyFrame(1.0f, 20.0f)]);
+           [new Keyframe(0.0f, 0.0f), new Keyframe(1.0f, 20.0f)]);
 
         particleSystem.Collision.Enabled = true;
         particleSystem.Collision.Quality = CollisionQuality.Medium;

@@ -1,4 +1,4 @@
-Shader "Default/GTAO"
+﻿Shader "Hidden/Post Process/GTAO"
 
 Properties
 {
@@ -78,7 +78,11 @@ Pass "CalculateGTAO"
             float norm = inversesqrt(viewDistance);
             viewDistance *= norm;
 
-            vec3 viewDir = viewPos * -norm;
+            // Every ray through an orthographic projection is parallel, so the view vector is the
+            // same everywhere rather than fanning out from the sample's own position. Deriving it
+            // from the position instead tilts the horizon estimate further off-axis the further a
+            // pixel sits from the centre of the screen.
+            vec3 viewDir = isOrthographic() ? vec3(0.0, 0.0, -1.0) : viewPos * -norm;
 
             int sliceCount = _Slices;
             float rSliceCount = 1.0 / float(sliceCount);
@@ -87,7 +91,12 @@ Pass "CalculateGTAO"
             float rSampleCount = 1.0 / float(sampleCount);
 
             float radius = _Radius * saturate(0.25 + viewDistance * rcp(64.0));
-            vec2 sRadius = rSampleCount * radius * norm * diagonal2(PROWL_MATRIX_P);
+
+            // A world radius covers less of the screen the further away it is, but only under
+            // perspective. An orthographic projection has a fixed scale, so dividing by the distance
+            // shrinks the sampling radius with depth and the occlusion fades out into the distance.
+            float radiusToScreen = isOrthographic() ? 1.0 : norm;
+            vec2 sRadius = rSampleCount * radius * radiusToScreen * diagonal2(PROWL_MATRIX_P);
             // Floor the per-sample step so consecutive samples are at least ~1.5 texels apart in the
             // depth buffer we are actually reading. Without this, distant/flat surfaces sample
             // sub-texel and the horizon estimate degenerates into depth-precision noise. Keyed off
@@ -215,7 +224,11 @@ Pass "Blur"
         void main()
         {
             vec2 texelSize = 1.0 / _ScreenParams.xy;
-            float centerDepth = texture(_CameraDepthTexture, TexCoords).r;
+            // Linear, and compared as a fraction of the centre's own depth. A raw-depth difference
+            // means a different world distance at every depth under perspective and a constant one
+            // under orthographic, so the same falloff would vary with both distance and projection.
+            // Same shape the fog upsample uses.
+            float centerDepth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).r);
 
             vec4 result = texture(_MainTex, TexCoords);
             float totalWeight = 1.0;
@@ -227,8 +240,8 @@ Pass "Blur"
                 float offset = float(i) * _BlurRadius;
                 vec2 sampleUV = TexCoords + _BlurDirection * texelSize * offset;
 
-                float sampleDepth = texture(_CameraDepthTexture, sampleUV).r;
-                float depthDiff = abs(centerDepth - sampleDepth);
+                float sampleDepth = linearizeDepthFromProjection(texture(_CameraDepthTexture, sampleUV).r);
+                float depthDiff = abs(centerDepth - sampleDepth) / max(centerDepth, 1e-4);
 
                 // Weight based on depth similarity
                 float weight = exp(-depthDiff * 100.0) * exp(-0.5 * float(i * i) / 2.0);

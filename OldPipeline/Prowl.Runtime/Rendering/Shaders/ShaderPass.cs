@@ -17,6 +17,10 @@ public sealed class ShaderPass
     [SerializeField] private RasterizerState _rasterizerState;
 
     [SerializeField] private string _vertexSource;
+
+    /// <summary>Fully preprocessed vertex source, includes already pasted in.</summary>
+    internal string VertexSource => _vertexSource;
+
     [SerializeField] private string _fragmentSource;
     [SerializeField] private string _fallbackAsset;
 

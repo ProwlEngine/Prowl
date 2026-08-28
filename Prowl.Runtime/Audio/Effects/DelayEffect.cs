@@ -1,8 +1,7 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio.Native;
@@ -11,43 +10,66 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Audio.Effects;
 
 /// <summary>Fixed delay line with optional feedback, for slapback and echo.</summary>
+/// <remarks>
+/// An insert, so the signal that goes in comes back out with the repeats added to it. It used to
+/// replace the input with the contents of the delay line instead, which meant dropping a delay on a
+/// source removed the sound and left only a copy of it arriving a quarter of a second later.
+/// </remarks>
 public sealed class DelayEffect : AudioEffect
 {
     [SerializeField, Tooltip("Delay length in seconds.")]
     private float _delaySeconds = 0.25f;
     [SerializeField, Range(0f, 1f), Tooltip("How much of each repeat feeds the next one. 0 is a single repeat.")]
-    private float _decay = 0.0f;
-    [SerializeField, Range(0f, 1f), Tooltip("Level of the delayed signal.")]
-    private float _wet = 1.0f;
-    [SerializeField, Range(0f, 1f), Tooltip("Level of the signal written into the delay line.")]
-    private float _dry = 1.0f;
+    private float _decay = 0.3f;
+    [SerializeField, Range(0f, 1f), Tooltip("Balance between the untouched signal at 0 and the repeats alone at 1.")]
+    private float _mix = 0.5f;
 
-    private Int32 channels = 1;
-    private bool delayStart;       /* Set to true to delay the start of the output; false otherwise. */
-    private Int32 cursor;               /* Feedback is written to this cursor. Always equal or in front of the read cursor. */
-    private Int32 bufferSizeInFrames = 1;
-    private float[] buffer = [];
-
-    public float Wet
+    /// <summary>
+    /// The buffer and the geometry that describes it, as one thing.
+    /// </summary>
+    /// <remarks>
+    /// These three have to agree. Held as separate fields, resizing wrote the new frame count and then
+    /// swapped the array, so a block landing between the two indexed the old, shorter buffer with the
+    /// new, larger count and ran off the end of it. Swapping one reference instead means the audio
+    /// thread reads a set that was never half updated.
+    /// </remarks>
+    private sealed class DelayLine
     {
-        get => _wet;
-        set => _wet = value;
+        public readonly float[] Buffer;
+        public readonly int FrameCount;
+        public readonly int Channels;
+
+        /// <summary>Where feedback is written. Only the audio thread touches it.</summary>
+        public int Cursor;
+
+        public DelayLine(int frameCount, int channels)
+        {
+            FrameCount = Math.Max(1, frameCount);
+            Channels = Math.Max(1, channels);
+            Buffer = new float[FrameCount * Channels];
+        }
     }
 
-    public float Dry
+    private volatile DelayLine _line = new(1, 1);
+
+    /// <summary>
+    /// Balance between the untouched signal and the repeats. 0 passes audio through, 1 is the
+    /// repeats on their own.
+    /// </summary>
+    public float Mix
     {
-        get => _dry;
-        set => _dry = value;
+        get => _mix;
+        set => _mix = Maths.Clamp(value, 0.0f, 1.0f);
     }
 
+    /// <summary>
+    /// How much of each repeat feeds the next one. 0 gives a single repeat, and it stops short of 1,
+    /// where the line would return everything it was given forever and build without limit.
+    /// </summary>
     public float Decay
     {
         get => _decay;
-        set
-        {
-            _decay = value;
-            delayStart = _decay == 0;
-        }
+        set => _decay = Maths.Clamp(value, 0.0f, 0.99f);
     }
 
     /// <summary>Delay length in seconds. Rounds up to whole frames, with one frame as the floor.</summary>
@@ -62,47 +84,56 @@ public sealed class DelayEffect : AudioEffect
     }
 
     /// <summary>The delay length the buffer was actually sized to.</summary>
-    public UInt32 DelayInFrames => (UInt32)bufferSizeInFrames;
+    public UInt32 DelayInFrames => (UInt32)_line.FrameCount;
 
-    protected override void OnInitialize()
-    {
-        channels = Math.Max(1, Channels);
-        delayStart = _decay == 0;
-        Resize();
-    }
+    protected override void OnInitialize() => Resize();
 
     public override void OnValidate()
     {
-        delayStart = _decay == 0;
+        // The inspector writes the fields directly, so this is where a value it wrote is checked.
+        _mix = Maths.Clamp(_mix, 0.0f, 1.0f);
+        _decay = Maths.Clamp(_decay, 0.0f, 0.99f);
+
         Resize();
     }
 
     /// <summary>
-    /// Sizes the delay line. One frame is the floor: OnProcess takes the cursor modulo this, and a
-    /// zero length is a divide by zero on the audio thread over a zero length buffer.
+    /// Sizes the delay line, replacing it only when the geometry actually changes. One frame is the
+    /// floor: OnProcess takes the cursor modulo this, and a zero length is a divide by zero over a
+    /// zero length buffer.
     /// </summary>
+    /// <remarks>
+    /// The early return matters as much as the resize. OnValidate runs for every field on the owning
+    /// source, so replacing the line unconditionally would empty the delay each time someone nudged
+    /// an unrelated slider.
+    /// </remarks>
     private void Resize()
     {
-        int frames = (Int32)Maths.Ceiling(_delaySeconds * Math.Max(1, SampleRate));
-        bufferSizeInFrames = Maths.Max(1, frames);
+        int frames = Maths.Max(1, (Int32)Maths.Ceiling(_delaySeconds * Math.Max(1, SampleRate)));
+        int channelCount = Math.Max(1, Channels);
 
-        int required = (Int32)GetNextPowerOfTwo((UInt32)(bufferSizeInFrames * channels));
+        DelayLine current = _line;
 
-        if (buffer.Length < required)
-            buffer = new float[required];
+        if (current.FrameCount == frames && current.Channels == channelCount)
+            return;
 
-        cursor %= bufferSizeInFrames;
+        _line = new DelayLine(frames, channelCount);
     }
 
-    public override unsafe void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    protected override unsafe void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
     {
+        // Read once. Everything below works against this one set, so a resize landing mid block takes
+        // effect on the next one rather than halfway through this one.
+        DelayLine line = _line;
+        float[] buffer = line.Buffer;
+
         // The buffer is laid out for the channel count this effect was initialized with, so a chain
         // that disagrees would step the write cursor off the end of it.
-        if (buffer.Length == 0 || channels != this.channels)
+        if (buffer.Length == 0 || channels != line.Channels)
             return;
 
         int frames = (int)frameCountIn;
-        int available = Math.Min(framesIn.Length, framesOut.Length) / this.channels;
+        int available = Math.Min(framesIn.Length, framesOut.Length) / line.Channels;
 
         if (frames > available)
             frames = available;
@@ -110,54 +141,34 @@ public sealed class DelayEffect : AudioEffect
         float* pFramesOutF32 = (float*)framesOut.Pointer;
         float* pFramesInF32 = (float*)framesIn.Pointer;
 
+        int cursor = line.Cursor % line.FrameCount;
+        float wet = _mix;
+        float dry = 1.0f - _mix;
+        float decay = _decay;
+
         for (int iFrame = 0; iFrame < frames; iFrame += 1)
         {
-            for (int iChannel = 0; iChannel < this.channels; iChannel += 1)
+            for (int iChannel = 0; iChannel < line.Channels; iChannel += 1)
             {
-                Int32 iBuffer = (cursor * this.channels) + iChannel;
+                Int32 iBuffer = (cursor * line.Channels) + iChannel;
 
-                if (delayStart)
-                {
-                    /* Delayed start. */
+                // Read before write, always. The cursor is a whole delay length behind what is about
+                // to be written to it, so this is the sample from that long ago. Writing first turned
+                // the effect into something else, and it was the feedback amount that decided which,
+                // because a delay with no feedback took one branch and a delay with feedback the other.
+                float delayed = buffer[iBuffer];
+                float input = pFramesInF32[iChannel];
 
-                    /* Read */
-                    pFramesOutF32[iChannel] = buffer[iBuffer] * _wet;
-
-                    /* Feedback */
-                    buffer[iBuffer] = (buffer[iBuffer] * _decay) + (pFramesInF32[iChannel] * _dry);
-                }
-                else
-                {
-                    /* Immediate start */
-
-                    /* Feedback */
-                    buffer[iBuffer] = (buffer[iBuffer] * _decay) + (pFramesInF32[iChannel] * _dry);
-
-                    /* Read */
-                    pFramesOutF32[iChannel] = buffer[iBuffer] * _wet;
-                }
+                buffer[iBuffer] = input + (delayed * decay);
+                pFramesOutF32[iChannel] = (input * dry) + (delayed * wet);
             }
 
-            cursor = (cursor + 1) % bufferSizeInFrames;
+            cursor = (cursor + 1) % line.FrameCount;
 
-            pFramesOutF32 += this.channels;
-            pFramesInF32 += this.channels;
+            pFramesOutF32 += line.Channels;
+            pFramesInF32 += line.Channels;
         }
-    }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private UInt32 GetNextPowerOfTwo(UInt32 value)
-    {
-        if (value <= 1)
-            return 1;
-
-        value--;
-        value |= value >> 1;
-        value |= value >> 2;
-        value |= value >> 4;
-        value |= value >> 8;
-        value |= value >> 16;
-        value++;
-        return value;
+        line.Cursor = cursor;
     }
 }

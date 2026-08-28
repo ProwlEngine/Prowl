@@ -1,4 +1,4 @@
-Shader "Default/EnhancedBokehdoF"
+﻿Shader "Hidden/Post Process/Depth of Field"
 
 Properties
 {
@@ -34,6 +34,8 @@ Pass "CircularHorizMRT"
         layout(location = 0) out vec4 OutputR;
         layout(location = 1) out vec4 OutputG;
         layout(location = 2) out vec4 OutputB;
+
+        #include "ProwlCG"
 
         in vec2 TexCoords;
 
@@ -85,12 +87,12 @@ Pass "CircularHorizMRT"
         void main()
         {
         #ifdef AUTOFOCUS
-            float focusPoint = texture(_CameraDepthTexture, vec2(0.5, 0.5)).x;
+            float focusPoint = linearizeDepthFromProjection(texture(_CameraDepthTexture, vec2(0.5, 0.5)).x);
         #else
             float focusPoint = _ManualFocusPoint;
         #endif
 
-            float depth = texture(_CameraDepthTexture, TexCoords).x;
+            float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
             float coc = calculateCoC(depth, focusPoint);
             float radius = coc / _Resolution.x / float(KERNEL_RADIUS);
 
@@ -150,6 +152,8 @@ Pass "CircularVerticalComposite"
     {
         layout(location = 0) out vec4 OutputColor;
 
+        #include "ProwlCG"
+
         in vec2 TexCoords;
 
         uniform sampler2D _HorizR;
@@ -208,12 +212,12 @@ Pass "CircularVerticalComposite"
         void main()
         {
         #ifdef AUTOFOCUS
-            float focusPoint = texture(_CameraDepthTexture, vec2(0.5, 0.5)).x;
+            float focusPoint = linearizeDepthFromProjection(texture(_CameraDepthTexture, vec2(0.5, 0.5)).x);
         #else
             float focusPoint = _ManualFocusPoint;
         #endif
 
-            float depth = texture(_CameraDepthTexture, TexCoords).x;
+            float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
             float coc = calculateCoC(depth, focusPoint);
             float radius = coc / _Resolution.y / float(KERNEL_RADIUS);
 
@@ -288,6 +292,8 @@ Pass "DoFCombine"
     {
         layout(location = 0) out vec4 OutputColor;
 
+        #include "ProwlCG"
+
         in vec2 TexCoords;
 
         uniform sampler2D _MainTex;
@@ -309,7 +315,7 @@ Pass "DoFCombine"
         void main()
         {
         #ifdef AUTOFOCUS
-            float focusPoint = texture(_CameraDepthTexture, vec2(0.5, 0.5)).x;
+            float focusPoint = linearizeDepthFromProjection(texture(_CameraDepthTexture, vec2(0.5, 0.5)).x);
         #else
             float focusPoint = _ManualFocusPoint;
         #endif
@@ -317,7 +323,7 @@ Pass "DoFCombine"
             vec4 originalColor = texture(_MainTex, TexCoords);
             vec4 blurredColor = texture(_BlurredTex, TexCoords);
 
-            float depth = texture(_CameraDepthTexture, TexCoords).x;
+            float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
             float coc = calculateCoC(depth, focusPoint);
 
             // Smooth blend based on CoC

@@ -14,7 +14,7 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.Importers;
 
-[ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr")]
+[ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr", ".tif", ".tiff")]
 public class TextureImporter : AssetImporter
 {
     // 4: min/mag/mip filter booleans

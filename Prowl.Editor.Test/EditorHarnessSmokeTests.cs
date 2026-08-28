@@ -49,7 +49,7 @@ public class EditorHarnessSmokeTests : EditorTestHarness
         var prefab = GetPrefab(guid);
         Assert.NotNull(prefab);
 
-        var instance = prefab!.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab!);
         Assert.NotNull(instance);
         Assert.Equal("Enemy", instance!.Name);
         Assert.Equal(guid, instance.PrefabAssetId);

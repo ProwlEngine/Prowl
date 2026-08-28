@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,6 +22,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
+using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.Core;
 
@@ -174,6 +175,10 @@ public class EditorApplication : Game
         {
             var eo = target as Runtime.EngineObject;
             if (eo.IsValid()) eo.OnValidate();
+
+            // Record the edit against the prefab it belongs to as it happens, rather than relying on
+            // something drawing this object again later.
+            PrefabUtility.NotifyEdited(target);
         };
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
@@ -272,6 +277,8 @@ public class EditorApplication : Game
         {
             SaveEditorWindowState();
         };
+
+        Window.FileDrop += ExternalAssetDrop.Enqueue;
     }
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -347,10 +354,11 @@ public class EditorApplication : Game
         // (taken last frame) against the current state to detect changes.
         Undo.FlushFrame();
 
-        // Escape always unlocks cursor in editor
-        if (Input.GetKeyDown(KeyCode.Escape) && Input.CursorLocked)
+        // Escape always releases the cursor in editor.
+        if (Input.GetKeyDown(KeyCode.Escape) && (Input.CursorLockState != CursorLockMode.None || !Input.CursorVisible))
         {
             Input.UnlockCursor();
+            Input.CursorVisible = true;
         }
 
         // Global keyboard shortcuts
@@ -450,8 +458,10 @@ public class EditorApplication : Game
             EditorAssetBackend.Instance?.Refresh();
         _wasFocused = focused;
 
+        ExternalAssetDrop.ProcessPending();
+
         // Process file changes optionally only when window is focused
-        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused;
+        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || ExternalAssetDrop.ForceProcessActive;
         if (canProcessAssets)
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
@@ -554,7 +564,7 @@ public class EditorApplication : Game
             // Ghost buttons tint their icon by variant: green Play when stopped, red Stop while playing,
             // amber Pause when paused; step stays neutral.
             var play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
-                .OnClick(() => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); })
+                .OnClick(RequestTogglePlayMode)
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
@@ -1520,6 +1530,63 @@ public class EditorApplication : Game
     //  Play Mode
     // ================================================================
 
+    /// <summary>
+    /// Raised when something asks to start or stop play mode, before any of it happens. A handler with
+    /// work the user has to resolve first holds the transition with
+    /// <see cref="PlayModeRequest.Defer"/> and asks again once they have.
+    /// </summary>
+    public static event Action<PlayModeRequest> PlayModeRequested;
+
+    /// <summary>Asks to start play mode. Held if any handler has something outstanding.</summary>
+    public static void RequestPlayMode()
+    {
+        if (Application.IsPlaying || Instance == null) return;
+
+        if (Held(entering: true)) return;
+
+        Instance.EnterPlayMode();
+    }
+
+    /// <summary>Asks to stop play mode. Held if any handler has something outstanding.</summary>
+    public static void RequestExitPlayMode()
+    {
+        if (!Application.IsPlaying || Instance == null) return;
+
+        if (Held(entering: false)) return;
+
+        Instance.ExitPlayMode();
+    }
+
+    /// <summary>Asks for whichever of the two is the opposite of now, which is what the play button does.</summary>
+    public static void RequestTogglePlayMode()
+    {
+        if (Application.IsPlaying) RequestExitPlayMode();
+        else RequestPlayMode();
+    }
+
+    private static bool Held(bool entering)
+    {
+        var request = new PlayModeRequest(entering);
+
+        try
+        {
+            PlayModeRequested?.Invoke(request);
+        }
+        catch (Exception ex)
+        {
+            // A handler that throws must not leave the play button dead. Letting the transition
+            // through is the safer failure: the alternative is an editor that cannot be played in
+            // and does not say why.
+            Runtime.Debug.LogError($"A play mode handler threw, so the transition went ahead anyway: {ex}");
+            return false;
+        }
+
+        if (!request.IsDeferred) return false;
+
+        Runtime.Debug.Log($"{(entering ? "Entering" : "Exiting")} play mode is waiting on {request.DeferredBy}.");
+        return true;
+    }
+
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
@@ -1538,6 +1605,11 @@ public class EditorApplication : Game
         // Save active tab (to restore on stop)
         SaveActiveTab();
 
+        // An edit the inspector never saw is only a raw value on the objects, and stopping restores
+        // this snapshot and brings its instances back into line with their prefabs. Record it as an
+        // override first or the round trip through play mode is what drops it.
+        PrefabUtility.ReconcileOpenScene();
+
         // Serialize the current editor scene
         _savedEditorScene = Echo.Serializer.Serialize(scene);
         if (_savedEditorScene == null)
@@ -1548,6 +1620,10 @@ public class EditorApplication : Game
 
         // Clear selection (references will be invalid)
         Selection.Clear();
+
+        // Before the play copy is built, so it resolves its own instances rather than adopting the ones
+        // the editor scene had.
+        DropLoadedAssets();
 
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
@@ -1605,6 +1681,8 @@ public class EditorApplication : Game
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
         {
+            DropLoadedAssets();
+
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
             if (restoredScene != null)
@@ -1612,6 +1690,10 @@ public class EditorApplication : Game
             Undo.Clear();
             _savedEditorScene = null;
         }
+
+        // Don't inherit cursor state the game left behind
+        Input.CursorLockState = CursorLockMode.None;
+        Input.CursorVisible = true;
 
         // Pop play-mode input handler
         if (Input.Current is GameViewInputHandler)
@@ -1629,6 +1711,18 @@ public class EditorApplication : Game
         RestoreActiveTab();
 
         Runtime.Debug.Log("Exited play mode.");
+    }
+
+    /// <summary>
+    /// Drops every loaded asset instance, so the scene about to be built resolves fresh ones and
+    /// nothing a play session did to an asset outlives it.
+    /// </summary>
+    private static void DropLoadedAssets()
+    {
+        int dropped = EditorAssetBackend.Instance?.UnloadAll() ?? 0;
+
+        if (dropped > 0)
+            Runtime.Debug.Log($"[Assets] Dropped {dropped} loaded asset instances, so both sides of the play session read from disk.");
     }
 
     private void TogglePause()

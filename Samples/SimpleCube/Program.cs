@@ -89,7 +89,7 @@ public sealed class MyGame : Game
         CreateLineExamples();
 
 
-        Input.SetCursorVisible(false);
+        Input.LockCursor();
 
         Scene.Load(scene);
     }
@@ -284,6 +284,6 @@ public sealed class MyGame : Game
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))
-            Input.SetCursorVisible(true);
+            Input.UnlockCursor();
     }
 }

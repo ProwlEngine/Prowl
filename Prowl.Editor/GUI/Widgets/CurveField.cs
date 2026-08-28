@@ -107,7 +107,7 @@ public static class CurveRenderer
 
     public static void DrawPreview(Canvas canvas, Rect r, AnimationCurve curve, OrigamiTheme theme)
     {
-        if (curve.Keys.Count == 0) return;
+        if (curve.Count == 0) return;
         float x = (float)r.Min.X + 2, y = (float)r.Min.Y + 2;
         float w = (float)r.Size.X - 4, h = (float)r.Size.Y - 4;
         GetBounds(curve, out float minT, out float maxT, out float minV, out float maxV);
@@ -130,7 +130,7 @@ public static class CurveRenderer
     public static void DrawGraph(Canvas canvas, Rect r, AnimationCurve curve,
         float vMinT, float vMaxT, float vMinV, float vMaxV, OrigamiTheme theme, int selectedIdx)
     {
-        if (curve.Keys.Count == 0) return;
+        if (curve.Count == 0) return;
         float x = (float)r.Min.X, y = (float)r.Min.Y;
         float w = (float)r.Size.X, h = (float)r.Size.Y;
         float rngT = vMaxT - vMinT, rngV = vMaxV - vMinV;
@@ -183,10 +183,10 @@ public static class CurveRenderer
 
         // Keyframe dots
         float tToX = w / rngT, vToY = h / rngV;
-        for (int i = 0; i < curve.Keys.Count; i++)
+        for (int i = 0; i < curve.Count; i++)
         {
-            var key = curve.Keys[i];
-            float kx = x + (key.Position - vMinT) * tToX;
+            var key = curve[i];
+            float kx = x + (key.Time - vMinT) * tToX;
             float ky = y + h - (key.Value - vMinV) * vToY;
             if (kx < x - 6 || kx > x + w + 6 || ky < y - 6 || ky > y + h + 6) continue;
 
@@ -204,14 +204,14 @@ public static class CurveRenderer
                 canvas.SetStrokeWidth(1.5f);
                 if (i > 0)
                 {
-                    var (tinX, tinY) = GetTangentScreenPos(kx, ky, key.TangentIn, -1f, tToX, vToY);
+                    var (tinX, tinY) = GetTangentScreenPos(kx, ky, key.InTangent, -1f, tToX, vToY);
                     canvas.BeginPath(); canvas.MoveTo(kx, ky); canvas.LineTo(tinX, tinY); canvas.Stroke();
                     canvas.SetFillColor(Color32.FromArgb(255, 200, 200, 60));
                     canvas.BeginPath(); canvas.Circle(tinX, tinY, 3f, 8); canvas.Fill();
                 }
-                if (i < curve.Keys.Count - 1)
+                if (i < curve.Count - 1)
                 {
-                    var (toutX, toutY) = GetTangentScreenPos(kx, ky, key.TangentOut, 1f, tToX, vToY);
+                    var (toutX, toutY) = GetTangentScreenPos(kx, ky, key.OutTangent, 1f, tToX, vToY);
                     canvas.BeginPath(); canvas.MoveTo(kx, ky); canvas.LineTo(toutX, toutY); canvas.Stroke();
                     canvas.SetFillColor(Color32.FromArgb(255, 200, 200, 60));
                     canvas.BeginPath(); canvas.Circle(toutX, toutY, 3f, 8); canvas.Fill();
@@ -268,9 +268,9 @@ public static class CurveRenderer
 
     public static void GetBounds(AnimationCurve curve, out float minT, out float maxT, out float minV, out float maxV)
     {
-        if (curve.Keys.Count == 0) { minT = 0; maxT = 1; minV = 0; maxV = 1; return; }
-        minT = curve.Keys[0].Position;
-        maxT = curve.Keys[curve.Keys.Count - 1].Position;
+        if (curve.Count == 0) { minT = 0; maxT = 1; minV = 0; maxV = 1; return; }
+        minT = curve[0].Time;
+        maxT = curve[curve.Count - 1].Time;
         if (maxT <= minT) maxT = minT + 1;
         minV = float.MaxValue; maxV = float.MinValue;
         for (int i = 0; i <= PreviewSteps; i++)
@@ -382,8 +382,8 @@ internal static class CurvePopover
                 {
                     float t = vMinT + (float)e.NormalizedPosition.X * rngT;
                     float v = vMinV + (1f - (float)e.NormalizedPosition.Y) * rngV;
-                    c.Keys.Add(new KeyFrame(t, v));
-                    c.SmoothTangents(CurveTangent.Smooth);
+                    c.AddKey(new Keyframe(t, v));
+                    c.SmoothTangents(CurveTangentMode.Auto);
                     onChange(c);
                 })
                 .OnClick(e => paper.SetElementStorage(el, "sel", -1))
@@ -407,19 +407,19 @@ internal static class CurvePopover
 
             // Interactive keyframe handles
             bool dragActive = paper.GetElementStorage(el, "dragActive", false);
-            for (int i = 0; i < curve.Keys.Count; i++)
+            for (int i = 0; i < curve.Count; i++)
             {
-                var key = curve.Keys[i];
+                var key = curve[i];
                 bool isSelected = i == selectedIdx;
 
                 // While the selected key is being dragged, render its live (uncommitted) position
-                // instead of touching curve.Keys every frame. Keys.Add does a sorted insert, so
+                // instead of touching the curve every frame. AddKey does a sorted insert, so
                 // mutating the array mid-drag can reorder it the moment the dragged key crosses a
                 // neighbor's time - which changes its index and, with it, this box's id ($"{id}_key_{i}"),
                 // breaking the in-progress drag's identity onto whatever key now sits at that index.
                 // Deferring the actual insert to OnDragEnd keeps the array (and every box id) stable
                 // for the whole gesture.
-                float posT = key.Position, posV = key.Value;
+                float posT = key.Time, posV = key.Value;
                 if (isSelected && dragActive)
                 {
                     posT = paper.GetElementStorage(el, "dragT", posT);
@@ -437,9 +437,9 @@ internal static class CurvePopover
                 if (isSelected)
                 {
                     if (i > 0)
-                        DrawTangentHandle(paper, id, i, "In", curve, el, onChange, kx, ky, key.TangentIn, -1f, tToX, vToY, theme);
-                    if (i < curve.Keys.Count - 1)
-                        DrawTangentHandle(paper, id, i, "Out", curve, el, onChange, kx, ky, key.TangentOut, 1f, tToX, vToY, theme);
+                        DrawTangentHandle(paper, id, i, "In", curve, el, onChange, kx, ky, key.InTangent, -1f, tToX, vToY, theme);
+                    if (i < curve.Count - 1)
+                        DrawTangentHandle(paper, id, i, "Out", curve, el, onChange, kx, ky, key.OutTangent, 1f, tToX, vToY, theme);
                 }
 
                 // Keyframe handle
@@ -455,9 +455,9 @@ internal static class CurvePopover
                     .OnDragStart(idx, (ci, _) =>
                     {
                         paper.SetElementStorage(el, "sel", ci);
-                        var k = curve.Keys[ci];
+                        var k = curve[ci];
                         paper.SetElementStorage(el, "dragActive", true);
-                        paper.SetElementStorage(el, "dragT", k.Position);
+                        paper.SetElementStorage(el, "dragT", k.Time);
                         paper.SetElementStorage(el, "dragV", k.Value);
                     })
                     .OnDragging(idx, (ci, e) =>
@@ -476,19 +476,19 @@ internal static class CurvePopover
 
                         float t = paper.GetElementStorage(el, "dragT", 0f);
                         float v = paper.GetElementStorage(el, "dragV", 0f);
-                        var k = curve.Keys[ci];
-                        var moved = new KeyFrame(t, v, k.TangentIn, k.TangentOut, k.Continuity);
-                        curve.Keys.RemoveAt(ci);
-                        curve.Keys.Add(moved);
-                        paper.SetElementStorage(el, "sel", curve.Keys.IndexOf(moved));
+                        var k = curve[ci];
+                        // MoveKey re-sorts when the drag crosses a neighbour and hands back where the
+                        // key landed, which is what the selection has to follow.
+                        int landed = curve.MoveKey(ci, new Keyframe(t, v, k.InTangent, k.OutTangent, k.Interpolation));
+                        paper.SetElementStorage(el, "sel", landed);
                         onChange(curve);
                     })
                     .OnRightClick(idx, (ci, _) =>
                     {
-                        if (curve.Keys.Count > 2)
+                        if (curve.Count > 2)
                         {
-                            curve.Keys.RemoveAt(ci);
-                            curve.SmoothTangents(CurveTangent.Smooth);
+                            curve.RemoveKey(ci);
+                            curve.SmoothTangents(CurveTangentMode.Auto);
                             paper.SetElementStorage(el, "sel", -1);
                             onChange(curve);
                         }
@@ -512,19 +512,19 @@ internal static class CurvePopover
 
                 Origami.Button(paper, $"{id}_smooth", "Smooth All", () =>
                 {
-                    curve.SmoothTangents(CurveTangent.Smooth);
+                    curve.SmoothTangents(CurveTangentMode.Auto);
                     onChange(curve);
                 }).Height(m.CompactHeight).Show();
 
                 Origami.Button(paper, $"{id}_linear", "Linear All", () =>
                 {
-                    curve.SmoothTangents(CurveTangent.Linear);
+                    curve.SmoothTangents(CurveTangentMode.Linear);
                     onChange(curve);
                 }).Height(m.CompactHeight).Show();
 
                 Origami.Button(paper, $"{id}_flat", "Flat All", () =>
                 {
-                    curve.SmoothTangents(CurveTangent.Flat);
+                    curve.SmoothTangents(CurveTangentMode.Flat);
                     onChange(curve);
                 }).Height(m.CompactHeight).Show();
             }
@@ -547,12 +547,12 @@ internal static class CurvePopover
             .StopEventPropagation()
             .OnDragging(keyIdx, (ci, e) =>
             {
-                var k = curve.Keys[ci];
+                var k = curve[ci];
                 float dt = (float)e.Delta.X / tToX;
                 float dv = -(float)e.Delta.Y / vToY;
 
                 float curHandleDt = dir * TangentHandleLen / tToX;
-                float curTangent = side == "In" ? k.TangentIn : k.TangentOut;
+                float curTangent = side == "In" ? k.InTangent : k.OutTangent;
                 float curHandleDv = curTangent * curHandleDt;
 
                 curHandleDt += dt;
@@ -561,8 +561,8 @@ internal static class CurvePopover
                 if (MathF.Abs(curHandleDt) > 0.0001f)
                 {
                     float newTangent = curHandleDv / curHandleDt;
-                    if (side == "In") k.TangentIn = newTangent;
-                    else k.TangentOut = newTangent;
+                    if (side == "In") k.InTangent = newTangent;
+                    else k.OutTangent = newTangent;
                 }
                 onChange(curve);
             });

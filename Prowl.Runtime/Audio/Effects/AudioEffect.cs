@@ -25,7 +25,16 @@ public abstract class AudioEffect
     [SerializeField, Tooltip("Pass audio through untouched, without taking the effect out of the chain.")]
     private bool _bypass;
 
-    /// <summary>Passes audio through untouched while leaving the effect in the chain.</summary>
+    /// <summary>
+    /// Passes audio through untouched while leaving the effect in the chain. Takes effect on the next
+    /// block, from any thread.
+    /// </summary>
+    /// <remarks>
+    /// Tested per block rather than filtered out when the chain is built, so toggling this from
+    /// gameplay works without anything having to republish the chain afterwards. The audio thread may
+    /// read a value one block stale, which is inaudible, and the alternative was a toggle that only
+    /// worked from the inspector.
+    /// </remarks>
     public bool Bypass
     {
         get => _bypass;
@@ -33,19 +42,47 @@ public abstract class AudioEffect
     }
 
     /// <summary>Sample rate of the chain this effect is in. Valid from <see cref="OnInitialize"/> onward.</summary>
-    protected int SampleRate { get; private set; }
+    public int SampleRate { get; private set; }
 
     /// <summary>Channel count of the chain this effect is in. Valid from <see cref="OnInitialize"/> onward.</summary>
-    protected int Channels { get; private set; }
+    public int Channels { get; private set; }
+
+    /// <summary>
+    /// The source or mixer group this effect belongs to. An effect carries its own filter state, so
+    /// one instance cannot be in two chains: they would drive the same delay lines from two audio
+    /// callbacks and destroy it twice.
+    /// </summary>
+    private object _owner;
+
+    /// <summary>Takes this effect for <paramref name="owner"/>, false if it belongs to someone else.</summary>
+    internal bool TryClaim(object owner)
+    {
+        if (ReferenceEquals(_owner, owner))
+            return true;
+
+        if (_owner is not null)
+            return false;
+
+        _owner = owner;
+        return true;
+    }
+
+    /// <summary>Gives the effect up, so it can be added somewhere else.</summary>
+    internal void Release() => _owner = null;
 
     /// <summary>True once <see cref="OnInitialize"/> has run and the DSP state exists.</summary>
     public bool IsInitialized { get; private set; }
 
     /// <summary>
-    /// Binds the effect to an audio format and builds its DSP state. Called when the effect joins a
-    /// source and again if the format changes, so it has to be safe to call more than once.
+    /// Binds the effect to an audio format and builds its DSP state. Safe to call more than once: it
+    /// is what a source or bus calls when the effect joins it, and again whenever the format changes.
     /// </summary>
-    internal void Initialize(int sampleRate, int channels)
+    /// <remarks>
+    /// Public so an effect can be driven outside a chain, for an offline render or a test of its own
+    /// DSP. Until this runs there is no state for <see cref="Process"/> to work with, so an effect
+    /// used that way does nothing at all.
+    /// </remarks>
+    public void Initialize(int sampleRate, int channels)
     {
         SampleRate = Math.Max(1, sampleRate);
         Channels = Math.Max(1, channels);
@@ -63,10 +100,23 @@ public abstract class AudioEffect
     public virtual void OnValidate() { }
 
     /// <summary>
+    /// Runs the effect over one block unless it is bypassed, and reports whether it did. Chains call
+    /// this rather than <see cref="OnProcess"/>, so bypassing is honoured the same way everywhere.
+    /// </summary>
+    public bool Process(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    {
+        if (_bypass)
+            return false;
+
+        OnProcess(framesIn, frameCountIn, framesOut, ref frameCountOut, channels);
+        return true;
+    }
+
+    /// <summary>
     /// Processes one block on the audio thread. Leaving <paramref name="framesOut"/> untouched passes
     /// the previous stage's output through unchanged.
     /// </summary>
-    public abstract void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels);
+    protected abstract void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels);
 
     /// <summary>Called when the effect is removed from its source, or the source is destroyed.</summary>
     public virtual void OnDestroy() { }

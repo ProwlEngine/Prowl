@@ -1,4 +1,4 @@
-﻿Shader "Default/ProceduralSkybox"
+﻿Shader "Skybox/Procedural"
 
 Properties
 {
@@ -227,7 +227,7 @@ Pass "Skybox"
 			    viewNoTranslation[3][1] = 0.0;
 			    viewNoTranslation[3][2] = 0.0;
 
-			    gl_Position = PROWL_MATRIX_P * viewNoTranslation * vec4(vertexPosition, 1.0);
+			    gl_Position = prowlSkyProjection() * viewNoTranslation * vec4(vertexPosition, 1.0);
 			    gl_Position.z = gl_Position.w;
 
                 // Sky

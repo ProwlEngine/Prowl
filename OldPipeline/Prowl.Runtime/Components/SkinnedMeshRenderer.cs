@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -42,11 +43,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
     public Color MainColor = Color.White;
 
-    /// <summary>Index into <c>Scene.BakedLighting.Lightmaps</c>, or -1 if not lightmapped. Assigned by the bake.</summary>
-    [HideInInspector] public int LightmapIndex = -1;
 
-    /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
-    [HideInInspector] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
 
     // Resolved at runtime
     [System.NonSerialized] private Transform? _rootBone;
@@ -83,13 +80,24 @@ public class SkinnedMeshRenderer : MonoBehaviour
     [System.NonSerialized] private readonly List<Float4> _activeMorphLayers = new();
 
     /// <summary>Number of blend shapes on the shared mesh (0 if none).</summary>
-    public int BlendShapeCount => SharedMesh.Res?.BlendShapeCount ?? 0;
+    public int BlendShapeCount
+    {
+        get { var mesh = SharedMesh.Res; return mesh.IsValid() ? mesh.BlendShapeCount : 0; }
+    }
 
     /// <summary>Index of a blend shape by name, or -1 if not found.</summary>
-    public int GetBlendShapeIndex(string name) => SharedMesh.Res?.GetBlendShapeIndex(name) ?? -1;
+    public int GetBlendShapeIndex(string name)
+    {
+        var mesh = SharedMesh.Res;
+        return mesh.IsValid() ? mesh.GetBlendShapeIndex(name) : -1;
+    }
 
     /// <summary>The blend shape's name, or empty if out of range.</summary>
-    public string GetBlendShapeName(int index) => SharedMesh.Res?.GetBlendShapeName(index) ?? string.Empty;
+    public string GetBlendShapeName(int index)
+    {
+        var mesh = SharedMesh.Res;
+        return mesh.IsValid() ? mesh.GetBlendShapeName(index) : string.Empty;
+    }
 
     /// <summary>Get a blend-shape weight (0-100). Returns 0 for invalid indices.</summary>
     public float GetBlendShapeWeight(int index)
@@ -290,11 +298,11 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
     public override void OnDisable()
     {
-        _boneTexture?.Dispose();
+        if (_boneTexture.IsValid()) _boneTexture.Dispose();
         _boneTexture = null;
         _boneTextureSize = 0;
 
-        _morphWeightTexture?.Dispose();
+        if (_morphWeightTexture.IsValid()) _morphWeightTexture.Dispose();
         _morphWeightTexture = null;
         _morphWeightCapacity = 0;
         _morphWeightData = null;
@@ -309,7 +317,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
         if (_boneTexture != null && _boneTextureSize >= boneCount)
             return;
 
-        _boneTexture?.Dispose();
+        if (_boneTexture.IsValid()) _boneTexture.Dispose();
 
         // Width = boneCount * 4 (4 texels per mat4), Height = 1
         uint width = (uint)(boneCount * 4);
@@ -421,9 +429,11 @@ public class SkinnedMeshRenderer : MonoBehaviour
         }
 
         Texture2D posTex = mesh.MorphPositionTexture!;
+        Texture2D? normalTex = mesh.MorphNormalTexture;
+        Texture2D? tangentTex = mesh.MorphTangentTexture;
         props.SetTexture("morphPositionTexture", posTex);
-        props.SetTexture("morphNormalTexture", mesh.MorphNormalTexture ?? posTex);
-        props.SetTexture("morphTangentTexture", mesh.MorphTangentTexture ?? posTex);
+        props.SetTexture("morphNormalTexture", normalTex.IsValid() ? normalTex! : posTex);
+        props.SetTexture("morphTangentTexture", tangentTex.IsValid() ? tangentTex! : posTex);
         props.SetTexture("morphWeightTexture", _morphWeightTexture!);
         props.SetInt("morphActiveCount", _morphActiveCount);
         props.SetInt("morphTexWidth", mesh.MorphTexWidth);
@@ -443,7 +453,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
         int count = Math.Max(1, _activeMorphLayers.Count); // keep a valid 1-wide texture even when idle
         if (_morphWeightTexture == null || _morphWeightCapacity < count)
         {
-            _morphWeightTexture?.Dispose();
+            if (_morphWeightTexture.IsValid()) _morphWeightTexture.Dispose();
             _morphWeightTexture = new Texture2D((uint)count, 1, false, TextureImageFormat.Float4);
             _morphWeightTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
             Graphics.SetWrapS(_morphWeightTexture.Handle, TextureWrap.ClampToEdge);
@@ -522,7 +532,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
             props.SetInt("_ObjectID", InstanceID);
             props.SetColor("_MainColor", MainColor);
             Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
-            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
+            LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
             if (_boneTexture != null)
             {
                 props.SetTexture("boneMatrixTexture", _boneTexture);

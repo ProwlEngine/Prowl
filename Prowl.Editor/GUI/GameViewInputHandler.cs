@@ -123,9 +123,10 @@ public class GameViewInputHandler : IInputHandler
     public bool GetMouseButton(int button) => ShouldFilter ? false : _real.GetMouseButton(button);
     public bool GetMouseButtonDown(int button) => ShouldFilter ? false : _real.GetMouseButtonDown(button);
     public bool GetMouseButtonUp(int button) => ShouldFilter ? false : _real.GetMouseButtonUp(button);
-    public void SetCursorVisible(bool visible, int miceIndex = 0)
+
+    public void ApplyCursorState(bool visible, CursorLockMode mode)
     {
-        _real.SetCursorVisible(visible, miceIndex);
+        _real.ApplyCursorState(visible, mode);
     }
 
     public void SetCursorShape(PaperCursor shape, int miceIndex = 0)
@@ -147,6 +148,7 @@ public class GameViewInputHandler : IInputHandler
 
     // Gamepads always pass through (physical controllers work regardless of focus)
     public int GetGamepadCount() => _real.GetGamepadCount();
+    public int GetGamepadSlotCount() => _real.GetGamepadSlotCount();
     public bool IsGamepadConnected(int gamepadIndex) => _real.IsGamepadConnected(gamepadIndex);
     public bool GetGamepadButton(int gamepadIndex, GamepadButton button) => _real.GetGamepadButton(gamepadIndex, button);
     public bool GetGamepadButtonDown(int gamepadIndex, GamepadButton button) => _real.GetGamepadButtonDown(gamepadIndex, button);

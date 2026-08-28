@@ -1,4 +1,4 @@
-Shader "Default/Tonemapper"
+Shader "Hidden/Post Process/Tonemapper"
 
 Properties
 {

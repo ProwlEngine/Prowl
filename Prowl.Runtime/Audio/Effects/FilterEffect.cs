@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -28,8 +28,8 @@ public sealed class FilterEffect : AudioEffect
         set
         {
             _type = value;
-            // The coefficient function is chosen per type, so a type change is a rebuild.
-            Rebuild();
+            if (_filter != null)
+                _filter.Type = value;
         }
     }
 
@@ -72,9 +72,29 @@ public sealed class FilterEffect : AudioEffect
         }
     }
 
+    /// <summary>Binding to a format is the one thing that needs a filter built from scratch.</summary>
     protected override void OnInitialize() => Rebuild();
 
-    public override void OnValidate() => Rebuild();
+    /// <summary>
+    /// Pushes the serialized values into the live filter rather than replacing it. Replacing it threw
+    /// away the delay state mid stream, so an unrelated inspector edit on the source, dragging its
+    /// volume say, clicked once per frame of the drag.
+    /// </summary>
+    public override void OnValidate()
+    {
+        if (_filter == null)
+        {
+            Rebuild();
+            return;
+        }
+
+        _filter.Type = _type;
+        _filter.Frequency = _frequency;
+        _filter.Q = _q;
+        _filter.GainDB = _gainDB;
+
+        MirrorClamps();
+    }
 
     private void Rebuild()
     {
@@ -83,16 +103,33 @@ public sealed class FilterEffect : AudioEffect
             return;
 
         _filter = new Filter(_type, _frequency, _q, _gainDB, SampleRate, Channels);
+        MirrorClamps();
+    }
 
-        // The filter clamps what it was given, so mirror the values it settled on back.
+    /// <summary>The filter clamps what it is given, so the serialized values follow what it settled on.</summary>
+    private void MirrorClamps()
+    {
         _frequency = _filter.Frequency;
         _q = _filter.Q;
     }
 
-    public override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    protected override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
     {
+        // Passing audio through untouched is the only safe answer to either of these, but doing it
+        // without a word is how an effect ends up looking broken rather than misconfigured.
         if (_filter == null)
+        {
+            Debug.LogWarningOnce("Audio.FilterUnbound",
+                "A FilterEffect is in a chain without having been bound to an audio format, so it passes audio through untouched.");
             return;
+        }
+
+        if (channels != (uint)Channels)
+        {
+            Debug.LogWarningOnce("Audio.FilterChannels",
+                $"A FilterEffect built for {Channels} channels was handed {channels}, so it passes audio through untouched. A biquad keeps one delay pair per channel.");
+            return;
+        }
 
         _filter.Process(framesIn, framesOut, frameCountIn, (int)channels);
     }

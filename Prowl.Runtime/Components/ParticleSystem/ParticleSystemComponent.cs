@@ -42,6 +42,7 @@ public class ParticleSystemComponent : MonoBehaviour
     public ColorOverLifetimeModule ColorOverLifetime = new();
     public RotationOverLifetimeModule RotationOverLifetime = new();
     public VelocityOverLifetimeModule VelocityOverLifetime = new();
+    public WindModule Wind = new();
     public CollisionModule Collision = new();
     public UVModule UV = new();
     public LightModule Light = new();
@@ -114,6 +115,9 @@ public class ParticleSystemComponent : MonoBehaviour
             _isPlaying = false;
         }
 
+        // Pick the wind zone once per frame, before any particle samples it
+        Wind.BeginFrame(Transform, SimulationSpace);
+
         // Emit new particles
         int emitCount = Emission.CalculateEmitCount(deltaTime, _time / Duration, _random);
         for (int i = 0; i < emitCount && _particles.Count < MaxParticles; i++)
@@ -142,6 +146,7 @@ public class ParticleSystemComponent : MonoBehaviour
             ColorOverLifetime.OnParticleUpdate(ref particle, deltaTime);
             RotationOverLifetime.OnParticleUpdate(ref particle, deltaTime);
             VelocityOverLifetime.OnParticleUpdate(ref particle, deltaTime);
+            Wind.OnParticleUpdate(ref particle, deltaTime);
             UV.OnParticleUpdate(ref particle, deltaTime);
 
             // Update position

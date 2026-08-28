@@ -336,13 +336,49 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public SkyboxParams Skybox = new();
 
+    /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
+    public struct LightmapPlacement
+    {
+        /// <summary>Which atlas page, indexing <see cref="BakedLightingData.Lightmaps"/>.</summary>
+        public int Index;
+        /// <summary>Scale and offset taking the renderer's UVs into that page.</summary>
+        public Float4 ScaleOffset;
+    }
+
     /// <summary>Baked lightmaps + light-probe data for this scene, produced by the editor lightmap bake.</summary>
     public sealed class BakedLightingData
     {
-        /// <summary>Baked lightmap atlas pages (RGBM-encoded). A renderer's <c>LightmapIndex</c> selects one.</summary>
+        /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
         public List<AssetRef<Texture2D>> Lightmaps = new();
 
+        /// <summary>
+        /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
+        /// Here rather than on the renderer because it belongs to this scene's bake and to nothing else,
+        /// which is also what stops a prefab instance reading as modified the moment it is baked.
+        /// </summary>
+        public Dictionary<Guid, LightmapPlacement> Placements = new();
+        /// <summary>World-space light-probe positions.</summary>
+        public Float3[] ProbePositions = [];
+        /// <summary>Baked SH per probe, indexed with <see cref="ProbePositions"/>.</summary>
+        public SphericalHarmonicsL2[] ProbeSH = [];
+        /// <summary>Tetrahedralization of the probes: 4 probe indices per tetrahedron.</summary>
+        public int[] ProbeTetrahedra = [];
+        /// <summary>Per-tetra neighbour links: 4 per tetra (across the face opposite vertex i), -1 = hull.</summary>
+        public int[] ProbeTetNeighbours = [];
+
         public bool HasLightmaps => Lightmaps.Count > 0;
+        public bool HasProbes => ProbeSH.Length > 0;
+
+        /// <summary>Where this object's surface was baked, or nothing if it was not.</summary>
+        public LightmapPlacement? PlacementFor(Guid objectIdentifier)
+            => Placements.TryGetValue(objectIdentifier, out LightmapPlacement placement) ? placement : null;
+
+        /// <summary>Drop every baked lightmap page and placement, leaving the probes alone.</summary>
+        public void ClearLightmaps()
+        {
+            Lightmaps.Clear();
+            Placements.Clear();
+        }
     }
 
     public BakedLightingData BakedLighting = new();
@@ -364,11 +400,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public int Samples = 64;              // progressive indirect iterations before finalize
         public int ProbeSamples = 256;
         public bool DoBackfaceCull = false;   // cull back faces on all bake rays (matches Prowl's backface-culled rendering)
-        public float RussianRoulette = 0f;    // 0 = off
 
-        // Edge-avoiding denoiser (runs once at finalize); geometry-guided only.
-        public bool Denoise = false;
-        public int DenoiseRadius = 5;         // a-trous pass count; each step ~doubles the smoothing reach (~2^N texels)
+        // Trace one texel per NxN atlas cell and interpolate the rest. 1 traces everything; higher
+        // values converge far faster and cost fine indirect detail. Contacts and corners always trace.
+        public int SparseStride = 1;
 
         // Feed the scene's ambient colour in as ray-miss (sky) radiance.
         public bool BakeSkyLighting = false;
