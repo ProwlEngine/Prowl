@@ -57,6 +57,8 @@
   "toast.cursor_locked_msg": "Escapeで解除します。",
   "toast.cursor_lock_failed": "カーソルロック失敗",
   "toast.cursor_lock_failed_msg": "有効なゲームビューがありません。",
+  "toast.drop_imported": "アセットを追加しました",
+  "toast.drop_imported_msg": "{{count}} 個のファイルを '{{folder}}' に追加しました。",
   "toast.prefab_create_failed": "プレハブを作成できません",
   "toast.prefab_create_failed_body": "'{name}' をプレハブとして保存できませんでした。詳細はコンソールを確認してください。",
   "toast.rename_exists": "'{{name}}'という名前のファイルまたはフォルダーが既に存在します。",

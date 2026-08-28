@@ -57,6 +57,8 @@
   "toast.cursor_locked_msg": "Нажмите Escape для разблокировки.",
   "toast.cursor_lock_failed": "Не удалось заблокировать курсор",
   "toast.cursor_lock_failed_msg": "Нет доступного игрового окна.",
+  "toast.drop_imported": "Ассеты добавлены",
+  "toast.drop_imported_msg": "Добавлено {{count}} файл(ов) в '{{folder}}'.",
   "toast.prefab_create_failed": "Префаб не создан",
   "toast.prefab_create_failed_body": "Не удалось сохранить '{name}' как префаб. Подробности в консоли.",
   "toast.rename_exists": "Файл или папка с именем '{{name}}' уже существует.",

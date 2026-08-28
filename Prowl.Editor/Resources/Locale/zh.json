@@ -57,6 +57,8 @@
   "toast.cursor_locked_msg": "按Escape释放。",
   "toast.cursor_lock_failed": "光标锁定失败",
   "toast.cursor_lock_failed_msg": "没有可用的游戏视图。",
+  "toast.drop_imported": "资产已添加",
+  "toast.drop_imported_msg": "已将 {{count}} 个文件添加到 '{{folder}}'。",
   "toast.prefab_create_failed": "未能创建预制件",
   "toast.prefab_create_failed_body": "无法将 '{name}' 保存为预制件。请查看控制台。",
   "toast.rename_exists": "名为'{{name}}'的文件或文件夹已存在。",

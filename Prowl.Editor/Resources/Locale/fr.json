@@ -57,6 +57,8 @@
   "toast.cursor_locked_msg": "Appuyez sur Echap pour liberer.",
   "toast.cursor_lock_failed": "Verrouillage du curseur echoue",
   "toast.cursor_lock_failed_msg": "Aucune vue de jeu disponible.",
+  "toast.drop_imported": "Assets ajoutes",
+  "toast.drop_imported_msg": "{{count}} fichier(s) ajoute(s) dans '{{folder}}'.",
   "toast.prefab_create_failed": "Prefab non cree",
   "toast.prefab_create_failed_body": "'{name}' n'a pas pu etre enregistre comme prefab. Voir la console.",
   "toast.rename_exists": "Un fichier ou dossier nomme '{{name}}' existe deja.",

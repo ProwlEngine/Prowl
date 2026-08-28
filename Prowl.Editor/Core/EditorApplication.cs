@@ -274,6 +274,8 @@ public class EditorApplication : Game
         {
             SaveEditorWindowState();
         };
+
+        Window.FileDrop += ExternalAssetDrop.Enqueue;
     }
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -453,8 +455,10 @@ public class EditorApplication : Game
             EditorAssetBackend.Instance?.Refresh();
         _wasFocused = focused;
 
+        ExternalAssetDrop.ProcessPending();
+
         // Process file changes optionally only when window is focused
-        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused;
+        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || ExternalAssetDrop.ForceProcessActive;
         if (canProcessAssets)
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
