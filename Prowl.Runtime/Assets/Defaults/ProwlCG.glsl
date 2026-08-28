@@ -32,16 +32,6 @@ vec3 gammaToLinearSpace(vec3 gamma)
 }
 // ============================================================================
 
-float linearizeDepth(float depth, float near, float far) 
-{
-    float z = depth * 2.0 - 1.0; // Back to NDC [-1,1] range
-    return (2.0 * near * far) / (far + near - z * (far - near));
-}
-
-float linearizeDepthFromProjection(float depth) {
-    return linearizeDepth(depth, _ProjectionParams.y, _ProjectionParams.z);
-}
-
 // A projection matrix already says which kind it is, in the row that produces w. A perspective one
 // puts view-space z there so the divide happens (m[2][3] = 1, m[3][3] = 0); an orthographic one
 // leaves w at 1 so it does not (m[2][3] = 0, m[3][3] = 1). Reading it costs one compare and needs no
@@ -51,6 +41,33 @@ bool isPerspective(mat4 proj) { return proj[3][3] <= 0.5; }
 
 bool isOrthographic() { return isOrthographic(prowl_MatP); }
 bool isPerspective() { return isPerspective(prowl_MatP); }
+
+// Depth as sampled is what OpenGL's viewport transform wrote. Prowl's projections are DirectX style
+// and emit clip z in [0, w], so that transform lands them in [0.5, 1] rather than filling the buffer;
+// undoing it is the first step of reconstructing anything from a depth sample, and it is the same
+// remap getNDCFromScreenPos applies.
+float screenDepthToNDC(float depth) { return depth * 2.0 - 1.0; }
+
+// Perspective depth is hyperbolic, spending most of its range close to the camera.
+float linearizeDepth(float depth, float near, float far)
+{
+    float ndc = screenDepthToNDC(depth);
+    return (near * far) / (far - ndc * (far - near));
+}
+
+// Orthographic depth is already linear in view space, so it only needs its range put back. Running
+// it through the perspective reconstruction instead reports a curve where the buffer holds a line.
+float linearizeDepthOrtho(float depth, float near, float far)
+{
+    return near + screenDepthToNDC(depth) * (far - near);
+}
+
+float linearizeDepthFromProjection(float depth)
+{
+    return isOrthographic()
+        ? linearizeDepthOrtho(depth, _ProjectionParams.y, _ProjectionParams.z)
+        : linearizeDepth(depth, _ProjectionParams.y, _ProjectionParams.z);
+}
 
 // Vertical field of view the sky falls back to when the camera has none of its own.
 #define PROWL_SKY_ORTHO_FOV 1.0471975512
