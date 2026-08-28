@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -561,7 +561,7 @@ public class EditorApplication : Game
             // Ghost buttons tint their icon by variant: green Play when stopped, red Stop while playing,
             // amber Pause when paused; step stays neutral.
             var play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
-                .OnClick(() => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); })
+                .OnClick(RequestTogglePlayMode)
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
@@ -1525,6 +1525,63 @@ public class EditorApplication : Game
     // ================================================================
     //  Play Mode
     // ================================================================
+
+    /// <summary>
+    /// Raised when something asks to start or stop play mode, before any of it happens. A handler with
+    /// work the user has to resolve first holds the transition with
+    /// <see cref="PlayModeRequest.Defer"/> and asks again once they have.
+    /// </summary>
+    public static event Action<PlayModeRequest> PlayModeRequested;
+
+    /// <summary>Asks to start play mode. Held if any handler has something outstanding.</summary>
+    public static void RequestPlayMode()
+    {
+        if (Application.IsPlaying || Instance == null) return;
+
+        if (Held(entering: true)) return;
+
+        Instance.EnterPlayMode();
+    }
+
+    /// <summary>Asks to stop play mode. Held if any handler has something outstanding.</summary>
+    public static void RequestExitPlayMode()
+    {
+        if (!Application.IsPlaying || Instance == null) return;
+
+        if (Held(entering: false)) return;
+
+        Instance.ExitPlayMode();
+    }
+
+    /// <summary>Asks for whichever of the two is the opposite of now, which is what the play button does.</summary>
+    public static void RequestTogglePlayMode()
+    {
+        if (Application.IsPlaying) RequestExitPlayMode();
+        else RequestPlayMode();
+    }
+
+    private static bool Held(bool entering)
+    {
+        var request = new PlayModeRequest(entering);
+
+        try
+        {
+            PlayModeRequested?.Invoke(request);
+        }
+        catch (Exception ex)
+        {
+            // A handler that throws must not leave the play button dead. Letting the transition
+            // through is the safer failure: the alternative is an editor that cannot be played in
+            // and does not say why.
+            Runtime.Debug.LogError($"A play mode handler threw, so the transition went ahead anyway: {ex}");
+            return false;
+        }
+
+        if (!request.IsDeferred) return false;
+
+        Runtime.Debug.Log($"{(entering ? "Entering" : "Exiting")} play mode is waiting on {request.DeferredBy}.");
+        return true;
+    }
 
     private void EnterPlayMode()
     {
