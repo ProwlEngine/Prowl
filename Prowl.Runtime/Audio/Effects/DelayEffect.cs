@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio.Native;
@@ -47,7 +46,7 @@ public sealed class DelayEffect : AudioEffect
         {
             FrameCount = Math.Max(1, frameCount);
             Channels = Math.Max(1, channels);
-            Buffer = new float[GetNextPowerOfTwo((UInt32)(FrameCount * Channels))];
+            Buffer = new float[FrameCount * Channels];
         }
     }
 
@@ -171,21 +170,5 @@ public sealed class DelayEffect : AudioEffect
         }
 
         line.Cursor = cursor;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static UInt32 GetNextPowerOfTwo(UInt32 value)
-    {
-        if (value <= 1)
-            return 1;
-
-        value--;
-        value |= value >> 1;
-        value |= value >> 2;
-        value |= value >> 4;
-        value |= value >> 8;
-        value |= value >> 16;
-        value++;
-        return value;
     }
 }
