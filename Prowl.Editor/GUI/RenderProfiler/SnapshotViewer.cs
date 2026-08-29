@@ -74,37 +74,26 @@ public class SnapshotViewerPanel : DockPanel
         {
             DrawToolbar(paper);
 
-            paper.Box("snap_toolbar_div")
-                .Height(DividerHeight)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
+            EditorGUI.Divider(paper, "snap_toolbar_div");
 
             if (_snapshot == null)
             {
-                Origami.Label(paper, "snap_empty", "No snapshot loaded")
-                    .Muted()
-                    .Show();
+                EditorGUI.EmptyState(paper, "snap_empty", "No snapshot loaded", EditorTheme.DefaultFont!);
                 return;
             }
 
             _flame.Draw(paper, _snapshot.Frame, FlameGraphHeight);
 
-            paper.Box("snap_flame_div")
-                .Height(DividerHeight)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
+            EditorGUI.Divider(paper, "snap_flame_div");
 
             using (paper.Row("snap_contents").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
             {
-                float contentsHeight = height - ToolbarHeight - FlameGraphHeight - DividerHeight * 2f;
+                float contentsHeight = Math.Max(0f, height - ToolbarHeight - FlameGraphHeight - DividerHeight * 2f);
                 _hierarchy.Draw(paper, _snapshot.Frame, HierarchyPanelWidth, contentsHeight);
 
-                paper.Box("snap_contents_vdiv")
-                    .Width(1)
-                    .IsNotInteractable()
-                    .BackgroundColor(EditorTheme.BorderStrong);
+                EditorGUI.VerticalDivider(paper, "snap_contents_vdiv");
 
-                float detailPanelWidth = width - HierarchyPanelWidth - DividerHeight;
+                float detailPanelWidth = Math.Max(0f, width - HierarchyPanelWidth - DividerHeight);
                 DrawSelectionInspector(paper, detailPanelWidth, contentsHeight);
             }
         }

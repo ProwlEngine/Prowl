@@ -269,6 +269,26 @@ public static class EditorGUI
         if (verticalMargin > 0f) b.Margin(0, 0, verticalMargin, verticalMargin);
     }
 
+    public static void VerticalDivider(Paper paper, string id)
+    {
+        paper.Box(id).Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+    }
+
+    public static void StatRow(Paper paper, string id, string left, string right, Color? rightColor = null)
+    {
+        using (paper.Row(id).Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
+        {
+            Origami.Label(paper, $"{id}_left", left).Muted().AlignLeft().Show();
+            paper.Box($"{id}_spacer").Width(UnitValue.Stretch());
+            var value = Origami.Label(paper, $"{id}_right", right).AlignRight();
+            if (rightColor.HasValue)
+                value.TextColor(rightColor.Value);
+            else
+                value.Muted();
+            value.Show();
+        }
+    }
+
     /// <summary>
     /// A grouped section panel that visually nests its content: a soft rounded inset card with a clean
     /// title strip (icon optional) + divider and a padded body. Use to group related rows/controls.

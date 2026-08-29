@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Profiling;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.OrigamiUI.Charts;
 using Prowl.PaperUI;
@@ -47,10 +48,7 @@ public sealed class ProfilerFlameGraphView
         {
             if (frame == null)
             {
-                Origami.Label(paper, $"{_id}_empty", "No frame selected")
-                    .Muted()
-                    .AlignCenter()
-                    .Show();
+                EditorGUI.EmptyState(paper, $"{_id}_empty", "No frame selected", EditorTheme.DefaultFont!);
                 return;
             }
 

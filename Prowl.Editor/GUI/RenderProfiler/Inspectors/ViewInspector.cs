@@ -38,9 +38,7 @@ public sealed class ProfilerViewInspector
     {
         if (view == null)
         {
-            Origami.Label(paper, "rdp_view_empty", "No view selected")
-                .Muted()
-                .Show();
+            EditorGUI.EmptyState(paper, "rdp_view_empty", "No view selected", EditorTheme.DefaultFont!);
             return;
         }
 

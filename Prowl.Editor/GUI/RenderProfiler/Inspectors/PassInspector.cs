@@ -39,9 +39,7 @@ public sealed class ProfilerPassInspector : IDisposable
     {
         if (view == null || pass == null)
         {
-            Origami.Label(paper, "rdp_pass_empty", "No pass selected")
-                .Muted()
-                .Show();
+            EditorGUI.EmptyState(paper, "rdp_pass_empty", "No pass selected", EditorTheme.DefaultFont!);
             return;
         }
 
@@ -139,23 +137,11 @@ public sealed class ProfilerPassInspector : IDisposable
     // texture's attachments nest as children instead of the two kinds looking unrelated.
     private void DrawResourceCard(Paper paper, string id, string title, IReadOnlyList<ResourceRef> resources, ISnapshotResourceResolver? resolver, float width)
     {
-        using (paper.Column(id + "_card")
-            .Height(UnitValue.Auto)
-            .BorderColor(EditorTheme.BorderStrong)
-            .BorderWidth(1f)
-            .Rounded(EditorTheme.Roundness)
-            .Padding(8f)
-            .ColBetween(6f)
-            .Enter())
+        EditorGUI.Group(paper, id, title, () =>
         {
-            InspectorKit.SectionHeading(paper, id + "_hdr", title);
-
             if (resources.Count == 0)
             {
-                paper.Box(id + "_empty").Height(ResourceTreeHeight)
-                    .Text("No resources", EditorTheme.DefaultFont).TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                    .IsNotInteractable();
+                EditorGUI.EmptyState(paper, id + "_empty", "No resources", EditorTheme.DefaultFont!);
                 return;
             }
 
@@ -177,7 +163,7 @@ public sealed class ProfilerPassInspector : IDisposable
                 })
                 .ExpandStateSink(_resourceExpanded)
                 .Show();
-        }
+        });
     }
 
 

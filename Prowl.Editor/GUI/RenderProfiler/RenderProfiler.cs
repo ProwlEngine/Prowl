@@ -79,36 +79,19 @@ public partial class RenderProfilerPanel : DockPanel
         {
             DrawToolbar(paper);
 
-            paper.Box("rdp_toolbar_div")
-                .Height((UnitValue)1)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
-
+            EditorGUI.Divider(paper, "rdp_toolbar_div");
             DrawFramePicker(paper);
-
-            paper.Box("rdp_picker_div")
-                .Height((UnitValue)1)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
-
+            EditorGUI.Divider(paper, "rdp_picker_div");
             _flame.Draw(paper, SelectedFrame, FlameGraphHeight);
-
-            paper.Box("rdp_flame_div")
-                .Height((UnitValue)1)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
+            EditorGUI.Divider(paper, "rdp_flame_div");
 
             using (paper.Row("rdp_contents").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
             {
-                float contentsHeight = height - ToolbarHeight - FramePickerHeight - FlameGraphHeight - DividerHeight * 3f;
+                float contentsHeight = Math.Max(0f, height - ToolbarHeight - FramePickerHeight - FlameGraphHeight - DividerHeight * 3f);
                 _hierarchy.Draw(paper, SelectedFrame, HierarchyPanelWidth, contentsHeight);
+                EditorGUI.VerticalDivider(paper, "rdp_contents_vdiv");
 
-                paper.Box("rdp_contents_vdiv")
-                    .Width(1)
-                    .IsNotInteractable()
-                    .BackgroundColor(EditorTheme.BorderStrong);
-
-                float detailPanelWidth = width - HierarchyPanelWidth - DividerHeight;
+                float detailPanelWidth = Math.Max(0f, width - HierarchyPanelWidth - DividerHeight);
                 DrawSelectionInspector(paper, detailPanelWidth, contentsHeight);
             }
         }
@@ -119,8 +102,8 @@ public partial class RenderProfilerPanel : DockPanel
     {
         using (paper.Row("rdp_toolbar")
             .Height(ToolbarHeight)
-            .ColBetween(6)
             .Padding(6)
+            .RowBetween(6)
             .Enter())
         {
             Origami.IconButton(paper, "record", EditorIcons.CircleDot_I, TogglePaused)
@@ -132,13 +115,9 @@ public partial class RenderProfilerPanel : DockPanel
                 .Show();
 
             Origami.Label(paper, "record_label", _profiler.IsPaused ? "Paused" : "Recording")
-                .AlignCenter()
                 .AlignLeft()
-                .Height(20)
                 .Show();
-
-            paper.Box("rdp_toolbar_spacer");
-
+            paper.Box("rdp_toolbar_spacer").Width(UnitValue.Stretch());
             Origami.Button(paper, "snapshot", "Snapshot", _profiler.RequestCaptureNextFrame)
                 .Disabled(_profiler.IsCaptureArmed)
                 .Warning()

@@ -14,9 +14,7 @@ public static class ProfilerCommandBufferInspector
     {
         if (commandBuffer == null)
         {
-            Origami.Label(paper, "rdp_cb_empty", "No command buffer selected")
-                .Muted()
-                .Show();
+            EditorGUI.EmptyState(paper, "rdp_cb_empty", "No command buffer selected", EditorTheme.DefaultFont!);
             return;
         }
 

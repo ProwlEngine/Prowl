@@ -21,9 +21,7 @@ public static class ProfilerFrameInspector
     {
         if (frame == null)
         {
-            Origami.Label(paper, "rdp_frame_empty", "No frame selected")
-                .Muted()
-                .Show();
+            EditorGUI.EmptyState(paper, "rdp_frame_empty", "No frame selected", EditorTheme.DefaultFont!);
             return;
         }
 

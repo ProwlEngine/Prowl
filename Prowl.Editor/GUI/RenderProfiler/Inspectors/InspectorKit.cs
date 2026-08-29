@@ -57,30 +57,11 @@ public static class InspectorKit
     // ── Card drawer ────────────────────────────────────────────────
 
     public static void SectionHeading(Paper paper, string id, string title)
-    {
-        Origami.Label(paper, id, title)
-            .Subheading()
-            .AlignLeft()
-            .Height(20f)
-            .Show();
-    }
+        => EditorGUI.SectionHeader(paper, id, title);
 
 
     public static void SectionCard(Paper paper, string id, string title, Action drawContent)
-    {
-        using (paper.Column(id + "_card")
-            .Height(UnitValue.Auto)
-            .BorderColor(EditorTheme.BorderStrong)
-            .BorderWidth(1f)
-            .Rounded(EditorTheme.Roundness)
-            .Padding(8f)
-            .ColBetween(6f)
-            .Enter())
-        {
-            SectionHeading(paper, id + "_hdr", title);
-            drawContent();
-        }
-    }
+        => EditorGUI.Group(paper, id, title, drawContent);
 
 
     // Gated chart drawer - a history of one frame (SingleFrameHistory, i.e. a snapshot) has nothing to

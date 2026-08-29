@@ -24,10 +24,7 @@ public partial class RenderProfilerPanel
         {
             DrawFrameBars(paper);
 
-            paper.Box("rdp_picker_vdiv")
-                .Width(1)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
+            EditorGUI.VerticalDivider(paper, "rdp_picker_vdiv");
 
             DrawFrameStatsBox(paper);
         }
@@ -141,9 +138,7 @@ public partial class RenderProfilerPanel
 
             if (frame == null)
             {
-                Origami.Label(paper, "rdp_stats_empty", "No frames captured")
-                    .Muted()
-                    .Show();
+                EditorGUI.EmptyState(paper, "rdp_stats_empty", "No frames captured", EditorTheme.DefaultFont!);
                 return;
             }
 
@@ -162,65 +157,10 @@ public partial class RenderProfilerPanel
                 avgGpuMs = sumGpuMs / history.Count;
             }
 
-            using (paper.Row("rdp_stats_row1").Width(UnitValue.Stretch()).Height(28).Enter())
-            {
-                Origami.Label(paper, "rdp_stats_frame_num", $"Frame {frame.FrameIndex}")
-                    .MD()
-                    .AlignLeft()
-                    .Show();
-
-                paper.Box("rdp_stats_row1_spacer").Width(UnitValue.Stretch());
-
-                Origami.Label(paper, "rdp_stats_views", $"{frame.ViewCount} views")
-                    .Muted()
-                    .AlignRight()
-                    .Show();
-            }
-
-            using (paper.Row("rdp_stats_row2").Width(UnitValue.Stretch()).Height(18).Enter())
-            {
-                Origami.Label(paper, "rdp_stats_capture", frame.HasCaptureDepth ? "Capture" : "Live")
-                    .Muted()
-                    .AlignLeft()
-                    .Show();
-
-                paper.Box("rdp_stats_row2_spacer").Width(UnitValue.Stretch());
-
-                Origami.Label(paper, "rdp_stats_fps", $"{frame.Fps:F1} FPS")
-                    .TextColor(BudgetColor(frame.Fps))
-                    .AlignRight()
-                    .Show();
-            }
-
-            using (paper.Row("rdp_stats_row3").Width(UnitValue.Stretch()).Height(18).Enter())
-            {
-                Origami.Label(paper, "rdp_stats_cpu", $"CPU {frame.FrameMilliseconds:F2} ms")
-                    .TextColor(BudgetColor(MsToFps(frame.FrameMilliseconds)))
-                    .AlignLeft()
-                    .Show();
-
-                paper.Box("rdp_stats_row3_spacer").Width(UnitValue.Stretch());
-
-                Origami.Label(paper, "rdp_stats_cpu_avg", $"avg {avgFrameMs:F2} ms")
-                    .Muted()
-                    .AlignRight()
-                    .Show();
-            }
-
-            using (paper.Row("rdp_stats_row4").Width(UnitValue.Stretch()).Height(18).Enter())
-            {
-                Origami.Label(paper, "rdp_stats_gpu", $"GPU {frame.GpuMilliseconds:F2} ms")
-                    .TextColor(BudgetColor(MsToFps(frame.GpuMilliseconds)))
-                    .AlignLeft()
-                    .Show();
-
-                paper.Box("rdp_stats_row4_spacer").Width(UnitValue.Stretch());
-
-                Origami.Label(paper, "rdp_stats_gpu_avg", $"avg {avgGpuMs:F2} ms")
-                    .Muted()
-                    .AlignRight()
-                    .Show();
-            }
+            EditorGUI.StatRow(paper, "rdp_stats_frame", $"Frame {frame.FrameIndex}", $"{frame.ViewCount} views");
+            EditorGUI.StatRow(paper, "rdp_stats_capture", frame.HasCaptureDepth ? "Capture" : "Live", $"{frame.Fps:F1} FPS", BudgetColor(frame.Fps));
+            EditorGUI.StatRow(paper, "rdp_stats_cpu", $"CPU {frame.FrameMilliseconds:F2} ms", $"avg {avgFrameMs:F2} ms", BudgetColor(MsToFps(frame.FrameMilliseconds)));
+            EditorGUI.StatRow(paper, "rdp_stats_gpu", $"GPU {frame.GpuMilliseconds:F2} ms", $"avg {avgGpuMs:F2} ms", BudgetColor(MsToFps(frame.GpuMilliseconds)));
         }
     }
 
