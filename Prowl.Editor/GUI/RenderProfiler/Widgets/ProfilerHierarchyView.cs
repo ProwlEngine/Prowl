@@ -205,7 +205,7 @@ public sealed class ProfilerHierarchyView
         nodes.Add(new TreeNode
         {
             Id = id,
-            Label = $"{pipeline.ShaderName} ({pipeline.ShaderPassName}, {pipeline.Variant})",
+            Label = $"{pipeline.ShaderName} ({pipeline.ShaderPassName})",
             HasChildren = hasChildren,
             Depth = depth,
             UserData = new HierarchyNode(HierarchyNodeKind.Pipeline, view, pass, commandBuffer, pipeline, null, -1),
