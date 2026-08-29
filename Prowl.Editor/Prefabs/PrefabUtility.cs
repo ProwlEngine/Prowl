@@ -623,7 +623,7 @@ public static partial class PrefabUtility
 
         // Copy source value to instance
         var sourceValue = GetMemberValue(sourceTarget, sourceFieldPath);
-        SetMemberValue(instanceTarget, instanceFieldPath, sourceValue);
+        SetMemberValue(instanceTarget, instanceFieldPath, CopyFromSource(sourceValue, source, root!));
         if (instanceTarget is MonoBehaviour reverted)
         {
             reverted.HierarchyStateChanged();
@@ -657,6 +657,65 @@ public static partial class PrefabUtility
         }
 
         EditorSceneManager.MarkDirty();
+    }
+
+    /// <summary>
+    /// A value read off the prefab, in a form the instance can own. What the source holds belongs to
+    /// the tree every instance of that prefab is compared against, so assigning it outright would
+    /// have the instance share it: editing the value afterwards would change the baseline, the
+    /// override would stop being detected, and a second instance reverting the same member would end
+    /// up holding the very same object.
+    /// <para/>
+    /// A reference into the prefab becomes the instance's own counterpart, the way a refresh rewires
+    /// one. An asset, and anything else the prefab only points at, stays shared.
+    /// </summary>
+    private static object? CopyFromSource(object? sourceValue, GameObject source, GameObject instanceRoot)
+    {
+        if (sourceValue == null) return null;
+
+        // Nothing to share. Matches what IsSameByValue already treats as a value.
+        Type type = sourceValue.GetType();
+        if (type.IsValueType || type == typeof(string)) return sourceValue;
+
+        var context = new CloneContext();
+        PairSourceToInstance(source, instanceRoot, context);
+
+        // An engine object is shared wherever a clone reaches one, but a clone always treats its own
+        // root as owned, so Cloner.Clone would copy an asset outright. Answered here instead.
+        if (sourceValue is EngineObject)
+            return context.TryGetTarget(sourceValue, out object? paired) ? paired : sourceValue;
+
+        return Cloner.Clone(sourceValue, context);
+    }
+
+    /// <summary>
+    /// Map every object of the prefab onto the instance object standing for it, contents sealed, so
+    /// a clone reading from the prefab rewrites a reference into it rather than copying the tree.
+    /// Read-only, unlike <see cref="PairToSource"/>, which creates what the instance is missing.
+    /// </summary>
+    private static void PairSourceToInstance(GameObject source, GameObject instance, CloneContext context)
+    {
+        context.AddTarget(source, instance, walkContents: false);
+        context.AddTarget(source.Transform, instance.Transform, walkContents: false);
+
+        foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
+        {
+            Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
+            if (sourceId == Guid.Empty) continue;
+
+            MonoBehaviour? match = instance.GetComponents<MonoBehaviour>()
+                .FirstOrDefault(c => instance.GetComponentSourceIdentifier(c) == sourceId);
+            if (match.IsValid()) context.AddTarget(sourceComponent, match!, walkContents: false);
+        }
+
+        foreach (GameObject sourceChild in source.Children)
+        {
+            Guid sourceId = sourceChild.SourceIdentifier;
+            if (sourceId == Guid.Empty) continue;
+
+            GameObject? match = instance.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
+            if (match.IsValid()) PairSourceToInstance(sourceChild, match!, context);
+        }
     }
 
     // ================================================================
@@ -1348,19 +1407,31 @@ public static partial class PrefabUtility
     }
 
     /// <summary>
-    /// Drop what was cached for prefabs that have just been deleted, so instances of one stop recording
-    /// overrides against a tree nothing can produce any more.
+    /// Drop what was cached for prefabs that have just been deleted, except where instances of one are
+    /// open. There the tree is the last thing that prefab said, and it is the only baseline those
+    /// instances have left.
     /// </summary>
     internal static void OnAssetsDeleted(string[] paths)
     {
         var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
-        // The entries are gone by now, so which guid each path was is unanswerable. Drop every cached
-        // prefab the database can no longer resolve instead.
+        Scene? scene = Scene.Current;
+
+        // The entries are gone by now, so which guid each path was is unanswerable. Go by which cached
+        // prefabs the database can no longer resolve instead.
         foreach (Guid prefabGuid in _sourceCache.Keys.ToList())
-            if (db.GetEntry(prefabGuid) == null)
-                InvalidateSource(prefabGuid);
+        {
+            if (db.GetEntry(prefabGuid) != null) continue;
+
+            // A deleted prefab is often on its way back, from an undo or a branch that still has it.
+            // Keeping the tree is what lets its instances go on recording overrides while it is away.
+            // Dropped instead, an edit made in the meantime is not recorded anywhere, and the refresh
+            // that runs the moment the prefab returns overwrites it without trace.
+            if (scene != null && scene.AllObjects.Any(go => go.PrefabAssetId == prefabGuid)) continue;
+
+            InvalidateSource(prefabGuid);
+        }
     }
 
     /// <summary>
@@ -1872,7 +1943,7 @@ public static partial class PrefabUtility
     {
         if (!instanceGO.IsPrefabInstance) return;
 
-        var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
+        var source = GetComparisonBaseline(instanceGO.PrefabAssetId);
         if (source == null) return;
 
         // The component this one came from, found by identity rather than by position, so adding or
@@ -1980,7 +2051,7 @@ public static partial class PrefabUtility
     {
         if (!instanceGO.IsPrefabInstance) return;
 
-        var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
+        var source = GetComparisonBaseline(instanceGO.PrefabAssetId);
         if (source == null) return;
 
         string pathPrefix = GetOverridePath(instanceGO, "");
@@ -2175,6 +2246,24 @@ public static partial class PrefabUtility
     /// dead one, to buy nothing the collector was not already going to do.
     /// </summary>
     private static void InvalidateSource(Guid prefabGuid) => _sourceCache.Remove(prefabGuid);
+
+    /// <summary>
+    /// What an instance is compared against when deciding it has overridden something, or null when
+    /// there is nothing to compare against and it says so.
+    /// <para/>
+    private static GameObject? GetComparisonBaseline(Guid prefabGuid)
+    {
+        GameObject? source = GetCachedPrefabSource(prefabGuid);
+        if (source != null) return source;
+
+        // Reached once per drawn component per frame, so this must not log per occurrence.
+        string name = EditorAssetBackend.Instance?.GetEntry(prefabGuid)?.Path ?? prefabGuid.ToString();
+        Runtime.Debug.LogWarningOnce($"prefab.nobaseline.{prefabGuid}",
+            $"[Prefab] '{name}' could not be loaded, so changes to its instances are not being tracked " +
+            "and will be replaced by the prefab's own values once it loads. Unpack an instance to keep " +
+            "what it holds.");
+        return null;
+    }
 
 
 

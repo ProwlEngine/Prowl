@@ -1085,6 +1085,49 @@ public class PrefabTests : EditorTestHarness
         Assert.Empty(live.PrefabOverrides);
     }
 
+    /// <summary>
+    /// A prefab can go away while its instances stay open, from a delete, an undo, or a branch that
+    /// does not have it. What it last said is the only baseline those instances have, so it is kept:
+    /// dropped instead, nothing records an edit made while the prefab is away, and the refresh that
+    /// runs the moment it comes back replaces that edit with the prefab's own value.
+    /// </summary>
+    [Fact]
+    public void EditsMadeWhileThePrefabIsDeleted_SurviveItComingBack()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "Gone.prefab");
+
+        GameObject instance = Inst(g);
+        SetSceneCurrent(instance);
+
+        // Reading it once before it goes is what leaves a baseline behind.
+        OverrideComp comp = Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!;
+        PrefabUtility.RecordComponentOverrides(Scene.Current!.RootObjects.First(), comp);
+
+        string absolute = AssetAbsolutePath("Gone.prefab");
+        string prefabText = File.ReadAllText(absolute);
+        string metaText = File.ReadAllText(MetaFile.GetMetaPath(absolute));
+
+        Assets.DeleteAsset("Gone.prefab");
+        Assert.Null(AssetDatabase.Get(g));
+
+        // The edit the user makes while it is away.
+        comp.A = 77;
+        PrefabUtility.RecordComponentOverrides(Scene.Current!.RootObjects.First(), comp);
+        Assert.True(PrefabUtility.IsPropertyOverridden(Scene.Current!.RootObjects.First(),
+            PrefabUtility.GetOverridePath(Scene.Current!.RootObjects.First(), comp, "A")));
+
+        // The prefab comes back under the same guid, which is what restoring the meta gives it.
+        File.WriteAllText(absolute, prefabText);
+        File.WriteAllText(MetaFile.GetMetaPath(absolute), metaText);
+        Assets.Refresh();
+        Assert.NotNull(AssetDatabase.Get(g));
+
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Equal(77, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
+    }
+
     // ---------------------------------------------------------------------
     // CreatePrefab argument validation
     // ---------------------------------------------------------------------
@@ -1414,6 +1457,85 @@ public class PrefabTests : EditorTestHarness
 
         Assert.Equal(5, comp.A);
         Assert.False(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "A")));
+    }
+
+    /// <summary>
+    /// Reverting reads the value off the tree every instance of the prefab is compared against, so it
+    /// has to hand the instance something of its own. Sharing that object would have an edit to one
+    /// instance land on the other instances and on the baseline itself, after which the override
+    /// stops being detected at all.
+    /// </summary>
+    [Fact]
+    public void RevertSingleOverride_DoesNotHandTheInstanceThePrefabsOwnList()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<ListComp>().Values = [1, 2, 3];
+        Guid g = CreatePrefabAsset(root, "RevertList.prefab");
+
+        GameObject a = Inst(g);
+        GameObject b = Inst(g);
+        SetSceneCurrent(a, b);
+
+        ListComp compA = a.GetComponent<ListComp>()!;
+        ListComp compB = b.GetComponent<ListComp>()!;
+        compA.Values = [9];
+        compB.Values = [8];
+        PrefabUtility.RecordComponentOverrides(a, compA);
+        PrefabUtility.RecordComponentOverrides(b, compB);
+
+        // The same path on both, since it names the prefab's objects rather than the instance's.
+        string path = PrefabUtility.GetOverridePath(a, compA, "Values");
+        PrefabUtility.RevertSingleOverride(a, path);
+        PrefabUtility.RevertSingleOverride(b, path);
+
+        Assert.Equal([1, 2, 3], compA.Values);
+        Assert.Equal([1, 2, 3], compB.Values);
+        Assert.NotSame(compA.Values, compB.Values);
+
+        // Neither instance is holding the other's list.
+        compA.Values.Add(4);
+        Assert.Equal([1, 2, 3], compB.Values);
+
+        // Nor the baseline's, which would make the edit compare equal to the prefab forever.
+        PrefabUtility.RecordComponentOverrides(a, compA);
+        Assert.True(PrefabUtility.IsPropertyOverridden(a, path));
+    }
+
+    /// <summary>
+    /// A reverted reference into the prefab has to land on the instance's own copy, the same as one
+    /// a refresh rewires. The prefab's objects are in no scene, so pointing at them is a reference
+    /// into a cache that the next reimport drops.
+    /// </summary>
+    [Fact]
+    public void RevertSingleOverride_PointsAReferenceAtTheInstancesOwnObject()
+    {
+        var root = new GameObject("Root");
+        RefComp refComp = root.AddComponent<RefComp>();
+        var a = new GameObject("A");
+        OverrideComp aComp = a.AddComponent<OverrideComp>();
+        a.SetParent(root);
+        var b = new GameObject("B");
+        b.AddComponent<OverrideComp>();
+        b.SetParent(root);
+        refComp.Other = aComp; // the prefab points at A
+
+        Guid g = CreatePrefabAsset(root, "RevertRef.prefab");
+        GameObject instance = Inst(g);
+        SetSceneCurrent(instance);
+
+        RefComp instRef = instance.GetComponent<RefComp>()!;
+        OverrideComp instA = instance.Children[0].GetComponent<OverrideComp>()!;
+        OverrideComp instB = instance.Children[1].GetComponent<OverrideComp>()!;
+
+        instRef.Other = instB;
+        PrefabUtility.RecordComponentOverrides(instance, instRef);
+        string path = PrefabUtility.GetOverridePath(instance, instRef, "Other");
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, path));
+
+        PrefabUtility.RevertSingleOverride(instance, path);
+
+        Assert.Same(instA, instRef.Other);
+        Assert.Same(instance, instRef.Other!.GameObject.Parent);
     }
 
     [Fact]
@@ -5360,10 +5482,17 @@ public class PrefabTests : EditorTestHarness
 
     #endregion
 
-    #region A deleted prefab stops being a comparison baseline
+    #region A deleted prefab goes on being a comparison baseline
 
+    /// <summary>
+    /// This asserted the opposite until the edits made while a prefab is away were found to be lost
+    /// when it came back. A delete is usually temporary, from an undo or a branch that does not have
+    /// the prefab, and what it last said is a perfectly good baseline that is still in memory. The
+    /// tree is only dropped once no instance of it is open, so nothing is compared against a prefab
+    /// nobody is using.
+    /// </summary>
     [Fact]
-    public void DeletingThePrefab_StopsItsInstancesRecordingOverridesAgainstIt()
+    public void DeletingThePrefab_KeepsWhatItLastSaidAsTheBaseline()
     {
         Guid guid = MakePrefab("Deleted.prefab");
         GameObject instance = Inst(guid);
@@ -5378,8 +5507,9 @@ public class PrefabTests : EditorTestHarness
         instance.GetComponent<OverrideComp>()!.B = 7;
         PrefabUtility.ReconcileInstance(instance);
 
-        // Nothing to compare against any more, so nothing new is recorded.
-        Assert.Single(instance.PrefabOverrides);
+        // Still something to compare against, so the edit is recorded and survives the prefab
+        // returning rather than being replaced by whatever the prefab says about that member.
+        Assert.Equal(2, instance.PrefabOverrides.Count);
     }
 
     #endregion
