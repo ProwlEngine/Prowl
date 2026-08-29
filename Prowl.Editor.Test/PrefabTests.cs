@@ -1040,6 +1040,51 @@ public class PrefabTests : EditorTestHarness
         Assert.False(File.Exists(AssetAbsolutePath("X.prefab")));
     }
 
+    /// <summary>
+    /// A prefab file can change while the game is playing: an external edit, a branch switch, a
+    /// model reimport. Nothing may rebuild instances mid session, but the baseline they are compared
+    /// against has to be dropped anyway. Left in place, the prefab's own change reads as an instance
+    /// override the moment anything reconciles after play, and the instance stops following the
+    /// prefab from then on.
+    /// </summary>
+    [Fact]
+    public void PrefabChangedDuringPlayMode_IsNotRecordedAsAnOverrideAfterwards()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "PlayStale.prefab");
+
+        var instance = Inst(g);
+        SetSceneCurrent(instance);
+
+        // Reading the prefab once before play starts is what fills the comparison baseline.
+        PrefabUtility.RecordComponentOverrides(instance, instance.GetComponent<OverrideComp>()!);
+        Assert.Empty(instance.PrefabOverrides);
+
+        Application.IsPlaying = true;
+        try
+        {
+            EditPrefabSource(g, "PlayStale.prefab", s => s.GetComponent<OverrideComp>()!.A = 42);
+        }
+        finally
+        {
+            // What the editor does on both play transitions. It reaches the loaded asset, not the
+            // tree the prefab system compares instances against.
+            Assets.UnloadAll();
+            Application.IsPlaying = false;
+        }
+
+        // Leaving play reloads the scene, which is what brings its instances up to date.
+        PrefabUtility.RefreshAllInstances(g);
+        GameObject live = Scene.Current!.RootObjects.First();
+        Assert.Equal(42, live.GetComponent<OverrideComp>()!.A);
+
+        // Saving the scene, or pressing play again, reconciles. A change the prefab made is not an
+        // override the instance made.
+        PrefabUtility.ReconcileOpenScene();
+        Assert.Empty(live.PrefabOverrides);
+    }
+
     // ---------------------------------------------------------------------
     // CreatePrefab argument validation
     // ---------------------------------------------------------------------
