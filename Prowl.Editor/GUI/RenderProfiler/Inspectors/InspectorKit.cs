@@ -274,8 +274,6 @@ public static class InspectorKit
         return values;
     }
 
-    public static IReadOnlyList<double> CounterSeries(IProfilerHistory history, string name) => history.Counter(name);
-
     public static double CounterValue(ProfiledFrame? frame, string name)
     {
         if (frame == null || !CounterIndex.TryGetValue(name, out int index))
