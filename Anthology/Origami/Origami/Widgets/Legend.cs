@@ -99,7 +99,7 @@ public sealed class LegendBuilder
 
     public void Show()
     {
-        using (_paper.Column(_id).Width(_width).PaddingTop(_padding).ColBetween(_rowGap).Enter())
+        using (_paper.Column(_id).Width(_width).Height(UnitValue.Auto).PaddingTop(_padding).ColBetween(_rowGap).Enter())
         {
             for (int i = 0; i < _entries.Count; i++)
             {
