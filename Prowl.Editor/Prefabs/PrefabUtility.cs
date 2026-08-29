@@ -1314,9 +1314,6 @@ public static partial class PrefabUtility
     /// </summary>
     internal static void OnAssetsImported(string[] paths)
     {
-        if (_refreshingFromApply || Application.IsPlaying) return;
-        if (Scene.Current == null) return;
-
         var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
@@ -1325,15 +1322,21 @@ public static partial class PrefabUtility
             var entry = db.GetEntry(path);
             if (entry == null || entry.MainAssetType != typeof(PrefabAsset)) continue;
 
+            // Before anything that can skip the refresh, and never skipped itself. Whether instances
+            // may be rebuilt right now is a separate question from whether what they are compared
+            // against is still true, and an instance compared against a stale tree records the
+            // prefab's own changes as its overrides and stops following the prefab from then on.
+            InvalidateSource(entry.Guid);
+
+            // An apply is already refreshing, a play session must not have its objects rebuilt under
+            // it, there is nothing to refresh without a scene, and a prefab session's scene holds the
+            // prefab and an editor-only rig rather than instances.
+            if (_refreshingFromApply || Application.IsPlaying) continue;
+            if (Scene.Current == null || PrefabEditingMode.IsEditing) continue;
+
             try
             {
-                // Always, because the cached comparison baseline is now wrong. Saving during a prefab
-                // session reimports the very prefab being edited, so this matters there most.
-                InvalidateSource(entry.Guid);
-
-                // A session's scene holds the prefab and an editor-only rig, and no instances at all.
-                if (!PrefabEditingMode.IsEditing)
-                    RefreshAllInstances(entry.Guid);
+                RefreshAllInstances(entry.Guid);
             }
             catch (Exception ex)
             {
