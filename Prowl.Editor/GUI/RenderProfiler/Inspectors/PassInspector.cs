@@ -15,7 +15,7 @@ namespace Prowl.Editor.GUI.RenderProfiler.Inspectors;
 public sealed class ProfilerPassInspector : IDisposable
 {
     private const float ResourceRowHeight = 26f;
-    private const float ResourceTreeMaxHeight = 220f;
+    private const float ResourceTreeHeight = 240f;
     private const float ResourceTreeIndentSize = 10f;
 
     // UserData carried by every node in the Inputs/Outputs resource trees. SubTextureName is null for
@@ -140,7 +140,7 @@ public sealed class ProfilerPassInspector : IDisposable
     private void DrawResourceCard(Paper paper, string id, string title, IReadOnlyList<ResourceRef> resources, ISnapshotResourceResolver? resolver, float width)
     {
         using (paper.Column(id + "_card")
-            .Height(UnitValue.Auto)
+            .Height(ResourceTreeHeight)
             .BorderColor(EditorTheme.BorderStrong)
             .BorderWidth(1f)
             .Rounded(EditorTheme.Roundness)
@@ -152,10 +152,7 @@ public sealed class ProfilerPassInspector : IDisposable
 
             if (resources.Count == 0)
             {
-                Origami.Label(paper, id + "_empty", "None")
-                    .Muted()
-                    .SM()
-                    .Show();
+                EditorGUI.EmptyState(paper, id + "_empty", "None", EditorTheme.DefaultFont);
                 return;
             }
 
@@ -164,9 +161,8 @@ public sealed class ProfilerPassInspector : IDisposable
                 BuildResourceNodes(nodes, $"{id}_r{i}", resources[i], resolver);
 
             float treeWidth = MathF.Max(120f, width - 16f);
-            float treeHeight = MathF.Min(ResourceTreeMaxHeight, resources.Count * ResourceRowHeight);
 
-            Origami.Tree(paper, id + "_tree", treeWidth, treeHeight)
+            Origami.Tree(paper, id + "_tree", treeWidth, ResourceTreeHeight)
                 .Nodes(nodes)
                 .RowHeight(ResourceRowHeight)
                 .IndentSize(ResourceTreeIndentSize)
