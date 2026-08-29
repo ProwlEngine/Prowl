@@ -140,7 +140,7 @@ public sealed class ProfilerPassInspector : IDisposable
     private void DrawResourceCard(Paper paper, string id, string title, IReadOnlyList<ResourceRef> resources, ISnapshotResourceResolver? resolver, float width)
     {
         using (paper.Column(id + "_card")
-            .Height(ResourceTreeHeight)
+            .Height(UnitValue.Auto)
             .BorderColor(EditorTheme.BorderStrong)
             .BorderWidth(1f)
             .Rounded(EditorTheme.Roundness)
@@ -152,7 +152,10 @@ public sealed class ProfilerPassInspector : IDisposable
 
             if (resources.Count == 0)
             {
-                EditorGUI.EmptyState(paper, id + "_empty", "None", EditorTheme.DefaultFont);
+                paper.Box(id + "_empty").Height(ResourceTreeHeight)
+                    .Text("No resources", EditorTheme.DefaultFont).TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+                    .IsNotInteractable();
                 return;
             }
 
