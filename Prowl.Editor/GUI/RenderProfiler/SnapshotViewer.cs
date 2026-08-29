@@ -211,7 +211,7 @@ public class SnapshotViewerPanel : DockPanel
                             _viewInspector.Draw(paper, _selection.SelectedView, History, width);
                             break;
                         case ProfilerSelectionType.Pass:
-                            _passInspector.Draw(paper, _selection.SelectedView, _selection.SelectedPass, History, _resolver);
+                            _passInspector.Draw(paper, _selection.SelectedView, _selection.SelectedPass, History, _resolver, width);
                             break;
                     }
                 });

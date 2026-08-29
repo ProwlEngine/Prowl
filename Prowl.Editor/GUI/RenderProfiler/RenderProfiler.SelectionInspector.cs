@@ -25,7 +25,7 @@ public partial class RenderProfilerPanel
                             _viewInspector.Draw(paper, SelectedView, History, width);
                             break;
                         case ProfilerSelectionType.Pass:
-                            _passInspector.Draw(paper, SelectedView, SelectedPass, History, null);
+                            _passInspector.Draw(paper, SelectedView, SelectedPass, History, null, width);
                             break;
                         case ProfilerSelectionType.CommandBuffer:
                             ProfilerCommandBufferInspector.Draw(paper, SelectedView, SelectedPass, SelectedCommandBuffer);

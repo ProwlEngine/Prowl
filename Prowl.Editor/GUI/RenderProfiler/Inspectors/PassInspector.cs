@@ -15,6 +15,13 @@ namespace Prowl.Editor.GUI.RenderProfiler.Inspectors;
 public sealed class ProfilerPassInspector : IDisposable
 {
     private const float ResourceRowHeight = 26f;
+    private const float ResourceTreeMaxHeight = 220f;
+    private const float ResourceTreeIndentSize = 10f;
+
+    // UserData carried by every node in the Inputs/Outputs resource trees. SubTextureName is null for
+    // a resource's own root row (and for Buffer/Unknown rows, which have no children); set for a
+    // texture's attachment leaves.
+    private readonly record struct ResourceTreeNode(ResourceRef Resource, string? SubTextureName);
 
     // Cleared whenever the selected pass changes, so a stale texture/buffer selection from a
     // previously-inspected pass doesn't linger under a pass that never touched that resource.
@@ -28,7 +35,7 @@ public sealed class ProfilerPassInspector : IDisposable
     private readonly Dictionary<(uint ResourceId, uint Version, string SubName), Texture2D> _textureCache = new();
 
 
-    public void Draw(Paper paper, ProfiledView? view, ProfiledPass? pass, IProfilerHistory history, ISnapshotResourceResolver? resolver)
+    public void Draw(Paper paper, ProfiledView? view, ProfiledPass? pass, IProfilerHistory history, ISnapshotResourceResolver? resolver, float width)
     {
         if (view == null || pass == null)
         {
@@ -68,10 +75,11 @@ public sealed class ProfilerPassInspector : IDisposable
                     .Show();
             }
 
+            float resourceCardWidth = (width - 8f) / 2f;
             using (paper.Row("rdp_pass_io_row").Height(UnitValue.Auto).ColBetween(8f).Enter())
             {
-                DrawResourceCard(paper, "rdp_pass_inputs", "Inputs", pass.Inputs, resolver);
-                DrawResourceCard(paper, "rdp_pass_outputs", "Outputs", pass.Outputs, resolver);
+                DrawResourceCard(paper, "rdp_pass_inputs", "Inputs", pass.Inputs, resolver, resourceCardWidth);
+                DrawResourceCard(paper, "rdp_pass_outputs", "Outputs", pass.Outputs, resolver, resourceCardWidth);
             }
 
             if (resolver != null && _selectedResource is { Kind: ResourceRefKind.Buffer } selectedBuffer)
@@ -126,7 +134,10 @@ public sealed class ProfilerPassInspector : IDisposable
 
     // ── Input/Output resource cards ────────────────────────────────
 
-    private void DrawResourceCard(Paper paper, string id, string title, IReadOnlyList<ResourceRef> resources, ISnapshotResourceResolver? resolver)
+    // Textures and buffers used to render as two visually different widgets (a foldout with a badge
+    // vs. a plain selectable row) - both now go through the same hierarchy (Tree) widget, so a
+    // texture's attachments nest as children instead of the two kinds looking unrelated.
+    private void DrawResourceCard(Paper paper, string id, string title, IReadOnlyList<ResourceRef> resources, ISnapshotResourceResolver? resolver, float width)
     {
         using (paper.Column(id + "_card")
             .Height(UnitValue.Auto)
@@ -148,102 +159,113 @@ public sealed class ProfilerPassInspector : IDisposable
                 return;
             }
 
+            var nodes = new List<TreeNode>();
             for (int i = 0; i < resources.Count; i++)
-                DrawResourceRow(paper, $"{id}_r{i}", resources[i], resolver);
+                BuildResourceNodes(nodes, $"{id}_r{i}", resources[i], resolver);
+
+            float treeWidth = MathF.Max(120f, width - 16f);
+            float treeHeight = MathF.Min(ResourceTreeMaxHeight, resources.Count * ResourceRowHeight);
+
+            Origami.Tree(paper, id + "_tree", treeWidth, treeHeight)
+                .Nodes(nodes)
+                .RowHeight(ResourceRowHeight)
+                .IndentSize(ResourceTreeIndentSize)
+                .IsSelected(n => n.UserData is ResourceTreeNode rn && IsResourceNodeSelected(rn))
+                .OnSelect(e =>
+                {
+                    if (e.Node.UserData is ResourceTreeNode rn)
+                        SelectResourceNode(rn);
+                })
+                .ExpandStateSink(_resourceExpanded)
+                .Show();
         }
     }
 
 
-    private void DrawResourceRow(Paper paper, string id, ResourceRef resource, ISnapshotResourceResolver? resolver)
+    private void BuildResourceNodes(List<TreeNode> nodes, string rootId, ResourceRef resource, ISnapshotResourceResolver? resolver)
     {
-        bool selected = _selectedResource is { } sel && sel.Id == resource.Id && sel.Kind == resource.Kind;
-
         // Textures back a render target - fold out to its attachments. Buffers/unknown resources have
-        // no attachment hierarchy, so they're just a selectable row.
+        // no attachment hierarchy, so they're just a selectable leaf.
         if (resource.Kind == ResourceRefKind.Texture)
         {
-            bool expanded = _resourceExpanded.TryGetValue(id, out bool e) && e;
+            nodes.Add(new TreeNode
+            {
+                Id = rootId,
+                Label = resource.Name,
+                Icon = EditorIcons.Image,
+                Badge = "Texture",
+                HasChildren = true,
+                Depth = 0,
+                UserData = new ResourceTreeNode(resource, null),
+            });
 
-            Origami.Foldout(paper, id, resource.Name)
-                .Icon(EditorIcons.Image_I)
-                .Badge("Texture")
-                .HeaderBackground(selected ? EditorTheme.Selected : EditorTheme.Glass)
-                .Expanded(expanded, v => _resourceExpanded[id] = v)
-                .Body(() => DrawTextureAttachments(paper, id, resource, resolver));
+            SnapshotResourceVersion? version = FindVersion(resolver?.Resolve(resource.Resource), resource.Resource.Version);
+            if (version == null || version.Subtextures.Count == 0)
+            {
+                nodes.Add(new TreeNode
+                {
+                    Id = $"{rootId}_empty",
+                    Label = "Attachments unavailable outside a snapshot",
+                    LabelColor = EditorTheme.Ink300,
+                    IsLeaf = true,
+                    Disabled = true,
+                    Depth = 1,
+                    UserData = new ResourceTreeNode(resource, null),
+                });
+                return;
+            }
+
+            for (int i = 0; i < version.Subtextures.Count; i++)
+            {
+                SnapshotSubTexture sub = version.Subtextures[i];
+                nodes.Add(new TreeNode
+                {
+                    Id = $"{rootId}_s{i}",
+                    Label = sub.Name,
+                    Icon = EditorIcons.Image,
+                    IsLeaf = true,
+                    Depth = 1,
+                    UserData = new ResourceTreeNode(resource, sub.Name),
+                });
+            }
             return;
         }
 
-        var row = paper.Row(id)
-            .Height(ResourceRowHeight)
-            .Padding(8f, 0f)
-            .Rounded(EditorTheme.Roundness)
-            .BorderColor(EditorTheme.BorderSoft)
-            .BorderWidth(1f)
-            .BackgroundColor(selected ? EditorTheme.Selected : EditorTheme.Glass);
-
-        if (resource.Kind == ResourceRefKind.Buffer)
+        nodes.Add(new TreeNode
         {
-            row.Cursor(PaperCursor.Pointer);
-            ResourceRef captured = resource;
-            row.OnClick(_ => _selectedResource = captured);
-        }
-
-        using (row.Enter())
-        {
-            Origami.Label(paper, $"{id}_lbl", resource.Name)
-                .LeadingIcon(resource.Kind == ResourceRefKind.Buffer ? EditorIcons.Database_I : EditorIcons.CircleQuestion_I, 14f)
-                .AlignLeft()
-                .Show();
-        }
-    }
-
-
-    private void DrawTextureAttachments(Paper paper, string id, ResourceRef resource, ISnapshotResourceResolver? resolver)
-    {
-        SnapshotResourceVersion? version = FindVersion(resolver?.Resolve(resource.Resource), resource.Resource.Version);
-
-        if (version == null || version.Subtextures.Count == 0)
-        {
-            Origami.Label(paper, $"{id}_attach_empty", "Attachments unavailable outside a snapshot")
-                .Muted()
-                .SM()
-                .Show();
-            return;
-        }
-
-        for (int i = 0; i < version.Subtextures.Count; i++)
-            DrawSubTextureRow(paper, $"{id}_attach{i}", resource, version.Subtextures[i]);
-    }
-
-
-    private void DrawSubTextureRow(Paper paper, string id, ResourceRef resource, SnapshotSubTexture sub)
-    {
-        bool selected = _selectedResource is { } sel && sel.Id == resource.Id && sel.Kind == resource.Kind
-            && _selectedSubTextureName == sub.Name;
-
-        var row = paper.Row(id)
-            .Height(ResourceRowHeight)
-            .Padding(8f, 0f)
-            .Rounded(EditorTheme.Roundness)
-            .BorderColor(EditorTheme.BorderSoft)
-            .BorderWidth(1f)
-            .BackgroundColor(selected ? EditorTheme.Selected : EditorTheme.Glass)
-            .Cursor(PaperCursor.Pointer);
-
-        ResourceRef captured = resource;
-        string subName = sub.Name;
-        row.OnClick(_ =>
-        {
-            _selectedResource = captured;
-            _selectedSubTextureName = subName;
+            Id = rootId,
+            Label = resource.Name,
+            Icon = resource.Kind == ResourceRefKind.Buffer ? EditorIcons.Database : EditorIcons.CircleQuestion,
+            IsLeaf = true,
+            Disabled = resource.Kind != ResourceRefKind.Buffer,
+            Depth = 0,
+            UserData = new ResourceTreeNode(resource, null),
         });
+    }
 
-        using (row.Enter())
+
+    private bool IsResourceNodeSelected(ResourceTreeNode node)
+    {
+        if (_selectedResource is not { } sel || sel.Id != node.Resource.Id || sel.Kind != node.Resource.Kind)
+            return false;
+
+        return node.Resource.Kind == ResourceRefKind.Buffer
+            ? _selectedSubTextureName == null
+            : _selectedSubTextureName == node.SubTextureName && node.SubTextureName != null;
+    }
+
+
+    private void SelectResourceNode(ResourceTreeNode node)
+    {
+        if (node.Resource.Kind == ResourceRefKind.Buffer)
         {
-            Origami.Label(paper, $"{id}_lbl", sub.Name)
-                .LeadingIcon(EditorIcons.Image_I, 14f)
-                .AlignLeft()
-                .Show();
+            _selectedResource = node.Resource;
+            _selectedSubTextureName = null;
+        }
+        else if (node.SubTextureName != null)
+        {
+            _selectedResource = node.Resource;
+            _selectedSubTextureName = node.SubTextureName;
         }
     }
 

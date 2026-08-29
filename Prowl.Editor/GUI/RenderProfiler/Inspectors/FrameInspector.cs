@@ -51,7 +51,7 @@ public static class ProfilerFrameInspector
 
             InspectorKit.SectionCard(paper, "rdp_fv_renderops", "Render Operations", () => DrawRenderOperationsSection(paper, history));
             InspectorKit.SectionCard(paper, "rdp_fv_resmem", "Resident Memory", () => DrawResidentMemorySection(paper, frame, history));
-            InspectorKit.SectionCard(paper, "rdp_fv_liveobj", "Live Objects", () => DrawLiveObjectsSection(paper, history));
+            InspectorKit.SectionCard(paper, "rdp_fv_liveobj", "Live Objects", () => DrawLiveObjectsSection(paper, frame));
             InspectorKit.SectionCard(paper, "rdp_fv_bufferops", "Buffer Operations", () => DrawBufferOperationsSection(paper, history));
             InspectorKit.SectionCard(paper, "rdp_fv_swapchain", "Swapchain", () => DrawSwapchainSection(paper, history));
             InspectorKit.SectionCard(paper, "rdp_fv_barriers", "Barriers", () => DrawBarriersSection(paper, history));
@@ -102,18 +102,36 @@ public static class ProfilerFrameInspector
     }
 
 
-    private static void DrawLiveObjectsSection(Paper paper, IProfilerHistory history)
+    // One row per live-object category instead of a StatGroup per Live/Alloc/Free series - with
+    // AllocBin's full set of categories, three side-by-side StatGroups overflowed the card width and
+    // overlapped.
+    private static void DrawLiveObjectsSection(Paper paper, ProfiledFrame frame)
     {
-        using (paper.Column("rdp_fv_liveobj").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
-        {
-            DrawLiveObjectsCountChart(paper, "rdp_fv_liveobj_count_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
+        AllocBin[] bins = Enum.GetValues<AllocBin>();
 
-            using (paper.Row("rdp_fv_liveobj_alloc_free_orw").Height(UnitValue.Auto).RowBetween(InspectorKit.ChartRowGap).Enter())
-            {
-                DrawLiveObjectsAllocChart(paper, "rdp_fv_liveobj_alloc_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
-                DrawLiveObjectsFreeChart(paper, "rdp_fv_liveobj_free_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
-            }
+        TableBuilder table = Origami.Table(paper, "rdp_fv_liveobj_table", -1, _ => { })
+            .Bordered(true)
+            .Width(UnitValue.Stretch())
+            .RowHeight(24f)
+            .Column("Name", 1.6f)
+            .Column("Count", 1f, align: TextAlignment.MiddleRight)
+            .Column("Allocation", 1f, align: TextAlignment.MiddleRight)
+            .Column("Free", 1f, align: TextAlignment.MiddleRight);
+
+        foreach (AllocBin bin in bins)
+        {
+            double count = InspectorKit.CounterValue(frame, $"Live/{bin}");
+            double allocs = InspectorKit.CounterValue(frame, $"Alloc/{bin}");
+            double frees = InspectorKit.CounterValue(frame, $"Free/{bin}");
+
+            table.Row()
+                .Cell(bin.ToString(), EditorTheme.Ink500)
+                .CellRight(InspectorKit.FormatCountCompact(count), EditorTheme.Ink500)
+                .CellRight(InspectorKit.FormatCountCompact(allocs), EditorTheme.Ink500)
+                .CellRight(InspectorKit.FormatCountCompact(frees), EditorTheme.Ink500);
         }
+
+        table.Show();
     }
 
 
@@ -216,7 +234,9 @@ public static class ProfilerFrameInspector
             new("Shader", EditorTheme.Amber500, 2, InspectorKit.FormatBytesAuto(shaderBytes)),
         };
 
-        Origami.Legend(paper, id, entries).Show();
+        Origami.Legend(paper, id, entries)
+            .Width(InspectorKit.VramColumnWidth)
+            .Show();
     }
 
 
@@ -237,39 +257,6 @@ public static class ProfilerFrameInspector
             series[i] = (roles[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Resident/{roles[i]}"));
 
         InspectorKit.DrawChart(paper, history, id, "Buffer Usage", "Size", InspectorKit.FormatBytesAuto, width, height, false, series);
-    }
-
-
-    private static void DrawLiveObjectsCountChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
-    {
-        AllocBin[] bins = Enum.GetValues<AllocBin>();
-        var series = new (string, Color, IReadOnlyList<double>)[bins.Length];
-        for (int i = 0; i < bins.Length; i++)
-            series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Live/{bins[i]}"));
-
-        InspectorKit.DrawChart(paper, history, id, "Count", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
-    }
-
-
-    private static void DrawLiveObjectsAllocChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
-    {
-        AllocBin[] bins = Enum.GetValues<AllocBin>();
-        var series = new (string, Color, IReadOnlyList<double>)[bins.Length];
-        for (int i = 0; i < bins.Length; i++)
-            series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Alloc/{bins[i]}"));
-
-        InspectorKit.DrawChart(paper, history, id, "Allocations", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
-    }
-
-
-    private static void DrawLiveObjectsFreeChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
-    {
-        AllocBin[] bins = Enum.GetValues<AllocBin>();
-        var series = new (string, Color, IReadOnlyList<double>)[bins.Length];
-        for (int i = 0; i < bins.Length; i++)
-            series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], InspectorKit.CounterSeries(history, $"Free/{bins[i]}"));
-
-        InspectorKit.DrawChart(paper, history, id, "Frees", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
     }
 
 

@@ -27,6 +27,7 @@ public sealed class ProfilerViewInspector
     private int _mode = ModeStats;
     private readonly NodeGraphController _pipelineGraphController = new();
     private ProfiledView? _pipelineGraphFramedFor;
+    private int _pipelineGraphFramedSignature;
 
     // Raised instead of selecting the pass/pinging the hierarchy directly - see FlameGraph's
     // NodeClicked for why the host owns this wiring.
@@ -181,6 +182,7 @@ public sealed class ProfilerViewInspector
         var resourceColumnUsage = new Dictionary<int, int>();
 
         IReadOnlyList<ProfiledPass> passes = view.Passes;
+        IReadOnlyList<PassEdge> edges = view.Edges;
 
         for (int i = 0; i < passes.Count; i++)
         {
@@ -199,26 +201,53 @@ public sealed class ProfilerViewInspector
             foreach (ResourceRef input in pass.Inputs)
             {
                 passNode.Inputs.Add(new GraphPort($"in_{input.Id}", input.Name) { Side = PortSide.Left });
-                GraphNode resourceNode = GetOrAddResourceNode(nodes, resourceNodes, resourceColumnUsage, input, i);
-                connections.Add(new GraphConnection(resourceNode.Id, "out", passNode.Id, $"in_{input.Id}"));
+
+                // A pure input - nothing else in this view produced it - gets its own loose node.
+                // One produced earlier in the view is wired below as a direct edge from the pass
+                // that produced it instead, so it never becomes a second loose node here.
+                if (!IsEdgeInto(edges, pass.Index, input.Id))
+                {
+                    GraphNode resourceNode = GetOrAddResourceNode(nodes, resourceNodes, resourceColumnUsage, input, i);
+                    connections.Add(new GraphConnection(resourceNode.Id, "out", passNode.Id, $"in_{input.Id}"));
+                }
             }
 
             foreach (ResourceRef output in pass.Outputs)
             {
                 passNode.Outputs.Add(new GraphPort($"out_{output.Id}", output.Name) { Side = PortSide.Right });
-                GraphNode resourceNode = GetOrAddResourceNode(nodes, resourceNodes, resourceColumnUsage, output, i);
-                connections.Add(new GraphConnection(passNode.Id, $"out_{output.Id}", resourceNode.Id, "in"));
+
+                bool consumedInView = false;
+                foreach (PassEdge edge in edges)
+                {
+                    if (edge.FromPass != pass.Index || edge.Resource.Id != output.Id)
+                        continue;
+
+                    // Passed directly from this pass into the one that reads it - a direct
+                    // node-to-node connection instead of a loose resource pill in between.
+                    connections.Add(new GraphConnection(passNode.Id, $"out_{output.Id}", $"pass_{edge.ToPass}", $"in_{edge.Resource.Id}"));
+                    consumedInView = true;
+                }
+
+                // A pure output - nothing in this view reads it back - gets its own loose node.
+                if (!consumedInView)
+                {
+                    GraphNode resourceNode = GetOrAddResourceNode(nodes, resourceNodes, resourceColumnUsage, output, i);
+                    connections.Add(new GraphConnection(passNode.Id, $"out_{output.Id}", resourceNode.Id, "in"));
+                }
             }
 
             nodes.Add(passNode);
         }
 
-        // Re-frame whenever the selected view changes, so the graph centers on all its nodes
-        // instead of defaulting to zoom=1/pan=0 (which sits on the first node in the top-left).
-        if (!ReferenceEquals(_pipelineGraphFramedFor, view))
+        // Re-frame whenever the selected view changes, or the graph's own node/edge set changes
+        // (fewer/more loose resource nodes as edges form) - not just on the first draw - so the
+        // view always centers on what's actually on screen instead of a stale prior framing.
+        int signature = HashCode.Combine(nodes.Count, connections.Count, passes.Count);
+        if (!ReferenceEquals(_pipelineGraphFramedFor, view) || signature != _pipelineGraphFramedSignature)
         {
             _pipelineGraphController.FrameAll();
             _pipelineGraphFramedFor = view;
+            _pipelineGraphFramedSignature = signature;
         }
 
         Origami.NodeGraph(paper, "rdp_vv_pipeline_graph", width - PipelineGraphPadding, PipelineGraphHeight)
@@ -232,6 +261,19 @@ public sealed class ProfilerViewInspector
                     PassSelected?.Invoke(view, pass);
             })
             .Show();
+    }
+
+
+    // Whether some earlier pass in this view already produced this resource - if so, the
+    // consuming pass's input is satisfied by a direct edge instead of a loose resource node.
+    private static bool IsEdgeInto(IReadOnlyList<PassEdge> edges, int toPass, uint resourceId)
+    {
+        foreach (PassEdge edge in edges)
+        {
+            if (edge.ToPass == toPass && edge.Resource.Id == resourceId)
+                return true;
+        }
+        return false;
     }
 
 
