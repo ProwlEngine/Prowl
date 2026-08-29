@@ -11,6 +11,9 @@ public abstract partial class CommandBuffer
     public void SetShader(GraphicsProgram program)
     {
         ValidationHelpers.RequireNotNullRender(program, nameof(GraphicsProgram), nameof(SetShader));
+        bool changed = !ReferenceEquals(_shaderProgram, program);
+        if (!changed) return;
+
         SetShaderCore(program);
         _shaderProgram = program;
 
@@ -31,11 +34,15 @@ public abstract partial class CommandBuffer
     public void SetComputeShader(ComputeProgram program)
     {
         ValidationHelpers.RequireNotNullRender(program, nameof(ComputeProgram), nameof(SetComputeShader));
+        bool changed = !ReferenceEquals(_computeProgram, program);
         SetComputeShaderCore(program);
         _computeProgram = program;
 
-        Execution?.Device.Profiler?.RecordPipelineSwitch(
-            ProfilerInfo, new PipelineBindInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
+        if (changed)
+        {
+            Execution?.Device.Profiler?.RecordPipelineSwitch(
+                ProfilerInfo, new PipelineBindInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
+        }
     }
 
     private protected abstract void SetComputeShaderCore(ComputeProgram program);
