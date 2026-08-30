@@ -129,18 +129,15 @@ public abstract class RenderPipeline<TView> : IDisposable
 
     private static void CapturePassOutputs(RenderContext<TView> context, IProfiler profiler, in PassInfo passInfo, RenderGraph<TView>.PassNode node)
     {
-        if (node.Outputs == null || node.Outputs.Length == 0)
-            return;
-
-        var framebuffers = new List<Framebuffer>(node.Outputs.Length);
-        foreach (RenderResourceID output in node.Outputs)
+        var framebuffers = new List<Framebuffer>(node.Outputs?.Length ?? 0);
+        if (node.Outputs != null)
         {
-            if (context.IsTextureResource(output))
-                framebuffers.Add(context.GetRenderTexture(new TextureHandle(output)).Framebuffer);
+            foreach (RenderResourceID output in node.Outputs)
+            {
+                if (context.IsTextureResource(output))
+                    framebuffers.Add(context.GetRenderTexture(new TextureHandle(output)).Framebuffer);
+            }
         }
-
-        if (framebuffers.Count == 0)
-            return;
 
         Framebuffer[] outputs = framebuffers.ToArray();
         TransferCommandBuffer transfer = context.GetTransferCommandBuffer($"{node.Pass.Name} Capture");
