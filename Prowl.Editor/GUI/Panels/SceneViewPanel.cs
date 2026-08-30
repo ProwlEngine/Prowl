@@ -938,10 +938,11 @@ public class SceneViewPanel : DockPanel
 
         _viewManipulator ??= new Gizmo.ViewManipulatorGizmo();
 
-        float cubeSize = 80;
+        float cubeSize = 100;
 
         _viewManipulator.SetCamera(_editorCamera.Camera.GameObject.Transform.Forward,
             _editorCamera.Camera.GameObject.Transform.Up);
+        _viewManipulator.SetFont(font);
 
         // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
@@ -966,7 +967,14 @@ public class SceneViewPanel : DockPanel
                 bool clicked = Input.GetMouseButtonDown(0);
                 Float2 mousePos = paper.PointerPos;
 
-                if (_viewManipulator.Update(canvas, mousePos, clicked && mayClick, !mayClick, out var newForward))
+                bool axisPicked = _viewManipulator.Update(canvas, mousePos, clicked && mayClick, !mayClick, out var newForward);
+
+                // Clicking the widget itself rather than one of its axes swaps the projection, which
+                // is the other thing an orientation gizmo is conventionally good for.
+                if (_viewManipulator.BackgroundClicked)
+                    _editorCamera.ToggleProjection();
+
+                if (axisPicked)
                 {
                     // Snap camera to face direction
                     // Calculate yaw/pitch from the new forward vector
