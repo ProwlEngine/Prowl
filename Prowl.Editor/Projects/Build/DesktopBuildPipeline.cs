@@ -725,7 +725,7 @@ public class DesktopBuildPipeline : BuildPipeline
         var plan = context.GetOutput<DesktopPlan>();
 
         // Engine-custom natives (e.g. miniaudioex) that NuGet does not provide. The NuGet ones
-        // (glfw3, soft_oal, Magick.Native) are already handled by dotnet publish.
+        // (glfw3, soft_oal) are already handled by dotnet publish.
         context.Log("Copying native libraries...");
         CopyEngineNatives(plan.OutputDirectory, plan.Profile.Target, ct);
 

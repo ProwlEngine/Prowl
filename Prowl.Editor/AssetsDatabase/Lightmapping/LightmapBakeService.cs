@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 
-using ImageMagick;
+using Prowl.Aperture;
 
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
@@ -426,13 +426,14 @@ public sealed class LightmapBakeService
         if (!File.Exists(abs)) return null;
         try
         {
-            using var img = new MagickImage(abs);
-            img.ColorSpace = ColorSpace.sRGB;
-            img.ColorType = ColorType.TrueColorAlpha;
-            img.Flip();
-            byte[]? rgba = img.GetPixels().ToByteArray(PixelMapping.RGBA);
-            if (rgba == null) return null;
-            return bake.CreateTextureRGBA(name, (int)img.Width, (int)img.Height, rgba, 2.2f);
+            using Aperture.Image img = Aperture.Image.Load(abs, new DecodeOptions
+            {
+                TargetPixelFormat = PixelFormat.Rgba8,
+                FlipVertically = true,
+            });
+
+            byte[] rgba = img.RootFrame.Pixels.ToArray();
+            return bake.CreateTextureRGBA(name, img.Width, img.Height, rgba, 2.2f);
         }
         catch { return null; }
     }
@@ -504,13 +505,15 @@ public sealed class LightmapBakeService
 
     private static void WritePng(string absolutePath, byte[] rgba, int width, int height)
     {
-        var settings = new PixelReadSettings((uint)width, (uint)height, StorageType.Char, PixelMapping.RGBA);
-        using var img = new MagickImage();
-        img.ReadPixels(rgba, settings);
-        // Photonic's atlas buffer is row-0-first (UV1 v=0 == row 0), but Texture2D.FromImage calls
-        // image.Flip() on import. Pre-flip here so the two cancel and the sampled v matches the
-        // packed UV1. Store raw bytes (linear RGBM); sampled linear and decoded in-shader.
-        img.Flip();
-        img.Write(absolutePath, MagickFormat.Png32);
+        using Aperture.Image img = Aperture.Image.FromPixels(rgba, width, height, PixelFormat.Rgba8);
+
+        // Photonic's atlas buffer is row-0-first (UV1 v=0 == row 0), but the texture import flips
+        // on the way in. Pre-flip here so the two cancel and the sampled v matches the packed UV1.
+        // Store raw bytes (linear RGBM); sampled linear and decoded in-shader.
+        img.Save(absolutePath, new EncodeOptions
+        {
+            Format = ImageFormat.Png,
+            FlipVertically = true,
+        });
     }
 }

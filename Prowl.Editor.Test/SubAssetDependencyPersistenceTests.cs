@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using ImageMagick;
 
 using Prowl.Editor.Build;
 using Prowl.Editor.Importers;
@@ -31,12 +30,7 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
         EditorRegistries.OnProjectOpened();
 
         string pngPath = AssetAbsolutePath("PersistTexture.png");
-        var color = new MagickColor(R, G, B, A);
-        using (var image = new MagickImage(color, TexSize, TexSize))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, TexSize, R, G, B, A);
         Guid texGuid = Assets.ImportFile("PersistTexture.png");
         Assert.NotEqual(Guid.Empty, texGuid);
 

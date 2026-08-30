@@ -13,11 +13,27 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.Importers;
 
-[ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr", ".tif", ".tiff")]
+// Every extension Aperture decodes. Detection is by content, so an extension that turns out
+// to hold something else is refused at import rather than mis-decoded.
+[ImporterFor(".png", ".apng",
+             ".jpg", ".jpeg", ".jpe", ".jfif",
+             ".bmp", ".dib",
+             ".gif",
+             ".tga", ".icb", ".vda", ".vst",
+             ".tif", ".tiff",
+             ".webp",
+             ".psd", ".psb",
+             ".dds",
+             ".exr",
+             ".hdr", ".pic", ".rgbe",
+             ".ico", ".cur",
+             ".pnm", ".pbm", ".pgm", ".ppm", ".pam",
+             ".dng", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".orf", ".rw2", ".raf", ".pef", ".srw")]
 public class TextureImporter : AssetImporter
 {
     // 5: sprite sub-asset GUIDs derive from the slice's persistent Id instead of its name.
-    public override int Version => 5;
+    // 6: decoded by Aperture rather than ImageMagick
+    public override int Version => 6;
 
     public override bool Import(ImportContext ctx)
     {

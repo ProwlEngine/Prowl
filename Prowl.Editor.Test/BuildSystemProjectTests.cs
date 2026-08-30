@@ -4,7 +4,6 @@
 using System.Diagnostics;
 using System.Reflection;
 
-using ImageMagick;
 
 using Prowl.Echo;
 using Prowl.Editor.Build;
@@ -107,12 +106,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     public void DeletingParent_RemovesSubAssetDependencyGraphEntries()
     {
         string pngPath = AssetAbsolutePath("CleanupTexture.png");
-        var color = new MagickColor(1, 2, 3, 255);
-        using (var image = new MagickImage(color, 4, 4))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, 4, 1, 2, 3, 255);
         Guid texGuid = Assets.ImportFile("CleanupTexture.png");
         Assert.NotEqual(Guid.Empty, texGuid);
 
@@ -138,21 +132,13 @@ public class BuildSystemProjectTests : EditorTestHarness
     public void Collect_WalksDependenciesOfSubAssetsIncludedOnlyViaParent()
     {
         string pngPathA = AssetAbsolutePath("ParentTextureA.png");
-        using (var image = new MagickImage(new MagickColor(10, 20, 30, 255), 4, 4))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPathA);
-        }
+        TestImages.WriteSolidPng(pngPathA, 4, 10, 20, 30, 255);
         Guid texGuidA = Assets.ImportFile("ParentTextureA.png");
         TextureSpriteMeta.Save(texGuidA, new SpriteImportSettings { Mode = SpriteMode.Single });
         Guid spriteGuid = Assets.GetSubAssets(texGuidA)[0].Guid;
 
         string pngPathB = AssetAbsolutePath("UnrelatedTextureB.png");
-        using (var image = new MagickImage(new MagickColor(40, 50, 60, 255), 4, 4))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPathB);
-        }
+        TestImages.WriteSolidPng(pngPathB, 4, 40, 50, 60, 255);
         Guid texGuidB = Assets.ImportFile("UnrelatedTextureB.png");
 
         // Simulate a sub-asset dependency not covered by any other mechanism: the sprite also
@@ -198,11 +184,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     public void ReimportRemovingSubAsset_RemovesSubAssetDependencyGraphEntries()
     {
         string pngPath = AssetAbsolutePath("ReimportTexture.png");
-        using (var image = new MagickImage(new MagickColor(1, 2, 3, 255), 4, 4))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, 4, 1, 2, 3, 255);
         Guid texGuid = Assets.ImportFile("ReimportTexture.png");
         Assert.NotEqual(Guid.Empty, texGuid);
 
@@ -229,11 +211,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     {
         string pngPath = AssetAbsolutePath("Editor/Icon.png");
         Directory.CreateDirectory(Path.GetDirectoryName(pngPath)!);
-        using (var image = new MagickImage(new MagickColor(5, 6, 7, 255), 4, 4))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, 4, 5, 6, 7, 255);
         Guid texGuid = Assets.ImportFile("Editor/Icon.png");
         Assert.NotEqual(Guid.Empty, texGuid);
 
@@ -272,11 +250,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     {
         string pngPath = AssetAbsolutePath("Editor/Unused.png");
         Directory.CreateDirectory(Path.GetDirectoryName(pngPath)!);
-        using (var image = new MagickImage(new MagickColor(8, 9, 10, 255), 4, 4))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, 4, 8, 9, 10, 255);
         Guid texGuid = Assets.ImportFile("Editor/Unused.png");
         Assert.NotEqual(Guid.Empty, texGuid);
 
@@ -407,12 +381,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         // 1. Author a real, tiny PNG, then flip it to Sprite mode (Texture Type -> Sprite in the
         //    Inspector) so the importer also emits a Sprite sub-asset wrapping it.
         string pngPath = AssetAbsolutePath("BuildTestTexture.png");
-        var color = new MagickColor(TexR, TexG, TexB, TexA);
-        using (var image = new MagickImage(color, TexSize, TexSize))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, TexSize, TexR, TexG, TexB, TexA);
         Guid texGuid = Assets.ImportFile("BuildTestTexture.png");
         Assert.NotEqual(Guid.Empty, texGuid);
 

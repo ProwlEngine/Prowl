@@ -682,7 +682,21 @@ public static class EditorRegistries
     {
         RegisterFileIcons(EditorIcons.FileCode, ".cs", ".js", ".ts", ".py", ".lua");
         RegisterFileIcons(EditorIcons.WandMagicSparkles, ".shader", ".glsl", ".hlsl", ".shadergraph");
-        RegisterFileIcons(EditorIcons.FileImage, ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".psd", ".hdr");
+        RegisterFileIcons(EditorIcons.FileImage,
+            ".png", ".apng",
+            ".jpg", ".jpeg", ".jpe", ".jfif",
+            ".bmp", ".dib",
+            ".gif",
+            ".tga", ".icb", ".vda", ".vst",
+            ".tif", ".tiff",
+            ".webp",
+            ".psd", ".psb",
+            ".dds",
+            ".exr",
+            ".hdr", ".pic", ".rgbe",
+            ".ico", ".cur",
+            ".pnm", ".pbm", ".pgm", ".ppm", ".pam",
+            ".dng", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".orf", ".rw2", ".raf", ".pef", ".srw");
         RegisterFileIcons(EditorIcons.FileAudio, ".mp3", ".wav", ".ogg", ".flac");
         RegisterFileIcons(EditorIcons.FileVideo, ".mp4", ".avi", ".mkv", ".mov");
         RegisterFileIcons(EditorIcons.VectorSquare, ".fbx", ".obj", ".gltf", ".glb", ".dae", ".mesh");

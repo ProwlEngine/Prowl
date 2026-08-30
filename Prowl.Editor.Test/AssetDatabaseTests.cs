@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using ImageMagick;
 
 using Prowl.Echo;
 using Prowl.Editor.Importers;
@@ -696,11 +695,7 @@ public class AssetDatabaseTests : EditorTestHarness
     private (Guid texGuid, Guid spriteGuid) CreateTextureWithSprite(string path)
     {
         string pngPath = AssetAbsolutePath(path);
-        using (var image = new MagickImage(new MagickColor(1, 2, 3, 255), 4, 4))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, 4, 1, 2, 3);
         Guid texGuid = Assets.ImportFile(path);
         Assert.NotEqual(Guid.Empty, texGuid);
 
