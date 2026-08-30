@@ -27,6 +27,23 @@ public sealed class ApertureException : Exception
     internal static ApertureException For(ApertureError error, ImageFormat format) =>
         new(error, format, Describe(error, format));
 
+    /// <summary>The same failures worded for a write rather than a read.</summary>
+    internal static ApertureException ForSave(ApertureError error, ImageFormat format)
+    {
+        string what = format == ImageFormat.Unknown ? "image" : format.ToString();
+        string message = error switch
+        {
+            ApertureError.UnknownFormat => "No format was named and the file extension does not imply one.",
+            ApertureError.NotSupported => $"No encoder is registered for {what}.",
+            ApertureError.UnsupportedFeature => $"The {what} encoder cannot write that pixel layout.",
+            ApertureError.InvalidDimensions => "An image is at least one pixel each way.",
+            ApertureError.IoError => $"The {what} could not be written.",
+            _ => Describe(error, format),
+        };
+
+        return new ApertureException(error, format, message);
+    }
+
     private static string Describe(ApertureError error, ImageFormat format)
     {
         string what = format == ImageFormat.Unknown ? "image" : format.ToString();

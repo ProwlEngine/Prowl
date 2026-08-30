@@ -8,7 +8,7 @@ namespace Prowl.Aperture;
 /// input; prefer them for files you did not produce. A decoded image owns its pixel memory, which
 /// is pooled by default, so a span taken from a frame must not outlive the image.
 /// </summary>
-public sealed class Image : IDisposable
+public sealed partial class Image : IDisposable
 {
     private ImageFrame[] _frames = [];
     private bool _disposed;
