@@ -34,6 +34,8 @@ public class SnapshotViewerPanel : DockPanel
     private readonly ProfilerFlameGraphView _flame = new("snap_flame");
     private readonly ProfilerViewInspector _viewInspector = new();
     private readonly ProfilerPassInspector _passInspector = new();
+    private readonly ProfilerShaderInspector _shaderInspector = new();
+    private readonly ProfilerDrawCallInspector _drawInspector = new();
 
     private Snapshot? _snapshot;
     private ISnapshotResourceResolver? _resolver;
@@ -204,6 +206,15 @@ public class SnapshotViewerPanel : DockPanel
                             break;
                         case ProfilerSelectionType.CommandBuffer:
                             ProfilerCommandBufferInspector.Draw(paper, _selection.SelectedView, _selection.SelectedPass, _selection.SelectedCommandBuffer);
+                            break;
+                        case ProfilerSelectionType.Pipeline:
+                            _shaderInspector.Draw(paper, _selection.SelectedPipeline);
+                            break;
+                        case ProfilerSelectionType.Object:
+                            ProfilerObjectInspector.Draw(paper, _selection.SelectedView, _selection.SelectedPass, _selection.SelectedCommandBuffer, _selection.SelectedPipeline, _selection.SelectedObject);
+                            break;
+                        case ProfilerSelectionType.DrawCall:
+                            _drawInspector.Draw(paper, _selection.SelectedView, _selection.SelectedPass, _selection.SelectedCommandBuffer, _selection.SelectedPipeline, _selection.SelectedDrawCallIndex, _resolver, width);
                             break;
                     }
                 });
