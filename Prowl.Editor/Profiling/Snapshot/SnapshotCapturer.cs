@@ -6,38 +6,8 @@ using Prowl.Graphite;
 namespace Prowl.Editor.Profiling;
 
 /// <summary>
-/// Services capture requests: tracks textures/buffers referenced via pass reads this frame (cheap,
-/// every frame), and when a capture is armed, reads them back to CPU and assembles a Snapshot once
-/// the frame's GPU work has been submitted (see EditorProfiler.CaptureFinalizeHandler).
-///
-/// IProfiler.Capture runs mid-frame, once per pass that has texture outputs, and must not block
-/// waiting on the GPU - Graphite non-blocking-submits the given TransferCommandBuffer right after
-/// Capture returns. HandleCapture uses that per-pass buffer to copy the pass's own outputs to
-/// staging immediately, tagged with that pass's index as the resource's version (matching the
-/// ResourceRef.Resource stamped by PassGraphCollector), so a render target reused and overwritten by a
-/// later pass still yields a distinct captured version for each pass that wrote it. The CPU-side
-/// map/readback of those staging copies is deferred to Finalize, once the frame's GPU work has been
-/// submitted, using GraphicsDevice.WaitForIdle/SubmitAndWait.
-///
-/// Buffers referenced via RecordPassRead (render-graph-declared pass inputs/outputs) have no
-/// equivalent per-pass capture hook (Capture is only invoked for passes with texture outputs), so they
-/// are still copied to staging once, in Finalize, tagged with whatever ContentVersion they have at that
-/// point - reflecting only their end-of-frame state, not every version PassGraphCollector may have
-/// stamped into the tree if the buffer was written more than once this frame. This is a known gap:
-/// draw-time buffers (below) don't have it because HandleCapture stages them synchronously per-pass.
-///
-/// Draw-call buffers (vertex/index buffers plus bound PropertySet buffers, reported via
-/// RecordDrawBuffers - not visible to the render graph at all) are tracked per pass in progress and
-/// staged the same way as this pass's output textures: at HandleCapture, using that pass's own
-/// TransferCommandBuffer, so they reflect the state as of this pass's draws.
-///
-/// A whole DeviceBuffer isn't always one logical resource - a transient/streaming buffer serves many
-/// independent sub-allocations across a frame, one per draw - so draw-call buffers are tracked and
-/// deduped by (DeviceBuffer, Offset), not by DeviceBuffer alone, using the same
-/// (uint)DeviceBuffer.GetHashCode() ^ Offset identity DrawHierarchyCollector stamps onto
-/// ReferenceBuffer.Resource. Within that, DeviceBuffer.ContentVersion (bumped on every CPU write /
-/// GPU-side copy into a buffer) lets a buffer that's rebound unchanged across many passes get staged
-/// exactly once per distinct version instead of once per pass.
+/// Captures GPU resources referenced this frame into a Snapshot. Per-pass texture copies happen in
+/// HandleCapture; readbacks and everything else are deferred to Finalize.
 /// </summary>
 public sealed class SnapshotCapturer
 {
@@ -53,8 +23,8 @@ public sealed class SnapshotCapturer
     private readonly List<PendingTextureCapture> _pendingCaptures = new();
     private readonly HashSet<uint> _capturedResourceIds = new();
 
-    private readonly Dictionary<(DeviceBuffer Buffer, uint Offset), BufferBindingInfo> _currentPassDrawBuffers = new();
-    private readonly Dictionary<(DeviceBuffer Buffer, uint Offset), uint> _lastCapturedBufferVersion = new();
+    private readonly Dictionary<(DeviceBuffer Buffer, uint Offset, uint Version), BufferBindingInfo> _currentPassDrawBuffers = new();
+    private readonly HashSet<(DeviceBuffer Buffer, uint Offset, uint Version)> _capturedBufferVersions = new();
     private readonly List<PendingBufferCapture> _pendingBufferCaptures = new();
 
     public void Attach(GraphicsDevice device) => _device = device;
@@ -66,7 +36,7 @@ public sealed class SnapshotCapturer
         _textures.Clear();
         _buffers.Clear();
         _currentPassDrawBuffers.Clear();
-        _lastCapturedBufferVersion.Clear();
+        _capturedBufferVersions.Clear();
 
         foreach (PendingTextureCapture pending in _pendingCaptures)
             foreach ((string _, Texture _, Texture staging) in pending.Attachments)
@@ -79,12 +49,10 @@ public sealed class SnapshotCapturer
         _pendingBufferCaptures.Clear();
     }
 
-    /// <summary>Registered as EditorProfiler.BeginPass. Drops any draw-call buffers tracked for the
-    /// previous pass, so they never bleed into a later pass's capture (e.g. if the previous pass's
-    /// Capture never fired because it had no texture outputs).</summary>
+    /// <summary>Registered as EditorProfiler.BeginPass. No-op: HandleCapture now runs every pass and
+    /// drains _currentPassDrawBuffers itself.</summary>
     public void OnPassBegin()
     {
-        _currentPassDrawBuffers.Clear();
     }
 
     public void OnPassRead(in PassInfo p, RenderResourceID id, RenderTexture? texture, DeviceBuffer? buffer)
@@ -96,27 +64,22 @@ public sealed class SnapshotCapturer
             _buffers[resourceId] = buffer;
     }
 
-    /// <summary>Registered as EditorProfiler.RecordDrawBuffers, via IProfiler.RequestCapture -
-    /// Graphite only reports this when a capture is armed. Bindings are deduped by (Buffer, Offset)
-    /// within the current pass; the last one reported for a given (Buffer, Offset) wins, which also
-    /// carries that binding's latest ContentVersion as of this draw.</summary>
+    /// <summary>Registered as EditorProfiler.RecordDrawBuffers. Dedupes bindings by (Buffer, Offset,
+    /// ContentVersion) so each revision a draw saw gets its own capture.</summary>
     public void OnDrawBuffers(in DrawBufferInfo info)
     {
         foreach (BufferBindingInfo vb in info.VertexBuffers)
-            _currentPassDrawBuffers[(vb.Buffer, vb.Offset)] = vb;
+            _currentPassDrawBuffers[(vb.Buffer, vb.Offset, vb.ContentVersion)] = vb;
 
         if (info.IndexBuffer is { } ib)
-            _currentPassDrawBuffers[(ib.Buffer, ib.Offset)] = ib;
+            _currentPassDrawBuffers[(ib.Buffer, ib.Offset, ib.ContentVersion)] = ib;
 
         foreach (BufferBindingInfo b in info.BoundBuffers)
-            _currentPassDrawBuffers[(b.Buffer, b.Offset)] = b;
+            _currentPassDrawBuffers[(b.Buffer, b.Offset, b.ContentVersion)] = b;
     }
 
-    /// <summary>Registered as EditorProfiler.CaptureHandler. Marks a capture as armed for this
-    /// frame and records a copy of this pass's outputs to staging textures using the given
-    /// per-pass TransferCommandBuffer, tagged with this pass's index as the resource's version. The
-    /// CPU-side readback of those staging textures happens later in Finalize, so this always returns
-    /// null.</summary>
+    /// <summary>Registered as EditorProfiler.CaptureHandler. Arms the capture and copies this pass's
+    /// outputs to staging. Readback happens in Finalize, so this always returns null.</summary>
     public Snapshot? HandleCapture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer)
     {
         _armed = true;
@@ -142,32 +105,79 @@ public sealed class SnapshotCapturer
             _capturedResourceIds.Add(id);
         }
 
-        foreach (KeyValuePair<(DeviceBuffer Buffer, uint Offset), BufferBindingInfo> entry in _currentPassDrawBuffers)
-        {
-            (DeviceBuffer src, uint offset) = entry.Key;
-            BufferBindingInfo binding = entry.Value;
-
-            // Same (Buffer, Offset) already staged this frame at this exact content version - the
-            // bytes can't have changed, so skip the redundant copy.
-            if (_lastCapturedBufferVersion.TryGetValue(entry.Key, out uint capturedVersion)
-                && capturedVersion == binding.ContentVersion)
-            {
-                continue;
-            }
-
-            DeviceBuffer staging = _device.ResourceFactory.CreateBuffer(new BufferDescription(binding.SizeInBytes, BufferUsage.Staging));
-            transfer.CopyBuffer(src, offset, staging, 0, binding.SizeInBytes);
-            uint bufId = (uint)src.GetHashCode() ^ offset;
-            _pendingBufferCaptures.Add(new PendingBufferCapture(bufId, binding.Name, src, offset, binding.SizeInBytes, binding.ContentVersion, staging));
-            _lastCapturedBufferVersion[entry.Key] = binding.ContentVersion;
-        }
-        _currentPassDrawBuffers.Clear();
+        StageDrawBuffers(transfer);
+        StageRemainingResources(_device, transfer);
 
         return null;
     }
 
-    // RecordPassRead is invoked for this pass's outputs immediately before Capture, so _textures
-    // already holds an entry for each of passOutputs by the time HandleCapture runs.
+    // Catches resources seen via OnPassRead that weren't this pass's framebuffer outputs (compute-bound
+    // buffers, textures read but never written). Staged on the same per-pass transfer as everything else
+    // so the copy is ordered after the GPU work that produced the data, instead of Finalize's old
+    // stand-alone submit which could run before that work was even flushed.
+    private void StageRemainingResources(GraphicsDevice device, TransferCommandBuffer transfer)
+    {
+        foreach (KeyValuePair<uint, RenderTexture> entry in _textures)
+        {
+            if (_capturedResourceIds.Contains(entry.Key))
+                continue;
+
+            RenderTexture rt = entry.Value;
+            var attachments = new List<(string Name, Texture Src, Texture Staging)>();
+
+            foreach (Texture color in rt.ColorTextures)
+                if (CopyToStaging(device, transfer, color) is { } colorStaging)
+                    attachments.Add((color.Name, color, colorStaging));
+            if (rt.DepthTexture != null && CopyToStaging(device, transfer, rt.DepthTexture) is { } depthStaging)
+                attachments.Add((rt.DepthTexture.Name, rt.DepthTexture, depthStaging));
+
+            if (attachments.Count == 0)
+                continue;
+
+            _pendingCaptures.Add(new PendingTextureCapture(entry.Key, rt.Framebuffer.Name, 0, attachments));
+            _capturedResourceIds.Add(entry.Key);
+        }
+
+        foreach (KeyValuePair<uint, DeviceBuffer> entry in _buffers)
+        {
+            if (_capturedResourceIds.Contains(entry.Key))
+                continue;
+
+            DeviceBuffer src = entry.Value;
+            DeviceBuffer staging = device.ResourceFactory.CreateBuffer(new BufferDescription(src.SizeInBytes, BufferUsage.Staging));
+            transfer.CopyBuffer(src, 0, staging, 0, src.SizeInBytes);
+            _pendingBufferCaptures.Add(new PendingBufferCapture(entry.Key, src.Name, src, 0, src.SizeInBytes, src.ContentVersion, staging));
+            _capturedResourceIds.Add(entry.Key);
+        }
+    }
+
+    // Stage each distinct (Buffer, Offset, ContentVersion) revision exactly once, then clear the set.
+    private void StageDrawBuffers(TransferCommandBuffer transfer)
+    {
+        if (_device is null || _currentPassDrawBuffers.Count == 0)
+            return;
+
+        GraphicsDevice device = _device;
+        foreach (KeyValuePair<(DeviceBuffer Buffer, uint Offset, uint Version), BufferBindingInfo> entry in _currentPassDrawBuffers)
+        {
+            if (_capturedBufferVersions.Contains(entry.Key))
+                continue;
+
+            DeviceBuffer src = entry.Key.Buffer;
+            uint offset = entry.Key.Offset;
+            uint version = entry.Key.Version;
+            BufferBindingInfo binding = entry.Value;
+
+            DeviceBuffer staging = device.ResourceFactory.CreateBuffer(new BufferDescription(binding.SizeInBytes, BufferUsage.Staging));
+            transfer.CopyBuffer(src, offset, staging, 0, binding.SizeInBytes);
+            uint bufId = (uint)src.GetHashCode() ^ offset;
+            _pendingBufferCaptures.Add(new PendingBufferCapture(bufId, binding.Name, src, offset, binding.SizeInBytes, version, staging));
+            _capturedBufferVersions.Add(entry.Key);
+        }
+        _currentPassDrawBuffers.Clear();
+    }
+
+    // RecordPassRead runs before Capture, so _textures already holds this pass's outputs.
     private uint ResolveId(Framebuffer fb)
     {
         foreach (KeyValuePair<uint, RenderTexture> entry in _textures)
@@ -178,8 +188,8 @@ public sealed class SnapshotCapturer
         return (uint)fb.GetHashCode();
     }
 
-    /// <summary>Registered as EditorProfiler.CaptureFinalizeHandler. Called once per frame where a
-    /// capture was armed, with a cloned, fully independent (HasCaptureDepth == true) ProfiledFrame.</summary>
+    /// <summary>Registered as EditorProfiler.CaptureFinalizeHandler. Called once per armed frame with a
+    /// cloned ProfiledFrame.</summary>
     public Snapshot? Finalize(ProfiledFrame frame)
     {
         if (!_armed || _device is null)
@@ -200,26 +210,13 @@ public sealed class SnapshotCapturer
             entry.Versions.Add(version);
         }
 
-        // Textures referenced this frame that were never captured via a pass's own Capture
-        // invocation (e.g. only read, not written, while armed) still need a copy - do that now,
-        // reflecting their end-of-frame state (version 0, matching PassGraphCollector's fallback for a
-        // texture nothing wrote this frame) since no earlier hook was available for them.
-        var uncapturedTextures = new List<KeyValuePair<uint, RenderTexture>>();
-        foreach (KeyValuePair<uint, RenderTexture> entry in _textures)
-            if (!_capturedResourceIds.Contains(entry.Key))
-                uncapturedTextures.Add(entry);
-
-        if (_pendingCaptures.Count > 0 || _pendingBufferCaptures.Count > 0 || uncapturedTextures.Count > 0 || _buffers.Count > 0)
+        // Everything reachable this frame was already staged per-pass in HandleCapture, on that pass's own
+        // transfer buffer, so the GPU work producing the data is guaranteed flushed ahead of the copy.
+        // Finalize only needs to wait for all of it to land, then read the staging buffers/textures back.
+        if (_pendingCaptures.Count > 0 || _pendingBufferCaptures.Count > 0)
         {
             device.WaitForIdle();
 
-            var stagingTextures = new List<(uint Id, string TextureName, uint Version, List<(string Name, Texture Src, Texture Staging)> Attachments)>();
-            foreach (PendingTextureCapture pending in _pendingCaptures)
-                stagingTextures.Add((pending.Id, pending.FramebufferName, pending.Version, pending.Attachments));
-            _pendingCaptures.Clear();
-
-            // Draw-call buffers already have their staging copy from HandleCapture; just read them
-            // back here, same as the per-pass texture captures above.
             foreach (PendingBufferCapture pending in _pendingBufferCaptures)
             {
                 byte[] data = ReadBufferBytes(device, pending.Staging, pending.SizeInBytes);
@@ -229,58 +226,18 @@ public sealed class SnapshotCapturer
             }
             _pendingBufferCaptures.Clear();
 
-            if (uncapturedTextures.Count > 0 || _buffers.Count > 0)
+            foreach (PendingTextureCapture pending in _pendingCaptures)
             {
-                TransferCommandBuffer xfer = device.ResourceFactory.CreateTransferCommandBuffer();
-                xfer.Begin();
-
-                foreach (KeyValuePair<uint, RenderTexture> entry in uncapturedTextures)
-                {
-                    RenderTexture rt = entry.Value;
-                    var attachments = new List<(string Name, Texture Src, Texture Staging)>();
-
-                    foreach (Texture color in rt.ColorTextures)
-                        if (CopyToStaging(device, xfer, color) is { } colorStaging)
-                            attachments.Add((color.Name, color, colorStaging));
-                    if (rt.DepthTexture != null && CopyToStaging(device, xfer, rt.DepthTexture) is { } depthStaging)
-                        attachments.Add((rt.DepthTexture.Name, rt.DepthTexture, depthStaging));
-
-                    stagingTextures.Add((entry.Key, rt.Framebuffer.Name, 0, attachments));
-                }
-
-                var stagingBuffers = new List<(uint Id, string Name, DeviceBuffer Src, uint Version, DeviceBuffer Staging)>();
-                foreach (KeyValuePair<uint, DeviceBuffer> entry in _buffers)
-                {
-                    DeviceBuffer src = entry.Value;
-                    DeviceBuffer staging = device.ResourceFactory.CreateBuffer(new BufferDescription(src.SizeInBytes, BufferUsage.Staging));
-                    xfer.CopyBuffer(src, 0, staging, 0, src.SizeInBytes);
-                    stagingBuffers.Add((entry.Key, src.Name, src, src.ContentVersion, staging));
-                }
-
-                xfer.End();
-                device.SubmitAndWait(xfer);
-                xfer.Dispose();
-
-                foreach ((uint id, string name, DeviceBuffer src, uint version, DeviceBuffer staging) in stagingBuffers)
-                {
-                    byte[] data = ReadBufferBytes(device, staging, src.SizeInBytes);
-                    var meta = new SnapshotBufferMeta(ClassifyKind(src.Usage), src.SizeInBytes, 0, Array.Empty<BufferField>());
-                    AddVersion(id, name, SnapshotResourceKind.Buffer, new SnapshotResourceVersion(version, Array.Empty<SnapshotSubTexture>(), data, meta));
-                    staging.Dispose();
-                }
-            }
-
-            foreach ((uint id, string textureName, uint version, List<(string Name, Texture Src, Texture Staging)> attachments) in stagingTextures)
-            {
-                var subtextures = new List<SnapshotSubTexture>(attachments.Count);
-                foreach ((string name, Texture src, Texture staging) in attachments)
+                var subtextures = new List<SnapshotSubTexture>(pending.Attachments.Count);
+                foreach ((string name, Texture src, Texture staging) in pending.Attachments)
                 {
                     byte[] pixels = ReadTextureMip0(device, staging);
                     subtextures.Add(new SnapshotSubTexture(name, src.Format, src.Width, src.Height, src.Depth, src.MipLevels, pixels));
                     staging.Dispose();
                 }
-                AddVersion(id, textureName, SnapshotResourceKind.Texture, new SnapshotResourceVersion(version, subtextures, Array.Empty<byte>(), null));
+                AddVersion(pending.Id, pending.FramebufferName, SnapshotResourceKind.Texture, new SnapshotResourceVersion(pending.Version, subtextures, Array.Empty<byte>(), null));
             }
+            _pendingCaptures.Clear();
         }
 
         _capturedResourceIds.Clear();
@@ -295,9 +252,7 @@ public sealed class SnapshotCapturer
         return new Snapshot(null, frame.FrameIndex, frame, result);
     }
 
-    // Depth-stencil formats require TextureUsage.DepthStencil, which can't be combined with
-    // TextureUsage.Staging (the only usage Map() accepts for CPU readback) - so these formats
-    // have no legal staging-texture representation and can't be captured here.
+    // Depth-stencil formats can't be combined with TextureUsage.Staging, so they can't be captured.
     private static bool IsStageable(PixelFormat format)
         => format != PixelFormat.D24_UNorm_S8_UInt && format != PixelFormat.D32_Float_S8_UInt;
 
@@ -313,8 +268,7 @@ public sealed class SnapshotCapturer
         return staging;
     }
 
-    // Reads back mip 0 / array layer 0 / depth slice range only. Multi-mip/array pixel data is not
-    // captured; MipLevels is still reported as metadata on SnapshotSubTexture.
+    // Reads back mip 0 / layer 0 only; MipLevels is still reported as metadata.
     private static unsafe byte[] ReadTextureMip0(GraphicsDevice device, Texture staging)
     {
         uint bytesPerPixel = staging.Format.GetSizeInBytes();
