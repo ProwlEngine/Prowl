@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Echo.Cloning;
@@ -1040,13 +1040,7 @@ public class PrefabTests : EditorTestHarness
         Assert.False(File.Exists(AssetAbsolutePath("X.prefab")));
     }
 
-    /// <summary>
-    /// A prefab file can change while the game is playing: an external edit, a branch switch, a
-    /// model reimport. Nothing may rebuild instances mid session, but the baseline they are compared
-    /// against has to be dropped anyway. Left in place, the prefab's own change reads as an instance
-    /// override the moment anything reconciles after play, and the instance stops following the
-    /// prefab from then on.
-    /// </summary>
+    /// <summary>A prefab changed on disk during play must not read as an instance override afterwards.</summary>
     [Fact]
     public void PrefabChangedDuringPlayMode_IsNotRecordedAsAnOverrideAfterwards()
     {
@@ -1085,12 +1079,7 @@ public class PrefabTests : EditorTestHarness
         Assert.Empty(live.PrefabOverrides);
     }
 
-    /// <summary>
-    /// A prefab can go away while its instances stay open, from a delete, an undo, or a branch that
-    /// does not have it. What it last said is the only baseline those instances have, so it is kept:
-    /// dropped instead, nothing records an edit made while the prefab is away, and the refresh that
-    /// runs the moment it comes back replaces that edit with the prefab's own value.
-    /// </summary>
+    /// <summary>A deleted prefab keeps its baseline, so edits made while it is away are still recorded.</summary>
     [Fact]
     public void EditsMadeWhileThePrefabIsDeleted_SurviveItComingBack()
     {
@@ -1459,12 +1448,7 @@ public class PrefabTests : EditorTestHarness
         Assert.False(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "A")));
     }
 
-    /// <summary>
-    /// Reverting reads the value off the tree every instance of the prefab is compared against, so it
-    /// has to hand the instance something of its own. Sharing that object would have an edit to one
-    /// instance land on the other instances and on the baseline itself, after which the override
-    /// stops being detected at all.
-    /// </summary>
+    /// <summary>Reverting reads off the shared baseline, so it has to hand the instance a copy.</summary>
     [Fact]
     public void RevertSingleOverride_DoesNotHandTheInstanceThePrefabsOwnList()
     {
@@ -1501,11 +1485,7 @@ public class PrefabTests : EditorTestHarness
         Assert.True(PrefabUtility.IsPropertyOverridden(a, path));
     }
 
-    /// <summary>
-    /// A reverted reference into the prefab has to land on the instance's own copy, the same as one
-    /// a refresh rewires. The prefab's objects are in no scene, so pointing at them is a reference
-    /// into a cache that the next reimport drops.
-    /// </summary>
+    /// <summary>A reverted reference into the prefab lands on the instance's own copy, not the baseline's.</summary>
     [Fact]
     public void RevertSingleOverride_PointsAReferenceAtTheInstancesOwnObject()
     {
@@ -5482,14 +5462,102 @@ public class PrefabTests : EditorTestHarness
 
     #endregion
 
+    #region Moving prefab content within its own instance
+
+    /// <summary>A provided child moved under a sibling is settled, not destroyed by the next refresh.</summary>
+    [Fact]
+    public void AChildMovedUnderASibling_IsSettledRatherThanDestroyed()
+    {
+        var root = new GameObject("Root");
+        var a = new GameObject("A");
+        a.AddComponent<OverrideComp>().A = 1;
+        a.SetParent(root);
+        new GameObject("B").SetParent(root);
+        Guid g = CreatePrefabAsset(root, "MoveWithin.prefab");
+
+        GameObject instance = Inst(g);
+        SetSceneCurrent(instance);
+        instance = Scene.Current!.RootObjects.First();
+
+        GameObject movedA = instance.Children.First(c => c.Name == "A");
+        GameObject instB = instance.Children.First(c => c.Name == "B");
+
+        // What a script does. The hierarchy offers to break the link first, SetParent does not.
+        var kept = new GameObject("KeptUnderA");
+        kept.SetParent(movedA);
+        movedA.SetParent(instB);
+
+        PrefabUtility.RefreshAllInstances(g);
+
+        Assert.True(movedA.IsValid());
+        Assert.True(kept.IsValid());
+        Assert.Same(instB, movedA.Parent);
+        Assert.False(movedA.IsPrefabInstance);
+
+        // The prefab still provides an A, so the instance gets one back where the prefab puts it.
+        Assert.Contains(instance.Children, c => c.Name == "A" && c.IsPrefabInstance);
+    }
+
+    #endregion
+
+    #region An instance of a prefab placed inside another instance of it
+
+    /// <summary>Unpacking the outer instance leaves the inner one linked, as any nested instance is.</summary>
+    [Fact]
+    public void UnpackingTheOuter_LeavesASelfNestedInstanceLinked()
+    {
+        Guid g = MakePrefab("SelfNest.prefab");
+        GameObject outer = Inst(g);
+        LoadSceneWith(outer);
+
+        GameObject inner = Inst(g);
+        inner.SetParent(outer);
+        Assert.True(PrefabUtility.IsInstanceRoot(inner));
+
+        PrefabUtility.UnpackPrefabInstance(outer);
+
+        Assert.False(outer.IsPrefabInstance);
+        Assert.True(inner.IsPrefabInstance);
+        Assert.Equal(g, inner.PrefabAssetId);
+    }
+
+    /// <summary>An override on the outer instance resolves to the outer's own object.</summary>
+    [Fact]
+    public void ASelfNestedInstance_DoesNotSwallowTheOutersOverridePaths()
+    {
+        var root = new GameObject("Root");
+        var child = new GameObject("Child");
+        child.AddComponent<OverrideComp>().A = 1;
+        child.SetParent(root);
+        Guid g = CreatePrefabAsset(root, "SelfNestPath.prefab");
+
+        GameObject outer = Inst(g);
+        LoadSceneWith(outer);
+
+        GameObject inner = Inst(g);
+        inner.SetParent(outer);
+        inner.SetSiblingIndex(0); // ahead of the outer's own child, so a walk meets it first
+
+        GameObject outerChild = outer.Children.First(c => !PrefabUtility.IsInstanceRoot(c));
+        OverrideComp outerComp = outerChild.GetComponent<OverrideComp>()!;
+        outerComp.A = 42;
+        PrefabUtility.ReconcileInstance(outer);
+
+        string path = PrefabUtility.GetOverridePath(outerChild, outerComp, "A");
+        PrefabUtility.RevertSingleOverride(outer, path);
+
+        // The outer's child went back, and the nested instance was left alone.
+        Assert.Equal(1, outerComp.A);
+        Assert.Equal(1, inner.Children[0].GetComponent<OverrideComp>()!.A);
+    }
+
+    #endregion
+
     #region A deleted prefab goes on being a comparison baseline
 
     /// <summary>
-    /// This asserted the opposite until the edits made while a prefab is away were found to be lost
-    /// when it came back. A delete is usually temporary, from an undo or a branch that does not have
-    /// the prefab, and what it last said is a perfectly good baseline that is still in memory. The
-    /// tree is only dropped once no instance of it is open, so nothing is compared against a prefab
-    /// nobody is using.
+    /// Asserted the opposite until edits made while a prefab was away were found to be lost when it
+    /// came back. The tree is still dropped once no instance of it is open.
     /// </summary>
     [Fact]
     public void DeletingThePrefab_KeepsWhatItLastSaidAsTheBaseline()

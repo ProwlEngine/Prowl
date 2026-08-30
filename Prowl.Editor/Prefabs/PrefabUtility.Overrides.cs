@@ -126,7 +126,7 @@ public static partial class PrefabUtility
 
         foreach (GameObject child in root.Children)
         {
-            if (child.IsPrefabInstance && child.PrefabAssetId != boundaryPrefabId) continue;
+            if (IsSeparateInstance(child, boundaryPrefabId)) continue;
 
             GameObject? found = FindBySourceIdentifier(child, sourceId, boundaryPrefabId);
             if (found != null) return found;
