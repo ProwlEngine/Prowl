@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Prowl.Aperture</RootNamespace>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Aperture</PackageId>
+    <Title>Prowl.Aperture</Title>
+
+    <Description>Image loading for the Prowl Game Engine. One dependency-free API that identifies and decodes BMP, DDS, EXR, GIF, HDR, ICO, JPEG, PNG, PNM, TGA, TIFF, WebP, PSD and camera RAW.</Description>
+    <PackageTags>image;decoder;loader;texture;png;jpeg;webp;dds;exr;tiff;gif;bmp;tga;psd;raw;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
+  </PropertyGroup>
+
+</Project>
