@@ -547,38 +547,76 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="type">The type of component to add.</param>
     /// <returns>The newly added MonoBehaviour component.</returns>
     public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
+        => AddComponent(type, null);
+
+    /// <summary>
+    /// Adds a component, carrying the set of types already part way through being added so that a
+    /// requirement cycle stops rather than recursing. A component only reaches the object after its
+    /// requirements are met, so nothing the walk can look at would ever break the cycle on its own.
+    /// </summary>
+    private MonoBehaviour AddComponent(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
+        HashSet<Type>? pending)
     {
-        if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
+        if (!CanConstruct(type)) return null;
 
-        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
-        if (requireComponentAttribute != null)
+        pending ??= [];
+        if (!pending.Add(type)) return null;
+
+        try
         {
-            foreach (Type requiredComponentType in requireComponentAttribute.types)
-            {
-                if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
-                    continue;
+            AddRequirements(type, pending);
 
-                // If there is already a component on the object
-                if (GetComponent(requiredComponentType).IsValid())
-                    continue;
+            var newComponent = Activator.CreateInstance(type) as MonoBehaviour;
+            if (newComponent.IsNotValid()) return null;
 
-                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
-#pragma warning disable IL2072
-                AddComponent(requiredComponentType);
-#pragma warning restore IL2072
-            }
+            newComponent.AttachToGameObject(this);
+            _components.Add(newComponent);
+            _componentCache.Add(type, newComponent);
+
+            NotifyComponentAddedToScene(newComponent);
+
+            return newComponent;
         }
+        finally
+        {
+            pending.Remove(type);
+        }
+    }
 
-        var newComponent = Activator.CreateInstance(type) as MonoBehaviour;
-        if (newComponent.IsNotValid()) return null;
+    /// <summary>
+    /// Whether this type is one <see cref="Activator"/> can make. Anything else is refused here, so
+    /// that a script the editor offers but cannot instantiate reports nothing rather than throwing
+    /// out of whichever menu or drop target reached it.
+    /// </summary>
+    private static bool CanConstruct(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
+        => type is not null
+        && typeof(MonoBehaviour).IsAssignableFrom(type)
+        && !type.IsAbstract
+        && !type.ContainsGenericParameters
+        && type.GetConstructor(Type.EmptyTypes) != null;
 
-        newComponent.AttachToGameObject(this);
-        _components.Add(newComponent);
-        _componentCache.Add(type, newComponent);
+    /// <summary>Adds whatever a type's <see cref="RequireComponentAttribute"/> asks for and is missing.</summary>
+    private void AddRequirements(Type type, HashSet<Type> pending)
+    {
+        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
+        if (requireComponentAttribute == null) return;
 
-        NotifyComponentAddedToScene(newComponent);
+        foreach (Type requiredComponentType in requireComponentAttribute.types)
+        {
+            if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
+                continue;
 
-        return newComponent;
+            // If there is already a component on the object
+            if (GetComponent(requiredComponentType).IsValid())
+                continue;
+
+            // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
+#pragma warning disable IL2072
+            AddComponent(requiredComponentType, pending);
+#pragma warning restore IL2072
+        }
     }
 
     /// <summary>
@@ -596,25 +634,10 @@ public partial class GameObject : EngineObject, ISerializable
         if (comp.GameObject.IsValid())
             comp.GameObject.DetachComponent(comp);
 
+        // Seeded with the type being attached, so a component that requires its own type is
+        // satisfied by this one rather than constructing a second alongside it.
         Type type = comp.GetType();
-        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
-        if (requireComponentAttribute != null)
-        {
-            foreach (Type requiredComponentType in requireComponentAttribute.types)
-            {
-                if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
-                    continue;
-
-                // If there is already a component on the object
-                if (GetComponent(requiredComponentType).IsValid())
-                    continue;
-
-                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
-#pragma warning disable IL2072
-                AddComponent(requiredComponentType);
-#pragma warning restore IL2072
-            }
-        }
+        AddRequirements(type, [type]);
 
         comp.AttachToGameObject(this);
         _components.Add(comp);

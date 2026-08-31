@@ -34,6 +34,33 @@ public sealed class LateComponent : MonoBehaviour { }
 // A non-MonoBehaviour type, used to verify AddComponent(Type) rejects it.
 public sealed class NotAComponent { }
 
+// Requires itself. The requirement is satisfied by the very component being added.
+[RequireComponent(typeof(SelfRequiring))]
+public sealed class SelfRequiring : MonoBehaviour { }
+
+// Two components that require each other, which is a cycle no walk can bottom out on.
+[RequireComponent(typeof(MutualB))]
+public sealed class MutualA : MonoBehaviour { }
+
+[RequireComponent(typeof(MutualA))]
+public sealed class MutualB : MonoBehaviour { }
+
+// A three step cycle, to check the guard is not just a one level lookback.
+[RequireComponent(typeof(RingB))]
+public sealed class RingA : MonoBehaviour { }
+
+[RequireComponent(typeof(RingC))]
+public sealed class RingB : MonoBehaviour { }
+
+[RequireComponent(typeof(RingA))]
+public sealed class RingC : MonoBehaviour { }
+
+// A component that cannot be constructed without arguments.
+public sealed class NoDefaultConstructor : MonoBehaviour
+{
+    public NoDefaultConstructor(int _) { }
+}
+
 #endregion
 
 /// <summary>
@@ -43,6 +70,61 @@ public sealed class NotAComponent { }
 public class ComponentTests : RuntimeTestBase
 {
     // ---- Add ----
+
+    /// <summary>
+    /// A component whose requirement is itself has to stop, not recurse. The requirement walk runs
+    /// before the component is on the object, so nothing it can look at will ever satisfy it.
+    /// </summary>
+    [Fact]
+    public void AddComponent_SelfRequirement_AddsOnceAndTerminates()
+    {
+        var go = CreateGameObject();
+
+        var comp = go.AddComponent<SelfRequiring>();
+
+        Assert.NotNull(comp);
+        Assert.Single(go.GetComponents<SelfRequiring>());
+    }
+
+    [Fact]
+    public void AddComponent_MutualRequirement_AddsBothAndTerminates()
+    {
+        var go = CreateGameObject();
+
+        var comp = go.AddComponent<MutualA>();
+
+        Assert.NotNull(comp);
+        Assert.Single(go.GetComponents<MutualA>());
+        Assert.Single(go.GetComponents<MutualB>());
+    }
+
+    [Fact]
+    public void AddComponent_RequirementRing_AddsEachOnceAndTerminates()
+    {
+        var go = CreateGameObject();
+
+        go.AddComponent<RingA>();
+
+        Assert.Single(go.GetComponents<RingA>());
+        Assert.Single(go.GetComponents<RingB>());
+        Assert.Single(go.GetComponents<RingC>());
+    }
+
+    /// <summary>
+    /// Every path that adds a component by type reaches this, including dragging a script onto the
+    /// inspector, so a type that cannot be constructed has to be refused rather than thrown from.
+    /// </summary>
+    [Fact]
+    public void AddComponent_WithoutAParameterlessConstructor_ReturnsNull()
+    {
+        var go = CreateGameObject();
+
+        var comp = go.AddComponent(typeof(NoDefaultConstructor));
+
+        Assert.Null(comp);
+        Assert.Empty(go.GetComponents<NoDefaultConstructor>());
+    }
+
 
     [Fact]
     public void AddComponent_ReturnsInstance_WiredToGameObject()
