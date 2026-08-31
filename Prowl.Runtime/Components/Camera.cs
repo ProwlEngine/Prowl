@@ -179,8 +179,6 @@ public class Camera : MonoBehaviour
     /// </summary>
     public bool HasPreviousViewProjectionMatrix => _hasPreviousViewProjectionMatrix;
 
-    public Camera() : base() { }
-
     public override void OnEnable()
     {
         _hasPreviousViewProjectionMatrix = false;
