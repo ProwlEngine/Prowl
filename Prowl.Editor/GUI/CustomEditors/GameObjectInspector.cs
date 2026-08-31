@@ -1172,18 +1172,91 @@ public static class GameObjectInspector
                         if (canApply)
                             Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
                     }
+
+                    // Only where the list can be acted on. A model is rebuilt from its source file on
+                    // every import, so nothing in it can be applied and Revert above is the whole of
+                    // what an instance of one can do.
+                    if (isRoot && canApply && (hasOverrides || PrefabUtility.HasAnyAdditions(go)))
+                        DrawOverridesButton(paper, font, go);
                 }
             }
+        }
+    }
 
-            // What makes this instance differ from its prefab, whether by a changed value or by
-            // something it has that the prefab does not.
-            if (hasOverrides || PrefabUtility.HasAnyAdditions(go))
+    // The override list opens in a popover. Inline it ran to a header and a row per entry with no
+    // bound, and setting a flag down a deep instance puts hundreds of them above every component.
+    private static bool _overridesPopupOpen;
+    private static GameObject? _overridesPopupTarget;
+
+    private static void ToggleOverridesPopup(GameObject target)
+    {
+        bool sameTarget = _overridesPopupOpen && _overridesPopupTarget == target;
+        _overridesPopupOpen = !sameTarget;
+        _overridesPopupTarget = sameTarget ? null : target;
+    }
+
+    private static void CloseOverridesPopup()
+    {
+        _overridesPopupOpen = false;
+        _overridesPopupTarget = null;
+    }
+
+    private static void DrawOverridesButton(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
+    {
+        int count = PrefabUtility.CountOverrides(go);
+
+        var trigger = paper.Box("gi_prefab_ov_btn")
+            .Width(110).Height(24).Rounded(4)
+            .BackgroundColor(EditorTheme.Ink100)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .OnClick(go, (g, _) => ToggleOverridesPopup(g));
+
+        using (trigger.Enter())
+        {
+            var trigHandle = paper.CurrentParent;
+
+            paper.Box("gi_prefab_ov_btn_lbl")
+                .Width(UnitValue.Stretch()).Height(24).IsNotInteractable()
+                .Text(Loc.Get("inspector.override_count", new { count }), font)
+                .TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+
+            if (!_overridesPopupOpen || _overridesPopupTarget != go) return;
+
+            if (paper.IsKeyPressed(PaperKey.Escape))
             {
-                paper.Box("gi_prefab_ov_sep").Height(1)
-                    .BackgroundColor(borderColor).Margin(0, 2, 0, 2);
-
-                DrawOverridesContent(paper, font, go);
+                CloseOverridesPopup();
+                return;
             }
+
+            MenuTreePopup.Backdrop(paper, "gi_prefab_ov", CloseOverridesPopup);
+            RenderOverridesPopover(paper, font, go, trigHandle);
+        }
+    }
+
+    private static void RenderOverridesPopover(Paper paper, Prowl.Scribe.FontFile font, GameObject go, ElementHandle trigger)
+    {
+        const float width = 420f, padding = 5f, maxHeight = 420f;
+        float triggerHeight = trigger.Data.LayoutRect.Size.Y > 0 ? (float)trigger.Data.LayoutRect.Size.Y : 24f;
+
+        using (paper.Column("gi_prefab_ov_pop")
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, triggerHeight + 4f)
+            .Width(width).Height(UnitValue.Auto)
+            .BackgroundColor(EditorTheme.Popover)
+            .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
+            .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
+            .Rounded(EditorTheme.Roundness + 2f)
+            .Padding(padding, padding, padding, padding)
+            .HookToParent()
+            .Layer(Layer.Topmost)
+            .ClampToScreen()
+            .StopEventPropagation()
+            .Enter())
+        {
+            Origami.ScrollView(paper, "gi_prefab_ov_scroll", width - padding * 2, maxHeight)
+                .Padding(0)
+                .Body(() => DrawOverridesContent(paper, font, go));
         }
     }
 
@@ -1207,11 +1280,8 @@ public static class GameObjectInspector
 
         using (paper.Column("gi_prefab_ov_list")
             .Height(UnitValue.Auto)
-            .Margin(8, 0, 4, 4)
             .Enter())
         {
-            DrawOverridesToolbar(paper, font, go, described.Count, canApply);
-
             int key = 0;
             foreach (var group in described.GroupBy(d => d.Group))
             {
@@ -1254,26 +1324,6 @@ public static class GameObjectInspector
             if (canApply)
                 OverrideButton(paper, font, $"gi_add_apply_{key}", Loc.Get("inspector.apply"), 45,
                     root, r => PrefabUtility.ApplyAddition(r, addition));
-        }
-    }
-
-    /// <summary>Everything at once, so a whole instance can be settled without walking the list.</summary>
-    private static void DrawOverridesToolbar(Paper paper, Prowl.Scribe.FontFile font, GameObject root, int count, bool canApply)
-    {
-        using (paper.Row("gi_ov_bar").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
-        {
-            paper.Box("gi_ov_count")
-                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                .Text(Loc.Get("inspector.override_count", new { count }), font)
-                .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
-
-            OverrideButton(paper, font, "gi_ov_revert_all", Loc.Get("inspector.revert_all"), 70,
-                root, r => PrefabUtility.RevertOverrides(r));
-
-            if (canApply)
-                OverrideButton(paper, font, "gi_ov_apply_all", Loc.Get("inspector.apply_all"), 65,
-                    root, r => PrefabUtility.ApplyOverrides(r));
         }
     }
 

@@ -857,8 +857,30 @@ public static partial class PrefabUtility
         }
     }
 
-    /// <summary>Whether this instance has anything its prefab does not.</summary>
-    public static bool HasAnyAdditions(GameObject go) => DescribeAdditions(go).Count > 0;
+    /// <summary>Whether this instance has anything its prefab does not. Stops at the first one.</summary>
+    public static bool HasAnyAdditions(GameObject go)
+    {
+        GameObject? prefabRoot = GetPrefabInstanceRoot(go);
+        return prefabRoot.IsValid() && Any(prefabRoot!);
+
+        static bool Any(GameObject owner)
+        {
+            foreach (MonoBehaviour component in owner.GetComponents<MonoBehaviour>())
+                if (owner.GetComponentSourceIdentifier(component) == Guid.Empty) return true;
+
+            foreach (GameObject child in owner.Children)
+                if (!IsProvidedByPrefab(child) || Any(child)) return true;
+
+            return false;
+        }
+    }
+
+    /// <summary>How many members this instance overrides, without describing any of them.</summary>
+    public static int CountOverrides(GameObject go)
+    {
+        GameObject? root = GetPrefabInstanceRoot(go);
+        return root.IsValid() ? root!.PrefabOverrides.Count : 0;
+    }
 
     /// <summary>Take an addition back out of the instance. It was the instance's, so it simply goes.</summary>
     public static void RemoveAddition(GameObject instanceGO, AdditionDescription addition)
