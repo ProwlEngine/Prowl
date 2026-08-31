@@ -9,6 +9,7 @@
 //   Fly Up:    E
 //   Fly Down:  Q
 //   Sprint:    Left Shift
+//   Shadow Focus Toggle: F (cascades follow the player vs. the camera)
 //
 
 using Prowl.Runtime;
@@ -31,6 +32,8 @@ internal class Program
 public sealed class MyGame : Game
 {
     private GameObject? cameraGO;
+    private Camera? camera;
+    private GameObject? playerGO;
     private Scene? scene;
 
     // Input Actions
@@ -52,14 +55,30 @@ public sealed class MyGame : Game
         GameObject lightGO = new("Directional Light");
         DirectionalLight light = lightGO.AddComponent<DirectionalLight>();
         light.Color = Color.White;
+        // Four cascades over a large ground plane: the resolution difference between the near and far
+        // cascade is what the shadow focus toggle below makes visible.
+        light.Cascades = DirectionalLight.CascadeCount.Four;
         lightGO.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
         scene.Add(lightGO);
 
-        // Create camera
+        // Create ground plane
+        AddCube("Ground", new Float3(0, -1, 0), new Float3(80, 0.1f, 80), new Color(0.5f, 0.5f, 0.5f, 1.0f));
+
+        // The player stand-in, far enough from the camera to land in a coarse far cascade when the
+        // cascades are centered on the camera instead of on it.
+        playerGO = AddCube("Player", new Float3(0, 0, 25), new Float3(1, 2, 1), new Color(0.9f, 0.7f, 0.2f, 1.0f));
+
+        // Props beside the player, to show shadow detail (or the lack of it) on more than one edge.
+        AddCube("Prop A", new Float3(2.0f, -0.6f, 24.0f), new Float3(0.8f, 0.8f, 0.8f), new Color(0.8f, 0.3f, 0.3f, 1.0f));
+        AddCube("Prop B", new Float3(-2.2f, -0.45f, 26.0f), new Float3(1.1f, 1.1f, 1.1f), new Color(0.3f, 0.6f, 0.8f, 1.0f));
+        AddCube("Prop C", new Float3(-1.0f, -0.75f, 23.0f), new Float3(0.5f, 0.5f, 0.5f), new Color(0.4f, 0.8f, 0.4f, 1.0f));
+
+        // Create camera, third-person: behind and above the player, looking at it.
         cameraGO = new("Main Camera");
         cameraGO.Tag = "Main Camera";
-        cameraGO.Transform.Position = new(0, 1.5f, -5);
-        Camera camera = cameraGO.AddComponent<Camera>();
+        cameraGO.Transform.Position = new(0, 6, -10);
+        cameraGO.Transform.LookAt(playerGO.Transform.Position);
+        camera = cameraGO.AddComponent<Camera>();
         camera.Depth = -1;
         camera.HDR = true;
         camera.Effects =
@@ -68,23 +87,30 @@ public sealed class MyGame : Game
             new BloomEffect(),
             new TonemapperEffect(),
         ];
+        // Centre the cascades on the player rather than on the camera, so the character sits in the
+        // highest-resolution cascade instead of a distant coarse one. Press F to compare.
+        camera.ShadowFocus = playerGO.Transform;
         scene.Add(cameraGO);
-
-        // Create ground plane
-        GameObject groundGO = new("Ground");
-        MeshRenderer mr = groundGO.AddComponent<MeshRenderer>();
-        mr.Mesh = Mesh.CreateCube(Float3.One);
-        mr.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
-        mr.Material.Res?.SetColor("_MainColor", new Color(0.5f, 0.5f, 0.5f, 1.0f));
-        groundGO.Transform.Position = new(0, -1, 0);
-        groundGO.Transform.LocalScale = new(20, 0.1f, 20);
-        scene.Add(groundGO);
 
         // Load and create BananaMan
         CreateBananaMan();
 
         Input.LockCursor();
         Scene.Load(scene);
+    }
+
+    /// <summary>Adds a coloured unit cube to the scene, scaled and positioned as given.</summary>
+    private GameObject AddCube(string name, Float3 position, Float3 scale, Color color)
+    {
+        GameObject go = new(name);
+        MeshRenderer mr = go.AddComponent<MeshRenderer>();
+        mr.Mesh = Mesh.CreateCube(Float3.One);
+        mr.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        mr.Material.Res?.SetColor("_MainColor", color);
+        go.Transform.Position = position;
+        go.Transform.LocalScale = scale;
+        scene!.Add(go);
+        return go;
     }
 
     private void CreateBananaMan()
@@ -204,6 +230,17 @@ public sealed class MyGame : Game
         if (lookEnableAction.IsPressed())
         {
             cameraGO.Transform.LocalEulerAngles += new Float3(lookInput.Y, lookInput.X, 0);
+        }
+
+        // Flip the shadow cascades between centring on the player and centring on the camera.
+        // With focus on, the player's shadows stay crisp however far the camera flies away; with it
+        // off, the resolution follows the camera and the player's shadows go blocky.
+        if (Input.GetKeyDown(KeyCode.F))
+        {
+            camera.ShadowFocus = camera.ShadowFocus == null ? playerGO.Transform : null;
+            Debug.Log(camera.ShadowFocus == null
+                ? "Shadow focus: Camera (default)"
+                : "Shadow focus: Player");
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))
