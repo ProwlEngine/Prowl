@@ -102,16 +102,25 @@ public class ComponentPopoutPanel : DockPanel
 
             // Draw the component editor
             string compId = $"cpop_{comp.Identifier}";
-            var customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
-            if (customEditor != null)
+            // Contained the same way the Inspector contains it: a broken custom editor, a throwing
+            // property getter or a bad [Button] must not take the editor down with it.
+            try
             {
-                customEditor.OnGUI(paper, compId, comp);
-                // The PropertyGrid draws [Button] methods itself, a custom editor does not.
-                GameObjectInspector.DrawButtonMethods(paper, $"{compId}_btns", comp);
+                var customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
+                if (customEditor != null)
+                {
+                    customEditor.OnGUI(paper, compId, comp);
+                    // The PropertyGrid draws [Button] methods itself, a custom editor does not.
+                    GameObjectInspector.DrawButtonMethods(paper, $"{compId}_btns", comp);
+                }
+                else
+                {
+                    PropertyGridUtils.Draw(paper, compId, comp);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                PropertyGridUtils.Draw(paper, compId, comp);
+                Runtime.Debug.LogError($"[Inspector] Drawing {comp.GetType().Name} threw and was skipped: {ex.Message}");
             }
         });
     }
