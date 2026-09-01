@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using Silk.NET.Core.Native;
@@ -407,6 +408,50 @@ public static unsafe class Graphics
         using var cmd = GetCommandBuffer("Texture.TexSubImage3D");
         cmd.EncodeUpdateTexture3D(texture, level, x, y, z, width, height, depth, span);
         Submit(cmd);
+    }
+
+    /// <summary>
+    /// Captures the currently bound default framebuffer as a <see cref="Texture2D"/>. The caller
+    /// receives a normal texture and can use <see cref="Texture2D.GetData{T}"/> / sampling /
+    /// serialization without managing raw byte buffers. The texture is stored bottom-up (GPU Y-up,
+    /// matching other Prowl textures). Callers that encode to PNG or other top-down formats should
+    /// flip rows before encoding.
+    /// </summary>
+    public static Texture2D Screenshot()
+    {
+        if (IsHeadless || Window.InternalWindow is null)
+        {
+            throw new InvalidOperationException("No graphical framebuffer is available.");
+        }
+
+        var size = Window.InternalWindow.FramebufferSize;
+        int width = size.X;
+        int height = size.Y;
+        if (width is < 1 or > 16_384 || height is < 1 or > 16_384)
+        {
+            throw new InvalidOperationException("The graphical framebuffer has an invalid size.");
+        }
+
+        int rowBytes = checked(width * 4);
+        ulong totalBytes = checked((ulong)rowBytes * (ulong)height);
+        if (totalBytes > 64UL * 1024UL * 1024UL)
+        {
+            throw new InvalidOperationException("The graphical framebuffer exceeds the capture size limit.");
+        }
+
+        if (totalBytes > int.MaxValue)
+        {
+            throw new InvalidOperationException("The graphical framebuffer is too large for readback.");
+        }
+
+        var texture = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Color4b);
+        using (var cmd = GetCommandBuffer("Screenshot"))
+        {
+            cmd.EncodeScreenshot(texture.Handle, width, height);
+            SubmitAndWait(cmd);
+        }
+
+        return texture;
     }
 
     /// <summary>Bytes per pixel under tight packing, used to size copies into the

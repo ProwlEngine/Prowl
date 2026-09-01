@@ -106,4 +106,7 @@ internal enum CommandOpcode : ushort
     // Debug markers
     BeginSample,
     EndSample,
+
+    // Development screenshot capture; appended to preserve existing opcode values.
+    Screenshot,
 }

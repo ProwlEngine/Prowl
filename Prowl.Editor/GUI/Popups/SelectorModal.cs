@@ -309,14 +309,16 @@ public static class SelectorModal
             return;
         }
 
-        var items = db.FindAllOfType(_targetType).Take(200).ToList();
+        // Exact then prefix matches sort ahead so the closest ones survive the cap.
+        var all = db.FindAllOfType(_targetType);
+        var matches = string.IsNullOrEmpty(_searchText)
+            ? all
+            : all.Where(i => i.name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                 .OrderBy(i => i.name.Equals(_searchText, StringComparison.OrdinalIgnoreCase) ? 0
+                             : i.name.StartsWith(_searchText, StringComparison.OrdinalIgnoreCase) ? 1 : 2)
+                 .ThenBy(i => i.name, StringComparer.OrdinalIgnoreCase);
 
-        // Filter by search
-        if (!string.IsNullOrEmpty(_searchText))
-        {
-            items = items.Where(i =>
-                i.name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)).ToList();
-        }
+        var items = matches.Take(200).ToList();
 
         const float cellSize = 72f;
         const float labelH = 18f;

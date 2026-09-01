@@ -172,6 +172,11 @@ public abstract class Game
 
                 _paper.EndFrame();
 
+                // Give presentation hosts a point after all scene and Paper commands have been
+                // submitted but before the backbuffer is swapped. Development screenshot capture
+                // uses this hook to read the actual rendered client on the render thread.
+                AfterGui(currentScene);
+
                 // === End Graphics ===
 
                 RenderTexture.UpdatePool();
@@ -372,6 +377,9 @@ public abstract class Game
     public virtual void EndRender() { }
     public virtual void BeginGui(Paper paper) { }
     public virtual void EndGui(Paper paper) { }
+
+    /// <summary>Called after the GUI frame is submitted and before the backbuffer is swapped.</summary>
+    public virtual void AfterGui(Scene? scene) { }
 
     /// <summary>Called during update. Override to control scene update/gizmo behavior.</summary>
     public virtual void OnUpdate(Scene? scene)
