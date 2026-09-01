@@ -119,9 +119,7 @@ public abstract class Game
             }
             catch (Exception e)
             {
-                Debug.LogError("An exception occurred during the Update loop:");
-                Debug.LogError(e.ToString());
-                throw;
+                ReportLoopFailure("Update", e);
             }
         };
 
@@ -201,11 +199,21 @@ public abstract class Game
             }
             catch (Exception e)
             {
-                Debug.LogError("An exception occurred during the Update loop:");
-                Debug.LogError(e.ToString());
-                throw;
+                ReportLoopFailure("Render", e);
             }
         };
+
+        void ReportLoopFailure(string loop, Exception e)
+        {
+            Debug.LogError($"An exception occurred during the {loop} loop:");
+            Debug.LogError(e.ToString());
+
+            // A game has nowhere useful to carry on to, so it still fails fast. The editor does: the
+            // scene, the panels and whatever is unsaved are all still there, and taking the process
+            // down over one bad frame loses all of it.
+            if (!Application.IsEditor)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e).Throw();
+        }
 
         Window.Resize += (size) =>
         {
