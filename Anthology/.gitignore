@@ -428,3 +428,10 @@ Slang/Native/lib
 !Clay/test-models/obj/
 !Clay/test-models/obj/*.obj
 !Clay/test-models/obj/*.mtl
+
+# Everything of Aperture's that is not the library itself: the test project, the benchmark
+# project, the image corpus both read, and the Python and C# tools that build that corpus. The
+# corpus runs to hundreds of megabytes,and may not be redistributed, and the benchmark
+# pulls in ImageSharp and ImageMagick purely to compare against. None of it is needed to build
+# or consume the package.
+Aperture/local/
