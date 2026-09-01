@@ -1746,7 +1746,8 @@ public static partial class PrefabUtility
                 match = null;
             }
 
-            MonoBehaviour paired = match.IsValid() ? match! : instance.AttachClonedComponent(sourceComponent.GetType());
+            MonoBehaviour? paired = match.IsValid() ? match! : instance.AttachClonedComponent(sourceComponent.GetType());
+            if (paired is null) continue;
 
             context.AddTarget(sourceComponent, paired);
         }

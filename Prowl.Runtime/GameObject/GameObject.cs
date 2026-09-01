@@ -567,8 +567,8 @@ public partial class GameObject : EngineObject, ISerializable
         {
             AddRequirements(type, pending);
 
-            var newComponent = Activator.CreateInstance(type) as MonoBehaviour;
-            if (newComponent.IsNotValid()) return null;
+            if (!TryConstruct(type, out MonoBehaviour? newComponent) || newComponent.IsNotValid())
+                return null;
 
             newComponent.AttachToGameObject(this);
             _components.Add(newComponent);
@@ -581,6 +581,34 @@ public partial class GameObject : EngineObject, ISerializable
         finally
         {
             pending.Remove(type);
+        }
+    }
+
+    /// <summary>
+    /// Constructs a component, containing anything its constructor throws. A field initializer is
+    /// compiled into the constructor, so user code runs here and can fail for any reason at all;
+    /// letting that escape would take down whichever menu, drop target or scene load asked for it.
+    /// </summary>
+    internal static bool TryConstruct(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
+        out MonoBehaviour? component)
+    {
+        component = null;
+        try
+        {
+            component = Activator.CreateInstance(type) as MonoBehaviour;
+            return component is not null;
+        }
+        catch (Exception e)
+        {
+            Exception cause = e is TargetInvocationException { InnerException: not null } wrapped
+                ? wrapped.InnerException!
+                : e;
+
+            Debug.LogError($"'{type.Name}' threw while being constructed, so it was not added. " +
+                           $"A field initializer runs in the constructor, before the component is " +
+                           $"attached and before any Start or OnEnable. {cause.GetType().Name}: {cause.Message}");
+            return false;
         }
     }
 
@@ -1317,10 +1345,23 @@ public partial class GameObject : EngineObject, ISerializable
                 }
 
                 // Deserialize against the resolved type, not the abstract MonoBehaviour, so a name that
-                // binds to a non component type can't throw a bad cast out of the array.
-                MonoBehaviour? typedComponent = oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType)
-                    ? Serializer.Deserialize(compTag, oType, ctx) as MonoBehaviour
-                    : null;
+                // binds to a non component type can't throw a bad cast out of the array. A user
+                // constructor runs in here and can throw anything, which would otherwise drop every
+                // remaining object in the scene rather than the one component that failed.
+                MonoBehaviour? typedComponent = null;
+                if (oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType))
+                {
+                    try
+                    {
+                        typedComponent = Serializer.Deserialize(compTag, oType, ctx) as MonoBehaviour;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"'{oType.Name}' on '{Name}' threw while being loaded, so it was " +
+                                       $"kept as missing rather than dropping the rest of the scene. " +
+                                       $"{e.GetType().Name}: {e.Message}");
+                    }
+                }
 
                 if (typedComponent.IsValid())
                 {

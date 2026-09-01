@@ -1,6 +1,10 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
+using Prowl.Echo.Cloning;
+
 using Xunit;
 
 namespace Prowl.Runtime.Test;
@@ -61,6 +65,23 @@ public sealed class NoDefaultConstructor : MonoBehaviour
     public NoDefaultConstructor(int _) { }
 }
 
+// Throws from its constructor, the way a field initializer calling a null delegate does.
+public sealed class ThrowsWhenConstructed : MonoBehaviour
+{
+    public ThrowsWhenConstructed() => throw new InvalidOperationException("no");
+}
+
+// Throws only while armed, so an object holding one can be built and then copied.
+public sealed class ThrowsWhenArmed : MonoBehaviour
+{
+    public static bool Armed;
+
+    public ThrowsWhenArmed()
+    {
+        if (Armed) throw new InvalidOperationException("no");
+    }
+}
+
 #endregion
 
 /// <summary>
@@ -114,6 +135,61 @@ public class ComponentTests : RuntimeTestBase
     /// Every path that adds a component by type reaches this, including dragging a script onto the
     /// inspector, so a type that cannot be constructed has to be refused rather than thrown from.
     /// </summary>
+    /// <summary>
+    /// A constructor is user code, and a field initializer is compiled into one, so it can throw
+    /// anything. That has to be contained rather than escaping into whatever asked for the component.
+    /// </summary>
+    [Fact]
+    public void AddComponent_WhoseConstructorThrows_ReturnsNullInsteadOfPropagating()
+    {
+        var go = CreateGameObject();
+
+        var comp = go.AddComponent(typeof(ThrowsWhenConstructed));
+
+        Assert.Null(comp);
+        Assert.Empty(go.GetComponents<ThrowsWhenConstructed>());
+    }
+
+    /// <summary>The object it failed on stays usable, rather than being left half built.</summary>
+    [Fact]
+    public void AddComponent_AfterAConstructorThrows_TheObjectStillWorks()
+    {
+        var go = CreateGameObject();
+
+        go.AddComponent(typeof(ThrowsWhenConstructed));
+        var plain = go.AddComponent<PlainComponent>();
+
+        Assert.NotNull(plain);
+        Assert.Single(go.GetComponents<PlainComponent>());
+    }
+
+    /// <summary>
+    /// A constructor that only fails later, which is what a delegate that was assigned and then
+    /// cleared looks like, must not take the copy down with it.
+    /// </summary>
+    [Fact]
+    public void Cloning_WhenAComponentsConstructorThrows_SkipsItRatherThanFailing()
+    {
+        var go = CreateGameObject();
+        Assert.NotNull(go.AddComponent(typeof(ThrowsWhenArmed)));
+        go.AddComponent<PlainComponent>();
+
+        GameObject copy;
+        ThrowsWhenArmed.Armed = true;
+        try
+        {
+            copy = Cloner.Clone(go);
+        }
+        finally
+        {
+            ThrowsWhenArmed.Armed = false;
+        }
+
+        Assert.NotNull(copy);
+        Assert.Empty(copy.GetComponents<ThrowsWhenArmed>());
+        Assert.Single(copy.GetComponents<PlainComponent>());
+    }
+
     [Fact]
     public void AddComponent_WithoutAParameterlessConstructor_ReturnsNull()
     {
