@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Prowl.Analyzers;
 
@@ -18,6 +20,7 @@ public sealed class MonoBehaviourConstructorAnalyzer : DiagnosticAnalyzer
 {
     public const string DeclaredConstructorId = "PROWLMB001";
     public const string NoParameterlessConstructorId = "PROWLMB002";
+    public const string RunsBeforeAttachId = "PROWLMB003";
 
     private const string MonoBehaviourMetadataName = "Prowl.Runtime.MonoBehaviour";
 
@@ -39,8 +42,17 @@ public sealed class MonoBehaviourConstructorAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The engine creates components with no arguments. A MonoBehaviour whose only constructors take parameters cannot be added to a GameObject, loaded from a scene, or dragged onto the inspector.");
 
+    public static readonly DiagnosticDescriptor RunsBeforeAttach = new(
+        RunsBeforeAttachId,
+        title: "Field initializer on a MonoBehaviour calls something",
+        messageFormat: "This initializer runs in '{0}'s constructor, before the component is attached and before any Start or OnEnable has run anywhere in the scene. Anything it reaches for is very likely not set up yet. Assign it in OnEnable or Start instead.",
+        category: "Usage",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "A field initializer is compiled into the constructor, so it runs while the scene is still being deserialized. Calling into other systems from there sees them before they have been initialised, and whatever it assigns is overwritten when serialized values are applied.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        ImmutableArray.Create(DeclaredConstructor, NoParameterlessConstructor);
+        ImmutableArray.Create(DeclaredConstructor, NoParameterlessConstructor, RunsBeforeAttach);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -52,6 +64,9 @@ public sealed class MonoBehaviourConstructorAnalyzer : DiagnosticAnalyzer
             if (monoBehaviour is null) return; // no reference to Prowl.Runtime in this compilation
 
             start.RegisterSymbolAction(ctx => Analyze(ctx, monoBehaviour), SymbolKind.NamedType);
+
+            start.RegisterOperationAction(ctx => AnalyzeInitializer(ctx, monoBehaviour),
+                OperationKind.FieldInitializer, OperationKind.PropertyInitializer);
         });
     }
 
@@ -85,6 +100,34 @@ public sealed class MonoBehaviourConstructorAnalyzer : DiagnosticAnalyzer
         ctx.ReportDiagnostic(Diagnostic.Create(
             NoParameterlessConstructor, type.Locations.FirstOrDefault() ?? Location.None, type.Name));
     }
+
+    /// <summary>
+    /// Flags an initializer that calls out to something. A constant or a plain object is harmless;
+    /// an invocation is what reaches for a system the scene has not stood up yet.
+    /// </summary>
+    private static void AnalyzeInitializer(OperationAnalysisContext ctx, INamedTypeSymbol monoBehaviour)
+    {
+        var initializer = (ISymbolInitializerOperation)ctx.Operation;
+        if (!DerivesFrom(ctx.ContainingSymbol?.ContainingType, monoBehaviour)) return;
+
+        // A static field is not part of constructing the component, so it is nothing to do with this.
+        if (InitializedSymbols(initializer).Any(symbol => symbol.IsStatic)) return;
+
+        if (!initializer.Value.Descendants().Prepend(initializer.Value).Any(op => op is IInvocationOperation))
+            return;
+
+        ctx.ReportDiagnostic(Diagnostic.Create(
+            RunsBeforeAttach, initializer.Value.Syntax.GetLocation(),
+            ctx.ContainingSymbol!.ContainingType.Name));
+    }
+
+    private static IEnumerable<ISymbol> InitializedSymbols(ISymbolInitializerOperation initializer) =>
+        initializer switch
+        {
+            IFieldInitializerOperation field => field.InitializedFields,
+            IPropertyInitializerOperation property => property.InitializedProperties,
+            _ => Enumerable.Empty<ISymbol>(),
+        };
 
     private static bool DerivesFrom(ITypeSymbol? type, INamedTypeSymbol monoBehaviour)
     {

@@ -77,6 +77,36 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
         Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
     }
 
+    /// <summary>
+    /// The shape that took a real project down: no declared constructor at all, but a field
+    /// initializer the compiler moves into one, calling a static delegate nothing has assigned yet.
+    /// </summary>
+    [Fact]
+    public void WarnsOnAFieldInitializerThatCallsSomething()
+    {
+        WriteScript("Reg.cs", "public static class Reg { public static System.Func<int> Get; }");
+        WriteScript("Init.cs", "public class Init : Prowl.Runtime.MonoBehaviour { private int _v = Reg.Get(); }");
+
+        var result = ScriptCompiler.CompileAll(Project);
+
+        Assert.Contains(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+    }
+
+    /// <summary>A constant or a plain object is not reaching for anything, so it stays quiet.</summary>
+    [Fact]
+    public void SaysNothingAboutAPlainFieldInitializer()
+    {
+        WriteScript("Defaults.cs",
+            "public class Defaults : Prowl.Runtime.MonoBehaviour " +
+            "{ public int Speed = 5; public string Name = \"hi\"; " +
+            "public System.Collections.Generic.List<int> Items = new(); }");
+
+        var result = ScriptCompiler.CompileAll(Project);
+
+        Assert.True(result.Success, result.Errors);
+        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+    }
+
     [Fact]
     public void SaysNothingAboutAComponentWithNoConstructor()
     {
