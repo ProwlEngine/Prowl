@@ -159,7 +159,12 @@ internal static class RoslynScriptBackend
                 .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning)
                 .ToList();
             diagnostics.AddRange(RunScriptAnalyzers(compilation));
-            byte[]? image = result.Success ? peStream.ToArray() : null;
+
+            // An analyzer reporting an error is describing something that will not survive being run,
+            // so it fails the compile the way the compiler's own errors do. Loading the assembly anyway
+            // would report the problem and then hit it at run time regardless.
+            bool blocked = diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
+            byte[]? image = result.Success && !blocked ? peStream.ToArray() : null;
 
             // 6. Update state. Compilation/trees/refs reflect what we just built; the success snapshot
             //    only advances when the emit actually succeeded (so a repeat of failing source does not

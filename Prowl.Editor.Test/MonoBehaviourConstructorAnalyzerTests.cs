@@ -89,7 +89,39 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
 
         var result = ScriptCompiler.CompileAll(Project);
 
+        // A null delegate cannot be defended, so this refuses to compile rather than warning.
+        Assert.False(result.Success);
+        Assert.Contains(MonoBehaviourConstructorAnalyzer.InvokesDelegateId, result.Output);
+    }
+
+    /// <summary>
+    /// Calling the project's own code is suspect but may be pure, so it warns rather than refusing.
+    /// The engine relies on exactly this for a component's default sprite.
+    /// </summary>
+    [Fact]
+    public void WarnsButCompilesWhenAnInitializerCallsOwnCode()
+    {
+        WriteScript("Pure.cs", "public static class Pure { public static int Twice(int x) => x * 2; }");
+        WriteScript("Uses.cs", "public class Uses : Prowl.Runtime.MonoBehaviour { private int _v = Pure.Twice(2); }");
+
+        var result = ScriptCompiler.CompileAll(Project);
+
+        Assert.True(result.Success, result.Errors);
         Assert.Contains(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+    }
+
+    /// <summary>A framework helper does not care how far through loading a scene is.</summary>
+    [Fact]
+    public void SaysNothingAboutAFrameworkCall()
+    {
+        WriteScript("Fw.cs",
+            "public class Fw : Prowl.Runtime.MonoBehaviour { private string _id = System.Guid.NewGuid().ToString(); }");
+
+        var result = ScriptCompiler.CompileAll(Project);
+
+        Assert.True(result.Success, result.Errors);
+        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.InvokesDelegateId, result.Output);
     }
 
     /// <summary>A constant or a plain object is not reaching for anything, so it stays quiet.</summary>
@@ -105,6 +137,7 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
 
         Assert.True(result.Success, result.Errors);
         Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.InvokesDelegateId, result.Output);
     }
 
     [Fact]

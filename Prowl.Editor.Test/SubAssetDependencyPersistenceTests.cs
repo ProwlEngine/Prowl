@@ -78,9 +78,9 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
                 {
                     MySprite.EnsureLoaded();
                     var sprite = MySprite.Res;
-                    sprite?.Texture.EnsureLoaded();
-                    var tex = sprite?.Texture.Res;
-                    System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={tex.IsValid()}|width={tex?.Width}|height={tex?.Height}");
+                    if (sprite.IsValid()) sprite.Texture.EnsureLoaded();
+                    var tex = sprite.IsValid() ? sprite.Texture.Res : null;
+                    System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={tex.IsValid()}|width={(tex.IsValid() ? tex.Width : 0)}|height={(tex.IsValid() ? tex.Height : 0)}");
                 }
             }
             """);

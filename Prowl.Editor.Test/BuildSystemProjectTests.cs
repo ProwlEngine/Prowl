@@ -407,13 +407,13 @@ public class BuildSystemProjectTests : EditorTestHarness
 
                     MyTexture.EnsureLoaded();
                     var tex = MyTexture.Res;
-                    System.Console.WriteLine($"PROWL_TEXTURE_CHECK|valid={tex.IsValid()}|width={tex?.Width}|height={tex?.Height}");
+                    System.Console.WriteLine($"PROWL_TEXTURE_CHECK|valid={tex.IsValid()}|width={(tex.IsValid() ? tex.Width : 0)}|height={(tex.IsValid() ? tex.Height : 0)}");
 
                     MySprite.EnsureLoaded();
                     var sprite = MySprite.Res;
-                    sprite?.Texture.EnsureLoaded();
-                    var spriteTex = sprite?.Texture.Res;
-                    System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={spriteTex.IsValid()}|width={spriteTex?.Width}|height={spriteTex?.Height}");
+                    if (sprite.IsValid()) sprite.Texture.EnsureLoaded();
+                    var spriteTex = sprite.IsValid() ? sprite.Texture.Res : null;
+                    System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={spriteTex.IsValid()}|width={(spriteTex.IsValid() ? spriteTex.Width : 0)}|height={(spriteTex.IsValid() ? spriteTex.Height : 0)}");
                 }
             }
             """);
