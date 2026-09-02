@@ -30,6 +30,9 @@ public class AssetWatcher : IDisposable
     {
         if (!Directory.Exists(assetsPath)) return;
 
+        // Dispose any existing watcher before creating a new one
+        Stop();
+
         _watcher = new FileSystemWatcher(assetsPath)
         {
             IncludeSubdirectories = true,
