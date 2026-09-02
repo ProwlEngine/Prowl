@@ -91,7 +91,11 @@ public static class SaveManager
         _timeSinceLastSave = 0;
         IsAutoSave = isAutoSave;
 
-        if (OnSave == null) return;
+        if (OnSave == null)
+            {
+                IsAutoSave = false;
+                return;
+            }
 
         var labels = new List<string>();
 
