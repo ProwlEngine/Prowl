@@ -546,26 +546,27 @@ internal static class CurvePopover
             .Rounded(4)
             .StopEventPropagation()
             .OnDragging(keyIdx, (ci, e) =>
-            {
-                var k = curve[ci];
-                float dt = (float)e.Delta.X / tToX;
-                float dv = -(float)e.Delta.Y / vToY;
+                        {
+                            var k = curve[ci];
+                            float dt = (float)e.Delta.X / tToX;
+                            float dv = -(float)e.Delta.Y / vToY;
 
-                float curHandleDt = dir * TangentHandleLen / tToX;
-                float curTangent = side == "In" ? k.InTangent : k.OutTangent;
-                float curHandleDv = curTangent * curHandleDt;
+                            float curHandleDt = dir * TangentHandleLen / tToX;
+                            float curTangent = side == "In" ? k.InTangent : k.OutTangent;
+                            float curHandleDv = curTangent * curHandleDt;
 
-                curHandleDt += dt;
-                curHandleDv += dv;
+                            curHandleDt += dt;
+                            curHandleDv += dv;
 
-                if (MathF.Abs(curHandleDt) > 0.0001f)
-                {
-                    float newTangent = curHandleDv / curHandleDt;
-                    if (side == "In") k.InTangent = newTangent;
-                    else k.OutTangent = newTangent;
-                }
-                onChange(curve);
-            });
+                            if (MathF.Abs(curHandleDt) > 0.0001f)
+                            {
+                                float newTangent = curHandleDv / curHandleDt;
+                                float newInTangent = side == "In" ? newTangent : k.InTangent;
+                                float newOutTangent = side == "Out" ? newTangent : k.OutTangent;
+                                curve.MoveKey(ci, new Keyframe(k.Time, k.Value, newInTangent, newOutTangent, k.Interpolation));
+                            }
+                            onChange(curve);
+                        });
     }
 }
 
