@@ -67,6 +67,23 @@ public abstract class Game
 
         Window.Load += () =>
         {
+            try
+            {
+                Load();
+            }
+            catch (Exception e)
+            {
+                // Nothing above this catches, so without it a failure here closes the window with no
+                // message at all. It is still fatal, since a half built editor is worse than none,
+                // but it is reported first.
+                Debug.LogError("An exception occurred while starting up:");
+                Debug.LogError(e.ToString());
+                throw;
+            }
+        };
+
+        void Load()
+        {
             AudioContext.Initialize(44100, 2, 2048);
 
             // Renderer projection uses framebuffer (physical) pixels;
@@ -86,7 +103,7 @@ public abstract class Game
             BuiltInAssets.Initialize();
 
             Initialize();
-        };
+        }
 
         Window.Update += (delta) =>
         {

@@ -105,7 +105,9 @@ public sealed class LocalVariantCache : IVariantCache
         {
             return ValueTask.FromResult<Stream?>(File.OpenRead(path));
         }
-        catch (FileNotFoundException)
+        // A cold cache has no directory yet, which File.OpenRead reports as a different exception
+        // from a missing file. Both mean the same thing here: nothing cached.
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {
             return ValueTask.FromResult<Stream?>(null);
         }
