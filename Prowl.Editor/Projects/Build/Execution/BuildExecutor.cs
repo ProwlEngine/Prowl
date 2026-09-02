@@ -167,7 +167,7 @@ public sealed class BuildExecutor
                     Interlocked.Increment(ref done);
                     gate.Release();
                 }
-            }, ct));
+            }));
         }
         }
     }
