@@ -187,7 +187,7 @@ public class EnvironmentPanel : DockPanel
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         var s = scene.LightmapBake;
-        void Touch() => EditorSceneManager.MarkDirty();
+        void Touch() { scene.LightmapBake = s; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 
