@@ -954,5 +954,14 @@ public static class Undo
     // Private alias used by PropertyRecord
     private static MonoBehaviour? FindComponentByIdentifier(Guid identifier) => FindComponent(identifier);
 
-    private static GameObject? FindGameObjectByIdentifier(Scene scene, Guid identifier) => FindGO(identifier);
+    private static GameObject? FindGameObjectByIdentifier(Scene scene, Guid identifier)
+    {
+        if (scene == null) return null;
+        foreach (var root in scene.RootObjects)
+        {
+            var found = root.FindChildByIdentifier(identifier);
+            if (found != null) return found;
+        }
+        return null;
+    }
 }
