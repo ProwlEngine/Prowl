@@ -121,8 +121,9 @@ public sealed class LightmapBakeService
         // --- Occluders: present in the ray-traced scene (shadows + colour bounce) but never written
         // into an atlas page. ReceivesLighting=false keeps them out of rasterization. ---
         if (_atlas.Targets.Length > 0)
-            foreach (var (om, ox) in occluders)
-                _atlas.Targets[0].AddBakeInstance(om, ox).ReceivesLighting = false;
+                    foreach (var target in _atlas.Targets)
+                        foreach (var (om, ox) in occluders)
+                            target.AddBakeInstance(om, ox).ReceivesLighting = false;
 
         // --- Probes. ---
         foreach (var go in scene.AllObjects)
