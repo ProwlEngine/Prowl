@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -103,13 +103,22 @@ public class CreateAssetTask : EditorTask
             return null;
         }
 
-        using (StreamReader reader = new StreamReader(stream))
+        try
         {
-            File.WriteAllText(filePath, reader.ReadToEnd().Replace("{[shaderName]}", shaderName));
-        }
+            using (StreamReader reader = new StreamReader(stream))
+            {
+                File.WriteAllText(filePath, reader.ReadToEnd().Replace("{[shaderName]}", shaderName));
+            }
 
-        EditorAssetBackend.Instance?.InvalidateFolderIndex();
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+            EditorAssetBackend.Instance?.InvalidateFolderIndex();
+            Debug.Log($"Created shader: {name}");
+            return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to create shader '{shaderName}': {ex.Message}");
+            return null;
+        }
     }
 
     public static string? CreateFolder(string folderName, string relativeFolder)
@@ -143,8 +152,8 @@ public class CreateAssetTask : EditorTask
         {
             var instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
             var echo = Serializer.Serialize(typeof(object), instance);
-            if (echo != null)
-                File.WriteAllText(filePath, echo.WriteToString());
+                        if (echo == null) return null;
+                        File.WriteAllText(filePath, echo.WriteToString());
 
             EditorAssetBackend.Instance?.InvalidateFolderIndex();
             Debug.Log($"Created {entry.Name}: {name}");
