@@ -7,19 +7,20 @@ using System.Drawing;
 using System.Linq;
 
 using Prowl.Editor.Build;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Scribe;
-using Prowl.Editor.Projects.Settings;
-using Prowl.Editor.Projects.Scripting;
-using Prowl.Editor.Theming;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 
@@ -187,7 +188,7 @@ public class BuildSettingsPanel : DockPanel
 
         using (rowB.Enter())
         {
-            var grip = paper.Box($"bp_sc_{sk}_grip").Width(12)                .Text(EditorIcons.Grip, font).TextColor(beingDragged ? EditorTheme.Ink500 : EditorTheme.Ink300)
+            var grip = paper.Box($"bp_sc_{sk}_grip").Width(12).Text(EditorIcons.Grip, font).TextColor(beingDragged ? EditorTheme.Ink500 : EditorTheme.Ink300)
                 .Hovered.TextColor(EditorTheme.Ink500).End()
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 

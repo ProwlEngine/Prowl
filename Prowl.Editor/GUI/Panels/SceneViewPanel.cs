@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
-using Gizmo = Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
@@ -13,10 +16,7 @@ using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
+using Gizmo = Prowl.OrigamiUI.Gizmo;
 
 namespace Prowl.Editor.GUI.Panels;
 

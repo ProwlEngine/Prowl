@@ -1,22 +1,23 @@
 using System;
 using System.Linq;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Utils;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 
+using static Prowl.Editor.GUI.EditorGUI;
+
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
-using Prowl.Editor.Thumbnails;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Utils;
 
 namespace Prowl.Editor.GUI.Panels;
 

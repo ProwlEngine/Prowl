@@ -3,17 +3,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Projects;
 namespace Prowl.Editor.GUI.Panels;
 
 public class InspectorPanel : DockPanel
@@ -294,7 +294,7 @@ public class InspectorPanel : DockPanel
             // Multi-selection summary (GameObjects already get a full multi-object inspector above)
             if (Selection.Count > 1 && active is not GameObject)
             {
-                                Origami.Header(paper, "insp_h_multi", Loc.Get("inspector.selection")).Underline().Show();
+                Origami.Header(paper, "insp_h_multi", Loc.Get("inspector.selection")).Underline().Show();
                 Origami.Label(paper, "insp_multi_count", $"{Selection.Count} {Loc.Get("inspector.objects_selected")}").Show();
 
                 for (int i = 0; i < Selection.Count && i < 20; i++)
@@ -539,7 +539,7 @@ public class InspectorPanel : DockPanel
                     var settings = meta.Settings ?? importer.DefaultSettings();
                     if (settings != null && settings.TagType == Echo.EchoType.Compound)
                     {
-                                                Origami.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  {Loc.Get("inspector.import_settings")}").Underline().Show();
+                        Origami.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  {Loc.Get("inspector.import_settings")}").Underline().Show();
 
                         foreach (var kvp in settings.Tags.ToList())
                         {
@@ -850,7 +850,7 @@ public class InspectorPanel : DockPanel
             Origami.Label(paper, "insp_eo_assetpath", $"{Loc.Get("inspector.asset_path")}: {obj.AssetPath}").Show();
 
         // Use PropertyGrid for reflection-based editing
-                Origami.Header(paper, "insp_h_props", Loc.Get("inspector.properties")).Underline().Show();
+        Origami.Header(paper, "insp_h_props", Loc.Get("inspector.properties")).Underline().Show();
         PropertyGridUtils.Draw(paper, "insp_pg", obj);
     }
 
@@ -900,7 +900,7 @@ public class InspectorPanel : DockPanel
         if (log.StackTrace != null && log.StackTrace.StackFrames.Length > 0)
         {
             paper.Box("log_sp").Height(8);
-                        Origami.Header(paper, "log_st_hdr", Loc.Get("inspector.stack_trace")).Underline().Show();
+            Origami.Header(paper, "log_st_hdr", Loc.Get("inspector.stack_trace")).Underline().Show();
 
             for (int i = 0; i < log.StackTrace.StackFrames.Length; i++)
             {
@@ -926,7 +926,7 @@ public class InspectorPanel : DockPanel
         Origami.Header(paper, "insp_h_generic", obj.GetType().Name).Show();
         Origami.Label(paper, "insp_generic_str", obj.ToString() ?? "null").Show();
 
-                Origami.Header(paper, "insp_h_gprops", Loc.Get("inspector.properties")).Underline().Show();
+        Origami.Header(paper, "insp_h_gprops", Loc.Get("inspector.properties")).Underline().Show();
         PropertyGridUtils.Draw(paper, "insp_gpg", obj);
     }
 

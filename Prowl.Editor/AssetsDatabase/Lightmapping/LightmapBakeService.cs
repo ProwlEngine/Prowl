@@ -121,9 +121,9 @@ public sealed class LightmapBakeService
         // --- Occluders: present in the ray-traced scene (shadows + colour bounce) but never written
         // into an atlas page. ReceivesLighting=false keeps them out of rasterization. ---
         if (_atlas.Targets.Length > 0)
-                    foreach (var target in _atlas.Targets)
-                        foreach (var (om, ox) in occluders)
-                            target.AddBakeInstance(om, ox).ReceivesLighting = false;
+            foreach (var target in _atlas.Targets)
+                foreach (var (om, ox) in occluders)
+                    target.AddBakeInstance(om, ox).ReceivesLighting = false;
 
         // --- Probes. ---
         foreach (var go in scene.AllObjects)
@@ -477,24 +477,24 @@ public sealed class LightmapBakeService
         {
             case PointLight pl: bl = bake.CreatePointLight(light.GameObject.Name, xform, color, pl.Range); break;
             case SpotLight sl:
-            {
-                // Prowl's SpotAngle/InnerSpotAngle are OUTER/INNER half-angles in degrees; Photonic's
-                // ConeAngle/InnerConeAngle are FULL cone angles in radians (it halves them internally).
-                var spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, sl.Range, 2.0f * sl.SpotAngle * Maths.Deg2Rad);
-                spot.InnerConeAngle = 2.0f * sl.InnerSpotAngle * Maths.Deg2Rad;
-                bl = spot;
-                break;
-            }
+                {
+                    // Prowl's SpotAngle/InnerSpotAngle are OUTER/INNER half-angles in degrees; Photonic's
+                    // ConeAngle/InnerConeAngle are FULL cone angles in radians (it halves them internally).
+                    var spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, sl.Range, 2.0f * sl.SpotAngle * Maths.Deg2Rad);
+                    spot.InnerConeAngle = 2.0f * sl.InnerSpotAngle * Maths.Deg2Rad;
+                    bl = spot;
+                    break;
+                }
             default:
-            {
-                // Prowl's realtime directional light uses Transform.Forward as the TO-LIGHT
-                // direction (the sun shines along -Forward), whereas Photonic treats the transform's
-                // +Z column as the light's TRAVEL direction. Negate +Z so the baked sun matches realtime.
-                var dirX = xform;
-                dirX.c2 = new Float4(-xform.c2.X, -xform.c2.Y, -xform.c2.Z, xform.c2.W);
-                bl = bake.CreateDirectionalLight(light.GameObject.Name, dirX, color);
-                break;
-            }
+                {
+                    // Prowl's realtime directional light uses Transform.Forward as the TO-LIGHT
+                    // direction (the sun shines along -Forward), whereas Photonic treats the transform's
+                    // +Z column as the light's TRAVEL direction. Negate +Z so the baked sun matches realtime.
+                    var dirX = xform;
+                    dirX.c2 = new Float4(-xform.c2.X, -xform.c2.Y, -xform.c2.Z, xform.c2.W);
+                    bl = bake.CreateDirectionalLight(light.GameObject.Name, dirX, color);
+                    break;
+                }
         }
         bl.BakeDirect = bakeDirect;
     }

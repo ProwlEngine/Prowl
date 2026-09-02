@@ -297,7 +297,8 @@ public static class Undo
             T oldV = get(go);
             T captured = newValue;
             actions.Add((() => { var g = FindGO(id); if (g != null) set(g, oldV); },
-                         () => { var g = FindGO(id); if (g != null) set(g, captured); }));
+                         () => { var g = FindGO(id); if (g != null) set(g, captured); }
+            ));
             set(go, newValue);
         }
         RegisterActionGroup(description, actions, coalesce);
@@ -383,7 +384,8 @@ public static class Undo
 
                 Selection.Select(restored);
                 EditorSceneManager.MarkDirty();
-            });
+            }
+        );
     }
 
     /// <summary>

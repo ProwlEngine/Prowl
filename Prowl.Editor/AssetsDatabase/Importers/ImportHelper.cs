@@ -42,17 +42,17 @@ public static class ImportHelper
             var serCtx = CreateTrackingContext(out var dependencies);
             var asset = Serializer.Deserialize<T>(echo, serCtx);
             if (asset != null)
-                        {
-                            asset.Name = ctx.FileName;
-                            ctx.SetMainAsset(asset);
-                            foreach (var dep in dependencies)
-                                ctx.AddDependency(dep);
-                        }
-                        else
-                        {
-                            Debug.LogError($"Failed to import {errorLabel}: {ctx.AbsolutePath} - deserialization returned null");
-                            return false;
-                        }
+            {
+                asset.Name = ctx.FileName;
+                ctx.SetMainAsset(asset);
+                foreach (var dep in dependencies)
+                    ctx.AddDependency(dep);
+            }
+            else
+            {
+                Debug.LogError($"Failed to import {errorLabel}: {ctx.AbsolutePath} - deserialization returned null");
+                return false;
+            }
         }
         catch (Exception ex)
         {

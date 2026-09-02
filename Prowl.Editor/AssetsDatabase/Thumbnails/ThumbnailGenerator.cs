@@ -2,14 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using Prowl.Runtime;
-using Prowl.Runtime.Resources;
-
 using Prowl.Aperture;
 using Prowl.Aperture.Utilities;
 using Prowl.Editor.GUI;
-using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
+using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Thumbnails;
 

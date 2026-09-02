@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI.Widgets;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Editor.GUI.Widgets;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
 public class WidgetPlaygroundPanel : DockPanel

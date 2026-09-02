@@ -5,10 +5,10 @@ using System;
 using System.IO;
 
 using Prowl.Echo;
-using Prowl.Editor.GUI.Popups;
-using Prowl.Runtime;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.Theming;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.Core.Tasks;
 
@@ -152,8 +152,8 @@ public class CreateAssetTask : EditorTask
         {
             var instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
             var echo = Serializer.Serialize(typeof(object), instance);
-                        if (echo == null) return null;
-                        File.WriteAllText(filePath, echo.WriteToString());
+            if (echo == null) return null;
+            File.WriteAllText(filePath, echo.WriteToString());
 
             EditorAssetBackend.Instance?.InvalidateFolderIndex();
             Debug.Log($"Created {entry.Name}: {name}");

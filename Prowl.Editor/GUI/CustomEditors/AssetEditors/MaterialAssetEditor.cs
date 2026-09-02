@@ -5,6 +5,9 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -13,9 +16,6 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.GUI.PropertyEditors;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Projects;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Material))]
@@ -121,7 +121,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         DrawApplyRevertBar(paper, id, entry, asset);
 
         // 3D Preview
-                Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
+        Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
         PreviewWidget.For(entry.Guid).Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
     }

@@ -5,22 +5,22 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Inspector;
 using Prowl.Editor.Importers;
+using Prowl.Editor.Inspector;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Core;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Utils;
 
 namespace Prowl.Editor;
 

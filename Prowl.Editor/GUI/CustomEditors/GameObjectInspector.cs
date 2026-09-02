@@ -3,23 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using Prowl.Editor.Utils;
-
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Prefabs;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.GUI;
-using Prowl.Vector;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
@@ -277,7 +275,8 @@ public static class GameObjectInspector
                             var cid = c.Identifier;
                             bool old = c.Enabled;
                             actions.Add((() => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = old; x.OnValidate(); } },
-                                        () => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = v; x.OnValidate(); } }));
+                                        () => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = v; x.OnValidate(); } }
+                            ));
                             c.Enabled = v; c.OnValidate();
                         }
                         Undo.RegisterActionGroup("Toggle Component", actions);
@@ -832,13 +831,13 @@ public static class GameObjectInspector
 
         EditorGUI.Row(paper, "gi_rt_pivot", "Pivot", () =>
         {
-            Origami.Float2Field(paper, "gi_rt_pivot_vf", rt.Pivot,v =>
+            Origami.Float2Field(paper, "gi_rt_pivot_vf", rt.Pivot, v =>
             {
                 Undo.RecordGameObjectChange(go, "Change Pivot", rt.Pivot, v,
                     (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
                 rt.Pivot = v;
             }).Show();
-        }, labelWidth: EditorTheme.LabelWidth/2f);
+        }, labelWidth: EditorTheme.LabelWidth / 2f);
 
     }
 

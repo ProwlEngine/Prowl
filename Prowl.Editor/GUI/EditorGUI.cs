@@ -11,8 +11,8 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
-using VColor = Prowl.Vector.Color;
 using TextAlign = Prowl.Runtime.UI.TextAlignment;
+using VColor = Prowl.Vector.Color;
 
 namespace Prowl.Editor.GUI;
 

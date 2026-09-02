@@ -9,7 +9,7 @@ public class EditorTask
 {
     public virtual async System.Threading.Tasks.Task IdleOnCondition(Func<bool> condition)
     {
-        while(!condition())
+        while (!condition())
         {
             await System.Threading.Tasks.Task.Delay(50);
         }

@@ -6,12 +6,12 @@ using System.Linq;
 using System.Threading;
 
 using Prowl.Echo;
-using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Importers;
-using Prowl.Runtime;
-using Prowl.Editor.Projects.Scripting;
-using Prowl.Editor.Projects;
 using Prowl.Editor.Prefabs;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Thumbnails;
+using Prowl.Runtime;
 
 namespace Prowl.Editor;
 
@@ -1903,34 +1903,34 @@ public class EditorAssetBackend : AssetBackendBase
 
     private void ProcessFileEvent(FileEvent evt, List<AssetEntry> toImport, List<string> deleted)
     {
-            // Any change to a real (non-.meta) file or folder can add/remove/rename an entry or
-            // change a file's size/date, so the cached folder index the Project Panel reads is stale.
-            // .meta files are ours and don't affect the displayed structure.
-            if (!evt.Path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
-                InvalidateFolderIndex();
+        // Any change to a real (non-.meta) file or folder can add/remove/rename an entry or
+        // change a file's size/date, so the cached folder index the Project Panel reads is stale.
+        // .meta files are ours and don't affect the displayed structure.
+        if (!evt.Path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+            InvalidateFolderIndex();
 
-            // Skip directory events - ScanAssets handles directory .meta creation
-            if (Directory.Exists(evt.Path))
-            {
-                // A renamed folder relocates everything under it without any per-file event.
-                if (evt.Type == FileEventType.Renamed && ContainsCompilationInput(evt.Path))
-                    ScriptAssemblyManager.RequestRecompile();
-                return;
-            }
+        // Skip directory events - ScanAssets handles directory .meta creation
+        if (Directory.Exists(evt.Path))
+        {
+            // A renamed folder relocates everything under it without any per-file event.
+            if (evt.Type == FileEventType.Renamed && ContainsCompilationInput(evt.Path))
+                ScriptAssemblyManager.RequestRecompile();
+            return;
+        }
 
-            string relativePath = ToRelativePath(evt.Path);
+        string relativePath = ToRelativePath(evt.Path);
 
-            // Skip .meta files we manage them
-            if (relativePath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) return;
+        // Skip .meta files we manage them
+        if (relativePath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) return;
 
-            switch (evt.Type)
-            {
-                case FileEventType.Created:
-                case FileEventType.Modified:
-                    RegisterFileChange(evt.Path, relativePath, toImport);
-                    break;
+        switch (evt.Type)
+        {
+            case FileEventType.Created:
+            case FileEventType.Modified:
+                RegisterFileChange(evt.Path, relativePath, toImport);
+                break;
 
-                case FileEventType.Deleted:
+            case FileEventType.Deleted:
                 {
                     if (_pathToGuid.TryGetValue(relativePath, out var guid))
                     {
@@ -1958,7 +1958,7 @@ public class EditorAssetBackend : AssetBackendBase
                     break;
                 }
 
-                case FileEventType.Renamed:
+            case FileEventType.Renamed:
                 {
                     if (evt.OldPath != null)
                     {
@@ -2016,7 +2016,7 @@ public class EditorAssetBackend : AssetBackendBase
                     }
                     break;
                 }
-            }
+        }
     }
 
     /// <summary>

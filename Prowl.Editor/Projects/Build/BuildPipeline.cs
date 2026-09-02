@@ -10,9 +10,9 @@ using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Editor.Projects;
-using Prowl.Runtime;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;
 
@@ -71,7 +71,7 @@ public abstract class BuildPipeline
     //  Shared utilities for all pipelines
     // ================================================================
 
-        /// <summary>Collect assets based on build settings.</summary>
+    /// <summary>Collect assets based on build settings.</summary>
     protected AssetCollector.CollectionResult CollectAssets(BuildSettings settings, BuildProgress? progress)
     {
         progress?.Log("Collecting assets...");

@@ -121,7 +121,7 @@ public static class EditorUtils
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 Process.Start("open", $"-R \"{absPath}\"");
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                {
+            {
                 if (Directory.Exists(absPath))
                     Process.Start("xdg-open", absPath);
                 else if (File.Exists(absPath))

@@ -1,14 +1,14 @@
 using System;
 using System.Linq;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
 /// <summary>

@@ -3,20 +3,18 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
-using Prowl.OrigamiUI;
-using Prowl.Rosetta;
-
 using Prowl.Editor.Core;
+using Prowl.Editor.Core.Tasks;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.Popups;
-using Prowl.Editor.Theming;
+using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
-using Prowl.Editor.Core.Tasks;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-
-using Prowl.Editor.GUI;
-using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor;
 
@@ -147,9 +145,9 @@ public static class AssetCreateMenu
 
         var def = new Projects.Scripting.AssemblyDefinition { Name = Path.GetFileNameWithoutExtension(name) };
         def.WriteToFile(filePath);
-                EditorAssetBackend.Instance?.InvalidateFolderIndex();
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
 
-                Debug.Log($"Created assembly definition: {name}");
+        Debug.Log($"Created assembly definition: {name}");
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 

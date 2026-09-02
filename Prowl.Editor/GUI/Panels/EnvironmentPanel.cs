@@ -6,7 +6,6 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Lightmapping;
@@ -18,6 +17,8 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -12,9 +13,8 @@ using Prowl.Runtime;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-using VColor = Prowl.Vector.Color;
 using Gradient = Prowl.Vector.Gradient;
-using Prowl.Editor.Theming;
+using VColor = Prowl.Vector.Color;
 
 namespace Prowl.Editor.GUI.Widgets;
 

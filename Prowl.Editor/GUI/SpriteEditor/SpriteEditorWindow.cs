@@ -165,8 +165,13 @@ public class SpriteEditorWindow : DockPanel
     // break every reference to its sprite.
     private static SpriteSliceData CloneSlice(SpriteSliceData s) => new()
     {
-        Id = s.Id, Name = s.Name, Rect = s.Rect, Alignment = s.Alignment,
-        CustomPivot = s.CustomPivot, PivotUnit = s.PivotUnit, Border = s.Border,
+        Id = s.Id,
+        Name = s.Name,
+        Rect = s.Rect,
+        Alignment = s.Alignment,
+        CustomPivot = s.CustomPivot,
+        PivotUnit = s.PivotUnit,
+        Border = s.Border,
     };
 
     private EditSnapshot Capture() => new()
@@ -539,61 +544,61 @@ public class SpriteEditorWindow : DockPanel
                 break;
 
             case DragMode.Move when Valid(_selected):
-            {
-                Float2 delta = content - _startContent;
-                float dx = _startRect.X + delta.X, dy = _startRect.Y + delta.Y, dw = _startRect.Z, dh = _startRect.W;
-                ClampDisplay(ref dx, ref dy, ref dw, ref dh, texW, texH);
-                _settings.Slices[_selected].Rect = ToSpriteRect(dx, dy, dw, dh, texH);
-                _dragChanged = true;
-                break;
-            }
+                {
+                    Float2 delta = content - _startContent;
+                    float dx = _startRect.X + delta.X, dy = _startRect.Y + delta.Y, dw = _startRect.Z, dh = _startRect.W;
+                    ClampDisplay(ref dx, ref dy, ref dw, ref dh, texW, texH);
+                    _settings.Slices[_selected].Rect = ToSpriteRect(dx, dy, dw, dh, texH);
+                    _dragChanged = true;
+                    break;
+                }
 
             case DragMode.ResizeRect when Valid(_selected):
-            {
-                Float2 c = ClampContent(content, texW, texH);
-                float left = _startRect.X, top = _startRect.Y, right = _startRect.X + _startRect.Z, bottom = _startRect.Y + _startRect.W;
-                if (_resizeHandle is 0 or 6 or 7) left = c.X;
-                if (_resizeHandle is 2 or 3 or 4) right = c.X;
-                if (_resizeHandle is 0 or 1 or 2) top = c.Y;
-                if (_resizeHandle is 4 or 5 or 6) bottom = c.Y;
+                {
+                    Float2 c = ClampContent(content, texW, texH);
+                    float left = _startRect.X, top = _startRect.Y, right = _startRect.X + _startRect.Z, bottom = _startRect.Y + _startRect.W;
+                    if (_resizeHandle is 0 or 6 or 7) left = c.X;
+                    if (_resizeHandle is 2 or 3 or 4) right = c.X;
+                    if (_resizeHandle is 0 or 1 or 2) top = c.Y;
+                    if (_resizeHandle is 4 or 5 or 6) bottom = c.Y;
 
-                float dx = MathF.Min(left, right), dy = MathF.Min(top, bottom);
-                float dw = MathF.Max(1, MathF.Abs(right - left)), dh = MathF.Max(1, MathF.Abs(bottom - top));
-                ClampDisplay(ref dx, ref dy, ref dw, ref dh, texW, texH);
-                _settings.Slices[_selected].Rect = ToSpriteRect(dx, dy, dw, dh, texH);
-                _dragChanged = true;
-                break;
-            }
+                    float dx = MathF.Min(left, right), dy = MathF.Min(top, bottom);
+                    float dw = MathF.Max(1, MathF.Abs(right - left)), dh = MathF.Max(1, MathF.Abs(bottom - top));
+                    ClampDisplay(ref dx, ref dy, ref dw, ref dh, texW, texH);
+                    _settings.Slices[_selected].Rect = ToSpriteRect(dx, dy, dw, dh, texH);
+                    _dragChanged = true;
+                    break;
+                }
 
             case DragMode.MovePivot when Valid(_selected):
-            {
-                SpriteSliceData s = _settings.Slices[_selected];
-                SpriteRect rc = s.Rect;
-                float normX = (content.X - rc.X) / Math.Max(1, rc.Width);
-                float normY = ((texH - content.Y) - rc.Y) / Math.Max(1, rc.Height);
-                s.CustomPivot = s.PivotUnit == PivotUnitMode.Pixels
-                    ? new Float2(normX * rc.Width, normY * rc.Height)
-                    : new Float2(normX, normY);
-                _dragChanged = true;
-                break;
-            }
+                {
+                    SpriteSliceData s = _settings.Slices[_selected];
+                    SpriteRect rc = s.Rect;
+                    float normX = (content.X - rc.X) / Math.Max(1, rc.Width);
+                    float normY = ((texH - content.Y) - rc.Y) / Math.Max(1, rc.Height);
+                    s.CustomPivot = s.PivotUnit == PivotUnitMode.Pixels
+                        ? new Float2(normX * rc.Width, normY * rc.Height)
+                        : new Float2(normX, normY);
+                    _dragChanged = true;
+                    break;
+                }
 
             case DragMode.MoveBorder when Valid(_selected):
-            {
-                SpriteSliceData s = _settings.Slices[_selected];
-                Float4 dr = DisplayRect(s.Rect, texH);
-                Float4 b = s.Border;
-                switch (_borderSide)
                 {
-                    case 0: b.X = Math.Clamp(content.X - dr.X, 0, dr.Z - b.Z); break;
-                    case 1: b.Z = Math.Clamp(dr.X + dr.Z - content.X, 0, dr.Z - b.X); break;
-                    case 2: b.Y = Math.Clamp(content.Y - dr.Y, 0, dr.W - b.W); break;
-                    default: b.W = Math.Clamp(dr.Y + dr.W - content.Y, 0, dr.W - b.Y); break;
+                    SpriteSliceData s = _settings.Slices[_selected];
+                    Float4 dr = DisplayRect(s.Rect, texH);
+                    Float4 b = s.Border;
+                    switch (_borderSide)
+                    {
+                        case 0: b.X = Math.Clamp(content.X - dr.X, 0, dr.Z - b.Z); break;
+                        case 1: b.Z = Math.Clamp(dr.X + dr.Z - content.X, 0, dr.Z - b.X); break;
+                        case 2: b.Y = Math.Clamp(content.Y - dr.Y, 0, dr.W - b.W); break;
+                        default: b.W = Math.Clamp(dr.Y + dr.W - content.Y, 0, dr.W - b.Y); break;
+                    }
+                    s.Border = b;
+                    _dragChanged = true;
+                    break;
                 }
-                s.Border = b;
-                _dragChanged = true;
-                break;
-            }
         }
     }
 

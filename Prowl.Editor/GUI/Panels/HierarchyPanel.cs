@@ -2,22 +2,22 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
+using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Prefabs;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Rosetta;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Utils;
-using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -1086,7 +1086,8 @@ public class HierarchyPanel : DockPanel
                 var g = Undo.FindGO(goId);
                 var p = Undo.FindGO(newParentId);
                 if (g != null && p != null) g.SetParent(p);
-            });
+            }
+        );
     }
 
     /// <summary>

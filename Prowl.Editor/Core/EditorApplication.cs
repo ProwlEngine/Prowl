@@ -9,6 +9,7 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
@@ -21,7 +22,6 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
-using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.Core;
 
@@ -77,7 +77,7 @@ public class EditorApplication : Game
         // be drawn in a chosen weight directly (e.g. an outline vs filled star), independent of the
         // fallback resolution order.
         EditorTheme.FontIconOutline = LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
-        EditorTheme.FontIconSolid   = LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
+        EditorTheme.FontIconSolid = LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
 
         // Load CJK/international fallback fonts from system for localization support
         LoadSystemFallbackFonts();
@@ -285,13 +285,13 @@ public class EditorApplication : Game
     {
         if (EditorTheme.DefaultFont != null) return;
 
-        EditorTheme.DefaultFont  = LoadBundledFont("Geist-Regular.ttf");
-        EditorTheme.FontMedium   = LoadBundledFont("Geist-Medium.ttf");
+        EditorTheme.DefaultFont = LoadBundledFont("Geist-Regular.ttf");
+        EditorTheme.FontMedium = LoadBundledFont("Geist-Medium.ttf");
         EditorTheme.FontSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
         EditorTheme.DefaultBoldFont = LoadBundledFont("Geist-Bold.ttf");
-        EditorTheme.FontMono     = LoadBundledFont("JetBrainsMono-Regular.ttf");
-        EditorTheme.FontDisplay  = LoadBundledFont("SpaceGrotesk-Bold.ttf");
-        EditorTheme.FontLogo     = LoadBundledFont("Audiowide-Regular.ttf");
+        EditorTheme.FontMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
+        EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
+        EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;

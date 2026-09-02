@@ -13,9 +13,9 @@ using Prowl.Quill;
 using Prowl.Rosetta;
 using Prowl.Vector;
 
-using Color = System.Drawing.Color;
-
 using static Prowl.Editor.GUI.EditorGUI;
+
+using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI;
 
@@ -375,12 +375,12 @@ public static class ProjectLauncher
                     () =>
                     {
                         try
-                                                {
-                                                    if (Directory.Exists(entry.Path))
-                                                        Directory.Delete(entry.Path, true);
-                                                    RecentProjects.Remove(entry.Path);
-                                                }
-                                                catch (Exception ex) { Runtime.Debug.LogError($"Failed to delete project: {ex.Message}"); }
+                        {
+                            if (Directory.Exists(entry.Path))
+                                Directory.Delete(entry.Path, true);
+                            RecentProjects.Remove(entry.Path);
+                        }
+                        catch (Exception ex) { Runtime.Debug.LogError($"Failed to delete project: {ex.Message}"); }
                     }), icon: EditorIcons.Trash, danger: true);
             }
         });

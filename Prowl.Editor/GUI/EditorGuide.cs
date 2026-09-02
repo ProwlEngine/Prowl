@@ -62,7 +62,7 @@ public static class EditorGuide
     public static GuideTarget Panel(Type panelType) => () =>
         _dock != null && _dock.TryGetPanelRect(panelType, out var r)
             ? ((float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, (float)r.Size.Y)
-            : (( float, float, float, float)?)null;
+            : ((float, float, float, float)?)null;
 
     /// <summary>Target the header's Theme quick-access button.</summary>
     public static GuideTarget ThemeButton() => () => _themeButton;
