@@ -150,7 +150,7 @@ public static class BuiltInTargets
         RuntimeIdentifiers = ["osx-x64"],
         Capabilities = s_macOS,
         AssemblyPlatform = Projects.Scripting.BuildPlatforms.MacOS,
-        Defines = ["PROWL_DESKTOP"],
+        Defines = ["PROWL_MACOS"],
     };
 
     public static readonly PlatformTarget MacOSArm64 = MacOSX64 with
