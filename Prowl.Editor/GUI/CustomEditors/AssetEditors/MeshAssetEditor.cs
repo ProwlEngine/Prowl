@@ -26,11 +26,17 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Mesh))]
 public class MeshAssetEditor : AssetImporterEditor
 {
-    private sealed class State
-    {
-        public PreviewRenderer? Preview;
-        public EngineObject? LastPreviewSubject;
-    }
+    private sealed class State : IDisposable
+        {
+            public PreviewRenderer? Preview;
+            public EngineObject? LastPreviewSubject;
+
+            public void Dispose()
+            {
+                Preview?.Dispose();
+                Preview = null;
+            }
+        }
 
     private readonly State _ownState = new();
 
