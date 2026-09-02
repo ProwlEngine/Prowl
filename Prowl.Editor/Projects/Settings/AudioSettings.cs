@@ -7,9 +7,11 @@ using Prowl.Runtime;
 using Prowl.Runtime.Audio;
 namespace Prowl.Editor.Projects.Settings;
 
+/// <summary> Project settings for audio output, including master volume, sample rate, channel count, and buffer size. </summary>
 [ProjectSettings("Audio", EditorIcons.VolumeHigh, order: 25)]
 public class AudioSettings : ProjectSettingsBase
 {
+    /// <summary> Master volume applied to all audio output, in the range [0, 1]. </summary>
     public float GlobalVolume = 1.0f;
 
     /// <summary>Rate the device is opened at. Clips at other rates are resampled to it.</summary>
@@ -27,6 +29,7 @@ public class AudioSettings : ProjectSettingsBase
     private static readonly int[] s_sampleRates = [22050, 44100, 48000, 96000];
     private static readonly int[] s_bufferSizes = [256, 512, 1024, 2048, 4096];
 
+    /// <summary> Applies the current settings to the audio context, updating the master volume and reopening the device if parameters changed. </summary>
     public override void Apply()
     {
         AudioContext.MasterVolume = GlobalVolume;
@@ -35,6 +38,7 @@ public class AudioSettings : ProjectSettingsBase
         AudioContext.Restart((uint)SampleRate, (uint)Channels, (uint)BufferSize);
     }
 
+    /// <summary> Resets all audio settings to their default values. </summary>
     public override void ResetToDefaults()
     {
         GlobalVolume = 1.0f;
@@ -43,6 +47,7 @@ public class AudioSettings : ProjectSettingsBase
         BufferSize = 2048;
     }
 
+    /// <summary> Draws the audio settings panel in the project settings window. </summary>
     public override void OnGUI(Paper paper, float width)
     {
         Origami.Header(paper, "audio_hdr", $"{EditorIcons.VolumeHigh}  Audio").Underline().Show();

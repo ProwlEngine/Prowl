@@ -9,36 +9,53 @@ using Prowl.Vector;
 using Color = System.Drawing.Color;
 namespace Prowl.Editor.Projects.Settings;
 
+/// <summary> Project settings for global physics simulation, including gravity, solver configuration, behavior flags, and layer collision matrix. </summary>
 [ProjectSettings("Physics", EditorIcons.Atom, order: 20)]
 public class PhysicsSettings : ProjectSettingsBase
 {
     // Gravity
+    /// <summary> X component of the gravity vector, in world units per second squared. </summary>
     public float GravityX = 0f;
+    /// <summary> Y component of the gravity vector, in world units per second squared. </summary>
     public float GravityY = -9.81f;
+    /// <summary> Z component of the gravity vector, in world units per second squared. </summary>
     public float GravityZ = 0f;
 
     // Solver
+    /// <summary> Number of solver iterations per frame. Higher values improve constraint accuracy at the cost of performance. Range 1-32. </summary>
     public int SolverIterations = 8;
+    /// <summary> Number of relaxation iterations per frame. Higher values improve joint stability. Range 1-16. </summary>
     public int RelaxIterations = 4;
+    /// <summary> Number of sub-steps per frame. Higher values improve simulation accuracy. Range 1-16. </summary>
     public int SubSteps = 2;
 
     // Behavior
+    /// <summary> Enables the physics sleep optimization, allowing idle rigid bodies to skip simulation. </summary>
     public bool AllowSleep = true;
+    /// <summary> Enables multithreaded physics simulation for improved performance on multi-core systems. </summary>
     public bool UseMultithreading = true;
+    /// <summary> Automatically synchronizes transform changes between the physics engine and the scene graph. </summary>
     public bool AutoSyncTransforms = true;
 
     // Advanced
+    /// <summary> Enforces deterministic physics simulation across runs, at the cost of performance. </summary>
     public bool EnhancedDeterminism = false;
+    /// <summary> Controls whether the physics thread is persistent or created per-frame. </summary>
     public PhysicsThreadModel ThreadModel = PhysicsThreadModel.Regular;
+    /// <summary> Enables additional contact points for collision detection, improving stability at the cost of performance. </summary>
     public bool EnableAuxiliaryContactPoints = true;
+    /// <summary> Enables persistent contact manifolds to reduce contact generation overhead across frames. </summary>
     public bool PersistentContactManifold = true;
+    /// <summary> Factor controlling speculative contact relaxation. Range 0-1. Higher values reduce jitter. </summary>
     public float SpeculativeRelaxationFactor = 0.9f;
 
     // Collision matrix stored as 32 uints (bit rows)
+    /// <summary> Layer collision matrix stored as 32 bit-rows. Each row is a uint where bit j indicates whether layer i collides with layer j. </summary>
     public uint[] CollisionMatrixRows = CreateDefaultCollisionMatrix();
 
     private static bool s_sceneHookRegistered;
 
+    /// <summary> Applies the current physics settings to the active scene and registers a hook to re-apply them to any scene loaded afterward. </summary>
     public override void Apply()
     {
         ApplyToScene(Runtime.Resources.Scene.Current);

@@ -22,27 +22,35 @@ public class EditorSettings
         "Prowl", "EditorSettings.json");
 
     // Preferences
+    /// <summary> Gets or sets the default directory for new projects. Defaults to Documents/ProwlProjects. </summary>
     public string DefaultProjectsPath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ProwlProjects");
     public string Locale { get; set; } = "en";
     public bool AutoSaveLayout { get; set; } = true;
     public bool ReimportOnFocusOnly { get; set; } = true;
+    /// <summary> Gets or sets the thumbnail size in pixels for asset previews. Defaults to 32. </summary>
     public int ThumbnailSize { get; set; } = 32;
 
+    /// <summary> Gets or sets the editor window X position in screen coordinates. -1 means auto-place. </summary>
     public int WindowX { get; set; } = -1;
 
+    /// <summary> Gets or sets the editor window Y position in screen coordinates. -1 means auto-place. </summary>
     public int WindowY { get; set; } = -1;
 
+    /// <summary> Gets or sets the editor window width in pixels. Defaults to 1280. </summary>
     public int WindowWidth { get; set; } = 1280;
 
+    /// <summary> Gets or sets the editor window height in pixels. Defaults to 800. </summary>
     public int WindowHeight { get; set; } = 800;
 
     public bool WindowMaximized { get; set; } = false;
 
     // Shortcuts only user-overridden bindings are stored
+    /// <summary> Gets or sets the dictionary of user-overridden shortcut bindings, keyed by action name. Only overridden bindings are stored. </summary>
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();
 
     // IDs of interactive guides/tutorials the user has already completed or skipped.
+    /// <summary> Gets or sets the list of interactive guide IDs the user has completed or skipped. </summary>
     public List<string> SeenGuides { get; set; } = new();
 
     /// <summary>Serialized per-scene-tool settings, keyed by settings type name. Per-user rather
@@ -50,6 +58,7 @@ public class EditorSettings
     public Dictionary<string, string> SceneToolSettings { get; set; } = new();
 
     // Theme
+    /// <summary> Gets or sets the current editor theme data. Defaults to the built-in theme. </summary>
     public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();
 
     /// <summary>Apply the current theme to EditorTheme's static fields.</summary>
@@ -104,6 +113,7 @@ public class EditorSettings
         EditorTheme.SyncOrigami();
     }
 
+    /// <summary> Serializes this instance to the editor settings JSON file on disk. Silently logs a warning on failure. </summary>
     public void Save()
     {
         try
@@ -145,6 +155,7 @@ public class EditorSettings
         return def;
     }
 
+    /// <summary> Resets the theme to the default, applies it, and saves the settings. </summary>
     public void ResetTheme()
     {
         Theme = EditorThemeData.CreateDefault();

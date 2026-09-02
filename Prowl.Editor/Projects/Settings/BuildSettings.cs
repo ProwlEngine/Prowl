@@ -25,6 +25,7 @@ public class SceneBuildEntry
     public bool Enabled = true;
 }
 
+/// <summary> Project settings for configuring builds, including scenes, build configuration, output directory, asset packaging, and platform profiles. </summary>
 [ProjectSettings("Build", EditorIcons.Hammer, order: 50, exportToBuild: false)]
 public sealed class BuildSettings : ProjectSettingsBase
 {
@@ -94,6 +95,7 @@ public sealed class BuildSettings : ProjectSettingsBase
         return profile;
     }
 
+    /// <summary> Draws the build settings UI in the project settings panel. </summary>
     public override void OnGUI(Paper paper, float width)
     {
         var font = EditorTheme.DefaultFont;

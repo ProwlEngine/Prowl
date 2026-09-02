@@ -10,18 +10,23 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 namespace Prowl.Editor.Projects.Settings;
 
+/// <summary> Project settings for configuring tags and layers used in the project. </summary>
 [ProjectSettings("Tags & Layers", EditorIcons.Tags, order: 10)]
 public class TagsAndLayersSettings : ProjectSettingsBase
 {
+    /// <summary> The list of tags defined for the project. </summary>
     public List<string> Tags = new(TagLayerManager.tags);
+    /// <summary> The array of layers defined for the project. </summary>
     public string[] Layers = (string[])TagLayerManager.layers.Clone();
 
+    /// <summary> Applies the current tag and layer settings to TagLayerManager. </summary>
     public override void Apply()
     {
         TagLayerManager.tags = new List<string>(Tags);
         Array.Copy(Layers, TagLayerManager.layers, Math.Min(Layers.Length, TagLayerManager.layers.Length));
     }
 
+    /// <summary> Resets tags and layers to their default values. </summary>
     public override void ResetToDefaults()
     {
         TagLayerManager.ResetDefault();
@@ -29,6 +34,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
         Layers = (string[])TagLayerManager.layers.Clone();
     }
 
+    /// <summary> Renders the tags and layers editor UI. </summary>
     public override void OnGUI(Paper paper, float width)
     {
         var font = EditorTheme.DefaultFont;
