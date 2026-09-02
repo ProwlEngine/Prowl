@@ -89,6 +89,10 @@ public static class Program
 
     public static void Main(string[] args)
     {
+        // First, so that anything failing after this point is written down rather than closing the
+        // window with nothing to show for it.
+        CrashReporter.Install();
+
         RegisterMiniAudioExResolver();
 
         ReadArguments(args);
