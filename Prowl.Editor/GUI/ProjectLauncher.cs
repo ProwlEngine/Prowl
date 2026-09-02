@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Reflection;
 
@@ -374,9 +374,13 @@ public static class ProjectLauncher
                     Loc.Get("launcher.delete_confirm_body", new { name = entry.Name }),
                     () =>
                     {
-                        try { if (Directory.Exists(entry.Path)) Directory.Delete(entry.Path, true); }
-                        catch (Exception ex) { Runtime.Debug.LogError($"Failed to delete project: {ex.Message}"); }
-                        RecentProjects.Remove(entry.Path);
+                        try
+                                                {
+                                                    if (Directory.Exists(entry.Path))
+                                                        Directory.Delete(entry.Path, true);
+                                                    RecentProjects.Remove(entry.Path);
+                                                }
+                                                catch (Exception ex) { Runtime.Debug.LogError($"Failed to delete project: {ex.Message}"); }
                     }), icon: EditorIcons.Trash, danger: true);
             }
         });
