@@ -602,7 +602,8 @@ public class InspectorPanel : DockPanel
         Origami.Header(paper, "insp_h_folder", Loc.Get("inspector.folder")).Show();
         Origami.Label(paper, "insp_folder_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
 
-        string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+        if (Project.Current == null) return;
+        string absPath = Path.Combine(Project.Current.AssetsPath, item.RelativePath);
         if (!Directory.Exists(absPath)) return;
 
         var counts = GetFolderCounts(item.RelativePath, absPath);
@@ -767,14 +768,12 @@ public class InspectorPanel : DockPanel
         string relativePath = string.IsNullOrEmpty(parentDir) ? fileName : $"{parentDir}/{fileName}";
 
         // Serialize the asset to the file
+        // Clear the sub-asset's AssetID so it serializes as a full object, not a reference
+        var originalId = asset.AssetID;
+        asset.AssetID = Guid.Empty;
         try
         {
-            // Clear the sub-asset's AssetID so it serializes as a full object, not a reference
-            var originalId = asset.AssetID;
-            asset.AssetID = Guid.Empty;
-
             var echo = Echo.Serializer.Serialize(typeof(object), asset);
-            asset.AssetID = originalId; // Restore
 
             if (echo != null)
             {
@@ -787,6 +786,10 @@ public class InspectorPanel : DockPanel
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"Failed to extract sub-asset: {ex.Message}");
+        }
+        finally
+        {
+            asset.AssetID = originalId; // Restore
         }
     }
 
