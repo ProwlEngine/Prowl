@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1014,7 +1014,7 @@ public class EditorApplication : Game
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        var resourceName = resource;
+        var resourceName = "Prowl.Editor.Resources." + resource;
 
         var pathToFile = Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory) +
                           resourceName;
