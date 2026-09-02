@@ -40,16 +40,18 @@ public static class RecentProjects
     {
         _entries ??= Load();
 
-        // Remove existing entry for this path
-        _entries.RemoveAll(e => e.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
+        // Remove existing entry for this path, preserving its favorite flag
+                bool wasFavorite = _entries.Find(e => e.Path.Equals(path, StringComparison.OrdinalIgnoreCase))?.Favorite ?? false;
+                _entries.RemoveAll(e => e.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
 
-        // Add at front
-        _entries.Insert(0, new RecentProjectEntry
-        {
-            Path = path,
-            Name = name,
-            LastOpened = DateTime.UtcNow
-        });
+                // Add at front
+                _entries.Insert(0, new RecentProjectEntry
+                {
+                    Path = path,
+                    Name = name,
+                    LastOpened = DateTime.UtcNow,
+                    Favorite = wasFavorite
+                });
 
         // Trim the non-favorite tail to MaxRecent entries. Favorites are never evicted regardless
         // of count or age - starring a project is meant to pin it in this list permanently.
