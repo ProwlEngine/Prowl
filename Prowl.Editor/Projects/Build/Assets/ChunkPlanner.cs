@@ -121,7 +121,10 @@ public static class ChunkPlanner
                             discovered.Add(sub);
 
             if (discovered.Count > 0)
-                closure.UnionWith(dependencies.GetTransitiveDependencies(discovered));
+                        {
+                            closure.UnionWith(dependencies.GetTransitiveDependencies(discovered));
+                            closure.UnionWith(discovered);
+                        }
 
         } while (closure.Count > previous);
 
