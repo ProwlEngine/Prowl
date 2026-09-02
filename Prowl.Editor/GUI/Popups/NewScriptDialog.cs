@@ -225,6 +225,7 @@ public static class NewScriptDialog
         string absPath = Path.Combine(absFolder, fileName);
         var tpl = s_templates[s_selectedIndex];
         File.WriteAllText(absPath, tpl.Generate(s_name));
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
 
         string relPath = string.IsNullOrEmpty(s_folder) ? fileName : s_folder + "/" + fileName;
         Runtime.Debug.Log($"Created script: {relPath}");
