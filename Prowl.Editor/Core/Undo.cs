@@ -197,7 +197,8 @@ public static class Undo
         if (!_pendingSnapshots.ContainsKey(target))
         {
             var before = Serializer.Serialize(target.GetType(), target);
-            _pendingSnapshots[target] = before;
+            if (before != null)
+                _pendingSnapshots[target] = before;
         }
     }
 
