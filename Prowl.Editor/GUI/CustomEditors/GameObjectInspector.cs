@@ -137,6 +137,7 @@ public static class GameObjectInspector
     /// </summary>
     public static void DrawMulti(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
     {
+        if (gos.Count == 0) return;
         if (gos.Count == 1) { Draw(paper, font, gos[0]); return; }
 
         DrawMultiHeader(paper, font, gos);
