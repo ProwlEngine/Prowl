@@ -433,7 +433,7 @@ public static class GameObjectInspector
         var t = go.Transform;
         var goId = go.Identifier;
 
-        bool expanded = SectionHeader(paper, font, "gi_transform", EditorIcons.ArrowsUpDownLeftRight,
+        bool expanded = SectionHeader(paper, font, $"gi_transform_{goId}", EditorIcons.ArrowsUpDownLeftRight,
             Loc.Get("inspector.transform"), EditorTheme.Ink500, () =>
             {
                 EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, () => ResetTransform(go));
