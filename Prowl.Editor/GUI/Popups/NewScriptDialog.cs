@@ -44,7 +44,7 @@ public static class NewScriptDialog
         s_selectedIndex = 0;
         s_onCreated = onCreated;
 
-        s_templates = EditorRegistries.ScriptTemplates;
+        s_templates = new List<ScriptTemplate>(EditorRegistries.ScriptTemplates);
         if (s_templates.Count == 0)
         {
             Runtime.Debug.LogWarning("NewScriptDialog: no script templates registered.");
