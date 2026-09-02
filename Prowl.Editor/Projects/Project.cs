@@ -111,7 +111,7 @@ public class Project
             try
             {
                 string json = File.ReadAllText(prowlFiles[0]);
-                var doc = JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(json);
                 if (doc.RootElement.TryGetProperty("name", out var nameProp))
                     name = nameProp.GetString() ?? name;
             }
