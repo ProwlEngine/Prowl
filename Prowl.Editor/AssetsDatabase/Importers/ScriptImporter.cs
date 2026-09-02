@@ -23,18 +23,7 @@ public class ScriptImporter : AssetImporter
         var project = Project.Current;
         if (project != null && File.Exists(ctx.AbsolutePath))
         {
-            var scriptTime = File.GetLastWriteTimeUtc(ctx.AbsolutePath);
-            bool needsRecompile = true;
-
-            // Check if Game assembly exists and is newer
-            if (File.Exists(project.GameAssemblyPath))
-            {
-                var dllTime = File.GetLastWriteTimeUtc(project.GameAssemblyPath);
-                needsRecompile = scriptTime > dllTime;
-            }
-
-            if (needsRecompile)
-                ScriptAssemblyManager.RequestRecompile();
+            ScriptAssemblyManager.RequestRecompile();
         }
 
         return true;
