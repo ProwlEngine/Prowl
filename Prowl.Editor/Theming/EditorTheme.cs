@@ -92,10 +92,7 @@ public static class EditorTheme
     /// </summary>
     public static IDisposable PushOrigami() => Origami.PushTheme(OrigamiTheme);
 
-    /// <summary>
-    /// The editor theme = Origami's default palette + the editor's fonts and metrics.
-    /// Icons are left at Origami's default vector set (no override).
-    /// </summary>
+    /// <summary> The editor theme = Origami's default palette + the editor's fonts and metrics. Icons are replaced with Font Awesome glyphs via BuildIconSet. </summary>
     public static OrigamiTheme BuildOrigamiTheme()
     {
         var t = OrigamiTheme.CreateDefaults();
@@ -180,8 +177,11 @@ public static class EditorTheme
     public static FontFile? DefaultFont;
     /// <summary>Bold (700) weight.</summary>
     public static FontFile? DefaultBoldFont;
+    /// <summary> Medium (500) weight font. </summary>
     public static FontFile? FontMedium;
+    /// <summary> Semi-bold (600) weight font. </summary>
     public static FontFile? FontSemiBold;
+    /// <summary> Monospace font for code and terminal displays. </summary>
     public static FontFile? FontMono;
     /// <summary>Display face for wordmarks / big headings (Space Grotesk).</summary>
     public static FontFile? FontDisplay;
@@ -192,44 +192,74 @@ public static class EditorTheme
     /// <summary>Font Awesome regular (outline) glyphs, for drawing an icon directly in the outline style.</summary>
     public static FontFile? FontIconOutline;
 
+    /// <summary> Primary UI font, delegates to DefaultFont. </summary>
     public static FontFile? Font => DefaultFont;
+    /// <summary> Bold UI font, falls back through DefaultBoldFont, FontSemiBold, then DefaultFont. </summary>
     public static FontFile? FontBold => DefaultBoldFont ?? FontSemiBold ?? DefaultFont;
 
+    /// <summary> Font family name for the primary UI face. </summary>
     public static string DefaultFontName = "Geist";
+    /// <summary> Font family name for the bold UI face. </summary>
     public static string DefaultBoldFontName = "Geist";
 
     // DPI Scaling value
+    /// <summary> DPI scaling factor applied to all UI measurements. </summary>
     public static float UserScale { get; set; } = 1f;
 
     // -- Sizing (mutable so the Preferences panel can tweak) -----------
+    /// <summary> Height of the main menu bar. </summary>
     public static float MenuBarHeight = 40f;
+    /// <summary> Height of the status bar. </summary>
     public static float StatusBarHeight = 26f;
+    /// <summary> Standard row height for lists, trees and property grids. </summary>
     public static float RowHeight = 24f;
     // Base spacing/padding the full Origami metric scale (SpacingSmall..PaddingLarge) is derived from
     // these in BuildOrigamiTheme, so tweaking them retunes gaps/padding everywhere (property grid, etc.).
+    /// <summary> Base spacing unit from which the full Origami spacing scale is derived. </summary>
     public static float Spacing = 4f;
+    /// <summary> Base padding unit from which the full Origami padding scale is derived. </summary>
     public static float Padding = 6f;
+    /// <summary> Base font size for UI text. </summary>
     public static float FontSize = 17f;
+    /// <summary> Smaller font size for secondary labels and captions. </summary>
     public static float FontSizeSmall = FontSize - 2f;
+    /// <summary> Larger font size for headings and emphasis. </summary>
     public static float FontSizeLarge = FontSize + 2f;
+    /// <summary> Font size for the PROWL logo wordmark. </summary>
     public static float FontSizeLogo = 72f;
+    /// <summary> Default width for property labels in the inspector. </summary>
     public static float LabelWidth = 150f;
+    /// <summary> Corner rounding radius for panels, buttons and containers. </summary>
     public static float Roundness = 6f;
 
     // -- Effects (mirrored from EditorThemeData; applied globally) -----
+    /// <summary> Enables glass-morphism blur on backdrop surfaces. </summary>
     public static bool GlassBlur = true;
+    /// <summary> Blur radius in pixels when GlassBlur is enabled. </summary>
     public static float BlurAmount = 22f;
+    /// <summary> Enables drop shadows on popovers, dropdowns and modals. </summary>
     public static bool DropShadows = true;
+    /// <summary> Enables glow effect on accent-colored elements. </summary>
     public static bool AccentGlow = true;
+    /// <summary> Enables anti-aliasing for UI rendering. </summary>
     public static bool AntiAliasing = true;
+    /// <summary> Enables animated background effects (nebula, comets, stars). </summary>
     public static bool AnimatedBackground = true;
+    /// <summary> Speed multiplier for background animations. </summary>
     public static float BackgroundSpeed = 1f;
+    /// <summary> Style of the editor background (Nebula, Gradient, Solid). </summary>
     public static EditorBackgroundStyle BackgroundStyle = EditorBackgroundStyle.Nebula;
+    /// <summary> First gradient color for the background. </summary>
     public static Color BackgroundColorA = Color.FromArgb(27, 17, 48);
+    /// <summary> Second gradient color for the background. </summary>
     public static Color BackgroundColorB = Color.FromArgb(8, 6, 12);
+    /// <summary> Shows gradient layers in the nebula background. </summary>
     public static bool BgShowGradients = true;
+    /// <summary> Shows star field in the nebula background. </summary>
     public static bool BgShowStars = true;
+    /// <summary> Shows comet streaks in the nebula background. </summary>
     public static bool BgShowComets = true;
+    /// <summary> Deepest void color behind all background layers. </summary>
     public static Color BackgroundVoidColor = Color.FromArgb(6, 4, 9);
 
     /// <summary>True when the (animated or static) nebula should be drawn rather than a gradient/solid.</summary>
@@ -238,17 +268,27 @@ public static class EditorTheme
     /// <summary>The blur radius actually pushed into Origami's metrics (0 when Glass Blur is off).</summary>
     public static float EffectiveBlur => GlassBlur ? BlurAmount : 0f;
 
+    /// <summary> Size of dock zone indicators. </summary>
     public static float IndicatorSize = 28f;
+    /// <summary> Gap between dock zone indicators. </summary>
     public static float IndicatorGap = 4f;
+    /// <summary> Width of dock splitters. </summary>
     public static float SplitterSize = 6f;
+    /// <summary> Padding inside dock panels. </summary>
     public static float DockPadding = 6f;
 
+    /// <summary> Horizontal padding at the edges of panels and windows. </summary>
     public static float SidePixelPadding = 10f;
+    /// <summary> Spacing between items in the vertical navbar. </summary>
     public static float VerticalNavbarSpacing = 4f;
 
+    /// <summary> Height of the tab bar. </summary>
     public static float TabBarHeight = 32f;
+    /// <summary> Horizontal padding inside each tab. </summary>
     public static float TabPadding = 12f;
+    /// <summary> Size of the tab close button. </summary>
     public static float TabCloseSize = 14f;
+    /// <summary> Gap between adjacent tabs. </summary>
     public static float TabGap = 0f;
 
     // ==================================================================
@@ -349,8 +389,11 @@ public static class EditorTheme
     /// <summary>Light accent for text / small highlights.</summary>
     public static Color AccentText => T.Primary.C700;
 
+    /// <summary> Hover highlight overlay color. </summary>
     public static Color Hover => WithAlpha(Accent, 31);
+    /// <summary> Selected / active highlight overlay color. </summary>
     public static Color Selected => WithAlpha(Accent, 41);
 
+    /// <summary> Returns a copy of the color with the specified alpha channel value. </summary>
     public static Color WithAlpha(Color c, int a) => Color.FromArgb(a, c.R, c.G, c.B);
 }
