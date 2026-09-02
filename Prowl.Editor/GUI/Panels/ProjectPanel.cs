@@ -842,7 +842,7 @@ public class ProjectPanel : DockPanel
                 {
                     var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
-                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, it.RelativePath, subType));
                 }
                 else
                 {
@@ -1266,7 +1266,7 @@ public class ProjectPanel : DockPanel
             {
                 var db = EditorAssetBackend.Instance;
                 Type? subType = db?.GetSubAssets(s.ParentGuid).FirstOrDefault(x => x.Guid == s.Guid)?.Type;
-                DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, subType));
+                DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, s.RelativePath, subType));
             })
             .Tooltip(sub.Name)
             .Enter())
@@ -1340,7 +1340,7 @@ public class ProjectPanel : DockPanel
                 {
                     var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
-                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, it.RelativePath, subType));
                     return;
                 }
 

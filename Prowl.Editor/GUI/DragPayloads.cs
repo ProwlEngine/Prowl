@@ -33,8 +33,8 @@ public class AssetDragPayload : EditorDragPayload
     public string[] AssetPaths { get; }
     public bool IsMulti => AssetGuids.Length > 1;
 
-    public AssetDragPayload(Guid guid, string name, Type? type)
-        : this(guid, name, type, [guid], [name]) { }
+    public AssetDragPayload(Guid guid, string name, string path, Type? type)
+            : this(guid, name, type, [guid], [path]) { }
 
     public AssetDragPayload(Guid guid, string name, Type? type, Guid[] allGuids, string[] allPaths)
         : base(allGuids.Length > 1 ? $"{allGuids.Length} assets" : name, EditorIcons.Cube)
