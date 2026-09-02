@@ -147,8 +147,9 @@ public static class AssetCreateMenu
 
         var def = new Projects.Scripting.AssemblyDefinition { Name = Path.GetFileNameWithoutExtension(name) };
         def.WriteToFile(filePath);
+                EditorAssetBackend.Instance?.InvalidateFolderIndex();
 
-        Debug.Log($"Created assembly definition: {name}");
+                Debug.Log($"Created assembly definition: {name}");
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
@@ -395,7 +396,7 @@ Pass ""ShadowCaster""
     ENDGLSL
 }
 ");
-
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
         Debug.Log($"Created shader: {name}");
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
