@@ -305,7 +305,7 @@ public class GameViewPanel : DockPanel
                         canvas.SetStrokeColor(playing ? EditorTheme.Purple500 : EditorTheme.Ink200);
                         canvas.SetStrokeWidth(bw);
                         canvas.Stroke();
-                        });
+                    });
                     });
 
                 // Stats overlay (top-right of viewport, theme sized)

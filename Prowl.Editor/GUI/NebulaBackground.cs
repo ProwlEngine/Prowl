@@ -147,7 +147,10 @@ public sealed class NebulaBackground
                 _comets[i] = new Comet
                 {
                     active = true,
-                    x = cx0, y = cy0, dx = cdx, dy = cdy,
+                    x = cx0,
+                    y = cy0,
+                    dx = cdx,
+                    dy = cdy,
                     speed = (float)(0.09 + _rng.NextDouble() * 0.07),
                     len = (float)(0.08 + _rng.NextDouble() * 0.06),
                     dur = (float)(2.8 + _rng.NextDouble() * 1.8)
@@ -226,29 +229,29 @@ public sealed class NebulaBackground
                     vg.DrawImage(_starTex, tx, ty, StarTexSize, StarTexSize);
 
         if (ShowComets)
-        foreach (var c in _comets)
-        {
-            if (!c.active) continue;
-            float env = MathF.Sin(c.life * MathF.PI);
-            if (env <= 0.01f) continue;
-            float hx = x + c.x * w, hy = y + c.y * h;
-            float vx = c.dx * w, vy = c.dy * h;
-            float vlen = MathF.Max(1e-4f, MathF.Sqrt(vx * vx + vy * vy));
-            float ux = vx / vlen, uy = vy / vlen;
-            float L = c.len * w;
-            float tlx = hx - ux * L, tly = hy - uy * L;
-            float perpx = -uy, perpy = ux, hw = 1.7f;
-            vg.SaveState();
-            vg.SetLinearBrush(hx, hy, tlx, tly, Lighten(_primary, 0.55f, env * 0.85f), Lighten(_primary, 0.55f, 0f));
-            vg.BeginPath();
-            vg.MoveTo(hx + perpx * hw, hy + perpy * hw);
-            vg.LineTo(hx - perpx * hw, hy - perpy * hw);
-            vg.LineTo(tlx, tly);
-            vg.ClosePath();
-            vg.FillComplexAA();
-            vg.RestoreState();
-            vg.BeginPath(); vg.Circle(hx, hy, 2.2f); vg.SetFillColor(Col(255, 255, 255, env)); vg.Fill();
-        }
+            foreach (var c in _comets)
+            {
+                if (!c.active) continue;
+                float env = MathF.Sin(c.life * MathF.PI);
+                if (env <= 0.01f) continue;
+                float hx = x + c.x * w, hy = y + c.y * h;
+                float vx = c.dx * w, vy = c.dy * h;
+                float vlen = MathF.Max(1e-4f, MathF.Sqrt(vx * vx + vy * vy));
+                float ux = vx / vlen, uy = vy / vlen;
+                float L = c.len * w;
+                float tlx = hx - ux * L, tly = hy - uy * L;
+                float perpx = -uy, perpy = ux, hw = 1.7f;
+                vg.SaveState();
+                vg.SetLinearBrush(hx, hy, tlx, tly, Lighten(_primary, 0.55f, env * 0.85f), Lighten(_primary, 0.55f, 0f));
+                vg.BeginPath();
+                vg.MoveTo(hx + perpx * hw, hy + perpy * hw);
+                vg.LineTo(hx - perpx * hw, hy - perpy * hw);
+                vg.LineTo(tlx, tly);
+                vg.ClosePath();
+                vg.FillComplexAA();
+                vg.RestoreState();
+                vg.BeginPath(); vg.Circle(hx, hy, 2.2f); vg.SetFillColor(Col(255, 255, 255, env)); vg.Fill();
+            }
 
         RadialFill(vg, x, y, w, h, x + w * 0.5f, y + h * 0.4f, big * 0.55f, big * 0.9f, Col(0, 0, 0, 0f), Col(0, 0, 0, 0.55f));
     }

@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -95,6 +95,33 @@ public abstract class AssetBackendBase
                 AssetDatabase.Forget(guid);
             }
         }
+    }
+
+    /// <summary>
+    /// Drops every loaded asset that is not pinned, whether or not it is idle, so the next use of each
+    /// one loads a fresh instance from what is on disk. Returns how many were dropped.
+    /// </summary>
+    public int UnloadAll()
+    {
+        int dropped = 0;
+
+        foreach (var kv in _loadedAssets)
+        {
+            Guid guid = kv.Key;
+
+            // Pinned on purpose by something that needs this exact instance to survive.
+            if (AssetDatabase.IsLocked(guid)) continue;
+
+            if (!_loadedAssets.TryRemove(guid, out var obj)) continue;
+
+            try { obj.Dispose(); }
+            catch (Exception ex) { Debug.LogWarning($"Error disposing asset {guid}: {ex.Message}"); }
+
+            AssetDatabase.Forget(guid);
+            dropped++;
+        }
+
+        return dropped;
     }
 
     /// <summary>Run an idle sweep immediately, bypassing <see cref="IdleSweepInterval"/>'s gate - used

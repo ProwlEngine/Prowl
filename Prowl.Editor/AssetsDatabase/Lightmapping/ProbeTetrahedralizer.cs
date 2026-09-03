@@ -146,7 +146,7 @@ public static class ProbeTetrahedralizer
     private static Tet MakeOriented(Double3[] v, int f0, int f1, int f2, int apex)
     {
         double vol = Orient3D(v[f0], v[f1], v[f2], v[apex]);
-        return vol < 0 ? new Tet(f0, f1, f2, apex) : new Tet(f0, f2, f1, apex);
+        return vol < 0 ? new Tet(f0, f2, f1, apex) : new Tet(f0, f1, f2, apex);
     }
 
     private static int[] BuildNeighbours(List<Tet> tets, int m)

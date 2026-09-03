@@ -43,16 +43,11 @@ public static partial class PrefabUtility
 
     #region Queries
 
-    // Four questions can be asked about an object's relationship to a prefab, and they are easy to
-    // confuse. In order of how much each claims:
-    //
-    //   GameObject.IsPrefabInstance   this one object carries a link to a prefab. The weakest, and the
-    //                                 wrong question for anything that then acts on the whole instance.
-    //   IsPartOfPrefabInstance        it belongs to an instance, root or not.
-    //   IsInstanceRoot                it stands for the prefab's own root object, so it is an instance
-    //                                 rather than one object inside one.
-    //   IsProvidedByPrefab            its parent's prefab is what put it there, so it is structure the
-    //                                 instance may not restructure.
+    // Four questions, easy to confuse, in order of how much each claims:
+    //   GameObject.IsPrefabInstance   this object carries a link to a prefab
+    //   IsPartOfPrefabInstance        it belongs to an instance, root or not
+    //   IsInstanceRoot                it stands for the prefab's own root object
+    //   IsProvidedByPrefab            its parent's prefab put it there, so it is structure
 
     /// <summary>
     /// True when this object belongs to a prefab instance, whether it is the root of one or sits
@@ -190,12 +185,9 @@ public static partial class PrefabUtility
     #region Flattening
 
     /// <summary>
-    /// Turn a freshly spawned instance into ordinary objects, keeping its contents and dropping what ties
-    /// them to a prefab. For where an instance cannot exist, which is inside the prefab being edited:
-    /// a prefab is one self contained tree, so what is added to it becomes its own content.
-    /// <para/>
-    /// No undo of its own. The caller is spawning, and the record for that already covers the objects
-    /// arriving and going away again.
+    /// Turn a freshly spawned instance into ordinary objects, for where an instance cannot exist: inside
+    /// the prefab being edited, which is one self contained tree. No undo of its own, since the caller is
+    /// spawning and that record already covers these objects.
     /// </summary>
     public static void DropPrefabLink(GameObject go)
     {
@@ -206,19 +198,10 @@ public static partial class PrefabUtility
 
     #region Restructuring
 
-    // Asking before an edit that a prefab instance cannot survive, and unlinking what it touches.
-    //
-    // An instance records the values its objects hold, not the shape they are in. Deleting one of its
-    // objects, or moving one out of it, or taking away a component the prefab provides, are all changes
-    // there is nowhere to write down: the next refresh reads the prefab and puts the object back, so the
-    // edit was never really made.
-    //
-    // The answer is not to refuse. Someone deleting a child of an instance usually means it, and telling
-    // them to unpack first is asking them to do by hand exactly what this does. So it says what will be
-    // lost, and on a yes the instance stops being one and the edit goes through as an ordinary edit.
-    //
-    // The break and the edit are two undo steps. One undo puts back what was deleted or moved, a second
-    // puts back the connection.
+    // An instance records the values its objects hold, not the shape they are in, so deleting one of its
+    // objects, moving one out, or dropping a component the prefab provides is a change with nowhere to be
+    // written down. Rather than refuse, these say what will be lost and unlink on a yes. The break and
+    // the edit are two undo steps.
 
     /// <summary>Whether any of these objects is structure its prefab provides.</summary>
     public static bool NeedsBreaking(IEnumerable<GameObject> targets)
@@ -270,15 +253,9 @@ public static partial class PrefabUtility
     #region Copies
 
     /// <summary>
-    /// Settle what a freshly made copy of <paramref name="original"/> is: an instance in its own right,
-    /// or ordinary objects.
-    /// <para/>
-    /// A copy of a whole instance is another instance of the same prefab, which is what a user
-    /// duplicating one expects. A copy of part of one is not: it would answer to the same identities as
-    /// the objects it was copied from, so an override meant for one would land on both, a refresh would
-    /// update only whichever came first, and applying would write two objects under one identity into
-    /// the asset. Those copies become plain objects, which also makes them additions the instance can
-    /// report, move and delete.
+    /// Settle what a freshly made copy is: a copy of a whole instance is another instance, a copy of part
+    /// of one becomes plain objects. Keeping the link on a partial copy would give two objects one source
+    /// identity, so an override meant for one would land on both.
     /// </summary>
     public static void SettleCopiedPrefabData(GameObject original, GameObject copy)
     {

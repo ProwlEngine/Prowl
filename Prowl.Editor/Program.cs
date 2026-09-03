@@ -1,13 +1,13 @@
-using Prowl.Editor.Core;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Projects.Scripting;
-using Prowl.Editor.Theming;
-
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+
+using Prowl.Editor.Core;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Theming;
 
 
 namespace Prowl.Editor;
@@ -89,6 +89,10 @@ public static class Program
 
     public static void Main(string[] args)
     {
+        // First, so that anything failing after this point is written down rather than closing the
+        // window with nothing to show for it.
+        CrashReporter.Install();
+
         RegisterMiniAudioExResolver();
 
         ReadArguments(args);

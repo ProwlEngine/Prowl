@@ -2,18 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Editor.Utils;
-
+using Prowl.Editor.Build;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Theming;
-
-using Prowl.Editor.GUI;
-
-using Prowl.Editor.Build;
 
 namespace Prowl.Editor.Projects.Settings;
 

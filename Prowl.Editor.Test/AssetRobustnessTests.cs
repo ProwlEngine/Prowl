@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using ImageMagick;
 
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
@@ -20,12 +19,7 @@ public class AssetRobustnessTests : EditorTestHarness
     private Guid MakeTexture(string relativePath)
     {
         string abs = AssetAbsolutePath(relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
-        using (var image = new MagickImage(new MagickColor(20, 40, 60, 255), 8, 8))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(abs);
-        }
+        TestImages.WriteSolidPng(abs, 8, 20, 40, 60);
         Guid guid = Assets.ImportFile(relativePath);
         Assert.NotEqual(Guid.Empty, guid);
         return guid;

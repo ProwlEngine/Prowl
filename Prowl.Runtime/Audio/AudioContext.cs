@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -246,6 +246,7 @@ public static class AudioContext
         unsafe
         {
             deviceDataProc = &OnDeviceDataProc;
+            contextConfig.deviceDataProc = deviceDataProc;
         }
 
         audioContext = MiniAudioExNative.ma_ex_context_init(ref contextConfig);
@@ -443,6 +444,10 @@ public static class AudioContext
     /// </summary>
     public static void Update()
     {
+        // Before the device check: a snapshot transition is a change to the mix that game code asked
+        // for, and it has to run to completion whether or not there is anything to hear it on.
+        AudioMixer.TickTransitions();
+
         if (audioContext == IntPtr.Zero)
             return;
 
@@ -827,14 +832,11 @@ public sealed class AudioBuffer
 
     /// <summary>
     /// Copies the samples written by the last <see cref="Write"/> into <paramref name="output"/>,
-    /// allocating or growing it to the buffer's capacity first, and returns how many are valid.
-    /// Returns 0 when the writer kept overtaking the read, meaning there is nothing consistent to show.
+    /// growing it to hold them if it is too small, and returns how many are valid. Returns 0 when the
+    /// writer kept overtaking the read, meaning there is nothing consistent to show.
     /// </summary>
     public int Read(ref float[] output)
     {
-        if (output == null || output.Length < buffer.Length)
-            output = new float[buffer.Length];
-
         for (int attempt = 0; attempt < ReadAttempts; attempt++)
         {
             int before = sequence;
@@ -847,6 +849,9 @@ public sealed class AudioBuffer
 
             if (length > 0)
             {
+                if (output == null || output.Length < length)
+                    output = new float[length];
+
                 unsafe
                 {
                     // Only the written span, not the whole capacity. Everything past it is stale and

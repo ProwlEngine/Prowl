@@ -58,6 +58,11 @@ public static class ImportHelper
                 foreach (var dep in dependencies)
                     ctx.AddDependency(dep);
             }
+            else
+            {
+                Debug.LogError($"Failed to import {errorLabel}: {ctx.AbsolutePath} - deserialization returned null");
+                return false;
+            }
         }
         catch (Exception ex)
         {

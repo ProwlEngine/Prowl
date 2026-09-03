@@ -46,6 +46,7 @@ public static partial class PrefabUtility
         {
             if (_field != null) _field.SetValue(target, value);
             else if (_property!.CanWrite) _property.SetValue(target, value);
+            else throw new InvalidOperationException($"Property '{_property.Name}' is read-only and cannot be overridden.");
         }
 
         public static Member Find(object target, string name)
@@ -126,7 +127,7 @@ public static partial class PrefabUtility
 
         foreach (GameObject child in root.Children)
         {
-            if (child.IsPrefabInstance && child.PrefabAssetId != boundaryPrefabId) continue;
+            if (IsSeparateInstance(child, boundaryPrefabId)) continue;
 
             GameObject? found = FindBySourceIdentifier(child, sourceId, boundaryPrefabId);
             if (found != null) return found;
@@ -143,10 +144,9 @@ public static partial class PrefabUtility
         var member = Member.Find(parent, parts[^1]);
         if (!member.IsValid) return;
 
-        // An override value is serialized on its own, detached from any scene graph, so Echo cannot
-        // tell that a GameObject or component field points at another scene object rather than at
-        // content to copy. Keying the reference by identifier lets it re-link to the live object, in
-        // the scene the instance being written actually belongs to rather than whichever is open.
+        // An override value is serialized detached from any scene graph, so Echo cannot tell a reference
+        // to another scene object from content to copy. Keyed by identifier, it re-links to the live
+        // object, in the scene the instance belongs to rather than whichever happens to be open.
         object? deserialized = Serializer.Deserialize(value, member.MemberType,
             SceneReferenceResolver.ContextForLinking(resolveIn));
 
@@ -170,9 +170,8 @@ public static partial class PrefabUtility
         // rebuilds its derived state once, after all of them have been written.
         var touched = new HashSet<MonoBehaviour>();
 
-        // Reference typed overrides name their target by identifier, and the object they name lives in
-        // the same scene as the instance. That is the open scene when a user is editing, and is not when
-        // a build brings a scene it read off disk up to date.
+        // Not Scene.Current: a build brings a scene it read off disk up to date, and that is not the
+        // scene that happens to be open.
         Scene? resolveIn = root.Scene;
 
         foreach (PropertyOverride ov in overrides)

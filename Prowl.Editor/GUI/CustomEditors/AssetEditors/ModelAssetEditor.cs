@@ -3,7 +3,6 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -12,6 +11,8 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.MeshFeatures.Generation;
 using Prowl.Runtime.Resources;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 namespace Prowl.Editor.Inspector;
 
@@ -48,6 +49,9 @@ public class ModelAssetEditor : ImportSettingsEditor
 
     private static float Float(EchoObject? s, string key, float fallback)
         => s != null && s.TryGet(key, out EchoObject t) ? t.FloatValue : fallback;
+
+    private static string Str(EchoObject? s, string key, string fallback)
+        => s != null && s.TryGet(key, out EchoObject t) ? t.StringValue ?? fallback : fallback;
 
     private static EchoObject? SdfBlock(EchoObject s)
         => s.TryGet(SDFFeatureSpec.KeyRoot, out EchoObject sdf) ? sdf : null;
@@ -140,12 +144,6 @@ public class ModelAssetEditor : ImportSettingsEditor
         EditorGUI.SettingsToggle(paper, $"{id}_tangents", "Calculate Tangents", Bool(settings, "calculateTangents", true),
             v => settings["calculateTangents"] = new EchoObject(v), separator: false);
 
-        EditorGUI.SettingsToggle(paper, $"{id}_flipUV", "Flip UVs", Bool(settings, "flipUVs", false),
-            v => settings["flipUVs"] = new EchoObject(v), separator: false);
-
-        EditorGUI.SettingsToggle(paper, $"{id}_globalScale", "Global Scale", Bool(settings, "globalScale", false),
-            v => settings["globalScale"] = new EchoObject(v), separator: false);
-
         EditorGUI.Row(paper, $"{id}_unitScale", "Unit Scale", () =>
             Origami.NumericField<float>(paper, $"{id}_unitScale_v", Float(settings, "unitScale", 1f),
                 v => settings["unitScale"] = new EchoObject(v)).Show());
@@ -154,6 +152,53 @@ public class ModelAssetEditor : ImportSettingsEditor
         // it's slow (a full unwrap per mesh) and some models already ship their own UV2.
         EditorGUI.SettingsToggle(paper, $"{id}_lightmapUVs", "Generate Lightmap UVs (slow)", Bool(settings, "generateLightmapUVs", false),
             v => settings["generateLightmapUVs"] = new EchoObject(v), separator: false);
+
+        EditorGUI.SectionHeader(paper, $"{id}_h_contentSettings", "Contents");
+
+        EditorGUI.SettingsToggle(paper, $"{id}_impMaterials", "Import Materials", Bool(settings, "importMaterials", true),
+            v => settings["importMaterials"] = new EchoObject(v), separator: false);
+
+        bool importAnimations = Bool(settings, "importAnimations", true);
+        EditorGUI.SettingsToggle(paper, $"{id}_impAnimations", "Import Animations", importAnimations,
+            v => settings["importAnimations"] = new EchoObject(v), separator: false);
+
+        // Model formats carry no looping flag of their own, so the wrap mode is a choice the import
+        // has to make rather than read.
+        if (importAnimations)
+            EditorGUI.Row(paper, $"{id}_wrapMode", "Animation Wrap Mode", () =>
+                Origami.EnumDropdown(paper, $"{id}_wrapMode_v",
+                    (AnimationWrapMode)Int(settings, "animationWrapMode", (int)AnimationWrapMode.Loop),
+                    v => settings["animationWrapMode"] = new EchoObject((int)v)).Show());
+
+        EditorGUI.SettingsToggle(paper, $"{id}_impBlendShapes", "Import Blend Shapes", Bool(settings, "importBlendShapes", true),
+            v => settings["importBlendShapes"] = new EchoObject(v), separator: false);
+
+        EditorGUI.SettingsToggle(paper, $"{id}_impCameras", "Import Cameras", Bool(settings, "importCameras", true),
+            v => settings["importCameras"] = new EchoObject(v), separator: false);
+
+        EditorGUI.SettingsToggle(paper, $"{id}_impLights", "Import Lights", Bool(settings, "importLights", true),
+            v => settings["importLights"] = new EchoObject(v), separator: false);
+
+        EditorGUI.Row(paper, $"{id}_sceneIndex", "Scene Index (-1 = default)", () =>
+            Origami.NumericField<int>(paper, $"{id}_sceneIndex_v", Int(settings, "sceneIndex", -1),
+                v => settings["sceneIndex"] = new EchoObject(v)).Min(-1).Show());
+
+        EditorGUI.SectionHeader(paper, $"{id}_h_optimize", "Optimization");
+
+        EditorGUI.SettingsToggle(paper, $"{id}_optMeshes", "Merge Sibling Meshes", Bool(settings, "optimizeMeshes", false),
+            v => settings["optimizeMeshes"] = new EchoObject(v), separator: false);
+
+        bool optimizeHierarchy = Bool(settings, "optimizeHierarchy", false);
+        EditorGUI.SettingsToggle(paper, $"{id}_optGraph", "Collapse Empty Nodes", optimizeHierarchy,
+            v => settings["optimizeHierarchy"] = new EchoObject(v), separator: false);
+
+        if (optimizeHierarchy)
+            EditorGUI.Row(paper, $"{id}_preserveNodes", "Never Collapse (comma separated)", () =>
+                Origami.TextField(paper, $"{id}_preserveNodes_v", Str(settings, "preserveNodeNames", ""),
+                    v => settings["preserveNodeNames"] = new EchoObject(v)).Show());
+
+        EditorGUI.SettingsToggle(paper, $"{id}_strict", "Fail On Validation Errors", Bool(settings, "strictValidation", false),
+            v => settings["strictValidation"] = new EchoObject(v), separator: false);
 
         // Mesh features produces an SDF sub-asset alongside every imported mesh.
         EditorGUI.SectionHeader(paper, $"{id}_h_features", "Mesh Features");

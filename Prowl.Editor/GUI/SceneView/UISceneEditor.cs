@@ -68,10 +68,10 @@ public sealed class UISceneEditor : SceneTool
     // ================================================================
 
     private static readonly Color ResizeColor = new(0.80f, 0.75f, 0.80f, 1.00f);  // green
-    private static readonly Color PivotColor  = new(0.20f, 0.80f, 1.00f, 1.00f);  // cyan
+    private static readonly Color PivotColor = new(0.20f, 0.80f, 1.00f, 1.00f);  // cyan
     private static readonly Color AnchorColor = new(1.00f, 0.85f, 0.20f, 1.00f);  // amber
-    private static readonly Color MoveColor   = new(0.40f, 1.00f, 0.60f, 1.00f);  // bright green
-    private static readonly Color HotColor    = new(1.00f, 1.00f, 1.00f, 1.00f);  // hovered / active
+    private static readonly Color MoveColor = new(0.40f, 1.00f, 0.60f, 1.00f);  // bright green
+    private static readonly Color HotColor = new(1.00f, 1.00f, 1.00f, 1.00f);  // hovered / active
 
     private const float MinRectSize = 1f;
 
@@ -406,15 +406,15 @@ public sealed class UISceneEditor : SceneTool
             case Handle.ResizeTL: minX += delta.X; maxY += delta.Y; break;
 
             case Handle.Pivot:
-            {
-                Float2 newPivot = new(
-                    Maths.Clamp((designHit.X - s.Min.X) / Maths.Max(s.Size.X, 1e-4f), 0f, 1f),
-                    Maths.Clamp((designHit.Y - s.Min.Y) / Maths.Max(s.Size.Y, 1e-4f), 0f, 1f));
-                rt.Pivot = newPivot;
-                // Re-pivoting keeps the element where it is on screen.
-                ApplyDesiredRect(rt, parentRect, s.Min.X, s.Min.Y, s.Size.X, s.Size.Y);
-                return;
-            }
+                {
+                    Float2 newPivot = new(
+                        Maths.Clamp((designHit.X - s.Min.X) / Maths.Max(s.Size.X, 1e-4f), 0f, 1f),
+                        Maths.Clamp((designHit.Y - s.Min.Y) / Maths.Max(s.Size.Y, 1e-4f), 0f, 1f));
+                    rt.Pivot = newPivot;
+                    // Re-pivoting keeps the element where it is on screen.
+                    ApplyDesiredRect(rt, parentRect, s.Min.X, s.Min.Y, s.Size.X, s.Size.Y);
+                    return;
+                }
 
             case Handle.AnchorBL:
             case Handle.AnchorBR:

@@ -140,35 +140,35 @@ public sealed class BuildExecutor
 
         async Task PlanAndRunAsync()
         {
-        await foreach (var operation in pipeline.PlanStageAsync(node.Stage, context, ct).WithCancellation(ct))
-        {
-            if (node.OnFailure == StageFailurePolicy.FailFast && Volatile.Read(ref failed) > 0)
-                break;
-
-            await gate.WaitAsync(ct).ConfigureAwait(false);
-
-            running.Add(Task.Run(async () =>
+            await foreach (var operation in pipeline.PlanStageAsync(node.Stage, context, ct).WithCancellation(ct))
             {
-                try
+                if (node.OnFailure == StageFailurePolicy.FailFast && Volatile.Read(ref failed) > 0)
+                    break;
+
+                await gate.WaitAsync(ct).ConfigureAwait(false);
+
+                running.Add(Task.Run(async () =>
                 {
-                    await ExecuteAsync(operation, context, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception e)
-                {
-                    Interlocked.Increment(ref failed);
-                    context.Report(Issue(node.Stage, "PB1001", $"{operation.Description}: {e.Message}", BuildSeverity.Error));
-                }
-                finally
-                {
-                    Interlocked.Increment(ref done);
-                    gate.Release();
-                }
-            }, ct));
-        }
+                    try
+                    {
+                        await ExecuteAsync(operation, context, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception e)
+                    {
+                        Interlocked.Increment(ref failed);
+                        context.Report(Issue(node.Stage, "PB1001", $"{operation.Description}: {e.Message}", BuildSeverity.Error));
+                    }
+                    finally
+                    {
+                        Interlocked.Increment(ref done);
+                        gate.Release();
+                    }
+                }));
+            }
         }
     }
 

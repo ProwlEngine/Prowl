@@ -41,6 +41,12 @@ public static class ScriptComponentResolver
             if (type.IsAbstract) continue;
             if (!typeof(MonoBehaviour).IsAssignableFrom(type)) continue;
             if (type == typeof(MonoBehaviour)) continue;
+
+            // Offering a type nothing can construct would put a drop target on screen that does
+            // nothing when it is used.
+            if (type.ContainsGenericParameters) continue;
+            if (type.GetConstructor(Type.EmptyTypes) == null) continue;
+
             return type;
         }
 

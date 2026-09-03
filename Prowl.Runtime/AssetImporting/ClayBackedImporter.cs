@@ -15,13 +15,11 @@ using ClayMesh = Prowl.Clay.Mesh;
 using ClayMaterial = Prowl.Clay.Material;
 using ClayAnim = Prowl.Clay.AnimationClip;
 using ClayBinding = Prowl.Clay.AnimationBinding;
-using ClayCurve = Prowl.Clay.AnimationCurve;
 using ClayTexture = Prowl.Clay.Texture;
 using ClaySettings = Prowl.Clay.Importer.ModelImporterSettings;
 using PMesh = Prowl.Runtime.Resources.Mesh;
 using PMaterial = Prowl.Runtime.Resources.Material;
 using PAnim = Prowl.Runtime.AnimationClip;
-using PCurve = Prowl.Runtime.AnimationCurve;
 using PBlendShape = Prowl.Runtime.Resources.BlendShape;
 using PBlendShapeFrame = Prowl.Runtime.Resources.BlendShapeFrame;
 
@@ -69,27 +67,51 @@ internal static class ClayBackedImporter
         // Prowl-specific toggles on top.
         var flags = PostProcessPresets.GameQuality;
 
-        // Prowl does its own GenerateNormals/RecalculateNormals at the runtime mesh layer (via
-        // PMesh.RecalculateNormals after bake), so we drop CalcTangentSpace + smooth normals from
-        // the Clay pipeline and let Prowl decide afterwards. This matches the existing
-        // GltfImporter / ObjImporter behavior.
-        flags &= ~PostProcessFlags.CalcTangentSpace;
-        flags &= ~PostProcessFlags.GenerateSmoothNormals;
-        flags &= ~PostProcessFlags.GenerateNormals;
+        // Normals come from Clay. Its steps split vertices along edges sharper than the smoothing
+        // angle, which is what actually produces flat or hard-edged shading; generating them at the
+        // runtime mesh layer instead can only write one normal per existing vertex.
+        flags &= ~(PostProcessFlags.GenerateNormals | PostProcessFlags.GenerateSmoothNormals);
+        if (s.GenerateNormals || s.RecalculateNormals)
+            flags |= s.GenerateSmoothNormals ? PostProcessFlags.GenerateSmoothNormals : PostProcessFlags.GenerateNormals;
 
-        // FlipUVs: glTF stores UVs with V=0 at the top of the texture (top-left origin convention).
-        // FBX and OBJ store V=0 at the bottom (OpenGL convention) which is what Prowl's shaders
-        // expect post-import. So only flip when the source is glTF/GLB/VRM - flipping FBX or OBJ
-        // would invert UVs and ship textures upside down.
-        bool sourceNeedsFlip = fileExt is ".gltf" or ".glb" or ".vrm";
-        if (s.FlipUVs && sourceNeedsFlip) flags |= PostProcessFlags.FlipUVs;
+        // Tangents come from Clay too. Its step runs before JoinIdenticalVertices, which is the
+        // order tangent generation wants, and it keeps tangents the source authored rather than
+        // overwriting them the way the old mesh-layer pass did.
+        if (s.CalculateTangentSpace) flags |= PostProcessFlags.CalcTangentSpace;
+        else flags &= ~PostProcessFlags.CalcTangentSpace;
+
+        // glTF stores UVs with V=0 at the top of the texture; FBX and OBJ store V=0 at the bottom,
+        // which is what Prowl's shaders expect post-import because Texture2D uploads bottom-up. So
+        // the flip is a property of the source format, not a preference: glTF always needs it and
+        // FBX and OBJ never do. It used to be a toggle, which could only ever produce upside-down
+        // textures on every glTF or do nothing at all.
+        if (fileExt is ".gltf" or ".glb" or ".vrm") flags |= PostProcessFlags.FlipUVs;
         else flags &= ~PostProcessFlags.FlipUVs;
+
+        if (s.OptimizeMeshes) flags |= PostProcessFlags.OptimizeMeshes;
+        else flags &= ~PostProcessFlags.OptimizeMeshes;
+
+        if (s.OptimizeHierarchy) flags |= PostProcessFlags.OptimizeGraph;
+        else flags &= ~PostProcessFlags.OptimizeGraph;
+
+        // No mesh splitting: a mesh that outgrows a 16-bit index buffer gets a 32-bit one, which
+        // the bake already picks per mesh from its vertex count. Cutting a model into pieces to fit
+        // an index width is a workaround for hardware Prowl does not target.
+        flags &= ~PostProcessFlags.SplitLargeMeshes;
+
+        // Strict validation needs the validator itself, which is not in the GameQuality preset.
+        if (s.StrictValidation) flags |= PostProcessFlags.ValidateDataStructure;
 
         return new ClaySettings
         {
             PostProcess = flags,
             GlobalScale = s.UnitScale,
             BoneWeightLimit = 4,
+            SmoothNormalsAngleDeg = s.SmoothNormalsAngleDeg,
+            RecalculateNormals = s.RecalculateNormals,
+            StrictValidation = s.StrictValidation,
+            OptimizeGraphPreserveNodeNames = s.PreserveNodeNames,
+            SceneIndex = s.SceneIndex,
         };
     }
 
@@ -115,13 +137,18 @@ internal static class ClayBackedImporter
         // supply one that only ever produces AssetRefs and never touches pixel data itself.
         var resolver = settings.TextureResolver ?? DefaultModelTextureResolver.Instance;
         var textureCache = new AssetRef<Texture2D>[clayModel.Textures.Count];
-        for (int i = 0; i < clayModel.Textures.Count; i++)
-            textureCache[i] = ResolveModelTexture(clayModel.Textures[i], resolver);
+        // Skipped wholesale when materials are off, so an import that wants no materials also does
+        // not decode or register the textures only those materials would have referenced.
+        if (settings.ImportMaterials)
+            for (int i = 0; i < clayModel.Textures.Count; i++)
+                textureCache[i] = ResolveModelTexture(clayModel.Textures[i], resolver);
 
-        // 2. Materials.
+        // 2. Materials. Left empty when the import does not want them, which makes every renderer
+        // fall back to the default material rather than to a material built from the file.
         var materials = new List<PMaterial>(clayModel.Materials.Count);
-        for (int i = 0; i < clayModel.Materials.Count; i++)
-            materials.Add(BuildMaterial(clayModel.Materials[i], textureCache));
+        if (settings.ImportMaterials)
+            for (int i = 0; i < clayModel.Materials.Count; i++)
+                materials.Add(BuildMaterial(clayModel.Materials[i], textureCache));
 
         // 3. Meshes (with per-submesh material index propagated).
         var meshes = new List<PMesh>(clayModel.Meshes.Count);
@@ -156,6 +183,12 @@ internal static class ClayBackedImporter
         var rootGO = nodeGOs[clayModel.Root.Index];
 
         // 5. Renderers + skin wiring.
+        // Bind poses and bone names live on the Mesh, but a model may point one mesh at two
+        // different skins. Writing both onto the shared mesh would leave whichever node came last
+        // deciding the skinning for all of them, so a second skin gets its own copy of the mesh.
+        var meshSkin = new int[clayModel.Meshes.Count];
+        Array.Fill(meshSkin, UnclaimedMesh);
+
         for (int i = 0; i < clayModel.Nodes.Count; i++)
         {
             var n = clayModel.Nodes[i];
@@ -166,6 +199,17 @@ internal static class ClayBackedImporter
 
             if (n.SkinIndex >= 0)
             {
+                if (meshSkin[n.MeshIndex] == UnclaimedMesh)
+                {
+                    meshSkin[n.MeshIndex] = n.SkinIndex;
+                }
+                else if (meshSkin[n.MeshIndex] != n.SkinIndex)
+                {
+                    (mesh, _) = BuildMesh(clayModel.Meshes[n.MeshIndex], settings);
+                    mesh.Name = $"{mesh.Name}_Skin{n.SkinIndex}";
+                    meshes.Add(mesh);
+                }
+
                 var clayskin = clayModel.Skins[n.SkinIndex];
                 // Mirror Clay.Skin -> Prowl Mesh.BindPoses + Mesh.BoneNames (relative paths).
                 mesh.BindPoses = clayskin.InverseBindPoses.ToArray();
@@ -202,10 +246,23 @@ internal static class ClayBackedImporter
             }
         }
 
+        // 5b. Cameras and lights. Both are node-attached with no geometry, so they only need the
+        // component putting on the GameObject the node already produced.
+        if (settings.ImportCameras)
+            for (int i = 0; i < clayModel.Nodes.Count; i++)
+                if (clayModel.Nodes[i].CameraIndex is int ci and >= 0)
+                    BuildCamera(clayModel.Cameras[ci], nodeGOs[i]);
+
+        if (settings.ImportLights)
+            for (int i = 0; i < clayModel.Nodes.Count; i++)
+                if (clayModel.Nodes[i].LightIndex is int li and >= 0)
+                    BuildLight(clayModel.Lights[li], nodeGOs[i]);
+
         // 6. Animations.
         var animations = new List<PAnim>(clayModel.AnimationClips.Count);
-        foreach (var clip in clayModel.AnimationClips)
-            animations.Add(BuildAnimationClip(clip, clayModel, nodeGOs, rootGO));
+        if (settings.ImportAnimations)
+            foreach (var clip in clayModel.AnimationClips)
+                animations.Add(BuildAnimationClip(clip, clayModel, nodeGOs, rootGO, settings.AnimationWrapMode));
 
         if (animations.Count > 0)
         {
@@ -222,6 +279,9 @@ internal static class ClayBackedImporter
             Animations = animations,
         };
     }
+
+    /// <summary>No node has claimed this mesh for a skin yet.</summary>
+    private const int UnclaimedMesh = -1;
 
     private static List<AssetRef<PMaterial>> BuildMatRefs(int[] submeshMatIndices, List<PMaterial> materials)
     {
@@ -287,7 +347,7 @@ internal static class ClayBackedImporter
 
         // Blend shapes (morph targets). Clay already expands sparse deltas to full vertex count and
         // remaps them through vertex dedup, so the delta arrays line up 1:1 with dst.Vertices.
-        if (src.BlendShapes is { Length: > 0 })
+        if (settings.ImportBlendShapes && src.BlendShapes is { Length: > 0 })
         {
             var shapes = new PBlendShape[src.BlendShapes.Length];
             for (int i = 0; i < src.BlendShapes.Length; i++)
@@ -328,37 +388,8 @@ internal static class ClayBackedImporter
             submeshMatIndices[0] = src.SubMeshes[0].MaterialIndex;
         }
 
-        // Normal / tangent recalculation pass (matching the existing importers' policy).
-        bool hadNormals = dst.HasNormals;
-        if (settings.RecalculateNormals || (!hadNormals && settings.GenerateNormals))
-        {
-            if (settings.GenerateSmoothNormals || settings.RecalculateNormals)
-                dst.RecalculateNormals();
-            else
-                GenerateFlatNormals(dst);
-        }
-
-        if (settings.CalculateTangentSpace && dst.HasNormals && dst.HasUV)
-            dst.RecalculateTangents();
-
         dst.RecalculateBounds();
         return (dst, submeshMatIndices);
-    }
-
-    private static void GenerateFlatNormals(PMesh mesh)
-    {
-        var normals = new Float3[mesh.Vertices.Length];
-        for (int i = 0; i + 2 < mesh.Indices.Length; i += 3)
-        {
-            int i0 = (int)mesh.Indices[i], i1 = (int)mesh.Indices[i + 1], i2 = (int)mesh.Indices[i + 2];
-            var e1 = mesh.Vertices[i1] - mesh.Vertices[i0];
-            var e2 = mesh.Vertices[i2] - mesh.Vertices[i0];
-            var fn = Float3.Cross(e1, e2);
-            float lenSq = Float3.Dot(fn, fn);
-            fn = lenSq > 1e-8f ? fn / MathF.Sqrt(lenSq) : Float3.UnitY;
-            normals[i0] = fn; normals[i1] = fn; normals[i2] = fn;
-        }
-        mesh.Normals = normals;
     }
 
     private static Topology MapTopology(PrimitiveTopology t) => t switch
@@ -368,6 +399,75 @@ internal static class ClayBackedImporter
         PrimitiveTopology.Points => Topology.Points,
         _ => Topology.Triangles,
     };
+
+    // ----------------------------------------------------------------------------------------
+    // Camera / light bake
+    // ----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Attaches a <see cref="Camera"/> matching the source lens. Orientation needs no handling here:
+    /// glTF aims a camera down its node's -Z, and Clay's coordinate conversion mirrors that to the
+    /// +Z the engine treats as forward.
+    /// </summary>
+    private static void BuildCamera(Clay.Camera src, GameObject go)
+    {
+        var cam = go.AddComponent<Camera>();
+
+        if (src.Projection == CameraProjection.Orthographic)
+        {
+            cam.ProjectionMode = Camera.ProjectionType.Orthographic;
+            cam.OrthographicSize = src.OrthographicHalfHeight;
+        }
+        else
+        {
+            cam.ProjectionMode = Camera.ProjectionType.Perspective;
+            cam.FieldOfView = src.VerticalFovRadians * (180f / MathF.PI);
+        }
+
+        cam.NearClipPlane = src.NearPlane;
+        // An absent far plane means an infinite projection, which Prowl's camera cannot express, so
+        // it gets a far distance rather than a broken one.
+        cam.FarClipPlane = src.FarPlane ?? 10000f;
+
+        // An imported camera is a viewpoint the file described, not the one the game renders from.
+        // Enabling it would fight whatever camera the scene already has.
+        cam.Enabled = false;
+    }
+
+    /// <summary>
+    /// Attaches the <see cref="Light"/> subclass matching the source type.
+    /// </summary>
+    /// <remarks>
+    /// glTF intensity is photometric (lux for directional, candela for point and spot) while Prowl's
+    /// is an arbitrary scale, so the value is carried across as-is and will usually want adjusting.
+    /// Converting it would need a scene-wide exposure convention Prowl does not have.
+    /// </remarks>
+    private static void BuildLight(Clay.Light src, GameObject go)
+    {
+        Light light = src.Type switch
+        {
+            Clay.LightType.Directional => go.AddComponent<DirectionalLight>(),
+            Clay.LightType.Spot => go.AddComponent<SpotLight>(),
+            _ => go.AddComponent<PointLight>(),
+        };
+
+        light.Color = src.Color;
+        light.Intensity = src.Intensity;
+
+        // Range is optional in glTF and means unlimited when absent, which no real-time light can
+        // do, so an absent one keeps the component's own default.
+        if (light is PointLight point && src.Range is { } pointRange)
+            point.Range = pointRange;
+
+        if (light is SpotLight spot)
+        {
+            if (src.Range is { } spotRange) spot.Range = spotRange;
+
+            // glTF measures cone angles from the axis; Prowl's are full cone angles.
+            spot.SpotAngle = src.OuterConeAngleRadians * 2f * (180f / MathF.PI);
+            spot.InnerSpotAngle = src.InnerConeAngleRadians * 2f * (180f / MathF.PI);
+        }
+    }
 
     // ----------------------------------------------------------------------------------------
     // Material bake
@@ -415,6 +515,7 @@ internal static class ClayBackedImporter
         // grid checker is the missing-texture placeholder for hand-authored materials and would
         // otherwise get multiplied into every untextured imported material.
         mat.SetTexture("_MainTex", OrDefault(ResolveTexture(src.BaseColorTexture, textureCache), DefaultTexture.White));
+        mat.SetInt("_MainTexUV", UVSetFor(src.BaseColorTexture, src));
 
         ApplyTextureTransform(mat, src);
 
@@ -427,23 +528,37 @@ internal static class ClayBackedImporter
 
         mat.SetTexture("_NormalTex", OrDefault(ResolveTexture(src.NormalTexture, textureCache), DefaultTexture.Normal));
         mat.SetFloat("_NormalScale", src.NormalScale);
+        mat.SetInt("_NormalTexUV", UVSetFor(src.NormalTexture, src));
 
         // Factors multiply the texture channels, matching glTF. White is the neutral texture so a
         // factor-only material lands on exactly its factors.
         mat.SetTexture("_SurfaceTex", OrDefault(ResolveTexture(src.MetallicRoughnessTexture, textureCache), DefaultTexture.White));
         mat.SetFloat("_Metallic", src.Metallic);
         mat.SetFloat("_Roughness", src.Roughness);
+        mat.SetInt("_SurfaceTexUV", UVSetFor(src.MetallicRoughnessTexture, src));
 
         // Occlusion is its own slot. When a model packs ORM into one image and points both
         // occlusionTexture and metallicRoughnessTexture at it, both slots resolve to that image.
         mat.SetTexture("_OcclusionTex", OrDefault(ResolveTexture(src.OcclusionTexture, textureCache), DefaultTexture.White));
         mat.SetFloat("_OcclusionStrength", src.OcclusionStrength);
+        mat.SetInt("_OcclusionTexUV", UVSetFor(src.OcclusionTexture, src));
 
         mat.SetTexture("_EmissionTex", OrDefault(ResolveTexture(src.EmissiveTexture, textureCache), DefaultTexture.White));
         mat.SetColor("_EmissiveColor", src.EmissiveFactor);
         mat.SetFloat("_EmissionIntensity", src.EmissiveStrength);
+        mat.SetInt("_EmissionTexUV", UVSetFor(src.EmissiveTexture, src));
 
         return mat;
+    }
+
+    private static int UVSetFor(MaterialTextureSlot? slot, ClayMaterial src)
+    {
+        if (slot is null) return 0;
+        if (slot.UVChannel is 0 or 1) return slot.UVChannel;
+
+        Debug.LogWarning($"[Clay] Material '{src.Name}' samples a texture from UV channel {slot.UVChannel}; " +
+            "a mesh carries UV0 and UV1 only, so UV0 was used instead.");
+        return 0;
     }
 
     /// <summary>
@@ -467,12 +582,6 @@ internal static class ClayBackedImporter
         foreach (var other in EnumerateSlots(src))
         {
             if (other is null || ReferenceEquals(other, slot)) continue;
-
-            if (other.UVChannel != 0)
-            {
-                Debug.LogWarning($"[Clay] Material '{src.Name}' samples a texture from UV channel {other.UVChannel}; " +
-                    "the Standard shaders sample UV0 for every slot, so UV0 was used instead.");
-            }
 
             bool differs = slot is null
                 ? other.Scale != Float2.One || other.Offset != Float2.Zero
@@ -529,15 +638,18 @@ internal static class ClayBackedImporter
     // Animation bake
     // ----------------------------------------------------------------------------------------
 
-    private static PAnim BuildAnimationClip(ClayAnim src, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO)
+    private static PAnim BuildAnimationClip(ClayAnim src, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO, AnimationWrapMode wrap)
     {
         var clip = new PAnim
         {
             Name = src.Name,
+            // A clip authored on a shared timeline can start after zero; carrying that keeps the
+            // player from sitting on the first pose for the gap.
+            StartTime = src.StartTime,
             Duration = src.Duration,
             DurationInTicks = src.Duration,
             TicksPerSecond = 1f,
-            Wrap = AnimationWrapMode.Loop,
+            Wrap = wrap,
         };
 
         // Bin bindings by target node -> AnimBone. Blend-shape weight channels are handled
@@ -574,27 +686,18 @@ internal static class ClayBackedImporter
         return clip;
     }
 
+    /// <summary>
+    /// Hands Clay's curve to the bone channel unchanged. Both sides are
+    /// <see cref="Prowl.Vector.AnimationCurve"/>, so per-key interpolation and cubic tangents cross
+    /// intact rather than being resampled into scalar points.
+    /// </summary>
     private static void ApplyBinding(ClayBinding binding, PAnim.AnimBone bone)
     {
-        var curve = binding.Curve;
         switch (binding.Property)
         {
-            case AnimatedProperty.Position:
-                bone.PosX = SampleComponent(curve, component: 0);
-                bone.PosY = SampleComponent(curve, component: 1);
-                bone.PosZ = SampleComponent(curve, component: 2);
-                break;
-            case AnimatedProperty.Rotation:
-                bone.RotX = SampleComponent(curve, component: 0);
-                bone.RotY = SampleComponent(curve, component: 1);
-                bone.RotZ = SampleComponent(curve, component: 2);
-                bone.RotW = SampleComponent(curve, component: 3);
-                break;
-            case AnimatedProperty.Scale:
-                bone.ScaleX = SampleComponent(curve, component: 0);
-                bone.ScaleY = SampleComponent(curve, component: 1);
-                bone.ScaleZ = SampleComponent(curve, component: 2);
-                break;
+            case AnimatedProperty.Position: bone.Position = binding.Curve; break;
+            case AnimatedProperty.Rotation: bone.Rotation = binding.Curve; break;
+            case AnimatedProperty.Scale: bone.Scale = binding.Curve; break;
             // Visibility: not handled by Prowl yet. BlendShapeWeight is handled separately
             // (see ApplyBlendShapeBinding) since it targets a renderer + named shape, not a bone.
         }
@@ -620,36 +723,8 @@ internal static class ClayBackedImporter
         {
             Path = path,
             ShapeName = shapeName,
-            Weight = SampleComponent(binding.Curve, 0),
+            Weight = binding.Curve,
         });
     }
 
-    /// <summary>
-    /// Builds a Prowl <see cref="PCurve"/> by sampling one component of a Clay curve at each of its
-    /// authored key times. Cubic spline curves are sampled at their value entry only; runtime
-    /// re-interpolation uses Prowl's own smoothing.
-    /// </summary>
-    private static PCurve SampleComponent(ClayCurve curve, int component)
-    {
-        int dim = curve.Dimension;
-        int valuesPerKey = curve.Interpolation == AnimationInterpolation.CubicSpline ? dim * 3 : dim;
-        int valueOffset = curve.Interpolation == AnimationInterpolation.CubicSpline ? dim : 0;
-        if (component >= dim)
-        {
-            // Shouldn't happen if caller and binding agree on dimension.
-            return new PCurve(new[] { new KeyFrame(0f, 0f) });
-        }
-
-        int keyCount = curve.Times.Length;
-        var keys = new List<KeyFrame>(keyCount);
-        for (int k = 0; k < keyCount; k++)
-        {
-            float t = curve.Times[k];
-            float v = curve.Values[k * valuesPerKey + valueOffset + component];
-            keys.Add(new KeyFrame(t, v));
-        }
-        if (keys.Count == 0)
-            keys.Add(new KeyFrame(0f, 0f));
-        return new PCurve(keys);
-    }
 }

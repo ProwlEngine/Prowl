@@ -3,24 +3,25 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.Registries;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.Popups;
+using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Prefabs;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
 
+using static Prowl.Editor.GUI.EditorGUI;
+
 using Color = System.Drawing.Color;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Utils;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -111,6 +112,14 @@ public class ProjectPanel : DockPanel
 
     private bool IsListView => _thumbnailSize < ListThreshold;
 
+    // An OS file drop carries no drag payload, so the hover gates open for it too.
+    private static bool DropHoverTrackingActive
+        => DragDrop.IsDragging || DragDrop.IsDropFrame || ExternalAssetDrop.IsResolvingDropTarget;
+
+    // Drop target for an OS file drop, cleared before each one resolves.
+    internal string? ExternalDropHoverFolder => _dragHoverFolderNext ?? _dragHoverFolder;
+    internal void ClearDropHover() { _dragHoverFolder = null; _dragHoverFolderNext = null; }
+
     public void NavigateTo(string folder)
     {
         if (folder == _currentFolder) return;
@@ -139,8 +148,8 @@ public class ProjectPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null || Project.Current == null) return;
 
-        // Sets itself as instance on start
-        Instance ??= this;
+        // Last-drawn wins, so a re-created panel replaces its dead predecessor.
+        Instance = this;
 
         // Detect new ping and navigate to the pinged asset's folder
         if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastPingedGuid)
@@ -592,7 +601,7 @@ public class ProjectPanel : DockPanel
                 })
                 .OnHover((n, normY) =>
                 {
-                    if (DragDrop.IsDragging || DragDrop.IsDropFrame)
+                    if (DropHoverTrackingActive)
                         _dragHoverFolderNext = (string)n.UserData!;
                 })
                 .CustomRowContent((p, node, isSel, isExp) =>
@@ -834,7 +843,7 @@ public class ProjectPanel : DockPanel
                 {
                     var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
-                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, it.RelativePath, subType));
                 }
                 else
                 {
@@ -845,7 +854,7 @@ public class ProjectPanel : DockPanel
             .OnRowHover((i, _) =>
             {
                 var it = visible[i].item;
-                if (it.IsFolder && (DragDrop.IsDragging || DragDrop.IsDropFrame)) _dragHoverFolderNext = it.RelativePath;
+                if (it.IsFolder && DropHoverTrackingActive) _dragHoverFolderNext = it.RelativePath;
             })
             .IsPinged(i => { var g = visible[i].item.Guid; return g != Guid.Empty && g == Selection.PingedGuid; })
             .PingAlpha(() => Selection.GetPingAlpha())
@@ -1258,7 +1267,7 @@ public class ProjectPanel : DockPanel
             {
                 var db = EditorAssetBackend.Instance;
                 Type? subType = db?.GetSubAssets(s.ParentGuid).FirstOrDefault(x => x.Guid == s.Guid)?.Type;
-                DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, subType));
+                DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, s.RelativePath, subType));
             })
             .Tooltip(sub.Name)
             .Enter())
@@ -1332,7 +1341,7 @@ public class ProjectPanel : DockPanel
                 {
                     var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
-                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, it.RelativePath, subType));
                     return;
                 }
 
@@ -1342,7 +1351,7 @@ public class ProjectPanel : DockPanel
             .OnHover(item, (it, _) =>
             {
                 if (!it.IsFolder) return;
-                if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolderNext = it.RelativePath;
+                if (DropHoverTrackingActive) _dragHoverFolderNext = it.RelativePath;
             })
             .Tooltip(item.Name)
             .OnPostLayout((handle, rect) =>

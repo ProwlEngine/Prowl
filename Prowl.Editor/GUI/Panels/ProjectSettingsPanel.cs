@@ -88,7 +88,7 @@ public class ProjectSettingsPanel : DockPanel
             return;
         }
 
-        if (_selectedIndex >= entries.Count) _selectedIndex = 0;
+        if (_selectedIndex >= entries.Count || entries[_selectedIndex].Instance == null || !entries[_selectedIndex].Instance.DrawInProjectSettingsPanel) _selectedIndex = 0;
 
         // The entry index is used as the string id so the sidebar selection maps straight back to _selectedIndex.
         var cats = new List<(string id, string label, string icon)>();

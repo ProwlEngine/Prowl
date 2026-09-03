@@ -4,10 +4,10 @@ using System.Linq;
 using System.Text;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Editor.Theming;
 using Prowl.Quill;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;

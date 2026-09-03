@@ -19,6 +19,7 @@ public class ProjectsEditorSettings : ProjectSettingsBase
     public override void ResetToDefaults()
     {
         ColorPalette = DefaultColorPalette();
+        SelectedResolutionIndex = 0;
     }
 
     public override void OnGUI(Paper paper, float width)

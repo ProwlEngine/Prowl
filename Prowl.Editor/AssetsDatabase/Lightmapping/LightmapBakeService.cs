@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 
-using ImageMagick;
+using Prowl.Aperture;
 
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
@@ -68,10 +68,8 @@ public sealed class LightmapBakeService
         baker.Options.IncludeDirectLighting = true;
         baker.Options.DoBackfaceCull = settings.DoBackfaceCull;
         baker.Options.DilatePixels = settings.DilatePixels;
-        baker.Options.RussianRoulette = settings.RussianRoulette;
-        baker.Options.IgnoreAlbedo = settings.IgnoreAlbedo;
-        baker.Options.Denoise = settings.Denoise;
-        baker.Options.DenoiseIterations = Math.Max(1, settings.DenoiseRadius);
+        baker.Options.SparseStride = Math.Max(1, settings.SparseStride);
+        baker.Options.Diagnostics.IgnoreAlbedo = settings.IgnoreAlbedo;
         if (settings.BakeSkyLighting)
             baker.Options.SkyColor = SceneSkyRadiance(scene);
 
@@ -123,8 +121,9 @@ public sealed class LightmapBakeService
         // --- Occluders: present in the ray-traced scene (shadows + colour bounce) but never written
         // into an atlas page. ReceivesLighting=false keeps them out of rasterization. ---
         if (_atlas.Targets.Length > 0)
-            foreach (var (om, ox) in occluders)
-                _atlas.Targets[0].AddBakeInstance(om, ox).ReceivesLighting = false;
+            foreach (var target in _atlas.Targets)
+                foreach (var (om, ox) in occluders)
+                    target.AddBakeInstance(om, ox).ReceivesLighting = false;
 
         // --- Probes. ---
         foreach (var go in scene.AllObjects)
@@ -247,9 +246,7 @@ public sealed class LightmapBakeService
         var atlas = _atlas!;
         var scene = _scene!;
         baker.Cancel();        // stop the progressive job
-        baker.Job?.Wait();     // ensure the worker stopped writing before we post-process
-        if (_settings.Denoise) Status = "Denoising…";
-        baker.Job?.Denoise();  // edge-avoiding denoise + re-dilate (no-op unless enabled); atlas buffers are now final
+        baker.Job?.Wait();     // ensure the worker stopped writing before we read the atlas buffers
 
         var db = EditorAssetBackend.Instance;
         string scenePath = EditorSceneManager.CurrentScenePath ?? "";
@@ -430,13 +427,14 @@ public sealed class LightmapBakeService
         if (!File.Exists(abs)) return null;
         try
         {
-            using var img = new MagickImage(abs);
-            img.ColorSpace = ColorSpace.sRGB;
-            img.ColorType = ColorType.TrueColorAlpha;
-            img.Flip();
-            byte[]? rgba = img.GetPixels().ToByteArray(PixelMapping.RGBA);
-            if (rgba == null) return null;
-            return bake.CreateTextureRGBA(name, (int)img.Width, (int)img.Height, rgba, 2.2f);
+            using Aperture.Image img = Aperture.Image.Load(abs, new DecodeOptions
+            {
+                TargetPixelFormat = PixelFormat.Rgba8,
+                FlipVertically = true,
+            });
+
+            byte[] rgba = img.RootFrame.Pixels.ToArray();
+            return bake.CreateTextureRGBA(name, img.Width, img.Height, rgba, 2.2f);
         }
         catch { return null; }
     }
@@ -479,24 +477,24 @@ public sealed class LightmapBakeService
         {
             case PointLight pl: bl = bake.CreatePointLight(light.GameObject.Name, xform, color, pl.Range); break;
             case SpotLight sl:
-            {
-                // Prowl's SpotAngle/InnerSpotAngle are OUTER/INNER half-angles in degrees; Photonic's
-                // ConeAngle/InnerConeAngle are FULL cone angles in radians (it halves them internally).
-                var spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, sl.Range, 2.0f * sl.SpotAngle * Maths.Deg2Rad);
-                spot.InnerConeAngle = 2.0f * sl.InnerSpotAngle * Maths.Deg2Rad;
-                bl = spot;
-                break;
-            }
+                {
+                    // Prowl's SpotAngle/InnerSpotAngle are OUTER/INNER half-angles in degrees; Photonic's
+                    // ConeAngle/InnerConeAngle are FULL cone angles in radians (it halves them internally).
+                    var spot = bake.CreateSpotLight(light.GameObject.Name, xform, color, sl.Range, 2.0f * sl.SpotAngle * Maths.Deg2Rad);
+                    spot.InnerConeAngle = 2.0f * sl.InnerSpotAngle * Maths.Deg2Rad;
+                    bl = spot;
+                    break;
+                }
             default:
-            {
-                // Prowl's realtime directional light uses Transform.Forward as the TO-LIGHT
-                // direction (the sun shines along -Forward), whereas Photonic treats the transform's
-                // +Z column as the light's TRAVEL direction. Negate +Z so the baked sun matches realtime.
-                var dirX = xform;
-                dirX.c2 = new Float4(-xform.c2.X, -xform.c2.Y, -xform.c2.Z, xform.c2.W);
-                bl = bake.CreateDirectionalLight(light.GameObject.Name, dirX, color);
-                break;
-            }
+                {
+                    // Prowl's realtime directional light uses Transform.Forward as the TO-LIGHT
+                    // direction (the sun shines along -Forward), whereas Photonic treats the transform's
+                    // +Z column as the light's TRAVEL direction. Negate +Z so the baked sun matches realtime.
+                    var dirX = xform;
+                    dirX.c2 = new Float4(-xform.c2.X, -xform.c2.Y, -xform.c2.Z, xform.c2.W);
+                    bl = bake.CreateDirectionalLight(light.GameObject.Name, dirX, color);
+                    break;
+                }
         }
         bl.BakeDirect = bakeDirect;
     }
@@ -508,13 +506,15 @@ public sealed class LightmapBakeService
 
     private static void WritePng(string absolutePath, byte[] rgba, int width, int height)
     {
-        var settings = new PixelReadSettings((uint)width, (uint)height, StorageType.Char, PixelMapping.RGBA);
-        using var img = new MagickImage();
-        img.ReadPixels(rgba, settings);
-        // Photonic's atlas buffer is row-0-first (UV1 v=0 == row 0), but Texture2D.FromImage calls
-        // image.Flip() on import. Pre-flip here so the two cancel and the sampled v matches the
-        // packed UV1. Store raw bytes (linear RGBM); sampled linear and decoded in-shader.
-        img.Flip();
-        img.Write(absolutePath, MagickFormat.Png32);
+        using Aperture.Image img = Aperture.Image.FromPixels(rgba, width, height, PixelFormat.Rgba8);
+
+        // Photonic's atlas buffer is row-0-first (UV1 v=0 == row 0), but the texture import flips
+        // on the way in. Pre-flip here so the two cancel and the sampled v matches the packed UV1.
+        // Store raw bytes (linear RGBM); sampled linear and decoded in-shader.
+        img.Save(absolutePath, new EncodeOptions
+        {
+            Format = ImageFormat.Png,
+            FlipVertically = true,
+        });
     }
 }

@@ -25,7 +25,10 @@ public partial class GameObject : ICloneExplicit
             MonoBehaviour component = _components[i];
             if (component.IsNotValid()) continue;
 
-            setup.HandleObject(component, ClaimComponent(target, component, i, setup), CloneBehavior.ChildObject);
+            MonoBehaviour? claimed = ClaimComponent(target, component, i, setup);
+            if (claimed is null) continue;
+
+            setup.HandleObject(component, claimed, CloneBehavior.ChildObject);
         }
 
         for (int i = 0; i < Children.Count; i++)
@@ -60,7 +63,7 @@ public partial class GameObject : ICloneExplicit
     /// The target's counterpart of one of this object's components: the one a caller already paired it
     /// with, the one standing in the same place if it is the same type, or a new one.
     /// </summary>
-    private static MonoBehaviour ClaimComponent(GameObject target, MonoBehaviour component, int index, ICloneSetup setup)
+    private static MonoBehaviour? ClaimComponent(GameObject target, MonoBehaviour component, int index, ICloneSetup setup)
     {
         if (setup.Context.TryGetTarget(component, out object? paired) && paired is MonoBehaviour claimed)
             return claimed;
@@ -91,10 +94,13 @@ public partial class GameObject : ICloneExplicit
     /// <summary>
     /// Attaches a bare component of the given type. Unlike <see cref="AddComponent(Type)"/> this does
     /// not pull in required components, since the object being copied already has whatever it needs.
+    /// Returns null when the type's constructor throws, so one bad component is skipped rather than
+    /// abandoning the whole copy.
     /// </summary>
-    internal MonoBehaviour AttachClonedComponent(Type type)
+    internal MonoBehaviour? AttachClonedComponent(Type type)
     {
-        var component = (MonoBehaviour)Activator.CreateInstance(type, nonPublic: true)!;
+        if (!TryConstruct(type, out MonoBehaviour? component) || component is null)
+            return null;
 
         component.AttachToGameObject(this);
         _components.Add(component);

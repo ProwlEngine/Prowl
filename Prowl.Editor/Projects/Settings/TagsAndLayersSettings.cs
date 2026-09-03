@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GUI;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
-using Prowl.Editor.Theming;
-
-using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 [ProjectSettings("Tags & Layers", EditorIcons.Tags, order: 10)]

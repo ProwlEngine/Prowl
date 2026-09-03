@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI.Widgets;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Editor.GUI.Widgets;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
 public class WidgetPlaygroundPanel : DockPanel
@@ -40,7 +40,7 @@ public class WidgetPlaygroundPanel : DockPanel
 
     public enum TestEnum { Option1, Option2, Option3, SuperLongOptionName }
 
-    private Runtime.AnimationCurve _curve = new();
+    private Vector.AnimationCurve _curve = new();
     private TestComponent _testObject = new();
 
     // Test class for property grid exercises every type the grid supports
@@ -70,7 +70,7 @@ public class WidgetPlaygroundPanel : DockPanel
         public System.Guid Id = System.Guid.NewGuid();
 
         // AnimationCurve
-        public Runtime.AnimationCurve SpeedCurve = new();
+        public Vector.AnimationCurve SpeedCurve = new();
 
         // Collections
         public List<float> Scores = new() { 10.5f, 20.3f, 30.1f };

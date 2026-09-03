@@ -197,7 +197,8 @@ public static class Undo
         if (!_pendingSnapshots.ContainsKey(target))
         {
             var before = Serializer.Serialize(target.GetType(), target);
-            _pendingSnapshots[target] = before;
+            if (before != null)
+                _pendingSnapshots[target] = before;
         }
     }
 
@@ -296,7 +297,8 @@ public static class Undo
             T oldV = get(go);
             T captured = newValue;
             actions.Add((() => { var g = FindGO(id); if (g != null) set(g, oldV); },
-                         () => { var g = FindGO(id); if (g != null) set(g, captured); }));
+                         () => { var g = FindGO(id); if (g != null) set(g, captured); }
+            ));
             set(go, newValue);
         }
         RegisterActionGroup(description, actions, coalesce);
@@ -382,7 +384,8 @@ public static class Undo
 
                 Selection.Select(restored);
                 EditorSceneManager.MarkDirty();
-            });
+            }
+        );
     }
 
     /// <summary>
@@ -953,5 +956,14 @@ public static class Undo
     // Private alias used by PropertyRecord
     private static MonoBehaviour? FindComponentByIdentifier(Guid identifier) => FindComponent(identifier);
 
-    private static GameObject? FindGameObjectByIdentifier(Scene scene, Guid identifier) => FindGO(identifier);
+    private static GameObject? FindGameObjectByIdentifier(Scene scene, Guid identifier)
+    {
+        if (scene == null) return null;
+        foreach (var root in scene.RootObjects)
+        {
+            var found = root.FindChildByIdentifier(identifier);
+            if (found != null) return found;
+        }
+        return null;
+    }
 }

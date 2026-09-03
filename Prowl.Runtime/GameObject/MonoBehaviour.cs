@@ -26,22 +26,13 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
-    /// <summary>
-    /// Which component of the prefab this one was built from, or empty when it came from no prefab.
-    /// <para/>
-    /// On the component rather than in a table on the owning GameObject, because a table has to be keyed
-    /// on something and the only thing available was the component's own identifier. Identifiers are
-    /// handed out fresh by every deserialization, so every path that copied a component had to remember
-    /// to either preserve identifiers or rewrite the keys, and one that forgot silently unaddressed every
-    /// override in every other instance. Held here, the answer travels with the component that is the
-    /// question, and there is no key to go stale.
-    /// <para/>
-    /// Written out only when it says something, so an ordinary component costs nothing in a scene file.
-    /// </summary>
+    // On the component rather than in a table keyed by component identifier: identifiers are handed out
+    // fresh by every load, so such a table goes stale wherever a copy forgets to rewrite its keys.
+    // Written out only when set, so an ordinary component costs nothing in a scene file.
     [SerializeField, HideInInspector, SerializeIf(nameof(IsFromPrefab))]
     private Guid _prefabTemplateIdentity;
 
-    /// <summary>Whether this component came from a prefab. Drives the condition above.</summary>
+    /// <summary>Whether this component came from a prefab.</summary>
     public bool IsFromPrefab => _prefabTemplateIdentity != Guid.Empty;
 
     [SerializeField, HideInInspector]

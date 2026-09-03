@@ -16,6 +16,7 @@ internal sealed class ModalHandle
 
     public void Open(Action<Paper, int> draw, bool closeOnBackdrop = false)
     {
+        Close();
         _modal = Modal.PushCustomDraw((p, layer, _) => draw(p, layer), closeOnBackdrop: closeOnBackdrop);
     }
 

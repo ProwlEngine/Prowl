@@ -33,8 +33,8 @@ public class UVModule : ParticleSystemModule
     public bool RandomStartFrame = false; // Start from random frame
 
     // Curve animation settings
-    public AnimationCurve UOffsetCurve = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
-    public AnimationCurve VOffsetCurve = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
+    public AnimationCurve UOffsetCurve = new([new Keyframe(0f, 0f), new Keyframe(1f, 0f)]);
+    public AnimationCurve VOffsetCurve = new([new Keyframe(0f, 0f), new Keyframe(1f, 0f)]);
 
     // UV scrolling
     public Float2 ScrollSpeed = Float2.Zero;

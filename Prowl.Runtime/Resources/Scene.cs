@@ -355,12 +355,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         /// <summary>
         /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
-        /// <para/>
-        /// Here rather than on the renderer because it belongs to this scene's bake and to nothing else.
-        /// On the component it was ordinary serialized state, so a prefab instance read as modified the
-        /// moment it was baked, applying one instance handed its atlas slot to every other instance of
-        /// that prefab, and reverting an instance cleared its lighting. None of that can be expressed
-        /// now: a prefab has no opinion about where this scene's bake put things.
+        /// Here rather than on the renderer because it belongs to this scene's bake and to nothing else,
+        /// which is also what stops a prefab instance reading as modified the moment it is baked.
         /// </summary>
         public Dictionary<Guid, LightmapPlacement> Placements = new();
         /// <summary>World-space light-probe positions.</summary>
@@ -406,11 +402,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public int Samples = 64;              // progressive indirect iterations before finalize
         public int ProbeSamples = 256;
         public bool DoBackfaceCull = false;   // cull back faces on all bake rays (matches Prowl's backface-culled rendering)
-        public float RussianRoulette = 0f;    // 0 = off
 
-        // Edge-avoiding denoiser (runs once at finalize); geometry-guided only.
-        public bool Denoise = false;
-        public int DenoiseRadius = 5;         // a-trous pass count; each step ~doubles the smoothing reach (~2^N texels)
+        // Trace one texel per NxN atlas cell and interpolate the rest. 1 traces everything; higher
+        // values converge far faster and cost fine indirect detail. Contacts and corners always trace.
+        public int SparseStride = 1;
 
         // Feed the scene's ambient colour in as ray-miss (sky) radiance.
         public bool BakeSkyLighting = false;

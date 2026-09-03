@@ -2,15 +2,16 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Popups;
-using Prowl.PaperUI;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
+using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.PropertyEditors;
 

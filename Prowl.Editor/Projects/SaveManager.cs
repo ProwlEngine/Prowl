@@ -91,7 +91,11 @@ public static class SaveManager
         _timeSinceLastSave = 0;
         IsAutoSave = isAutoSave;
 
-        if (OnSave == null) return;
+        if (OnSave == null)
+        {
+            IsAutoSave = false;
+            return;
+        }
 
         var labels = new List<string>();
 
@@ -113,6 +117,7 @@ public static class SaveManager
         {
             if (!isAutoSave)
                 Origami.Toast(Loc.Get("save.nothing")).Message(Loc.Get("save.nothing_msg")).Info().Show();
+            IsAutoSave = false;
             return;
         }
 
@@ -122,6 +127,7 @@ public static class SaveManager
             : string.Join(", ", labels);
 
         Origami.Toast(title).Message(message).Success().Show();
+        IsAutoSave = false;
     }
 
     /// <summary>Reset the auto-save timer (e.g. after a manual save).</summary>

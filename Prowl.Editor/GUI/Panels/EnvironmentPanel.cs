@@ -6,7 +6,6 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Lightmapping;
@@ -18,6 +17,8 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
@@ -187,7 +188,7 @@ public class EnvironmentPanel : DockPanel
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         var s = scene.LightmapBake;
-        void Touch() => EditorSceneManager.MarkDirty();
+        void Touch() { scene.LightmapBake = s; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 
@@ -207,17 +208,13 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SettingsRow(paper, $"{id}_psmp", Loc.Get("env.probe_samples"), () =>
             Origami.IntSlider(paper, $"{id}_psmp_v", s.ProbeSamples, v => { if (!baking) { s.ProbeSamples = v; Touch(); } }, 16, 2048).Show());
         EditorGUI.SettingsToggle(paper, $"{id}_cull", Loc.Get("env.backface_cull"), s.DoBackfaceCull, v => { if (!baking) { s.DoBackfaceCull = v; Touch(); } });
-        EditorGUI.SettingsToggle(paper, $"{id}_dn", Loc.Get("env.denoise"), s.Denoise, v => { if (!baking) { s.Denoise = v; Touch(); } });
-        if (s.Denoise)
-            EditorGUI.SettingsRow(paper, $"{id}_dnr", Loc.Get("env.denoise_radius"), () =>
-                Origami.IntSlider(paper, $"{id}_dnr_v", s.DenoiseRadius, v => { if (!baking) { s.DenoiseRadius = v; Touch(); } }, 1, 8).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_spr", Loc.Get("env.sparse_stride"), () =>
+            Origami.IntSlider(paper, $"{id}_spr_v", s.SparseStride, v => { if (!baking) { s.SparseStride = v; Touch(); } }, 1, 16).Show());
 
         EditorGUI.SectionHeader(paper, $"{id}_h_env", Loc.Get("panel.environment"));
         EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.bake_sky_gi"), s.BakeSkyLighting, v => { if (!baking) { s.BakeSkyLighting = v; Touch(); } });
 
         EditorGUI.SectionHeader(paper, $"{id}_h_adv", Loc.Get("env.advanced"));
-        EditorGUI.SettingsRow(paper, $"{id}_rr", Loc.Get("env.russian_roulette"), () =>
-            Origami.Slider(paper, $"{id}_rr_v", s.RussianRoulette, v => { if (!baking) { s.RussianRoulette = v; Touch(); } }, 0f, 1f).Show());
         EditorGUI.SettingsToggle(paper, $"{id}_alb", Loc.Get("env.ignore_albedo"), s.IgnoreAlbedo, v => { if (!baking) { s.IgnoreAlbedo = v; Touch(); } });
 
         DrawBakeCard(paper, id, font, scene, s, baking);

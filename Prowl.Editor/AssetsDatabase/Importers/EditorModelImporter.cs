@@ -15,8 +15,15 @@ namespace Prowl.Editor.Importers;
 public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
-    private const int BaseVersion = 7;
+    // 8: normals now come from Clay, which splits vertices on hard edges.
+    private const int BaseVersion = 11;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
+
+    /// <summary>Splits the comma-separated preserve list the inspector stores as one field.</summary>
+    private static string[] SplitNodeNames(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public override bool Import(ImportContext ctx)
     {
@@ -32,10 +39,21 @@ public class EditorModelImporter : AssetImporter
                 var s = ctx.Settings;
                 importSettings.GenerateNormals = !s.TryGet("generateNormals", out var gn) || gn.BoolValue;
                 importSettings.GenerateSmoothNormals = !s.TryGet("generateSmoothNormals", out var gsn) || gsn.BoolValue;
+                importSettings.SmoothNormalsAngleDeg = s.TryGet("smoothNormalsAngle", out var sna) ? sna.FloatValue : 80f;
                 importSettings.RecalculateNormals = s.TryGet("recalculateNormals", out var rn) && rn.BoolValue;
                 importSettings.CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue;
-                importSettings.FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue;
                 importSettings.UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f;
+                importSettings.ImportMaterials = !s.TryGet("importMaterials", out var im) || im.BoolValue;
+                importSettings.ImportAnimations = !s.TryGet("importAnimations", out var ia) || ia.BoolValue;
+                importSettings.ImportBlendShapes = !s.TryGet("importBlendShapes", out var ibs) || ibs.BoolValue;
+                importSettings.OptimizeMeshes = s.TryGet("optimizeMeshes", out var om) && om.BoolValue;
+                importSettings.OptimizeHierarchy = s.TryGet("optimizeHierarchy", out var oh) && oh.BoolValue;
+                importSettings.PreserveNodeNames = SplitNodeNames(s.TryGet("preserveNodeNames", out var pnn) ? pnn.StringValue : null);
+                importSettings.StrictValidation = s.TryGet("strictValidation", out var sv) && sv.BoolValue;
+                importSettings.SceneIndex = s.TryGet("sceneIndex", out var si) ? si.IntValue : -1;
+                importSettings.ImportCameras = !s.TryGet("importCameras", out var ic) || ic.BoolValue;
+                importSettings.ImportLights = !s.TryGet("importLights", out var il) || il.BoolValue;
+                importSettings.AnimationWrapMode = (AnimationWrapMode)(s.TryGet("animationWrapMode", out var awm) ? awm.IntValue : (int)AnimationWrapMode.Loop);
                 // Off by default (slow; some models ship their own UV2). The importer runs the
                 // unwrap in its post-process so the baked UV2 is captured before serialization.
                 importSettings.GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
@@ -95,18 +113,10 @@ public class EditorModelImporter : AssetImporter
     }
 
     /// <summary>
-    /// Gives every object identities derived from where it sits rather than from its constructor, so
-    /// importing the same file twice produces the same ones.
-    /// <para/>
-    /// This is what lets an instance survive a reimport. Every override names the object and component it
-    /// is on by the identity the asset holds them under, so handing out fresh identities would leave
-    /// every instance in the project addressing objects that no longer exist: overrides dropped, objects
-    /// below the instance root destroyed and rebuilt, references to them dead. A model is reimported
-    /// whenever its file or any of its settings change, so that is otherwise a routine loss.
-    /// <para/>
-    /// Keying on position means renaming or moving a node reads as a different object and orphans the
-    /// overrides on it, which is unavoidable while the source file carries no identities of its own. The
-    /// root is keyed as itself rather than by name, since the importer names it after the asset file.
+    /// Gives every object an identity derived from where it sits rather than from its constructor, so
+    /// importing the same file twice produces the same ones and instances keep their overrides across a
+    /// reimport. Renaming or moving a node therefore reads as a different object and orphans its
+    /// overrides, which is unavoidable while the source file carries no identities of its own.
     /// </summary>
     internal static void StabilizeIdentities(GameObject go, string path = "$Root")
     {
@@ -138,10 +148,14 @@ public class EditorModelImporter : AssetImporter
         var s = EchoObject.NewCompound();
         s["generateNormals"] = new EchoObject(true);
         s["generateSmoothNormals"] = new EchoObject(true);
+        s["smoothNormalsAngle"] = new EchoObject(80.0f);
         s["recalculateNormals"] = new EchoObject(false);
         s["calculateTangents"] = new EchoObject(true);
         s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);
+        s["importCameras"] = new EchoObject(true);
+        s["importLights"] = new EchoObject(true);
+        s["animationWrapMode"] = new EchoObject((int)AnimationWrapMode.Loop);
         s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;

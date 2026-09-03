@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+using Prowl.Aperture;
+using Prowl.Aperture.Utilities;
+using Prowl.Editor.GUI;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-
-using ImageMagick;
-using Prowl.Editor.GUI;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Projects;
 
 namespace Prowl.Editor.Thumbnails;
 
@@ -213,24 +213,14 @@ public static class ThumbnailGenerator
 
         try
         {
-            using var image = new MagickImage(filePath);
+            using Aperture.Image image = Aperture.Image.Load(filePath,
+                new DecodeOptions { TargetPixelFormat = PixelFormat.Rgba8 });
 
-            // Resize maintaining aspect ratio, then extent to square with transparent padding
-            var size = (uint)ThumbnailSize;
-            var geo = new MagickGeometry(size, size)
-            {
-                IgnoreAspectRatio = false,
-                FillArea = false
-            };
-            image.Resize(geo);
+            // Scaled to fit, then centred on a square of transparent padding.
+            using Aperture.Image thumbnail = ImageResize.FitAndPad(
+                image, ThumbnailSize, ThumbnailSize, stackalloc byte[] { 0, 0, 0, 0 });
 
-            // Center in a square canvas
-            image.BackgroundColor = MagickColors.Transparent;
-            image.Extent(size, size, Gravity.Center);
-
-            // Output as RGBA
-            var pixels = image.GetPixels();
-            return pixels.ToByteArray(PixelMapping.RGBA);
+            return thumbnail.RootFrame.Pixels.ToArray();
         }
         catch { return null; }
     }

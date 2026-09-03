@@ -34,9 +34,17 @@ public sealed class PreviewWidget : IDisposable
     {
         if (s_byAsset.TryGetValue(asset, out PreviewWidget? existing))
         {
+            if (existing._width == width && existing._height == height && existing._showGrid == showGrid)
+            {
+                s_recent.Remove(asset);
+                s_recent.Add(asset);
+                return existing;
+            }
+
+            // Dimensions or grid setting don't match – discard the old widget and create a new one.
+            s_byAsset.Remove(asset);
             s_recent.Remove(asset);
-            s_recent.Add(asset);
-            return existing;
+            existing.Dispose();
         }
 
         var created = new PreviewWidget(width, height, showGrid);
@@ -84,8 +92,8 @@ public sealed class PreviewWidget : IDisposable
         }
         if (_last != subject)
         {
-            _last = subject;
             setup(_renderer);
+            _last = subject;
         }
         return _renderer;
     }

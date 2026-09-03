@@ -44,7 +44,7 @@ public static class NewScriptDialog
         s_selectedIndex = 0;
         s_onCreated = onCreated;
 
-        s_templates = EditorRegistries.ScriptTemplates;
+        s_templates = new List<ScriptTemplate>(EditorRegistries.ScriptTemplates);
         if (s_templates.Count == 0)
         {
             Runtime.Debug.LogWarning("NewScriptDialog: no script templates registered.");
@@ -225,6 +225,7 @@ public static class NewScriptDialog
         string absPath = Path.Combine(absFolder, fileName);
         var tpl = s_templates[s_selectedIndex];
         File.WriteAllText(absPath, tpl.Generate(s_name));
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
 
         string relPath = string.IsNullOrEmpty(s_folder) ? fileName : s_folder + "/" + fileName;
         Runtime.Debug.Log($"Created script: {relPath}");

@@ -299,7 +299,7 @@ public static class ScriptCompiler
                     if (producing.Contains(refName))
                         unit.AssemblyReferences.Add(refName);
                     else if (byName.ContainsKey(refName))
-                        { /* referenced asmdef has no scripts -> nothing to link */ }
+                    { /* referenced asmdef has no scripts -> nothing to link */ }
                     else
                         Runtime.Debug.LogWarning($"[ScriptCompiler] {unit.Name} references unknown assembly '{refName}'.");
                 }

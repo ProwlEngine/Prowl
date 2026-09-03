@@ -618,11 +618,10 @@ public static class PackageImportDialog
         // Trigger asset database rescan to pick up the new/changed files
         var db = EditorAssetBackend.Instance;
         if (db != null)
-        {
-            // Reinitialize to pick up all changes
-            var freshDb = new EditorAssetBackend(project);
-            freshDb.Initialize();
-        }
+            db.Dispose();
+
+        var freshDb = new EditorAssetBackend(project);
+        freshDb.Initialize();
 
         string message = failed > 0
             ? Loc.Get("package.imported_msg_failed", new { count = imported, failed = failed })

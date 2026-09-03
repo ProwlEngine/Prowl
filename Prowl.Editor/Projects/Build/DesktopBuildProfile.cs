@@ -7,9 +7,9 @@ using System.Linq;
 
 using Prowl.Editor.GUI;
 using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects.Settings;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
-using Prowl.Editor.Projects.Settings;
 
 
 namespace Prowl.Editor.Build;

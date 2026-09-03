@@ -38,71 +38,102 @@ public static class AssetTypeStyles
 
     private static readonly System.Collections.Generic.Dictionary<string, AssetTypeStyle> _map =
         new(System.StringComparer.OrdinalIgnoreCase)
-    {
-        // Code / binaries - text badges read better than an icon.
-        [".cs"] = new() { Badge = "C#", Color = Green },
-        [".dll"] = new() { Badge = "DLL", Color = Orange },
-        [".so"] = new() { Badge = "DLL", Color = Orange },
-        [".dylib"] = new() { Badge = "DLL", Color = Orange },
-        [".asmdef"] = new() { Badge = "ASM", Color = Blue },
-        // Shaders.
-        [".shader"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
-        [".glsl"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
-        [".hlsl"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
-        [".compute"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
-        [".shadergraph"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
-        // Textures / images.
-        [".png"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".jpg"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".jpeg"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".tga"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".dds"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".bmp"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".gif"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".hdr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".exr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".psd"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
-        [".rendertexture"] = new() { Icon = EditorIcons.Image_I, Color = Cyan },
-        // Materials.
-        [".mat"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
-        [".material"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
-        // Meshes / models.
-        [".fbx"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
-        [".obj"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
-        [".gltf"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
-        [".glb"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
-        [".dae"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
-        [".blend"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
-        [".mesh"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
-        // Scenes / prefabs.
-        [".scene"] = new() { Icon = EditorIcons.Shapes_I, Color = Amber },
-        [".prefab"] = new() { Icon = EditorIcons.Cube_I, Color = Blue },
-        // Audio.
-        [".mp3"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
-        [".wav"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
-        [".ogg"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
-        [".flac"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
-        // Fonts.
-        [".ttf"] = new() { Icon = EditorIcons.Font_I, Color = Amber },
-        [".otf"] = new() { Icon = EditorIcons.Font_I, Color = Amber },
-        [".woff"] = new() { Icon = EditorIcons.Font_I, Color = Amber },
-        // Data / text.
-        [".json"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
-        [".txt"] = new() { Icon = EditorIcons.FileLines_I, Color = Gray },
-        [".md"] = new() { Icon = EditorIcons.FileLines_I, Color = Gray },
-        [".xml"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
-        [".yaml"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
-        [".yml"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
-        [".csv"] = new() { Icon = EditorIcons.FileLines_I, Color = Gray },
-        // Video.
-        [".mp4"] = new() { Icon = EditorIcons.Image_I, Color = Red },
-        [".mov"] = new() { Icon = EditorIcons.Image_I, Color = Red },
-        [".mkv"] = new() { Icon = EditorIcons.Image_I, Color = Red },
-        [".webm"] = new() { Icon = EditorIcons.Image_I, Color = Red },
-        // Archives / packages.
-        [".zip"] = new() { Icon = EditorIcons.LayerGroup_I, Color = Gray },
-        [".prowlpackage"] = new() { Icon = EditorIcons.LayerGroup_I, Color = Purple },
-    };
+        {
+            // Code / binaries - text badges read better than an icon.
+            [".cs"] = new() { Badge = "C#", Color = Green },
+            [".dll"] = new() { Badge = "DLL", Color = Orange },
+            [".so"] = new() { Badge = "DLL", Color = Orange },
+            [".dylib"] = new() { Badge = "DLL", Color = Orange },
+            [".asmdef"] = new() { Badge = "ASM", Color = Blue },
+            // Shaders.
+            [".shader"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
+            [".glsl"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
+            [".hlsl"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
+            [".compute"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
+            [".shadergraph"] = new() { Icon = EditorIcons.Bolt_I, Color = Pink },
+            // Textures / images.
+            [".png"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".apng"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".jpg"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".jpeg"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".jpe"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".jfif"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".bmp"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".dib"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".gif"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".tga"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".icb"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".vda"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".vst"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".tif"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".tiff"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".webp"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".psd"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".psb"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".dds"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".exr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".hdr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".pic"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".rgbe"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".ico"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".cur"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".pnm"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".pbm"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".pgm"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".ppm"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".pam"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".dng"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".cr2"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".cr3"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".nef"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".nrw"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".arw"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".orf"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".rw2"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".raf"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".pef"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".srw"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+            [".rendertexture"] = new() { Icon = EditorIcons.Image_I, Color = Cyan },
+            // Materials.
+            [".mat"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
+            [".material"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
+            // Meshes / models.
+            [".fbx"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
+            [".obj"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
+            [".gltf"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
+            [".glb"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
+            [".dae"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
+            [".blend"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
+            [".mesh"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
+            // Scenes / prefabs.
+            [".scene"] = new() { Icon = EditorIcons.Shapes_I, Color = Amber },
+            [".prefab"] = new() { Icon = EditorIcons.Cube_I, Color = Blue },
+            // Audio.
+            [".mp3"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
+            [".wav"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
+            [".ogg"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
+            [".flac"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
+            // Fonts.
+            [".ttf"] = new() { Icon = EditorIcons.Font_I, Color = Amber },
+            [".otf"] = new() { Icon = EditorIcons.Font_I, Color = Amber },
+            [".woff"] = new() { Icon = EditorIcons.Font_I, Color = Amber },
+            // Data / text.
+            [".json"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
+            [".txt"] = new() { Icon = EditorIcons.FileLines_I, Color = Gray },
+            [".md"] = new() { Icon = EditorIcons.FileLines_I, Color = Gray },
+            [".xml"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
+            [".yaml"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
+            [".yml"] = new() { Icon = EditorIcons.Code_I, Color = Gray },
+            [".csv"] = new() { Icon = EditorIcons.FileLines_I, Color = Gray },
+            // Video.
+            [".mp4"] = new() { Icon = EditorIcons.Image_I, Color = Red },
+            [".mov"] = new() { Icon = EditorIcons.Image_I, Color = Red },
+            [".mkv"] = new() { Icon = EditorIcons.Image_I, Color = Red },
+            [".webm"] = new() { Icon = EditorIcons.Image_I, Color = Red },
+            // Archives / packages.
+            [".zip"] = new() { Icon = EditorIcons.LayerGroup_I, Color = Gray },
+            [".prowlpackage"] = new() { Icon = EditorIcons.LayerGroup_I, Color = Purple },
+        };
 
     private static readonly AssetTypeStyle _default = new() { Icon = EditorIcons.FileLines_I, Color = Gray };
 

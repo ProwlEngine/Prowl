@@ -67,6 +67,23 @@ public abstract class Game
 
         Window.Load += () =>
         {
+            try
+            {
+                Load();
+            }
+            catch (Exception e)
+            {
+                // Nothing above this catches, so without it a failure here closes the window with no
+                // message at all. It is still fatal, since a half built editor is worse than none,
+                // but it is reported first.
+                Debug.LogError("An exception occurred while starting up:");
+                Debug.LogError(e.ToString());
+                throw;
+            }
+        };
+
+        void Load()
+        {
             AudioContext.Initialize(44100, 2, 2048);
 
             // Renderer projection uses framebuffer (physical) pixels;
@@ -86,7 +103,7 @@ public abstract class Game
             BuiltInAssets.Initialize();
 
             Initialize();
-        };
+        }
 
         Window.Update += (delta) =>
         {
@@ -119,9 +136,7 @@ public abstract class Game
             }
             catch (Exception e)
             {
-                Debug.LogError("An exception occurred during the Update loop:");
-                Debug.LogError(e.ToString());
-                throw;
+                ReportLoopFailure("Update", e);
             }
         };
 
@@ -172,6 +187,11 @@ public abstract class Game
 
                 _paper.EndFrame();
 
+                // Give presentation hosts a point after all scene and Paper commands have been
+                // submitted but before the backbuffer is swapped. Development screenshot capture
+                // uses this hook to read the actual rendered client on the render thread.
+                AfterGui(currentScene);
+
                 // === End Graphics ===
 
                 RenderTexture.UpdatePool();
@@ -196,11 +216,21 @@ public abstract class Game
             }
             catch (Exception e)
             {
-                Debug.LogError("An exception occurred during the Update loop:");
-                Debug.LogError(e.ToString());
-                throw;
+                ReportLoopFailure("Render", e);
             }
         };
+
+        void ReportLoopFailure(string loop, Exception e)
+        {
+            Debug.LogError($"An exception occurred during the {loop} loop:");
+            Debug.LogError(e.ToString());
+
+            // A game has nowhere useful to carry on to, so it still fails fast. The editor does: the
+            // scene, the panels and whatever is unsaved are all still there, and taking the process
+            // down over one bad frame loses all of it.
+            if (!Application.IsEditor)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e).Throw();
+        }
 
         Window.Resize += (size) =>
         {
@@ -372,6 +402,9 @@ public abstract class Game
     public virtual void EndRender() { }
     public virtual void BeginGui(Paper paper) { }
     public virtual void EndGui(Paper paper) { }
+
+    /// <summary>Called after the GUI frame is submitted and before the backbuffer is swapped.</summary>
+    public virtual void AfterGui(Scene? scene) { }
 
     /// <summary>Called during update. Override to control scene update/gizmo behavior.</summary>
     public virtual void OnUpdate(Scene? scene)

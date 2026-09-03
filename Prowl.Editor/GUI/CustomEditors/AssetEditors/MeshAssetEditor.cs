@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -10,6 +9,8 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.MeshFeatures;
 using Prowl.Runtime.Resources;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 namespace Prowl.Editor.Inspector;
 
@@ -26,10 +27,16 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Mesh))]
 public class MeshAssetEditor : AssetImporterEditor
 {
-    private sealed class State
+    private sealed class State : IDisposable
     {
         public PreviewRenderer? Preview;
         public EngineObject? LastPreviewSubject;
+
+        public void Dispose()
+        {
+            Preview?.Dispose();
+            Preview = null;
+        }
     }
 
     private readonly State _ownState = new();

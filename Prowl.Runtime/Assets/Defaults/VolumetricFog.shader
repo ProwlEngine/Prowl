@@ -1,4 +1,4 @@
-Shader "Hidden/Post Process/Volumetric Fog"
+﻿Shader "Hidden/Post Process/Volumetric Fog"
 
 Properties
 {
@@ -85,8 +85,15 @@ Pass "FogMarch"
         }
 
         // ── Camera reconstruction ──
+        // A perspective view is a bundle of rays leaving one point, so every pixel marches from the
+        // camera along its own direction. An orthographic view is the other way round: one shared
+        // direction, and a starting point per pixel spread across the camera plane. Both halves have
+        // to swap together, or the fog marches from the wrong place along the wrong line.
         vec3 ReconstructWorldRay(vec2 uv)
         {
+            if (isOrthographic())
+                return normalize((PROWL_MATRIX_I_V * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+
             vec4 clip = vec4(uv * 2.0 - 1.0, 1.0, 1.0);
             vec4 viewPos = PROWL_MATRIX_I_P * clip;
             viewPos /= viewPos.w;
@@ -94,16 +101,20 @@ Pass "FogMarch"
             return normalize(worldDir);
         }
 
-        float LinearEyeDepth(float rawDepth)
+        vec3 ReconstructRayOrigin(vec2 uv)
         {
-            float zNear = _ProjectionParams.y;
-            float zFar = _ProjectionParams.z;
-            float z = rawDepth * 2.0 - 1.0;
-            return (2.0 * zNear * zFar) / (zFar + zNear - z * (zFar - zNear));
+            if (isPerspective())
+                return _WorldSpaceCameraPos.xyz;
+
+            // The pixel's own point on the near plane, which is where its ray starts.
+            vec4 clip = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+            vec4 viewPos = PROWL_MATRIX_I_P * clip;
+            viewPos /= viewPos.w;
+            return (PROWL_MATRIX_I_V * vec4(viewPos.xyz, 1.0)).xyz;
         }
 
         // Returns world-space distance from camera to the geometry at this UV.
-        // Different from LinearEyeDepth, which only gives the view-space Z component
+        // Different from linearizeDepthFromProjection, which only gives the view-space Z component
         // (along camera forward). For off-axis pixels the actual world distance is
         // greater because the ray is at an angle.
         float WorldDistFromDepth(vec2 uv, float rawDepth)
@@ -111,7 +122,8 @@ Pass "FogMarch"
             vec4 clip = vec4(uv * 2.0 - 1.0, rawDepth * 2.0 - 1.0, 1.0);
             vec4 worldPos = PROWL_MATRIX_I_VP * clip;
             worldPos.xyz /= worldPos.w;
-            return distance(worldPos.xyz, _WorldSpaceCameraPos.xyz);
+            // Measured from where this pixel's ray starts, which is only the camera under perspective.
+            return distance(worldPos.xyz, ReconstructRayOrigin(uv));
         }
 
         // ── Volumetric shadow sampling (no slope bias, no normal bias) ──
@@ -380,7 +392,7 @@ Pass "FogMarch"
 
             // World distance from camera to the actual geometry (NOT eye-space Z).
             // We march along viewDir in world space, so we need world distance using
-            // LinearEyeDepth here makes off-axis pixels under/overshoot the geometry,
+            // a linear eye depth here makes off-axis pixels under/overshoot the geometry,
             // causing fog to appear past surfaces (e.g. through the ground at oblique angles).
             float sceneDist = (rawDepth >= 0.9999) ? _FogMaxDistance : WorldDistFromDepth(uv, rawDepth);
 
@@ -390,7 +402,7 @@ Pass "FogMarch"
                 return;
             }
 
-            vec3 cameraPos = _WorldSpaceCameraPos.xyz;
+            vec3 rayOrigin = ReconstructRayOrigin(uv);
             vec3 viewDir = ReconstructWorldRay(uv);
 
             int steps = max(_FogSteps, 1);
@@ -404,7 +416,7 @@ Pass "FogMarch"
 
             for (int i = 0; i < steps; i++)
             {
-                vec3 samplePos = cameraPos + viewDir * t;
+                vec3 samplePos = rayOrigin + viewDir * t;
 
                 // Density at this point: global + volumes (clamped to 0 if negatives carved it out)
                 float volumeDensity;
@@ -571,14 +583,6 @@ Pass "FogComposite"
         uniform vec2 _LowResolution;
         uniform float _FogUpsampleThreshold;
 
-        float LinearEyeDepthC(float rawDepth)
-        {
-            float zNear = _ProjectionParams.y;
-            float zFar = _ProjectionParams.z;
-            float z = rawDepth * 2.0 - 1.0;
-            return (2.0 * zNear * zFar) / (zFar + zNear - z * (zFar - zNear));
-        }
-
         // Depth-aware nearest-tap upsample. Picks the half-res tap whose depth is
         // closest to the full-res depth avoids bleeding fog across silhouettes
         // where bilinear blending would mix fog from sky pixels into ground pixels.
@@ -599,7 +603,7 @@ Pass "FogComposite"
             for (int i = 0; i < 4; i++)
             {
                 vec2 sampleUV = uv + offsets[i] * lowTexel;
-                depths[i] = LinearEyeDepthC(texture(_CameraDepthTexture, sampleUV).r);
+                depths[i] = linearizeDepthFromProjection(texture(_CameraDepthTexture, sampleUV).r);
                 float diff = abs(depths[i] - refDepth);
                 if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
             }
@@ -632,7 +636,7 @@ Pass "FogComposite"
             vec3 sceneColor = texture(_MainTex, TexCoords).rgb;
             float alpha = texture(_MainTex, TexCoords).a;
 
-            float refDepth = LinearEyeDepthC(texture(_CameraDepthTexture, TexCoords).r);
+            float refDepth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).r);
             vec4 fog = BilateralUpsample(TexCoords, refDepth);
 
             // fog.rgb = scattering, fog.a = transmittance

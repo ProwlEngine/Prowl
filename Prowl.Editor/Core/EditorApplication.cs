@@ -9,6 +9,7 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
@@ -21,7 +22,6 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
-using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.Core;
 
@@ -77,7 +77,7 @@ public class EditorApplication : Game
         // be drawn in a chosen weight directly (e.g. an outline vs filled star), independent of the
         // fallback resolution order.
         EditorTheme.FontIconOutline = LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
-        EditorTheme.FontIconSolid   = LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
+        EditorTheme.FontIconSolid = LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
 
         // Load CJK/international fallback fonts from system for localization support
         LoadSystemFallbackFonts();
@@ -274,6 +274,8 @@ public class EditorApplication : Game
         {
             SaveEditorWindowState();
         };
+
+        Window.FileDrop += ExternalAssetDrop.Enqueue;
     }
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -283,13 +285,13 @@ public class EditorApplication : Game
     {
         if (EditorTheme.DefaultFont != null) return;
 
-        EditorTheme.DefaultFont  = LoadBundledFont("Geist-Regular.ttf");
-        EditorTheme.FontMedium   = LoadBundledFont("Geist-Medium.ttf");
+        EditorTheme.DefaultFont = LoadBundledFont("Geist-Regular.ttf");
+        EditorTheme.FontMedium = LoadBundledFont("Geist-Medium.ttf");
         EditorTheme.FontSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
         EditorTheme.DefaultBoldFont = LoadBundledFont("Geist-Bold.ttf");
-        EditorTheme.FontMono     = LoadBundledFont("JetBrainsMono-Regular.ttf");
-        EditorTheme.FontDisplay  = LoadBundledFont("SpaceGrotesk-Bold.ttf");
-        EditorTheme.FontLogo     = LoadBundledFont("Audiowide-Regular.ttf");
+        EditorTheme.FontMono = LoadBundledFont("JetBrainsMono-Regular.ttf");
+        EditorTheme.FontDisplay = LoadBundledFont("SpaceGrotesk-Bold.ttf");
+        EditorTheme.FontLogo = LoadBundledFont("Audiowide-Regular.ttf");
 
         _curDefaultFont = EditorTheme.DefaultFontName;
         _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
@@ -453,8 +455,10 @@ public class EditorApplication : Game
             EditorAssetBackend.Instance?.Refresh();
         _wasFocused = focused;
 
+        ExternalAssetDrop.ProcessPending();
+
         // Process file changes optionally only when window is focused
-        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused;
+        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || ExternalAssetDrop.ForceProcessActive;
         if (canProcessAssets)
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
@@ -557,7 +561,7 @@ public class EditorApplication : Game
             // Ghost buttons tint their icon by variant: green Play when stopped, red Stop while playing,
             // amber Pause when paused; step stays neutral.
             var play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
-                .OnClick(() => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); })
+                .OnClick(RequestTogglePlayMode)
                 .Style(ButtonStyle.Ghost);
             if (Application.IsPlaying) play.Danger(); else play.Success();
             play.Show();
@@ -1010,7 +1014,7 @@ public class EditorApplication : Game
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        var resourceName = resource;
+        var resourceName = "Prowl.Editor.Resources." + resource;
 
         var pathToFile = Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory) +
                           resourceName;
@@ -1522,6 +1526,63 @@ public class EditorApplication : Game
     //  Play Mode
     // ================================================================
 
+    /// <summary>
+    /// Raised when something asks to start or stop play mode, before any of it happens. A handler with
+    /// work the user has to resolve first holds the transition with
+    /// <see cref="PlayModeRequest.Defer"/> and asks again once they have.
+    /// </summary>
+    public static event Action<PlayModeRequest> PlayModeRequested;
+
+    /// <summary>Asks to start play mode. Held if any handler has something outstanding.</summary>
+    public static void RequestPlayMode()
+    {
+        if (Application.IsPlaying || Instance == null) return;
+
+        if (Held(entering: true)) return;
+
+        Instance.EnterPlayMode();
+    }
+
+    /// <summary>Asks to stop play mode. Held if any handler has something outstanding.</summary>
+    public static void RequestExitPlayMode()
+    {
+        if (!Application.IsPlaying || Instance == null) return;
+
+        if (Held(entering: false)) return;
+
+        Instance.ExitPlayMode();
+    }
+
+    /// <summary>Asks for whichever of the two is the opposite of now, which is what the play button does.</summary>
+    public static void RequestTogglePlayMode()
+    {
+        if (Application.IsPlaying) RequestExitPlayMode();
+        else RequestPlayMode();
+    }
+
+    private static bool Held(bool entering)
+    {
+        var request = new PlayModeRequest(entering);
+
+        try
+        {
+            PlayModeRequested?.Invoke(request);
+        }
+        catch (Exception ex)
+        {
+            // A handler that throws must not leave the play button dead. Letting the transition
+            // through is the safer failure: the alternative is an editor that cannot be played in
+            // and does not say why.
+            Runtime.Debug.LogError($"A play mode handler threw, so the transition went ahead anyway: {ex}");
+            return false;
+        }
+
+        if (!request.IsDeferred) return false;
+
+        Runtime.Debug.Log($"{(entering ? "Entering" : "Exiting")} play mode is waiting on {request.DeferredBy}.");
+        return true;
+    }
+
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
@@ -1555,6 +1616,10 @@ public class EditorApplication : Game
 
         // Clear selection (references will be invalid)
         Selection.Clear();
+
+        // Before the play copy is built, so it resolves its own instances rather than adopting the ones
+        // the editor scene had.
+        DropLoadedAssets();
 
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
@@ -1612,6 +1677,8 @@ public class EditorApplication : Game
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
         {
+            DropLoadedAssets();
+
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
             if (restoredScene != null)
@@ -1640,6 +1707,18 @@ public class EditorApplication : Game
         RestoreActiveTab();
 
         Runtime.Debug.Log("Exited play mode.");
+    }
+
+    /// <summary>
+    /// Drops every loaded asset instance, so the scene about to be built resolves fresh ones and
+    /// nothing a play session did to an asset outlives it.
+    /// </summary>
+    private static void DropLoadedAssets()
+    {
+        int dropped = EditorAssetBackend.Instance?.UnloadAll() ?? 0;
+
+        if (dropped > 0)
+            Runtime.Debug.Log($"[Assets] Dropped {dropped} loaded asset instances, so both sides of the play session read from disk.");
     }
 
     private void TogglePause()

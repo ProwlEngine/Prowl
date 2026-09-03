@@ -1,19 +1,19 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Projects;
 namespace Prowl.Editor.GUI.Panels;
 
 public class InspectorPanel : DockPanel
@@ -69,6 +69,7 @@ public class InspectorPanel : DockPanel
         if (_subscribed)
         {
             Selection.OnSelectionChanged -= OnSelectionChanged;
+            EditorApplication.PlayModeRequested -= OnPlayModeRequested;
             _subscribed = false;
         }
     }
@@ -111,6 +112,24 @@ public class InspectorPanel : DockPanel
 
         if (!editor.HasPendingChanges(entry, asset)) return false;
 
+        // Navigating away has already happened by the time this is asked, so dismissing it has to
+        // mean something: it reverts, the same as the button does.
+        RaiseUnappliedPrompt(editor, entry, asset, onResolved: null, cancellable: false);
+        return true;
+    }
+
+    /// <summary>
+    /// Raises the Apply/Revert choice for an editor holding unwritten changes.
+    /// </summary>
+    /// <param name="onResolved">Run once the user has chosen, for a caller that is waiting on the answer.</param>
+    /// <param name="cancellable">
+    /// Offers a way out that leaves the changes exactly as they are. For a prompt that is holding
+    /// something up rather than reacting to something that has already happened, since backing out of
+    /// pressing play should not be the same as throwing away what is in the inspector.
+    /// </param>
+    private void RaiseUnappliedPrompt(AssetImporterEditor editor, AssetEntry entry, EngineObject? asset,
+        Action? onResolved, bool cancellable)
+    {
         _promptOpen = true;
 
         string name = Path.GetFileName(entry.Path);
@@ -119,18 +138,74 @@ public class InspectorPanel : DockPanel
 
         dialog.CloseOnEscape = true;
         dialog.CloseOnBackdrop = false;
+
         dialog.OnDismissed = _ =>
         {
             _promptOpen = false;
-            editor.RevertPendingChanges(entry, asset);
+
+            // Escaping a prompt that is holding something up means "not now", so it leaves both the
+            // changes and whatever was waiting alone.
+            if (!cancellable)
+                editor.RevertPendingChanges(entry, asset);
         };
 
         dialog.Button(Loc.Get("dialog.apply"),
-                () => { _promptOpen = false; editor.ApplyPendingChanges(entry, asset); Modal.Pop(); }, OrigamiVariant.Primary)
+                () =>
+                {
+                    _promptOpen = false;
+                    editor.ApplyPendingChanges(entry, asset);
+                    Modal.Pop();
+                    onResolved?.Invoke();
+                }, OrigamiVariant.Primary)
             .Button(Loc.Get("dialog.revert"),
-                () => { _promptOpen = false; editor.RevertPendingChanges(entry, asset); Modal.Pop(); });
+                () =>
+                {
+                    _promptOpen = false;
+                    editor.RevertPendingChanges(entry, asset);
+                    Modal.Pop();
+                    onResolved?.Invoke();
+                });
 
-        return true;
+        if (cancellable)
+            dialog.Button(Loc.Get("common.cancel"), () => { _promptOpen = false; Modal.Pop(); });
+    }
+
+    /// <summary>
+    /// Holds a play mode transition while the inspector has edits nobody has decided about.
+    /// </summary>
+    /// <remarks>
+    /// Both sides of a play session drop every loaded asset instance, so that a session starts from
+    /// what is on disk and cannot leave anything behind. Unwritten inspector edits live in those
+    /// instances, so without this they would go with them, and the only sign would be an inspector
+    /// that quietly reads differently afterwards.
+    /// </remarks>
+    private void OnPlayModeRequested(PlayModeRequest request)
+    {
+        if (_promptOpen)
+        {
+            request.Defer("a choice about unapplied changes");
+            return;
+        }
+
+        if (_openEditor == null || _openEntry == null) return;
+        if (!_openEditor.HasPendingChanges(_openEntry, _openAsset)) return;
+
+        AssetImporterEditor editor = _openEditor;
+        AssetEntry entry = _openEntry;
+        EngineObject? asset = _openAsset;
+        bool entering = request.Entering;
+
+        request.Defer($"unapplied changes to '{Path.GetFileName(entry.Path)}'");
+
+        // Asking again rather than resuming a held transition: the answer runs every handler afresh,
+        // so a second panel with something outstanding gets its turn instead of being skipped.
+        RaiseUnappliedPrompt(editor, entry, asset,
+            onResolved: () =>
+            {
+                if (entering) EditorApplication.RequestPlayMode();
+                else EditorApplication.RequestExitPlayMode();
+            },
+            cancellable: true);
     }
 
     private void OnSelectionChanged()
@@ -153,6 +228,7 @@ public class InspectorPanel : DockPanel
         if (!_subscribed)
         {
             Selection.OnSelectionChanged += OnSelectionChanged;
+            EditorApplication.PlayModeRequested += OnPlayModeRequested;
             _subscribed = true;
         }
 
@@ -218,7 +294,7 @@ public class InspectorPanel : DockPanel
             // Multi-selection summary (GameObjects already get a full multi-object inspector above)
             if (Selection.Count > 1 && active is not GameObject)
             {
-                                Origami.Header(paper, "insp_h_multi", Loc.Get("inspector.selection")).Underline().Show();
+                Origami.Header(paper, "insp_h_multi", Loc.Get("inspector.selection")).Underline().Show();
                 Origami.Label(paper, "insp_multi_count", $"{Selection.Count} {Loc.Get("inspector.objects_selected")}").Show();
 
                 for (int i = 0; i < Selection.Count && i < 20; i++)
@@ -463,7 +539,7 @@ public class InspectorPanel : DockPanel
                     var settings = meta.Settings ?? importer.DefaultSettings();
                     if (settings != null && settings.TagType == Echo.EchoType.Compound)
                     {
-                                                Origami.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  {Loc.Get("inspector.import_settings")}").Underline().Show();
+                        Origami.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  {Loc.Get("inspector.import_settings")}").Underline().Show();
 
                         foreach (var kvp in settings.Tags.ToList())
                         {
@@ -526,7 +602,8 @@ public class InspectorPanel : DockPanel
         Origami.Header(paper, "insp_h_folder", Loc.Get("inspector.folder")).Show();
         Origami.Label(paper, "insp_folder_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
 
-        string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+        if (Project.Current == null) return;
+        string absPath = Path.Combine(Project.Current.AssetsPath, item.RelativePath);
         if (!Directory.Exists(absPath)) return;
 
         var counts = GetFolderCounts(item.RelativePath, absPath);
@@ -691,14 +768,12 @@ public class InspectorPanel : DockPanel
         string relativePath = string.IsNullOrEmpty(parentDir) ? fileName : $"{parentDir}/{fileName}";
 
         // Serialize the asset to the file
+        // Clear the sub-asset's AssetID so it serializes as a full object, not a reference
+        var originalId = asset.AssetID;
+        asset.AssetID = Guid.Empty;
         try
         {
-            // Clear the sub-asset's AssetID so it serializes as a full object, not a reference
-            var originalId = asset.AssetID;
-            asset.AssetID = Guid.Empty;
-
             var echo = Echo.Serializer.Serialize(typeof(object), asset);
-            asset.AssetID = originalId; // Restore
 
             if (echo != null)
             {
@@ -711,6 +786,10 @@ public class InspectorPanel : DockPanel
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"Failed to extract sub-asset: {ex.Message}");
+        }
+        finally
+        {
+            asset.AssetID = originalId; // Restore
         }
     }
 
@@ -771,7 +850,7 @@ public class InspectorPanel : DockPanel
             Origami.Label(paper, "insp_eo_assetpath", $"{Loc.Get("inspector.asset_path")}: {obj.AssetPath}").Show();
 
         // Use PropertyGrid for reflection-based editing
-                Origami.Header(paper, "insp_h_props", Loc.Get("inspector.properties")).Underline().Show();
+        Origami.Header(paper, "insp_h_props", Loc.Get("inspector.properties")).Underline().Show();
         PropertyGridUtils.Draw(paper, "insp_pg", obj);
     }
 
@@ -821,7 +900,7 @@ public class InspectorPanel : DockPanel
         if (log.StackTrace != null && log.StackTrace.StackFrames.Length > 0)
         {
             paper.Box("log_sp").Height(8);
-                        Origami.Header(paper, "log_st_hdr", Loc.Get("inspector.stack_trace")).Underline().Show();
+            Origami.Header(paper, "log_st_hdr", Loc.Get("inspector.stack_trace")).Underline().Show();
 
             for (int i = 0; i < log.StackTrace.StackFrames.Length; i++)
             {
@@ -847,7 +926,7 @@ public class InspectorPanel : DockPanel
         Origami.Header(paper, "insp_h_generic", obj.GetType().Name).Show();
         Origami.Label(paper, "insp_generic_str", obj.ToString() ?? "null").Show();
 
-                Origami.Header(paper, "insp_h_gprops", Loc.Get("inspector.properties")).Underline().Show();
+        Origami.Header(paper, "insp_h_gprops", Loc.Get("inspector.properties")).Underline().Show();
         PropertyGridUtils.Draw(paper, "insp_gpg", obj);
     }
 

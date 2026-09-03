@@ -5,22 +5,22 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Inspector;
 using Prowl.Editor.Importers;
+using Prowl.Editor.Inspector;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Core;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Utils;
 
 namespace Prowl.Editor;
 
@@ -302,12 +302,19 @@ public static class EditorRegistries
         if (type.IsAbstract || !typeof(ISceneDropHandler).IsAssignableFrom(type)) return;
         var attr = type.GetCustomAttribute<SceneDropHandlerAttribute>();
         if (attr == null) return;
-        _dropHandlers.Add(new DropHandlerEntry
+        try
         {
-            AssetType = attr.TargetType,
-            Order = attr.Order,
-            Handler = (ISceneDropHandler)Activator.CreateInstance(type)!,
-        });
+            _dropHandlers.Add(new DropHandlerEntry
+            {
+                AssetType = attr.TargetType,
+                Order = attr.Order,
+                Handler = (ISceneDropHandler)Activator.CreateInstance(type)!,
+            });
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Editor] Drop handler '{type.Name}' could not be created: {ex.Message}");
+        }
     }
 
     private static void ScanProjectSettings(Type type)
@@ -315,15 +322,22 @@ public static class EditorRegistries
         if (type.IsAbstract || !typeof(ProjectSettingsBase).IsAssignableFrom(type)) return;
         var attr = type.GetCustomAttribute<ProjectSettingsAttribute>();
         if (attr == null) return;
-        _settingsEntries.Add(new SettingsEntry
+        try
         {
-            Type = type,
-            Name = attr.Name,
-            Icon = attr.Icon,
-            Order = attr.Order,
-            ExportToBuild = attr.ExportToBuild,
-            Instance = (ProjectSettingsBase)Activator.CreateInstance(type)!,
-        });
+            _settingsEntries.Add(new SettingsEntry
+            {
+                Type = type,
+                Name = attr.Name,
+                Icon = attr.Icon,
+                Order = attr.Order,
+                ExportToBuild = attr.ExportToBuild,
+                Instance = (ProjectSettingsBase)Activator.CreateInstance(type)!,
+            });
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Editor] Project settings '{type.Name}' could not be created: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -466,6 +480,34 @@ public static class EditorRegistries
     public static AssetImporterEditor? GetAssetEditor(Type type) => LookupEditor(type, _assetEditorTypes, _assetEditorCache);
 
     /// <summary>
+    /// Creates a registered editor or importer, containing anything its constructor throws. These are
+    /// user types reached while drawing the inspector or importing a file, so letting one escape would
+    /// take the editor down over a single bad custom editor.
+    /// </summary>
+    private static bool TryCreate<T>(Type type, out T? instance) where T : class
+    {
+        instance = null;
+        try
+        {
+            instance = Activator.CreateInstance(type) as T;
+            if (instance is not null) return true;
+
+            Runtime.Debug.LogError($"[Editor] '{type.Name}' is not a {typeof(T).Name}, so it was ignored.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Exception cause = ex is TargetInvocationException { InnerException: not null } wrapped
+                ? wrapped.InnerException!
+                : ex;
+
+            Runtime.Debug.LogError($"[Editor] '{type.Name}' threw while being created, so it was " +
+                                   $"ignored. {cause.GetType().Name}: {cause.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// The editor for an asset, preferring one registered for its importer over one registered for
     /// its type. Several formats can import to the same asset type while needing different settings.
     /// </summary>
@@ -476,7 +518,12 @@ public static class EditorRegistries
             if (_assetEditorByImporterCache.TryGetValue(entry.ImporterType, out var cached)) return cached;
 
             if (_assetEditorTypesByImporter.TryGetValue(entry.ImporterType, out var editorType))
-                return _assetEditorByImporterCache[entry.ImporterType] = (AssetImporterEditor)Activator.CreateInstance(editorType)!;
+            {
+                if (TryCreate(editorType, out AssetImporterEditor? editor))
+                    return _assetEditorByImporterCache[entry.ImporterType] = editor!;
+
+                return null;
+            }
         }
 
         return GetAssetEditor(entry.MainAssetType);
@@ -488,19 +535,19 @@ public static class EditorRegistries
         for (var t = targetType; t != null; t = t.BaseType)
         {
             if (!types.TryGetValue(t, out var editorType)) continue;
-            return cache[targetType] = (T)Activator.CreateInstance(editorType)!;
+            return TryCreate(editorType, out T? made) ? cache[targetType] = made! : null;
         }
         if (checkInterfaces)
             foreach (var iface in targetType.GetInterfaces())
                 if (types.TryGetValue(iface, out var editorType))
-                    return cache[targetType] = (T)Activator.CreateInstance(editorType)!;
+                    return TryCreate(editorType, out T? made) ? cache[targetType] = made! : null;
         return null;
     }
 
     public static AssetImporter? GetImporter(string extension)
     {
         if (_importersByExt.TryGetValue(NormalizeExt(extension), out var type))
-            return (AssetImporter)Activator.CreateInstance(type)!;
+            return TryCreate(type, out AssetImporter? importer) ? importer : null;
         return null;
     }
 
@@ -510,7 +557,7 @@ public static class EditorRegistries
     public static AssetImporter? CreateImporterByName(string typeName)
     {
         if (_importersByName.TryGetValue(typeName, out var type))
-            return (AssetImporter)Activator.CreateInstance(type)!;
+            return TryCreate(type, out AssetImporter? importer) ? importer : null;
         return null;
     }
 
@@ -682,7 +729,21 @@ public static class EditorRegistries
     {
         RegisterFileIcons(EditorIcons.FileCode, ".cs", ".js", ".ts", ".py", ".lua");
         RegisterFileIcons(EditorIcons.WandMagicSparkles, ".shader", ".glsl", ".hlsl", ".shadergraph");
-        RegisterFileIcons(EditorIcons.FileImage, ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".psd", ".hdr");
+        RegisterFileIcons(EditorIcons.FileImage,
+            ".png", ".apng",
+            ".jpg", ".jpeg", ".jpe", ".jfif",
+            ".bmp", ".dib",
+            ".gif",
+            ".tga", ".icb", ".vda", ".vst",
+            ".tif", ".tiff",
+            ".webp",
+            ".psd", ".psb",
+            ".dds",
+            ".exr",
+            ".hdr", ".pic", ".rgbe",
+            ".ico", ".cur",
+            ".pnm", ".pbm", ".pgm", ".ppm", ".pam",
+            ".dng", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".orf", ".rw2", ".raf", ".pef", ".srw");
         RegisterFileIcons(EditorIcons.FileAudio, ".mp3", ".wav", ".ogg", ".flac");
         RegisterFileIcons(EditorIcons.FileVideo, ".mp4", ".avi", ".mkv", ".mov");
         RegisterFileIcons(EditorIcons.VectorSquare, ".fbx", ".obj", ".gltf", ".glb", ".dae", ".mesh");

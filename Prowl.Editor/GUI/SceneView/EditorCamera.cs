@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
@@ -59,6 +59,77 @@ public class EditorCamera
     /// </summary>
     public Float3 ViewFocusPoint => _position + _cameraObject.Transform.Forward * _orbitDistance;
 
+    public bool IsOrthographic => _camera.IsOrthographic;
+
+    /// <summary>
+    /// Swaps between perspective and orthographic without changing what is on screen.
+    /// </summary>
+    /// <remarks>
+    /// The two are tied together through the focus point: an orthographic half-height of
+    /// <c>distance * tan(fov/2)</c> frames exactly what the perspective view framed at that distance,
+    /// so the switch reads as a change of projection rather than a jump to somewhere else.
+    /// </remarks>
+    public void ToggleProjection()
+    {
+        Float3 focus = ViewFocusPoint;
+        float halfFov = MathF.Tan(Maths.ToRadians(_camera.FieldOfView) * 0.5f);
+
+        if (_camera.IsOrthographic)
+        {
+            _camera.ProjectionMode = Camera.ProjectionType.Perspective;
+            _camera.FarClipPlane = _perspectiveFarClip;
+            _orbitDistance = MathF.Max(0.1f, _camera.OrthographicSize / MathF.Max(1e-4f, halfFov));
+            UpdateTransform();
+            _position = focus - _cameraObject.Transform.Forward * _orbitDistance;
+            UpdateTransform();
+        }
+        else
+        {
+            _camera.ProjectionMode = Camera.ProjectionType.Orthographic;
+            _camera.OrthographicSize = MathF.Max(MinOrthographicSize, _orbitDistance * halfFov);
+            SyncOrthographicDepth();
+        }
+    }
+
+    private void SetOrthographicSize(float size)
+    {
+        _camera.OrthographicSize = Math.Clamp(size, MinOrthographicSize, MaxOrthographicSize);
+        SyncOrthographicDepth();
+    }
+
+    /// <summary>
+    /// Keeps the visible slab centred on the focus point and sized with the zoom.
+    /// </summary>
+    /// <remarks>
+    /// Where the camera sits along the view axis decides nothing about what an orthographic view
+    /// covers, so the depth range has to come from the zoom instead. Left alone it does not: zooming
+    /// out widens the box while the clip planes stay put, and once the camera has been pushed further
+    /// back than the far plane reaches, the focus point and everything around it fall outside the
+    /// frustum and are culled. Backing off with the box and reaching as far past the focus as behind
+    /// it makes the clip planes the only thing that stops the view, which is what an orthographic
+    /// camera should feel like.
+    /// </remarks>
+    private void SyncOrthographicDepth()
+    {
+        if (!_camera.IsOrthographic) return;
+
+        // Captured first: both terms of it are about to move.
+        Float3 focus = ViewFocusPoint;
+
+        float backOff = MathF.Max(_camera.OrthographicSize * 4f, MinOrthographicDepth);
+        _orbitDistance = backOff;
+        _camera.FarClipPlane = backOff * 2f;
+        _position = focus - _cameraObject.Transform.Forward * backOff;
+        UpdateTransform();
+    }
+
+    private const float MinOrthographicSize = 0.01f;
+    private const float MaxOrthographicSize = 10000f;
+    private const float MinOrthographicDepth = 10f;
+
+    /// <summary>Far plane to put back when leaving orthographic, which moves it to suit the zoom.</summary>
+    private float _perspectiveFarClip;
+
     /// <summary>Set the camera position directly.</summary>
     public void SetPosition(Float3 position)
     {
@@ -85,6 +156,7 @@ public class EditorCamera
         _camera.FieldOfView = 60f;
         _camera.NearClipPlane = 0.01f;
         _camera.FarClipPlane = 1000f;
+        _perspectiveFarClip = _camera.FarClipPlane;
         _camera.ClearFlags = CameraClearFlags.Skybox;
 
         UpdateTransform();
@@ -309,11 +381,20 @@ public class EditorCamera
         // Scroll to dolly forward/back (also adjusts orbit distance)
         if (scroll != 0 && !Input.GetMouseButton(1))
         {
-            Float3 forward = GetForwardFromAngles();
-            float dolly = scroll * _orbitDistance * 0.1f;
-            _position += forward * dolly;
-            _orbitDistance = MathF.Max(0.1f, _orbitDistance - dolly);
-            UpdateTransform();
+            if (_camera.IsOrthographic)
+            {
+                // Moving along the view direction changes nothing an orthographic projection can
+                // show, so the wheel has to resize the box instead of dollying.
+                SetOrthographicSize(_camera.OrthographicSize * MathF.Pow(0.9f, scroll));
+            }
+            else
+            {
+                Float3 forward = GetForwardFromAngles();
+                float dolly = scroll * _orbitDistance * 0.1f;
+                _position += forward * dolly;
+                _orbitDistance = MathF.Max(0.1f, _orbitDistance - dolly);
+                UpdateTransform();
+            }
             consumed = true;
         }
 
@@ -345,11 +426,19 @@ public class EditorCamera
         if (Input.IsAltPressed && Input.GetMouseButton(1))
         {
             Float2 delta = Input.MouseDelta;
-            float zoomDelta = (delta.X + delta.Y) * 0.02f * _orbitDistance;
-            Float3 forward = GetForwardFromAngles();
-            _position += forward * zoomDelta;
-            _orbitDistance = MathF.Max(0.1f, _orbitDistance - zoomDelta);
-            UpdateTransform();
+            if (_camera.IsOrthographic)
+            {
+                // Same reason as the wheel: there is nothing to dolly toward in an orthographic view.
+                SetOrthographicSize(_camera.OrthographicSize * (1f - (delta.X + delta.Y) * 0.02f));
+            }
+            else
+            {
+                float zoomDelta = (delta.X + delta.Y) * 0.02f * _orbitDistance;
+                Float3 forward = GetForwardFromAngles();
+                _position += forward * zoomDelta;
+                _orbitDistance = MathF.Max(0.1f, _orbitDistance - zoomDelta);
+                UpdateTransform();
+            }
             consumed = true;
         }
 

@@ -1,19 +1,20 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
-using VColor = Prowl.Vector.Color;
-using Gradient = Prowl.Runtime.Gradient;
+using Prowl.Vector;
 
+using Gradient = Prowl.Vector.Gradient;
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.GUI;
+using VColor = Prowl.Vector.Color;
 namespace Prowl.Editor.Inspector;
 
 // ================================================================

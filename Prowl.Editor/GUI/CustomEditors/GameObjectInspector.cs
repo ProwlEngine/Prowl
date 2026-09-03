@@ -3,23 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-using Prowl.Editor.Utils;
-
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Prefabs;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.GUI;
-using Prowl.Vector;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
@@ -137,6 +135,7 @@ public static class GameObjectInspector
     /// </summary>
     public static void DrawMulti(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
     {
+        if (gos.Count == 0) return;
         if (gos.Count == 1) { Draw(paper, font, gos[0]); return; }
 
         DrawMultiHeader(paper, font, gos);
@@ -276,7 +275,8 @@ public static class GameObjectInspector
                             var cid = c.Identifier;
                             bool old = c.Enabled;
                             actions.Add((() => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = old; x.OnValidate(); } },
-                                        () => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = v; x.OnValidate(); } }));
+                                        () => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = v; x.OnValidate(); } }
+                            ));
                             c.Enabled = v; c.OnValidate();
                         }
                         Undo.RegisterActionGroup("Toggle Component", actions);
@@ -432,7 +432,7 @@ public static class GameObjectInspector
         var t = go.Transform;
         var goId = go.Identifier;
 
-        bool expanded = SectionHeader(paper, font, "gi_transform", EditorIcons.ArrowsUpDownLeftRight,
+        bool expanded = SectionHeader(paper, font, $"gi_transform_{goId}", EditorIcons.ArrowsUpDownLeftRight,
             Loc.Get("inspector.transform"), EditorTheme.Ink500, () =>
             {
                 EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, () => ResetTransform(go));
@@ -831,13 +831,13 @@ public static class GameObjectInspector
 
         EditorGUI.Row(paper, "gi_rt_pivot", "Pivot", () =>
         {
-            Origami.Float2Field(paper, "gi_rt_pivot_vf", rt.Pivot,v =>
+            Origami.Float2Field(paper, "gi_rt_pivot_vf", rt.Pivot, v =>
             {
                 Undo.RecordGameObjectChange(go, "Change Pivot", rt.Pivot, v,
                     (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
                 rt.Pivot = v;
             }).Show();
-        }, labelWidth: EditorTheme.LabelWidth/2f);
+        }, labelWidth: EditorTheme.LabelWidth / 2f);
 
     }
 
@@ -984,9 +984,8 @@ public static class GameObjectInspector
 
         builder.Separator();
 
-        // A component the prefab provides can still be removed, but not while the object is an instance:
-        // nothing records the removal, so the next refresh would put it straight back. Taking it away
-        // therefore asks first and unlinks the instance.
+        // Nothing records the removal of a component the prefab provides, so the next refresh would put
+        // it back. Removing one therefore asks first and unlinks the instance.
         builder.Item(Loc.Get("inspector.remove_component"), () =>
         {
             if (PrefabUtility.NeedsBreaking(comp))
@@ -1062,7 +1061,7 @@ public static class GameObjectInspector
             if (method.GetParameters().Length > 0) continue; // Only parameterless methods
 
             string label = btnAttr.Label ?? PropertyGridUtils.NicifyName(method.Name);
-            Origami.Button(paper, $"{id}_{btnIdx++}", label, () => { method.Invoke(comp, null); }).Show();
+            Origami.Button(paper, $"{id}_{btnIdx++}", label, () => { try { method.Invoke(comp, null); } catch (Exception ex) { Runtime.Debug.LogError($"[Inspector] Button method {method.Name} on {comp.GetType().Name} threw: {ex.Message}"); } }).Show();
         }
     }
 
@@ -1173,18 +1172,91 @@ public static class GameObjectInspector
                         if (canApply)
                             Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
                     }
+
+                    // Only where the list can be acted on. A model is rebuilt from its source file on
+                    // every import, so nothing in it can be applied and Revert above is the whole of
+                    // what an instance of one can do.
+                    if (isRoot && canApply && (hasOverrides || PrefabUtility.HasAnyAdditions(go)))
+                        DrawOverridesButton(paper, font, go);
                 }
             }
+        }
+    }
 
-            // What makes this instance differ from its prefab, whether by a changed value or by
-            // something it has that the prefab does not.
-            if (hasOverrides || PrefabUtility.HasAnyAdditions(go))
+    // The override list opens in a popover. Inline it ran to a header and a row per entry with no
+    // bound, and setting a flag down a deep instance puts hundreds of them above every component.
+    private static bool _overridesPopupOpen;
+    private static GameObject? _overridesPopupTarget;
+
+    private static void ToggleOverridesPopup(GameObject target)
+    {
+        bool sameTarget = _overridesPopupOpen && _overridesPopupTarget == target;
+        _overridesPopupOpen = !sameTarget;
+        _overridesPopupTarget = sameTarget ? null : target;
+    }
+
+    private static void CloseOverridesPopup()
+    {
+        _overridesPopupOpen = false;
+        _overridesPopupTarget = null;
+    }
+
+    private static void DrawOverridesButton(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
+    {
+        int count = PrefabUtility.CountOverrides(go);
+
+        var trigger = paper.Box("gi_prefab_ov_btn")
+            .Width(110).Height(24).Rounded(4)
+            .BackgroundColor(EditorTheme.Ink100)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .OnClick(go, (g, _) => ToggleOverridesPopup(g));
+
+        using (trigger.Enter())
+        {
+            var trigHandle = paper.CurrentParent;
+
+            paper.Box("gi_prefab_ov_btn_lbl")
+                .Width(UnitValue.Stretch()).Height(24).IsNotInteractable()
+                .Text(Loc.Get("inspector.override_count", new { count }), font)
+                .TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+
+            if (!_overridesPopupOpen || _overridesPopupTarget != go) return;
+
+            if (paper.IsKeyPressed(PaperKey.Escape))
             {
-                paper.Box("gi_prefab_ov_sep").Height(1)
-                    .BackgroundColor(borderColor).Margin(0, 2, 0, 2);
-
-                DrawOverridesContent(paper, font, go);
+                CloseOverridesPopup();
+                return;
             }
+
+            MenuTreePopup.Backdrop(paper, "gi_prefab_ov", CloseOverridesPopup);
+            RenderOverridesPopover(paper, font, go, trigHandle);
+        }
+    }
+
+    private static void RenderOverridesPopover(Paper paper, Prowl.Scribe.FontFile font, GameObject go, ElementHandle trigger)
+    {
+        const float width = 420f, padding = 5f, maxHeight = 420f;
+        float triggerHeight = trigger.Data.LayoutRect.Size.Y > 0 ? (float)trigger.Data.LayoutRect.Size.Y : 24f;
+
+        using (paper.Column("gi_prefab_ov_pop")
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, triggerHeight + 4f)
+            .Width(width).Height(UnitValue.Auto)
+            .BackgroundColor(EditorTheme.Popover)
+            .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
+            .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
+            .Rounded(EditorTheme.Roundness + 2f)
+            .Padding(padding, padding, padding, padding)
+            .HookToParent()
+            .Layer(Layer.Topmost)
+            .ClampToScreen()
+            .StopEventPropagation()
+            .Enter())
+        {
+            Origami.ScrollView(paper, "gi_prefab_ov_scroll", width - padding * 2, maxHeight)
+                .Padding(0)
+                .Body(() => DrawOverridesContent(paper, font, go));
         }
     }
 
@@ -1208,11 +1280,8 @@ public static class GameObjectInspector
 
         using (paper.Column("gi_prefab_ov_list")
             .Height(UnitValue.Auto)
-            .Margin(8, 0, 4, 4)
             .Enter())
         {
-            DrawOverridesToolbar(paper, font, go, described.Count, canApply);
-
             int key = 0;
             foreach (var group in described.GroupBy(d => d.Group))
             {
@@ -1255,26 +1324,6 @@ public static class GameObjectInspector
             if (canApply)
                 OverrideButton(paper, font, $"gi_add_apply_{key}", Loc.Get("inspector.apply"), 45,
                     root, r => PrefabUtility.ApplyAddition(r, addition));
-        }
-    }
-
-    /// <summary>Everything at once, so a whole instance can be settled without walking the list.</summary>
-    private static void DrawOverridesToolbar(Paper paper, Prowl.Scribe.FontFile font, GameObject root, int count, bool canApply)
-    {
-        using (paper.Row("gi_ov_bar").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
-        {
-            paper.Box("gi_ov_count")
-                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                .Text(Loc.Get("inspector.override_count", new { count }), font)
-                .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
-
-            OverrideButton(paper, font, "gi_ov_revert_all", Loc.Get("inspector.revert_all"), 70,
-                root, r => PrefabUtility.RevertOverrides(r));
-
-            if (canApply)
-                OverrideButton(paper, font, "gi_ov_apply_all", Loc.Get("inspector.apply_all"), 65,
-                    root, r => PrefabUtility.ApplyOverrides(r));
         }
     }
 
@@ -1350,9 +1399,8 @@ public static class GameObjectInspector
     }
 
     /// <summary>
-    /// The component an entry is on, by the identity the entry was described with. Searched inside this
-    /// instance rather than across the scene: two instances of one prefab have identically named objects
-    /// carrying identically named components, and a search by name lands on whichever comes first.
+    /// The component an entry is on, by identity and inside this instance. Two instances of one prefab
+    /// have identically named objects, so a search by name lands on whichever comes first.
     /// </summary>
     private static MonoBehaviour? ComponentFor(GameObject root, PrefabUtility.OverrideDescription entry)
     {

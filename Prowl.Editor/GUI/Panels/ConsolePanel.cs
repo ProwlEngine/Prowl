@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using Prowl.Editor.Utils;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -14,6 +13,8 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Scribe;
 using Prowl.Vector;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 using Color = System.Drawing.Color;
 using TextAlignment = Prowl.PaperUI.TextAlignment;

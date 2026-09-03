@@ -163,7 +163,8 @@ public class PreviewRenderer : IDisposable
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 38, 42))
             .Rounded(4)
             .StopEventPropagation()
-            .OnDragging((e) => {
+            .OnDragging((e) =>
+            {
                 Float2 delta = e.Delta;
                 _orbitYaw += delta.X * 0.5f;
                 _orbitPitch += delta.Y * 0.5f;

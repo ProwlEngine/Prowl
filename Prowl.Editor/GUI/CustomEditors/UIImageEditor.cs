@@ -302,10 +302,10 @@ public class UIImageEditor : CustomEditor
     private static int MaxOriginIndex(FillMethod m) => m switch
     {
         FillMethod.Horizontal => 1,
-        FillMethod.Vertical   => 1,
-        FillMethod.Radial90   => 3,
-        FillMethod.Radial180  => 3,
-        FillMethod.Radial360  => 3,
+        FillMethod.Vertical => 1,
+        FillMethod.Radial90 => 3,
+        FillMethod.Radial180 => 3,
+        FillMethod.Radial360 => 3,
         _ => 0
     };
 }

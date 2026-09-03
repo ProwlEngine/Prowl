@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -272,19 +272,22 @@ public class TerrainEditor : CustomEditor
             .TextColor(EditorTheme.InkDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
 
         // Selected layer settings.
-        var sl = data.Layers[PaintLayer];
-        EditorGUI.SectionHeader(paper, $"{id}_slh", $"Layer {PaintLayer}");
-        PropertyGridUtils.DrawField(paper, $"{id}_alb", "Albedo", typeof(AssetRef<Texture2D>), sl.Albedo,
-            v => { sl.Albedo = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
-        PropertyGridUtils.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(AssetRef<Texture2D>), sl.NormalMap,
-            v => { sl.NormalMap = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
-        EditorGUI.Row(paper, $"{id}_til", "Tiling", () =>
-            Origami.NumericField<float>(paper, $"{id}_til_v", sl.Tiling,
-                v => { sl.Tiling = MathF.Max(0.01f, v); _isDirty = true; }).Min(0.01f).Show());
-        EditorGUI.Row(paper, $"{id}_rgh", "Roughness", () =>
-            Origami.Slider(paper, $"{id}_rgh_v", sl.Roughness, v => { sl.Roughness = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
-        EditorGUI.Row(paper, $"{id}_met", "Metallic", () =>
-            Origami.Slider(paper, $"{id}_met_v", sl.Metallic, v => { sl.Metallic = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
+        if (data.LayerCount > 0)
+        {
+            var sl = data.Layers[PaintLayer];
+            EditorGUI.SectionHeader(paper, $"{id}_slh", $"Layer {PaintLayer}");
+            PropertyGridUtils.DrawField(paper, $"{id}_alb", "Albedo", typeof(AssetRef<Texture2D>), sl.Albedo,
+                v => { sl.Albedo = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
+            PropertyGridUtils.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(AssetRef<Texture2D>), sl.NormalMap,
+                v => { sl.NormalMap = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
+            EditorGUI.Row(paper, $"{id}_til", "Tiling", () =>
+                Origami.NumericField<float>(paper, $"{id}_til_v", sl.Tiling,
+                    v => { sl.Tiling = MathF.Max(0.01f, v); _isDirty = true; }).Min(0.01f).Show());
+            EditorGUI.Row(paper, $"{id}_rgh", "Roughness", () =>
+                Origami.Slider(paper, $"{id}_rgh_v", sl.Roughness, v => { sl.Roughness = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
+            EditorGUI.Row(paper, $"{id}_met", "Metallic", () =>
+                Origami.Slider(paper, $"{id}_met_v", sl.Metallic, v => { sl.Metallic = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
+        }
 
         DrawBrushBlock(paper, $"{id}_brush", font);
     }

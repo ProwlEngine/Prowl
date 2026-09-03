@@ -547,38 +547,104 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="type">The type of component to add.</param>
     /// <returns>The newly added MonoBehaviour component.</returns>
     public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
+        => AddComponent(type, null);
+
+    /// <summary>
+    /// Adds a component, carrying the set of types already part way through being added so that a
+    /// requirement cycle stops rather than recursing. A component only reaches the object after its
+    /// requirements are met, so nothing the walk can look at would ever break the cycle on its own.
+    /// </summary>
+    private MonoBehaviour AddComponent(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
+        HashSet<Type>? pending)
     {
-        if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
+        if (!CanConstruct(type)) return null;
 
-        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
-        if (requireComponentAttribute != null)
+        pending ??= [];
+        if (!pending.Add(type)) return null;
+
+        try
         {
-            foreach (Type requiredComponentType in requireComponentAttribute.types)
-            {
-                if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
-                    continue;
+            AddRequirements(type, pending);
 
-                // If there is already a component on the object
-                if (GetComponent(requiredComponentType).IsValid())
-                    continue;
+            if (!TryConstruct(type, out MonoBehaviour? newComponent) || newComponent.IsNotValid())
+                return null;
 
-                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
-#pragma warning disable IL2072
-                AddComponent(requiredComponentType);
-#pragma warning restore IL2072
-            }
+            newComponent.AttachToGameObject(this);
+            _components.Add(newComponent);
+            _componentCache.Add(type, newComponent);
+
+            NotifyComponentAddedToScene(newComponent);
+
+            return newComponent;
         }
+        finally
+        {
+            pending.Remove(type);
+        }
+    }
 
-        var newComponent = Activator.CreateInstance(type) as MonoBehaviour;
-        if (newComponent.IsNotValid()) return null;
+    /// <summary>
+    /// Constructs a component, containing anything its constructor throws. A field initializer is
+    /// compiled into the constructor, so user code runs here and can fail for any reason at all;
+    /// letting that escape would take down whichever menu, drop target or scene load asked for it.
+    /// </summary>
+    internal static bool TryConstruct(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
+        out MonoBehaviour? component)
+    {
+        component = null;
+        try
+        {
+            component = Activator.CreateInstance(type) as MonoBehaviour;
+            return component is not null;
+        }
+        catch (Exception e)
+        {
+            Exception cause = e is TargetInvocationException { InnerException: not null } wrapped
+                ? wrapped.InnerException!
+                : e;
 
-        newComponent.AttachToGameObject(this);
-        _components.Add(newComponent);
-        _componentCache.Add(type, newComponent);
+            Debug.LogError($"'{type.Name}' threw while being constructed, so it was not added. " +
+                           $"A field initializer runs in the constructor, before the component is " +
+                           $"attached and before any Start or OnEnable. {cause.GetType().Name}: {cause.Message}");
+            return false;
+        }
+    }
 
-        NotifyComponentAddedToScene(newComponent);
+    /// <summary>
+    /// Whether this type is one <see cref="Activator"/> can make. Anything else is refused here, so
+    /// that a script the editor offers but cannot instantiate reports nothing rather than throwing
+    /// out of whichever menu or drop target reached it.
+    /// </summary>
+    private static bool CanConstruct(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
+        => type is not null
+        && typeof(MonoBehaviour).IsAssignableFrom(type)
+        && !type.IsAbstract
+        && !type.ContainsGenericParameters
+        && type.GetConstructor(Type.EmptyTypes) != null;
 
-        return newComponent;
+    /// <summary>Adds whatever a type's <see cref="RequireComponentAttribute"/> asks for and is missing.</summary>
+    private void AddRequirements(Type type, HashSet<Type> pending)
+    {
+        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
+        if (requireComponentAttribute == null) return;
+
+        foreach (Type requiredComponentType in requireComponentAttribute.types)
+        {
+            if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
+                continue;
+
+            // If there is already a component on the object
+            if (GetComponent(requiredComponentType).IsValid())
+                continue;
+
+            // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
+#pragma warning disable IL2072
+            AddComponent(requiredComponentType, pending);
+#pragma warning restore IL2072
+        }
     }
 
     /// <summary>
@@ -596,25 +662,10 @@ public partial class GameObject : EngineObject, ISerializable
         if (comp.GameObject.IsValid())
             comp.GameObject.DetachComponent(comp);
 
+        // Seeded with the type being attached, so a component that requires its own type is
+        // satisfied by this one rather than constructing a second alongside it.
         Type type = comp.GetType();
-        RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
-        if (requireComponentAttribute != null)
-        {
-            foreach (Type requiredComponentType in requireComponentAttribute.types)
-            {
-                if (!typeof(MonoBehaviour).IsAssignableFrom(requiredComponentType))
-                    continue;
-
-                // If there is already a component on the object
-                if (GetComponent(requiredComponentType).IsValid())
-                    continue;
-
-                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
-#pragma warning disable IL2072
-                AddComponent(requiredComponentType);
-#pragma warning restore IL2072
-            }
-        }
+        AddRequirements(type, [type]);
 
         comp.AttachToGameObject(this);
         _components.Add(comp);
@@ -697,9 +748,9 @@ public partial class GameObject : EngineObject, ISerializable
     /// <para/>
     /// A component the prefab provides is not the instance's to remove while the editor is the thing
     /// holding it: nothing records that it went, so the next time the instance is brought back into
-    /// line with its prefab it would simply reappear. Unpack the instance, or take the component off
-    /// the prefab. In play mode and in a player nothing refreshes an instance, so nothing stands in
-    /// the way there.
+    /// line with its prefab it would simply reappear. The editor's own remove offers to break the
+    /// connection first and then comes back here. In play mode and in a player nothing refreshes an
+    /// instance, so nothing stands in the way there.
     /// </summary>
     /// <param name="component">The component instance to remove.</param>
     /// <returns>
@@ -713,7 +764,7 @@ public partial class GameObject : EngineObject, ISerializable
         if (!Application.IsPlaying && IsPrefabInstance && GetComponentSourceIdentifier(component) != Guid.Empty)
         {
             Debug.LogWarning($"[Prefab] '{component.GetType().Name}' on '{Name}' comes from a prefab, " +
-                "so it cannot be removed from this instance. Unpack the instance, or remove it from the prefab.");
+                "so removing it means breaking the connection to that prefab first.");
             return false;
         }
 
@@ -1294,10 +1345,23 @@ public partial class GameObject : EngineObject, ISerializable
                 }
 
                 // Deserialize against the resolved type, not the abstract MonoBehaviour, so a name that
-                // binds to a non component type can't throw a bad cast out of the array.
-                MonoBehaviour? typedComponent = oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType)
-                    ? Serializer.Deserialize(compTag, oType, ctx) as MonoBehaviour
-                    : null;
+                // binds to a non component type can't throw a bad cast out of the array. A user
+                // constructor runs in here and can throw anything, which would otherwise drop every
+                // remaining object in the scene rather than the one component that failed.
+                MonoBehaviour? typedComponent = null;
+                if (oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType))
+                {
+                    try
+                    {
+                        typedComponent = Serializer.Deserialize(compTag, oType, ctx) as MonoBehaviour;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"'{oType.Name}' on '{Name}' threw while being loaded, so it was " +
+                                       $"kept as missing rather than dropping the rest of the scene. " +
+                                       $"{e.GetType().Name}: {e.Message}");
+                    }
+                }
 
                 if (typedComponent.IsValid())
                 {

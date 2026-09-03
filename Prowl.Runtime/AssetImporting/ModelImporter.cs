@@ -14,8 +14,15 @@ public struct ModelImporterSettings
     /// <summary>Generate normals if the mesh doesn't have them.</summary>
     public bool GenerateNormals = true;
 
-    /// <summary>Use smooth (area-weighted vertex) normals instead of flat/faceted.</summary>
+    /// <summary>Use smooth (angle-weighted vertex) normals instead of flat/faceted.</summary>
     public bool GenerateSmoothNormals = true;
+
+    /// <summary>
+    /// Edges sharper than this stay hard when generating smooth normals; the vertices along them
+    /// are split so each side keeps its own normal. Only used when <see cref="GenerateSmoothNormals"/>
+    /// is on.
+    /// </summary>
+    public float SmoothNormalsAngleDeg = 80f;
 
     /// <summary>Force recalculate normals even if the mesh already has them.</summary>
     public bool RecalculateNormals = false;
@@ -23,11 +30,65 @@ public struct ModelImporterSettings
     /// <summary>Generate tangent vectors for normal mapping.</summary>
     public bool CalculateTangentSpace = true;
 
-    /// <summary>Flip V texture coordinate (some formats use top-left origin).</summary>
-    public bool FlipUVs = true;
-
     /// <summary>Uniform scale applied to all vertex positions.</summary>
     public float UnitScale = 1.0f;
+
+    /// <summary>
+    /// Build the materials the file describes. Off makes every renderer fall back to the default
+    /// </summary>
+    public bool ImportMaterials = true;
+
+    /// <summary>Build the animation clips the file describes, and the component that plays them.</summary>
+    public bool ImportAnimations = true;
+
+    /// <summary>
+    /// Keep morph targets. Off drops them, which is worth doing for a model whose shapes the game
+    /// never drives: the deltas are a full extra copy of the vertex data per shape.
+    /// </summary>
+    public bool ImportBlendShapes = true;
+
+    /// <summary>
+    /// Merge sibling meshes that share a material into one. Reduces draw calls for models authored
+    /// as many small parts, at the cost of the parts no longer being separately addressable.
+    /// </summary>
+    public bool OptimizeMeshes = false;
+
+    /// <summary>
+    /// Collapse pass-through nodes, folding their transforms into their children. Sockets, markers,
+    /// bones, animated nodes and anything carrying metadata are kept regardless.
+    /// </summary>
+    public bool OptimizeHierarchy = false;
+
+    /// <summary>Node names <see cref="OptimizeHierarchy"/> must never collapse.</summary>
+    public string[] PreserveNodeNames = [];
+
+    /// <summary>
+    /// Fail the import when the file fails cross-reference validation, instead of warning and
+    /// importing whatever survived.
+    /// </summary>
+    public bool StrictValidation = false;
+
+    /// <summary>
+    /// Which scene to import from a file defining several, or -1 for the one the file nominates.
+    /// </summary>
+    public int SceneIndex = -1;
+
+    /// <summary>
+    /// Create a <see cref="Camera"/> for every camera the file defines. Imported cameras are added
+    /// disabled, since they describe viewpoints the author set up rather than the one the game
+    /// renders from.
+    /// </summary>
+    public bool ImportCameras = true;
+
+    /// <summary>Create a light component for every punctual light the file defines.</summary>
+    public bool ImportLights = true;
+
+    /// <summary>
+    /// Wrap mode given to every imported clip. Model formats carry no looping flag of their own, so
+    /// this is a choice the importer has to make rather than read. Loop suits the cycles most
+    /// character animation ships as; a one-shot clip (a door, a chest, an emote) wants Once.
+    /// </summary>
+    public AnimationWrapMode AnimationWrapMode = AnimationWrapMode.Loop;
 
     /// <summary>Generate a lightmap UV set (UV2) for every mesh via Prowl.Unwrapper. Off by default
     /// (it's slow and some models ship their own UV2); the built-in default models force it on.</summary>

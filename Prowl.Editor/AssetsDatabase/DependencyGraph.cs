@@ -22,7 +22,7 @@ public class DependencyGraph
         }
 
         // Set new forward links
-        var depSet = new HashSet<Guid>(dependencies);
+        var depSet = new HashSet<Guid>(dependencies ?? []);
         _forward[asset] = depSet;
 
         // Build reverse links

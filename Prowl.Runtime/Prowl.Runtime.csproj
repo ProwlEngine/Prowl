@@ -30,13 +30,13 @@
     <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
     <PackageReference Include="Jitter2" Version="2.8.5" />
 
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.13.0" />
-
+    <!-- <ProjectReference Include="..\..\Anthology\Aperture\Aperture\Aperture.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Clay\Clay\Clay.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Echo\Echo\Echo.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Paper\Paper\Paper.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Recast\Recast\Prowl.Recast.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
+    <PackageReference Include="Prowl.Aperture" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />

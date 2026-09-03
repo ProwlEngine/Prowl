@@ -52,7 +52,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
         if (font == null) return;
         Prowl.Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
         Prowl.Scribe.FontFile mono = EditorTheme.FontMono ?? font;
-        
+
         List<ProwlCall> calls = action.Calls;
         string title = string.IsNullOrEmpty(label) ? "Actions" : label;
 
@@ -97,7 +97,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
     private static void DrawCallCard(Paper paper, string id, int index, ProwlCall call,
         Prowl.Scribe.FontFile mono, Prowl.Scribe.FontFile font, Action changed, Action remove)
     {
-        
+
         // The stored Target is the exact object the call runs on (a GameObject or one of its
         // Components); the picker edits the owning GameObject, which we recover from either.
         GameObject? ownerGo = call.Target as GameObject;

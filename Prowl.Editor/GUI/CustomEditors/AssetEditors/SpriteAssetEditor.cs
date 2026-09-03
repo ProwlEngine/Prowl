@@ -92,7 +92,7 @@ public class SpriteAssetEditor : AssetImporterEditor
                 canvas.RectFilled(px, py, cw, ch, ((cx + cy) & 1) == 0 ? ca : cb);
             }
 
-        if (tex == null || tex.Width == 0 || tex.Height == 0 || sprite.Rect.Width <= 0 || sprite.Rect.Height <= 0)
+        if (tex.IsNotValid() || tex.Width == 0 || tex.Height == 0 || sprite.Rect.Width <= 0 || sprite.Rect.Height <= 0)
             return;
 
         // Fit the sprite rect's aspect inside the preview.
