@@ -19,16 +19,21 @@ public enum AudioLoadType
 /// </summary>
 public static class AudioImportKeys
 {
+    /// <summary> Key for the AudioLoadType import setting. </summary>
     public const string LoadType = "loadType";
+    /// <summary> Key for the force-mono import setting. </summary>
     public const string ForceMono = "forceMono";
+    /// <summary> Key for the sample-rate override import setting. </summary>
     public const string SampleRateOverride = "sampleRateOverride";
 }
 
+/// <summary> Imports audio files (.wav, .mp3, .ogg, .flac) into AudioClip assets. </summary>
 [ImporterFor(".wav", ".mp3", ".ogg", ".flac")]
 public class AudioImporter : AssetImporter
 {
     public override int Version => 4;
 
+    /// <summary> Returns the default import settings for audio files. </summary>
     public override EchoObject? DefaultSettings()
     {
         var settings = EchoObject.NewCompound();
@@ -38,6 +43,7 @@ public class AudioImporter : AssetImporter
         return settings;
     }
 
+    /// <summary> Imports an audio file at the given path into an AudioClip asset. </summary>
     public override bool Import(ImportContext ctx)
     {
         try

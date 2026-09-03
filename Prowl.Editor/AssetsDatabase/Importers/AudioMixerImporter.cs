@@ -15,6 +15,7 @@ public class AudioMixerImporter : AssetImporter
 {
     public override int Version => 1;
 
+    /// <summary> Imports an Echo-serialized AudioMixer and registers each of its groups as a sub-asset keyed on the group's persistent identity. </summary>
     public override bool Import(ImportContext ctx)
     {
         if (!ImportHelper.ImportEcho<AudioMixer>(ctx, "audio mixer"))

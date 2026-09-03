@@ -20,6 +20,7 @@ public class PluginImporter : AssetImporter
 
     public override bool IsEditorOnlyAsset => true;
 
+    /// <summary> Creates a PluginAsset marker for the plugin file and requests a script assembly recompile if a project is open, because a new or changed plugin can invalidate user assemblies that reference it. </summary>
     public override bool Import(ImportContext ctx)
     {
         // A new or changed plugin can invalidate user assemblies that reference it.
@@ -32,6 +33,7 @@ public class PluginImporter : AssetImporter
         return true;
     }
 
+    /// <summary> Returns the default per-plugin settings compound with editor-only, auto-referenced, platform, and CPU architecture defaults. </summary>
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();

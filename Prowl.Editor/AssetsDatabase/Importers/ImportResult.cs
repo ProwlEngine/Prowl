@@ -39,6 +39,7 @@ public readonly struct SubAssetIdentity
         return new SubAssetIdentity(key);
     }
 
+    /// <summary> Returns the explicit key if set, or "Order" for an order-based identity. </summary>
     public override string ToString() => Explicit ?? "Order";
 }
 

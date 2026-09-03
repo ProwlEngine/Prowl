@@ -11,12 +11,14 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
 
+/// <summary> Imports .gltf, .glb, .obj and .fbx model files into the editor asset database. Produces a PrefabAsset with meshes, materials, animations, textures and mesh features as sub-assets. </summary>
 [ImporterFor(".gltf", ".glb", ".obj", ".fbx")]
 public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
     // 8: normals now come from Clay, which splits vertices on hard edges.
     private const int BaseVersion = 11;
+    /// <summary> Combined version: the importer's own base version plus the aggregate version from MeshFeatureRegistry, so any change to mesh feature generation invalidates the cache. </summary>
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     /// <summary>Splits the comma-separated preserve list the inspector stores as one field.</summary>
@@ -25,6 +27,7 @@ public class EditorModelImporter : AssetImporter
             ? []
             : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    /// <summary> Imports the model file at ctx.AbsolutePath, registers meshes, materials, animations and generated mesh features as sub-assets, and sets the main asset to a PrefabAsset containing the serialized GameObject hierarchy. </summary>
     public override bool Import(ImportContext ctx)
     {
         try
@@ -143,6 +146,7 @@ public class EditorModelImporter : AssetImporter
         }
     }
 
+    /// <summary> Returns the default import settings as an EchoObject compound, including normals, tangents, UVs, animation wrap mode, camera/light import toggles and mesh feature defaults. </summary>
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();

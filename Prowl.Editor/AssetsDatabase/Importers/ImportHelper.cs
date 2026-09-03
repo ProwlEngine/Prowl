@@ -7,6 +7,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.Importers;
 
+/// <summary> Provides common import operations for Echo-serialized assets, including deserialization with dependency tracking, dependency collection, and prefab link flattening. </summary>
 public static class ImportHelper
 {
     /// <summary>
@@ -21,18 +22,11 @@ public static class ImportHelper
         return ctx;
     }
 
-    /// <summary>
-    /// Full boilerplate for importers that simply deserialize a single Echo-serialized asset.
-    /// Reads the file, deserializes as T with dependency tracking, sets it as the main asset,
-    /// and forwards all discovered dependencies to ctx. Returns false and logs on any error.
-    /// </summary>
-    /// <summary>
-    /// Import an Echo file whose concrete type is written in the file itself, for assets the editor
-    /// has no specific importer for. Same as <see cref="ImportEcho{T}"/> without naming the type up front.
-    /// </summary>
+    /// <summary> Import an Echo file whose concrete type is written in the file itself, for assets the editor has no specific importer for. Same as ImportEcho&lt;T&gt; without naming the type up front. </summary>
     public static bool ImportEchoObject(ImportContext ctx, string errorLabel)
         => ImportEcho<EngineObject>(ctx, errorLabel);
 
+    /// <summary> Reads an Echo-serialized file, deserializes it as T with dependency tracking, sets the result as the main asset on ctx, and forwards all discovered dependencies. Returns false and logs on any error. </summary>
     public static bool ImportEcho<T>(ImportContext ctx, string errorLabel) where T : EngineObject
     {
         try
