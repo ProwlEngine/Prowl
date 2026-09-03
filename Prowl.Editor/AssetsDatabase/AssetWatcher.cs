@@ -5,12 +5,17 @@ using System.Linq;
 
 namespace Prowl.Editor;
 
+/// <summary> Types of file system changes that the asset watcher can detect. </summary>
 public enum FileEventType { Created, Modified, Deleted, Renamed }
 
+/// <summary> Represents a single file system change detected by the asset watcher. </summary>
 public struct FileEvent
 {
+    /// <summary> The kind of file system change. </summary>
     public FileEventType Type;
+    /// <summary> The full path of the affected file. </summary>
     public string Path;
+    /// <summary> The previous path of the file, only set when Type is Renamed. </summary>
     public string? OldPath; // For renames
 }
 
@@ -26,6 +31,7 @@ public class AssetWatcher : IDisposable
     private DateTime _lastEventTime = DateTime.MinValue;
     private const double DebounceMs = 300;
 
+    /// <summary> Creates a FileSystemWatcher on the given directory and begins monitoring for file changes. </summary>
     public void Start(string assetsPath)
     {
         if (!Directory.Exists(assetsPath)) return;
@@ -55,6 +61,7 @@ public class AssetWatcher : IDisposable
         _watcher.EnableRaisingEvents = true;
     }
 
+    /// <summary> Stops monitoring and disposes the underlying FileSystemWatcher. </summary>
     public void Stop()
     {
         if (_watcher != null)
@@ -153,6 +160,7 @@ public class AssetWatcher : IDisposable
         }
     }
 
+    /// <summary> Stops the watcher and releases all resources. </summary>
     public void Dispose()
     {
         Stop();

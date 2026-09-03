@@ -52,8 +52,11 @@ public class EditorAssetBackend : AssetBackendBase
     private bool _folderIndexDirty = true;
 
     // Events
+    /// <summary> Raised after one or more assets have been imported. The string array contains the relative paths of the imported assets. </summary>
     public event Action<string[]>? OnAssetsImported;
+    /// <summary> Raised after one or more assets have been deleted. The string array contains the relative paths of the deleted assets. </summary>
     public event Action<string[]>? OnAssetsDeleted;
+    /// <summary> Raised after an asset is moved or renamed. Provides the old and new relative paths. </summary>
     public event Action<string, string>? OnAssetMoved;
 
     public EditorAssetBackend(Project project)
@@ -65,6 +68,7 @@ public class EditorAssetBackend : AssetBackendBase
     //  Initialization
     // ================================================================
 
+    /// <summary> Initialize the asset database: set up the instance, register event hooks, load the metadata cache, scan and import assets, start file watchers, and build the shader menu catalog. Idempotent. </summary>
     public void Initialize()
     {
         _mainThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -236,6 +240,7 @@ public class EditorAssetBackend : AssetBackendBase
     //  Asset Loading
     // ================================================================
 
+    /// <summary> Load an asset from its cache file, reimporting if the source or importer has changed. Sub-assets are loaded through their parent. Returns null when the asset is not available. </summary>
     protected override EngineObject? LoadFresh(Guid assetId)
     {
         // Importing writes files / creates GPU resources and mutates the index, so it must run
@@ -940,15 +945,19 @@ public class EditorAssetBackend : AssetBackendBase
     //  Query API
     // ================================================================
 
+    /// <summary> Get the asset entry for a GUID, or null if not tracked. </summary>
     public AssetEntry? GetEntry(Guid guid)
         => _guidToEntry.GetValueOrDefault(guid);
 
+    /// <summary> Get the asset entry for a relative path, or null if not tracked. </summary>
     public AssetEntry? GetEntry(string relativePath)
         => _pathToGuid.TryGetValue(relativePath, out var guid) ? _guidToEntry.GetValueOrDefault(guid) : null;
 
+    /// <summary> Resolve a relative path to its asset GUID. Returns Guid.Empty when the path is not tracked. </summary>
     public Guid PathToGuid(string relativePath)
         => _pathToGuid.GetValueOrDefault(relativePath);
 
+    /// <summary> Resolve a GUID to its relative asset path, or null if not tracked. </summary>
     public string? GuidToPath(Guid guid)
         => _guidToEntry.TryGetValue(guid, out var entry) ? entry.Path : null;
 
@@ -979,8 +988,10 @@ public class EditorAssetBackend : AssetBackendBase
         return false;
     }
 
+    /// <summary> Enumerate every tracked asset entry. </summary>
     public IEnumerable<AssetEntry> GetAllEntries() => _guidToEntry.Values;
 
+    /// <summary> Find all main asset entries whose type is assignable to T. </summary>
     public IEnumerable<AssetEntry> FindAssetsOfType<T>() where T : EngineObject
         => FindAssetsOfType(typeof(T));
 
@@ -1026,6 +1037,7 @@ public class EditorAssetBackend : AssetBackendBase
     public SubAssetEntry[] GetSubAssets(Guid parentGuid)
         => _guidToEntry.TryGetValue(parentGuid, out var entry) ? entry.SubAssets : Array.Empty<SubAssetEntry>();
 
+    /// <summary> Get the relative path of every tracked asset. </summary>
     public string[] GetAllAssetPaths()
         => _pathToGuid.Keys.ToArray();
 
@@ -1310,7 +1322,9 @@ public class EditorAssetBackend : AssetBackendBase
         _folderIndex[relativePath] = contents;
     }
 
+    /// <summary> Directed dependency graph tracking which assets reference which other assets. </summary>
     public DependencyGraph Dependencies => _dependencies;
+    /// <summary> Absolute path to the folder where thumbnail cache files are stored. </summary>
     public string ThumbnailsPath => _project.ThumbnailsPath;
 
     /// <summary>Load a cached thumbnail for an asset. Returns (width, height, pixels) or null.</summary>
@@ -1752,6 +1766,7 @@ public class EditorAssetBackend : AssetBackendBase
         AssetDatabase.Forget(guid);
     }
 
+    /// <summary> Reimport an asset by GUID: dispose cached instances, clear thumbnails, run the importer, and regenerate thumbnails. </summary>
     public void Reimport(Guid guid)
     {
         if (_guidToEntry.TryGetValue(guid, out var entry))
@@ -2173,6 +2188,7 @@ public class EditorAssetBackend : AssetBackendBase
     public string ToRelativePath(string absolutePath)
         => NormalizePath(Path.GetRelativePath(_project.AssetsPath, absolutePath));
 
+    /// <summary> Dispose the asset watcher, clear thumbnail textures, and unregister this instance from the global AssetDatabase.Current. </summary>
     public void Dispose()
     {
         _watcher?.Dispose();

@@ -14,6 +14,7 @@ public static class MetadataCache
 {
     private const int CurrentVersion = 2; // Bump when format changes
 
+    /// <summary> Loads the metadata cache from disk. Returns an empty dictionary if the file does not exist, the version is incompatible, or deserialization fails. </summary>
     public static Dictionary<Guid, AssetEntry> Load(string metadataDbPath)
     {
         var result = new Dictionary<Guid, AssetEntry>();
@@ -53,6 +54,7 @@ public static class MetadataCache
         return result;
     }
 
+    /// <summary> Serializes the given entries and writes them to the metadata database file, including a version tag and a scan timestamp. Creates the directory if it does not exist. </summary>
     public static void Save(string metadataDbPath, IEnumerable<AssetEntry> entries)
     {
         try

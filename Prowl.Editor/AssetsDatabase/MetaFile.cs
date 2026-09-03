@@ -10,9 +10,13 @@ namespace Prowl.Editor;
 /// </summary>
 public class MetaFileData
 {
+    /// <summary> The stable GUID that identifies the asset across reimports. </summary>
     public Guid Guid;
+    /// <summary> The name of the importer type used for this asset. </summary>
     public string ImporterType = "";
+    /// <summary> The version number of the importer that last imported this asset. </summary>
     public int ImporterVersion;
+    /// <summary> The importer settings stored for this asset, or null if none. </summary>
     public EchoObject? Settings;
 }
 
@@ -26,6 +30,7 @@ public static class MetaFile
 
     public static bool Exists(string assetPath) => File.Exists(GetMetaPath(assetPath));
 
+    /// <summary> Reads a .meta file from disk and parses it into a MetaFileData. </summary>
     public static MetaFileData Read(string metaFilePath) => Parse(File.ReadAllText(metaFilePath));
 
     private static MetaFileData Parse(string text)
@@ -49,6 +54,7 @@ public static class MetaFile
         return data;
     }
 
+    /// <summary> Writes a MetaFileData to a .meta file using an atomic temp-file rename to prevent truncation on crash. </summary>
     public static void Write(string metaFilePath, MetaFileData data)
     {
         var echo = EchoObject.NewCompound();
@@ -67,6 +73,7 @@ public static class MetaFile
         File.Move(tempPath, metaFilePath, overwrite: true);
     }
 
+    /// <summary> Creates a new MetaFileData with a fresh GUID and the given importer type, version, and optional default settings. </summary>
     public static MetaFileData CreateNew(string importerTypeName, int importerVersion = 1, EchoObject? defaultSettings = null)
     {
         return new MetaFileData
