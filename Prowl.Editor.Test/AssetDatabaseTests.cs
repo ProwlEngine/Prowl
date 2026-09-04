@@ -784,5 +784,36 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Null(Assets.Get(g));
     }
 
+    /// <summary>
+    /// A .navmesh is written and read as binary Echo. Its payload is compressed voxelization
+    /// blobs, which as text become base64 — bigger, slower to parse, and no more readable. A
+    /// text one does not parse as binary, so it fails the import outright rather than loading
+    /// as something wrong; rebaking is the migration.
+    /// </summary>
+    [Fact]
+    public void NavMesh_RoundTripsAsBinary_AndRejectsText()
+    {
+        NavMeshData? baked = NavMeshBuilder.Build(new NavMeshBuildSettings(), [FlatQuad(20f)]);
+        Assert.NotNull(baked);
+        EchoObject echo = Serializer.Serialize(typeof(object), baked!);
+
+        echo.WriteToBinary(new FileInfo(AssetAbsolutePath("Baked.navmesh")));
+        Guid guid = Assets.ImportFile("Baked.navmesh");
+        Assert.NotEqual(Guid.Empty, guid);
+
+        var loaded = Assets.Get(guid) as NavMeshData;
+        Assert.NotNull(loaded);
+        Assert.Equal(baked!.CacheLayers.Count, loaded!.CacheLayers.Count);
+
+        File.WriteAllText(AssetAbsolutePath("Legacy.navmesh"), echo.WriteToString());
+        Assert.Null(Assets.Get(Assets.ImportFile("Legacy.navmesh")));
+    }
+
+    private static NavMeshGeometrySource FlatQuad(float size)
+    {
+        Prowl.Vector.Float3[] verts = [new(0, 0, 0), new(0, 0, size), new(size, 0, size), new(size, 0, 0)];
+        return new NavMeshGeometrySource(verts, [0, 1, 2, 0, 2, 3], Prowl.Vector.Float4x4.Identity);
+    }
+
     #endregion
 }

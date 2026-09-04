@@ -34,11 +34,21 @@ public static class ImportHelper
         => ImportEcho<EngineObject>(ctx, errorLabel);
 
     public static bool ImportEcho<T>(ImportContext ctx, string errorLabel) where T : EngineObject
+        => ImportEcho<T>(ctx, errorLabel, static path => EchoObject.ReadFromString(File.ReadAllText(path)));
+
+    /// <summary>
+    /// As <see cref="ImportEcho{T}(ImportContext, string)"/>, for assets written with Echo's
+    /// binary format — the one to use when the payload is bulk bytes rather than something a
+    /// human reads or diffs.
+    /// </summary>
+    public static bool ImportEchoBinary<T>(ImportContext ctx, string errorLabel) where T : EngineObject
+        => ImportEcho<T>(ctx, errorLabel, static path => EchoObject.ReadFromBinary(new FileInfo(path)));
+
+    private static bool ImportEcho<T>(ImportContext ctx, string errorLabel, Func<string, EchoObject> read) where T : EngineObject
     {
         try
         {
-            string text = File.ReadAllText(ctx.AbsolutePath);
-            var echo = EchoObject.ReadFromString(text);
+            var echo = read(ctx.AbsolutePath);
             var serCtx = CreateTrackingContext(out var dependencies);
             var asset = Serializer.Deserialize<T>(echo, serCtx);
             if (asset != null)

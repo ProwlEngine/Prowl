@@ -16,6 +16,25 @@ public class ProjectSettingsTests : EditorTestHarness
         EditorRegistries.OnProjectOpened();
     }
 
+    // ResetToDefaults is not a button — it runs when a project is opened, before that project's
+    // own settings load. Deriving the "defaults" from the live NavMeshAreas table would therefore
+    // carry the PREVIOUS project's area names and costs into the new one.
+    [Fact]
+    public void NavigationSettings_ResetToDefaults_IgnoresTheLiveAreaTable()
+    {
+        const int Custom = 3; // built-in areas are immutable, so only custom ones can drift
+        Prowl.Runtime.NavMeshAreas.SetAreaName(Custom, "Swamp");
+        Prowl.Runtime.NavMeshAreas.SetAreaCost(Custom, 5f);
+
+        var settings = EditorRegistries.GetSettings<NavigationSettings>();
+        settings.ResetToDefaults();
+
+        Assert.Equal(string.Empty, settings.AreaNames[Custom]);
+        Assert.Equal(1f, settings.AreaCosts[Custom]);
+        Assert.Equal("Walkable", settings.AreaNames[Prowl.Runtime.NavMeshAreas.Walkable]);
+        Assert.Equal("Jump", settings.AreaNames[Prowl.Runtime.NavMeshAreas.Jump]);
+    }
+
     // Settings persist as Echo YAML: a saved value must survive a save/load round-trip.
     [Fact]
     public void SettingsSaveLoad_RoundTripsYaml()

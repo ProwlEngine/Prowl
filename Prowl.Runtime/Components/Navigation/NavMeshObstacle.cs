@@ -1,0 +1,477 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour.TileCache;
+
+using Prowl.Vector;
+
+namespace Prowl.Runtime;
+
+/// <summary>Shape of a <see cref="NavMeshObstacle"/>.</summary>
+public enum NavMeshObstacleShape
+{
+    /// <summary>Upright cylinder of the given radius and height.</summary>
+    Cylinder,
+    /// <summary>Oriented box (yaw only — Detour box obstacles rotate around Y).</summary>
+    Box,
+}
+
+/// <summary>
+/// Blocks agents while enabled — a parked vehicle, a dropped crate, a placed building. Mirrors
+/// Unity's NavMeshObstacle, including both of its modes:
+/// <para/>
+/// <see cref="Carve"/> on cuts a hole in the navmesh, so pathfinding routes around it. Affected
+/// tiles rebuild incrementally over the following frames; with <see cref="CarveOnlyStationary"/>
+/// the hole lifts while moving and re-applies once still for <see cref="CarvingTimeToStationary"/>.
+/// <para/>
+/// <see cref="Carve"/> off is Unity's velocity-obstacle mode: the mesh stays untouched and the
+/// obstacle joins each crowd as an immovable neighbour instead, so agents steer around it
+/// locally. Costs nothing per move — the right mode for something that moves often — but paths
+/// are computed as if it weren't there, so an agent with no other route presses against it.
+/// <para/>
+/// Either way the object's own geometry stays out of bakes: it's a runtime thing, and
+/// voxelizing it would freeze a hole where it happened to be standing.
+/// </summary>
+[AddComponentMenu("Navigation/NavMesh Obstacle")]
+[ComponentIcon("")] // road barrier
+// Carving runs in the editor as well as in play, so placing a building shows the hole it will
+// cut without entering play mode. Only the live navmesh is affected — the baked asset never
+// stores carves — and the velocity-obstacle path stays play-only, since it is crowd steering.
+[ExecuteAlways]
+public class NavMeshObstacle : MonoBehaviour
+{
+    [Tooltip("Obstacle shape. Both stand upright: a cylinder has no tilt, and a box is oriented by yaw only.")]
+    public NavMeshObstacleShape Shape = NavMeshObstacleShape.Box;
+
+    [Tooltip("Obstacle center, local to this GameObject.")]
+    public Float3 Center;
+
+    [Tooltip("Box size, local (scaled by the Transform).")]
+    [ShowIf(nameof(IsBox))]
+    public Float3 Size = new(1, 1, 1);
+
+    [Tooltip("Cylinder radius (scaled by the largest horizontal Transform scale).")]
+    [ShowIf(nameof(IsCylinder))]
+    public float Radius = 0.5f;
+
+    [Tooltip("Cylinder height (scaled by the vertical Transform scale).")]
+    [ShowIf(nameof(IsCylinder))]
+    public float Height = 2f;
+
+    [Tooltip("On: cut a hole in the navmesh so paths route around this. Off: leave the mesh alone and make agents steer around it locally instead — cheaper, and the right choice for something that moves, but paths still lead through it.")]
+    public bool Carve = true;
+
+    [Tooltip("Only carve while stationary: the carve lifts while the obstacle moves and re-applies once it has settled. Off re-carves on every move beyond the threshold — much more expensive for frequently-moving obstacles.")]
+    public bool CarveOnlyStationary = true;
+
+    [Tooltip("Movement beyond this distance (world units) counts as moving.")]
+    public float CarvingMoveThreshold = 0.1f;
+
+    [Tooltip("Seconds the obstacle must be still before it carves again (with Carve Only Stationary).")]
+    public float CarvingTimeToStationary = 0.5f;
+
+    private bool IsBox => Shape == NavMeshObstacleShape.Box;
+    private bool IsCylinder => Shape == NavMeshObstacleShape.Cylinder;
+
+    private NavMeshWorld? _world;
+    // Obstacle handle per navmesh instance the carve is registered with. Instances are
+    // per-agent-type; the obstacle applies to every one of them (Unity has no agent filter on
+    // obstacles).
+    private readonly Dictionary<NavMeshInstance, long> _refs = [];
+    private Float3 _appliedPosition;
+    private float _stillTime;
+    private bool _carveApplied;
+
+    // Velocity-obstacle mode: one immovable agent per live crowd, re-pinned every frame.
+    private readonly Dictionary<Prowl.Recast.Detour.Crowd.DtCrowd, Prowl.Recast.Detour.Crowd.DtCrowdAgent> _blockers = [];
+    private int _blockerCrowdCount = -1;
+    private float _blockerRadius, _blockerHeight;
+    private bool _warnedBlockerUnplaced;
+
+    // Geometry the live carve was registered with, re-checked each LateUpdate so writing the
+    // public fields after AddComponent (spawn-then-configure) re-carves — the same drift-check
+    // pattern as NavMeshAgent's AgentTypeId/AreaMask. Rotation compares quaternions by dot
+    // product: no per-frame Euler conversion, no wrap false-positives at ±180°.
+    private NavMeshObstacleShape _appliedShape;
+    private Float3 _appliedSize;
+    private float _appliedRadius, _appliedHeight;
+    private Quaternion _appliedRotation = Quaternion.Identity;
+
+    private void CaptureAppliedGeometry()
+    {
+        _appliedShape = Shape;
+        _appliedSize = Size;
+        _appliedRadius = Radius;
+        _appliedHeight = Height;
+        _appliedRotation = Transform.Rotation;
+    }
+
+    private bool GeometryChanged()
+        => Shape != _appliedShape
+            || !Size.Equals(_appliedSize)
+            || Radius != _appliedRadius
+            || Height != _appliedHeight
+            || (Shape == NavMeshObstacleShape.Box
+                && Math.Abs(Quaternion.Dot(Transform.Rotation, _appliedRotation)) < 0.9999);
+
+    public override void OnEnable()
+    {
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsValid())
+        {
+            _world = scene!.Navigation;
+            _world.NavMeshChanged += OnNavMeshChanged;
+        }
+
+        _appliedPosition = Transform.Position;
+        _stillTime = CarvingTimeToStationary; // spawning still: carve immediately
+        TryApplyCarve();
+    }
+
+    public override void OnDisable()
+    {
+        RemoveCarve();
+        RemoveBlockers();
+        if (_world != null)
+        {
+            _world.NavMeshChanged -= OnNavMeshChanged;
+            _world = null;
+        }
+    }
+
+    private void OnNavMeshChanged()
+    {
+        // An instance may have been replaced (rebake) or registered late; dead entries are
+        // dropped and the carve re-applies to any new instance on the next LateUpdate. Gated on
+        // the structural counter because the event also fires every frame a carve is converging
+        // — including this obstacle's own — which would make each carve pay for itself repeatedly.
+        if (_world == null || _world.StructureGeneration == _seenStructureGeneration) return;
+        _seenStructureGeneration = _world.StructureGeneration;
+        _refsPruneNeeded = true;
+    }
+
+    private bool _refsPruneNeeded;
+    private int _seenStructureGeneration = -1;
+
+    public override void LateUpdate()
+    {
+        if (!Carve)
+        {
+            // Switching modes at runtime must not leave the other mode's effect behind.
+            if (_carveApplied) RemoveCarve();
+            // Velocity mode is crowd steering, and crowds only step during play — outside it a
+            // blocker would sit in a crowd nothing is running.
+            if (Application.IsPlaying) UpdateBlockers();
+            else if (_blockers.Count > 0) RemoveBlockers();
+            return;
+        }
+        // The other half of that: a blocker left over from velocity mode would sit inside the
+        // hole this obstacle carves, avoided by agents already routing around it.
+        if (_blockers.Count > 0) RemoveBlockers();
+
+        // Geometry drift MUST be evaluated before the new-instance pickup below: TryApplyCarve
+        // captures the applied-geometry snapshot, so running the pickup first (its flag is set
+        // by any NavMeshChanged — including the cache pump's own convergence events) would
+        // record the new field values without re-carving and swallow the drift for good.
+        if (_carveApplied && GeometryChanged())
+        {
+            RemoveCarve();
+            TryApplyCarve();
+        }
+
+        if (_refsPruneNeeded)
+        {
+            _refsPruneNeeded = false;
+            PruneDeadInstances();
+            if (_carveApplied) TryApplyCarve(); // pick up newly registered navmeshes
+        }
+
+        double moved = Float3.Distance(Transform.Position, _appliedPosition);
+        if (CarveOnlyStationary)
+        {
+            if (moved > CarvingMoveThreshold)
+            {
+                // Moving: lift the carve and restart the settle timer.
+                RemoveCarve();
+                _appliedPosition = Transform.Position;
+                _stillTime = 0f;
+            }
+            else if (!_carveApplied)
+            {
+                _stillTime += (float)Time.DeltaTime;
+                if (_stillTime >= CarvingTimeToStationary)
+                    TryApplyCarve();
+            }
+        }
+        else if (moved > CarvingMoveThreshold)
+        {
+            // Follow mode: re-carve at the new position. Every move pays incremental tile
+            // rebuilds, hence the tooltip's warning.
+            RemoveCarve();
+            _appliedPosition = Transform.Position;
+            TryApplyCarve();
+        }
+    }
+
+    /// <summary>
+    /// Velocity-obstacle mode: keep one immovable agent per live crowd sitting on this
+    /// obstacle, so every other agent's local avoidance treats it as a neighbour to steer
+    /// around. Crowds appear lazily (when the first agent of a type registers), so membership
+    /// is re-derived whenever the world's crowd count changes rather than only at enable.
+    /// </summary>
+    private void UpdateBlockers()
+    {
+        if (_world == null) return;
+
+        // LossyScale walks the parent chain, so the shape is measured once per frame and passed
+        // down rather than re-derived by each helper.
+        Float3 scale = Transform.LossyScale;
+        float radius = BlockerRadius(scale);
+        float height = BlockerHeight(scale);
+        bool resized = Math.Abs(radius - _blockerRadius) > 1e-4f || Math.Abs(height - _blockerHeight) > 1e-4f;
+        if (_blockerCrowdCount != _world.CrowdCount || resized || _refsPruneNeeded)
+        {
+            _refsPruneNeeded = false;
+            _blockerRadius = radius;
+            _blockerHeight = height;
+            RefreshBlockers(radius, height);
+        }
+
+        // Write the position straight onto the crowd agent every frame: a crowd agent is
+        // normally moved by its own steering, which a blocker has none of, so this is what makes
+        // it follow the Transform. It also absorbs the crowd's collision-resolution displacement
+        // (measured under a centimetre even under pressure, but costs nothing to be exact).
+        Float3 position = BlockerPosition(height);
+        var pinned = new RcVec3f((float)position.X, (float)position.Y, (float)position.Z);
+        foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker in _blockers.Values)
+            blocker.npos = pinned;
+    }
+
+    /// <summary>Join every live crowd not already blocked, and drop memberships whose crowd
+    /// died with its navmesh.</summary>
+    private void RefreshBlockers(float radius, float height)
+    {
+        if (_world == null) return;
+
+        Float3 position = BlockerPosition(height);
+        var rcPosition = new RcVec3f((float)position.X, (float)position.Y, (float)position.Z);
+        foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
+        {
+            Prowl.Recast.Detour.Crowd.DtCrowd? crowd = _world.GetNativeCrowd(type.Id);
+            if (crowd == null) continue;
+            if (_blockers.TryGetValue(crowd, out Prowl.Recast.Detour.Crowd.DtCrowdAgent? existing))
+            {
+                crowd.UpdateAgentParameters(existing, BlockerParams(radius, height));
+                continue;
+            }
+
+            Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker = crowd.AddAgent(rcPosition, BlockerParams(radius, height));
+            _blockers[crowd] = blocker;
+            WarnIfUnplaced(blocker);
+        }
+
+        // A crowd the world no longer owns died with its navmesh; its agents went with it.
+        List<Prowl.Recast.Detour.Crowd.DtCrowd>? dead = null;
+        foreach (Prowl.Recast.Detour.Crowd.DtCrowd crowd in _blockers.Keys)
+        {
+            bool live = false;
+            foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
+                if (ReferenceEquals(_world.GetNativeCrowd(type.Id), crowd)) { live = true; break; }
+            if (!live) (dead ??= []).Add(crowd);
+        }
+        if (dead != null)
+            foreach (Prowl.Recast.Detour.Crowd.DtCrowd crowd in dead)
+                _blockers.Remove(crowd);
+
+        _blockerCrowdCount = _world.CrowdCount;
+    }
+
+    private void RemoveBlockers()
+    {
+        foreach ((Prowl.Recast.Detour.Crowd.DtCrowd crowd, Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker) in _blockers)
+            crowd.RemoveAgent(blocker);
+        _blockers.Clear();
+        _blockerCrowdCount = -1;
+    }
+
+    /// <summary>
+    /// A blocker that failed to place is an invisible failure: the component looks configured
+    /// and nothing avoids it. The crowd's placement probe searches only a few units vertically
+    /// (sized from <see cref="NavMeshWorld.CrowdMaxAgentRadius"/>), so an obstacle floating well
+    /// above the walkable surface — a tall Center offset, spawned mid-air — lands invalid.
+    /// </summary>
+    private void WarnIfUnplaced(Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker)
+    {
+        if (blocker.state != Prowl.Recast.Detour.Crowd.DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID) return;
+        if (_warnedBlockerUnplaced) return;
+        _warnedBlockerUnplaced = true;
+        Debug.LogWarning($"[Navigation] NavMeshObstacle '{GameObject.Name}' could not place its avoidance blocker: no navmesh near its base. Agents will not steer around it. Move the obstacle onto the navmesh (check Center and the object's height), or raise NavMeshWorld.CrowdMaxAgentRadius to widen the placement search.");
+    }
+
+    /// <summary>Where the blocker stands: the obstacle's footprint centre at its base, matching
+    /// how agents sit on the mesh at their feet.</summary>
+    private Float3 BlockerPosition(float height)
+    {
+        Float3 center = Transform.TransformPoint(Center);
+        return new Float3(center.X, center.Y - height * 0.5f, center.Z);
+    }
+
+    // The shape an obstacle occupies once the Transform's scale is applied. The carve, the
+    // avoidance blocker and the gizmo all describe the same volume and have to agree on it, so
+    // each shape's dimensions are worked out in exactly one place.
+
+    /// <summary>Radius by the larger horizontal scale, height by the vertical one.</summary>
+    private (float Radius, float Height) ScaledCylinder(Float3 scale) => (
+        Radius * MathF.Max(0.01f, MathF.Max(Math.Abs(scale.X), Math.Abs(scale.Z))),
+        Height * MathF.Max(0.01f, Math.Abs(scale.Y)));
+
+    /// <summary>Per-axis, and without the carve's horizontal clearance — that is a navmesh
+    /// concern (an agent's centre must clear the box, not just its body) rather than part of
+    /// the shape the user authored.</summary>
+    private Float3 ScaledBoxHalfExtents(Float3 scale) => new(
+        Size.X * 0.5f * Math.Abs(scale.X),
+        Size.Y * 0.5f * Math.Abs(scale.Y),
+        Size.Z * 0.5f * Math.Abs(scale.Z));
+
+    /// <summary>Avoidance is circle-based, so a box is approximated by the circle enclosing its
+    /// footprint — agents give a rotated crate a slightly wider berth than its corners need.</summary>
+    private float BlockerRadius(Float3 scale)
+    {
+        if (Shape == NavMeshObstacleShape.Cylinder)
+            return MathF.Max(0.01f, ScaledCylinder(scale).Radius);
+
+        Float3 half = ScaledBoxHalfExtents(scale);
+        return MathF.Max(0.01f, MathF.Sqrt(half.X * half.X + half.Z * half.Z));
+    }
+
+    private float BlockerHeight(Float3 scale)
+        => MathF.Max(0.01f, Shape == NavMeshObstacleShape.Cylinder
+            ? ScaledCylinder(scale).Height
+            : ScaledBoxHalfExtents(scale).Y * 2f);
+
+    private Prowl.Recast.Detour.Crowd.DtCrowdAgentParams BlockerParams(float radius, float height) => new()
+    {
+        radius = radius,
+        height = height,
+        // Immovable: no steering of its own, and no update flags, so the crowd never tries to
+        // path, avoid or separate on its behalf. It exists purely to be avoided — which is also
+        // why its own neighbour query is kept to its radius rather than the multiple a steering
+        // agent needs: the crowd still runs that query every frame, and nothing consumes it.
+        maxAcceleration = 0f,
+        maxSpeed = 0f,
+        collisionQueryRange = radius,
+        pathOptimizationRange = 0f,
+        updateFlags = 0,
+        obstacleAvoidanceType = 0,
+        separationWeight = 0f,
+        queryFilterType = 0,
+        userData = this,
+    };
+
+    /// <summary>Queue the carve on every registered navmesh not already carrying it. Queued onto
+    /// the cache directly rather than through <see cref="NavMeshWorld.MutateTileCache"/>, because
+    /// nothing here touches the mesh but the request queue: the tiles rebuild in the pump, which
+    /// is where the write lock and the change notification belong.</summary>
+    private void TryApplyCarve()
+    {
+        if (_world == null || !Carve) return;
+
+        foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
+        {
+            NavMeshInstance? instance = _world.GetInstance(type.Id);
+            if (instance == null || _refs.ContainsKey(instance)) continue;
+            long obstacleRef = AddToCache(instance.TileCache, instance.NavMeshData.Settings.AgentRadius);
+            if (obstacleRef == 0) continue;
+            _refs[instance] = obstacleRef;
+            instance.MarkCachePending();
+        }
+        _carveApplied = true;
+        CaptureAppliedGeometry();
+    }
+
+    // No try/catch: verified against Prowl.Recast — AllocObstacle grows its pool and
+    // the request queue is an unbounded list, so Add*Obstacle never throws and never returns
+    // 0 for capacity (maxObstacles only sizes the initial id encoding).
+    /// <param name="agentRadius">Envelope of the navmesh being carved. The hole is widened by it
+    /// because a navmesh stores where an agent's CENTRE may be, not where its body fits: a bake
+    /// pulls the mesh this far back from every wall, and a carve that did not would let agents
+    /// walk their centre onto the obstacle's surface and stand half inside it.</param>
+    private long AddToCache(DtTileCache cache, float agentRadius)
+    {
+        Float3 scale = Transform.LossyScale;
+        Float3 worldCenter = Transform.TransformPoint(Center);
+        float clearance = Math.Max(0f, agentRadius);
+
+        if (Shape == NavMeshObstacleShape.Cylinder)
+        {
+            (float radius, float height) = ScaledCylinder(scale);
+            // Cylinder obstacles anchor at the base center.
+            var basePos = new RcVec3f((float)worldCenter.X, (float)(worldCenter.Y - height * 0.5f), (float)worldCenter.Z);
+            return cache.AddObstacle(basePos, radius + clearance, height);
+        }
+
+        // Clearance horizontally only: erosion is a footprint concern, and growing the box
+        // vertically would start carving under things the obstacle passes beneath.
+        Float3 half = ScaledBoxHalfExtents(scale);
+        var halfExtents = new RcVec3f(half.X + clearance, half.Y, half.Z + clearance);
+        float yawRadians = (float)(Transform.Rotation.EulerAngles.Y * Maths.Deg2Rad);
+        return cache.AddBoxObstacle(new RcVec3f((float)worldCenter.X, (float)worldCenter.Y, (float)worldCenter.Z), halfExtents, yawRadians);
+    }
+
+    /// <summary>Queue removal of the carve everywhere it is registered.</summary>
+    private void RemoveCarve()
+    {
+        foreach ((NavMeshInstance instance, long obstacleRef) in _refs)
+        {
+            instance.TileCache.RemoveObstacle(obstacleRef);
+            instance.MarkCachePending();
+        }
+        _refs.Clear();
+        _carveApplied = false;
+    }
+
+    /// <summary>Drop handles whose instance is no longer registered — the cache (and its
+    /// obstacle state) died with it, so there is nothing to remove.</summary>
+    private void PruneDeadInstances()
+    {
+        if (_refs.Count == 0 || _world == null) return;
+        List<NavMeshInstance>? dead = null;
+        foreach (NavMeshInstance instance in _refs.Keys)
+        {
+            if (_world.GetInstance(instance.AgentTypeId) != instance)
+                (dead ??= []).Add(instance);
+        }
+        if (dead != null)
+            foreach (NavMeshInstance instance in dead)
+                _refs.Remove(instance);
+    }
+
+    /// <summary>
+    /// The volume this obstacle actually carves, which is not the volume its Transform describes:
+    /// both shapes stand upright however the object is pitched or rolled, because Detour orients a
+    /// box obstacle by yaw alone. Drawing the full transform would promise a tilt the navmesh
+    /// never cuts.
+    /// </summary>
+    public override void DrawGizmosSelected()
+    {
+        var color = new Color(1f, 0.5f, 0.1f, 1f);
+        Float3 scale = Transform.LossyScale;
+        Float3 worldCenter = Transform.TransformPoint(Center);
+
+        if (Shape == NavMeshObstacleShape.Cylinder)
+        {
+            (float radius, float height) = ScaledCylinder(scale);
+            Debug.DrawWireCylinder(worldCenter, Quaternion.Identity, radius, height, color);
+            return;
+        }
+
+        var yaw = Quaternion.FromEuler(new Float3(0, Transform.Rotation.EulerAngles.Y, 0));
+        Debug.PushMatrix(Float4x4.CreateTRS(worldCenter, yaw, Float3.One));
+        Debug.DrawWireCube(Float3.Zero, ScaledBoxHalfExtents(scale), color);
+        Debug.PopMatrix();
+    }
+}
