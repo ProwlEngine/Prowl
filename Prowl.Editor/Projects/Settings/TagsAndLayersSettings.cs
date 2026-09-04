@@ -29,6 +29,12 @@ public class TagsAndLayersSettings : ProjectSettingsBase
         Layers = (string[])TagLayerManager.layers.Clone();
     }
 
+    private void Changed()
+    {
+        Apply();
+        EditorRegistries.SaveSettings();
+    }
+
     public override void OnGUI(Paper paper, float width)
     {
         var font = EditorTheme.DefaultFont;
@@ -37,6 +43,8 @@ public class TagsAndLayersSettings : ProjectSettingsBase
         // Tags section
         Origami.Header(paper, "tl_tags_header", $"{EditorIcons.Tags}  Tags").Underline().Show();
 
+        const float TagDelW = 20;
+
         for (int i = 0; i < Tags.Count; i++)
         {
             int idx = i;
@@ -44,40 +52,60 @@ public class TagsAndLayersSettings : ProjectSettingsBase
 
             using (paper.Row($"tl_tag_{i}").Height(24).RowBetween(4).ChildLeft(8).ChildRight(4).Enter())
             {
-                paper.Box($"tl_tag_name_{i}")
-                    .Height(22).ChildLeft(4)
-                    .Text(Tags[i], font)
-                    .TextColor(isBuiltin ? EditorTheme.Ink400 : EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSizeSmall)
-                    .Alignment(TextAlignment.MiddleLeft);
+                // Name: same control for every row; built-in tags are locked.
+                using (paper.Box($"tl_tag_name_{i}").Width(UnitValue.Stretch()).Height(22).Enter())
+                {
+                    IDisposable? dim = isBuiltin ? EnableIfAttributeHandler.PushDisabledScope() : null;
+                    try
+                    {
+                        Origami.TextField(paper, $"tl_tag_name_tf_{i}", Tags[i], v =>
+                            {
+                                if (isBuiltin || string.IsNullOrWhiteSpace(v)) return;
+                                string trimmed = v.Trim();
+                                // Duplicate names would make tag lookup ambiguous.
+                                int existing = Tags.IndexOf(trimmed);
+                                if (existing >= 0 && existing != idx) return;
+                                Tags[idx] = trimmed;
+                                Changed();
+                            }).Show();
+                    }
+                    finally { dim?.Dispose(); }
+                }
 
                 if (!isBuiltin)
                 {
                     paper.Box($"tl_tag_del_{i}")
-                        .Width(20).Height(22).Rounded(3)
+                        .Width(TagDelW).Height(22).Rounded(3)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(idx, (id, _) =>
                         {
                             Tags.RemoveAt(id);
-                            Apply();
-                            EditorRegistries.SaveSettings();
+                            Changed();
                         });
+                }
+                else
+                {
+                    paper.Box($"tl_tag_del_{i}").Width(TagDelW).Height(22); // column alignment spacer
                 }
             }
         }
 
-        // Add tag row
-        Origami.TextField(paper, "tl_new_tag", "", v =>
-            {
-                if (!string.IsNullOrWhiteSpace(v) && !Tags.Contains(v))
-                {
-                    Tags.Add(v);
-                    Apply();
-                    EditorRegistries.SaveSettings();
-                }
-            }).Placeholder("Add new tag...").Width(UnitValue.Stretch()).Show();
+        paper.Box("tl_tags_sp").Height(4);
+
+        // A text-entry "add" would fire per keystroke (typing "test" would add "t", "te",
+        // "tes" and "test"); add a placeholder row instead and rename it in the row's own
+        // name field above.
+        Origami.Button(paper, "tl_add_tag", $"{EditorIcons.Plus}  Add Tag", () =>
+        {
+            string name = "New Tag";
+            for (int n = 1; Tags.Contains(name); n++)
+                name = $"New Tag ({n})";
+
+            Tags.Add(name);
+            Changed();
+        }).Show();
 
         paper.Box("tl_spacer1").Height(16);
 
