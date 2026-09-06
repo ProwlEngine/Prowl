@@ -99,6 +99,12 @@ public class CharacterController : MonoBehaviour
     private ShapeCastHit lastGroundHit;
     private Float3 lastVelocity;
 
+    private Float3 _achievedVelocity;
+    /// <summary>
+    /// How far the controller actually travelled in the last <see cref="Move"/>, divided by the frame
+    /// time. This is what it managed after sliding and blocking, which is not what it was asked for.
+    /// </summary>
+    public Float3 Velocity => _achievedVelocity;
     // Debug visualization for failed height attempts
     private bool failedHeightAttempt = false;
     private float failedAttemptHeight;
@@ -111,6 +117,7 @@ public class CharacterController : MonoBehaviour
     /// </summary>
     public void Move(Float3 motion)
     {
+        Float3 start = GameObject.Transform.Position;
         lastVelocity = motion;
 
         // Anything the controller is already inside stops every cast below at zero distance, so it
@@ -132,6 +139,10 @@ public class CharacterController : MonoBehaviour
         }
 
         GameObject.Transform.Position = finalPosition;
+
+        _achievedVelocity = Time.DeltaTime > 0.0f
+            ? (finalPosition - start) / Time.DeltaTime
+            : Float3.Zero;
 
         // Update grounded state based on where we actually ended up this
         // frame, so callers see an up-to-date value on the next frame
