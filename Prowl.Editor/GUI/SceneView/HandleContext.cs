@@ -214,7 +214,7 @@ public sealed class HandleContext
         {
             float delta = screenDistance - _pendingDistance;
             bool wins = delta < -DepthTieBandPixels    // clearly nearer the cursor
-                            || (delta <= 0 && depth <= _pendingDepth); // overlapping: in front wins
+                            || (MathF.Abs(delta) <= DepthTieBandPixels && depth <= _pendingDepth); // overlapping: in front wins
             if (!wins) return;
         }
 
