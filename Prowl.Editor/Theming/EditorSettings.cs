@@ -45,6 +45,12 @@ public class EditorSettings
 
     public bool WindowMaximized { get; set; } = false;
 
+    /// <summary> Gets or sets whether the editor waits for the display before presenting a frame. Play mode ignores this and lets the game decide. </summary>
+    public bool VSync { get; set; } = true;
+
+    /// <summary> Gets or sets the frame rate the editor is paced to. 0 is unlimited. Play mode ignores this and lets the game decide. </summary>
+    public int TargetFrameRate { get; set; } = 0;
+
     // Shortcuts only user-overridden bindings are stored
     /// <summary> Gets or sets the dictionary of user-overridden shortcut bindings, keyed by action name. Only overridden bindings are stored. </summary>
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();

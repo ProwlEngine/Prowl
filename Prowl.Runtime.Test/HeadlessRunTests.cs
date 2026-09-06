@@ -39,7 +39,7 @@ public class HeadlessRunTests
             var scene = new Scene();
             var game = new CountingHeadlessGame(scene);
 
-            game.RunHeadless(new HeadlessRunOptions { MaxFrames = 10, TargetFps = 0 });
+            game.RunHeadless(new HeadlessRunOptions { MaxFrames = 10, TargetFrameRate = 0 });
 
             Assert.Equal(10, game.UpdateCount);
             Assert.False(Application.IsHeadless); // reset on exit
@@ -58,9 +58,26 @@ public class HeadlessRunTests
         bool sawHeadless = false;
 
         var probe = new FlagProbeGame(() => sawHeadless = Application.IsHeadless);
-        probe.RunHeadless(new HeadlessRunOptions { MaxFrames = 1, TargetFps = 0 });
+        probe.RunHeadless(new HeadlessRunOptions { MaxFrames = 1, TargetFrameRate = 0 });
 
         Assert.True(sawHeadless);
+        Application.IsPlaying = false;
+    }
+
+    /// <summary>
+    /// The rate a headless server ticks at is the same property a windowed game uses, so game code
+    /// has one answer wherever it runs. The options only seed it.
+    /// </summary>
+    [Fact]
+    public void RunHeadless_PacesThroughApplicationTargetFrameRate()
+    {
+        int seenDuringRun = -1;
+
+        var probe = new FlagProbeGame(() => seenDuringRun = Application.TargetFrameRate);
+        probe.RunHeadless(new HeadlessRunOptions { MaxFrames = 1, TargetFrameRate = 20 });
+
+        Assert.Equal(20, seenDuringRun);
+        Assert.Equal(0, Application.TargetFrameRate); // released on exit
         Application.IsPlaying = false;
     }
 
@@ -75,7 +92,7 @@ public class HeadlessRunTests
     public void RunHeadless_RequestQuit_StopsLoop()
     {
         var stopper = new SelfStoppingGame();
-        stopper.RunHeadless(new HeadlessRunOptions { MaxFrames = 0, TargetFps = 0 });
+        stopper.RunHeadless(new HeadlessRunOptions { MaxFrames = 0, TargetFrameRate = 0 });
 
         // It quit itself after 3 frames rather than running unbounded.
         Assert.Equal(3, stopper.Frames);

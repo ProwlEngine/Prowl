@@ -89,6 +89,8 @@ public class EditorApplication : Game
         // Load editor settings (global, persists across projects)
         _ = EditorSettings.Instance; // triggers load + ApplyTheme
 
+        ApplyFramePacing();
+
         _dockSpace = new DockSpace(CreateDefaultLayout());
 
         // If launched with --project arg, open the project and load assemblies
@@ -1596,6 +1598,18 @@ public class EditorApplication : Game
         return true;
     }
 
+    /// <summary>
+    /// Puts the editor's vsync and frame rate preferences back in charge. Does nothing while the
+    /// game is playing, which is what leaves play mode free to pace itself.
+    /// </summary>
+    internal static void ApplyFramePacing()
+    {
+        if (Application.IsPlaying) return;
+
+        Application.VSync = EditorSettings.Instance.VSync;
+        Application.TargetFrameRate = EditorSettings.Instance.TargetFrameRate;
+    }
+
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
@@ -1670,6 +1684,11 @@ public class EditorApplication : Game
         // Focus the Game View tab
         FocusPanel(typeof(GameViewPanel));
 
+        // The editor's vsync and frame limit are its preference, not the game's, so play starts
+        // unpaced and whatever the game's own code sets from here is what it runs at.
+        Application.VSync = false;
+        Application.TargetFrameRate = 0;
+
         Runtime.Debug.Log("Entered play mode.");
     }
 
@@ -1718,6 +1737,8 @@ public class EditorApplication : Game
 
         // Restore the previously active tab
         RestoreActiveTab();
+
+        ApplyFramePacing();
 
         Runtime.Debug.Log("Exited play mode.");
     }

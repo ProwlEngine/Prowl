@@ -105,6 +105,10 @@ public class PreferencesPanel : DockPanel
     //  General
     // ================================================================
 
+    // Only applies outside play mode; the game gets an unpaced loop and sets its own.
+    private static readonly int[] FrameRates = [0, 30, 60, 120, 144, 240];
+    private static readonly string[] FrameRateNames = ["Unlimited", "30", "60", "120", "144", "240"];
+
     private void DrawGeneral(Paper paper, EditorSettings s)
     {
         EditorGUI.SectionHeader(paper, "pref_gen_hdr", Loc.Get("pref.general"), first: true);
@@ -135,6 +139,21 @@ public class PreferencesPanel : DockPanel
                     ThumbnailGenerator.DeleteAll();
                     EditorAssetBackend.Instance?.ClearThumbnailTextureCache();
                 }, thumbOptions).Show());
+
+        EditorGUI.SectionHeader(paper, "pref_gen_perf", Loc.Get("pref.performance"));
+
+        EditorGUI.SettingsToggle(paper, "pref_vsync", Loc.Get("pref.vsync"), s.VSync,
+            v => { s.VSync = v; s.Save(); EditorApplication.ApplyFramePacing(); });
+
+        int fpsIndex = Array.IndexOf(FrameRates, s.TargetFrameRate);
+        EditorGUI.SettingsRow(paper, "pref_fps_limit", Loc.Get("pref.frame_rate_limit"), () =>
+            Origami.Dropdown(paper, "pref_fps_limit_v", fpsIndex < 0 ? 0 : fpsIndex,
+                v =>
+                {
+                    s.TargetFrameRate = FrameRates[v];
+                    s.Save();
+                    EditorApplication.ApplyFramePacing();
+                }, FrameRateNames).Show());
 
         EditorGUI.SectionHeader(paper, "pref_gen_maint", Loc.Get("pref.maintenance"));
         EditorGUI.SettingsRow(paper, "pref_clear_cache", Loc.Get("pref.clear_cache"), () =>

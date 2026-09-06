@@ -68,6 +68,17 @@ public static unsafe class Graphics
     private static System.Threading.Thread? s_renderThread;
     private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
 
+    private static int s_wantedSwapInterval = -1;
+    private static int s_appliedSwapInterval = -1;
+
+    /// <summary>
+    /// Asks for a swap interval, 1 being vsync and 0 being off. The render thread holds the GL
+    /// context for the whole run, so it is the one that applies this, at the next frame end.
+    /// Set through <see cref="Application.VSync"/> rather than here, so there is one answer to
+    /// what vsync currently is.
+    /// </summary>
+    internal static void SetSwapInterval(int interval) => System.Threading.Volatile.Write(ref s_wantedSwapInterval, interval);
+
     /// <summary>Enqueue a CB for the render thread to execute. Fire-and-forget.</summary>
     public static void Submit(CommandBuffer cmd)
     {
@@ -183,6 +194,7 @@ public static unsafe class Graphics
     {
         // Hand the context off the main thread so the render thread can MakeCurrent.
         Window.InternalWindow.GLContext!.Clear();
+        s_appliedSwapInterval = -1;
         s_renderThread = new System.Threading.Thread(RenderThreadLoop)
         {
             IsBackground = true,
@@ -205,6 +217,19 @@ public static unsafe class Graphics
     private static bool PushCBDebugGroup(string? label) => false;
     private static void PopCBDebugGroup() { }
 #endif
+
+    private static void ApplyPendingSwapInterval()
+    {
+        int wanted = System.Threading.Volatile.Read(ref s_wantedSwapInterval);
+        if (wanted < 0 || wanted == s_appliedSwapInterval) return;
+
+        // Recorded either way, so a driver that refuses it is reported once per change rather than
+        // once per frame.
+        s_appliedSwapInterval = wanted;
+
+        try { Window.InternalWindow.GLContext!.SwapInterval(wanted); }
+        catch (Exception ex) { Debug.LogError($"SwapInterval failed: {ex}"); }
+    }
 
     private static void RenderThreadLoop()
     {
@@ -233,6 +258,7 @@ public static unsafe class Graphics
 
                 if (job.IsFrameEnd)
                 {
+                    ApplyPendingSwapInterval();
                     try { Window.InternalWindow.GLContext!.SwapBuffers(); }
                     catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
                     finally { s_renderFrameDone.Set(); }
