@@ -22,14 +22,7 @@ public sealed class PreviewWidget : IDisposable
     private static readonly Dictionary<Guid, PreviewWidget> s_byAsset = new();
     private static readonly List<Guid> s_recent = new(); // least recent first
 
-    /// <summary>
-    /// The preview for one asset.
-    /// </summary>
-    /// <remarks>
-    /// Editors are shared between inspector panels - <c>EditorRegistries</c> caches a single instance per
-    /// asset type - so a widget held as an editor field is reconfigured by every panel every frame, and
-    /// they all end up drawing whichever asset set it up last. Keying on the asset gives each its own.
-    /// </remarks>
+    /// <summary> Gets or creates a PreviewWidget for the specified asset, reusing an existing one if its dimensions and grid setting match. Editors are shared between inspector panels - EditorRegistries caches a single instance per asset type - so a widget held as an editor field is reconfigured by every panel every frame, and they all end up drawing whichever asset set it up last. Keying on the asset gives each its own. </summary>
     public static PreviewWidget For(Guid asset, int width = 256, int height = 256, bool showGrid = false)
     {
         if (s_byAsset.TryGetValue(asset, out PreviewWidget? existing))
@@ -41,7 +34,7 @@ public sealed class PreviewWidget : IDisposable
                 return existing;
             }
 
-            // Dimensions or grid setting don't match – discard the old widget and create a new one.
+            // Dimensions or grid setting don't match - discard the old widget and create a new one.
             s_byAsset.Remove(asset);
             s_recent.Remove(asset);
             existing.Dispose();
@@ -76,6 +69,7 @@ public sealed class PreviewWidget : IDisposable
     private readonly int _height;
     private readonly bool _showGrid;
 
+    /// <summary> Creates a new PreviewWidget with the specified dimensions and grid visibility. </summary>
     public PreviewWidget(int width = 256, int height = 256, bool showGrid = false)
     {
         _width = width;
@@ -83,6 +77,7 @@ public sealed class PreviewWidget : IDisposable
         _showGrid = showGrid;
     }
 
+    /// <summary> Returns the cached PreviewRenderer for the given subject, calling the setup action if the subject has changed or the renderer was just created. </summary>
     public PreviewRenderer Get(EngineObject subject, Action<PreviewRenderer> setup)
     {
         if (_renderer == null)
@@ -98,8 +93,10 @@ public sealed class PreviewWidget : IDisposable
         return _renderer;
     }
 
+    /// <summary> Forces the next call to Get to re-run the setup action for the current subject. </summary>
     public void Invalidate() => _last = null;
 
+    /// <summary> Disposes the underlying PreviewRenderer and resets the widget state. </summary>
     public void Dispose()
     {
         _renderer?.Dispose();

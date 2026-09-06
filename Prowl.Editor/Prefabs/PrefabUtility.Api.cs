@@ -14,10 +14,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Prefabs;
 
-/// <summary>
-/// Queries and operations tools and custom editors need, which until now every caller worked out for
-/// itself from the instance data.
-/// </summary>
+/// <summary> Queries and operations that tools and custom editors need, which were previously worked out from instance data. </summary>
 public static partial class PrefabUtility
 {
     #region Events
@@ -203,7 +200,7 @@ public static partial class PrefabUtility
     // written down. Rather than refuse, these say what will be lost and unlink on a yes. The break and
     // the edit are two undo steps.
 
-    /// <summary>Whether any of these objects is structure its prefab provides.</summary>
+    /// <summary> Whether any of these objects is structure that its prefab provides. </summary>
     public static bool NeedsBreaking(IEnumerable<GameObject> targets)
         => targets.Any(go => go.IsValid() && IsProvidedByPrefab(go));
 

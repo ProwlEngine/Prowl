@@ -25,13 +25,16 @@ public sealed record AssetChunk(string Name, IReadOnlyList<Guid> Assets);
 /// </remarks>
 public static class ChunkPlanner
 {
+    /// <summary> Name of the chunk that holds assets reachable from multiple entry points. </summary>
     public const string SharedChunk = "shared";
 
     /// <summary>Shipped, but nothing reachable pulls it in. Happens when a build ships every asset.</summary>
     public const string CommonChunk = "common";
 
+    /// <summary> Name of the chunk that holds assets reachable from the resources entry point. </summary>
     public const string ResourcesChunk = "resources";
 
+    /// <summary> Returns the chunk name for the given scene. </summary>
     public static string SceneChunkName(Guid scene) => $"scene_{scene:N}";
 
     /// <summary>

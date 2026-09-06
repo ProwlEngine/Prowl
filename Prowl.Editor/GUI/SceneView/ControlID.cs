@@ -11,12 +11,15 @@ namespace Prowl.Editor.GUI.SceneView;
 /// </summary>
 public readonly struct ControlID : IEquatable<ControlID>
 {
+    /// <summary> The raw integer value of this control identity. </summary>
     public readonly int Value;
 
     internal ControlID(int value) => Value = value;
 
+    /// <summary> Represents an invalid or absent control identity. </summary>
     public static readonly ControlID None = new(0);
 
+    /// <summary> Whether this control identity is valid (not the default zero value). </summary>
     public bool IsValid => Value != 0;
 
     public bool Equals(ControlID other) => Value == other.Value;

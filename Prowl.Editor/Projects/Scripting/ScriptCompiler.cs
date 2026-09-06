@@ -21,11 +21,16 @@ namespace Prowl.Editor.Projects.Scripting;
 /// </summary>
 public static class ScriptCompiler
 {
+    /// <summary> The result of a script compilation operation, indicating success, build output, errors, and whether a hot-reload is needed. </summary>
     public struct CompileResult
     {
+        /// <summary> Whether the compilation succeeded without errors. </summary>
         public bool Success;
+        /// <summary> The full build output, including warnings and informational messages. </summary>
         public string Output;
+        /// <summary> Error messages from the compilation, if any. </summary>
         public string Errors;
+        /// <summary> Whether at least one assembly was rebuilt and requires a hot-reload. </summary>
         public bool RequiresReload;   // true when script assemblies were rebuilt and need a hot-reload
     }
 

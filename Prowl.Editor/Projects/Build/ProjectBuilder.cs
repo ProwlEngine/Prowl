@@ -19,12 +19,10 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;
 
-/// <summary>
-/// Main class that should handle build starting/logging.
-/// It also supports starting the build as a separate process and receive logs from that.
-/// </summary>
+/// <summary> Provides methods for starting builds, logging build progress, and receiving logs from a separate build process. </summary>
 public static class ProjectBuilder
 {
+    /// <summary> Logs a build message with the specified severity. </summary>
     public static void BuildLog(string message, LogSeverity severity = LogSeverity.Normal)
     {
         if (Program.BuildMode)
@@ -59,6 +57,7 @@ public static class ProjectBuilder
         }
     }
 
+    /// <summary> Logs a build progress message with the specified severity and progress value. </summary>
     public static void BuildProgressLog(string message, float progress, LogSeverity severity = LogSeverity.Normal)
     {
         if (Program.BuildMode)
@@ -94,6 +93,7 @@ public static class ProjectBuilder
         }
     }
 
+    /// <summary> Processes a data-received event from a build subprocess, deserializing base64-encoded build status reports and updating the build UI. </summary>
     public static void ProcessBuildLog(object sender, DataReceivedEventArgs args)
     {
         if (!string.IsNullOrEmpty(args.Data))
@@ -135,12 +135,7 @@ public static class ProjectBuilder
         }
     }
 
-    /// <summary>
-    /// Runs the build as a separate process that runs separate from the main editor process.
-    /// To do, it launches the editor with build arguments to trigger an automatic build of the project.
-    /// </summary>
-    /// <param name="outputPath">The output path for the build.</param>
-    /// <returns></returns>
+    /// <summary> Launches the editor as a separate process with build arguments to perform an automatic build. </summary>
     public static BuildProgress StartBuildProcess(string? outputPath)
     {
         BuildProgress progress = null;
@@ -173,6 +168,7 @@ public static class ProjectBuilder
         return progress;
     }
 
+    /// <summary> Starts a build using the configured pipeline, optionally running it on a background thread. Returns a BuildProgress that tracks the build status. </summary>
     public static BuildProgress StartBuildAsync(bool andRun, string? outputPath)
     {
         BuildSettings? settings;
@@ -276,6 +272,7 @@ public static class ProjectBuilder
             ? new DesktopBuildPipeline()
             : DiscoverPipelines().FirstOrDefault(p => p.GetType().FullName == settings.SelectedPipeline);
 
+    /// <summary> Runs the specified pipeline's build synchronously and handles the result, including cancellation and fatal errors. </summary>
     public static void ProcessBuild(string projectPath, BuildPipeline pipeline, BuildSettings settings, string outputPath, BuildProgress progress, bool andRun)
     {
         try

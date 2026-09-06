@@ -116,22 +116,27 @@ public static class EditorGUI
     //  Project Settings row helpers — Row + widget + auto EditorRegistries.SaveSettings()
     // =====================================================================
 
+    /// <summary> A label + text field settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsTextField(Paper paper, string id, string label, string value, Action<string> setter)
         => Row(paper, id, label, () =>
             Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
 
+    /// <summary> A label + int slider settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsIntSlider(Paper paper, string id, string label, int value, int min, int max, Action<int> setter)
         => Row(paper, id, label, () =>
             Origami.IntSlider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max).Show());
 
+    /// <summary> A label + enum dropdown settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter) where T : struct, Enum
         => Row(paper, id, label, () =>
             Origami.EnumDropdown(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
 
+    /// <summary> A checkbox with a right-aligned label settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsCheckbox(Paper paper, string id, string label, bool value, Action<bool> setter)
         => Origami.Checkbox(paper, id, value, v => { setter(v); EditorRegistries.SaveSettings(); })
             .LabelRight(label).Show();
 
+    /// <summary> A label + slider settings row with a readout. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsSliderField(Paper paper, string id, string label, float value, float min, float max,
         Action<float> setter, string format = "F2")
         => Row(paper, id, label, () =>
@@ -158,7 +163,7 @@ public static class EditorGUI
         => Row(paper, id, label, () =>
             Origami.IntSlider(paper, $"{id}_v", value, setter, min, max).Show());
 
-    /// <summary>A foldout section with an enable toggle — shared by particle modules and image-effect sections.</summary>
+    /// <summary> A foldout section with an enable toggle, shared by particle modules and image-effect sections. </summary>
     public static void ModuleSection(Paper paper, string id, string icon, string label,
         bool enabled, Action<bool> setEnabled, Action draw)
         => Origami.Foldout(paper, id, $"{icon}  {label}")

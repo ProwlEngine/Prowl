@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -22,17 +22,7 @@ public enum HandleCap
     Circle,
 }
 
-/// <summary>
-/// Immediate-mode 3D drawing for scene tools and handles, projected onto the viewport's 2D overlay.
-///
-/// <para>Tools run during the input pass, but the Quill canvas only exists inside the overlay
-/// callback, so calls are recorded here and replayed in <see cref="Replay"/>. Recording also means
-/// every command still knows its 3D geometry at replay time, which is where per-command depth will
-/// be resolved once depth-aware handle rendering lands - individual tools will not have to change.</para>
-///
-/// <para>This is the thick, anti-aliased canvas path. Use <see cref="Prowl.Runtime.Debug"/> gizmos
-/// instead when the geometry should be depth-tested against the scene.</para>
-/// </summary>
+/// <summary> Immediate-mode 3D drawing for scene tools and handles, projected onto the viewport's 2D overlay. This is the thick, anti-aliased canvas path; use Prowl.Runtime.Debug gizmos for geometry that should be depth-tested against the scene. </summary>
 public sealed class SceneDrawList
 {
     private enum Kind { Line, Polyline, Polygon, Circle, Arc, Sector, Arrow, Dot, Label, ScreenRect }
@@ -73,9 +63,11 @@ public sealed class SceneDrawList
     //  3D primitives
     // ================================================================
 
+    /// <summary> Draws a line between two world positions. </summary>
     public void Line(Float3 a, Float3 b, Color32 color, float thickness = 0f)
         => _commands.Add(new Command { Kind = Kind.Line, A = a, B = b, Color = color, Thickness = Thick(thickness) });
 
+    /// <summary> Draws a polyline through a sequence of world positions. </summary>
     public void Polyline(ReadOnlySpan<Float3> points, Color32 color, float thickness = 0f, bool closed = false)
         => AddPoints(Kind.Polyline, points, color, Thick(thickness), closed, filled: false);
 
@@ -83,6 +75,7 @@ public sealed class SceneDrawList
     public void Polygon(ReadOnlySpan<Float3> points, Color32 color)
         => AddPoints(Kind.Polygon, points, color, 0f, closed: true, filled: true);
 
+    /// <summary> Draws a circle in 3D space, oriented by its normal. </summary>
     public void Circle(Float3 center, Float3 normal, float radius, Color32 color, float thickness = 0f)
         => _commands.Add(new Command
         {
@@ -90,6 +83,7 @@ public sealed class SceneDrawList
             Color = color, Thickness = Thick(thickness),
         });
 
+    /// <summary> Draws an arc of a circle in 3D space, oriented by its normal. </summary>
     public void Arc(Float3 center, Float3 normal, float radius, float startDegrees, float endDegrees,
                     Color32 color, float thickness = 0f)
         => _commands.Add(new Command
@@ -106,6 +100,7 @@ public sealed class SceneDrawList
             Start = startDegrees, End = endDegrees, Color = color,
         });
 
+    /// <summary> Draws an arrow from one world position to another. </summary>
     public void Arrow(Float3 from, Float3 to, Color32 color, float thickness = 0f)
         => _commands.Add(new Command { Kind = Kind.Arrow, A = from, B = to, Color = color, Thickness = Thick(thickness) });
 

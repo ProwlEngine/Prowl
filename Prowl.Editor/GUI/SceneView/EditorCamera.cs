@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
@@ -146,6 +146,7 @@ public class EditorCamera
         UpdateTransform();
     }
 
+    /// <summary> Creates a hidden GameObject with a Camera component configured for editor scene rendering. </summary>
     public EditorCamera()
     {
         _cameraObject = new GameObject("EditorCamera");
@@ -546,6 +547,7 @@ public class EditorCamera
         return _position + _cameraObject.Transform.Forward * _orbitDistance;
     }
 
+    /// <summary> Moves the camera to frame the currently selected objects, centering on their combined bounds or average position. </summary>
     public void FocusSelection()
     {
         Float3 min = new(float.MaxValue);
@@ -611,6 +613,7 @@ public class EditorCamera
             AccumulateRendererBounds(child, ref min, ref max, ref any);
     }
 
+    /// <summary> Sets the camera's yaw and pitch without changing its position. Pitch is clamped to +/-89 degrees. </summary>
     public void SetOrientation(float yaw, float pitch)
     {
         _yaw = yaw;
@@ -618,6 +621,7 @@ public class EditorCamera
         UpdateTransform();
     }
 
+    /// <summary> Converts a screen-space coordinate into a world-space ray using the editor camera's projection. </summary>
     public Ray ScreenPointToRay(Float2 screenPos, Float2 panelSize)
     {
         return _camera.ScreenPointToRay(screenPos, panelSize);
@@ -642,6 +646,7 @@ public class EditorCamera
         _cameraObject.Transform.LocalEulerAngles = new Float3(_pitch, _yaw, 0);
     }
 
+    /// <summary> Releases all cloned image effects and disposes the render target. </summary>
     public void Dispose()
     {
         DisposeClonedEffects();

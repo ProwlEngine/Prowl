@@ -23,11 +23,13 @@ public abstract record BuildOperation
     /// <summary>Shown in progress and in any issue raised against this operation.</summary>
     public abstract string Description { get; }
 
+    /// <summary> Copies a file from Source to Destination. </summary>
     public sealed record CopyFile(string Source, string Destination) : BuildOperation
     {
         public override string Description => $"copy {Path.GetFileName(Source)}";
     }
 
+    /// <summary> Writes a stream opened by Open to Destination. </summary>
     public sealed record WriteFile(Func<CancellationToken, Task<Stream>> Open, string Destination) : BuildOperation
     {
         public override string Description => $"write {Path.GetFileName(Destination)}";
@@ -46,5 +48,6 @@ public abstract record BuildOperation
 /// <summary>Executes a <see cref="BuildOperation.Custom"/>.</summary>
 public interface IOperationHandler
 {
+    /// <summary> Executes the custom operation with the given build context and cancellation token. </summary>
     Task ExecuteAsync(IBuildContext context, CancellationToken ct);
 }

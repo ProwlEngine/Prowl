@@ -9,6 +9,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI;
 
+/// <summary> Utility methods for rendering and interacting with property grids in the editor. </summary>
 public static class PropertyGridUtils
 {
     /// <summary>

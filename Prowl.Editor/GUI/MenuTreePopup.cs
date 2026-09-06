@@ -47,9 +47,12 @@ public readonly struct MenuTreeEntry
 /// <summary>Per-popup navigation state: the search box text and the folder the user has drilled into.</summary>
 public sealed class MenuTreeState
 {
+    /// <summary> Current search box text. Empty when no search is active. </summary>
     public string Search = "";
+    /// <summary> Breadcrumb path of folder names the user has drilled into. Empty at root. </summary>
     public List<string> Nav = [];
 
+    /// <summary> Clears the search text and navigation, returning to the root level. </summary>
     public void Reset()
     {
         Search = "";

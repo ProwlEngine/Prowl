@@ -25,6 +25,7 @@ namespace Prowl.Editor.GUI;
 /// </summary>
 public static class ProjectLauncher
 {
+    /// <summary> Gets whether the project launcher is currently open. </summary>
     public static bool IsOpen { get; private set; } = true;
 
     private static string _newProjectName = "Untitled";
@@ -83,6 +84,7 @@ public static class ProjectLauncher
     private static int _tipIndex;
     private static float _tipTimer;
 
+    /// <summary> Sets the default new-project path and resets the launcher to its initial state. </summary>
     public static void Initialize()
     {
         _newProjectPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Prowl Projects");
@@ -99,11 +101,13 @@ public static class ProjectLauncher
         _tipTimer = 0;
     }
 
+    /// <summary> Closes the project launcher. </summary>
     public static void Close()
     {
         IsOpen = false;
     }
 
+    /// <summary> Draws the project launcher window and its contents. Has no effect if IsOpen is false and forceDraw is false. </summary>
     public static void Draw(Paper paper, float dt, bool forceDraw = false)
     {
         if (!IsOpen && !forceDraw) return;

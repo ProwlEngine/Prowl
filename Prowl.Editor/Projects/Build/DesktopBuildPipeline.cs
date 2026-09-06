@@ -76,6 +76,7 @@ public class DesktopBuildPipeline : BuildPipeline
     private sealed record CopiedAssemblies(List<string> FileNames);
     private sealed record PackagedAssets(int Count);
 
+    /// <summary> Builds the project for the configured desktop target, running all stages from validation through finalization, and returns the build result including output path, errors, and duration. </summary>
     public override async Task<BuildResult> BuildAsync(
         string projectPath,
         BuildSettings settings,
@@ -922,6 +923,7 @@ public class DesktopBuildPipeline : BuildPipeline
         return resources;
     }
 
+    /// <summary> Appends MSBuild PackageReference items for the runtime's NuGet dependencies to the given StringBuilder, reading package metadata embedded in the compiled runtime assembly. </summary>
     public void ListDependencies(StringBuilder sb)
     {
         // Read PackageReferences from assembly metadata embedded by the MSBuild

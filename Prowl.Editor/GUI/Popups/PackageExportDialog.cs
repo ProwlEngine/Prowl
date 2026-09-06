@@ -36,6 +36,7 @@ public static class PackageExportDialog
 
     public static bool IsOpen => _handle.IsOpen;
 
+    /// <summary> Opens the export overlay dialog with the given asset paths, resolving dependencies and rebuilding the file tree. </summary>
     public static void Open(List<string> selectedAssetPaths)
     {
         _explicitPaths = selectedAssetPaths

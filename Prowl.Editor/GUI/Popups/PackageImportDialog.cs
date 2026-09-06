@@ -47,6 +47,7 @@ public static class PackageImportDialog
 
     public static bool IsOpen => _handle.IsOpen;
 
+    /// <summary> Opens the import dialog for the given .prowlpackage file, reads its manifest, computes per-asset import actions, and shows the overlay. Shows an error message if the package cannot be opened or lacks a manifest. </summary>
     public static void Open(string packagePath)
     {
         try
@@ -90,6 +91,7 @@ public static class PackageImportDialog
         }
     }
 
+    /// <summary> Closes the import dialog and releases all resources: archive, manifest, asset actions, and thumbnail cache. </summary>
     public static void Close()
     {
         _handle.Close();

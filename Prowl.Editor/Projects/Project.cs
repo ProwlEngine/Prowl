@@ -10,9 +10,12 @@ namespace Prowl.Editor.Projects;
 /// </summary>
 public class Project
 {
+    /// <summary> Gets the currently active project, or null if no project is open. </summary>
     public static Project? Current { get; private set; }
 
+    /// <summary> Gets the project name. </summary>
     public string Name { get; private set; }
+    /// <summary> Gets the absolute root path of the project. </summary>
     public string RootPath { get; private set; }
 
     // Standard directories
@@ -45,9 +48,7 @@ public class Project
         Name = name;
     }
 
-    /// <summary>
-    /// Create a new project at the given path.
-    /// </summary>
+    /// <summary> Creates a new project in a subfolder of parentFolder. Throws InvalidOperationException if the target directory already exists and is not empty. </summary>
     public static Project Create(string parentFolder, string projectName)
     {
         string rootPath = Path.Combine(parentFolder, projectName);
@@ -98,7 +99,7 @@ public class Project
 
         rootPath = Path.GetFullPath(rootPath);
 
-        // Validate it's a project must have Assets/ folder
+        // Validate the project has an Assets/ folder
         string assetsDir = Path.Combine(rootPath, "Assets");
         if (!Directory.Exists(assetsDir))
             throw new InvalidOperationException($"Not a valid Prowl project: missing Assets/ folder in '{rootPath}'");

@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -33,6 +33,7 @@ public abstract class SceneTool
     /// <summary>Icon glyph shown in the tool strip.</summary>
     public virtual string Icon => EditorIcons.Wrench;
 
+    /// <summary> Tooltip text shown when hovering the tool strip button. </summary>
     public virtual string? Tooltip => null;
 
     /// <summary>Sort order within the tool strip. Lower comes first.</summary>
@@ -103,9 +104,13 @@ public abstract class SceneTool
 
     internal void BindContext(SceneToolContext? ctx) => _context = ctx;
 
+    /// <summary> The current viewport's handle context for registering controls. </summary>
     protected HandleContext Handles => Context.Handles;
+    /// <summary> The current viewport's draw list for rendering scene overlays. </summary>
     protected SceneDrawList Draw => Context.Draw;
+    /// <summary> The current viewport's camera. </summary>
     protected Camera Camera => Context.Camera;
+    /// <summary> The GameObject currently hovered or selected in the viewport, if any. </summary>
     protected GameObject? ActiveObject => Context.ActiveObject;
 
     /// <summary>Text anchored to a world position - dimensions, counts, axis names.</summary>
@@ -172,6 +177,7 @@ public sealed class GlobalSceneToolAttribute : Attribute
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class ComponentSceneToolAttribute : Attribute
 {
+    /// <summary> The component type that must be selected for this tool to be available. </summary>
     public Type ComponentType { get; }
 
     public ComponentSceneToolAttribute(Type componentType) => ComponentType = componentType;

@@ -76,6 +76,7 @@ public class SpriteEditorWindow : DockPanel
 
     // --- Open / persistence ----------------------------------------------------------
 
+    /// <summary> Opens the sprite editor dock panel for the given texture GUID, creating a new window instance and loading the texture's sprite settings. </summary>
     public static void OpenFor(Guid textureGuid)
     {
         var panel = new SpriteEditorWindow();
@@ -83,6 +84,7 @@ public class SpriteEditorWindow : DockPanel
         EditorApplication.Instance?.OpenPanelInstance(panel, 1100, 720);
     }
 
+    /// <summary> Serializes the texture GUID into the state JSON object. Returns false if no texture is loaded. </summary>
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
         if (_textureGuid == Guid.Empty) return false;
@@ -90,6 +92,7 @@ public class SpriteEditorWindow : DockPanel
         return true;
     }
 
+    /// <summary> Restores the texture GUID from the state JSON object and loads the corresponding sprite editor target. </summary>
     public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
     {
         if (Guid.TryParse(state["texture"]?.GetValue<string>(), out Guid guid))
@@ -208,6 +211,7 @@ public class SpriteEditorWindow : DockPanel
 
     // --- Root ------------------------------------------------------------------------
 
+    /// <summary> Draws the sprite editor UI: toolbar, canvas with pan/zoom, sidebar with asset and slice settings, slicing popover, and handles mouse and keyboard interactions for editing sprites. </summary>
     public override void OnGUI(Paper paper, float width, float height)
     {
         if (EditorTheme.DefaultFont == null) return;

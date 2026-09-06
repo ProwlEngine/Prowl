@@ -100,11 +100,13 @@ public static class CurveField
 //  Curve Renderer - canvas drawing for preview and full editor
 // ================================================================
 
+/// <summary> Provides canvas drawing methods for AnimationCurve preview swatches and the full curve editor graph, including grid, rulers, keyframe handles, and tangent lines. </summary>
 public static class CurveRenderer
 {
     private const int PreviewSteps = 40;
     private const int EditorSteps = 120;
 
+    /// <summary> Draws a simplified preview of the curve within the given rectangle, using the theme's green color. Does nothing when the curve has no keys. </summary>
     public static void DrawPreview(Canvas canvas, Rect r, AnimationCurve curve, OrigamiTheme theme)
     {
         if (curve.Count == 0) return;
@@ -127,6 +129,7 @@ public static class CurveRenderer
         canvas.Stroke();
     }
 
+    /// <summary> Draws the full curve editor graph including grid lines, zero axes, the curve line, keyframe dots, and tangent lines for the selected key. </summary>
     public static void DrawGraph(Canvas canvas, Rect r, AnimationCurve curve,
         float vMinT, float vMaxT, float vMinV, float vMaxV, OrigamiTheme theme, int selectedIdx)
     {
@@ -220,6 +223,7 @@ public static class CurveRenderer
         }
     }
 
+    /// <summary> Draws a horizontal ruler with tick marks and time labels along the top of the graph area. </summary>
     public static void DrawRulerH(Canvas canvas, Rect r, float minT, float maxT, Scribe.FontFile? font)
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
@@ -238,6 +242,7 @@ public static class CurveRenderer
         }
     }
 
+    /// <summary> Draws a vertical ruler with tick marks and value labels along the left side of the graph area. </summary>
     public static void DrawRulerV(Canvas canvas, Rect r, float minV, float maxV, Scribe.FontFile? font)
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
@@ -256,6 +261,7 @@ public static class CurveRenderer
         }
     }
 
+    /// <summary> Computes the screen-space position of a tangent handle endpoint given the keyframe position, tangent slope, direction, and scale factors. </summary>
     public static (float x, float y) GetTangentScreenPos(float kx, float ky, float tangent, float dir, float tToX, float vToY)
     {
         const float HandleLen = 40f;
@@ -266,6 +272,7 @@ public static class CurveRenderer
         return (kx + dx, ky + dy);
     }
 
+    /// <summary> Computes padded bounds for the curve's time and value ranges, sampling at PreviewSteps intervals. Returns default bounds (0,1,0,1) when the curve has no keys. </summary>
     public static void GetBounds(AnimationCurve curve, out float minT, out float maxT, out float minV, out float maxV)
     {
         if (curve.Count == 0) { minT = 0; maxT = 1; minV = 0; maxV = 1; return; }
@@ -284,6 +291,7 @@ public static class CurveRenderer
         minT -= padT; maxT += padT; minV -= padV; maxV += padV;
     }
 
+    /// <summary> Returns a 'nice' step size for grid or ruler tick marks, given the data range, available pixel space, and minimum pixel spacing. </summary>
     public static float GetNiceStep(float range, float pixels, float minPixelStep)
     {
         float rawStep = range * minPixelStep / pixels;

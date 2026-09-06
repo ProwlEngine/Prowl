@@ -8,6 +8,7 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.GUI.SceneView;
 
+/// <summary> Attribute that marks a class as a handler for dropping assets of a specific type into the scene view. </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public class SceneDropHandlerAttribute : Attribute
 {
@@ -24,6 +25,7 @@ public struct SceneDropContext
     public Float2 PanelSize;
 }
 
+/// <summary> Interface for handling asset drops in the scene view. Implementations are discovered via SceneDropHandlerAttribute. </summary>
 public interface ISceneDropHandler
 {
     string DropHint { get; }

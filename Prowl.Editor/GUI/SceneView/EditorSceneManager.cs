@@ -48,6 +48,7 @@ public static class EditorSceneManager
         return false;
     }
 
+    /// <summary> Creates and loads a new default scene, clearing the current scene path, dirty flag, undo history, and selection. </summary>
     public static void NewScene()
     {
         if (Application.IsPlaying) { Debug.LogWarning("Cannot create new scene during play mode."); return; }

@@ -22,6 +22,7 @@ public sealed class TargetRegistry
     /// <summary>The registry the editor and tooling share.</summary>
     public static TargetRegistry Shared { get; } = CreateWithBuiltIns();
 
+    /// <summary> Creates a new registry and registers all built-in targets. </summary>
     public static TargetRegistry CreateWithBuiltIns()
     {
         var registry = new TargetRegistry();
@@ -43,6 +44,7 @@ public sealed class TargetRegistry
         _targets[target.Id] = target;
     }
 
+    /// <summary> Registers all targets from the given provider, logging a warning for any malformed target instead of failing. </summary>
     public void RegisterFrom(IBuildTargetProvider provider)
     {
         ArgumentNullException.ThrowIfNull(provider);

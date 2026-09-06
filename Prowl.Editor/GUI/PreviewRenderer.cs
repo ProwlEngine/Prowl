@@ -31,10 +31,14 @@ public class PreviewRenderer : IDisposable
     private float _orbitDistance = 3f;
     private Float3 _orbitTarget = Float3.Zero;
 
+    /// <summary> Gets the rendered RenderTexture, or null if not yet created. </summary>
     public RenderTexture? Result => _rt;
+    /// <summary> Gets the width of the preview render target in pixels. </summary>
     public int Width { get; private set; }
+    /// <summary> Gets the height of the preview render target in pixels. </summary>
     public int Height { get; private set; }
 
+    /// <summary> Creates a new PreviewRenderer with the given render target dimensions. Sets up an isolated Scene with a camera and directional light. </summary>
     public PreviewRenderer(int width = 256, int height = 256)
     {
         Width = width;
@@ -148,9 +152,7 @@ public class PreviewRenderer : IDisposable
         EnsureRT();
     }
 
-    /// <summary>
-    /// Draw the preview into a Paper element area. Returns true if hovered.
-    /// </summary>
+    /// <summary> Draw the preview into a Paper element area. Resizes and renders the preview, then displays it with orbit controls via drag and scroll. </summary>
     public void DrawPreview(Paper paper, string id, float width, float height)
     {
         Resize((int)width, (int)height);
@@ -326,6 +328,7 @@ public class PreviewRenderer : IDisposable
             CollectBoundsRecursive(child, ref min, ref max, ref found);
     }
 
+    /// <summary> Releases all resources held by this PreviewRenderer, including the subject, render texture, scene, camera and light. </summary>
     public void Dispose()
     {
         ClearSubject();

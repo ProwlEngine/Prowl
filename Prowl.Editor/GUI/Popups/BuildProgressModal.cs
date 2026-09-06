@@ -48,6 +48,7 @@ public sealed class BuildProgressModal : IModal
     public bool CloseOnBackdrop => false;
     public bool CloseOnEscape => false;
 
+    /// <summary> Draws the build progress modal, showing the build status, a progress bar, and a cancel button. Removes itself from the modal stack when the build completes. </summary>
     public void Draw(Paper paper, int layer, int stackIndex)
     {
         // Owned here rather than by the Build window, so the lock is correct even when that window is

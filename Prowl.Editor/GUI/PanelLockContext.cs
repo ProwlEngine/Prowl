@@ -16,6 +16,7 @@ public class PanelLockContext : CursorLockContext
     /// <summary>Panel size in Paper-logical coordinates.</summary>
     public Float2 PanelSize;
 
+    /// <summary> Returns the cursor confine rectangle for the panel, converting from paper-logical coordinates to window coordinates. </summary>
     public override IntRect GetConfineBounds()
     {
         float scale = PaperToWindowScale();

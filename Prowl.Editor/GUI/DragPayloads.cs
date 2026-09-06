@@ -11,6 +11,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI;
 
+/// <summary> Abstract base class for editor-specific drag payloads that carry a display name and icon. </summary>
 public abstract class EditorDragPayload : DragPayload
 {
     public override string DisplayName { get; }

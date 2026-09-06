@@ -9,11 +9,13 @@ using System.Text;
 
 namespace Prowl.Editor.Build;
 
+/// <summary> A NuGet package reference identified by its package identifier and version. </summary>
 public sealed record PackageRef(string Id, string Version);
 
 /// <summary>A reference resolved from a path rather than a package, for engine assemblies.</summary>
 public sealed record AssemblyRef(string Name, string HintPath);
 
+/// <summary> An embedded resource identified by its file path and logical name. </summary>
 public sealed record EmbeddedResourceRef(string Path, string LogicalName);
 
 /// <summary>
@@ -30,8 +32,10 @@ public sealed record EmbeddedResourceRef(string Path, string LogicalName);
 /// </remarks>
 public sealed record MSBuildProjectSpec
 {
+    /// <summary> The SDK to use for the project. Defaults to Microsoft.NET.Sdk. </summary>
     public string Sdk { get; init; } = "Microsoft.NET.Sdk";
 
+    /// <summary> The target framework moniker for the project, for example net8.0. </summary>
     public required string TargetFramework { get; init; }
 
     /// <summary>
@@ -41,12 +45,18 @@ public sealed record MSBuildProjectSpec
     /// </summary>
     public IReadOnlyList<string> RuntimeIdentifiers { get; init; } = [];
 
+    /// <summary> Additional MSBuild properties to include in the project. </summary>
     public IReadOnlyDictionary<string, string> Properties { get; init; } = new Dictionary<string, string>();
 
+    /// <summary> Assembly references resolved from file paths rather than packages. </summary>
     public IReadOnlyList<AssemblyRef> References { get; init; } = [];
+    /// <summary> NuGet package references to include in the project. </summary>
     public IReadOnlyList<PackageRef> Packages { get; init; } = [];
+    /// <summary> Source files to include in compilation. </summary>
     public IReadOnlyList<string> Compile { get; init; } = [];
+    /// <summary> Files to embed as resources in the compiled assembly. </summary>
     public IReadOnlyList<EmbeddedResourceRef> EmbeddedResources { get; init; } = [];
+    /// <summary> Assemblies to preserve during trimming. </summary>
     public IReadOnlyList<string> TrimmerRootAssemblies { get; init; } = [];
 
     /// <summary>

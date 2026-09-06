@@ -25,19 +25,15 @@ namespace Prowl.Editor.GUI.Popups;
 [Flags]
 public enum SelectorTabs
 {
+    /// <summary> Scene tab: lists GameObjects and components from the current scene. </summary>
     Scene = 1,
+    /// <summary> Assets tab: lists project and built-in assets with thumbnails. </summary>
     Assets = 2,
+    /// <summary> Both tabs: shows both Scene and Assets tabs. </summary>
     Both = Scene | Assets,
 }
 
-/// <summary>
-/// Unified asset/scene selector modal. Provides two tabs:
-/// <list type="bullet">
-///   <item><b>Scene</b> lists GameObjects and components from the current scene (list view).</item>
-///   <item><b>Assets</b> lists project + built-in assets with thumbnails (grid view).</item>
-/// </list>
-/// Only one selector can be open at a time.
-/// </summary>
+/// <summary> Unified asset/scene selector modal. Provides a Scene tab (lists GameObjects and components from the current scene) and an Assets tab (lists project and built-in assets with thumbnails). Only one selector can be open at a time. </summary>
 public static class SelectorModal
 {
     // ---- State ----
@@ -69,6 +65,7 @@ public static class SelectorModal
         _handle.Open(DrawInternal, closeOnBackdrop: true);
     }
 
+    /// <summary> Close the selector modal and clear the callback. </summary>
     public static void Close()
     {
         _callback = null;

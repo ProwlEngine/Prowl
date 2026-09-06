@@ -28,6 +28,7 @@ public static class BuildPlatforms
     /// <summary>Every platform an assembly can be assigned to, editor included.</summary>
     public static readonly string[] All = [Editor, Windows, Linux, MacOS];
 
+    /// <summary> Maps a BuildTarget enum value to the canonical platform name used in assembly definition platform lists. </summary>
     public static string FromBuildTarget(BuildTarget target) => target switch
     {
         BuildTarget.Linux => Linux,
@@ -112,6 +113,7 @@ public sealed class AssemblyDefinition
     //  Serialization (Echo text)
     // ------------------------------------------------------------------
 
+    /// <summary> Serializes this assembly definition to an EchoObject compound for storage in the .asmdef file. </summary>
     public EchoObject ToEcho()
     {
         var echo = EchoObject.NewCompound();
@@ -128,6 +130,7 @@ public sealed class AssemblyDefinition
         return echo;
     }
 
+    /// <summary> Deserializes an AssemblyDefinition from an EchoObject previously produced by ToEcho(). </summary>
     public static AssemblyDefinition FromEcho(EchoObject echo)
     {
         var def = new AssemblyDefinition();
@@ -145,8 +148,10 @@ public sealed class AssemblyDefinition
         return def;
     }
 
+    /// <summary> Writes this assembly definition to a file at the given path in Echo text format. </summary>
     public void WriteToFile(string path) => File.WriteAllText(path, ToEcho().WriteToString());
 
+    /// <summary> Reads an AssemblyDefinition from a .asmdef file. Returns a default definition with the file name as the assembly name if the file is empty. </summary>
     public static AssemblyDefinition ReadFromFile(string path)
     {
         string text = File.ReadAllText(path);
