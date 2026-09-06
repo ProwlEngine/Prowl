@@ -1,6 +1,9 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -16,6 +19,22 @@ public class CharacterController : MonoBehaviour
     /// <summary>
     /// The shape type used for the character controller collision detection.
     /// </summary>
+    /// <summary>Which sides of the controller met something during a move.</summary>
+    [Flags]
+    public enum CollisionFlags
+    {
+        None = 0,
+
+        /// <summary>Something was met to the side, which is what stops horizontal movement.</summary>
+        Sides = 1,
+
+        /// <summary>Something was met overhead.</summary>
+        Above = 2,
+
+        /// <summary>Something was met underneath, which includes standing on the ground.</summary>
+        Below = 4,
+    }
+
     public enum ColliderShape
     {
         Capsule,
@@ -99,24 +118,64 @@ public class CharacterController : MonoBehaviour
     private ShapeCastHit lastGroundHit;
     private Float3 lastVelocity;
 
+    private readonly List<ShapeCastHit> _hits = new();
+    private readonly List<ShapeCastHit> _overlaps = new();
+    private CollisionFlags _flags;
     private Float3 _achievedVelocity;
+
+    /// <summary>
+    /// Everything the last <see cref="Move"/> touched, in the order it was touched, including
+    /// anything it had to push out of. Valid until the next move. Each entry carries the collider,
+    /// the rigidbody, the contact point and the surface normal, so a caller can push what it hit,
+    /// read a tag off it, or ignore it.
+    /// </summary>
+    public IReadOnlyList<ShapeCastHit> Hits => _hits;
+
+    /// <summary>Which sides of the controller touched something during the last <see cref="Move"/>.</summary>
+    public CollisionFlags Collisions => _flags;
+
     /// <summary>
     /// How far the controller actually travelled in the last <see cref="Move"/>, divided by the frame
     /// time. This is what it managed after sliding and blocking, which is not what it was asked for.
     /// </summary>
     public Float3 Velocity => _achievedVelocity;
+
+    /// <summary>The surface normal under the controller, or up when it is not grounded.</summary>
+    public Float3 GroundNormal => IsGrounded ? lastGroundHit.Normal : new Float3(0, 1, 0);
+
+    /// <summary>The angle in degrees of the surface under the controller, or zero when not grounded.</summary>
+    public float GroundSlopeAngle => IsGrounded ? GetSlopeAngle(lastGroundHit.Normal) : 0.0f;
+
+    /// <summary>What the controller is standing on, or null when it is not grounded or the ground owns no collider.</summary>
+    public Collider? GroundCollider => IsGrounded ? lastGroundHit.Collider : null;
+
+    /// <summary>The rigidbody the controller is standing on, or null when it is not grounded.</summary>
+    public Rigidbody3D? GroundBody => IsGrounded ? lastGroundHit.Rigidbody : null;
+
+    /// <summary>The middle of the controller's shape in world space.</summary>
+    public Float3 Center => GetShapeCenter(GameObject.Transform.Position);
+
+    /// <summary>The bottom of the controller in world space, which is where it stands.</summary>
+    public Float3 Bottom => GameObject.Transform.Position;
+
+    /// <summary>The top of the controller in world space.</summary>
+    public Float3 Top => GameObject.Transform.Position + new Float3(0, Height, 0);
+
     // Debug visualization for failed height attempts
     private bool failedHeightAttempt = false;
     private float failedAttemptHeight;
     private float failedAttemptRadius;
 
     /// <summary>
-    /// Moves the character controller by the specified motion vector.
-    /// This handles collision detection and sliding.
-    /// Also updates the IsGrounded state.
+    /// Moves the character controller by the specified motion vector, sliding along whatever it
+    /// meets. Returns which sides were touched; <see cref="Hits"/> holds what was touched.
+    /// Also updates <see cref="IsGrounded"/>.
     /// </summary>
-    public void Move(Float3 motion)
+    public CollisionFlags Move(Float3 motion)
     {
+        _hits.Clear();
+        _flags = CollisionFlags.None;
+
         Float3 start = GameObject.Transform.Position;
         lastVelocity = motion;
 
@@ -148,6 +207,47 @@ public class CharacterController : MonoBehaviour
         // frame, so callers see an up-to-date value on the next frame
         // (e.g. right after a jump leaves the ground).
         UpdateGroundedState(finalPosition);
+
+        if (IsGrounded) _flags |= CollisionFlags.Below;
+        return _flags;
+    }
+
+    /// <summary>
+    /// Places the controller somewhere without sweeping there, then pushes it out of anything it
+    /// landed inside. Use this for a spawn or a teleport, where moving through what is in between
+    /// is not wanted.
+    /// </summary>
+    public void Teleport(Float3 position)
+    {
+        _hits.Clear();
+        _flags = CollisionFlags.None;
+        _achievedVelocity = Float3.Zero;
+
+        GameObject.Transform.Position = Depenetrate(position);
+        UpdateGroundedState(GameObject.Transform.Position);
+    }
+
+    /// <summary>
+    /// Sweeps the controller's own shape from where it stands, without moving it. Useful for asking
+    /// what is in the way before committing to a move.
+    /// </summary>
+    public bool Cast(Float3 direction, float distance, out ShapeCastHit hit)
+    {
+        if (Float3.LengthSquared(direction) <= 0.0f)
+        {
+            hit = default;
+            return false;
+        }
+
+        return PerformShapeCast(GameObject.Transform.Position, Float3.Normalize(direction), distance, out hit);
+    }
+
+    /// <summary>
+    /// Everything the controller's shape currently overlaps, at its own position. Returns how many
+    /// were written into <paramref name="results"/>.
+    /// </summary>
+    public int OverlapNow(List<ShapeCastHit> results) => OverlapShape(GameObject.Transform.Position, results);
+
     /// <summary>
     /// Pushes the controller out of anything it is inside. Each pass resolves the deepest contact,
     /// which lets a corner settle over a few passes rather than being over corrected in one.
@@ -176,6 +276,7 @@ public class CharacterController : MonoBehaviour
             if (Float3.LengthSquared(normal) <= 0.0f) return position;
 
             position += Float3.Normalize(normal) * (contact.Penetration + DepenetrationBias);
+            Record(contact);
         }
 
         return position;
@@ -195,6 +296,26 @@ public class CharacterController : MonoBehaviour
         return GameObject.Scene.Physics.OverlapCylinder(
             GetShapeCenter(position), GetEffectiveRadius(), Height, Quaternion.Identity, results, Filter);
     }
+
+    /// <summary>
+    /// Notes something the move touched, and which side of the controller it was on. The same
+    /// surface met twice while sliding is only reported once.
+    /// </summary>
+    private void Record(in ShapeCastHit hit)
+    {
+        const float Facing = 0.5f;
+
+        if (hit.Normal.Y > Facing) _flags |= CollisionFlags.Below;
+        else if (hit.Normal.Y < -Facing) _flags |= CollisionFlags.Above;
+        else _flags |= CollisionFlags.Sides;
+
+        foreach (ShapeCastHit seen in _hits)
+        {
+            if (ReferenceEquals(seen.Shape, hit.Shape) && ReferenceEquals(seen.Collider, hit.Collider))
+                return;
+        }
+
+        _hits.Add(hit);
     }
 
     /// <summary>
@@ -376,6 +497,8 @@ public class CharacterController : MonoBehaviour
 
         if (!hit)
             return position + velocity;
+
+        Record(hitInfo);
 
         // Back off by the skin width, and clamp so a cast that started already touching never walks
         // backwards.
