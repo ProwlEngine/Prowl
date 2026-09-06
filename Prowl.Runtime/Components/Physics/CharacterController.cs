@@ -83,6 +83,19 @@ public class CharacterController : MonoBehaviour
     /// </summary>
     public bool IsGrounded { get; private set; }
 
+    /// <summary>
+    /// How many times a move may push the controller out of geometry it is already inside before it
+    /// gives up. Anything it is inside stops every shape cast at zero distance, so without this the
+    /// controller cannot move at all until something else frees it.
+    /// </summary>
+    public int MaxDepenetrationIterations = 4;
+
+    /// <summary>
+    /// How far past touching a depenetration pushes, so the next cast starts outside rather than
+    /// exactly on the surface where rounding can put it back inside.
+    /// </summary>
+    public float DepenetrationBias = 0.001f;
+
     private ShapeCastHit lastGroundHit;
     private Float3 lastVelocity;
 
@@ -98,8 +111,12 @@ public class CharacterController : MonoBehaviour
     /// </summary>
     public void Move(Float3 motion)
     {
-        Float3 position = GameObject.Transform.Position;
         lastVelocity = motion;
+
+        // Anything the controller is already inside stops every cast below at zero distance, so it
+        // could neither move nor slide out. Push clear of it first, which is what a slope resting on
+        // a hair of penetration needs to stay movable.
+        Float3 position = Depenetrate(start);
 
         // Use the grounded state from the end of the previous move for this
         // frame's step-up and snap decisions, since we haven't moved yet.
@@ -120,6 +137,53 @@ public class CharacterController : MonoBehaviour
         // frame, so callers see an up-to-date value on the next frame
         // (e.g. right after a jump leaves the ground).
         UpdateGroundedState(finalPosition);
+    /// <summary>
+    /// Pushes the controller out of anything it is inside. Each pass resolves the deepest contact,
+    /// which lets a corner settle over a few passes rather than being over corrected in one.
+    /// </summary>
+    private Float3 Depenetrate(Float3 position)
+    {
+        for (int pass = 0; pass < MaxDepenetrationIterations; pass++)
+        {
+            if (OverlapShape(position, _overlaps) == 0) return position;
+
+            int deepest = -1;
+            for (int i = 0; i < _overlaps.Count; i++)
+            {
+                if (_overlaps[i].Penetration <= 0.0f) continue;
+                if (deepest < 0 || _overlaps[i].Penetration > _overlaps[deepest].Penetration) deepest = i;
+            }
+
+            if (deepest < 0) return position;
+
+            ShapeCastHit contact = _overlaps[deepest];
+            Float3 normal = contact.Normal;
+
+            // A degenerate normal has no direction to push along, so pushing would move the
+            // controller somewhere arbitrary. Leaving it where it is at least keeps it predictable.
+            if (!float.IsFinite(normal.X) || !float.IsFinite(normal.Y) || !float.IsFinite(normal.Z)) return position;
+            if (Float3.LengthSquared(normal) <= 0.0f) return position;
+
+            position += Float3.Normalize(normal) * (contact.Penetration + DepenetrationBias);
+        }
+
+        return position;
+    }
+
+    /// <summary>Overlaps the controller's shape at a position, using its own dimensions and filter.</summary>
+    private int OverlapShape(Float3 position, List<ShapeCastHit> results)
+    {
+        results.Clear();
+
+        if (Shape == ColliderShape.Capsule)
+        {
+            return GameObject.Scene.Physics.OverlapCapsule(
+                GetCapsuleBottom(position), GetCapsuleTop(position), GetEffectiveRadius(), results, Filter);
+        }
+
+        return GameObject.Scene.Physics.OverlapCylinder(
+            GetShapeCenter(position), GetEffectiveRadius(), Height, Quaternion.Identity, results, Filter);
+    }
     }
 
     /// <summary>
