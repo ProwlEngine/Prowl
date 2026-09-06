@@ -153,6 +153,7 @@ public static class Undo
     //  Configuration
     // ================================================================
 
+    /// <summary> Maximum number of undo steps kept in the undo stack. Defaults to 100. </summary>
     public static int MaxSteps { get; set; } = 100;
 
     // ================================================================
@@ -170,10 +171,12 @@ public static class Undo
     public static bool CanRedo => _redoStack.Count > 0;
     public static bool IsContinuous => _isContinuous;
 
+    /// <summary> Description of the next undo operation, or "Undo" if the stack is empty. </summary>
     public static string UndoDescription => _undoStack.Count > 0
         ? $"Undo {_undoStack[^1].Description}"
         : "Undo";
 
+    /// <summary> Description of the next redo operation, or "Redo" if the stack is empty. </summary>
     public static string RedoDescription => _redoStack.Count > 0
         ? $"Redo {_redoStack[^1].Description}"
         : "Redo";
@@ -561,6 +564,7 @@ public static class Undo
     //  Execute Undo/Redo
     // ================================================================
 
+    /// <summary> Perform one undo step. If a continuous operation is active, cancels it instead. Flushes pending records before undoing. </summary>
     public static void PerformUndo()
     {
         if (Application.IsPlaying) return;
@@ -600,6 +604,7 @@ public static class Undo
         OnUndoRedo?.Invoke();
     }
 
+    /// <summary> Perform one redo step. Does nothing if a continuous operation is active. Flushes pending records before redoing. </summary>
     public static void PerformRedo()
     {
         if (Application.IsPlaying) return;

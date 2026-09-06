@@ -10,30 +10,25 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor;
 
+/// <summary> Provides a pinned GameObject context for menu operations, either set explicitly or following the active selection. </summary>
 public static class MenuContext
 {
     private static GameObject? _pinned;
     private static bool _isPinned;
 
-    /// <summary>
-    /// The GameObject that a "GameObject/..." menu action parents its result to. Menus that carry a
-    /// context of their own - the hierarchy's row and background menus - pin it explicitly; every
-    /// other entry point (the main menu bar, the hierarchy's + button) leaves it unpinned so new
-    /// objects land under the active selection, which is what the equivalent menu does in Unity.
-    /// A pin to a since-destroyed object falls back to the scene root.
-    /// </summary>
+    /// <summary> Returns the explicitly pinned GameObject for context menus, or the first selected GameObject when no pin is active. </summary>
     public static GameObject? ActiveGameObject => _isPinned
         ? (_pinned.IsValid() ? _pinned : null)
         : Selection.GetSelected<GameObject>().FirstOrDefault();
 
-    /// <summary>Pin the context to <paramref name="go"/>, or to the scene root when it is null.</summary>
+    /// <summary> Pins the context to the specified GameObject. When go is null, the pin is set to null and ActiveGameObject will return null. </summary>
     public static void Set(GameObject? go)
     {
         _pinned = go;
         _isPinned = true;
     }
 
-    /// <summary>Drop the pin so the context follows the active selection again.</summary>
+    /// <summary> Drops the pin so the context follows the active selection again. </summary>
     public static void Clear()
     {
         _pinned = null;
@@ -41,15 +36,22 @@ public static class MenuContext
     }
 }
 
+/// <summary> Attribute applied to methods to register them as menu items. Supports validation methods, priority ordering, icons, and separators. </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
 public sealed class MenuItemAttribute : Attribute
 {
+    /// <summary> The menu path for this item, e.g. "GameObject/Create Empty". </summary>
     public string Path { get; }
+    /// <summary> When true, the attributed method is a validation function that returns whether the menu item should be enabled. </summary>
     public bool IsValidate { get; }
+    /// <summary> Sort order for this menu item. Lower values appear first. Default is 1000. </summary>
     public int Priority { get; }
+    /// <summary> Optional icon name to display alongside the menu item. </summary>
     public string Icon { get; init; } = "";
+    /// <summary> When true, inserts a separator before this menu item. </summary>
     public bool Separator { get; init; } = false;
 
+    /// <summary> Initializes a new menu item attribute with the specified path, validation flag, and priority. </summary>
     public MenuItemAttribute(string path, bool isValidate = false, int priority = 1000)
     {
         Path = path;
@@ -88,12 +90,14 @@ public sealed class MenuItemAttribute : Attribute
         }
     }
 
+    /// <summary> Registers a menu entry at the given path with the specified action, priority, and icon. </summary>
     public static void Register(string path, Action action, int priority = 1000, string icon = "")
     {
         _entries.Add(new Entry(path, action, priority, icon, typeof(MenuItemAttribute)));
         _dirty = true;
     }
 
+    /// <summary> Removes all registered menu entries whose path starts with the given prefix. </summary>
     public static void UnregisterByPrefix(string prefix)
     {
         if (_entries.RemoveAll(e => e.Path.StartsWith(prefix, StringComparison.Ordinal)) > 0)
@@ -118,6 +122,7 @@ public sealed class MenuItemAttribute : Attribute
         return _sorted;
     }
 
+    /// <summary> Populates the global MenuRegistry with all registered menu items, building the hierarchy from their paths. </summary>
     public static void PopulateMenuRegistry()
     {
         PopulateRegistryLevel(GetSorted(), "");
@@ -186,6 +191,7 @@ public sealed class MenuItemAttribute : Attribute
         }
     }
 
+    /// <summary> Builds a context menu by adding items under the specified root path to the given ContextBuilder. </summary>
     public static void BuildContextMenu(ContextBuilder builder, string rootPath)
     {
         string prefix = rootPath.TrimEnd('/') + "/";

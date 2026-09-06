@@ -51,6 +51,7 @@ public class ShortcutDefinition
     /// <summary>The effective binding (override if set, else default).</summary>
     public ShortcutBinding Binding => Override ?? Default;
 
+    /// <summary> Initializes a new shortcut definition. Category is derived from the id path (the part before the last '/'), or "General" if there is no slash. </summary>
     public ShortcutDefinition(string id, string displayName, ShortcutBinding defaultBinding)
     {
         Id = id;
