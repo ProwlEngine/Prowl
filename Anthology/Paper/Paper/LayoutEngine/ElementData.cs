@@ -186,7 +186,7 @@ public struct ElementData
             IsNotInteractable = false,
             StopPropagation = false,
             ParentIndex = -1,
-            ChildIndices = new List<int>(),
+            ChildIndices = null,   // supplied by CreateElement, which reuses the slot's existing list
             IsHookedToParent = false,
             IsAHookedParent = false,
             TabIndex = -1,

@@ -15,8 +15,16 @@ namespace Prowl.PaperUI.LayoutEngine
         // fires once per element instead of every frame.
         private static readonly HashSet<int> _warnedWrapCrossStretch = new HashSet<int>();
 
+        // Working buffers for the pass, reused frame to frame. Per thread, so two Paper instances
+        // laying out at the same time on different threads cannot tread on each other.
+        [ThreadStatic] private static LayoutArena? _arena;
+        private static LayoutArena Arena => _arena ??= new LayoutArena();
+
         internal static UISize Layout(ElementHandle elementHandle, Paper gui)
         {
+            // One pass, one reset: everything handed out below stays valid until the next pass.
+            Arena.Reset();
+
             ref var data = ref elementHandle.Data;
 
             var wValue = data._elementStyle.GetUnit(GuiProp.Width);
@@ -241,8 +249,8 @@ namespace Prowl.PaperUI.LayoutEngine
             float ownPaddingCrossAfter = paddingAxesFlipped ? paddingMainAfter : paddingCrossAfter;
 
             // Pre-allocate and filter in single pass to avoid LINQ overhead
-            var visibleChildren = new List<int>();
-            var parentDirectedChildren = new List<int>();
+            var visibleChildren = Arena.IntList();
+            var parentDirectedChildren = Arena.IntList();
 
             foreach (int childIdx in element.ChildIndices)
             {
@@ -319,8 +327,8 @@ namespace Prowl.PaperUI.LayoutEngine
             float mainFlexSum = 0f;
 
             // Lists for layout calculations
-            var children = new List<ChildElementInfo>(numChildren);
-            var mainAxis = new List<StretchItem>();
+            var children = Arena.ChildInfoList();
+            var mainAxis = Arena.StretchList();
 
             // Parent overrides for child auto space
             UnitValue elementChildMainBefore = GetChildMainBefore(ref element, layoutType);
@@ -399,7 +407,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 if (childMainBefore.HasGrow)
                 {
                     mainFlexSum += childMainBefore.Grow;
-                    mainAxis.Add(new StretchItem(
+                    mainAxis.Add(Arena.Stretch(
                         i, // Use list index for StretchItem
                         childMainBefore.Grow,
                         StretchItem.ItemTypes.Before,
@@ -411,7 +419,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 if (childMain.HasGrow)
                 {
                     mainFlexSum += childMain.Grow;
-                    mainAxis.Add(new StretchItem(
+                    mainAxis.Add(Arena.Stretch(
                         i, // Use list index for StretchItem
                         childMain.Grow,
                         StretchItem.ItemTypes.Size,
@@ -423,7 +431,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 if (childMainAfter.HasGrow)
                 {
                     mainFlexSum += childMainAfter.Grow;
-                    mainAxis.Add(new StretchItem(
+                    mainAxis.Add(Arena.Stretch(
                         i, // Use list index for StretchItem
                         childMainAfter.Grow,
                         StretchItem.ItemTypes.After,
@@ -468,14 +476,14 @@ namespace Prowl.PaperUI.LayoutEngine
                 mainSum += computedChildMain + computedChildMainBefore + computedChildMainAfter;
                 crossMax = Maths.Max(crossMax, computedChildCrossBefore + computedChildCross + computedChildCrossAfter);
 
-                children.Add(new ChildElementInfo(childHandle) {
-                    CrossBefore = computedChildCrossBefore,
-                    Cross = computedChildCross,
-                    CrossAfter = computedChildCrossAfter,
-                    MainBefore = computedChildMainBefore,
-                    Main = computedChildMain,
-                    MainAfter = computedChildMainAfter
-                });
+                var childInfo = Arena.ChildInfo(childHandle);
+                childInfo.CrossBefore = computedChildCrossBefore;
+                childInfo.Cross = computedChildCross;
+                childInfo.CrossAfter = computedChildCrossAfter;
+                childInfo.MainBefore = computedChildMainBefore;
+                childInfo.Main = computedChildMain;
+                childInfo.MainAfter = computedChildMainAfter;
+                children.Add(childInfo);
             }
 
             // Determine auto sizes from children
@@ -550,7 +558,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     childCrossAfter = elementChildCrossAfter;
 
                 float crossFlexSum = 0f;
-                var crossAxis = new List<StretchItem>();
+                var crossAxis = Arena.StretchList();
 
                 // Collect stretch cross items
                 if (childCrossBefore.HasGrow)
@@ -563,7 +571,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     crossFlexSum += childCrossBefore.Grow;
                     child.CrossBefore = 0f;
 
-                    crossAxis.Add(new StretchItem(
+                    crossAxis.Add(Arena.Stretch(
                         i,
                         childCrossBefore.Grow,
                         StretchItem.ItemTypes.Before,
@@ -582,7 +590,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     crossFlexSum += childCross.Grow;
                     child.Cross = 0f;
 
-                    crossAxis.Add(new StretchItem(
+                    crossAxis.Add(Arena.Stretch(
                         i,
                         childCross.Grow,
                         StretchItem.ItemTypes.Size,
@@ -601,7 +609,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     crossFlexSum += childCrossAfter.Grow;
                     child.CrossAfter = 0f;
 
-                    crossAxis.Add(new StretchItem(
+                    crossAxis.Add(Arena.Stretch(
                         i,
                         childCrossAfter.Grow,
                         StretchItem.ItemTypes.After,
@@ -861,9 +869,11 @@ namespace Prowl.PaperUI.LayoutEngine
             computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
             computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
 
-            // Handle self-directed children
-            foreach (var childHandle in GetChildren(elementHandle))
+            // Handle self-directed children. Walking the indices directly rather than through an
+            // iterator method, which would allocate a state machine per container per frame.
+            foreach (int selfChildIndex in elementHandle.Data.ChildIndices)
             {
+                var childHandle = new ElementHandle(elementHandle.Owner, selfChildIndex);
                 if (!childHandle.Data.Visible || childHandle.Data.PositionType != PositionType.SelfDirected) continue;
                 UnitValue childMainBefore = GetMainBefore(ref childHandle.Data, layoutType);
                 UnitValue childMain = GetMain(ref childHandle.Data, layoutType);
@@ -903,14 +913,14 @@ namespace Prowl.PaperUI.LayoutEngine
                     computedChildCross = childSize.Cross;
                 }
 
-                children.Add(new ChildElementInfo(childHandle) {
-                    CrossBefore = computedChildCrossBefore,
-                    Cross = computedChildCross,
-                    CrossAfter = computedChildCrossAfter,
-                    MainBefore = computedChildMainBefore,
-                    Main = computedChildMain,
-                    MainAfter = computedChildMainAfter
-                });
+                var childInfo = Arena.ChildInfo(childHandle);
+                childInfo.CrossBefore = computedChildCrossBefore;
+                childInfo.Cross = computedChildCross;
+                childInfo.CrossAfter = computedChildCrossAfter;
+                childInfo.MainBefore = computedChildMainBefore;
+                childInfo.Main = computedChildMain;
+                childInfo.MainAfter = computedChildMainAfter;
+                children.Add(childInfo);
             }
 
             // Process cross-axis stretching for self-directed children
@@ -998,7 +1008,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
 
                 // Group parent-directed children into lines by their footprint.
-                var lines = new List<(int Start, int Count, float Used, float Cross)>();
+                var lines = Arena.LineList();
                 int li = 0;
                 while (li < numParentDirectedChildren)
                 {
@@ -1156,7 +1166,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 childCrossAfter = elementChildCrossAfter;
 
             float crossFlexSum = 0f;
-            var crossAxis = new List<StretchItem>();
+            var crossAxis = Arena.StretchList();
 
             // Collect stretch cross items
             if (childCrossBefore.HasGrow)
@@ -1167,7 +1177,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 crossFlexSum += childCrossBefore.Grow;
                 child.CrossBefore = 0f;
 
-                crossAxis.Add(new StretchItem(childIndex, childCrossBefore.Grow, StretchItem.ItemTypes.Before, min, max));
+                crossAxis.Add(Arena.Stretch(childIndex, childCrossBefore.Grow, StretchItem.ItemTypes.Before, min, max));
             }
 
             if (childCross.HasGrow)
@@ -1178,7 +1188,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 crossFlexSum += childCross.Grow;
                 child.Cross = 0f;
 
-                crossAxis.Add(new StretchItem(childIndex, childCross.Grow, StretchItem.ItemTypes.Size, min, max));
+                crossAxis.Add(Arena.Stretch(childIndex, childCross.Grow, StretchItem.ItemTypes.Size, min, max));
             }
 
             if (childCrossAfter.HasGrow)
@@ -1189,7 +1199,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 crossFlexSum += childCrossAfter.Grow;
                 child.CrossAfter = 0f;
 
-                crossAxis.Add(new StretchItem(childIndex, childCrossAfter.Grow, StretchItem.ItemTypes.After, min, max));
+                crossAxis.Add(Arena.Stretch(childIndex, childCrossAfter.Grow, StretchItem.ItemTypes.After, min, max));
             }
 
             int unfrozenCrossCount = crossAxis.Count;
@@ -1276,7 +1286,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 childMainAfter = elementChildMainAfter;
 
             float mainFlexSum = 0f;
-            var mainAxis = new List<StretchItem>();
+            var mainAxis = Arena.StretchList();
 
             // Collect stretch main items
             if (childMainBefore.HasGrow)
@@ -1285,7 +1295,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 float max = GetMaxMainBefore(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMainBefore.Grow;
-                mainAxis.Add(new StretchItem(childIndex, childMainBefore.Grow, StretchItem.ItemTypes.Before, min, max));
+                mainAxis.Add(Arena.Stretch(childIndex, childMainBefore.Grow, StretchItem.ItemTypes.Before, min, max));
             }
 
             if (childMain.HasGrow)
@@ -1294,7 +1304,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 float max = GetMaxMain(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMain.Grow;
-                mainAxis.Add(new StretchItem(childIndex, childMain.Grow, StretchItem.ItemTypes.Size, min, max));
+                mainAxis.Add(Arena.Stretch(childIndex, childMain.Grow, StretchItem.ItemTypes.Size, min, max));
             }
 
             if (childMainAfter.HasGrow)
@@ -1303,7 +1313,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 float max = GetMaxMainAfter(ref child.Element.Data, layoutType).ToPx(parentMain, DEFAULT_MAX);
 
                 mainFlexSum += childMainAfter.Grow;
-                mainAxis.Add(new StretchItem(childIndex, childMainAfter.Grow, StretchItem.ItemTypes.After, min, max));
+                mainAxis.Add(Arena.Stretch(childIndex, childMainAfter.Grow, StretchItem.ItemTypes.After, min, max));
             }
 
             int unfrozenMainCount = mainAxis.Count;
@@ -1395,7 +1405,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 return;
 
             float crossFlexSum = 0f;
-            var crossAxis = new List<StretchItem>();
+            var crossAxis = Arena.StretchList();
             int childIndex = 0; // Just a placeholder since we're only dealing with this specific child
 
             // Collect stretch cross items
@@ -1407,7 +1417,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 crossFlexSum += childCrossBefore.Grow;
                 child.CrossBefore = 0f;
 
-                crossAxis.Add(new StretchItem(childIndex, childCrossBefore.Grow, StretchItem.ItemTypes.Before, min, max));
+                crossAxis.Add(Arena.Stretch(childIndex, childCrossBefore.Grow, StretchItem.ItemTypes.Before, min, max));
             }
 
             if (childCrossAfter.HasGrow)
@@ -1418,7 +1428,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 crossFlexSum += childCrossAfter.Grow;
                 child.CrossAfter = 0f;
 
-                crossAxis.Add(new StretchItem(childIndex, childCrossAfter.Grow, StretchItem.ItemTypes.After, min, max));
+                crossAxis.Add(Arena.Stretch(childIndex, childCrossAfter.Grow, StretchItem.ItemTypes.After, min, max));
             }
 
             int unfrozenCrossCount = crossAxis.Count;

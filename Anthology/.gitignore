@@ -439,3 +439,5 @@ Aperture/local/
 # The Scribe layout comparison harness: a console app, a headless browser page and the
 # screenshots they produce. None of it ships with the library.
 Scribe/local/
+
+Paper/local/

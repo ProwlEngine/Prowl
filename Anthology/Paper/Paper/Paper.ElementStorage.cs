@@ -45,7 +45,6 @@ public partial class Paper
         if (_freeIndices.Count > 0)
         {
             index = _freeIndices.Pop();
-            _elements[index] = elementData;
         }
         else
         {
@@ -57,9 +56,18 @@ public partial class Paper
                 _elements = newElements;
             }
             index = _elementCount;
-            _elements[index] = elementData;
             _elementCount++;
         }
+
+        // The tree is rebuilt from scratch every frame, so the child list already in this slot is
+        // last frame's for this same element: emptying it costs nothing and saves one allocation
+        // per element per frame, which is the largest single cost of building a frame.
+        List<int> childIndices = _elements[index].ChildIndices;
+        if (childIndices == null) childIndices = new List<int>();
+        else childIndices.Clear();
+        elementData.ChildIndices = childIndices;
+
+        _elements[index] = elementData;
 
         // First writer wins, matching the old linear scan's "return first match" for duplicate ids.
         _idToIndex.TryAdd(id, index);

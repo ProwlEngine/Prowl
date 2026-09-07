@@ -13,8 +13,17 @@ internal class ChildElementInfo
     public float Main;
     public float MainAfter;
 
-    public ChildElementInfo(ElementHandle element)
+    public ChildElementInfo(ElementHandle element) => Reset(element);
+
+    /// <summary>Puts the instance back to how a fresh one would look, so it can serve another child.</summary>
+    public void Reset(ElementHandle element)
     {
         Element = element;
+        CrossBefore = 0f;
+        Cross = 0f;
+        CrossAfter = 0f;
+        MainBefore = 0f;
+        Main = 0f;
+        MainAfter = 0f;
     }
 }

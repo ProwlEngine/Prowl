@@ -17,10 +17,17 @@ internal class StretchItem
     public float Max { get; set; }
 
     public StretchItem(int index, float factor, ItemTypes itemType, float min, float max)
+        => Reset(index, factor, itemType, min, max);
+
+    /// <summary>Puts the instance back to how a fresh one would look, so it can serve another item.</summary>
+    public void Reset(int index, float factor, ItemTypes itemType, float min, float max)
     {
         Index = index;
         Factor = factor;
         ItemType = itemType;
+        Violation = 0f;
+        Computed = 0f;
+        Frozen = false;
         Min = min;
         Max = max;
     }
