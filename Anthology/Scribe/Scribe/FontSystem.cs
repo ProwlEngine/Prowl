@@ -184,8 +184,8 @@ namespace Prowl.Scribe
         {
             if (binPacker.TryPack(4 + Padding * 2, 4 + Padding * 2, out int x, out int y))
             {
-                // RGBA, fully opaque white. In the SDF text shader the median of (1,1,1) reads as
-                // fully inside, so this rect still renders as a solid fill.
+                // RGBA, fully opaque white. A distance of 1 reads as fully inside the shape, so the
+                // text shader draws this rect as a solid fill.
                 byte[] whiteData = new byte[4 * 4 * 4];
                 Array.Fill<byte>(whiteData, 255);
 

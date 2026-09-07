@@ -97,7 +97,6 @@ in vec4 fragColor;
 out vec4 finalColor;
 uniform sampler2D texture0;
 const float pxRange = 4.0;
-float median(float r, float g, float b) { return max(min(r, g), min(max(r, g), b)); }
 float screenPxRange() {
     vec2 unitRange = vec2(pxRange) / vec2(textureSize(texture0, 0));
     vec2 screenTexSize = vec2(1.0) / fwidth(fragTexCoord);
@@ -108,8 +107,8 @@ float screenPxRange() {
     return max(min(range.x, range.y), 1.0);
 }
 void main() {
-    vec3 s = texture(texture0, fragTexCoord).rgb;
-    float sd = median(s.r, s.g, s.b);
+    // One distance field, written into every colour channel, so red is the value.
+    float sd = texture(texture0, fragTexCoord).r;
     float d = screenPxRange() * (sd - 0.5);
     float coverage = clamp(d + 0.5, 0.0, 1.0);
     finalColor = vec4(fragColor.rgb, fragColor.a * coverage);
