@@ -11,35 +11,53 @@ namespace Prowl.Scribe
         public TextLayoutSettings Settings { get; private set; }
         public string Text { get; private set; }
 
-        // Per-layout ascender cache - instance fields so LayoutText / LayoutLongWordFast can
-        // share state without allocating a closure or a Func<,> per call. Reset at the top of
-        // UpdateLayout. Most layouts only ever touch one font, so we keep two single-slot caches
-        // and only fall back to a Dictionary if a third font appears.
-        private FontFile _asc1Font;
-        private float _asc1Value;
-        private FontFile _asc2Font;
-        private float _asc2Value;
-        private Dictionary<FontFile, float> _ascenderCache;
+        // The baseline all glyphs on a line sit on, measured down from the line's top edge. One
+        // value per layout: glyphs from a fallback font share the primary font's baseline rather
+        // than each sitting on their own, which is what keeps mixed-font text on one line straight.
+        private float _baseline;
+        private bool _baselineSet;
+        private float _lineHeight;
+
+        // Last glyph placed on the current line, so the pair it forms with a following space can be
+        // kerned. Cleared at every line start, where there is nothing to its left.
+        private FontFile _prevFont;
+        private int _prevGlyph;
+
+        // Pen of the last character that took up width, which is where a combining mark goes.
+        private float _basePenX;
+
+        /// <summary>
+        /// How far past the wrap width something may reach and still be kept on the line. A browser
+        /// lays out on a 1/64 pixel grid, so its advances land a hair either side of ours and a line
+        /// can otherwise break a character earlier than the same text in a browser does. Four of
+        /// those grid units is enough slack to absorb that and still far too little to see.
+        /// </summary>
+        private const float FitTolerance = 4f / 64f;
+
+        private static bool Exceeds(float extent, float maxWidth) => extent > maxWidth + FitTolerance;
+
+        // Kerning between two glyphs of the same font. Different fonts have no pair to look up, and
+        // glyph 0 is .notdef, which never kerns.
+        private static float PairKern(FontSystem fontSystem, FontFile a, int ga, FontFile b, int gb, float pixelSize)
+        {
+            if (a == null || b == null || ga <= 0 || gb <= 0 || !ReferenceEquals(a, b)) return 0f;
+            return fontSystem.GetKerningByGlyph(a, ga, gb, pixelSize);
+        }
 
         // The font system this layout was last built against. Hit-testing methods need it to fetch
         // per-glyph metrics (offsets) at draw time, since AtlasGlyph is now size-independent.
         private FontSystem _fontSystem;
 
-        private float GetAscender(FontSystem fontSystem, FontFile font, float pixelSize)
+        /// <summary>
+        /// Distance from the top of a line to the baseline its glyphs sit on. Anything a line is
+        /// given beyond the font's own ascent-to-descent box is leading, and half of it belongs
+        /// above the text, so a raised <see cref="TextLayoutSettings.LineHeight"/> centres the line
+        /// rather than pushing it down.
+        /// </summary>
+        private static float BaselineFor(FontSystem fontSystem, FontFile font, float pixelSize, float lineHeight)
         {
-            if (ReferenceEquals(font, _asc1Font)) return _asc1Value;
-            if (ReferenceEquals(font, _asc2Font)) return _asc2Value;
-            if (_ascenderCache != null && _ascenderCache.TryGetValue(font, out var hit)) return hit;
-
-            fontSystem.GetScaledVMetrics(font, pixelSize, out var asc, out _, out _);
-            if (_asc1Font == null) { _asc1Font = font; _asc1Value = asc; }
-            else if (_asc2Font == null) { _asc2Font = font; _asc2Value = asc; }
-            else
-            {
-                if (_ascenderCache == null) _ascenderCache = new Dictionary<FontFile, float>(4);
-                _ascenderCache[font] = asc;
-            }
-            return asc;
+            fontSystem.GetScaledVMetrics(font, pixelSize, out float asc, out float desc, out _);
+            return (lineHeight - (asc - desc)) * 0.5f + asc;
         }
 
         /// <summary>
@@ -132,15 +150,24 @@ namespace Prowl.Scribe
             float lineHeight = GetLineHeight(fontSystem) * Settings.LineHeight;
             float spaceWidth = GetSpaceWidth(fontSystem);
             float spaceAdvance = spaceWidth + Settings.WordSpacing;
+
+            // Words are shaped one at a time, so the pairs that straddle a space are not covered by
+            // that shaping and have to be kerned here. Without this every space in a line is a
+            // fraction of a pixel too wide, and the error accumulates across the line.
+            var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.Font, Settings.Quality);
+            FontFile spaceFont = spaceGlyph?.Font;
+            int spaceIndex = spaceGlyph?.GlyphIndex ?? 0;
+            bool afterSpace = false;
             float tabWidth = spaceWidth * Settings.TabSize;
 
             bool wrapEnabled = Settings.WrapMode == TextWrapMode.Wrap && Settings.MaxWidth > 0f;
             float maxWidth = Settings.MaxWidth;
 
-            // Reset the per-layout ascender cache (instance fields - see top of class).
-            _asc1Font = null; _asc1Value = 0f;
-            _asc2Font = null; _asc2Value = 0f;
-            _ascenderCache?.Clear();
+            // With no primary font the baseline comes from the first glyph actually placed.
+            _lineHeight = lineHeight;
+            _prevFont = null; _prevGlyph = 0; _basePenX = 0f;
+            _baselineSet = Settings.Font != null;
+            if (_baselineSet) _baseline = BaselineFor(fontSystem, Settings.Font, pixelSize, lineHeight);
 
             // Reusable shaped-glyph buffer for the current content word (kerning/ligatures folded in).
             var wordGlyphs = _wordGlyphs ??= new List<ShapedGlyph>();
@@ -149,14 +176,16 @@ namespace Prowl.Scribe
             {
                 char ch = text[i];
 
-                // Explicit newline
-                if (ch == '\n')
+                // Explicit newline. A carriage return is one too, and a CRLF pair is a single break
+                // rather than two, which is what any text that has been near Windows looks like.
+                if (ch == '\n' || ch == '\r')
                 {
                     FinalizeLine(ref line, currentY, lineHeight, i, currentX);
                     currentX = 0f;
                     currentY += lineHeight;
-                    i++;
+                    i += ch == '\r' && i + 1 < len && text[i + 1] == '\n' ? 2 : 1;
                     line = new Line(new Float2(0, currentY), i);
+                    _prevFont = null; _prevGlyph = 0;
                     hasTrailingNewline = true;
                     continue;
                 }
@@ -165,27 +194,38 @@ namespace Prowl.Scribe
                 if (ch == '\t')
                 {
                     float tabStop = ((int)(currentX / tabWidth) + 1) * tabWidth;
+
+                    // A tab that would advance almost nothing reads as no tab at all, so a stop
+                    // closer than half a space is passed over for the one after it. Measured out of
+                    // Chrome, which uses the same half-space rule at every font and size.
+                    if (tabStop - currentX < spaceWidth * 0.5f) tabStop += tabWidth;
+
                     currentX = tabStop;
                     i++;
                     continue;
                 }
 
                 // Spaces (coalesce runs)
-                if (char.IsWhiteSpace(ch))
+                if (IsBreakingSpace(ch))
                 {
                     int s = i;
-                    while (i < len && char.IsWhiteSpace(text[i]) && text[i] != '\n' && text[i] != '\t') i++;
+                    while (i < len && IsBreakingSpace(text[i])
+                           && text[i] != '\n' && text[i] != '\r' && text[i] != '\t') i++;
                     int count = i - s;
 
-                    float runAdvance = spaceAdvance * count;
+                    float runAdvance = spaceAdvance * count
+                                     + PairKern(fontSystem, _prevFont, _prevGlyph, spaceFont, spaceIndex, pixelSize);
+                    afterSpace = true;
 
-                    if (wrapEnabled && currentX + runAdvance > maxWidth && line.Glyphs.Count > 0)
+                    if (wrapEnabled && Exceeds(currentX + runAdvance, maxWidth) && line.Glyphs.Count > 0)
                     {
                         // wrap before the run
                         FinalizeLine(ref line, currentY, lineHeight, s, currentX);
                         currentX = 0f;
                         currentY += lineHeight;
                         line = new Line(new Float2(0, currentY), i);
+                        _prevFont = null; _prevGlyph = 0;
+                        afterSpace = false;
                     }
                     else
                     {
@@ -208,24 +248,59 @@ namespace Prowl.Scribe
                     continue;
                 }
 
+                // Characters that occupy no width of their own: the ones that are only there to
+                // offer a break, and combining marks, which sit on the character before them. Fonts
+                // do not reliably give either a zero advance, so it is taken away here.
+                for (int g = 0; g < wordGlyphs.Count; g++)
+                {
+                    ShapedGlyph sg = wordGlyphs[g];
+                    if (sg.Cluster < 0 || sg.Cluster >= len) continue;
+
+                    char c = text[sg.Cluster];
+                    bool invisible = IsInvisible(c);
+                    if (!invisible && !IsNonSpacing(c)) continue;
+
+                    sg.Advance = 0f;
+                    if (invisible) sg.Glyph = null;
+                    wordGlyphs[g] = sg;
+                }
+
                 // Word width: advance (kerning included) plus letter spacing per cluster.
                 float wordWidth = 0f;
                 for (int g = 0; g < wordGlyphs.Count; g++)
                     wordWidth += wordGlyphs[g].Advance + Settings.LetterSpacing;
 
-                if (wrapEnabled && currentX + wordWidth > maxWidth)
+                // The pair that straddles the boundary this run starts at, which shaping the run on
+                // its own cannot see. Across a space that is the space and the first glyph; where a
+                // run was split at a dash the two glyphs simply touch. Dropped if the run wraps,
+                // since there is then nothing to its left.
+                var firstGlyph = wordGlyphs[0].Glyph;
+                FontFile leftFont = afterSpace ? spaceFont : _prevFont;
+                int leftGlyph = afterSpace ? spaceIndex : _prevGlyph;
+                float leadKern = PairKern(fontSystem, leftFont, leftGlyph,
+                                          firstGlyph?.Font, firstGlyph?.GlyphIndex ?? 0, pixelSize);
+                afterSpace = false;
+
+                if (wrapEnabled && Exceeds(currentX + leadKern + wordWidth, maxWidth))
                 {
                     // Wrap before the word when the line already has content.
                     if (line.Glyphs.Count > 0)
                     {
+                        // A soft hyphen is invisible right up until the line breaks at it, which is
+                        // this moment, and then it is a hyphen like any other.
+                        if (wordStart > 0 && text[wordStart - 1] == '­')
+                            EmitHyphen(fontSystem, line, ref currentX, pixelSize, wordStart - 1);
+
                         FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
                         currentX = 0f;
                         currentY += lineHeight;
                         line = new Line(new Float2(0, currentY), wordStart);
+                        _prevFont = null; _prevGlyph = 0;
+                        leadKern = 0f;
                     }
 
                     // A word too wide for a whole line is split at cluster boundaries.
-                    if (wordWidth > maxWidth)
+                    if (Exceeds(wordWidth, maxWidth))
                     {
                         PlaceLongWord(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
                                       wordGlyphs, pixelSize, Settings.LetterSpacing, maxWidth);
@@ -234,6 +309,7 @@ namespace Prowl.Scribe
                     }
                 }
 
+                currentX += leadKern;
                 for (int g = 0; g < wordGlyphs.Count; g++)
                     EmitShaped(fontSystem, line, wordGlyphs[g], ref currentX, pixelSize, Settings.LetterSpacing);
 
@@ -260,17 +336,30 @@ namespace Prowl.Scribe
                 var sg = glyphs[g];
                 float adv = sg.Advance + letterSpacing;
 
-                if (line.Glyphs.Count > 0 && currentX + adv > maxWidth)
+                if (line.Glyphs.Count > 0 && Exceeds(currentX + adv, maxWidth))
                 {
                     int clusterIndex = sg.Cluster;
                     FinalizeLine(ref line, currentY, lineHeight, clusterIndex, currentX);
                     currentX = 0f;
                     currentY += lineHeight;
                     line = new Line(new Float2(0, currentY), clusterIndex);
+                    _prevFont = null; _prevGlyph = 0;
                 }
 
                 EmitShaped(fontSystem, line, sg, ref currentX, pixelSize, letterSpacing);
             }
+        }
+
+        // Draws the hyphen a soft hyphen turns into once a line breaks at it.
+        private void EmitHyphen(FontSystem fontSystem, Line line, ref float currentX, float pixelSize, int charIndex)
+        {
+            var glyph = fontSystem.GetOrCreateGlyph('-', Settings.Font, Settings.Quality);
+            if (glyph == null) return;
+
+            var gm = fontSystem.GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, pixelSize, Settings.Font) ?? default;
+            line.Glyphs.Add(new GlyphInstance(glyph, new Float2(currentX + gm.OffsetX, gm.OffsetY + _baseline),
+                                              '-', gm.AdvanceWidth, pixelSize, charIndex, 1));
+            currentX += gm.AdvanceWidth;
         }
 
         // Emits one shaped glyph at the current pen X, advancing the pen. (Line.Glyphs is a reference,
@@ -286,14 +375,31 @@ namespace Prowl.Scribe
                 return;
             }
 
-            var gm = fontSystem.GetGlyphMetricsByIndex(atlas.Font, atlas.GlyphIndex, pixelSize) ?? default;
-            float a = GetAscender(fontSystem, atlas.Font, pixelSize);
+            var gm = fontSystem.GetGlyphMetricsByIndex(atlas.Font, atlas.GlyphIndex, pixelSize, Settings.Font) ?? default;
+            if (!_baselineSet)
+            {
+                _baseline = BaselineFor(fontSystem, atlas.Font, pixelSize, _lineHeight);
+                _baselineSet = true;
+            }
             char ch = sg.Cluster >= 0 && sg.Cluster < Text.Length ? Text[sg.Cluster] : '\0';
+
+            // A combining mark belongs over the character it follows. The pen has already moved past
+            // that character, so drawing at the pen would land the accent on the next letter along.
+            bool nonSpacing = IsNonSpacing(ch);
+            float penX = nonSpacing ? _basePenX : currentX;
 
             line.Glyphs.Add(new GlyphInstance(
                 atlas,
-                new Float2(currentX + gm.OffsetX, gm.OffsetY + a),
+                new Float2(penX + gm.OffsetX, gm.OffsetY + _baseline),
                 ch, advance, pixelSize, sg.Cluster, sg.CharCount));
+
+            if (!nonSpacing)
+            {
+                _basePenX = currentX;
+                _prevFont = atlas.Font;
+                _prevGlyph = atlas.GlyphIndex;
+            }
+
             currentX += advance;
         }
 
@@ -303,7 +409,7 @@ namespace Prowl.Scribe
         private float GlyphOffsetX(GlyphInstance gi)
         {
             if (_fontSystem == null || gi.Glyph == null) return 0f;
-            var gm = _fontSystem.GetGlyphMetricsByIndex(gi.Glyph.Font, gi.Glyph.GlyphIndex, gi.PixelSize);
+            var gm = _fontSystem.GetGlyphMetricsByIndex(gi.Glyph.Font, gi.Glyph.GlyphIndex, gi.PixelSize, Settings.Font);
             return gm?.OffsetX ?? 0f;
         }
 
@@ -323,16 +429,50 @@ namespace Prowl.Scribe
         {
             var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.Font, Settings.Quality);
             if (spaceGlyph == null) return Settings.PixelSize * 0.25f;
-            var gm = fontSystem.GetGlyphMetricsByIndex(spaceGlyph.Font, spaceGlyph.GlyphIndex, Settings.PixelSize);
+            var gm = fontSystem.GetGlyphMetricsByIndex(spaceGlyph.Font, spaceGlyph.GlyphIndex, Settings.PixelSize, Settings.Font);
             return gm?.AdvanceWidth ?? Settings.PixelSize * 0.25f;
         }
 
+        /// <summary>
+        /// Whether a space is one a line may break at. A no-break space is a space to look at and a
+        /// letter to lay out, so it belongs inside the word rather than between words.
+        /// </summary>
+        private static bool IsBreakingSpace(char c)
+            => char.IsWhiteSpace(c) && c != ' ' && c != ' ' && c != ' ';
+
+        /// <summary>Characters that take up no room and are only there to offer a break.</summary>
+        private static bool IsInvisible(char c) => c == '​' || c == '­';
+
+        /// <summary>
+        /// A combining mark belongs on top of the character before it, so it takes no width of its
+        /// own. Some fonts, monospace ones especially, still give their mark glyphs a full advance,
+        /// which would push the rest of the line along by a cell per accent.
+        /// </summary>
+        private static bool IsNonSpacing(char c)
+            => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+               == System.Globalization.UnicodeCategory.NonSpacingMark;
+
+        /// <summary>A line may break straight after these, with no space involved.</summary>
+        private static bool BreaksAfter(char c)
+            => c == '-' || c == '‐' || c == '‒' || c == '–' || c == '—'
+               || c == '​' || c == '­';
+
+        /// <summary>A line may break just before these.</summary>
+        private static bool BreaksBefore(char c) => c == '—';
+
+        // A run is the most a line can hold without a break inside it: up to the next space, the next
+        // line break, or the next dash-like character a line is allowed to break around.
         private int FindWordEnd(int startIndex)
         {
             int index = startIndex;
-            while (index < Text.Length && !char.IsWhiteSpace(Text[index]) && Text[index] != '\n')
+            while (index < Text.Length)
             {
+                char c = Text[index];
+                if (IsBreakingSpace(c) || c == '\n' || c == '\r') break;
+                if (index > startIndex && BreaksBefore(c)) break;
+
                 index++;
+                if (BreaksAfter(c)) break;
             }
             return index;
         }
@@ -341,9 +481,10 @@ namespace Prowl.Scribe
         {
             line.Position = new Float2(0, y);
             line.Height = lineHeight;
-            // Use the maximum of glyph-based width and currentX to account for trailing whitespace
-            float glyphWidth = line.Glyphs.Count > 0 ? line.Glyphs[^1].Position.X + line.Glyphs[^1].AdvanceWidth : 0;
-            line.Width = Math.Max(glyphWidth, currentX);
+            // The pen has already advanced past every glyph and space on the line, so it is the
+            // line's width. A glyph's Position.X carries its left side bearing, which is ink rather
+            // than advance and would over-report the width by that bearing.
+            line.Width = currentX;
             line.EndIndex = endIndex;
             Lines.Add(line);
         }

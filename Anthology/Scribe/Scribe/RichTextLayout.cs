@@ -34,7 +34,7 @@ namespace Prowl.Scribe
         public int CharStart;
         public int CharEnd;
         public float Y;          // line-top y
-        public float MaxAscent;  // baseline = Y + MaxAscent
+        public float MaxAscent;  // see Baseline: half of any leading sits above the text
         public float MaxDescent;
         public float Height;     // (MaxAscent + MaxDescent) * settings.LineHeight
         public float Width;
@@ -484,7 +484,7 @@ namespace Prowl.Scribe
 
             float baseHeight = asc + desc;
             float lineHeight = baseHeight * lineHeightMul;
-            float baselineY = yTop + asc + (lineHeight - baseHeight) * 0.5f;
+            float baselineY = BaselineOf(yTop, asc, desc, lineHeight);
 
             // Bake baseline into each glyph's Y position.
             for (int g = lineFirstGlyph; g < _glyphs.Count; g++)
@@ -647,6 +647,14 @@ namespace Prowl.Scribe
             }
         }
 
+        /// <summary>
+        /// Where a line's baseline sits, measured from the top of the layout. Any height the line has
+        /// beyond the text itself is leading, and half of it belongs above, so this is not simply the
+        /// ascent. Glyph placement and decorations both go through here so they cannot drift apart.
+        /// </summary>
+        private static float BaselineOf(float yTop, float ascent, float descent, float lineHeight)
+            => yTop + ascent + (lineHeight - (ascent + descent)) * 0.5f;
+
         private void EmitDecorationRun(List<IFontRenderer.Vertex> verts, List<int> indices, ref int vbase,
             Float2 position, RichLine line, RichStyleFlags which)
         {
@@ -654,7 +662,7 @@ namespace Prowl.Scribe
             bool inRun = false;
             FontColor runColor = default;
             float runX0 = 0f, runX1 = 0f, runMaxSize = 0f;
-            float baselineY = position.Y + line.Y + line.MaxAscent;
+            float baselineY = position.Y + BaselineOf(line.Y, line.MaxAscent, line.MaxDescent, line.Height);
 
             for (int g = line.FirstGlyph; g <= end; g++)
             {

@@ -80,6 +80,12 @@ namespace Prowl.Scribe
         public TextAlignment Alignment;
         public float MaxWidth; // for wrapping, 0 = no limit
 
+        /// <summary>Draw a line under the text, where the font's post table puts it.</summary>
+        public bool Underline;
+
+        /// <summary>Draw a line through the text, where the font's OS/2 table puts it.</summary>
+        public bool Strikethrough;
+
         // Atlas rasterization quality. Independent of PixelSize - the distance field is generated
         // once per quality and scaled to any display size at draw time.
         public FontQuality Quality;

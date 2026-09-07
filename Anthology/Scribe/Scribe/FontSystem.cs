@@ -43,6 +43,16 @@ namespace Prowl.Scribe
         private bool useWhiteRect;
         private float whiteU0, whiteV0, whiteU1, whiteV1;
 
+        // A distance field for a horizontal bar, used to draw underlines and strikethroughs. It is
+        // uniform along X, so a quad can be stretched to any length without distorting the field;
+        // only the top and bottom edges carry a gradient, and those are the edges that need to
+        // antialias. BandInset is how much of the tile above and below the bar is margin, as a
+        // fraction of the tile, so a caller knows how much taller than the bar to draw the quad.
+        private float bandU0, bandV0, bandU1, bandV1;
+        private bool hasBand;
+
+        private const int BandTexels = 8;
+
         // Settings
         public bool AllowExpansion { get; set; } = true;
         public float ExpansionFactor { get; set; } = 2f;
@@ -104,6 +114,70 @@ namespace Prowl.Scribe
             // Add a small white rectangle for rendering
             if (useWhiteRect)
                 AddWhiteRect();
+
+            AddDecorationBand();
+        }
+
+        /// <summary>
+        /// Packs the distance field a decoration is drawn from: a horizontal bar with a margin above
+        /// and below for the field to fall away into. Every column is identical, so stretching the
+        /// quad sideways cannot distort it.
+        /// </summary>
+        public void AddDecorationBand()
+        {
+            int margin = (int)MathF.Ceiling(DistanceRange);
+            int height = BandTexels + margin * 2;
+            const int Width = 4;
+
+            if (!binPacker.TryPack(Width + Padding * 2, height + Padding * 2, out int x, out int y))
+            {
+                hasBand = false;
+                return;
+            }
+
+            var data = new byte[Width * height * 4];
+            for (int row = 0; row < height; row++)
+            {
+                // Signed distance to the bar, positive inside, in texels.
+                float centre = row + 0.5f;
+                float inside = MathF.Min(centre - margin, margin + BandTexels - centre);
+                float encoded = Math.Clamp(0.5f + inside / (DistanceRange * 2f), 0f, 1f);
+                byte v = (byte)MathF.Round(encoded * 255f);
+
+                for (int col = 0; col < Width; col++)
+                {
+                    int o = (row * Width + col) * 4;
+                    data[o + 0] = v;
+                    data[o + 1] = v;
+                    data[o + 2] = v;
+                    data[o + 3] = 255;
+                }
+            }
+
+            renderer.UpdateTextureRegion(atlasTexture, new AtlasRect(x, y, Width, height), data);
+
+            // Texel centres, not the tile's outer edges. Sampling at an edge blends the first texel
+            // with whatever is packed next to it, and on a quad stretched to the width of a line of
+            // text that half-texel of bleed becomes tens of pixels of fade at each end.
+            bandU0 = (x + 0.5f) / atlasWidth;
+            bandV0 = (y + 0.5f) / atlasHeight;
+            bandU1 = (x + Width - 0.5f) / atlasWidth;
+            bandV1 = (y + height - 0.5f) / atlasHeight;
+            hasBand = true;
+        }
+
+        /// <summary>
+        /// The atlas rectangle a decoration quad samples, and how much taller than the bar itself the
+        /// quad has to be drawn for the field's margin to land outside it.
+        /// </summary>
+        public bool TryGetDecorationBand(out float u0, out float v0, out float u1, out float v1, out float marginRatio)
+        {
+            u0 = bandU0; v0 = bandV0; u1 = bandU1; v1 = bandV1;
+
+            // The sampled span runs between texel centres, so it is half a texel shorter than the
+            // tile at each end; the margin the caller has to leave shrinks to match.
+            marginRatio = (MathF.Ceiling(DistanceRange) - 0.5f) / BandTexels;
+            return hasBand;
         }
 
         public void AddWhiteRect()
@@ -247,17 +321,26 @@ namespace Prowl.Scribe
             if (gi > 0)
                 return GetOrAddGlyph(font, gi, quality);
 
-            // Check fallback fonts (must match the requested style).
+            // Fallbacks, preferring one drawn in the same style. A second pass takes any font that
+            // has the character at all: emoji and symbol fonts ship in one style only, so insisting
+            // on a match would drop them from every bold or italic run.
+            AtlasGlyph match = FindInFallbacks(codepoint, font, quality, font.Style);
+            return match ?? FindInFallbacks(codepoint, font, quality, null);
+        }
+
+        private AtlasGlyph FindInFallbacks(int codepoint, FontFile requested, FontQuality quality, FontStyle? style)
+        {
             foreach (var f in fallbackFonts)
             {
-                if (f == font) continue;
-                if (f.Style != font.Style) continue;
-                int fgi = f.FindGlyphIndex(codepoint);
-                if (fgi > 0)
-                    return GetOrAddGlyph(f, fgi, quality);
+                if (f == requested) continue;
+                if (style.HasValue && f.Style != style.Value) continue;
+
+                int gi = f.FindGlyphIndex(codepoint);
+                if (gi > 0)
+                    return GetOrAddGlyph(f, gi, quality);
             }
 
-            return null; // Glyph not found in any font
+            return null;
         }
 
         /// <summary>
@@ -374,10 +457,28 @@ namespace Prowl.Scribe
             if (useWhiteRect)
                 AddWhiteRect();
 
+            AddDecorationBand();
+
             return true;
         }
 
         #region Metrics and Getters
+
+        /// <summary>
+        /// The scale a glyph is drawn at when the text's size was set from <paramref name="primary"/>.
+        /// Every font in a fallback chain shares one em size, so a glyph borrowed from another font
+        /// comes out the size of the text around it rather than the size that font would have picked
+        /// for itself. Fonts disagree considerably about how tall a pixel size is: at 16px Arial's em
+        /// is 14.3 and Segoe UI Emoji's is 17.0, so a borrowed glyph is otherwise a fifth too big.
+        /// </summary>
+        public float GetScale(FontFile font, FontFile primary, float pixelSize)
+        {
+            if (font == null) return 0f;
+            if (primary == null || ReferenceEquals(font, primary) || font.UnitsPerEm <= 0)
+                return font.ScaleForPixelHeight(pixelSize);
+
+            return primary.ScaleForPixelHeight(pixelSize) * primary.UnitsPerEm / font.UnitsPerEm;
+        }
 
         public GlyphMetrics? GetGlyphMetrics(FontFile fontInfo, int codepoint, float pixelSize)
         {
@@ -387,11 +488,12 @@ namespace Prowl.Scribe
         }
 
         /// <summary>Per-glyph horizontal metrics by glyph index (used by the shaper / substituted glyphs).</summary>
-        public GlyphMetrics? GetGlyphMetricsByIndex(FontFile fontInfo, int glyphIndex, float pixelSize)
+        public GlyphMetrics? GetGlyphMetricsByIndex(FontFile fontInfo, int glyphIndex, float pixelSize,
+                                                    FontFile primary = null)
         {
             if (glyphIndex <= 0) return null;
 
-            float scale = fontInfo.ScaleForPixelHeight(pixelSize);
+            float scale = GetScale(fontInfo, primary, pixelSize);
 
             // Get advance and bearing
             int advance = 0, leftSideBearing = 0;
@@ -475,7 +577,7 @@ namespace Prowl.Scribe
                 if (ag == null)
                 {
                     // Missing in every font: flush so shaping/kerning doesn't cross the gap, then skip.
-                    FlushSubRun(runFont, buf, pixelSize, quality, output);
+                    FlushSubRun(runFont, buf, pixelSize, quality, output, requestedFont);
                     buf.Clear();
                     runFont = null;
                     i += charCount;
@@ -484,7 +586,7 @@ namespace Prowl.Scribe
 
                 if (runFont != null && !ReferenceEquals(ag.Font, runFont))
                 {
-                    FlushSubRun(runFont, buf, pixelSize, quality, output);
+                    FlushSubRun(runFont, buf, pixelSize, quality, output, requestedFont);
                     buf.Clear();
                 }
 
@@ -493,17 +595,18 @@ namespace Prowl.Scribe
                 i += charCount;
             }
 
-            FlushSubRun(runFont, buf, pixelSize, quality, output);
+            FlushSubRun(runFont, buf, pixelSize, quality, output, requestedFont);
             buf.Clear();
         }
 
-        private void FlushSubRun(FontFile font, List<GsubGlyph> buf, float pixelSize, FontQuality quality, List<ShapedGlyph> output)
+        private void FlushSubRun(FontFile font, List<GsubGlyph> buf, float pixelSize, FontQuality quality,
+                                 List<ShapedGlyph> output, FontFile primary)
         {
             if (font == null || buf.Count == 0)
                 return;
 
             font.ApplyGsub(buf);
-            float scale = font.ScaleForPixelHeight(pixelSize);
+            float scale = GetScale(font, primary, pixelSize);
 
             for (int k = 0; k < buf.Count; k++)
             {
@@ -666,11 +769,31 @@ namespace Prowl.Scribe
             var quads = layout._drawQuads;
             quads.Clear();
 
+            bool wantsDecoration = layout.Settings.Underline || layout.Settings.Strikethrough;
+
             foreach (var line in layout.Lines)
             {
+                // Where the line's decoration would run, gathered as the glyphs go past.
+                float decoBaseline = 0f, decoX0 = 0f, decoX1 = 0f;
+                bool decoStarted = false;
+
                 foreach (var glyphInstance in line.Glyphs)
                 {
                     var glyph = glyphInstance.Glyph;
+
+                    if (wantsDecoration)
+                    {
+                        var dgm = GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, glyphInstance.PixelSize,
+                                                         layout.Settings.Font) ?? default;
+                        float pen = line.Position.X + glyphInstance.Position.X - dgm.OffsetX;
+                        if (!decoStarted)
+                        {
+                            decoStarted = true;
+                            decoX0 = pen;
+                            decoBaseline = line.Position.Y + glyphInstance.Position.Y - dgm.OffsetY;
+                        }
+                        decoX1 = MathF.Max(decoX1, pen + glyphInstance.AdvanceWidth);
+                    }
 
                     // Only render if glyph is in atlas
                     if (!glyph.IsInAtlas || glyph.AtlasWidth <= 0 || glyph.AtlasHeight <= 0)
@@ -681,8 +804,8 @@ namespace Prowl.Scribe
                     // distance-field margin, so it is larger than the glyph's ink bounds. The region
                     // is in font units; scale it to this instance's pixel size.
                     float ps = glyphInstance.PixelSize;
-                    var gm = GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, ps) ?? default;
-                    float sc = glyph.Font.ScaleForPixelHeight(ps);
+                    var gm = GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, ps, layout.Settings.Font) ?? default;
+                    float sc = GetScale(glyph.Font, layout.Settings.Font, ps);
 
                     float penX = line.Position.X + glyphInstance.Position.X - gm.OffsetX;
                     float baselineY = line.Position.Y + glyphInstance.Position.Y - gm.OffsetY;
@@ -696,9 +819,50 @@ namespace Prowl.Scribe
                         U0 = glyph.U0, V0 = glyph.V0, U1 = glyph.U1, V1 = glyph.V1,
                     });
                 }
+
+                if (wantsDecoration && decoStarted)
+                    AddDecorationQuads(layout, quads, decoX0, decoX1, decoBaseline);
             }
 
             layout._drawQuadsBuilt = true;
+        }
+
+
+        // Underline and strikethrough for one line. Both come from the font's own tables, so they sit
+        // where the designer drew them rather than at a fraction of the size that happens to look
+        // right for one font.
+        private void AddDecorationQuads(TextLayout layout, List<TextLayout.DrawQuad> quads,
+                                        float x0, float x1, float baselineY)
+        {
+            FontFile font = layout.Settings.Font;
+            if (font == null || x1 <= x0) return;
+            if (!TryGetDecorationBand(out float u0, out float v0, out float u1, out float v1, out float marginRatio))
+                return;
+
+            float scale = font.ScaleForPixelHeight(layout.Settings.PixelSize);
+
+            if (layout.Settings.Underline)
+                Add(-font.UnderlinePosition * scale, font.UnderlineThickness * scale);
+
+            if (layout.Settings.Strikethrough)
+                Add(-font.StrikeoutPosition * scale, font.StrikeoutThickness * scale);
+
+            void Add(float below, float thickness)
+            {
+                if (thickness <= 0f) return;
+
+                // The field's margin has to fall outside the bar, so the quad is drawn taller than
+                // the bar by the same proportion the tile reserves for it.
+                float margin = thickness * marginRatio;
+                float top = baselineY + below;
+
+                quads.Add(new TextLayout.DrawQuad
+                {
+                    X0 = x0, Y0 = top - margin,
+                    X1 = x1, Y1 = top + thickness + margin,
+                    U0 = u0, V0 = v0, U1 = u1, V1 = v1,
+                });
+            }
         }
 
         #endregion

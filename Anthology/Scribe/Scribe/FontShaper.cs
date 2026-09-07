@@ -58,7 +58,7 @@ namespace Prowl.Scribe
         }
 
         /// <summary>
-        /// Applies the default GSUB substitution features (ccmp, then liga, then rlig) to a shaping
+        /// Applies the default GSUB substitution features (ccmp, liga, rlig, then calt) to a shaping
         /// buffer in place. Glyph indices may be replaced (single), expanded (multiple), or merged
         /// (ligature), with source clusters tracked so hit-testing can map back to characters.
         /// </summary>
@@ -69,6 +69,11 @@ namespace Prowl.Scribe
             ApplyGsubFeature(buf, "ccmp");
             ApplyGsubFeature(buf, "liga");
             ApplyGsubFeature(buf, "rlig");
+
+            // Contextual alternates are on by default everywhere text is laid out, and script faces
+            // lean on them heavily: without it their letters keep the shapes and widths they have in
+            // isolation instead of the ones that join up.
+            ApplyGsubFeature(buf, "calt");
         }
 
         private void ApplyGsubFeature(List<GsubGlyph> buf, string feature)
@@ -82,47 +87,68 @@ namespace Prowl.Scribe
 
         private void ApplyGsubLookup(List<GsubGlyph> buf, int lookupIndex)
         {
-            var table = this.data + this.gsub;
-            var lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
-            if (lookup.IsNull)
-                return;
-
             int i = 0;
             while (i < buf.Count)
             {
-                int advance = -1;
-                for (int s = 0; s < subtableCount && advance < 0; s++)
-                {
-                    var st = GetSubtable(lookup, s);
-                    int type = lookupType;
-                    if (type == 7) // Extension substitution - unwrap to the real lookup type/subtable.
-                    {
-                        type = ttUSHORT(st + 2);
-                        st = st + (int)ttULONG(st + 4);
-                    }
-
-                    switch (type)
-                    {
-                        case 1:
-                            if (ApplySingle(buf, i, st)) advance = 1;
-                            break;
-                        case 2:
-                        {
-                            int produced = ApplyMultiple(buf, i, st);
-                            if (produced >= 0) advance = produced; // 0 = glyph deleted (don't skip ahead)
-                            break;
-                        }
-                        case 4:
-                            if (ApplyLigature(buf, i, st)) advance = 1;
-                            break;
-                    }
-                }
-                i += advance >= 0 ? advance : 1;
-                if (advance == 0) i++; // safety: a deletion still moves forward eventually
+                int advance = ApplyLookupAt(buf, lookupIndex, i);
+                i += advance > 0 ? advance : 1;
             }
         }
 
-        // GSUB LookupType 1 - Single substitution (replace one glyph with one glyph).
+        // How deep a chained-context rule may recurse into other lookups. Fonts nest a level or two;
+        // a cycle would otherwise run until the stack gives out.
+        private int _gsubDepth;
+
+        /// <summary>
+        /// Runs one lookup at one position. Returns how many glyphs it consumed, or 0 when nothing
+        /// there matched.
+        /// </summary>
+        private int ApplyLookupAt(List<GsubGlyph> buf, int lookupIndex, int i)
+        {
+            if (i < 0 || i >= buf.Count)
+                return 0;
+
+            var table = this.data + this.gsub;
+            var lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
+            if (lookup.IsNull)
+                return 0;
+
+            for (int sIndex = 0; sIndex < subtableCount; sIndex++)
+            {
+                var st = GetSubtable(lookup, sIndex);
+                int type = lookupType;
+                if (type == 7) // Extension substitution - unwrap to the real lookup type/subtable.
+                {
+                    type = ttUSHORT(st + 2);
+                    st = st + (int)ttULONG(st + 4);
+                }
+
+                switch (type)
+                {
+                    case 1:
+                        if (ApplySingle(buf, i, st)) return 1;
+                        break;
+                    case 2:
+                    {
+                        int produced = ApplyMultiple(buf, i, st);
+                        if (produced >= 0) return produced; // 0 = glyph deleted
+                        break;
+                    }
+                    case 4:
+                        if (ApplyLigature(buf, i, st)) return 1;
+                        break;
+                    case 6:
+                    {
+                        int consumed = ApplyChainContext(buf, i, st);
+                        if (consumed > 0) return consumed;
+                        break;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
         private bool ApplySingle(List<GsubGlyph> buf, int i, FakePtr<byte> st)
         {
             int format = ttUSHORT(st);
@@ -216,6 +242,66 @@ namespace Prowl.Scribe
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// Chained context substitution, format 3: a run of glyphs matches only when the glyphs
+        /// before and after it match too, and the rules then say which other lookups to apply and
+        /// where. This is how a font builds a flag out of two regional indicators, or joins an emoji
+        /// sequence, so without it those come out as their separate pieces.
+        /// </summary>
+        /// <returns>How far to advance, or 0 when nothing matched.</returns>
+        private int ApplyChainContext(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+        {
+            // Formats 1 and 2 exist but are rare in the fonts this has to handle, and a rule that
+            // does not apply is better than one applied wrongly.
+            if (ttUSHORT(st) != 3 || _gsubDepth >= 4)
+                return 0;
+
+            int p = 2;
+            int backtrackCount = ttUSHORT(st + p); p += 2;
+            var backtrack = st + p; p += 2 * backtrackCount;
+            int inputCount = ttUSHORT(st + p); p += 2;
+            var input = st + p; p += 2 * inputCount;
+            int lookaheadCount = ttUSHORT(st + p); p += 2;
+            var lookahead = st + p; p += 2 * lookaheadCount;
+            int recordCount = ttUSHORT(st + p); p += 2;
+            var records = st + p;
+
+            if (inputCount < 1 || i + inputCount > buf.Count)
+                return 0;
+            if (i < backtrackCount || i + inputCount + lookaheadCount > buf.Count)
+                return 0;
+
+            for (int k = 0; k < inputCount; k++)
+                if (stbtt__GetCoverageIndex(st + ttUSHORT(input + 2 * k), buf[i + k].Glyph) == -1)
+                    return 0;
+
+            // Backtrack coverages are stored nearest-first, walking away from the input.
+            for (int k = 0; k < backtrackCount; k++)
+                if (stbtt__GetCoverageIndex(st + ttUSHORT(backtrack + 2 * k), buf[i - 1 - k].Glyph) == -1)
+                    return 0;
+
+            for (int k = 0; k < lookaheadCount; k++)
+                if (stbtt__GetCoverageIndex(st + ttUSHORT(lookahead + 2 * k), buf[i + inputCount + k].Glyph) == -1)
+                    return 0;
+
+            // The nested lookups may merge glyphs, so the input shrinks as they are applied.
+            int before = buf.Count;
+            _gsubDepth++;
+            try
+            {
+                for (int r = 0; r < recordCount; r++)
+                {
+                    int at = ttUSHORT(records + 4 * r);
+                    int nested = ttUSHORT(records + 4 * r + 2);
+                    ApplyLookupAt(buf, nested, i + at);
+                }
+            }
+            finally { _gsubDepth--; }
+
+            int consumed = inputCount - (before - buf.Count);
+            return consumed > 0 ? consumed : 1;
         }
 
         // GSUB and GPOS share the same v1.0 header: ScriptList@4, FeatureList@6, LookupList@8. All

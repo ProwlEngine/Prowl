@@ -31,6 +31,7 @@ namespace Prowl.Scribe
         private int kern;
         private int loca;
         private int numGlyphs;
+        private int post;
         private Buf subrs = null;
 
         // Lookup-list indices of the GPOS 'kern' feature (latn/DFLT), resolved lazily. Empty when the
@@ -49,6 +50,22 @@ namespace Prowl.Scribe
 
         /// <summary>Font design units per em (head.unitsPerEm); the scale denominator for em-relative sizing.</summary>
         public int UnitsPerEm { get; private set; } = 0;
+
+        /// <summary>
+        /// Where the designer put the underline, in font units below the baseline (so negative), and
+        /// how thick they drew it. From the font's own post table; a font that omits it falls back to
+        /// proportions of the em, which is what the value would have been anyway.
+        /// </summary>
+        public int UnderlinePosition { get; private set; }
+
+        /// <summary>Underline thickness in font units, from the post table.</summary>
+        public int UnderlineThickness { get; private set; }
+
+        /// <summary>Strikeout position in font units above the baseline, from OS/2.</summary>
+        public int StrikeoutPosition { get; private set; }
+
+        /// <summary>Strikeout thickness in font units, from OS/2.</summary>
+        public int StrikeoutThickness { get; private set; }
 
         public FontFile(FileInfo file)
         {
@@ -136,6 +153,7 @@ namespace Prowl.Scribe
 			this.gsub = (int)FindTable(ptr, (uint)fontstart, "GSUB");
 			this.gdef = (int)FindTable(ptr, (uint)fontstart, "GDEF");
 			this.os2 = (int)FindTable(ptr, (uint)fontstart, "OS/2");
+			this.post = (int)FindTable(ptr, (uint)fontstart, "post");
 			if (cmap == 0 || this.head == 0 || this.hhea == 0 || this.hmtx == 0)
 				return 0;
 			if (this.glyf != 0)
@@ -236,6 +254,7 @@ namespace Prowl.Scribe
 			}
 			this.indexToLocFormat = ttUSHORT(ptr + this.head + 50);
 			this.UnitsPerEm = ttUSHORT(ptr + this.head + 18);
+			ReadDecorationMetrics();
 
             GetFontVerticalMetrics(out int a, out int d, out int l);
             Ascent = a;
@@ -604,6 +623,34 @@ namespace Prowl.Scribe
             lineGap = ttSHORT(this.data + this.hhea + 8);
         }
 
+        // Where the designer put the underline and the strikeout. Both tables are optional, so a font
+        // without them gets the proportions of the em that the common defaults use anyway.
+        private void ReadDecorationMetrics()
+        {
+            int em = UnitsPerEm > 0 ? UnitsPerEm : 1000;
+
+            UnderlinePosition = -em / 10;
+            UnderlineThickness = Math.Max(1, em / 20);
+            StrikeoutPosition = em / 4;
+            StrikeoutThickness = UnderlineThickness;
+
+            if (post != 0)
+            {
+                UnderlinePosition = ttSHORT(this.data + post + 8);
+                int thickness = ttSHORT(this.data + post + 10);
+                if (thickness > 0) UnderlineThickness = thickness;
+            }
+
+            // OS/2 version 0 already carries both strikeout fields, so no version check is needed.
+            if (os2 != 0)
+            {
+                int size = ttSHORT(this.data + os2 + 26);   // yStrikeoutSize
+                int pos = ttSHORT(this.data + os2 + 28);    // yStrikeoutPosition
+                if (size > 0) StrikeoutThickness = size;
+                if (pos != 0) StrikeoutPosition = pos;
+            }
+        }
+
         private int GetGlyfOffset(int glyph_index)
         {
             var g1 = 0;
@@ -744,7 +791,16 @@ namespace Prowl.Scribe
                         {
                             scx = x;
                             scy = y;
-                            if ((vertices[off + i + 1].type & 1) == 0)
+
+                            // A contour opening off-curve takes its start from the point after it.
+                            // A contour whose only point is the glyph's last has no such point, and
+                            // reading one anyway runs off the end of the array.
+                            if (i + 1 >= n)
+                            {
+                                sx = x;
+                                sy = y;
+                            }
+                            else if ((vertices[off + i + 1].type & 1) == 0)
                             {
                                 sx = (x + vertices[off + i + 1].x) >> 1;
                                 sy = (y + vertices[off + i + 1].y) >> 1;
