@@ -146,7 +146,8 @@ float calculateBrushFactor_0(vec2 fragPos_0)
 float sdfScreenPxRange_0(vec2 uv_0)
 {
 
-    return max(0.5 * dot(vec2(sdfPxRange) * atlasTexelSize, vec2(1.0) / (fwidth((uv_0)))), 1.0);
+    vec2 range_0 = vec2(sdfPxRange) * atlasTexelSize * (vec2(1.0) / (fwidth((uv_0))));
+    return max(min(range_0.x, range_0.y), 1.0);
 }
 
 layout(location = 0)

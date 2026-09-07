@@ -101,7 +101,11 @@ float median(float r, float g, float b) { return max(min(r, g), min(max(r, g), b
 float screenPxRange() {
     vec2 unitRange = vec2(pxRange) / vec2(textureSize(texture0, 0));
     vec2 screenTexSize = vec2(1.0) / fwidth(fragTexCoord);
-    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+    // Per axis, then the smaller of the two. A glyph is scaled evenly so both agree, but a quad
+    // stretched far along one axis and barely at all along the other, such as an underline, needs
+    // the range of the axis carrying the gradient; averaging would harden that edge into a step.
+    vec2 range = unitRange * screenTexSize;
+    return max(min(range.x, range.y), 1.0);
 }
 void main() {
     vec3 s = texture(texture0, fragTexCoord).rgb;

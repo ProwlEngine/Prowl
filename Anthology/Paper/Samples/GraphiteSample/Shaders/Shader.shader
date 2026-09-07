@@ -144,7 +144,14 @@ Shader "Quill/Canvas"
         {
             float2 unitRange = float2(sdfPxRange) * atlasTexelSize;
             float2 screenTexSize = float2(1.0) / fwidth(uv);
-            return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+
+            // Per axis, then the smaller of the two. A glyph is scaled evenly so both agree and this is the
+            // average either way. A quad stretched far along one axis and barely at all along the other, an
+            // underline or a strikethrough, needs the range of the axis that carries the gradient: averaging
+            // would hand an edge that needs a range of about one a range of about seventy, hardening it into
+            // an aliased step.
+            float2 range = unitRange * screenTexSize;
+            return max(min(range.x, range.y), 1.0);
         }
 
 
