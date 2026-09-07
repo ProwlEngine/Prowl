@@ -48,7 +48,10 @@ public static class ImageResize
         (int Start, int End)[] columns = Spans(source.Width, width);
         (int Start, int End)[] rows = Spans(source.Height, height);
 
-        Span<int> totals = channels <= 8 ? stackalloc int[channels] : new int[channels];
+        // Widened deliberately: each channel accumulates up to 255 a source pixel, so an int
+        // overflows once one destination pixel covers more than about 8.4 million of them, which a
+        // large image scaled to a thumbnail of a few pixels reaches.
+        Span<long> totals = channels <= 8 ? stackalloc long[channels] : new long[channels];
 
         for (int y = 0; y < height; y++)
         {
@@ -70,7 +73,7 @@ public static class ImageResize
                     }
                 }
 
-                int count = (bottom - top) * (right - left);
+                long count = (long)(bottom - top) * (right - left);
                 int to = (y * stride) + (x * channels);
                 for (int c = 0; c < channels; c++)
                     pixels[to + c] = (byte)((totals[c] + (count / 2)) / count);
