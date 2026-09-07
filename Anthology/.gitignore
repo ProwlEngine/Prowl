@@ -435,3 +435,7 @@ Slang/Native/lib
 # pulls in ImageSharp and ImageMagick purely to compare against. None of it is needed to build
 # or consume the package.
 Aperture/local/
+
+# The Scribe layout comparison harness: a console app, a headless browser page and the
+# screenshots they produce. None of it ships with the library.
+Scribe/local/
