@@ -369,6 +369,11 @@ namespace Prowl.PaperUI
             if (!handle.IsValid) return;
             ref ElementData data = ref handle.Data;
 
+            // Skip hidden subtrees rather than walk them looking for raised layers. The hit-test
+            // walks refuse hidden elements anyway, so this is about not gathering and then
+            // repeatedly rescanning candidates that can never answer.
+            if (!data.Visible) return;
+
             if (data.Layer > Layer.Base)
             {
                 _layeredElements.Add(handle);
@@ -431,6 +436,11 @@ namespace Prowl.PaperUI
             if (!handle.IsValid) return default;
             ref ElementData data = ref handle.Data;
 
+            // Layout skips a hidden element, so the rectangle it still carries is an empty one at
+            // its parent's corner. The bounds test below is inclusive, so without this it would
+            // still answer for that one point and take the pointer from whatever is drawn there.
+            if (!data.Visible) return default;
+
             // Resolved once for the frame. Where nothing in the ancestry transforms anything, which
             // is the usual case, the pointer is already in the element's own space.
             Float2 local = data._isIdentityWorldTransform
@@ -469,6 +479,9 @@ namespace Prowl.PaperUI
 
             // Skip non-Base elements (they're handled independently)
             if (data.Layer != Layer.Base) return default;
+
+            // Hidden elements are not laid out, so their bounds mean nothing; see HitTestElementTree.
+            if (!data.Visible) return default;
 
             // Resolved once for the frame. Where nothing in the ancestry transforms anything, which
             // is the usual case, the pointer is already in the element's own space.
