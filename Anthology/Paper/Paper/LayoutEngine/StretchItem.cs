@@ -16,6 +16,10 @@ internal class StretchItem
     public float Min { get; set; }
     public float Max { get; set; }
 
+    /// <summary>The size the item had before any distribution. Shrinking measures down from it, and
+    /// weights how much an item gives up by it, so a wide item yields more than a narrow one.</summary>
+    public float Base { get; set; }
+
     public StretchItem(int index, float factor, ItemTypes itemType, float min, float max)
         => Reset(index, factor, itemType, min, max);
 
@@ -30,5 +34,6 @@ internal class StretchItem
         Frozen = false;
         Min = min;
         Max = max;
+        Base = 0f;
     }
 }

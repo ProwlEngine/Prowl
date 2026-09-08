@@ -9,8 +9,9 @@ using Prowl.Vector;
 namespace Prowl.PaperUI.LayoutEngine;
 
 /// <summary>
-/// A composite layout value built from four independent components:
-/// <c>Px + Pct% + Grow * remainderShare + AutoFactor * contentSize</c>.
+/// A composite layout value built from independent components:
+/// <c>Px + Pct% + Grow * remainderShare + AutoFactor * contentSize</c>, plus a <c>Shrink</c> weight
+/// that only comes into play when the children of a container do not fit inside it.
 /// Lerping interpolates each component linearly. Arithmetic combines components
 /// so things like <c>Stretch(1) + Pixels(10)</c> ("10px floor plus a share of the leftover")
 /// or <c>Percentage(50) + Pixels(-8)</c> ("50% minus 8px") fall out naturally.
@@ -29,13 +30,22 @@ public struct UnitValue : IEquatable<UnitValue>
     /// <summary>Content-size multiplier. 1 = use full content size; 0 = ignore content.</summary>
     public float AutoFactor;
 
+    /// <summary>
+    /// How readily this value gives up space when its siblings do not fit, weighted against theirs.
+    /// Zero, the default, means it never shrinks. Nothing else about the value changes: shrink only
+    /// applies where there is a shortfall to share out, in the way <see cref="Grow"/> only applies
+    /// where there is a surplus.
+    /// </summary>
+    public float Shrink;
+
     /// <summary> Initialises a UnitValue from its four component values: pixel offset, percentage of parent, stretch factor, and content-size multiplier. </summary>
-    public UnitValue(float px, float pct = 0f, float grow = 0f, float autoFactor = 0f)
+    public UnitValue(float px, float pct = 0f, float grow = 0f, float autoFactor = 0f, float shrink = 0f)
     {
         Px = px;
         Pct = pct;
         Grow = grow;
         AutoFactor = autoFactor;
+        Shrink = shrink;
     }
 
     #region Factory Methods
@@ -55,12 +65,22 @@ public struct UnitValue : IEquatable<UnitValue>
     /// <summary>A percentage of the parent, optionally combined with a pixel offset.</summary>
     public static UnitValue Percentage(float value, float offset = 0f) => new UnitValue(offset, value, 0f, 0f);
 
+    /// <summary>
+    /// The same value, but willing to give up space when its siblings would otherwise overflow the
+    /// container. <c>Pixels(200).Shrinkable()</c> is 200px that will go below 200 rather than spill.
+    /// </summary>
+    public readonly UnitValue Shrinkable(float factor = 1f)
+        => new UnitValue(Px, Pct, Grow, AutoFactor, factor);
+
     #endregion
 
     #region Predicates
 
     /// <summary>True when this value participates in stretch (flex-grow) distribution.</summary>
     public readonly bool HasGrow => Grow > 0f;
+
+    /// <summary>True when this value will give up space to fit, rather than overflow.</summary>
+    public readonly bool HasShrink => Shrink > 0f;
 
     /// <summary>True when this value contributes a content-size component.</summary>
     public readonly bool HasAuto => AutoFactor > 0f;
@@ -111,7 +131,8 @@ public struct UnitValue : IEquatable<UnitValue>
             a.Px + (b.Px - a.Px) * t,
             a.Pct + (b.Pct - a.Pct) * t,
             a.Grow + (b.Grow - a.Grow) * t,
-            a.AutoFactor + (b.AutoFactor - a.AutoFactor) * t
+            a.AutoFactor + (b.AutoFactor - a.AutoFactor) * t,
+            a.Shrink + (b.Shrink - a.Shrink) * t
         );
     }
 
@@ -122,25 +143,25 @@ public struct UnitValue : IEquatable<UnitValue>
 
     /// <summary> Adds two UnitValues component-wise, combining their Px, Pct, Grow, and AutoFactor independently. </summary>
     public static UnitValue operator +(in UnitValue a, in UnitValue b)
-        => new UnitValue(a.Px + b.Px, a.Pct + b.Pct, a.Grow + b.Grow, a.AutoFactor + b.AutoFactor);
+        => new UnitValue(a.Px + b.Px, a.Pct + b.Pct, a.Grow + b.Grow, a.AutoFactor + b.AutoFactor, a.Shrink + b.Shrink);
 
     /// <summary> Returns the component-wise difference of two UnitValues; each field (Px, Pct, Grow, AutoFactor) is subtracted independently. </summary>
     public static UnitValue operator -(in UnitValue a, in UnitValue b)
-        => new UnitValue(a.Px - b.Px, a.Pct - b.Pct, a.Grow - b.Grow, a.AutoFactor - b.AutoFactor);
+        => new UnitValue(a.Px - b.Px, a.Pct - b.Pct, a.Grow - b.Grow, a.AutoFactor - b.AutoFactor, a.Shrink - b.Shrink);
 
     /// <summary> Negates all components (Px, Pct, Grow, AutoFactor) of the UnitValue. </summary>
     public static UnitValue operator -(in UnitValue a)
-        => new UnitValue(-a.Px, -a.Pct, -a.Grow, -a.AutoFactor);
+        => new UnitValue(-a.Px, -a.Pct, -a.Grow, -a.AutoFactor, -a.Shrink);
 
     /// <summary> Returns a UnitValue whose four components (Px, Pct, Grow, AutoFactor) are each multiplied by scalar. </summary>
     public static UnitValue operator *(in UnitValue a, float scalar)
-        => new UnitValue(a.Px * scalar, a.Pct * scalar, a.Grow * scalar, a.AutoFactor * scalar);
+        => new UnitValue(a.Px * scalar, a.Pct * scalar, a.Grow * scalar, a.AutoFactor * scalar, a.Shrink * scalar);
 
     public static UnitValue operator *(float scalar, in UnitValue a) => a * scalar;
 
     /// <summary> Divides all four components (Px, Pct, Grow, AutoFactor) by the given scalar. </summary>
     public static UnitValue operator /(in UnitValue a, float scalar)
-        => new UnitValue(a.Px / scalar, a.Pct / scalar, a.Grow / scalar, a.AutoFactor / scalar);
+        => new UnitValue(a.Px / scalar, a.Pct / scalar, a.Grow / scalar, a.AutoFactor / scalar, a.Shrink / scalar);
 
     /// <summary> Implicitly converts an integer to a UnitValue representing that many pixels. </summary>
     public static implicit operator UnitValue(int value) => new UnitValue(value);
@@ -154,13 +175,13 @@ public struct UnitValue : IEquatable<UnitValue>
 
     #region Equality
 
-    /// <summary> Returns true when all four components (Px, Pct, Grow, AutoFactor) are equal to those of the other UnitValue. </summary>
+    /// <summary> Returns true when every component is equal to that of the other UnitValue. </summary>
     public readonly bool Equals(UnitValue other)
-        => Px == other.Px && Pct == other.Pct && Grow == other.Grow && AutoFactor == other.AutoFactor;
+        => Px == other.Px && Pct == other.Pct && Grow == other.Grow && AutoFactor == other.AutoFactor && Shrink == other.Shrink;
 
     public override readonly bool Equals(object? obj) => obj is UnitValue other && Equals(other);
 
-    public override readonly int GetHashCode() => HashCode.Combine(Px, Pct, Grow, AutoFactor);
+    public override readonly int GetHashCode() => HashCode.Combine(Px, Pct, Grow, AutoFactor, Shrink);
 
     #endregion
 
@@ -172,6 +193,7 @@ public struct UnitValue : IEquatable<UnitValue>
         if (Pct != 0f) parts.Add($"{Pct}%");
         if (Grow != 0f) parts.Add($"{Grow}grow");
         if (AutoFactor != 0f) parts.Add($"{AutoFactor}auto");
+        if (Shrink != 0f) parts.Add($"{Shrink}shrink");
         return parts.Count == 0 ? "0px" : string.Join(" + ", parts);
     }
 }

@@ -137,21 +137,32 @@ namespace Prowl.PaperUI.LayoutEngine
         // (which includes text measurement via ProcessText). An element is laid out several times per
         // frame during stretch resolution, so DevTools sums these per element.
         private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross)
+            => DoLayoutTimed(elementHandle, parentLayoutType, parentMain, parentCross, null);
+
+        /// <summary>
+        /// Lays an element out at a main size it is told, rather than the one it asks for. The shrink
+        /// pass has already settled that size, and the element still asks for its original one, so
+        /// without this it would lay its own contents out at the size it wanted rather than got.
+        /// </summary>
+        private static UISize DoLayoutAtMain(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross, float forcedMain)
+            => DoLayoutTimed(elementHandle, parentLayoutType, parentMain, parentCross, forcedMain);
+
+        private static UISize DoLayoutTimed(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross, float? forcedMain)
         {
             var dev = elementHandle.Owner.DevTools;
             if (!dev.DeepProfiling)
-                return DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross);
+                return DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross, forcedMain);
 
             int id = elementHandle.Data.ID;
             int pi = elementHandle.Data.ParentIndex;
             int pid = pi >= 0 ? elementHandle.Owner.GetElementData(pi).ID : 0;
             long start = System.Diagnostics.Stopwatch.GetTimestamp();
-            var size = DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross);
+            var size = DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross, forcedMain);
             dev.RecordLayout(id, pid, System.Diagnostics.Stopwatch.GetTimestamp() - start);
             return size;
         }
 
-        private static UISize DoLayoutInner(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross)
+        private static UISize DoLayoutInner(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross, float? forcedMain = null)
         {
             ref var element = ref elementHandle.Data;
             LayoutType layoutType = element.LayoutType;
@@ -179,6 +190,10 @@ namespace Prowl.PaperUI.LayoutEngine
             // Auto contribution is layered on after content measurement below.
             float computedMain = main.HasGrow ? parentMain : main.Floor(parentMain);
             float computedCross = cross.HasGrow ? parentCross : cross.Floor(parentCross);
+
+            // Told what size to be, rather than working it out. The shrink pass has already settled
+            // this element's main size and needs its contents laid out inside that.
+            if (forcedMain.HasValue) computedMain = forcedMain.Value;
 
             // Apply aspect ratio if set
             var aspectRatio = element._elementStyle.GetAspectRatio();
@@ -329,6 +344,7 @@ namespace Prowl.PaperUI.LayoutEngine
             // Lists for layout calculations
             var children = Arena.ChildInfoList();
             var mainAxis = Arena.StretchList();
+            var shrinkAxis = Arena.StretchList();
 
             // Parent overrides for child auto space
             UnitValue elementChildMainBefore = GetChildMainBefore(ref element, layoutType);
@@ -471,6 +487,21 @@ namespace Prowl.PaperUI.LayoutEngine
                     var childSize = DoLayout(childHandle, layoutType, innerParentMain, innerParentCross);
                     computedChildMain = childSize.Main;
                     computedChildCross = childSize.Cross;
+                }
+
+                // A child that agreed to shrink joins the deficit pass, weighted by its base size the
+                // way a browser weights it. One that grows is already flexible in both directions,
+                // so it is left to the stretch pass rather than being flexed twice.
+                if (childMain.HasShrink && !childMain.HasGrow && computedChildMain > 0f)
+                {
+                    var shrinkItem = Arena.Stretch(
+                        i,
+                        childMain.Shrink * computedChildMain,
+                        StretchItem.ItemTypes.Size,
+                        childMinMain.ToPx(actualParentMain, 0f),
+                        computedChildMain);
+                    shrinkItem.Base = computedChildMain;
+                    shrinkAxis.Add(shrinkItem);
                 }
 
                 mainSum += computedChildMain + computedChildMainBefore + computedChildMainAfter;
@@ -812,6 +843,66 @@ namespace Prowl.PaperUI.LayoutEngine
                                     break;
                             }
                         }
+                    }
+                }
+            }
+
+            // Main-axis shrinking. Where the loop above shares out surplus space among the children
+            // that asked to grow, this shares out the shortfall among the ones that agreed to
+            // shrink. It runs second so that anything the growers already gave up is accounted for,
+            // and it only does anything when the children genuinely do not fit.
+            // A wrapping container already has an answer for children that do not fit: put them on
+            // the next line. Shrinking them first would make them all fit and so never wrap.
+            if (shrinkAxis.Count > 0 && !element.ContentWrap)
+            {
+                int unfrozenShrinkCount = shrinkAxis.Count;
+                while (unfrozenShrinkCount > 0)
+                {
+                    float deficit = mainSum + ownPaddingMainBefore + ownPaddingMainAfter - actualParentMain;
+                    if (deficit <= 0f) break;
+
+                    float shrinkWeightSum = 0f;
+                    foreach (var item in shrinkAxis)
+                        if (!item.Frozen) shrinkWeightSum += item.Factor;
+
+                    if (shrinkWeightSum <= 0f) break;
+
+                    float totalViolation = 0f;
+                    foreach (var item in shrinkAxis)
+                    {
+                        if (item.Frozen) continue;
+
+                        float target = item.Base - deficit * (item.Factor / shrinkWeightSum);
+
+                        // Never past its own minimum, and never larger than it started.
+                        float clamped = Maths.Min(item.Base, Maths.Max(item.Min, target));
+                        item.Violation = clamped - target;
+                        totalViolation += item.Violation;
+                        item.Computed = clamped;
+                    }
+
+                    foreach (var item in shrinkAxis)
+                    {
+                        if (item.Frozen) continue;
+
+                        if (totalViolation > 0f) item.Frozen = item.Violation > 0f;
+                        else if (totalViolation < 0f) item.Frozen = item.Violation < 0f;
+                        else item.Frozen = true;
+
+                        if (!item.Frozen) continue;
+
+                        var child = children[item.Index];
+
+                        // The child is narrower now, so its own contents lay out again inside it. The
+                        // size is forced: the child still asks for its original width, and without
+                        // this it would lay its contents out at the size it wanted rather than got.
+                        var childSize = DoLayoutAtMain(child.Element, layoutType, actualParentMain, child.Cross, item.Computed);
+                        child.Cross = childSize.Cross;
+                        crossMax = Maths.Max(crossMax, child.CrossBefore + child.Cross + child.CrossAfter);
+
+                        mainSum -= child.Main - item.Computed;
+                        child.Main = item.Computed;
+                        unfrozenShrinkCount--;
                     }
                 }
             }
