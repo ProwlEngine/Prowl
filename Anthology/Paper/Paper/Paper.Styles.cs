@@ -382,13 +382,16 @@ namespace Prowl.PaperUI
         /// Sets a property value directly (already-resolved values such as the root size). In the new
         /// model this is the same as declaring a value for the frame.
         /// </summary>
-        public void SetDirectValue(GuiProp property, object value) => _current.Set(property, value);
+        public void SetDirectValue<TValue>(GuiProp property, TValue value) => _current.Set(property, value);
 
         /// <summary>
         /// Declares a property's value for this frame. Applied straight to the current values; if the
         /// property is animating, the transition pass (Update) overrides it with the tweened value.
         /// </summary>
-        public void SetNextValue(GuiProp property, object value) => _current.Set(property, value);
+        public void SetNextValue<TValue>(GuiProp property, TValue value) => _current.Set(property, value);
+
+        /// <summary>Folds every value a template declares into this element's current values.</summary>
+        internal void MergeValues(ref StyleValues values) => StyleValues.MergeInto(ref values, ref _current);
 
         /// <summary>
         /// Configures a transition for a property this frame (re-declared each frame, as before).
@@ -411,6 +414,18 @@ namespace Prowl.PaperUI
         // Reused per thread so the per-element per-frame transform build (render + every hit-test walk)
         // doesn't allocate a TransformBuilder each call. Non-reentrant: Build completes before we recurse.
         [ThreadStatic] private static TransformBuilder? s_transformBuilder;
+
+        /// <summary>
+        /// Whether the element declares any transform of its own. Almost none do, and the ones that
+        /// do not need neither a matrix built for them nor one multiplied through their subtree.
+        /// </summary>
+        public bool HasTransform =>
+            _current.Has(GuiProp.TranslateX) || _current.Has(GuiProp.TranslateY) ||
+            _current.Has(GuiProp.ScaleX) || _current.Has(GuiProp.ScaleY) ||
+            _current.Has(GuiProp.Rotate) ||
+            _current.Has(GuiProp.SkewX) || _current.Has(GuiProp.SkewY) ||
+            _current.Has(GuiProp.OriginX) || _current.Has(GuiProp.OriginY) ||
+            _current.Has(GuiProp.Transform);
 
         public Transform2D GetTransformForElement(Rect rect)
         {
@@ -437,67 +452,9 @@ namespace Prowl.PaperUI
         #region Private Helper Methods
 
         /// <summary>
-        /// Interpolates between two values based on their type.
-        /// </summary>
-        internal object Interpolate(object start, object end, float t)
-        {
-            if (start is float floatStart && end is float floatEnd)
-            {
-                return floatStart + (floatEnd - floatStart) * t;
-            }
-            else if(start is double doubleStart && end is double doubleEnd)
-            {
-                return doubleStart + (doubleEnd - doubleStart) * t;
-            }
-            else if (start is int intStart && end is int intEnd)
-            {
-                return intStart + (int)((intEnd - intStart) * t);
-            }
-            else if (start is Prowl.Vector.Color colorStart && end is Prowl.Vector.Color colorEnd)
-            {
-                return InterpolateColor(colorStart, colorEnd, t);
-            }
-            else if (start is Float2 vectorStart && end is Float2 vectorEnd)
-            {
-                return Maths.Lerp(vectorStart, vectorEnd, t);
-            }
-            else if (start is Float3 vector3Start && end is Float3 vector3End)
-            {
-                return Maths.Lerp(vector3Start, vector3End, t);
-            }
-            else if (start is Float4 vector4Start && end is Float4 vector4End)
-            {
-                return Maths.Lerp(vector4Start, vector4End, t);
-            }
-            else if (start is UnitValue unitStart && end is UnitValue unitEnd)
-            {
-                return UnitValue.Lerp(unitStart, unitEnd, t);
-            }
-            else if (start is Transform2D transformStart && end is Transform2D transformEnd)
-            {
-                return Transform2D.Lerp(transformStart, transformEnd, t);
-            }
-            else if (start is string startString && end is string endString)
-            {
-                return t > 0.5 ? endString : startString;
-            }
-            else if (start is Gradient gradientStart && end is Gradient gradientEnd)
-            {
-                return Gradient.Lerp(gradientStart, gradientEnd, t);
-            }
-            else if (start is BoxShadow shadowStart && end is BoxShadow shadowEnd)
-            {
-                return BoxShadow.Lerp(shadowStart, shadowEnd, t);
-            }
-
-            // Default to just returning the end value
-            return end;
-        }
-
-        /// <summary>
         /// Interpolates between two colors.
         /// </summary>
-        private Color InterpolateColor(Color start, Color end, float t)
+        internal static Color InterpolateColor(Color start, Color end, float t)
         {
             // If start is fully transparent, replace its RGB with end's RGB
             if (start.A == 0)
@@ -589,24 +546,25 @@ namespace Prowl.PaperUI
 
         #region Nested Types
 
-        /// <summary>Persistent interpolation state for one animating property.</summary>
-        private sealed class Interp
-        {
-            public object Start;
-            public object Target;
-            public object Current;
-            public float Time;
-        }
-
         /// <summary>
         /// Out-of-line transition state, allocated only for elements that configure a transition.
         /// Holds the per-frame configs (which properties transition this frame) and the persistent
         /// interpolation state that carries the animated value across frames.
+        /// <para>
+        /// That state is three <see cref="StyleValues"/> rather than a boxed cell per property: a
+        /// property's start, target and current value each live in their own typed field, so an
+        /// animation running every frame neither allocates nor unboxes anything.
+        /// </para>
         /// </summary>
         private sealed class Transitions
         {
             private readonly Dictionary<GuiProp, TransitionConfig> _frameConfigs = new();
-            private readonly Dictionary<GuiProp, Interp> _interps = new();
+
+            private StyleValues _start, _target, _animated;
+            private readonly float[] _elapsed = new float[64];
+            private ulong _running;
+
+            private static ulong Bit(GuiProp p) => 1UL << (int)p;
 
             public void BeginFrame() => _frameConfigs.Clear();
 
@@ -616,10 +574,10 @@ namespace Prowl.PaperUI
             public void Remove(GuiProp property)
             {
                 _frameConfigs.Remove(property);
-                _interps.Remove(property);
+                _running &= ~Bit(property);
             }
 
-            public bool IsAnimating(GuiProp property) => _interps.ContainsKey(property);
+            public bool IsAnimating(GuiProp property) => (_running & Bit(property)) != 0;
 
             /// <summary>
             /// For every property configured with a transition this frame, advance its interpolation
@@ -634,42 +592,44 @@ namespace Prowl.PaperUI
                 {
                     GuiProp property = kv.Key;
                     TransitionConfig config = kv.Value;
+                    int slot = (int)property;
 
-                    // The value declared this frame (or the default, since BeginFrame reset unset fields).
-                    object target = current.GetBoxed(property);
-
-                    if (!_interps.TryGetValue(property, out var interp))
+                    if ((_running & Bit(property)) == 0)
                     {
                         // First observation of this property - snap, don't animate from nothing.
-                        _interps[property] = new Interp { Start = target, Target = target, Current = target, Time = config.Duration };
+                        StyleValues.Copy(property, ref current, ref _start);
+                        StyleValues.Copy(property, ref current, ref _target);
+                        StyleValues.Copy(property, ref current, ref _animated);
+                        _elapsed[slot] = config.Duration;
+                        _running |= Bit(property);
                         continue;
                     }
 
-                    if (!Equals(interp.Target, target))
+                    if (!StyleValues.SameValue(property, ref current, ref _target))
                     {
                         // Target changed - restart from the current animated value.
-                        interp.Start = interp.Current;
-                        interp.Target = target;
-                        interp.Time = 0f;
+                        StyleValues.Copy(property, ref _animated, ref _start);
+                        StyleValues.Copy(property, ref current, ref _target);
+                        _elapsed[slot] = 0f;
                     }
 
-                    if (interp.Time < config.Duration)
+                    if (_elapsed[slot] < config.Duration)
                     {
-                        interp.Time += dt;
-                        if (interp.Time >= config.Duration)
+                        _elapsed[slot] += dt;
+                        if (_elapsed[slot] >= config.Duration)
                         {
-                            interp.Current = interp.Target;
+                            StyleValues.Copy(property, ref _target, ref _animated);
                         }
                         else
                         {
-                            float t = config.Duration > 0f ? interp.Time / config.Duration : 1f;
+                            float t = config.Duration > 0f ? _elapsed[slot] / config.Duration : 1f;
                             if (config.EasingFunction != null) t = config.EasingFunction(t);
-                            interp.Current = owner.Interpolate(interp.Start, interp.Target, t);
+                            StyleValues.Lerp(property, ref _start, ref _target, t, ref _animated);
                         }
                     }
 
                     // Override the declared snap with the animated value.
-                    current.Set(property, interp.Current);
+                    StyleValues.Copy(property, ref _animated, ref current);
                 }
             }
         }
@@ -735,9 +695,15 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Set a style property value (no transition).
         /// </summary>
-        internal void SetStyleProperty(int elementID, GuiProp property, object value)
+        internal void SetStyleProperty<TValue>(int elementID, GuiProp property, TValue value)
         {
             GetOrCreateStyle(elementID).SetNextValue(property, value);
+        }
+
+        /// <summary>Applies everything a style template declares to an element, without boxing.</summary>
+        internal void MergeStyleValues(int elementID, ref StyleValues values)
+        {
+            GetOrCreateStyle(elementID).MergeValues(ref values);
         }
 
         /// <summary>

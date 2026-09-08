@@ -207,7 +207,7 @@ namespace Prowl.PaperUI
         // Layered elements collected after layout for independent hit testing.
         // Each entry stores the element handle and the accumulated parent transform
         // (including scroll offsets) so hit testing uses the correct coordinates.
-        private List<(ElementHandle handle, Transform2D parentTransform)> _layeredElements = new List<(ElementHandle, Transform2D)>();
+        private readonly List<ElementHandle> _layeredElements = new List<ElementHandle>();
 
         // Public access to interaction state
         /// <summary> Gets the ID of the element currently under the pointer, or 0 if no element is hovered. </summary>
@@ -314,8 +314,7 @@ namespace Prowl.PaperUI
             _theHoveredElementId = 0;
 
             // Find the topmost element under the pointer
-            var t = Transform2D.Identity;
-            ElementHandle topmostInteractable = FindTopmostInteractableElement(ref _rootElementHandle, t);
+            ElementHandle topmostInteractable = FindTopmostInteractableElement(ref _rootElementHandle);
 
             if (topmostInteractable.IsValid)
             {
@@ -365,28 +364,18 @@ namespace Prowl.PaperUI
         /// Any element with <see cref="ElementData.Layer"/> &gt; <see cref="Layer.Base"/> is
         /// stored separately for layer-aware hit-testing.
         /// </summary>
-        private void CollectLayeredElements(ElementHandle handle, Transform2D parentTransform = default)
+        private void CollectLayeredElements(ElementHandle handle)
         {
             if (!handle.IsValid) return;
             ref ElementData data = ref handle.Data;
 
             if (data.Layer > Layer.Base)
             {
-                // Store the PARENT's accumulated transform (not this element's).
-                // HitTestElementTree will apply this element's own transform when testing.
-                _layeredElements.Add((handle, parentTransform));
+                _layeredElements.Add(handle);
             }
-
-            // Accumulate this element's transform for children
-            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
-            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
-            Transform2D combinedTransform = styleTransform * parentTransform;
 
             foreach (var childIndex in data.ChildIndices)
-            {
-                var child = new ElementHandle(this, childIndex);
-                CollectLayeredElements(child, combinedTransform);
-            }
+                CollectLayeredElements(new ElementHandle(this, childIndex));
         }
 
         /// <summary>
@@ -394,14 +383,14 @@ namespace Prowl.PaperUI
         /// from highest layer to lowest (last-added wins ties so DFS-front of the same layer
         /// hits first), then falls back to the Base tree.
         /// </summary>
-        private ElementHandle FindTopmostInteractableElement(ref ElementHandle handle, Transform2D parentTransform)
+        private ElementHandle FindTopmostInteractableElement(ref ElementHandle handle)
         {
             // Find the highest layer present, hit-test that tier, then step down. O(N*L)
             // in the worst case where N = layered count and L = distinct layers, but both
             // are tiny in practice (a handful of popovers / modals / tooltips).
             int currentLayer = int.MinValue;
             bool any = false;
-            foreach (var (le, _) in _layeredElements)
+            foreach (var le in _layeredElements)
             {
                 if (le.Data.Layer > currentLayer) { currentLayer = le.Data.Layer; any = true; }
             }
@@ -411,17 +400,17 @@ namespace Prowl.PaperUI
                 // Last-added of this layer = front (DFS order), so iterate in reverse.
                 for (int i = _layeredElements.Count - 1; i >= 0; i--)
                 {
-                    var (layered, layeredTransform) = _layeredElements[i];
+                    var layered = _layeredElements[i];
                     if (layered.Data.Layer != currentLayer) continue;
 
-                    var found = HitTestElementTree(ref layered, layeredTransform);
+                    var found = HitTestElementTree(ref layered);
                     if (found.IsValid) return found;
                 }
 
                 // Step to the next-highest layer below the one we just tested.
                 int next = int.MinValue;
                 any = false;
-                foreach (var (le, _) in _layeredElements)
+                foreach (var le in _layeredElements)
                 {
                     int l = le.Data.Layer;
                     if (l < currentLayer && l > next) { next = l; any = true; }
@@ -430,32 +419,28 @@ namespace Prowl.PaperUI
             }
 
             // Finally, Base layer tree walk (skipping anything that landed in _layeredElements).
-            return HitTestBaseLayer(ref handle, parentTransform);
+            return HitTestBaseLayer(ref handle);
         }
 
         /// <summary>
         /// Hit tests an element and its children as an independent tree (no parent clipping).
         /// Used for Topmost/Overlay elements.
         /// </summary>
-        private ElementHandle HitTestElementTree(ref ElementHandle handle, Transform2D parentTransform, bool isRoot = true)
+        private ElementHandle HitTestElementTree(ref ElementHandle handle, bool isRoot = true)
         {
             if (!handle.IsValid) return default;
             ref ElementData data = ref handle.Data;
 
-            Transform2D combinedTransform = parentTransform;
-            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
-            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
-            combinedTransform = styleTransform * combinedTransform;
-
-            var inverseTransform = combinedTransform.Inverse();
-            var local = inverseTransform.TransformPoint(PointerPos);
+            // Resolved once for the frame. Where nothing in the ancestry transforms anything, which
+            // is the usual case, the pointer is already in the element's own space.
+            Float2 local = data._isIdentityWorldTransform
+                ? PointerPos
+                : data._worldInverse.TransformPoint(PointerPos);
             bool isPointerOver = IsPointOverElementData(data, local.X, local.Y);
 
             // The layered root itself is not clipped by its original parent,
             // but children within the layered tree respect their own scissor.
             bool shouldCheckChildren = isRoot || data._scissorEnabled == false || isPointerOver;
-
-            Transform2D childTransform = combinedTransform;
 
             if (shouldCheckChildren)
             {
@@ -463,7 +448,7 @@ namespace Prowl.PaperUI
                 for (int i = childIndices.Count - 1; i >= 0; i--)
                 {
                     var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
-                    var found = HitTestElementTree(ref childHandle, childTransform, false);
+                    var found = HitTestElementTree(ref childHandle, false);
                     if (found.IsValid) return found;
                 }
             }
@@ -477,7 +462,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Hit tests the Base layer tree, skipping elements on other layers.
         /// </summary>
-        private ElementHandle HitTestBaseLayer(ref ElementHandle handle, Transform2D parentTransform)
+        private ElementHandle HitTestBaseLayer(ref ElementHandle handle)
         {
             if (!handle.IsValid) return default;
             ref ElementData data = ref handle.Data;
@@ -485,18 +470,14 @@ namespace Prowl.PaperUI
             // Skip non-Base elements (they're handled independently)
             if (data.Layer != Layer.Base) return default;
 
-            Transform2D combinedTransform = parentTransform;
-            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
-            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
-            combinedTransform = styleTransform * combinedTransform;
-
-            var inverseTransform = combinedTransform.Inverse();
-            var local = inverseTransform.TransformPoint(PointerPos);
+            // Resolved once for the frame. Where nothing in the ancestry transforms anything, which
+            // is the usual case, the pointer is already in the element's own space.
+            Float2 local = data._isIdentityWorldTransform
+                ? PointerPos
+                : data._worldInverse.TransformPoint(PointerPos);
             bool isPointerOver = IsPointOverElementData(data, local.X, local.Y);
 
             bool shouldCheckChildren = data._scissorEnabled == false || isPointerOver;
-
-            Transform2D childTransform = combinedTransform;
 
             var childIndices = data.ChildIndices;
             if (shouldCheckChildren && childIndices.Count > 0)
@@ -504,7 +485,7 @@ namespace Prowl.PaperUI
                 for (int i = childIndices.Count - 1; i >= 0; i--)
                 {
                     var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
-                    var found = HitTestBaseLayer(ref childHandle, childTransform);
+                    var found = HitTestBaseLayer(ref childHandle);
                     if (found.IsValid) return found;
                 }
             }

@@ -17,8 +17,10 @@ namespace Prowl.PaperUI
     /// <summary> Provides a fluent-style API for setting visual style properties on UI elements. The type parameter enables chained calls that return the concrete setter type. </summary>
     public interface IStyleSetter<T> where T : IStyleSetter<T>
     {
-        /// <summary> Sets the style property identified by property to the given value and returns the setter for chaining. </summary>
-        T SetStyleProperty(GuiProp property, object value);
+        /// <summary> Sets the style property identified by property to the given value and returns
+        /// the setter for chaining. Generic so a value reaches its typed field without being boxed
+        /// on the way; TValue is always the property's own type. </summary>
+        T SetStyleProperty<TValue>(GuiProp property, TValue value);
     }
 
     /// <summary> Base class for fluent style-builder types. Provides chainable methods that set UI properties on the wrapped element and return the derived type T so callers can continue the builder pattern. </summary>
@@ -26,13 +28,34 @@ namespace Prowl.PaperUI
     {
         public ElementHandle _handle { get; protected set; }
 
+        // Where a value written through this setter lands, held as data rather than reached through
+        // a virtual call. The setter is generic, and a generic virtual method cannot be dispatched
+        // through a vtable slot, so making it virtual would put a runtime lookup on every single
+        // style call. A null target means the values are being collected into a template instead.
+        // Where a value written through this setter lands. Reached through non-generic virtual
+        // properties rather than a virtual setter: the setter itself is generic, and a generic
+        // virtual method cannot be dispatched through a vtable slot, so making it virtual would put
+        // a runtime lookup on every style call. These cost a plain vtable call and, being
+        // properties rather than fields, add nothing to the size of a builder.
+        private protected abstract Paper? SinkPaper { get; }
+
+        /// <summary>Set only by a template, which collects declarations instead of applying them.</summary>
+        private protected virtual StyleTemplate? SinkCollector => null;
+
         protected StyleSetterBase(ElementHandle element)
         {
             _handle = element;
         }
 
         /// <summary> Sets the given style property to the specified value on the element. This is the base method that all typed convenience setters delegate to; returns the setter for fluent chaining. </summary>
-        public abstract T SetStyleProperty(GuiProp property, object value);
+        public T SetStyleProperty<TValue>(GuiProp property, TValue value)
+        {
+            Paper? paper = SinkPaper;
+            if (paper != null) paper.SetStyleProperty(_handle.Data.ID, property, value);
+            else SinkCollector?.Collect(property, value);
+
+            return (T)this;
+        }
 
         // Shared implementation methods
 
@@ -463,6 +486,9 @@ namespace Prowl.PaperUI
             _isActive = isActive;
         }
 
+        // Nothing is written while the state is not the one in effect.
+        private protected override Paper? SinkPaper => _isActive ? _owner._paper : null;
+
         /// <summary> Applies the predefined styles from the given template to the element, but only when this state-driven style is active (the condition is met). Returns this instance for fluent chaining. </summary>
         public StateDrivenStyle Style(StyleTemplate style)
         {
@@ -490,13 +516,6 @@ namespace Prowl.PaperUI
                 foreach(var styleName in names)
                     _owner._paper.ApplyStyleWithStates(_handle, styleName);
             }
-            return this;
-        }
-
-        public override StateDrivenStyle SetStyleProperty(GuiProp property, object value)
-        {
-            if (_isActive)
-                _owner._paper.SetStyleProperty(_handle.Data.ID, property, value);
             return this;
         }
 
@@ -530,23 +549,25 @@ namespace Prowl.PaperUI
     /// </summary>
     public class StyleTemplate : StyleSetterBase<StyleTemplate>
     {
-        private readonly Dictionary<GuiProp, object> _styleProperties = new Dictionary<GuiProp, object>();
         private readonly Dictionary<GuiProp, (float duration, Func<float, float> easing)> _transitions = new Dictionary<GuiProp, (float, Func<float, float>)>();
 
         /// <summary>
         /// Creates a new style template
         /// </summary>
+        private StyleValues _collected;
+
+        // A template has no element to write at; it gathers what was declared instead.
+        private protected override Paper? SinkPaper => null;
+        private protected override StyleTemplate? SinkCollector => this;
+
         public StyleTemplate() : base(default) { }
+
+        /// <summary>Records a declared value. Called by the shared setter, not through it.</summary>
+        internal void Collect<TValue>(GuiProp property, TValue value) => _collected.Set(property, value);
 
         /// <summary>
         /// Sets a style property in the template
         /// </summary>
-        public override StyleTemplate SetStyleProperty(GuiProp property, object value)
-        {
-            _styleProperties[property] = value;
-            return this;
-        }
-
         /// <summary>
         /// Configures a property transition with the specified duration and easing function.
         /// </summary>
@@ -566,10 +587,7 @@ namespace Prowl.PaperUI
         public void ApplyTo(ElementHandle element)
         {
             if (element.Owner == null) throw new ArgumentNullException(nameof(element));
-            foreach (var kvp in _styleProperties)
-            {
-                element.Owner!.SetStyleProperty(element.Data.ID, kvp.Key, kvp.Value);
-            }
+            element.Owner!.MergeStyleValues(element.Data.ID, ref _collected);
 
             // Apply transitions
             foreach (var kvp in _transitions)
@@ -583,10 +601,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public StyleTemplate ApplyTo(StyleTemplate other)
         {
-            foreach (var kvp in _styleProperties)
-            {
-                other.SetStyleProperty(kvp.Key, kvp.Value);
-            }
+            StyleValues.MergeInto(ref _collected, ref other._collected);
 
             // Apply transitions
             foreach (var kvp in _transitions)
@@ -602,10 +617,7 @@ namespace Prowl.PaperUI
         public StyleTemplate Clone()
         {
             var clone = new StyleTemplate();
-            foreach (var kvp in _styleProperties)
-            {
-                clone._styleProperties[kvp.Key] = kvp.Value;
-            }
+            clone._collected = _collected;
 
             // Clone transitions
             foreach (var kvp in _transitions)
@@ -641,12 +653,7 @@ namespace Prowl.PaperUI
             _paper = paper;
         }
 
-        /// <summary> Sets the style property identified by the given GuiProp to the specified value. Returns this builder for chaining. </summary>
-        public override ElementBuilder SetStyleProperty(GuiProp property, object value)
-        {
-            _paper.SetStyleProperty(_handle.Data.ID, property, value);
-            return this;
-        }
+        private protected override Paper? SinkPaper => _paper;
 
         /// <summary>
         /// Configures a property transition with the specified duration and easing function.

@@ -12,6 +12,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Paper.Tests" />
+  </ItemGroup>
+
+  <!-- Unsafe.As lets the typed style setters convert a generic value without boxing it. It is
+       built into net8.0 and later; on netstandard it comes from this package. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Quill\Quill\Quill.csproj" />
   </ItemGroup>
 

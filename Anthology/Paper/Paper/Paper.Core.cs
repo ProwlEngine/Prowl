@@ -232,6 +232,12 @@ namespace Prowl.PaperUI
             CallPostLayoutRecursive(RootElement);
             __t = _devTools.Phase("PostLayout", __t);
 
+            // Resolve every element's transform once, now that positions are final. Rendering,
+            // culling, layer collection and both hit-test walks all need it, and each of them used
+            // to rebuild it from the style itself.
+            ComputeTransforms(_rootElementHandle, Transform2D.Identity, true);
+            __t = _devTools.Phase("Transforms", __t);
+
             // Compute per-element subtree culling bounds now that positions are final, so
             // RenderElement can skip subtrees that fall entirely outside the clip.
             ComputeCullingBounds(_rootElementHandle);
@@ -239,7 +245,7 @@ namespace Prowl.PaperUI
 
             // Collect layered elements for independent hit testing
             _layeredElements.Clear();
-            CollectLayeredElements(_rootElementHandle, Transform2D.Identity);
+            CollectLayeredElements(_rootElementHandle);
             __t = _devTools.Phase("Layered", __t);
 
             // Reset rendering state
@@ -376,8 +382,8 @@ namespace Prowl.PaperUI
             _canvas.SaveState();
 
             // Apply element transform
-            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
-            _canvas.TransformBy(styleTransform);
+            if (!data._isIdentityTransform)
+                _canvas.TransformBy(data._localTransform);
 
             // Cull: if this whole subtree (including its shadow) lies outside the current clip and
             // nothing in it escapes to a higher layer, skip drawing it and all of its children.
@@ -588,6 +594,47 @@ namespace Prowl.PaperUI
         /// stored on each element for <see cref="RenderElement"/> to cull against; returns this
         /// element's subtree bounds so the parent can fold them in under the child's transform.
         /// </summary>
+        /// <summary>
+        /// Works out each element's own transform and its accumulated world transform, plus that
+        /// world transform's inverse for hit testing, in one pass over the tree.
+        /// <para>
+        /// An element that declares no transform, which is nearly all of them, keeps the identity
+        /// flags set and costs nothing: no matrix is built, no multiply happens, and a subtree whose
+        /// ancestors are all untransformed stays flagged all the way down.
+        /// </para>
+        /// </summary>
+        private void ComputeTransforms(ElementHandle handle, in Transform2D parentWorld, bool parentIsIdentity)
+        {
+            ref var data = ref handle.Data;
+
+            bool hasLocal = data._elementStyle.HasTransform;
+            data._isIdentityTransform = !hasLocal;
+            data._localTransform = hasLocal
+                ? data._elementStyle.GetTransformForElement(data.LayoutRect)
+                : Transform2D.Identity;
+
+            bool worldIsIdentity = parentIsIdentity && !hasLocal;
+            data._isIdentityWorldTransform = worldIsIdentity;
+
+            if (worldIsIdentity)
+            {
+                data._worldTransform = Transform2D.Identity;
+                data._worldInverse = Transform2D.Identity;
+            }
+            else
+            {
+                // Same order the walks used to combine in: this element's own transform, then
+                // everything above it.
+                data._worldTransform = hasLocal ? data._localTransform * parentWorld : parentWorld;
+                data._worldInverse = data._worldTransform.Inverse();
+            }
+
+            Transform2D world = data._worldTransform;
+            var children = data.ChildIndices;
+            for (int i = 0; i < children.Count; i++)
+                ComputeTransforms(new ElementHandle(this, children[i]), world, worldIsIdentity);
+        }
+
         private Rect ComputeCullingBounds(ElementHandle handle)
         {
             ref var data = ref handle.Data;
@@ -622,8 +669,8 @@ namespace Prowl.PaperUI
                 ref var childData = ref child.Data;
 
                 // Fold the child in under its own style transform, matching what RenderElement applies.
-                Transform2D xform = childData._elementStyle.GetTransformForElement(childData.LayoutRect);
-                cb = TransformBoundsAABB(xform, cb);
+                if (!childData._isIdentityTransform)
+                    cb = TransformBoundsAABB(childData._localTransform, cb);
 
                 minX = Maths.Min(minX, cb.Min.X);
                 minY = Maths.Min(minY, cb.Min.Y);

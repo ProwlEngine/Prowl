@@ -9,6 +9,7 @@ using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI.LayoutEngine;
 
@@ -129,6 +130,21 @@ public struct ElementData
     internal ElementStyle _elementStyle;
     internal bool _scissorEnabled;
     internal bool _clampToScreen;
+
+    // Transforms, computed once per frame after layout by Paper.ComputeTransforms. Rendering and
+    // culling want the element's own transform; hit testing wants the accumulated one and its
+    // inverse. All of those used to rebuild the matrix from the style themselves, several times per
+    // element per frame. The identity flags carry the common case, where there is no matrix to
+    // apply at all and every one of those walks can skip the work outright.
+    internal Transform2D _localTransform;
+    internal Transform2D _worldTransform;
+    internal Transform2D _worldInverse;
+
+    /// <summary>True when this element declares no transform of its own.</summary>
+    internal bool _isIdentityTransform;
+
+    /// <summary>True when neither this element nor any ancestor declares a transform.</summary>
+    internal bool _isIdentityWorldTransform;
 
     // Culling bounds: the element's whole-subtree extent in its own local (layout) space, grown
     // to cover box shadow and every descendant. _cullHasLayerBreakout is set when any descendant
