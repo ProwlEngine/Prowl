@@ -17,13 +17,13 @@ namespace Prowl.Runtime.Rendering;
 public sealed class BloomEffect : ImageEffect
 {
     /// <summary>Bloom intensity multiplier.</summary>
-    public float Intensity = 1f;
+    public float Intensity = 0.5f;
 
     /// <summary>Luminance threshold for bright pixel extraction.</summary>
-    public float Threshold = 0.6f;
+    public float Threshold = 0.8f;
 
     /// <summary>Number of downsample iterations. More = wider bloom but more GPU cost. 4-8 is typical.</summary>
-    public int Iterations = 4;
+    public int Iterations = 6;
 
     private Material _mat;
 
