@@ -416,9 +416,9 @@ public class NavMeshSurface : MonoBehaviour
     /// Swap rebuilt tiles (from <see cref="RebuildTilesAsync"/> or
     /// <see cref="NavMeshBuilder.BuildTilesInBounds"/>) into the live TileCache and mirror them
     /// into the asset. Main thread only. The swap quiesces pending obstacle work, replaces each
-    /// tile's layers (the cache's RemoveTile doesn't remove the paired navmesh tile, so that's
-    /// done explicitly), refreshes every obstacle's touched-tile list (stale after a tile
+    /// tile's layers, refreshes every obstacle's touched-tile list (stale after a tile
     /// replacement bumps its salt), then rebuilds the new tiles with carves re-applied.
+    /// Returns false, leaving the tiles as they were, when the cache cannot be quiesced.
     /// </summary>
     public bool ApplyRebuiltTiles(List<(int X, int Z, List<byte[]> Layers)> rebuilt, out int rebuiltTiles)
     {
@@ -428,59 +428,52 @@ public class NavMeshSurface : MonoBehaviour
         Runtime.NavMeshData? data = _runtimeData;
         if (world == null || _instance == null || data.IsNotValid() || rebuilt.Count == 0)
             return false;
-        rebuiltTiles = rebuilt.Count;
 
+        bool applied = false;
         world.MutateTileCache(_instance, cache =>
         {
-            // Quiesce: every obstacle settles and no pending rebuild references the tiles
-            // being replaced. Bounded — a healthy cache converges in a handful of slices. On
-            // exhaustion the refresh below skips unsettled obstacles, which is exactly the
-            // stale-carve failure this mechanism prevents, so it must not fail silent.
+            // Quiesce: every obstacle settles and no pending rebuild references the tiles being
+            // replaced. Unbounded slices, unlike the per-frame pump's budget — this runs inline
+            // on the main thread and cannot proceed unquiesced, so paying the whole queue here
+            // beats abandoning the caller's rebuild. A request enqueues its tiles only once the
+            // previous batch drains, so a few passes always suffice.
             bool converged = false;
-            for (int i = 0; i < 1024 && !converged; i++)
-                converged = cache.Update();
+            for (int i = 0; i < 8 && !converged; i++)
+                converged = cache.Update(int.MaxValue);
             if (!converged)
-                Debug.LogWarning("[Navigation] ApplyRebuiltTiles: the tile cache did not converge within 1024 update slices; obstacle carves may not re-apply to the regenerated tiles.");
+            {
+                // Replacing tiles an obstacle is still mid-carve on desyncs its pending list.
+                Debug.LogWarning("[Navigation] ApplyRebuiltTiles: the tile cache would not settle; the tile swap was skipped and the navmesh keeps its current tiles. The pump keeps draining, so a later rebuild can succeed.");
+                return;
+            }
 
-            DtNavMesh navMesh = cache.GetNavMesh();
             var addedRefs = new List<long>();
             foreach ((int x, int z, List<byte[]> blobs) in rebuilt)
             {
                 foreach (long tileRef in cache.GetTilesAt(x, z))
-                {
-                    // The cache's RemoveTile frees only the compressed tile; the built
-                    // navmesh tile must be removed explicitly (while the header still exists).
-                    DtTileCacheLayerHeader? header = cache.GetTileByRef(tileRef)?.header;
-                    if (header != null)
-                    {
-                        long navRef = navMesh.GetTileRefAt(header.tx, header.ty, header.tlayer);
-                        if (navRef != 0) navMesh.RemoveTile(navRef);
-                    }
                     cache.RemoveTile(tileRef);
-                }
 
                 foreach (byte[] blob in blobs)
                 {
-                    try
-                    {
-                        long added = cache.AddTile(blob, 0);
-                        if (added != 0) addedRefs.Add(added);
-                        else Debug.LogWarning($"[Navigation] ApplyRebuiltTiles: layer for tile ({x}, {z}) collided with an existing layer slot and was skipped.");
-                    }
-                    catch (Exception e)
-                    {
-                        // AddTile throws on cache tile-capacity exhaustion (regeneration can
-                        // legitimately grow the layer count past the bake's).
-                        Debug.LogWarning($"[Navigation] ApplyRebuiltTiles: failed to add a layer for tile ({x}, {z}): {e.Message}");
-                    }
+                    if (!cache.TryAddTile(blob, 0, out long added))
+                        Debug.LogWarning($"[Navigation] ApplyRebuiltTiles: the tile pool is full; a layer for tile ({x}, {z}) was dropped. Raise the agent type's tile capacity.");
+                    else if (added == 0)
+                        Debug.LogWarning($"[Navigation] ApplyRebuiltTiles: layer for tile ({x}, {z}) collided with an existing layer slot and was skipped.");
+                    else
+                        addedRefs.Add(added);
                 }
             }
 
-            NavMeshTileBuilder.RefreshObstacleTouchedTiles(cache, data!);
+            cache.RefreshObstacleTouchedTiles();
 
             foreach (long added in addedRefs)
                 cache.BuildNavMeshTile(added); // re-contours with carves applied via the refreshed lists
+
+            applied = true;
         });
+
+        if (!applied) return false;
+        rebuiltTiles = rebuilt.Count;
 
         // Mirror the swap into this surface's runtime copy so a later re-instantiation agrees
         // with the live mesh; the .navmesh asset on disk is not touched. Obstacles are runtime

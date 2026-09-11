@@ -272,6 +272,164 @@ public class NavMeshComponentTests : RuntimeTestBase
         Assert.True(agent.IsOnNavMesh, "Agent should register via NavMeshChanged once a navmesh exists.");
     }
 
+    /// <summary>Stopping used to drop the move target, which threw the corridor away: the agent
+    /// reported no path while halted and had to replan from scratch on resume. Unity keeps the
+    /// path across a pause.</summary>
+    [Fact]
+    public void Agent_IsStopped_KeepsThePathAndResumesWithoutReplanning()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, -8);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        agent.Speed = 10f;
+        agent.Acceleration = 100f;
+
+        Tick(scene, 2);
+        Assert.True(agent.SetDestination(new Float3(8, 0, 8)));
+        Tick(scene, 20);
+        Assert.True(agent.HasPath);
+
+        agent.IsStopped = true;
+        Tick(scene, 5);
+        float remainingWhenStopped = (float)agent.RemainingDistance;
+
+        for (int i = 0; i < 30; i++)
+        {
+            Tick(scene, 1);
+            Assert.True(agent.HasPath, "A stopped agent must keep the path it was following.");
+        }
+
+        Assert.Equal(remainingWhenStopped, (float)agent.RemainingDistance, 1);
+
+        // Resuming walks the corridor it already had; a replan would show up as a pending request.
+        agent.IsStopped = false;
+        for (int i = 0; i < 30; i++)
+        {
+            Tick(scene, 1);
+            Assert.False(agent.PathPending, "Resuming must not replan a path the agent still holds.");
+        }
+    }
+
+    /// <summary>A stopped agent whose corridor a rebake or carve invalidated has to be able to
+    /// replan, so the settle hook no longer skips it.</summary>
+    [Fact]
+    public void Agent_StoppedThroughARebuild_KeepsAPath()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene();
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, -8);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        agent.Speed = 10f;
+        agent.Acceleration = 100f;
+
+        Tick(scene, 2);
+        agent.IsStopped = true;
+        Assert.True(agent.SetDestination(new Float3(8, 0, 8)));
+        Tick(scene, 20);
+        Float3 before = agentGo.Transform.Position;
+
+        Assert.True(surface.RebuildTiles(new AABB(new Float3(-10, -2, -10), new Float3(10, 2, 10))));
+        Tick(scene, 60);
+
+        Assert.True(agent.HasPath, "A stopped agent must replan when the ground under it is rebuilt.");
+        Assert.True(Float3.Distance(agentGo.Transform.Position, before) < 0.6,
+            "Replanning while stopped must not move the agent.");
+    }
+
+    /// <summary>Arrival clears the move target, so an arrived agent has nothing live or pending —
+    /// but Unity keeps reporting the completed path, and give-up logic reads this.</summary>
+    [Fact]
+    public void Agent_StoppedBeforeANavMeshExists_PlansOnRegistration()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene(20f, bake: false);
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, -8);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        agent.Speed = 10f;
+        agent.Acceleration = 100f;
+
+        Tick(scene, 2);
+        Assert.False(agent.IsOnNavMesh, "No navmesh yet, so nothing to register with.");
+
+        // Only remembered at this point: registration is what turns it into a request, and a
+        // stopped agent used to be skipped there and joined the crowd with nothing planned.
+        agent.IsStopped = true;
+        agent.SetDestination(new Float3(8, 0, 8));
+
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 20);
+
+        Assert.True(agent.IsOnNavMesh);
+        Assert.True(agent.HasPath, "Registration must request the remembered destination even while stopped.");
+    }
+
+    [Fact]
+    public void Agent_AfterArrival_ReportsPathComplete()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-6, 0, -6);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        agent.Speed = 12f;
+        agent.Acceleration = 100f;
+
+        Tick(scene, 2);
+        agent.SetDestination(new Float3(6, 0, 6));
+        Assert.True(TickUntil(scene, () => !agent.PathPending && !agent.HasPath) >= 0,
+            "Agent should reach the destination and latch arrival.");
+
+        Assert.Equal(NavMeshPathStatus.PathComplete, agent.PathStatus);
+    }
+
+    /// <summary>An agent that has never been given a destination has no path, which is not the
+    /// same as holding a complete one.</summary>
+    [Fact]
+    public void Agent_WithNoPath_ReportsPathInvalid()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, -8);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        Tick(scene, 2);
+
+        Assert.False(agent.HasPath);
+        Assert.Equal(NavMeshPathStatus.PathInvalid, agent.PathStatus);
+    }
+
+    /// <summary>Warping goes through the crowd's own teleport, which keeps the DtCrowdAgent —
+    /// anything holding NativeAgent across a warp would otherwise be left with a detached one.
+    /// </summary>
+    [Fact]
+    public void Agent_Warp_KeepsTheSameCrowdAgent()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, -8);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        Tick(scene, 2);
+
+        object? before = agent.NativeAgent;
+        Assert.NotNull(before);
+
+        Assert.True(agent.Warp(new Float3(6, 0, 6)));
+
+        Assert.Same(before, agent.NativeAgent);
+        Assert.True(Float3.Distance(agentGo.Transform.Position, new Float3(6, 0, 6)) < 1.0);
+    }
+
     [Fact]
     public void Agent_IsStoppedHaltsMovement()
     {
@@ -661,11 +819,13 @@ public class NavMeshComponentTests : RuntimeTestBase
 
         Tick(scene, 2);
         agent.IsStopped = true;
-        agent.SetDestination(new Float3(8, 0, 8));
+        Assert.True(agent.SetDestination(new Float3(8, 0, 8)),
+            "A stopped agent should still accept and plan a destination.");
         Assert.True(agent.IsStopped, "SetDestination must not clear the stopped state.");
 
         Float3 posBefore = agentGo.Transform.Position;
         Tick(scene, 60);
+        Assert.True(agent.HasPath, "Planning while stopped must produce a path to resume onto.");
         Assert.True(Float3.Distance(agentGo.Transform.Position, posBefore) < 0.2,
             "A stopped agent should not move toward a newly set destination.");
 

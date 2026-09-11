@@ -202,6 +202,12 @@ public class NavMeshAgent : MonoBehaviour
         {
             if (_agent == null || _agent.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_FAILED)
                 return NavMeshPathStatus.PathInvalid;
+
+            // Nothing planned and nothing pending is not a path — except after arrival, where
+            // the latch clears the move target and Unity still reports the completed path.
+            if (!HasPath && !PathPending)
+                return _arrived ? NavMeshPathStatus.PathComplete : NavMeshPathStatus.PathInvalid;
+
             return _agent.partial ? NavMeshPathStatus.PathPartial : NavMeshPathStatus.PathComplete;
         }
     }
@@ -298,10 +304,14 @@ public class NavMeshAgent : MonoBehaviour
         return total;
     }
 
-    /// <summary>Stop (true) or resume (false) movement. Resuming re-requests the last
-    /// destination. Matches Unity: <see cref="SetDestination"/> while stopped remembers the
-    /// target but does NOT clear the stopped state — movement resumes only when this is set
-    /// back to false.</summary>
+    /// <summary>Stop (true) or resume (false) movement. The path is kept while stopped, so
+    /// resuming carries on along it rather than replanning. Matches Unity:
+    /// <see cref="SetDestination"/> while stopped plans the route but does NOT clear the stopped
+    /// state — movement resumes only when this is set back to false.
+    /// <para/>
+    /// Two things a stopped agent still does: an off-mesh hop already under way finishes (the
+    /// crowd animates it to the far side rather than stranding it mid-air), and a corridor that
+    /// cannot reach its target is re-planned about once a second until it can.</summary>
     public bool IsStopped
     {
         get => _isStopped;
@@ -311,10 +321,17 @@ public class NavMeshAgent : MonoBehaviour
             _isStopped = value;
             if (_agent == null) return;
 
+            // Halting by capping speed rather than dropping the target: clearing it would throw
+            // the corridor away, and resuming would then have to replan a path the agent was
+            // already standing on.
             if (value)
-                _crowd?.ResetMoveTarget(_agent);
-            else if (_hasDestination && !_arrived)
-                RequestPathTo(_destination);
+            {
+                _agent.vel = default;
+                _agent.nvel = default;
+                _agent.dvel = default;
+            }
+
+            RefreshParams();
         }
     }
 
@@ -373,7 +390,7 @@ public class NavMeshAgent : MonoBehaviour
     /// change on each, so replanning from that would throw the path away every frame of one.</summary>
     private void OnNavMeshSettled()
     {
-        if (_agent != null && AutoRepath && _hasDestination && !_isStopped && !_arrived)
+        if (_agent != null && AutoRepath && _hasDestination && !_arrived)
             RequestPathTo(_destination);
     }
 
@@ -394,7 +411,7 @@ public class NavMeshAgent : MonoBehaviour
         _filterSlot = entry.AcquireFilterSlot(AreaMask, _filter?.CostOverrides, GameObject.Name);
         _agent = entry.Crowd.AddAgent(ToRc(Transform.Position - new Float3(0, BaseOffset, 0)), BuildAgentParams());
         _crowd = entry.Crowd;
-        if (_hasDestination && !_isStopped && !_arrived)
+        if (_hasDestination && !_arrived)
             RequestPathTo(_destination);
     }
 
@@ -425,8 +442,13 @@ public class NavMeshAgent : MonoBehaviour
         {
             radius = radius,
             height = Math.Max(0.01f, Height),
+            // Real even while stopped: Integrate clamps the velocity change to
+            // maxAcceleration * dt, so a zero here would freeze whatever velocity the agent had
+            // and it would glide on at that speed.
             maxAcceleration = Acceleration,
-            maxSpeed = Speed,
+            // Every rebuild of the params goes through here, so a stopped agent stays stopped
+            // across an avoidance toggle, a filter change or an inspector edit.
+            maxSpeed = _isStopped ? 0f : Speed,
             collisionQueryRange = CollisionQueryRange > 0f ? CollisionQueryRange : radius * 12f,
             pathOptimizationRange = PathOptimizationRange > 0f ? PathOptimizationRange : radius * 30f,
             updateFlags = updateFlags,
@@ -481,14 +503,14 @@ public class NavMeshAgent : MonoBehaviour
 
     /// <summary>Request a path to <paramref name="target"/>. Returns false when the agent is
     /// not on a navmesh or the target cannot be mapped onto it. A stopped agent
-    /// (<see cref="IsStopped"/>) remembers the destination but stays halted until resumed —
-    /// Unity semantics, where isStopped is a pause flag that survives new destinations.</summary>
+    /// (<see cref="IsStopped"/>) plans the route but stays halted until resumed — Unity
+    /// semantics, where isStopped is a pause flag that survives new destinations.</summary>
     public bool SetDestination(Float3 target)
     {
         _destination = target;
         _hasDestination = true;
         _arrived = false;
-        if (_agent == null || _isStopped) return false; // remembered; requested on registration/resume
+        if (_agent == null) return false; // remembered; requested on registration
         return RequestPathTo(target);
     }
 
@@ -560,14 +582,21 @@ public class NavMeshAgent : MonoBehaviour
             return false;
         }
 
-        // Detour has no teleport: re-add the agent at the new position.
-        crowd.RemoveAgent(_agent);
-        _agent = crowd.AddAgent(ToRc(newPosition), BuildAgentParams());
+        // Warping keeps the DtCrowdAgent, so anything holding NativeAgent stays valid. The
+        // fallback covers the warp refusing for a reason re-adding can fix — a stale agent the
+        // crowd no longer owns — not a target off the navmesh, which defeats both equally.
+        if (!crowd.WarpAgent(_agent, ToRc(newPosition)))
+        {
+            crowd.RemoveAgent(_agent);
+            _agent = crowd.AddAgent(ToRc(newPosition), BuildAgentParams());
+            if (_agent.state == DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID)
+                return false; // nothing to snap to; the agent sits where it was put, off the mesh
+        }
 
         // A teleport is a fresh approach, so a previous arrival would otherwise park the agent
         // wherever it landed.
         _arrived = false;
-        if (_hasDestination && !_isStopped)
+        if (_hasDestination)
             RequestPathTo(_destination);
 
         // Use the position the crowd snapped to: the requested one can be off the mesh.
