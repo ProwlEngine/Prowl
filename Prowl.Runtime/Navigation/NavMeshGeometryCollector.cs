@@ -282,8 +282,8 @@ public static class NavMeshGeometryCollector
 
     /// <summary>
     /// Collect one collider as triangles. Primitive colliders tessellate to the same shape the
-    /// physics engine uses (capsules included); mesh colliders hand over the shared mesh's own
-    /// vertex and index arrays, without copying them.
+    /// physics engine uses (capsules included); mesh colliders share the mesh's vertex array and
+    /// copy its indices, which <see cref="NavMeshGeometrySource"/> needs as int.
     /// </summary>
     public static void CollectCollider(Collider collider, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
     {

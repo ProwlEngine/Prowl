@@ -163,6 +163,73 @@ public class NavMeshQueryTests
         Assert.InRange(hit.Distance, 1f, 6f);
     }
 
+    /// <summary>The default search distance comes from the mesh's own bounds rather than a fixed
+    /// radius, so an edge is found on a mesh wider than that radius. The border here is ~200 units
+    /// from the center — beyond the 100 the default used to cap at.</summary>
+    [Fact]
+    public void FindClosestEdge_DefaultDistance_SpansAMeshWiderThanTheOldFixedRadius()
+    {
+        var world = new NavMeshWorld();
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(400, 400, Float3.Zero)]);
+        Assert.NotNull(data);
+        world.AddNavMeshData(data!);
+
+        Assert.True(world.FindClosestEdge(new Float3(200, 0, 200), out NavMeshHit hit, NavMesh.AllAreas));
+        Assert.True(hit.Hit);
+        Assert.InRange(hit.Distance, 150f, 250f);
+    }
+
+    /// <summary>With no navmesh for the agent type there is no mesh to derive a search distance
+    /// from, so the query reports no edge rather than searching a made-up radius.</summary>
+    [Fact]
+    public void FindClosestEdge_WithNoNavMesh_ReturnsFalse()
+    {
+        var world = new NavMeshWorld();
+        Assert.False(world.FindClosestEdge(new Float3(5, 0, 5), out NavMeshHit hit, NavMesh.AllAreas));
+        Assert.False(hit.Hit);
+    }
+
+    /// <summary>A second navmesh for an agent type is refused rather than registered and ignored,
+    /// so it never pays for contouring tiles nothing will query.</summary>
+    [Fact]
+    public void AddNavMeshData_SecondForSameAgentType_IsRefusedAndWarnsOnce()
+    {
+        Debug.ClearReportedOnce();
+
+        var world = new NavMeshWorld();
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(10, 10, Float3.Zero)]);
+        Assert.NotNull(data);
+        NavMeshInstance? first = world.AddNavMeshData(data!);
+        Assert.NotNull(first);
+
+        List<string> warnings = [];
+        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        {
+            if (severity == LogSeverity.Warning && message.Contains("is ignored"))
+                warnings.Add(message);
+        }
+
+        Debug.OnLog += Capture;
+        try
+        {
+            Assert.Null(world.AddNavMeshData(data!));
+            Assert.Null(world.AddNavMeshData(data!));
+
+            Assert.Single(warnings); // once per agent type, not once per attempt
+
+            // Refused before the tile cache is built, which is the point: contouring every tile
+            // for a navmesh nothing will query is the cost being avoided, not just the registration.
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            Assert.Null(world.AddNavMeshData(data!));
+            Assert.True(GC.GetAllocatedBytesForCurrentThread() - before < 8 * 1024);
+        }
+        finally
+        {
+            Debug.OnLog -= Capture;
+            Debug.ClearReportedOnce();
+        }
+    }
+
     [Fact]
     public void AreaMask_ExcludingArea_BlocksPath()
     {

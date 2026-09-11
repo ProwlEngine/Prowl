@@ -902,9 +902,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _dispatcher.RunStart();
 
         // Navigation (crowd steering) advances on the variable update, before component Updates
-        // so gameplay code sees fresh agent state. A crowd blow-up must not crash the frame.
+        // so gameplay code sees fresh agent state. A crowd that blows up must not crash the frame,
+        // and does so every frame, so it is reported once.
         try { _navigation.Update(Time.DeltaTime); }
-        catch (Exception ex) { Debug.LogError($"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
+        catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
 
         _dispatcher.RunUpdate();
         _dispatcher.RunLateUpdate();

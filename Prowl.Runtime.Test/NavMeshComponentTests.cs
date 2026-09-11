@@ -17,6 +17,91 @@ public class NavMeshComponentTests : RuntimeTestBase
     private (Scene scene, NavMeshSurface surface) CreateBakedFloorScene(float size = 20f)
         => CreateFloorScene(size, bake: true);
 
+    /// <summary>Toggling two same-type surfaces must always leave exactly one registered, and it
+    /// must be an enabled one.</summary>
+    [Fact]
+    public void Surfaces_TwoOfOneAgentType_SurviveEnableToggling()
+    {
+        Debug.ClearReportedOnce();
+        try
+        {
+            (Scene scene, NavMeshSurface first) = CreateBakedFloorScene();
+            GameObject secondGo = CreateGameObject("SecondSurface");
+            scene.Add(secondGo);
+            var second = secondGo.AddComponent<NavMeshSurface>();
+            ApplyFastBakeSettings(second);
+            Assert.True(second.BuildNavMesh());
+
+            first.GameObject.Enabled = false;
+            second.GameObject.Enabled = false;
+            Assert.Null(scene.Navigation.GetInstance(0));
+            Assert.Null(first.Instance);
+            Assert.Null(second.Instance);
+
+            first.GameObject.Enabled = true;
+            Assert.NotNull(first.Instance);
+            Assert.Null(second.Instance);
+            Assert.Same(first.Instance, scene.Navigation.GetInstance(0));
+
+            second.GameObject.Enabled = true;
+            Assert.NotNull(first.Instance);
+            Assert.Null(second.Instance);
+            Assert.Same(first.Instance, scene.Navigation.GetInstance(0));
+        }
+        finally
+        {
+            Debug.ClearReportedOnce();
+        }
+    }
+
+    /// <summary>One surface per agent type per scene: the second registers nothing, keeps no data
+    /// of its own, and warns once however many times it bakes.</summary>
+    [Fact]
+    public void Surfaces_SecondOfOneAgentType_RegistersNothing()
+    {
+        Debug.ClearReportedOnce();
+        (Scene scene, NavMeshSurface first) = CreateBakedFloorScene();
+        Assert.NotNull(first.Instance);
+
+        GameObject secondGo = CreateGameObject("SecondSurface");
+        scene.Add(secondGo);
+        var second = secondGo.AddComponent<NavMeshSurface>();
+        ApplyFastBakeSettings(second);
+        second.AgentTypeId = first.AgentTypeId;
+
+        List<string> warnings = [];
+        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        {
+            if (severity == LogSeverity.Warning && message.Contains("is ignored"))
+                warnings.Add(message);
+        }
+
+        Debug.OnLog += Capture;
+        try
+        {
+            Assert.True(second.BuildNavMesh());
+            Assert.True(second.BuildNavMesh());
+
+            Assert.Null(second.Instance);
+            Assert.Null(second.RuntimeData);
+            Assert.Same(first.Instance, scene.Navigation.GetInstance(first.AgentTypeId));
+            Assert.Single(warnings);
+        }
+        finally
+        {
+            Debug.OnLog -= Capture;
+            Debug.ClearReportedOnce();
+        }
+
+        // Losing the registered surface must not take the agent type's navmesh with it — the
+        // refusal warning tells the user to delete one of the two.
+        first.GameObject.Enabled = false;
+
+        Assert.NotNull(second.Instance);
+        Assert.Same(second.Instance, scene.Navigation.GetInstance(second.AgentTypeId));
+        Assert.True(scene.Navigation.SamplePosition(new Float3(0, 0.2f, 0), out _, 0.5f, NavMesh.AllAreas));
+    }
+
     /// <summary>
     /// Agent-type resolution end to end: two types with different radii baked from the same
     /// scene produce two navmeshes, and a corridor passable for the small type is eroded shut

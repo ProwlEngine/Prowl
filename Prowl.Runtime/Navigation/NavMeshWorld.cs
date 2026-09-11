@@ -489,7 +489,7 @@ public sealed class NavMeshWorld
 
     /// <summary>
     /// Instantiate and register a baked navmesh. Returns the instance handle, or null when the
-    /// data has no tiles or fails to instantiate.
+    /// data has no tiles, fails to instantiate, or its agent type already has one.
     /// <para/>
     /// Threading: fires <see cref="NavMeshChanged"/> synchronously on the calling thread, and
     /// subscribers (agents, editor overlays) touch the crowd and Transforms — call from the
@@ -499,6 +499,19 @@ public sealed class NavMeshWorld
     public NavMeshInstance? AddNavMeshData(NavMeshData data)
     {
         if (data == null || !data.HasTiles) return null;
+
+        // Refused before instantiating: a query attaches to exactly one Detour navmesh, so a
+        // second registration would contour every tile and then never be consulted.
+        int agentTypeId = data.Settings.AgentTypeId;
+        NavMeshInstance? existing = GetInstance(agentTypeId);
+        if (existing != null)
+        {
+            // Keyed on the data too: the same type collides again in the next scene the editor
+            // opens, and reported-once ids outlive a scene change.
+            Debug.LogWarningOnce($"Navigation.DuplicateAgentType.{agentTypeId}.{data.Name}",
+                $"[Navigation] Agent type {NavMeshAgentTypes.GetName(agentTypeId)} already has a navmesh{OwnerOf(existing)}; '{data.Name}' is ignored. One surface per agent type per scene; bake as a single surface or give them separate agent types.");
+            return null;
+        }
 
         NavMeshInstance instance;
         try
@@ -521,6 +534,16 @@ public sealed class NavMeshWorld
         StructureGeneration++;
         NavMeshChanged?.Invoke();
         return instance;
+    }
+
+    // A runtime bake leaves every NavMeshData with the same placeholder name, so the asset name
+    // alone identifies nothing.
+    private string OwnerOf(NavMeshInstance instance)
+    {
+        for (int i = 0; i < _surfaces.Count; i++)
+            if (ReferenceEquals(_surfaces[i].Instance, instance))
+                return $" (on '{_surfaces[i].GameObject.Name}')";
+        return $" ('{instance.Data.Name}')";
     }
 
     /// <summary>Unregister a navmesh. Blocks until in-flight queries on it finish.</summary>
@@ -547,6 +570,12 @@ public sealed class NavMeshWorld
 
         StructureGeneration++;
         NavMeshChanged?.Invoke();
+
+        // Registration only ever runs from OnEnable, so without this a scene with a spare surface
+        // of the type loses navigation entirely the moment the registered one is deleted.
+        for (int i = 0; i < _surfaces.Count && GetInstance(instance.AgentTypeId) == null; i++)
+            if (_surfaces[i].AgentTypeId == instance.AgentTypeId && _surfaces[i].Instance == null)
+                _surfaces[i].RefreshRegistration();
     }
 
     /// <summary>Remove every registered navmesh (scene teardown).</summary>
@@ -569,9 +598,8 @@ public sealed class NavMeshWorld
         }
     }
 
-    /// <summary>The registered navmesh for an agent type, or null. When several are registered
-    /// for the same type, the first registered wins (one navmesh per agent type is the
-    /// supported setup; merging surfaces arrives with modifier support).</summary>
+    /// <summary>The registered navmesh for an agent type, or null. At most one exists:
+    /// <see cref="AddNavMeshData"/> refuses a second.</summary>
     public NavMeshInstance? GetInstance(int agentTypeId = 0)
     {
         lock (_instancesLock)
@@ -906,24 +934,35 @@ public sealed class NavMeshWorld
         }
     }
 
-    /// <summary>Default <paramref name="maxDistance"/> for
-    /// <see cref="FindClosestEdge(Float3, out NavMeshHit, int, float)"/>: wide enough for a
-    /// typical level, not derived from the mesh.</summary>
-    public const float DefaultEdgeSearchDistance = 100f;
+    /// <summary>Pass as <c>maxDistance</c> (or any non-positive value) to search out to the
+    /// navmesh's own bounds diagonal, which is by definition the widest gap it can contain.</summary>
+    public const float EdgeSearchDistanceFromBounds = 0f;
 
     /// <summary>Locate the closest navmesh border edge from a point.</summary>
     /// <param name="maxDistance">How far to search. Cost grows with it and an edge beyond it is
-    /// not found, so pass the widest gap that matters rather than a blanket maximum.</param>
+    /// not found, so pass the widest gap that matters; the default searches the whole mesh.</param>
     public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, int areaMask,
-        float maxDistance = DefaultEdgeSearchDistance)
+        float maxDistance = EdgeSearchDistanceFromBounds)
         => FindClosestEdge(sourcePosition, out hit, GetScratchFilter(areaMask), maxDistance);
 
     /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, int, float)"/>
     public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter,
-        float maxDistance = DefaultEdgeSearchDistance)
+        float maxDistance = EdgeSearchDistanceFromBounds)
     {
         ArgumentNullException.ThrowIfNull(filter);
         hit = default;
+
+        // Negated compares so NaN takes the same path as a non-positive distance.
+        if (!(maxDistance > 0f))
+        {
+            NavMeshInstance? bounded = GetInstance(filter.AgentTypeId);
+            if (bounded == null) return false;
+
+            maxDistance = (float)Float3.Distance(bounded.Data.BoundsMin, bounded.Data.BoundsMax);
+            // Degenerate bounds would ask Detour for a zero-radius search, which reports a wall
+            // at zero distance rather than no wall.
+            if (!(maxDistance > 0f)) return false;
+        }
 
         if (!TryRentQuery(out NavMeshQueryLease lease, filter.AgentTypeId))
             return false;

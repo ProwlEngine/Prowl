@@ -82,9 +82,10 @@ public static class NavMesh
 
     /// <summary>Triangulate the current navmesh for debug drawing or user tooling.</summary>
     public static NavMeshTriangulation CalculateTriangulation()
-        => World?.CalculateTriangulation() ?? new NavMeshTriangulation { Vertices = [], Indices = [], Areas = [] };
+        => World?.CalculateTriangulation() ?? NavMeshTriangulation.Empty;
 
-    /// <summary>Register a baked navmesh with the current scene. Returns its handle, or null.</summary>
+    /// <summary>Register a baked navmesh with the current scene. Returns its handle, or null —
+    /// including when the agent type already has one (see <see cref="NavMeshWorld.AddNavMeshData"/>).</summary>
     public static NavMeshInstance? AddNavMeshData(NavMeshData navMeshData)
         => World?.AddNavMeshData(navMeshData);
 

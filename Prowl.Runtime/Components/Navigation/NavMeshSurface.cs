@@ -42,7 +42,7 @@ public enum NavMeshCollectObjects
 public class NavMeshSurface : MonoBehaviour
 {
     [Header("Bake")]
-    [Tooltip("The agent type this navmesh is built for (radius, height, slope, climb come from the project's agent table). Agents only use navmeshes of their own type.")]
+    [Tooltip("The agent type this navmesh is built for (radius, height, slope, climb come from the project's agent table). Agents only use navmeshes of their own type. One surface per agent type per scene.")]
     [NavMeshAgentType]
     public int AgentTypeId = NavMeshAgentTypes.Humanoid;
 
@@ -150,7 +150,7 @@ public class NavMeshSurface : MonoBehaviour
         // rewrites must not land on it. One built at runtime and handed over through
         // ApplyNavMeshData has no other owner — copying it would just cost a list per
         // registration and throw away every rebuild since the original bake on re-registering.
-        // (Handing one runtime navmesh to two surfaces still shares it, as it always has.)
+        // (Two surfaces of DIFFERENT types handed the same runtime data still share it.)
         _runtimeData = NavMeshData.AssetID == Guid.Empty ? data : data.Clone();
         _instance = world.AddNavMeshData(_runtimeData);
         if (_instance == null) _runtimeData = null;
@@ -173,19 +173,29 @@ public class NavMeshSurface : MonoBehaviour
     /// </summary>
     public bool BuildNavMesh()
     {
+        Runtime.NavMeshData? data = BuildNavMeshData();
+        if (data == null) return false;
+
+        ApplyNavMeshData(data);
+        return true;
+    }
+
+    /// <summary>
+    /// Collect geometry and bake synchronously, returning the result without registering it.
+    /// For callers that persist the bake first and register the saved asset instead, so the
+    /// tiles are meshed once rather than once per registration.
+    /// </summary>
+    public Runtime.NavMeshData? BuildNavMeshData()
+    {
         NavMeshBuildSettings settings = ResolveBuildSettings(); // one resolve per bake: collection and build must agree
         List<NavMeshGeometrySource> sources = CollectSources(null, settings.EffectiveVoxelSize);
         Runtime.NavMeshData? data = NavMeshBuilder.Build(settings, sources, DefaultArea,
             threads: Math.Max(1, Environment.ProcessorCount - 1), worldBounds: ExplicitWorldBounds(),
             volumes: CollectVolumes(null), links: CollectLinks(null));
         if (data == null)
-        {
             Debug.LogWarning($"[Navigation] Bake of '{GameObject.Name}' produced no walkable geometry.");
-            return false;
-        }
 
-        ApplyNavMeshData(data);
-        return true;
+        return data;
     }
 
     /// <summary>In Volume mode the volume is an explicit statement of the bake's extent, so
@@ -323,13 +333,13 @@ public class NavMeshSurface : MonoBehaviour
     /// </summary>
     private AABB? RebuildCollectionBounds(AABB worldBounds)
     {
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        Runtime.NavMeshData? data = _runtimeData;
         if (data.IsNotValid() || data!.TileWorldSize <= 0) return null; // no grid: collect everything
 
         float ts = data.TileWorldSize;
         // Conservative world-space erosion border (CalcBorder cells = ceil(radius/cs) + 3).
-        // Derived from the ASSET's snapshot settings — the grid being rebuilt is the one the
-        // asset was baked with, not whatever the surface's current configuration says.
+        // Derived from the live copy's snapshot settings — the grid being rebuilt is the one the
+        // navmesh was baked with, not whatever the surface's current configuration says.
         float border = data.Settings.AgentRadius + 4f * data.Settings.EffectiveVoxelSize;
 
         double minTx = Math.Floor((worldBounds.Min.X - border - data.Origin.X) / ts);
@@ -654,10 +664,9 @@ public class NavMeshSurface : MonoBehaviour
             _debugTriangulation = null;
         }
 
-        // Prefer the live navmesh: it is the one carving and rebuilds change. Fall back to the
-        // baked asset when this surface has no live instance to read — its data failed to
-        // instantiate, or another surface of the same agent type holds the registration.
-        bool live = world != null && world.GetInstance(AgentTypeId) != null;
+        // Prefer this surface's own live navmesh: it is the one carving and rebuilds change.
+        // Asking the world for the agent type instead would draw a rival surface's mesh here.
+        bool live = _instance != null;
         if (_debugTriangulation == null || _debugFromLive != live || !ReferenceEquals(_debugSource, data))
         {
             _debugTriangulation = live ? world!.CalculateTriangulation(AgentTypeId) : data.CalculateTriangulation();

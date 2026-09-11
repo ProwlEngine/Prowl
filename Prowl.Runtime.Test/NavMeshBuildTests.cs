@@ -434,6 +434,30 @@ public class NavMeshBuildTests
         Assert.All(tri.Indices, i => Assert.InRange(i, 0, tri.Vertices.Length - 1));
     }
 
+    /// <summary>Callers iterate Edges and Connections without null-checking, so a "nothing to
+    /// triangulate" answer with only some of its six arrays set throws on the first foreach.</summary>
+    [Fact]
+    public void CalculateTriangulation_EmptyResult_HasEveryArrayInitialized()
+    {
+        static void AssertIterable(NavMeshTriangulation t)
+        {
+            Assert.Empty(t.Vertices);
+            Assert.Empty(t.Indices);
+            Assert.Empty(t.Areas);
+            Assert.Empty(t.IsPolygonCorner);
+            Assert.Empty(t.Edges);
+            Assert.Empty(t.Connections);
+        }
+
+        AssertIterable(NavMeshTriangulation.Empty);
+
+        // Data with no tiles never reaches a cache, so it returns the empty value directly.
+        AssertIterable(new NavMeshData().CalculateTriangulation());
+
+        // A world with nothing registered for the agent type is the other reachable path.
+        AssertIterable(new NavMeshWorld().CalculateTriangulation());
+    }
+
     /// <summary>
     /// Links whose endpoints fall in DIFFERENT tiles have to bake AND instantiate, however many
     /// of them cross the same boundary. Detour sizes a tile's link pool when the tile is built
