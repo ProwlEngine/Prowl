@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers;
 
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
@@ -654,6 +655,126 @@ public class NavMeshAgent : MonoBehaviour
         if (_world != null) return _world.SamplePosition(sourcePosition, out hit, maxDistance, Filter);
         hit = default;
         return false;
+    }
+
+    /// <summary>
+    /// How far along its current path the agent could get, without moving it: walks the path from
+    /// where the agent stands and stops at <paramref name="maxDistance"/>, at the end of the path,
+    /// or where the path first enters a polygon <paramref name="areaMask"/> excludes.
+    /// <para/>
+    /// True when the walk stopped short of <paramref name="maxDistance"/>. Two different things
+    /// cause that, and the mask tells them apart: <c>(hit.Mask &amp; areaMask) == 0</c> means an
+    /// excluded polygon blocked it, anything else means the path simply ran out. <c>hit.Hit</c>
+    /// separately says the position is a real point on the path rather than one interpolated where
+    /// the budget ran out, and <c>hit.Distance</c> is measured ALONG the path rather than to it.
+    /// <para/>
+    /// Mid-hop across an off-mesh link the corridor already begins at the landing point, so the
+    /// walk is measured from there rather than from where the agent hangs.
+    /// <para/>
+    /// Areas are tested per POLYGON rather than per corner, as Unity does. A path that only clips
+    /// the corner of an excluded polygon stops at it, even though no corner of the straight path
+    /// lies inside it.
+    /// </summary>
+    public bool SamplePathPosition(int areaMask, float maxDistance, out NavMeshHit hit)
+    {
+        hit = default;
+        hit.Normal = Float3.UnitY; // a position sample, so up — as SamplePosition reports
+        hit.Position = NextPosition;
+
+        if (_agent == null || _world == null) return true;
+
+        Span<long> corridor = _agent.corridor.GetPath();
+        int polyCount = _agent.corridor.GetPathCount();
+        if (polyCount <= 0 || corridor.Length < polyCount) return true;
+
+        if (!_world.TryRentQuery(out NavMeshQueryLease lease, AgentTypeId)) return true;
+        using (lease)
+        {
+            DtNavMesh mesh = lease.Query.GetAttachedNavMesh();
+            hit.Mask = NavMeshWorld.GetPolyAreaMaskBit(mesh, corridor[0]);
+            if ((hit.Mask & areaMask) == 0)
+            {
+                // Already standing in an excluded area: blocked at zero distance, and the
+                // agent position is as real a terminus as one found part way along.
+                hit.Hit = true;
+                return true;
+            }
+
+            // ResetPath clears the move target and leaves the corridor behind it, so without this
+            // the walk would report a lookahead along a path the agent has already discarded.
+            if (!HasPath)
+            {
+                hit.Hit = true; // a zero-length walk, ending where it started
+                return true;
+            }
+
+            // A corner at each apex portal and a crossing at each area change, both bounded by the
+            // portals walked, plus the two ends: sized from the corridor rather than a constant, so
+            // a long path is not silently truncated into a short answer.
+            int maxPoints = 2 * polyCount + 1;
+            DtStraightPath[] points = ArrayPool<DtStraightPath>.Shared.Rent(maxPoints);
+            try
+            {
+                RcVec3f from = _agent.corridor.GetPos();
+                DtStatus status = lease.Query.FindStraightPath(from, _agent.corridor.GetTarget(),
+                    corridor[..polyCount], polyCount, points.AsSpan(0, maxPoints), out int count, maxPoints,
+                    DtStraightPathOptions.DT_STRAIGHTPATH_AREA_CROSSINGS);
+                if (status.Failed() || count == 0)
+                {
+                    // Unanswerable, and the mask is what the caller reads: leaving the current
+                    // polygon in it would report the agent as standing on its destination.
+                    hit.Mask = 0;
+                    return true;
+                }
+
+                float walked = 0f;
+                for (int i = 0; i < count - 1; i++)
+                {
+                    // AREA_CROSSINGS above is what makes this per-polygon rather than per-corner: a
+                    // straight segment crosses many polygons, and without it the only ones reported
+                    // are those entered at a turn — so a strip of excluded area straight ahead would
+                    // never be looked at. With it there is a point wherever the area changes, and
+                    // the polygon entered there governs the segment that follows.
+                    int mask = NavMeshWorld.GetPolyAreaMaskBit(mesh, points[i].refs);
+                    if (mask != 0 && (mask & areaMask) == 0)
+                    {
+                        hit.Position = ToFloat3(points[i].pos);
+                        hit.Distance = walked;
+                        hit.Mask = mask;
+                        hit.Hit = true;
+                        return true;
+                    }
+
+                    if (mask != 0) hit.Mask = mask;
+
+                    Float3 a = ToFloat3(points[i].pos), b = ToFloat3(points[i + 1].pos);
+                    float leg = (float)Float3.Distance(a, b);
+                    if (walked + leg >= maxDistance)
+                    {
+                        // Clamped because maxDistance is the caller's: a negative one would
+                        // extrapolate backwards off the path, and a zero-length leg has no t at all.
+                        float t = leg > 0f ? Math.Clamp((maxDistance - walked) / leg, 0f, 1f) : 0f;
+                        hit.Position = a + (b - a) * t;
+                        hit.Distance = walked + leg * t;
+                        hit.Hit = false;
+                        return false; // covered the whole distance asked for
+                    }
+
+                    walked += leg;
+                    hit.Position = b;
+                }
+
+                // Ran out of path first — unless the buffer filled, which FindStraightPath reports
+                // as success: that last point is not the end of anything.
+                hit.Distance = walked;
+                hit.Hit = count < maxPoints;
+                return true;
+            }
+            finally
+            {
+                ArrayPool<DtStraightPath>.Shared.Return(points);
+            }
+        }
     }
 
     #endregion

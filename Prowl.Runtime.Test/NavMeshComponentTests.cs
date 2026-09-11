@@ -553,6 +553,108 @@ public class NavMeshComponentTests : RuntimeTestBase
         Assert.True(step < 0.005f, $"tile surfaces meet {step:0.000} apart across the rebuilt seam");
     }
 
+    /// <summary>
+    /// SamplePathPosition answers "how far can I get before the path enters somewhere I will not
+    /// go", which is the question Unity's version exists for — the agent still PATHS through the
+    /// area, so this is a lookahead and not a filter. All three outcomes are checked: blocked by an
+    /// excluded area, stopped by the distance budget, and the path simply ending.
+    /// </summary>
+    [Fact]
+    public void Agent_SamplePathPosition_StopsAtAnExcludedArea()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene(20f);
+
+        // A Jump strip across the whole floor at x in -2..2, so a path from one side to the other
+        // has to enter it and cannot route around.
+        GameObject volumeGo = CreateGameObject("JumpStrip");
+        scene.Add(volumeGo);
+        var volume = volumeGo.AddComponent<NavMeshModifierVolume>();
+        volume.Size = new Float3(4, 4, 40);
+        volume.Area = NavMeshAreas.Jump;
+
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, 0);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        Tick(scene, 2);
+        Assert.True(agent.IsOnNavMesh);
+        Assert.True(agent.SetDestination(new Float3(8, 0, 0)));
+        Assert.True(TickUntil(scene, () => agent.HasPath) >= 0);
+
+        // Excluding Jump: stops on entering the strip, roughly 6 units along from x = -8.
+        int noJump = NavMesh.AllAreas & ~(1 << NavMeshAreas.Jump);
+        Assert.True(agent.SamplePathPosition(noJump, 100f, out NavMeshHit blocked));
+        Assert.True(blocked.Hit);
+        Assert.Equal(1 << NavMeshAreas.Jump, blocked.Mask);
+        Assert.True(blocked.Position.X > -3.5 && blocked.Position.X < -1,
+            $"stopped at x={blocked.Position.X:0.00}, expected the strip's near edge around -2");
+        Assert.True(blocked.Distance > 4 && blocked.Distance < 8, $"walked {blocked.Distance:0.00}");
+
+        // The distance budget, not an area: reports exactly the budget and returns false.
+        Assert.False(agent.SamplePathPosition(NavMesh.AllAreas, 3f, out NavMeshHit budget));
+        Assert.False(budget.Hit);
+        Assert.Equal(3f, budget.Distance, 3);
+        Assert.NotEqual(0, budget.Mask & NavMesh.AllAreas);
+
+        // Nothing excluded and distance to spare: the path runs out, so it stopped early but was
+        // not blocked — which the mask is what distinguishes.
+        Assert.True(agent.SamplePathPosition(NavMesh.AllAreas, 100f, out NavMeshHit ranOut));
+        Assert.NotEqual(0, ranOut.Mask & NavMesh.AllAreas);
+        Assert.True(ranOut.Position.X > 6, $"ended at x={ranOut.Position.X:0.00}, expected near the destination");
+
+        // Standing in the excluded area: blocked where it stands, not truncated at the budget.
+        Assert.True(agent.Warp(new Float3(0, 0, 0)));
+        Assert.True(agent.SetDestination(new Float3(8, 0, 0)));
+        Assert.True(TickUntil(scene, () => agent.HasPath) >= 0);
+        Assert.True(agent.SamplePathPosition(noJump, 100f, out NavMeshHit inside));
+        Assert.True(inside.Hit);
+        Assert.Equal(0f, inside.Distance, 3);
+        Assert.Equal(1 << NavMeshAreas.Jump, inside.Mask);
+    }
+
+    /// <summary>
+    /// The degenerate inputs, which are the ones a caller reaches by accident: a budget that is
+    /// negative or zero must not extrapolate backwards off the path, and a discarded path must not
+    /// still be walked — ResetPath clears the move target but leaves the corridor behind it.
+    /// </summary>
+    [Fact]
+    public void Agent_SamplePathPosition_HandlesNoPathAndNegativeBudgets()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene(20f);
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, 0);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        Tick(scene, 2);
+        Assert.True(agent.IsOnNavMesh);
+        Assert.True(agent.SetDestination(new Float3(8, 0, 0)));
+        Assert.True(TickUntil(scene, () => agent.HasPath) >= 0);
+
+        // A budget of nothing stops where the agent stands, and a negative one cannot walk further
+        // back than that.
+        Assert.False(agent.SamplePathPosition(NavMesh.AllAreas, 0f, out NavMeshHit none));
+        Assert.Equal(0f, none.Distance, 3);
+        Assert.False(agent.SamplePathPosition(NavMesh.AllAreas, -5f, out NavMeshHit behind));
+        Assert.Equal(0f, behind.Distance, 3);
+        Assert.True(Float3.Distance(behind.Position, agent.NextPosition) < 0.5,
+            $"a negative budget reported {behind.Position}, away from the agent at {agent.NextPosition}");
+
+        // The path the agent just threw away is not a path it can walk.
+        float before = agent.SamplePathPosition(NavMesh.AllAreas, 100f, out NavMeshHit live) ? live.Distance : 0f;
+        Assert.True(before > 10, $"the live path should span the floor, reported {before:0.00}");
+        agent.ResetPath();
+        Assert.True(agent.SamplePathPosition(NavMesh.AllAreas, 100f, out NavMeshHit discarded));
+        Assert.Equal(0f, discarded.Distance, 3);
+        Assert.True(discarded.Hit);
+        Assert.NotEqual(0, discarded.Mask & NavMesh.AllAreas);
+    }
+
     private static NavMeshGeometrySource FloorQuad(float minX, float minZ, float maxX, float maxZ)
     {
         Float3[] verts =

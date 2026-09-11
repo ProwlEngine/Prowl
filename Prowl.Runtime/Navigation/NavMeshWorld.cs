@@ -1013,7 +1013,7 @@ public sealed class NavMeshWorld
         }
     }
 
-    private static int GetPolyAreaMaskBit(DtNavMesh mesh, long polyRef)
+    internal static int GetPolyAreaMaskBit(DtNavMesh mesh, long polyRef)
     {
         if (mesh.GetTileAndPolyByRef(polyRef, out _, out DtPoly poly).Failed())
             return 0;

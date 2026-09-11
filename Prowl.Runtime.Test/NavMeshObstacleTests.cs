@@ -25,6 +25,18 @@ public class NavMeshObstacleTests : RuntimeTestBase
     private static bool Walkable(Scene scene, Float3 position)
         => scene.Navigation.SamplePosition(position, out _, 0.5f, NavMesh.AllAreas);
 
+    /// <summary>Echo stores an enum as its number, so reordering these members would repoint every
+    /// saved obstacle at a different shape. The values are asserted, not just the round-trip.</summary>
+    [Fact]
+    public void ObstacleShape_KeepsTheValuesScenesWereSavedWith()
+    {
+        Assert.Equal(0, (int)NavMeshObstacleShape.Cylinder);
+        Assert.Equal(1, (int)NavMeshObstacleShape.Box);
+
+        Assert.Equal(NavMeshObstacleShape.Cylinder, Serializer.Deserialize<NavMeshObstacleShape>(new EchoObject(0L)));
+        Assert.Equal(NavMeshObstacleShape.Box, Serializer.Deserialize<NavMeshObstacleShape>(new EchoObject(1L)));
+    }
+
     /// <summary>A bake produces cache layers, is queryable, and the layers survive an Echo
     /// round-trip and re-instantiation.</summary>
     [Fact]
