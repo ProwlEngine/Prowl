@@ -14,6 +14,7 @@ them lands in a single commit, no cross-repo version juggling, no publish chain.
 | `Scribe`     | Prowl.Scribe      | TrueType fonts, layout, Markdown |
 | `Quill`      | Prowl.Quill       | GPU 2D vector graphics           |
 | `Paper`      | Prowl.Paper       | Immediate-mode UI framework      |
+| `Scaffold`   | Prowl.Scaffold    | Incremental UI layout engine     |
 | `Origami`    | Prowl.Origami     | UI Widgets/Components for paper  |
 | `Echo`       | Prowl.Echo        | Serialization                    |
 | `Clay`       | Prowl.Clay        | 3D Model Loading (GLTF/FBX/Obj)  |

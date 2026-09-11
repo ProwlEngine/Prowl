@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Scaffold/Scaffold.csproj" />
+  <Project Path="Tests/Scaffold.Tests.csproj" />
+</Solution>

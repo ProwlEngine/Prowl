@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <PackageId>Prowl.Scaffold</PackageId>
+    <RootNamespace>Prowl.Scaffold</RootNamespace>
+    <Title>Prowl.Scaffold</Title>
+    <Description>Incremental, allocation-free steady-state layout for application UI.</Description>
+    <PackageTags>layout;UI;flex;grid;incremental;immediate mode</PackageTags>
+  </PropertyGroup>
+</Project>
