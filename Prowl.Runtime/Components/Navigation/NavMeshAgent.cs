@@ -528,7 +528,8 @@ public class NavMeshAgent : MonoBehaviour
         if (polys[0] != _agent.corridor.GetFirstPoly()) return false;
 
         Float3 destination = path.LastCorner;
-        if (!_crowd.SetAgentPath(_agent, polys[^1], ToRc(destination), polys, polys.Length))
+        bool partial = path.Status == NavMeshPathStatus.PathPartial;
+        if (!_crowd.SetAgentPath(_agent, polys[^1], ToRc(destination), polys, polys.Length, partial))
             return false;
 
         _destination = destination;

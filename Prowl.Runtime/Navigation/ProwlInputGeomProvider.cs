@@ -109,6 +109,13 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
             foreach (int s in group)
             {
                 NavMeshGeometrySource source = sources[s];
+
+                // A mirroring transform reverses winding, and the slope test reads the normal from
+                // winding — so a floor scaled by -1 on one axis rasterizes as a ceiling and bakes
+                // unwalkable. For a TRS matrix the determinant is the product of the scales, so its
+                // sign answers this exactly.
+                bool flip = Float4x4.Determinant(source.Transform) < 0f;
+
                 for (int v = 0; v < source.Vertices.Length; v++)
                 {
                     Float3 world = Float4x4.TransformPoint(source.Vertices[v], source.Transform);
@@ -133,8 +140,8 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
                     if ((uint)i0 >= source.Vertices.Length || (uint)i1 >= source.Vertices.Length || (uint)i2 >= source.Vertices.Length)
                         continue;
                     tris[tWrite++] = vBase + i0;
-                    tris[tWrite++] = vBase + i1;
-                    tris[tWrite++] = vBase + i2;
+                    tris[tWrite++] = vBase + (flip ? i2 : i1);
+                    tris[tWrite++] = vBase + (flip ? i1 : i2);
                 }
 
                 vBase += source.Vertices.Length;

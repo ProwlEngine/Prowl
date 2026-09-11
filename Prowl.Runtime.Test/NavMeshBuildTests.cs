@@ -46,6 +46,26 @@ public class NavMeshBuildTests
         TileSize = 64,
     };
 
+    /// <summary>The slope test reads a triangle's normal from its winding, so a floor under a
+    /// mirroring transform faces down and rasterizes as a ceiling unless the winding is flipped
+    /// back. A mirrored floor is ordinary authoring — a room prefab scaled -1 to make its pair.
+    /// </summary>
+    [Fact]
+    public void FlatQuad_MirroredTransform_ProducesWalkablePolys()
+    {
+        NavMeshGeometrySource quad = FlatQuad();
+        var mirrored = new NavMeshGeometrySource(quad.Vertices, quad.Indices,
+            Float4x4.CreateScale(new Float3(-1, 1, 1)));
+
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [mirrored]);
+
+        Assert.NotNull(data);
+        var world = new NavMeshWorld();
+        Assert.NotNull(world.AddNavMeshData(data!));
+        Assert.True(world.SamplePosition(new Float3(-10, 0.2f, 10), out _, 1f, NavMesh.AllAreas),
+            "A mirrored floor must bake walkable, not vanish as a ceiling.");
+    }
+
     /// <summary>
     /// An asset whose tiles are in a format this engine cannot read says so, naming the versions,
     /// rather than handing bytes to Detour that mean something else now. Nothing in the engine

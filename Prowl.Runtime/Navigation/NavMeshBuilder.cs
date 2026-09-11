@@ -225,7 +225,17 @@ public static class NavMeshBuilder
         bmax = new RcVec3f((float)data.BoundsMax.X, (float)data.BoundsMax.Y, (float)data.BoundsMax.Z);
         if (geom != null)
         {
-            bmin.Y = Math.Min(bmin.Y, geom.GetMeshBoundsMin().Y);
+            // Layer heights are stored relative to the heightfield's own bmin.Y, and the tile
+            // cache rebases a neighbour's layer by a WHOLE number of voxel heights. Dropping to
+            // the geometry directly would put a rebuilt tile's floor a fraction of a voxel off
+            // its neighbours', which the seam cannot express: step down in whole ch instead.
+            float geomMinY = geom.GetMeshBoundsMin().Y;
+            if (geomMinY < bmin.Y)
+            {
+                float ch = data.Settings.EffectiveVoxelHeight;
+                bmin.Y -= MathF.Ceiling((bmin.Y - geomMinY) / ch) * ch;
+            }
+
             bmax.Y = Math.Max(bmax.Y, geom.GetMeshBoundsMax().Y);
         }
 

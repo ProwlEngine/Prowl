@@ -356,6 +356,45 @@ public class NavMeshComponentTests : RuntimeTestBase
         _ = cornersBefore;
     }
 
+    /// <summary>
+    /// A rebuild whose geometry reaches below the bake's minimum drops the heightfield floor to
+    /// meet it. Layer heights are stored relative to that floor and the tile cache rebases a
+    /// neighbour by a WHOLE number of voxel heights, so a drop of a fraction of a voxel leaves the
+    /// rebuilt tile quantized against a lattice its neighbours do not share, and the shared edge
+    /// stops meeting.
+    /// </summary>
+    [Fact]
+    public void RebuildTiles_WithGeometryBelowTheBakeMinimum_KeepsTheSeamFlush()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateExplicitGeometryScene();
+
+        // Voxel height is half the 0.25 voxel size, so this ledge sits 0.3 of a voxel below the
+        // bake's floor — deliberately not a whole multiple.
+        const float voxelHeight = 0.125f;
+        const float below = -0.3f * voxelHeight;
+
+        NavMeshGeometrySource[] sources =
+        [
+            FloorQuad(0, 0, 30, 30),
+            new([new(1, below, 1), new(1, below, 3), new(3, below, 3), new(3, below, 1)],
+                [0, 1, 2, 0, 2, 3], Float4x4.Identity),
+        ];
+
+        Assert.True(surface.RebuildTiles(new AABB(new Float3(0, -1, 0), new Float3(14, 1, 14)), sources, out int rebuilt));
+        Assert.True(rebuilt > 0);
+
+        // Either side of the x = 16 tile seam, clear of the ledge.
+        float step = 0f;
+        for (float z = 4; z <= 12; z += 2)
+        {
+            Assert.True(scene.Navigation.SamplePosition(new Float3(15.5f, 0.2f, z), out NavMeshHit west, 0.5f, NavMesh.AllAreas));
+            Assert.True(scene.Navigation.SamplePosition(new Float3(16.5f, 0.2f, z), out NavMeshHit east, 0.5f, NavMesh.AllAreas));
+            step = MathF.Max(step, MathF.Abs((float)(west.Position.Y - east.Position.Y)));
+        }
+
+        Assert.True(step < 0.005f, $"tile surfaces meet {step:0.000} apart across the rebuilt seam");
+    }
+
     private static NavMeshGeometrySource FloorQuad(float minX, float minZ, float maxX, float maxZ)
     {
         Float3[] verts =
