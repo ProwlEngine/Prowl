@@ -587,7 +587,6 @@ namespace Prowl.Recast
                 int t = i * 4;
                 if (tris[t + 0] == -1 || tris[t + 1] == -1 || tris[t + 2] == -1)
                 {
-                    Console.Error.WriteLine($"delaunayHull: Removing dangling face {i} [{tris[t]},{tris[t + 1]},{tris[t + 2]}]");
                     tris[t + 0] = tris[tris.Count - 4];
                     tris[t + 1] = tris[tris.Count - 3];
                     tris[t + 2] = tris[tris.Count - 2];
