@@ -336,7 +336,7 @@ namespace Prowl.PaperUI
             bool sel = n.Id == _selectedId;
             float indent = 2 + n.Depth * 12;
 
-            string kind = n.Lay == LayoutType.Row ? "Row" : "Col";
+            string kind = n.Lay.ToString();
             string extra = string.IsNullOrEmpty(n.Text) ? "" : "  \"" + n.Text + "\"";
             if (!string.IsNullOrEmpty(n.Handlers)) extra += "  {" + n.Handlers + "}";
             string label = $"{kind} #{n.Id}{extra}";
@@ -483,7 +483,7 @@ namespace Prowl.PaperUI
             UpdateFlameHover(); // sets _hoverId from last frame's bars so the app element lights up
 
             bool timing = ActiveDisplay.Count > 0;
-            float headH = 26 + 66 + 28 + 24 + 30; // stats + graph + phasebar + legend + flame toolbar
+            float headH = 26 + 66 + 28 + 24 + 22 + 30; // stats + graph + phasebar + legend + flame toolbar
             float flameH = MathF.Max(90, h - headH);
 
             using (_p.Column("prof").Width(w).Height(h).Enter())
@@ -975,7 +975,7 @@ namespace Prowl.PaperUI
                 for (int i = 0; i < hits.Count && i < 24; i++)
                 {
                     var n = _snap[hits[i]];
-                    string kind = n.Lay == LayoutType.Row ? "Row" : "Col";
+                    string kind = n.Lay.ToString();
                     _p.Box("hit_" + i, i).Width(_p.Percent(100)).Height(22)
                         .Text($"{kind} #{n.Id}  ({n.W:0}x{n.H:0})", _font).FontSize(14).TextColor(TextDim)
                         .Alignment(Prowl.PaperUI.TextAlignment.MiddleLeft)
@@ -991,7 +991,7 @@ namespace Prowl.PaperUI
             if (_idToSnap.TryGetValue(id, out int si))
             {
                 var n = _snap[si];
-                string kind = n.Lay == LayoutType.Row ? "Row" : "Col";
+                string kind = n.Lay.ToString();
                 return $"{kind} #{id}";
             }
             return "#" + id;
