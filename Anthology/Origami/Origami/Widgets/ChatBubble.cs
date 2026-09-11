@@ -155,7 +155,7 @@ public sealed class ChatBubbleBuilder
                 .Width(UnitValue.Auto).MaxWidth(_maxWidth)
                 .Height(UnitValue.Auto)
                 .Padding(13, 13, 9, 9)
-                .ColBetween(m.SpacingSmall)
+                .Gap(m.SpacingSmall)
                 .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
                 {
                     float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
@@ -216,7 +216,7 @@ public sealed class ChatBubbleBuilder
     private void DrawAvatar(FontFile? font, OrigamiMetrics m)
     {
         float size = _avatarSize;
-        // Gap between the avatar and the bubble (RowBetween is overridden by the stretch margins below).
+        // Gap between the avatar and the bubble (the container Gap is overridden by the stretch margins below).
         float gap = m.SpacingLarge;
         float aml = _tail == BubbleTailDirection.Right ? gap : 0f;
         float amr = _tail == BubbleTailDirection.Left ? gap : 0f;

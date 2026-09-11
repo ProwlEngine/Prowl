@@ -162,7 +162,7 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
         {
             _containerEl = _paper.CurrentParent;
 
-            using (_paper.Row(_id + "_chart_header").Height(20).ChildRight().Enter())
+            using (_paper.Row(_id + "_chart_header").Height(20).Enter())
                 Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
 
             _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);

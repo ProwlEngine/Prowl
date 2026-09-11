@@ -119,7 +119,7 @@ public sealed class ColorFieldBuilder
             .BorderColor(bdSoft).BorderWidth(1)
             .Hovered.BorderColor(_theme.Primary.C500).End()
             .Rounded(rounding)
-            .Padding(4, 10, 0, 0).RowBetween(8);
+            .Padding(4, 10, 0, 0).Gap(8);
 
         if (!_readOnly)
         {
@@ -181,7 +181,7 @@ public sealed class ColorFieldBuilder
             .Width(PopWidth)
             .Height(UnitValue.Auto)
             .Padding(pad, pad, pad, pad)
-            .ColBetween(gap)
+            .Gap(gap)
             .Enter())
         {
             var popEl = _paper.CurrentParent;
@@ -212,7 +212,7 @@ public sealed class ColorFieldBuilder
             float barCount = _showAlpha ? 2 : 1;
             float svW = PopWidth - pad * 2 - (BarWidth + gap) * barCount;
 
-            using (_paper.Row($"{_id}_cf_top").Height(svW).RowBetween(gap).Enter())
+            using (_paper.Row($"{_id}_cf_top").Height(svW).Gap(gap).Enter())
             {
                 DrawSVSquare(popEl, svW, h, s, v, a);
                 DrawHueBar(popEl, svW, h, s, v, a);
@@ -378,7 +378,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawHSVInputs(ElementHandle popEl, float h, float s, float v, float a)
     {
-        using (_paper.Row($"{_id}_cf_hsv_row").Height(UnitValue.Auto).RowBetween(_theme.Metrics.Spacing).Enter())
+        using (_paper.Row($"{_id}_cf_hsv_row").Height(UnitValue.Auto).Gap(_theme.Metrics.Spacing).Enter())
         {
             ChannelNumeric("H", $"{_id}_cf_h", (int)h, 0, 360, nh =>
             { _paper.SetElementStorage(popEl, "h", (float)nh); EmitFromHSV(popEl); }, HueCol);
@@ -396,7 +396,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawRGBInputs(ElementHandle popEl, Color c)
     {
-        using (_paper.Row($"{_id}_cf_rgb_row").Height(UnitValue.Auto).RowBetween(_theme.Metrics.Spacing).Enter())
+        using (_paper.Row($"{_id}_cf_rgb_row").Height(UnitValue.Auto).Gap(_theme.Metrics.Spacing).Enter())
         {
             ChannelNumeric("R", $"{_id}_cf_r", Clamp255(c.R), 0, 255, nr =>
             { var nc = new Color(nr / 255f, c.G, c.B, c.A); SyncHSV(popEl, nc); _setter(nc); }, RedCol);
@@ -463,7 +463,7 @@ public sealed class ColorFieldBuilder
 
         for (int row = 0; row < rowCount; row++)
         {
-            using (_paper.Row($"{_id}_cf_pr{row}").Height(swatchSize).RowBetween(gap).Enter())
+            using (_paper.Row($"{_id}_cf_pr{row}").Height(swatchSize).Gap(gap).Enter())
             {
                 for (int col = 0; col < cols; col++)
                 {

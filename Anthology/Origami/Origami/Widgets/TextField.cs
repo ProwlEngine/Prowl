@@ -631,7 +631,7 @@ public sealed class TextFieldBuilder
                     .BackgroundColor(rowBg)
                     .Hovered.BackgroundColor(ramp.C400).End()
                     .Rounded(2)
-                    .ChildLeft(8).ChildRight(8)
+                    .Padding(8, 8, 0, 0)
                     .Alignment(TextAlignment.MiddleLeft)
                     .Text(item, font)
                     .TextColor(_theme.Ink.C500)

@@ -309,7 +309,7 @@ public static class PropertyGridRenderer
                 if (targets[t] != null) config.OnBeginRoot?.Invoke(targets[t]);
         }
 
-        using (paper.Column($"{id}_root").ColBetween(m.SpacingLarge).Height(UnitValue.Auto).Enter())
+        using (paper.Column($"{id}_root").Gap(m.SpacingLarge).Height(UnitValue.Auto).Enter())
         {
             var type = representative.GetType();
             var fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
@@ -440,7 +440,7 @@ public static class PropertyGridRenderer
         }
 
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
-            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
+            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
         {
             // Override (prefab) / mixed (multi-select) marker: a small accent / amber dot before the label.
             if (isOverridden || isMixed)
@@ -787,7 +787,7 @@ public static class PropertyGridRenderer
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_se");
 
-                using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium).BackgroundColor(glass)
+                using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer)
@@ -810,7 +810,7 @@ public static class PropertyGridRenderer
                     for (int i = 0; i < list.Count; i++)
                     {
                         int idx = i; string sk = stableIds[i];
-                        var rowB = paper.Row($"{id}_r_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.PaddingSmall, m.Padding, m.PaddingSmall, m.PaddingSmall).RowBetween(m.SpacingLarge);
+                        var rowB = paper.Row($"{id}_r_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.PaddingSmall, m.Padding, m.PaddingSmall, m.PaddingSmall).Gap(m.SpacingLarge);
                         if (BeingDragged(sk)) rowB.BackgroundColor(theme.Selected);
                         CaptureRow(idx, rowB);
                         using (rowB.Enter())
@@ -854,7 +854,7 @@ public static class PropertyGridRenderer
                 var nelEl = paper.CurrentParent;
                 bool exp = paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault);
 
-                var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium)
+                var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer);
@@ -916,7 +916,7 @@ public static class PropertyGridRenderer
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_ne");
 
-                using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingLarge).BackgroundColor(glass)
+                using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingLarge).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer)
@@ -937,7 +937,7 @@ public static class PropertyGridRenderer
                 {
                     paper.Box($"{id}_nlhd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
 
-                    using (paper.Column($"{id}_nlb").Width(ST).Height(UnitValue.Auto).Padding(m.Padding, m.Padding, m.Padding, m.Padding).ColBetween(m.SpacingMedium).Enter())
+                    using (paper.Column($"{id}_nlb").Width(ST).Height(UnitValue.Auto).Padding(m.Padding, m.Padding, m.Padding, m.Padding).Gap(m.SpacingMedium).Enter())
                     {
                         if (list.Count == 0)
                             paper.Box($"{id}_nle").Width(ST).Height(24).IsNotInteractable()
@@ -1002,7 +1002,7 @@ public static class PropertyGridRenderer
         var m = theme.Metrics;
         var font = theme.Font;
 
-        using (paper.Row($"{id}_null").Height(m.RowHeight).RowBetween(m.SpacingMedium).Enter())
+        using (paper.Row($"{id}_null").Height(m.RowHeight).Gap(m.SpacingMedium).Enter())
         {
             if (font != null)
                 paper.Box($"{id}_null_lbl").Width(UnitValue.Stretch()).Height(m.RowHeight)

@@ -155,7 +155,7 @@ public sealed class DialogModal : IModal
         // ── Head (.w2mm-head): glass-in strip, leading icon + title + close X ──
         using (paper.Row($"{idp}_head").Width(UnitValue.Stretch()).Height(headH)
             .BackgroundColor(theme.Glass).RoundedTop(radius)
-            .Padding(11, 11, 0, 0).RowBetween(8)
+            .Padding(11, 11, 0, 0).Gap(8)
             .Enter())
         {
             if (Icon != null)
@@ -205,7 +205,7 @@ public sealed class DialogModal : IModal
         // ── Body (.w2mm-body): t-mid text, padding 11 ──
         using (paper.Column($"{idp}_body")
             .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-            .Padding(11, 11, 11, 11).ColBetween(m.SpacingMedium)
+            .Padding(11, 11, 11, 11).Gap(m.SpacingMedium)
             .TextColor(ink.C300).FontSize(m.FontSize)
             .Enter())
         {
@@ -217,7 +217,7 @@ public sealed class DialogModal : IModal
         {
             paper.Box($"{idp}_fdiv").Width(UnitValue.Stretch()).Height(1).BackgroundColor(theme.BorderSoft).IsNotInteractable();
             using (paper.Row($"{idp}_foot").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                .Padding(11, 11, 10, 10).RowBetween(8).ChildLeft(UnitValue.Stretch())
+                .Padding(11, 11, 10, 10).Gap(8).JustifyContent(LayoutJustification.End)
                 .Enter())
             {
                 for (int b = 0; b < Buttons.Count; b++)

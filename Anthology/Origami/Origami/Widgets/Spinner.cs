@@ -139,7 +139,7 @@ public sealed class SpinnerBuilder
             _ => diameter,
         };
 
-        using (_paper.Row(_id).Width(UnitValue.Auto).Height(rowH).RowBetween(8).Enter())
+        using (_paper.Row(_id).Width(UnitValue.Auto).Height(rowH).Gap(8).Enter())
         {
             using (_paper.Box($"{_id}_glyph")
                 .Width(glyphW).Height(rowH)

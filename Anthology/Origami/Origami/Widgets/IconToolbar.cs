@@ -76,7 +76,7 @@ public sealed class IconToolbarBuilder
 
         ElementBuilder bar = _vertical ? _paper.Column(_id) : _paper.Row(_id);
         bar.Width(UnitValue.Auto).Height(UnitValue.Auto);
-        if (_vertical) bar.ColBetween(gap); else bar.RowBetween(gap);
+        bar.Gap(gap);
         if (_center && !_vertical) bar.Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0);
         if (_container)
             bar.Rounded(10f).Padding(pad, pad, pad, pad)

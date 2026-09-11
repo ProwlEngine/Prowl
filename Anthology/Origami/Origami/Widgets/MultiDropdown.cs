@@ -145,7 +145,7 @@ public sealed class MultiDropdownBuilder<T>
         // Flex-wrap field (prototype .w2field: height auto, minHeight 32, padding 4, gap 4).
         var trigger = _paper.Row(_id)
             .Width(_width).Height(UnitValue.Auto).MinHeight(_height)
-            .WrapContent().RowBetween(4).Padding(4, 4, 4, 4)
+            .WrapContent().Gap(4).LineGap(4).Padding(4, 4, 4, 4)
             .BackgroundColor(trigBg)
             .BorderColor(trigBorder).BorderWidth(1)
             .Hovered.BorderColor(trigBorderHover).End()

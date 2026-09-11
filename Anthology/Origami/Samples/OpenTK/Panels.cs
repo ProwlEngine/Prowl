@@ -201,7 +201,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
             float cardW = (contentW - gap * (cols - 1)) / cols;
 
             // Flex-wrap the cards: they flow onto new lines automatically and the block grows to fit.
-            using (P.Row($"sec{si}_cards").Width(P.Percent(100)).Height(P.Auto).WrapContent().RowBetween(gap).Enter())
+            using (P.Row($"sec{si}_cards").Width(P.Percent(100)).Height(P.Auto).WrapContent().Gap(gap).LineGap(gap).Enter())
             {
                 for (int idx = 0; idx < sec.Cards.Length; idx++)
                 {
@@ -285,7 +285,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Menu Bar / App Bar ───────────────────────────────────────────────────
     private void MenuBarDemo(Paper P)
     {
-        using (P.Column("mbdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(14).Enter())
+        using (P.Column("mbdemo").Width(P.Percent(100)).Height(P.Auto).Gap(14).Enter())
         {
             using (P.Column("mbsec1").Width(P.Percent(100)).Height(P.Auto).Enter())
             {
@@ -436,7 +436,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
             new BreadcrumbItem("~", IconDraw(OrigamiIconSet.Folder, Palette.C(251, 191, 36))),
             new BreadcrumbItem("prowl"), new BreadcrumbItem("chimera"),
         };
-        using (P.Column("bcdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(12).Enter())
+        using (P.Column("bcdemo").Width(P.Percent(100)).Height(P.Auto).Gap(12).Enter())
         {
             Origami.Breadcrumb(P, "bc1", items, _ => { }).Chevrons().Show();
             Origami.Breadcrumb(P, "bc2", pathItems, _ => { }).Chevrons().ShowIcons().Show();
@@ -523,7 +523,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Label ────────────────────────────────────────────────────────────────
     private void LabelDemo(Paper P)
     {
-        using (P.Column("lbdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(5).Enter())
+        using (P.Column("lbdemo").Width(P.Percent(100)).Height(P.Auto).Gap(5).Enter())
         {
             Origami.Label(P, "lbh", "Heading").Heading().Show();
             Origami.Label(P, "lbs", "Subheading").Subheading().Show();
@@ -584,15 +584,15 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Header ───────────────────────────────────────────────────────────────
     private void HeaderDemo(Paper P)
     {
-        using (P.Column("hddemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(12).Enter())
+        using (P.Column("hddemo").Width(P.Percent(100)).Height(P.Auto).Gap(12).Enter())
         {
-            using (P.Column("hdb1").Width(P.Percent(100)).Height(P.Auto).ColBetween(4).Enter())
+            using (P.Column("hdb1").Width(P.Percent(100)).Height(P.Auto).Gap(4).Enter())
             {
                 DemoLabel(P, "hdl1", "Component / Foldout header");
                 Origami.Header(P, "hdcomp", "Rigidbody").Component()
                     .Chevron(true).Icon(IconDraw(OrigamiIconSet.Cube, Palette.Acc300)).Checkbox(true).More().Show();
             }
-            using (P.Column("hdb2").Width(P.Percent(100)).Height(P.Auto).ColBetween(4).Enter())
+            using (P.Column("hdb2").Width(P.Percent(100)).Height(P.Auto).Gap(4).Enter())
             {
                 DemoLabel(P, "hdl2", "Section label");
                 Origami.Header(P, "hdsec", "Physics").Show();
@@ -603,7 +603,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Foldout ──────────────────────────────────────────────────────────────
     private void FoldoutDemo(Paper P)
     {
-        using (P.Column("fldemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(7).Enter())
+        using (P.Column("fldemo").Width(P.Percent(100)).Height(P.Auto).Gap(7).Enter())
         {
             Origami.Foldout(P, "fldA", "Transform").Expanded(_foldA, v => _foldA = v)
                 .Icon(IconDraw(OrigamiIconSet.Cube, Palette.Acc300))
@@ -635,13 +635,13 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Skeleton ─────────────────────────────────────────────────────────────
     private void SkeletonDemo(Paper P)
     {
-        using (P.Column("skdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(11).Enter())
+        using (P.Column("skdemo").Width(P.Percent(100)).Height(P.Auto).Gap(11).Enter())
         {
             using (P.Row("skr1").Width(P.Percent(100)).Height(P.Auto).Enter())
             {
                 Origami.Skeleton(P, "ska").Avatar(38).Show();
                 P.Box("skg").Width(12);
-                using (P.Column("skc").Width(P.Auto).Height(P.Auto).ColBetween(7).Margin(0, 0, P.Stretch(), P.Stretch()).Enter())
+                using (P.Column("skc").Width(P.Auto).Height(P.Auto).Gap(7).Margin(0, 0, P.Stretch(), P.Stretch()).Enter())
                 {
                     Origami.Skeleton(P, "skl1").Pill().Size(150, 11).Show();
                     Origami.Skeleton(P, "skl2").Pill().Size(96, 11).Show();
@@ -654,7 +654,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Toasts ───────────────────────────────────────────────────────────────
     private void ToastsDemo(Paper P)
     {
-        using (P.Column("todemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(10).Enter())
+        using (P.Column("todemo").Width(P.Percent(100)).Height(P.Auto).Gap(10).Enter())
         {
             using (P.Row("tor1").Width(P.Percent(100)).Height(P.Auto).Enter())
                 Origami.Button(P, "toTrig", "Trigger toast").Primary().LeadingIcon(IconDraw(OrigamiIconSet.Bolt, Palette.White))
@@ -670,7 +670,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Tooltip ──────────────────────────────────────────────────────────────
     private void TooltipDemo(Paper P)
     {
-        using (P.Column("tipdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(10).Enter())
+        using (P.Column("tipdemo").Width(P.Percent(100)).Height(P.Auto).Gap(10).Enter())
         {
             DemoLabel(P, "tipl", "Hover to preview");
             using (P.Row("tipr").Width(P.Percent(100)).Height(P.Auto).Enter())
@@ -689,7 +689,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     private void ImageDiffDemo(Paper P)
     {
         EnsureDiffTextures(P);
-        using (P.Column("iddemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(10).Enter())
+        using (P.Column("iddemo").Width(P.Percent(100)).Height(P.Auto).Gap(10).Enter())
         {
             Origami.ImageDiff(P, "idiff", _diffA, _diffB).Width(P.Percent(100)).Height(156).Show();
             using (P.Row("idcap").Width(P.Percent(100)).Height(P.Auto).Enter())
@@ -744,7 +744,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Text Field ───────────────────────────────────────────────────────────
     private void TextFieldDemo(Paper P)
     {
-        using (P.Column("tfdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(8).Enter())
+        using (P.Column("tfdemo").Width(P.Percent(100)).Height(P.Auto).Gap(8).Enter())
         {
             DemoLabel(P, "tfl1", "Default");
             Origami.TextField(P, "tf1", _tfName, v => _tfName = v).Mono().Show();
@@ -768,7 +768,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Numeric Field ────────────────────────────────────────────────────────
     private void NumericFieldDemo(Paper P)
     {
-        using (P.Column("nfdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(8).Enter())
+        using (P.Column("nfdemo").Width(P.Percent(100)).Height(P.Auto).Gap(8).Enter())
         {
             DemoLabel(P, "nfl1", "Stepper");
             Origami.NumericField<float>(P, "nf1", _numMass, v => _numMass = v)
@@ -782,7 +782,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Vector Fields ────────────────────────────────────────────────────────
     private void VectorFieldDemo(Paper P)
     {
-        using (P.Column("vfdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(8).Enter())
+        using (P.Column("vfdemo").Width(P.Percent(100)).Height(P.Auto).Gap(8).Enter())
         {
             DemoLabel(P, "vfl2", "Vector2");
             Origami.Float2Field(P, "vf2", _vec2, v => _vec2 = v).Show();
@@ -802,12 +802,12 @@ public sealed class WidgetPlaygroundPanel : DockPanel
         };
         int cr = (int)MathF.Round(_colorVal.R * 255), cg = (int)MathF.Round(_colorVal.G * 255), cb = (int)MathF.Round(_colorVal.B * 255);
 
-        using (P.Column("cfdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(8).Enter())
+        using (P.Column("cfdemo").Width(P.Percent(100)).Height(P.Auto).Gap(8).Enter())
         {
             Origami.ColorField(P, "cf1", _colorVal, v => _colorVal = v).Show();
 
             DemoLabel(P, "cfl", "Swatch palette");
-            using (P.Row("cfsw").Width(P.Percent(100)).Height(P.Auto).RowBetween(5).Enter())
+            using (P.Row("cfsw").Width(P.Percent(100)).Height(P.Auto).Gap(5).Enter())
             {
                 foreach (var s in sw)
                 {
@@ -946,7 +946,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
             var font = theme.Font;
 
             using (paper.Row(id).Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight)
-                .Padding(12, 12, 4, 4).RowBetween(8).Enter())
+                .Padding(12, 12, 4, 4).Gap(8).Enter())
             {
                 if (font != null)
                     paper.Box($"{id}_l").Width(m.LabelWidth).Height(m.RowHeight)
@@ -970,7 +970,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
             .Text(text, _geist).FontSize(11.5f * Palette.TS).TextColor(Palette.TMid)
             .Alignment(TextAlignment.Left).Wrap(TextWrapMode.Wrap);
 
-        using (P.Column("moddemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(12).Enter())
+        using (P.Column("moddemo").Width(P.Percent(100)).Height(P.Auto).Gap(12).Enter())
         {
             using (P.Row("modtr").Width(P.Percent(100)).Height(P.Auto).Enter())
                 Origami.Button(P, "modopen", "Open modal").Primary().LeadingIcon(IconDraw(OrigamiIconSet.Expand, Palette.White))
@@ -1007,14 +1007,14 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Progress Bar ─────────────────────────────────────────────────────────
     private void ProgressBarDemo(Paper P)
     {
-        using (P.Column("pbdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(12).Enter())
+        using (P.Column("pbdemo").Width(P.Percent(100)).Height(P.Auto).Gap(12).Enter())
         {
-            using (P.Column("pb1c").Width(P.Percent(100)).Height(P.Auto).ColBetween(6).Enter())
+            using (P.Column("pb1c").Width(P.Percent(100)).Height(P.Auto).Gap(6).Enter())
             {
                 DemoLabel(P, "pbl1", "Determinate 68%");
                 Origami.ProgressBar(P, "pb1", 0.68f).Show();
             }
-            using (P.Column("pb2c").Width(P.Percent(100)).Height(P.Auto).ColBetween(6).Enter())
+            using (P.Column("pb2c").Width(P.Percent(100)).Height(P.Auto).Gap(6).Enter())
             {
                 DemoLabel(P, "pbl2", "Striped / active");
                 Origami.ProgressBar(P, "pb2", 0.44f).Striped().Show();
@@ -1032,7 +1032,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── File Dialog (embedded inline browser + modal trigger) ────────────────
     private void FileDialogDemo(Paper P)
     {
-        using (P.Column("fddwrap").Width(P.Percent(100)).Height(P.Auto).ColBetween(10).Enter())
+        using (P.Column("fddwrap").Width(P.Percent(100)).Height(P.Auto).Gap(10).Enter())
         {
             using (P.Row("fdtr").Width(P.Percent(100)).Height(P.Auto).Enter())
                 Origami.Button(P, "fdopen", "Open dialog").Primary().LeadingIcon(IconDraw(OrigamiIconSet.FolderOpen, Palette.White))
@@ -1045,7 +1045,7 @@ public sealed class WidgetPlaygroundPanel : DockPanel
     // ── Date Picker (functional field + styled popup, supports ranges) ───────
     private void DatePickerDemo(Paper P)
     {
-        using (P.Column("dpdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(10).Enter())
+        using (P.Column("dpdemo").Width(P.Percent(100)).Height(P.Auto).Gap(10).Enter())
         {
             DemoLabel(P, "dpl1", "Field + popup");
             Origami.DatePicker(P, "dp1", _dpDate, v => _dpDate = v).DateOnly().Width(P.Stretch()).Show();
@@ -1410,7 +1410,7 @@ public sealed class ChartsPanel : DockPanel
 
     private static void Row(Paper P, string id, Action body)
     {
-        using (P.Row(id).Height(P.Auto).RowBetween(12f).Enter())
+        using (P.Row(id).Height(P.Auto).Gap(12f).Enter())
             body();
     }
 
@@ -1602,7 +1602,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void Toolbar(Paper P)
     {
-        using (P.Row("chartstb").Width(P.Percent(100)).Height(26).ColBetween(8).Enter())
+        using (P.Row("chartstb").Width(P.Percent(100)).Height(26).Enter())
         {
             ToggleButton(P, "chartsSmooth", "Smooth", _smooth, v => _smooth = v);
             ToggleButton(P, "chartsFill", "Fill", _fill, v => _fill = v);

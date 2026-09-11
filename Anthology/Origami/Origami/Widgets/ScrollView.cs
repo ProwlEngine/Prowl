@@ -112,7 +112,7 @@ public sealed class ScrollViewBuilder
 
     // ── Behaviour ──────────────────────────────────────────────────────
 
-    /// <summary>Spacing between stacked children. Forwarded to the content column's <c>ColBetween</c>.</summary>
+    /// <summary>Spacing between stacked children. Forwarded to the content column's <c>Gap</c>.</summary>
     public ScrollViewBuilder ColSpacing(float spacing) { _colSpacing = spacing; return this; }
 
     /// <summary>Enable vertical scrolling (default <c>true</c>).</summary>
@@ -269,7 +269,7 @@ public sealed class ScrollViewBuilder
                 .PositionType(PositionType.SelfDirected)
                 .Position(_padLeft - animScrollX, _padTop - animScrollY)
                 .Height(UnitValue.Auto)
-                .ColBetween(_colSpacing);
+                .Gap(_colSpacing);
 
             if (_horizontal) content.Width(UnitValue.Auto);
             else content.Width(viewportW);

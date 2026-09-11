@@ -186,7 +186,7 @@ public sealed class DatePickerBuilder
             .BackgroundColor(_theme.Glass)
             .BorderColor(_theme.BorderSoft).BorderWidth(1)
             .Rounded(m.ContainerRounding)
-            .Padding(11, 11, 11, 11).ColBetween(m.SpacingMedium)
+            .Padding(11, 11, 11, 11).Gap(m.SpacingMedium)
             .Enter())
         {
             var h = _paper.CurrentParent;
@@ -400,7 +400,7 @@ internal static class OrigamiCalendar
 
             // ── Weekday row ──
             using (paper.Row($"{id}_dow").Width(UnitValue.Stretch()).Height(cell * 0.62f)
-                .Margin(0, 0, 0, 2).RowBetween(Gap).Enter())
+                .Margin(0, 0, 0, 2).Gap(Gap).Enter())
             {
                 for (int i = 0; i < 7; i++)
                     paper.Box($"{id}_dow_{i}").Width(cell).Height(cell * 0.62f)
@@ -416,12 +416,12 @@ internal static class OrigamiCalendar
             int rows = (firstDow + daysInMonth + 6) / 7;
 
             using (paper.Column($"{id}_grid").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                .ColBetween(Gap).Enter())
+                .Gap(Gap).Enter())
             {
                 for (int r = 0; r < rows; r++)
                 {
                     using (paper.Row($"{id}_r{r}").Width(UnitValue.Stretch()).Height(cell)
-                        .RowBetween(Gap).Enter())
+                        .Gap(Gap).Enter())
                     {
                         for (int c = 0; c < 7; c++)
                         {
@@ -615,7 +615,7 @@ internal sealed class DatePickerModal : IModal
             .Rounded(m.ContainerRounding)
             .DropShadow(0, 14, 40, 0, theme.Shadow)
             .Padding(Pad, Pad, Pad, Pad)
-            .ColBetween(m.SpacingMedium)
+            .Gap(m.SpacingMedium)
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()
@@ -740,8 +740,8 @@ internal sealed class DatePickerModal : IModal
 
         paper.Box($"{_id}_tsep").Height(1).Margin(0, 0, m.Spacing, m.Spacing).BackgroundColor(ink.C200);
 
-        using (paper.Row($"{_id}_time").Height(m.RowHeight + 4).RowBetween(m.Spacing)
-            .ChildLeft(UnitValue.StretchOne).ChildRight(UnitValue.StretchOne).Enter())
+        using (paper.Row($"{_id}_time").Height(m.RowHeight + 4).Gap(m.Spacing)
+            .JustifyContent(LayoutJustification.Center).Enter())
         {
             int hour = _value.Hour;
             int minute = _value.Minute;

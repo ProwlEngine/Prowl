@@ -300,7 +300,7 @@ public static class FileDialog
         // Wrap a self-rendering control (TextField/Button) so it centers vertically in a taller row.
         void VC(string wid, UnitValue w, float h, Action inner)
         {
-            using (paper.Row(wid).Width(w).Height(h).ChildTop().ChildBottom().Enter())
+            using (paper.Row(wid).Width(w).Height(h).AlignItems(LayoutAlignment.Center).Enter())
                 inner();
         }
 
@@ -320,15 +320,15 @@ public static class FileDialog
             int start = Math.Max(0, crumbs.Count - maxCrumbs);
 
             using (paper.Row($"{id}_crumbs").Width(UnitValue.Stretch()).Height(toolbarH)
-                .ChildLeft(4).RowBetween(1).Clip().Enter())
+                .PaddingLeft(4).Gap(1).Clip().Enter())
             {
-                void Sep(string sid) => paper.Box(sid).Width(UnitValue.Auto).Height(toolbarH).ChildLeft(2).ChildRight(2)
+                void Sep(string sid) => paper.Box(sid).Width(UnitValue.Auto).Height(toolbarH).Padding(2, 2, 0, 0)
                     .Text(">", font).TextColor(ink.C200).FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleCenter);
 
                 if (start > 0)
                 {
                     string tp = crumbs[start - 1].Path;
-                    var eb = paper.Box($"{id}_cr_ell").Width(UnitValue.Auto).Height(toolbarH).ChildLeft(5).ChildRight(5).Rounded(5)
+                    var eb = paper.Box($"{id}_cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(5)
                         .Text("...", font).TextColor(ink.C300).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                         .Hovered.BackgroundColor(theme.Hover).End();
                     eb.OnClick(0, (_, _) => NavigateTo(tp, true));
@@ -339,7 +339,7 @@ public static class FileDialog
                 {
                     var (label, cpath) = crumbs[i];
                     bool last = i == crumbs.Count - 1;
-                    var cb = paper.Box($"{id}_cr_{i}").Width(UnitValue.Auto).Height(toolbarH).ChildLeft(5).ChildRight(5).Rounded(5)
+                    var cb = paper.Box($"{id}_cr_{i}").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(5)
                         .Text(label, last ? titleFont : font).TextColor(last ? ink.C500 : ink.C300)
                         .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     if (!last)
@@ -353,7 +353,7 @@ public static class FileDialog
         }
 
         void SideSection(string key, string label) =>
-            paper.Box($"{id}_sl_{key}").Height(m.CompactHeight).ChildLeft(6)
+            paper.Box($"{id}_sl_{key}").Height(m.CompactHeight).PaddingLeft(6)
                 .Text(label.ToUpperInvariant(), labelFont).TextColor(ink.C200)
                 .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleLeft);
 
@@ -366,7 +366,7 @@ public static class FileDialog
             var r = paper.Row(sid).Height(m.RowHeight)
                 .BackgroundColor(sel ? Selection : Color.Transparent)
                 .Hovered.BackgroundColor(sel ? Selection : theme.Hover).End()
-                .Rounded(6).ChildLeft(7).RowBetween(6).Clip();
+                .Rounded(6).PaddingLeft(7).Gap(6).Clip();
             r.OnClick(0, (_, _) => NavigateTo(path, true));
             using (r.Enter())
             {
@@ -402,11 +402,11 @@ public static class FileDialog
         using (win.Enter())
         {
             // Toolbar: back / fwd / up + breadcrumb + search + new folder (+ close X when floating).
-            // Use Padding (not ChildLeft/Right): the edge buttons set an explicit Margin for vertical
+            // Use Padding: the edge buttons set an explicit Margin for vertical
             // centering, which would override container child-margins and touch the edges.
             using (paper.Row($"{id}_tb").Height(toolbarH)
                 .BackgroundColor(theme.Glass).RoundedTop(9f)
-                .Padding(10, 10, 0, 0).RowBetween(4).Enter())
+                .Padding(10, 10, 0, 0).Gap(4).Enter())
             {
                 TbBtn($"{id}_back", DrawBack, st.HistoryIndex > 0, NavBack);
                 TbBtn($"{id}_fwd", DrawForward, st.HistoryIndex < st.History.Count - 1, NavFwd);
@@ -426,7 +426,7 @@ public static class FileDialog
             {
                 using (paper.Column($"{id}_side").Width(sideW).Height(UnitValue.Stretch())
                     .BackgroundColor(SideBg)
-                    .Padding(7, 7, 7, 7).ColBetween(1).Enter())
+                    .Padding(7, 7, 7, 7).Gap(1).Enter())
                 {
                     string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                     string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
@@ -470,7 +470,7 @@ public static class FileDialog
                     {
                         tableH -= m.RowHeight + 4f;
                         using (paper.Row($"{id}_rn").Height(m.RowHeight).BackgroundColor(theme.Selected)
-                            .ChildLeft(rowPadL).RowBetween(6).Margin(0, 0, 0, 4).Enter())
+                            .PaddingLeft(rowPadL).Gap(6).Margin(0, 0, 0, 4).Enter())
                         {
                             using (paper.Box($"{id}_rn_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
                                 paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawPencil, 15f, theme.Primary.C500));
@@ -486,7 +486,7 @@ public static class FileDialog
                     {
                         tableH -= m.RowHeight + 4f;
                         using (paper.Row($"{id}_nf").Height(m.RowHeight).BackgroundColor(theme.Selected)
-                            .ChildLeft(rowPadL).RowBetween(6).Margin(0, 0, 0, 4).Enter())
+                            .PaddingLeft(rowPadL).Gap(6).Margin(0, 0, 0, 4).Enter())
                         {
                             using (paper.Box($"{id}_nf_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
                                 paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawFolder, 15f, theme.Amber.C500));
@@ -574,7 +574,7 @@ public static class FileDialog
             };
             using (paper.Row($"{id}_foot").Height(footH)
                 .BackgroundColor(theme.Glass).RoundedBottom(9f)
-                .ChildLeft(11).ChildRight(11).RowBetween(8).Enter())
+                .Padding(11, 11, 0, 0).Gap(8).Enter())
             {
                 paper.Box($"{id}_foot_l").Width(UnitValue.Auto).Height(footH)
                     .Text(mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font).TextColor(ink.C200)

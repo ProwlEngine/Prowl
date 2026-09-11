@@ -145,7 +145,7 @@ public sealed class NodeGraphPanel : DockPanel
 
     private void Toolbar(Paper P)
     {
-        using (P.Row("ngtb").Width(P.Percent(100)).Height(38).Padding(8, 8, 0, 0).ColBetween(6)
+        using (P.Row("ngtb").Width(P.Percent(100)).Height(38).Padding(8, 8, 0, 0)
             .BackgroundColor(Palette.GlassIn).Enter())
         {
             Origami.Button(P, "tb_all", "Frame All").Small().OnClick(() => _ctrl.FrameAll()).Show();
@@ -320,7 +320,7 @@ public sealed class NodeGraphPanel : DockPanel
         using (P.Column("ngpopup").PositionType(PositionType.SelfDirected).Left(px).Top(py)
             .Width(pw).Height(P.Auto).MaxHeight(320).Layer(Layer.Overlay + 10)
             .BackgroundColor(Palette.C(20, 16, 30, 0.98f)).Rounded(10)
-            .BorderColor(Palette.BdSoft).BorderWidth(1).Padding(7, 7, 7, 7).ColBetween(6)
+            .BorderColor(Palette.BdSoft).BorderWidth(1).Padding(7, 7, 7, 7).Gap(6)
             .DropShadow(0, 8, 24, 0, Palette.C(0, 0, 0, 0.5f)).Enter())
         {
             Origami.SearchField(P, "ngsearch", _search, v => _search = v, _wireNode != null ? "Compatible nodes..." : "Search nodes...").Show();

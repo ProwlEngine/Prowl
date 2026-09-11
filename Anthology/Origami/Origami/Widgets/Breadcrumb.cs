@@ -180,7 +180,7 @@ public sealed class BreadcrumbBuilder
             _ => "",
         };
 
-        using (_paper.Row(_id).Width(_width).Height(_height).RowBetween(0).Enter())
+        using (_paper.Row(_id).Width(_width).Height(_height).Enter())
         {
             for (int i = 0; i < _items.Count; i++)
             {

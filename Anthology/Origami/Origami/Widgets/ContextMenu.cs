@@ -123,7 +123,7 @@ public sealed class ContextBuilder
             var row = paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
-                .RowBetween(RowGap)
+                .Gap(RowGap)
                 .Rounded(6f)
                 .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
@@ -192,7 +192,7 @@ public sealed class ContextBuilder
 
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
-            using (paper.Row($"{id}_ti_{index}").Height(RowHeight).Padding(RowPadX, RowPadX, 0, 0).RowBetween(RowGap)
+            using (paper.Row($"{id}_ti_{index}").Height(RowHeight).Padding(RowPadX, RowPadX, 0, 0).Gap(RowGap)
                 .IsNotInteractable().Enter())
             {
                 if (IconDraw != null)
@@ -247,7 +247,7 @@ public sealed class ContextBuilder
             var row = paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
-                .RowBetween(RowGap)
+                .Gap(RowGap)
                 .Rounded(6f)
                 .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
@@ -303,7 +303,7 @@ public sealed class ContextBuilder
             using (paper.Row($"{id}_i_{index}")
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
-                .RowBetween(RowGap)
+                .Gap(RowGap)
                 .Rounded(6f)
                 .Hovered.BackgroundColor(theme.Hover).End()
                 // Remember this row's on-screen rect so next frame the submenu can decide which side to

@@ -433,7 +433,7 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
             .BorderColor(_theme.BorderStrong).BorderWidth(1f)
             .Rounded(6f)
             .Padding(6f)
-            .ColBetween(6f)
+            .Gap(6f)
             .Layer(Layer.Topmost + 1000)
             .OnPostLayout((_, rect) => paper.SetRootStorage(widthKey, (float)rect.Size.X));
 
@@ -451,7 +451,7 @@ public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf :
             {
                 (Color color, string text) = rows[i];
 
-                using (paper.Row($"{_id}_tooltip_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).RowBetween(2f).Enter())
+                using (paper.Row($"{_id}_tooltip_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).Gap(2f).Enter())
                 {
                     paper.Box($"{_id}_tooltip_sw_{i}").Size(SwatchSize).BackgroundColor(color).Rounded(2f);
 

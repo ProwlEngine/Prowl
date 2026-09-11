@@ -170,7 +170,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         {
             float trackRowH = _height;
 
-            using (_paper.Row($"{_id}_row").Width(UnitValue.Stretch()).Height(trackRowH).RowBetween(8).Enter())
+            using (_paper.Row($"{_id}_row").Width(UnitValue.Stretch()).Height(trackRowH).Gap(8).Enter())
             {
                 ElementHandle trackHandle = default;
                 var trackBuilder = _paper.Box($"{_id}_track")
@@ -228,7 +228,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                 if (_showValue)
                 {
                     // Two compact numeric fields side by side.
-                    using (_paper.Row($"{_id}_nfs").Width(_valueWidth * 2 + 4).Height(trackRowH).RowBetween(4).Enter())
+                    using (_paper.Row($"{_id}_nfs").Width(_valueWidth * 2 + 4).Height(trackRowH).Gap(4).Enter())
                     {
                         var nfLo = new NumericFieldBuilder<T>(_paper, $"{_id}_nf_lo", lo, v =>
                             EmitOrdered(SliderInternal.Clamp(v, _min, _max), hi),
@@ -251,7 +251,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
             if (drawTickLabels)
             {
-                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).RowBetween(8).Enter())
+                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).Gap(8).Enter())
                 {
                     using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
                     {

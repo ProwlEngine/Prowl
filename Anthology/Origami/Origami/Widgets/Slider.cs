@@ -284,7 +284,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             float trackRowH = _height;
 
             // ── Track + optional inline numeric field row ─────────
-            using (_paper.Row($"{_id}_row").Width(UnitValue.Stretch()).Height(trackRowH).RowBetween(8).Enter())
+            using (_paper.Row($"{_id}_row").Width(UnitValue.Stretch()).Height(trackRowH).Gap(8).Enter())
             {
                 // Track box owns all interaction + the canvas-drawn track + thumb.
                 ElementHandle trackHandle = default;
@@ -373,7 +373,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             // the labels would stretch under the inline numeric field too and skew the spacing.
             if (drawTickLabels)
             {
-                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).RowBetween(8).Enter())
+                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).Gap(8).Enter())
                 {
                     using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
                     {

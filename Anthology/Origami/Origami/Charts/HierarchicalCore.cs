@@ -614,7 +614,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
 
             if (_showHeader)
             {
-                using (_paper.Row(_id + "_chart_header").Height(20).ChildRight().Enter())
+                using (_paper.Row(_id + "_chart_header").Height(20).Enter())
                     Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
 
                 _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);
@@ -844,7 +844,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
             .BorderColor(_theme.BorderStrong).BorderWidth(1f)
             .Rounded(6f)
             .Padding(6f)
-            .ColBetween(6f)
+            .Gap(6f)
             .Layer(Layer.Topmost + 1000)
             .OnPostLayout((_, rect) => paper.SetRootStorage(widthKey, (float)rect.Size.X));
 
@@ -862,7 +862,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
             {
                 (Color color, string text) = rows[i];
 
-                using (paper.Row($"{_id}_tooltip_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).RowBetween(2f).Enter())
+                using (paper.Row($"{_id}_tooltip_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).Gap(2f).Enter())
                 {
                     paper.Box($"{_id}_tooltip_sw_{i}").Size(SwatchSize).BackgroundColor(color).Rounded(2f);
 

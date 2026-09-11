@@ -185,12 +185,12 @@ public sealed class ProgressBarBuilder
                 Time = (float)_paper.Time,
             };
 
-            using (_paper.Row(_id).Height(ringRowH).RowBetween(8).Enter())
+            using (_paper.Row(_id).Height(ringRowH).Gap(8).Enter())
             {
                 if (hasLabel)
                 {
                     _paper.Box($"{_id}_lbl")
-                        .Width(labelW).Height(ringRowH).ChildLeft(0)
+                        .Width(labelW).Height(ringRowH)
                         .Alignment(PaperUI.TextAlignment.MiddleLeft).IsNotInteractable()
                         .Text(_label!, font!).TextColor(ink.C500).FontSize(labelFontSize);
                 }
@@ -232,12 +232,12 @@ public sealed class ProgressBarBuilder
             Time = (float)_paper.Time,
         };
 
-        using (_paper.Row(_id).Height(rowH).RowBetween(8).Enter())
+        using (_paper.Row(_id).Height(rowH).Gap(8).Enter())
         {
             if (hasLabel)
             {
                 _paper.Box($"{_id}_lbl")
-                    .Width(labelW).Height(rowH).ChildLeft(0)
+                    .Width(labelW).Height(rowH)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft).IsNotInteractable()
                     .Text(_label!, font!).TextColor(ink.C500).FontSize(labelFontSize);
             }

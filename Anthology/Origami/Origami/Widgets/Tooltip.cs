@@ -130,7 +130,7 @@ public static class TooltipSystem
             .Rounded(7f)
             .DropShadow(0, 6, 20, 0, Color.FromArgb(128, 0, 0, 0))
             .Padding(padX, padX, padY, padY)
-            .ColBetween(m.SpacingSmall)
+            .Gap(m.SpacingSmall)
             .Layer(Layer.Topmost + 1000)
             .ClampToScreen()
             .IsNotInteractable()
@@ -140,7 +140,7 @@ public static class TooltipSystem
         {
             if (hasTitle || hasIcon)
             {
-                using (paper.Row("tt_hdr").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
+                using (paper.Row("tt_hdr").Height(UnitValue.Auto).Gap(m.Spacing).Enter())
                 {
                     if (hasIcon)
                         paper.Box("tt_ico").Width(m.IconWidth).Height(18)

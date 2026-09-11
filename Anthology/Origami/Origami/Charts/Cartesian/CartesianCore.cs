@@ -685,7 +685,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
                 {
                     using (_paper.Column(_id + "_chart_y_gtr_c").Width(UnitValue.Auto).Enter())
                     {
-                        using (_paper.Column(_id + "_chart_y_gtr").ChildLeft().Width(UnitValue.Auto).Enter())
+                        using (_paper.Column(_id + "_chart_y_gtr").AlignItems(LayoutAlignment.End).Width(UnitValue.Auto).Enter())
                         {
                             for (int i = yTicks.Count - 1; i >= 0; i--)
                             {
@@ -695,7 +695,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
                                     _paper.Box($"{_id}_ytick_{i}_sp").Height(UnitValue.Percentage(pHeight * 100, -1));
                                 }
 
-                                using (_paper.Row($"{_id}_ytick_{i}").Height(1f).Width(UnitValue.Auto).ChildLeft().Enter())
+                                using (_paper.Row($"{_id}_ytick_{i}").Height(1f).Width(UnitValue.Auto).JustifyContent(LayoutJustification.End).Enter())
                                 {
                                     if (!string.IsNullOrEmpty(yTicks[i].Label))
                                         Origami.Label(_paper, $"{_id}_ytick_label_{i}", yTicks[i].Label).XS().Height(1).AlignCenter().Show();
@@ -723,14 +723,14 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
 
                     if (_axes)
                     {
-                        using (_paper.Row(_id + "_chart_x_gtr").ChildBottom().Height(UnitValue.Auto).Enter())
+                        using (_paper.Row(_id + "_chart_x_gtr").Height(UnitValue.Auto).Enter())
                         {
                             if (xTicks.Count > 0 && xTicks[0].Position > 0d)
                                 _paper.Box(_id + "_xtick_lead_sp").Width(UnitValue.Percentage((float)xTicks[0].Position * 100));
 
                             for (int i = 0; i < xTicks.Count; i++)
                             {
-                                using (_paper.Column($"{_id}_xtick_{i}").Height(UnitValue.Auto).Width(1f).ChildBottom().ChildRight().Enter())
+                                using (_paper.Column($"{_id}_xtick_{i}").Height(UnitValue.Auto).Width(1f).Enter())
                                 {
                                     _paper.Box($"{_id}_xtick_tick_{i}").Height(4f).Width(1f).BackgroundColor(_theme.Ink.C500);
 
@@ -748,7 +748,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
                     }
 
                     if (_axes && !string.IsNullOrEmpty(_xLabel))
-                        using (_paper.Row(_id + "_chart_x_label_center").Height(UnitValue.Auto).ChildLeft().ChildRight().Enter())
+                        using (_paper.Row(_id + "_chart_x_label_center").Height(UnitValue.Auto).JustifyContent(LayoutJustification.Center).Enter())
                             Origami.Label(_paper, _id + "_chart_x_label", _xLabel)
                                 .XS()
                                 .AlignCenter()
@@ -1368,8 +1368,8 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
             .BorderColor(_theme.BorderStrong).BorderWidth(1f)
             .Rounded(6f)
             .Padding(6f)
-            .ColBetween(6f)
-            .ChildBottom()
+            .Gap(6f)
+
             .Layer(Layer.Topmost + 1000)
             .OnPostLayout((_, rect) => paper.SetRootStorage(widthKey, (float)rect.Size.X));
 
@@ -1387,7 +1387,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
             {
                 (Color color, string text) = rows[i];
 
-                using (paper.Row($"{_id}_sampler_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).RowBetween(2f).Enter())
+                using (paper.Row($"{_id}_sampler_row_{i}").Height(SwatchSize).Width(UnitValue.Auto).Gap(2f).Enter())
                 {
                     paper.Box($"{_id}_sampler_sw_{i}").Size(SwatchSize).BackgroundColor(color).Rounded(2f);
 

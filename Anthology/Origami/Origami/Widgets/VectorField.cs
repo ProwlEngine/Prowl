@@ -33,7 +33,7 @@ internal static class VectorFieldInternal
         string l1, T v1, SysColor c1, Action<T> s1, float h = 24f)
         where T : struct, INumber<T>
     {
-        using (paper.Row(id).Height(UnitValue.Auto).RowBetween(6).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).Gap(6).Enter())
         {
             Cell(paper, $"{id}_0", l0, v0, c0, s0, h);
             Cell(paper, $"{id}_1", l1, v1, c1, s1, h);
@@ -46,7 +46,7 @@ internal static class VectorFieldInternal
         string l2, T v2, SysColor c2, Action<T> s2, float h = 24f)
         where T : struct, INumber<T>
     {
-        using (paper.Row(id).Height(UnitValue.Auto).RowBetween(6).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).Gap(6).Enter())
         {
             Cell(paper, $"{id}_0", l0, v0, c0, s0, h);
             Cell(paper, $"{id}_1", l1, v1, c1, s1, h);
@@ -61,7 +61,7 @@ internal static class VectorFieldInternal
         string l3, T v3, SysColor c3, Action<T> s3, float h = 24f)
         where T : struct, INumber<T>
     {
-        using (paper.Row(id).Height(UnitValue.Auto).RowBetween(6).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).Gap(6).Enter())
         {
             Cell(paper, $"{id}_0", l0, v0, c0, s0, h);
             Cell(paper, $"{id}_1", l1, v1, c1, s1, h);

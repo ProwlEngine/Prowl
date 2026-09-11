@@ -167,7 +167,7 @@ public static class DragDrop
             .Width(UnitValue.Auto).Height(m.HeaderHeight)
             .BackgroundColor(Color.FromArgb(200, 40, 40, 45))
             .BorderColor(theme.Primary.C400).BorderWidth(1)
-            .Rounded(m.Rounding).ChildLeft(m.Padding).ChildRight(m.Padding)
+            .Rounded(m.Rounding).Padding(m.Padding, m.Padding, 0, 0)
             .IsNotInteractable()
             .Layer(Layer.Topmost + 500)
             .Text(display, font)

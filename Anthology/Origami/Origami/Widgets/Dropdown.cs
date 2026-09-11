@@ -176,7 +176,7 @@ public sealed class DropdownBuilder<T>
         Color chevColor = _variant is OrigamiVariant.Default or OrigamiVariant.Subtle
                                   ? ink.C300 : ramp.C600;
 
-        // Use Row so children flow left-to-right; per-child Margin (not ChildLeft/Right)
+        // Use Row so children flow left-to-right; per-child Margin (not container padding)
         // gives reliable label-stretches-chevron-on-right layout.
         var trigger = _paper.Row(_id)
             .Width(_width).Height(_height)

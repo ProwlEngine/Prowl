@@ -298,7 +298,7 @@ internal static class DropdownInternal
             .DropShadow(0, 14, 40, -6, p.Theme.Shadow)
             .Rounded(9)
             .Padding(padX, padX, padY, padY)
-            .ColBetween(searchGap)
+            .Gap(searchGap)
             .HookToParent()
             .Layer(Layer.Topmost)
             .ClampToScreen()
@@ -315,8 +315,8 @@ internal static class DropdownInternal
                     .BorderColor(p.Theme.Neutral.C400).BorderWidth(1)
                     .Focused.BorderColor(ramp.C500).End()
                     .Rounded(3)
-                    .ChildLeft(6).ChildRight(4)
-                    .RowBetween(4)
+                    .Padding(6, 4, 0, 0)
+                    .Gap(4)
                     .TabIndex(0)
                     .Enter())
                 {
@@ -399,8 +399,8 @@ internal static class DropdownInternal
                                 .BackgroundColor(rowBg)
                                 .Hovered.BackgroundColor(enabled ? hoverTint : rowBg).End()
                                 .Rounded(6)
-                                .ChildLeft(9).ChildRight(9)
-                                .RowBetween(9)
+                                .Padding(9, 9, 0, 0)
+                                .Gap(9)
                                 .OnClick(e =>
                                 {
                                     if (!enabled) return;
@@ -480,8 +480,8 @@ internal static class DropdownInternal
             {
                 using (paper.Row($"{p.Id}_pg")
                     .Height(paginationH)
-                    .ChildLeft(2).ChildRight(2)
-                    .RowBetween(4)
+                    .Padding(2, 2, 0, 0)
+                    .Gap(4)
                     .Enter())
                 {
                     bool canPrev = pageIdx > 0;

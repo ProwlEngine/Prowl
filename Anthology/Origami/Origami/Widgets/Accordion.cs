@@ -71,7 +71,7 @@ public sealed class AccordionBuilder
         string key = $"{_id}_open";
         string openId = _paper.GetElementStorage(parentH, key, _defaultOpen ?? "");
 
-        using (_paper.Column(_id).Width(UnitValue.Stretch()).Height(UnitValue.Auto).ColBetween(_spacing).Enter())
+        using (_paper.Column(_id).Width(UnitValue.Stretch()).Height(UnitValue.Auto).Gap(_spacing).Enter())
         {
             foreach (var s in _sections)
             {

@@ -99,7 +99,7 @@ public sealed class LegendBuilder
 
     public void Show()
     {
-        using (_paper.Column(_id).Width(_width).Height(UnitValue.Auto).PaddingTop(_padding).ColBetween(_rowGap).Enter())
+        using (_paper.Column(_id).Width(_width).Height(UnitValue.Auto).PaddingTop(_padding).Gap(_rowGap).Enter())
         {
             for (int i = 0; i < _entries.Count; i++)
             {
@@ -109,7 +109,7 @@ public sealed class LegendBuilder
                 string text = entry.ValueText != null ? entry.Label + "  " + entry.ValueText : entry.Label;
                 Color swatchColor = entry.Hidden ? Color.FromArgb(entry.Color.A / 3, entry.Color) : entry.Color;
 
-                using (_paper.Row($"{_id}_row_{i}").Height(_swatchSize).RowBetween(2f).Enter())
+                using (_paper.Row($"{_id}_row_{i}").Height(_swatchSize).Gap(2f).Enter())
                 {
                     ElementBuilder swatch = _paper.Box($"{_id}_sw_{i}").Size(_swatchSize).BackgroundColor(swatchColor).Rounded(2f);
 

@@ -475,8 +475,7 @@ public sealed class TreeBuilder
             .Hovered.BackgroundColor(hoverBg).End()
             .Rounded(rowRounding)
             .Clip()   // keep long labels from spilling under the overlay scrollbar
-            .ChildLeft(indent)
-            .ChildRight(6);
+            .Padding(indent, 6, 0, 0);
 
         // Click handling
         if (!disabled)

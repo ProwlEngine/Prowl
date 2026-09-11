@@ -100,7 +100,7 @@ public sealed class AppBarBuilder
             .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
             .Enter())
         {
-            // Gaps are explicit left margins: a Row's RowBetween is suppressed once children set an
+            // Gaps are explicit left margins: a Row Gap is not used here because children set an
             // explicit main-axis margin, which every item does here for vertical centering.
             bool first = true;
             for (int i = 0; i < _items.Count; i++)

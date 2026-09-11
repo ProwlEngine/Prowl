@@ -173,7 +173,7 @@ public sealed class Toasts
                 .DropShadow(0, 14, 40, 0, shadow)
                 .Layer(ToastLayer)
                 .IsNotInteractable()
-                .Padding(PadX, PadX, PadY, PadY).RowBetween(Gap)
+                .Padding(PadX, PadX, PadY, PadY).Gap(Gap)
                 .Enter())
             {
                 using (paper.Box($"toast_ico_{i}")
@@ -190,7 +190,7 @@ public sealed class Toasts
                 using (paper.Column($"toast_txt_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                     .Margin(UnitValue.Auto, UnitValue.Stretch())
-                    .ColBetween(2)
+                    .Gap(2)
                     .Enter())
                 {
                     paper.Box($"toast_t_{i}")
@@ -257,7 +257,7 @@ public sealed class Toasts
             .Rounded(CardRadius)
             .DropShadow(0, 14, 40, 0, shadow)
             .IsNotInteractable()
-            .Padding(PadX, PadX, PadY, PadY).RowBetween(Gap)
+            .Padding(PadX, PadX, PadY, PadY).Gap(Gap)
             .Enter())
         {
             using (paper.Box($"{id}_ico")
@@ -274,7 +274,7 @@ public sealed class Toasts
             using (paper.Column($"{id}_txt")
                 .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                .ColBetween(2)
+                .Gap(2)
                 .Enter())
             {
                 paper.Box($"{id}_t")
