@@ -44,19 +44,16 @@ namespace Prowl.Recast.Detour.TileCache
         private readonly DtTileCacheParams m_params;
         private readonly DtTileCacheStorageParams m_storageParams;
 
-        private readonly DtTileCacheAlloc m_talloc;
         private readonly IRcCompressor m_tcomp;
         private readonly IDtTileCacheMeshProcess m_tmproc;
 
-        /// Held for the life of the cache rather than made per tile: a context allocates
-        /// thread-local timer state, and tile builds run one at a time on a cache.
-        private readonly RcContext m_ctx = new RcContext();
+        /// Held for the life of the cache rather than made per tile: the caches inside it only pay
+        /// off across consecutive builds, and a cache's own builds run one at a time.
+        private readonly DtTileCacheBuildScratch m_scratch = new DtTileCacheBuildScratch();
 
-        /// Neighbour layers a tile's border reads, by tile ref (#BorderLayer). Dropped whenever a
-        /// tile or an obstacle changes, since both change what the layers say.
-        private readonly Dictionary<long, DtTileCacheLayer> m_borderLayers = new Dictionary<long, DtTileCacheLayer>();
-        private const int MaxCachedBorderLayers = 256;
-        private readonly List<long> m_neighbourRefs = new List<long>();
+        /// Bumped whenever a tile or an obstacle changes what the layers say, so a build scratch
+        /// can tell whether the neighbour layers it cached are still the truth.
+        private int m_tileEpoch;
 
         private readonly List<DtTileCacheObstacle> m_obstacles = new List<DtTileCacheObstacle>();
         private DtTileCacheObstacle m_nextFreeObstacle;
@@ -77,7 +74,6 @@ namespace Prowl.Recast.Detour.TileCache
             m_params = option;
             m_storageParams = storageParams;
             m_navmesh = navmesh;
-            m_talloc = new DtTileCacheAlloc(); // TODO: ikpil, improve pooling system
             m_tcomp = tcomp;
             m_tmproc = tmprocs;
 
@@ -277,7 +273,7 @@ namespace Prowl.Recast.Detour.TileCache
         public bool TryAddTile(byte[] data, int flags, out long refs)
         {
             refs = 0;
-            m_borderLayers.Clear();
+            m_tileEpoch++;
 
             // Make sure the data is in right format.
             RcByteBuffer buf = new RcByteBuffer(data);
@@ -399,7 +395,7 @@ namespace Prowl.Recast.Detour.TileCache
 
         private DtTileCacheLayerHeader FreeCompressedTile(long refs)
         {
-            m_borderLayers.Clear();
+            m_tileEpoch++;
 
             if (refs == 0)
             {
@@ -663,7 +659,7 @@ namespace Prowl.Recast.Detour.TileCache
                 // requests are about to change.
                 if (m_reqs.Count > 0)
                 {
-                    m_borderLayers.Clear();
+                    m_tileEpoch++;
                 }
 
                 // Process requests.
@@ -752,19 +748,19 @@ namespace Prowl.Recast.Detour.TileCache
 
         public void BuildNavMeshTile(long refs)
         {
-            int idx = DecodeTileIdTile(refs);
-            if (idx > m_params.maxTiles)
-            {
-                throw new Exception("Invalid tile index");
-            }
+            CommitTile(refs, BuildTileMeshData(refs, m_scratch));
+        }
 
-            DtCompressedTile tile = m_tiles[idx];
-            int salt = DecodeTileIdSalt(refs);
-            if (tile.salt != salt)
-            {
-                throw new Exception("Invalid tile salt");
-            }
-
+        /// The build half of a tile: compressed layer in, finished tile mesh out, or null for a
+        /// tile with nothing walkable left in it. Reads the cache's tiles and obstacles and touches
+        /// no navmesh state, so several tiles can be built at once with a
+        /// <see cref="DtTileCacheBuildScratch"/> each — provided nothing adds, removes or carves a
+        /// tile while they run. A scratch may be kept and reused; it notices when the tiles have
+        /// moved on. Publish the result with <see cref="CommitTile"/>.
+        public DtMeshData BuildTileMeshData(long refs, DtTileCacheBuildScratch scratch)
+        {
+            scratch.SyncTo(this, m_tileEpoch);
+            DtCompressedTile tile = ResolveTile(refs);
             int walkableClimbVx = (int)(m_params.walkableClimb / m_params.ch);
 
             // Decompress tile layer data.
@@ -783,26 +779,26 @@ namespace Prowl.Recast.Detour.TileCache
             RcCompactHeightfield chf = null;
             if (m_params.watershedPartition || m_params.detailSampleDist > 0)
             {
-                DtTileCacheBuilder.DtTileBorderGrid grid = BuildBorderGrid(tile, layer, DtTileCacheBuilder.SeamBorder);
+                DtTileCacheBuilder.DtTileBorderGrid grid = BuildBorderGrid(tile, layer, DtTileCacheBuilder.SeamBorder, scratch);
                 chf = DtTileCacheBuilder.ToCompactHeightfield(grid, m_params);
             }
 
             DtTileCacheContourSet lcset = m_params.watershedPartition
-                ? DtTileCacheBuilder.BuildTileCacheContoursWatershed(m_ctx, layer, chf, m_params)
+                ? DtTileCacheBuilder.BuildTileCacheContoursWatershed(scratch.Ctx, layer, chf, m_params)
                 : null;
             if (lcset == null)
             {
                 DtTileCacheBuilder.BuildTileCacheRegions(layer, walkableClimbVx);
-                lcset = DtTileCacheBuilder.BuildTileCacheContours(m_talloc, layer, walkableClimbVx, m_params.maxSimplificationError);
+                lcset = DtTileCacheBuilder.BuildTileCacheContours(scratch.Alloc, layer, walkableClimbVx, m_params.maxSimplificationError);
             }
 
             DtTileCachePolyMesh polyMesh = DtTileCacheBuilder.BuildTileCachePolyMesh(lcset, m_navmesh.GetMaxVertsPerPoly());
 
-            // Early out if the mesh tile is empty.
+            // Early out if the mesh tile is empty. Null rather than an empty DtMeshData, so
+            // CommitTile empties the position either way without a second emptiness test.
             if (polyMesh.npolys == 0)
             {
-                m_navmesh.RemoveTile(m_navmesh.GetTileRefAt(tile.header.tx, tile.header.ty, tile.header.tlayer));
-                return;
+                return null;
             }
 
             DtNavMeshCreateParams option = new DtNavMeshCreateParams();
@@ -825,20 +821,49 @@ namespace Prowl.Recast.Detour.TileCache
             option.bmin = tile.header.bmin;
             option.bmax = tile.header.bmax;
             if (chf != null)
-                DtTileCacheBuilder.BuildTileCacheDetailMesh(m_ctx, layer, chf, option, m_params);
+                DtTileCacheBuilder.BuildTileCacheDetailMesh(scratch.Ctx, layer, chf, option, m_params);
             if (m_tmproc != null)
             {
                 m_tmproc.Process(option);
             }
 
-            DtMeshData meshData = DtNavMeshBuilder.CreateNavMeshData(option);
-            // Remove existing tile.
+            return DtNavMeshBuilder.CreateNavMeshData(option);
+        }
+
+        /// The publish half: replaces whatever the navmesh holds at @p refs' position with
+        /// @p meshData, or empties the position when it is null. Touches the navmesh, so it runs one
+        /// tile at a time. Committing in ref order reproduces a serial build exactly — AddTile
+        /// inserts at the head of the position hash chain and connects neighbours in chain order,
+        /// so the link tables depend on commit order and nothing else.
+        public void CommitTile(long refs, DtMeshData meshData)
+        {
+            DtCompressedTile tile = ResolveTile(refs);
+
             m_navmesh.RemoveTile(m_navmesh.GetTileRefAt(tile.header.tx, tile.header.ty, tile.header.tlayer));
-            // Add new tile, or leave the location empty. if (navData) { // Let the
             if (meshData != null)
             {
                 m_navmesh.AddTile(meshData, 0, 0, out var result);
             }
+        }
+
+        private DtCompressedTile ResolveTile(long refs)
+        {
+            // >=, not >: the ref's tile field is masked to the tile bit width, which is a power of
+            // two and so wider than maxTiles unless maxTiles is one itself. At exactly maxTiles the
+            // old test fell through to an index out of range instead of saying what was wrong.
+            int idx = DecodeTileIdTile(refs);
+            if (idx >= m_params.maxTiles)
+            {
+                throw new Exception("Invalid tile index");
+            }
+
+            DtCompressedTile tile = m_tiles[idx];
+            if (tile.salt != DecodeTileIdSalt(refs))
+            {
+                throw new Exception("Invalid tile salt");
+            }
+
+            return tile;
         }
 
         /// Cuts every obstacle that reaches @p refs out of that tile's layer. Kept separate from
@@ -875,22 +900,15 @@ namespace Prowl.Recast.Detour.TileCache
         }
 
         /// A neighbour's layer as a tile's border reads it: decompressed, with the obstacles that
-        /// reach it already cut out, and kept until the tiles or obstacles change. A bake meshes
-        /// every tile, and each of those reads its eight neighbours, so without this every layer
-        /// is decompressed nine times over.
-        private DtTileCacheLayer BorderLayer(long refs, DtCompressedTile tile)
+        /// reach it already cut out, and kept in the scratch until the tiles or obstacles change.
+        private DtTileCacheLayer BorderLayer(long refs, DtCompressedTile tile, DtTileCacheBuildScratch scratch)
         {
-            if (m_borderLayers.TryGetValue(refs, out DtTileCacheLayer cached))
+            if (scratch.BorderLayers.TryGetValue(refs, out DtTileCacheLayer cached))
                 return cached;
 
             DtTileCacheLayer layer = DecompressTile(tile);
             MarkObstacles(layer, tile.header.bmin, refs);
-            // Bounded rather than grown without limit: a world of thousands of tiles would
-            // otherwise hold every one of them decompressed for the life of the cache.
-            if (m_borderLayers.Count >= MaxCachedBorderLayers)
-                m_borderLayers.Clear();
-
-            m_borderLayers[refs] = layer;
+            scratch.RememberBorderLayer(refs, layer);
             return layer;
         }
 
@@ -901,7 +919,7 @@ namespace Prowl.Recast.Detour.TileCache
         /// construction. Border cells with no neighbour stay empty, which is exactly a map
         /// perimeter. A neighbour stacking several vertical layers contributes, per cell, the
         /// layer nearest this tile's own surface at the adjacent edge.
-        private DtTileCacheBuilder.DtTileBorderGrid BuildBorderGrid(DtCompressedTile tile, DtTileCacheLayer layer, int border)
+        private DtTileCacheBuilder.DtTileBorderGrid BuildBorderGrid(DtCompressedTile tile, DtTileCacheLayer layer, int border, DtTileCacheBuildScratch scratch)
         {
             int w = layer.header.width, h = layer.header.height;
             var grid = new DtTileCacheBuilder.DtTileBorderGrid(w, h, border);
@@ -934,14 +952,14 @@ namespace Prowl.Recast.Detour.TileCache
                     if (dtx == 0 && dty == 0)
                         continue;
 
-                    m_neighbourRefs.Clear();
-                    GetTilesAt(tile.header.tx + dtx, tile.header.ty + dty, m_neighbourRefs);
-                    foreach (long r in m_neighbourRefs)
+                    scratch.NeighbourRefs.Clear();
+                    GetTilesAt(tile.header.tx + dtx, tile.header.ty + dty, scratch.NeighbourRefs);
+                    foreach (long r in scratch.NeighbourRefs)
                     {
                         DtCompressedTile nt = GetTileByRef(r);
                         if (nt?.header == null || nt.header.width != w || nt.header.height != h)
                             continue;
-                        DtTileCacheLayer nl = BorderLayer(r, nt);
+                        DtTileCacheLayer nl = BorderLayer(r, nt, scratch);
                         // Layer heights are relative to their own layer's base; rebase into ours.
                         int off = (int)Math.Round((nl.header.bmin.Y - layer.header.bmin.Y) / m_params.ch);
 
