@@ -13,7 +13,7 @@ public readonly record struct Length(float Px, float Pct = 0, float Grow = 0, fl
     {
         Shrink = factor
     };
-    internal float Resolve(float parent, float content) => Px + Pct * .01f * parent + AutoFactor * content;
+    internal float Resolve(float parent, float content) => Px + parent * Pct / 100f + AutoFactor * content;
     public static implicit operator Length(float value) => Pixels(value);
     public static implicit operator Length(int value) => Pixels(value);
     public static Length operator +(Length a, Length b) => new(a.Px + b.Px, a.Pct + b.Pct, a.Grow + b.Grow, a.AutoFactor + b.AutoFactor, a.Shrink + b.Shrink);

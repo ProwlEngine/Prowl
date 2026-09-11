@@ -106,11 +106,11 @@ public struct UnitValue : IEquatable<UnitValue>
     /// <summary>
     /// The fixed-length floor: <c>Px + (Pct/100) * parentValue</c>. Excludes stretch and content contributions.
     /// </summary>
-    public readonly float Floor(float parentValue) => Px + (Pct * 0.01f) * parentValue;
+    public readonly float Floor(float parentValue) => Px + parentValue * Pct / 100f;
 
     /// <summary> Resolves this composite value to a pixel length: Px + (Pct / 100) * parentValue + (Grow + AutoFactor) * defaultValue. </summary>
     public readonly float ToPx(float parentValue, float defaultValue)
-        => Px + (Pct * 0.01f) * parentValue + (Grow + AutoFactor) * defaultValue;
+        => Px + parentValue * Pct / 100f + (Grow + AutoFactor) * defaultValue;
 
     /// <summary>Resolves to pixels and clamps between min and max.</summary>
     public readonly float ToPxClamped(float parentValue, float defaultValue, in UnitValue min, in UnitValue max)
