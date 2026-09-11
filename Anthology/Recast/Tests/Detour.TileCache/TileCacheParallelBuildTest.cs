@@ -96,6 +96,84 @@ public class TileCacheParallelBuildTest : AbstractTileCacheTest
         Assert.True(compared > 1, $"only {compared} tiles were meshed; the fixture is not exercising this");
     }
 
+    /// A border grid over a buffer grown for a bigger tile has to look exactly like one over an
+    /// exact buffer. The tile fixtures are all one size, so nothing else reaches this: an unreset
+    /// cell would read as ground at whatever height the previous tile had there.
+    [Fact]
+    public void BorderGridOverAnOversizedBuffer_MatchesAnExactOne()
+    {
+        const int border = DtTileCacheBuilder.SeamBorder;
+        int bigCells = (32 + border * 2) * (32 + border * 2);
+        int[] heights = new int[bigCells];
+        int[] areas = new int[bigCells];
+
+        // Fill it as a big tile would have, then hand it back for a small one.
+        var big = new DtTileCacheBuilder.DtTileBorderGrid(32, 32, border, heights, areas);
+        for (int i = 0; i < bigCells; i++)
+        {
+            heights[i] = 7;
+            areas[i] = 3;
+        }
+
+        var reused = new DtTileCacheBuilder.DtTileBorderGrid(8, 8, border, heights, areas);
+        var exact = new DtTileCacheBuilder.DtTileBorderGrid(8, 8, border);
+
+        int smallCells = (8 + border * 2) * (8 + border * 2);
+        for (int i = 0; i < smallCells; i++)
+        {
+            Assert.Equal(exact.heights[i], reused.heights[i]);
+            Assert.Equal(exact.areas[i], reused.areas[i]);
+        }
+
+        Assert.Equal(big.border, reused.border);
+    }
+
+    /// The heightfield's cell array is sized by the tile's cells, and every tile in the fixtures has
+    /// the same count — so nothing else hands a converter a cell buffer grown for a bigger tile.
+    /// Sizes chosen so the second conversion uses a fraction of each buffer.
+    [Fact]
+    public void CompactHeightfieldOverAnOversizedBuffer_MatchesAnExactOne()
+    {
+        var option = new DtTileCacheParams { cs = 0.3f, ch = 0.2f, walkableHeight = 2f, walkableClimb = 0.9f };
+        var scratch = new DtTileCacheBuildScratch();
+
+        // Inflate every pooled buffer on a big grid with ground everywhere, then convert a small one.
+        var big = new DtTileCacheBuilder.DtTileBorderGrid(48, 48, DtTileCacheBuilder.SeamBorder);
+        for (int i = 0; i < big.heights.Length; i++) big.heights[i] = 5;
+        DtTileCacheBuilder.ToCompactHeightfield(big, option, scratch);
+
+        var small = new DtTileCacheBuilder.DtTileBorderGrid(8, 8, DtTileCacheBuilder.SeamBorder);
+        for (int z = 0; z < 8; z++)
+            for (int x = 0; x < 8; x++)
+                small.heights[small.Index(x, z)] = 3;
+
+        RcCompactHeightfield pooled = DtTileCacheBuilder.ToCompactHeightfield(small, option, scratch);
+        RcCompactHeightfield exact = DtTileCacheBuilder.ToCompactHeightfield(small, option, null);
+
+        Assert.Equal(exact.width, pooled.width);
+        Assert.Equal(exact.height, pooled.height);
+        Assert.Equal(exact.spanCount, pooled.spanCount);
+        Assert.Equal(exact.maxDistance, pooled.maxDistance);
+        Assert.Equal(exact.maxRegions, pooled.maxRegions);
+        Assert.Equal(exact.dist, pooled.dist);
+        Assert.True(pooled.spans.Length >= exact.spans.Length, "the buffer was supposed to still be oversized");
+
+        for (int i = 0; i < exact.width * exact.height; i++)
+        {
+            Assert.Equal(exact.cells[i].index, pooled.cells[i].index);
+            Assert.Equal(exact.cells[i].count, pooled.cells[i].count);
+        }
+
+        for (int i = 0; i < exact.spanCount; i++)
+        {
+            Assert.Equal(exact.areas[i], pooled.areas[i]);
+            Assert.Equal(exact.spans[i].y, pooled.spans[i].y);
+            Assert.Equal(exact.spans[i].h, pooled.spans[i].h);
+            Assert.Equal(exact.spans[i].con, pooled.spans[i].con);
+            Assert.Equal(exact.spans[i].reg, pooled.spans[i].reg);
+        }
+    }
+
     /// A scratch caches its neighbours' layers, so a scratch held across a carve would build the
     /// seam from the ground as it used to be — silently, since the tile itself is always
     /// re-decompressed and only the border would be stale.

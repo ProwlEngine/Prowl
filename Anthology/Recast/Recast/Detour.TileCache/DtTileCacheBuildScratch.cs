@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Prowl.Recast.Core;
@@ -23,6 +24,9 @@ namespace Prowl.Recast.Detour.TileCache
 
         internal readonly DtTileCacheAlloc Alloc = new DtTileCacheAlloc();
 
+        /// The region partitioner.s working buffers, a quarter of a build.s allocation on their own.
+        internal readonly RcRegionScratch Regions = new RcRegionScratch();
+
         /// Neighbour layers a tile's border reads, by tile ref. A bake meshes every tile and each
         /// reads its eight neighbours, so without this every layer is decompressed nine times over.
         /// Dropped whenever a tile or an obstacle changes, since both change what the layers say.
@@ -47,6 +51,54 @@ namespace Prowl.Recast.Detour.TileCache
             BorderLayers.Clear();
             m_owner = owner;
             m_epoch = epoch;
+        }
+
+        // Grow-only working buffers for the biggest arrays a tile build makes. They are sized by the
+        // tile's cell and span counts, which barely move from tile to tile, so after the first build
+        // a scratch stops allocating them: measured at 28% of a build's total allocation, and every
+        // carve pays it again. Only the used prefix of each is ever read — nothing on this path
+        // iterates one by Length — so an oversized buffer is as good as an exact one.
+        private int[] m_gridHeights = Array.Empty<int>();
+        private int[] m_gridAreas = Array.Empty<int>();
+        private RcCompactCell[] m_chfCells = Array.Empty<RcCompactCell>();
+        private RcCompactSpan[] m_chfSpans = Array.Empty<RcCompactSpan>();
+        private int[] m_chfAreas = Array.Empty<int>();
+        private RcCompactHeightfield m_chf;
+
+        internal int[] GridHeights(int size) => Grow(ref m_gridHeights, size);
+
+        internal int[] GridAreas(int size) => Grow(ref m_gridAreas, size);
+
+        internal RcCompactCell[] ChfCells(int size) => Grow(ref m_chfCells, size);
+
+        internal RcCompactSpan[] ChfSpans(int size) => Grow(ref m_chfSpans, size);
+
+        internal int[] ChfAreas(int size) => Grow(ref m_chfAreas, size);
+
+        /// The heightfield object itself, reused. Every field the tile-cache path reads is written
+        /// before it is read — the converter sets all of them bar bmin/bmax, which stay at zero as
+        /// they did on a fresh one, and the distance field and regions assign theirs each build.
+        internal RcCompactHeightfield Chf
+        {
+            get
+            {
+                if (m_chf == null)
+                {
+                    m_chf = new RcCompactHeightfield();
+                }
+
+                return m_chf;
+            }
+        }
+
+        private static T[] Grow<T>(ref T[] buffer, int size)
+        {
+            if (buffer.Length < size)
+            {
+                buffer = new T[size];
+            }
+
+            return buffer;
         }
 
         internal void RememberBorderLayer(long refs, DtTileCacheLayer layer)

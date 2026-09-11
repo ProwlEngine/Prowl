@@ -780,11 +780,11 @@ namespace Prowl.Recast.Detour.TileCache
             if (m_params.watershedPartition || m_params.detailSampleDist > 0)
             {
                 DtTileCacheBuilder.DtTileBorderGrid grid = BuildBorderGrid(tile, layer, DtTileCacheBuilder.SeamBorder, scratch);
-                chf = DtTileCacheBuilder.ToCompactHeightfield(grid, m_params);
+                chf = DtTileCacheBuilder.ToCompactHeightfield(grid, m_params, scratch);
             }
 
             DtTileCacheContourSet lcset = m_params.watershedPartition
-                ? DtTileCacheBuilder.BuildTileCacheContoursWatershed(scratch.Ctx, layer, chf, m_params)
+                ? DtTileCacheBuilder.BuildTileCacheContoursWatershed(scratch.Ctx, scratch.Regions, layer, chf, m_params)
                 : null;
             if (lcset == null)
             {
@@ -922,7 +922,8 @@ namespace Prowl.Recast.Detour.TileCache
         private DtTileCacheBuilder.DtTileBorderGrid BuildBorderGrid(DtCompressedTile tile, DtTileCacheLayer layer, int border, DtTileCacheBuildScratch scratch)
         {
             int w = layer.header.width, h = layer.header.height;
-            var grid = new DtTileCacheBuilder.DtTileBorderGrid(w, h, border);
+            int cells = (w + border * 2) * (h + border * 2);
+            var grid = new DtTileCacheBuilder.DtTileBorderGrid(w, h, border, scratch.GridHeights(cells), scratch.GridAreas(cells));
 
             for (int z = 0; z < h; ++z)
             {
