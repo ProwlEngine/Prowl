@@ -113,11 +113,11 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// Whether a constraint is live enough to read or write its properties.
     /// <para/>
     /// A non-null check is not sufficient. Jitter's constraint properties are views onto unmanaged
-    /// memory reached through <c>Handle</c>, and removing a body removes its constraints, which zeroes
-    /// their handles while this component still holds the managed object. Disabling a rigidbody that has
-    /// a joint on it is enough to get there, and writing through it afterwards writes to freed memory.
+    /// memory, and removing a body automatically removes its constraints while this component still
+    /// holds the managed object. Disabling a rigidbody that has a joint on it is enough to get there,
+    /// and writing through an invalid constraint would access unavailable state.
     /// </summary>
-    protected static bool IsLive(Constraint constraint) => constraint != null && !constraint.Handle.IsZero;
+    protected static bool IsLive(Constraint constraint) => constraint?.IsValid == true;
 
     /// <summary>
     /// Removes a constraint from the world that owns it. The constraint names its own bodies, so this
@@ -126,7 +126,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// </summary>
     protected static void RemoveConstraint(Constraint constraint)
     {
-        if (constraint == null || constraint.Handle.IsZero) return;
+        if (constraint?.IsValid != true) return;
 
         World world = constraint.Body1?.World;
         world?.Remove(constraint);
@@ -140,7 +140,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
         DestroyConstraint();
 
         Rigidbody3D body1 = Body1;
-        if (body1.IsNotValid() || body1._body == null || body1._body.Handle.IsZero)
+        if (body1.IsNotValid() || body1._body?.IsValid != true)
             return;
 
         // Reached from property setters as well as the lifecycle, so the scene can be mid-teardown
@@ -152,7 +152,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
         // No connected body means "anchor to the world". Jitter keeps a pinned static NullBody for
         // exactly that; creating a fresh static body here would leak one into the world on every
         // recreate, and this runs from OnEnable, OnValidate and every property setter.
-        RigidBody body2 = connectedBody.IsNotValid() || connectedBody._body == null || connectedBody._body.Handle.IsZero
+        RigidBody body2 = connectedBody.IsNotValid() || connectedBody._body?.IsValid != true
             ? world.NullBody
             : connectedBody._body;
 
