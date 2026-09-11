@@ -38,8 +38,13 @@ public class AbstractTileCacheTest
 
     public DtTileCache GetTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility)
     {
-        DtTileCacheParams option = new DtTileCacheParams();
         RcRecast.CalcTileCount(geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax(), m_cellSize, m_tileSize, m_tileSize, out var tw, out var th);
+        return GetTileCache(geom, order, cCompatibility, tw * th * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE);
+    }
+
+    public DtTileCache GetTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility, int maxTiles)
+    {
+        DtTileCacheParams option = new DtTileCacheParams();
         option.ch = m_cellHeight;
         option.cs = m_cellSize;
         option.orig = geom.GetMeshBoundsMin();
@@ -49,7 +54,7 @@ public class AbstractTileCacheTest
         option.walkableRadius = m_agentRadius;
         option.walkableClimb = m_agentMaxClimb;
         option.maxSimplificationError = m_edgeMaxError;
-        option.maxTiles = tw * th * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE;
+        option.maxTiles = maxTiles;
         option.maxObstacles = 128;
 
         DtNavMeshParams navMeshParams = new DtNavMeshParams();

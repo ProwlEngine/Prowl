@@ -264,6 +264,19 @@ namespace Prowl.Recast.Detour.TileCache
 
         public long AddTile(byte[] data, int flags)
         {
+            if (!TryAddTile(data, flags, out long refs))
+            {
+                throw new Exception("Out of storage");
+            }
+
+            return refs;
+        }
+
+        /// As AddTile, but reports an exhausted tile pool instead of throwing, for callers that can
+        /// carry on without the tile. @p refs is still 0 when the position and layer are taken.
+        public bool TryAddTile(byte[] data, int flags, out long refs)
+        {
+            refs = 0;
             m_borderLayers.Clear();
 
             // Make sure the data is in right format.
@@ -273,7 +286,7 @@ namespace Prowl.Recast.Detour.TileCache
             // Make sure the location is free.
             if (GetTileAt(header.tx, header.ty, header.tlayer) != null)
             {
-                return 0;
+                return true;
             }
 
             // Allocate a tile.
@@ -288,7 +301,7 @@ namespace Prowl.Recast.Detour.TileCache
             // Make sure we could allocate a tile.
             if (tile == null)
             {
-                throw new Exception("Out of storage");
+                return false;
             }
 
             // Insert tile into the position lut.
@@ -302,7 +315,8 @@ namespace Prowl.Recast.Detour.TileCache
             tile.compressed = Align4(buf.Position());
             tile.flags = flags;
 
-            return GetTileRef(tile);
+            refs = GetTileRef(tile);
+            return true;
         }
 
         private int Align4(int i)
@@ -310,7 +324,80 @@ namespace Prowl.Recast.Detour.TileCache
             return (i + 3) & (~3);
         }
 
+        /// Frees the compressed tile and the navmesh tile built from it. Leaving the latter behind
+        /// would keep a queryable surface at a position the cache no longer describes.
         public void RemoveTile(long refs)
+        {
+            DtTileCacheLayerHeader header = FreeCompressedTile(refs);
+            m_navmesh.RemoveTile(m_navmesh.GetTileRefAt(header.tx, header.ty, header.tlayer));
+            ForgetTileRef(refs);
+        }
+
+        /// Frees the compressed tile only, leaving the navmesh tile in place and the rebuild queue
+        /// still naming it. Preserves the behaviour package consumers had before RemoveTile grew
+        /// the rest.
+        public void RemoveCompressedTileOnly(long refs) => FreeCompressedTile(refs);
+
+        /// A freed ref is reissued with a fresh salt by the next add, so anything still holding it
+        /// would rebuild or carve whatever tile takes its place — and BuildNavMeshTile throws on a
+        /// stale one. Completing the obstacle here matters too: once the tile is gone the update
+        /// loop can no longer do it, and the obstacle sits in PROCESSING forever or leaks its slot.
+        private void ForgetTileRef(long refs)
+        {
+            if (m_updateSet.Remove(refs))
+            {
+                for (int i = m_update.Count; i > 0; i--)
+                {
+                    long queued = m_update.Dequeue();
+                    if (queued != refs)
+                    {
+                        m_update.Enqueue(queued);
+                    }
+                }
+            }
+
+            for (int i = 0; i < m_obstacles.Count; ++i)
+            {
+                DtTileCacheObstacle ob = m_obstacles[i];
+                ob.touched.Remove(refs);
+                if (ob.state != DtObstacleState.DT_OBSTACLE_PROCESSING && ob.state != DtObstacleState.DT_OBSTACLE_REMOVING)
+                {
+                    continue;
+                }
+
+                if (ob.pending.Remove(refs) && 0 == ob.pending.Count)
+                {
+                    CompleteObstacle(ob);
+                }
+            }
+        }
+
+        private void CompleteObstacle(DtTileCacheObstacle ob)
+        {
+            if (ob.state == DtObstacleState.DT_OBSTACLE_PROCESSING)
+            {
+                ob.state = DtObstacleState.DT_OBSTACLE_PROCESSED;
+                return;
+            }
+
+            if (ob.state != DtObstacleState.DT_OBSTACLE_REMOVING)
+            {
+                return;
+            }
+
+            ob.state = DtObstacleState.DT_OBSTACLE_EMPTY;
+            // Salt should never be zero.
+            ob.salt = (ob.salt + 1) & ((1 << 16) - 1);
+            if (ob.salt == 0)
+            {
+                ob.salt++;
+            }
+
+            ob.next = m_nextFreeObstacle;
+            m_nextFreeObstacle = ob;
+        }
+
+        private DtTileCacheLayerHeader FreeCompressedTile(long refs)
         {
             m_borderLayers.Clear();
 
@@ -332,8 +419,11 @@ namespace Prowl.Recast.Detour.TileCache
                 throw new Exception("Invalid tile salt");
             }
 
+            // Captured before the free nulls it.
+            DtTileCacheLayerHeader header = tile.header;
+
             // Remove tile from hash lookup.
-            int h = ComputeTileHash(tile.header.tx, tile.header.ty, m_tileLutMask);
+            int h = ComputeTileHash(header.tx, header.ty, m_tileLutMask);
             DtCompressedTile prev = null;
             DtCompressedTile cur = m_posLookup[h];
             while (cur != null)
@@ -371,6 +461,8 @@ namespace Prowl.Recast.Detour.TileCache
             // Add to free list.
             tile.next = m_nextFreeTile;
             m_nextFreeTile = tile;
+
+            return header;
         }
 
         // Cylinder obstacle
@@ -465,6 +557,45 @@ namespace Prowl.Recast.Detour.TileCache
             return m_obstacles[i];
         }
 
+        /// The obstacle's bounds widened by the seam border, because a tile reads that far into its
+        /// neighbours: a tile the obstacle only reaches through its border still has to rebuild, or
+        /// its seam keeps describing ground the neighbour has already cut away.
+        private void GetObstacleReachBounds(DtTileCacheObstacle ob, out RcVec3f bmin, out RcVec3f bmax)
+        {
+            bmin = new RcVec3f();
+            bmax = new RcVec3f();
+            GetObstacleBounds(ob, ref bmin, ref bmax);
+            float reach = DtTileCacheBuilder.SeamBorder * m_params.cs;
+            bmin.X -= reach;
+            bmin.Z -= reach;
+            bmax.X += reach;
+            bmax.Z += reach;
+        }
+
+        /// Re-lists the tiles each settled obstacle cuts, for a cache whose tiles were replaced
+        /// under it: a new tile at the same position has a new ref the obstacle does not hold, and
+        /// would rebuild without the carve. Call after the replacement tiles are added and before
+        /// they are rebuilt — this re-lists tiles but queues no rebuild of its own.
+        ///
+        /// Only obstacles in PROCESSED are re-listed; one still PROCESSING or REMOVING has a
+        /// pending list in flight that this would desync. Callers replace tiles with the cache
+        /// quiesced (Update reporting up to date), where no obstacle is in either state.
+        public void RefreshObstacleTouchedTiles()
+        {
+            for (int i = 0; i < m_obstacles.Count; ++i)
+            {
+                DtTileCacheObstacle ob = m_obstacles[i];
+                if (ob.state != DtObstacleState.DT_OBSTACLE_PROCESSED)
+                {
+                    continue;
+                }
+
+                GetObstacleReachBounds(ob, out RcVec3f bmin, out RcVec3f bmax);
+                int ntouched = 0;
+                QueryTiles(bmin, bmax, ob.touched, ref ntouched);
+            }
+        }
+
         private DtStatus QueryTiles(RcVec3f bmin, RcVec3f bmax, List<long> results, ref int ntouched)
         {
             results.Clear();
@@ -553,19 +684,7 @@ namespace Prowl.Recast.Detour.TileCache
 
                     if (req.action == DtObstacleRequestAction.REQUEST_ADD)
                     {
-                        // Find touched tiles. Widened by the seam border, because a tile reads
-                        // that far into its neighbours: a tile the obstacle only reaches through
-                        // its border still has to rebuild, or its seam keeps describing ground
-                        // the neighbour has already cut away.
-                        RcVec3f bmin = new RcVec3f();
-                        RcVec3f bmax = new RcVec3f();
-                        GetObstacleBounds(ob, ref bmin, ref bmax);
-                        float reach = DtTileCacheBuilder.SeamBorder * m_params.cs;
-                        bmin.X -= reach;
-                        bmin.Z -= reach;
-                        bmax.X += reach;
-                        bmax.Z += reach;
-
+                        GetObstacleReachBounds(ob, out RcVec3f bmin, out RcVec3f bmax);
                         int ntouched = 0;
                         QueryTiles(bmin, bmax, ob.touched, ref ntouched);
                         // Add tiles to update list.
@@ -622,24 +741,7 @@ namespace Prowl.Recast.Detour.TileCache
                         // If all pending tiles processed, change state.
                         if (0 == ob.pending.Count)
                         {
-                            if (ob.state == DtObstacleState.DT_OBSTACLE_PROCESSING)
-                            {
-                                ob.state = DtObstacleState.DT_OBSTACLE_PROCESSED;
-                            }
-                            else if (ob.state == DtObstacleState.DT_OBSTACLE_REMOVING)
-                            {
-                                ob.state = DtObstacleState.DT_OBSTACLE_EMPTY;
-                                // Update salt, salt should never be zero.
-                                ob.salt = (ob.salt + 1) & ((1 << 16) - 1);
-                                if (ob.salt == 0)
-                                {
-                                    ob.salt++;
-                                }
-
-                                // Return obstacle to free list.
-                                ob.next = m_nextFreeObstacle;
-                                m_nextFreeObstacle = ob;
-                            }
+                            CompleteObstacle(ob);
                         }
                     }
                 }
