@@ -46,6 +46,52 @@ public class NavMeshBuildTests
         TileSize = 64,
     };
 
+    /// <summary>
+    /// Registration meshes its tiles on the thread pool, so the same asset has to instantiate to
+    /// the same navmesh every time. A race in the split build would show up here as tiles that
+    /// differ between two registrations of one asset — and the surface would then depend on how
+    /// the pool happened to schedule.
+    /// </summary>
+    [Fact]
+    public void CreateTileCache_IsDeterministicAcrossRegistrations()
+    {
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [FlatQuad(96f)],
+            worldBounds: new AABB(new Float3(0, -1, 0), new Float3(96, 1, 96)));
+        Assert.NotNull(data);
+        Assert.True(data!.CacheLayers.Count > 4, $"only {data.CacheLayers.Count} layers; the fan-out is not exercised");
+
+        DtNavMesh first = data.CreateTileCache(1).GetNavMesh();
+        DtNavMesh second = data.CreateTileCache(1).GetNavMesh();
+        Assert.Equal(first.GetMaxTiles(), second.GetMaxTiles());
+
+        int compared = 0;
+        for (int t = 0; t < first.GetMaxTiles(); t++)
+        {
+            DtMeshData? a = first.GetTile(t)?.data;
+            DtMeshData? b = second.GetTile(t)?.data;
+            if (a?.header == null && b?.header == null) continue;
+
+            Assert.NotNull(a?.header);
+            Assert.NotNull(b?.header);
+            Assert.Equal(a!.header.x, b!.header.x);
+            Assert.Equal(a.header.y, b.header.y);
+            Assert.Equal(a.header.layer, b.header.layer);
+            Assert.Equal(a.header.polyCount, b.header.polyCount);
+            Assert.Equal(a.verts, b.verts);
+            Assert.Equal(a.detailVerts, b.detailVerts);
+            Assert.Equal(a.detailTris, b.detailTris);
+            for (int p = 0; p < a.header.polyCount; p++)
+            {
+                Assert.Equal(a.polys[p].verts, b.polys[p].verts);
+                Assert.Equal(a.polys[p].neis, b.polys[p].neis);
+            }
+
+            compared++;
+        }
+
+        Assert.True(compared > 4, $"only {compared} tiles were meshed; the fan-out is not exercised");
+    }
+
     /// <summary>The slope test reads a triangle's normal from its winding, so a floor under a
     /// mirroring transform faces down and rasterizes as a ceiling unless the winding is flipped
     /// back. A mirrored floor is ordinary authoring — a room prefab scaled -1 to make its pair.
