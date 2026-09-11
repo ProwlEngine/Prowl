@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Quill\Quill\Quill.csproj" />
+    <ProjectReference Include="..\..\Scaffold\Scaffold\Scaffold.csproj" />
   </ItemGroup>
 
 </Project>

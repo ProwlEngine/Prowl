@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -157,7 +157,13 @@ namespace Prowl.PaperUI
         }
 
         /// <summary> Registers a font that Paper will use as a fallback when a glyph is missing from the primary font. </summary>
-        public void AddFallbackFont(FontFile font) => _canvas.AddFallbackFont(font);
+        public void AddFallbackFont(FontFile font)
+        {
+            _canvas.AddFallbackFont(font);
+            // The fallback chain is not part of an element's text fingerprint, so glyphs that
+            // previously resolved elsewhere would keep their stale measurement without this.
+            MarkAllLayoutDirty();
+        }
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
 
@@ -224,7 +230,7 @@ namespace Prowl.PaperUI
 
             // Layout phase
             OnEndOfFramePreLayout?.Invoke();
-            ElementLayout.Layout(_rootElementHandle, this);
+            ComputeLayout();
             OnEndOfFramePostLayout?.Invoke();
             __t = _devTools.Phase("Layout", __t);
 
@@ -859,6 +865,13 @@ namespace Prowl.PaperUI
         public ElementBuilder Column(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
             => Box(stringID, intID, lineID).LayoutType(LayoutType.Column);
 
+        /// <summary>Create a grid container. Set the column count with Columns.</summary>
+        public ElementBuilder Grid(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
+            => Box(stringID, intID, lineID).LayoutType(LayoutType.Grid);
+        /// <summary>Create a container whose children share the same content box.</summary>
+        public ElementBuilder Overlay(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
+            => Box(stringID, intID, lineID).Overlay();
+
         /// <summary>
         /// Moves the current parent element to the root of the hierarchy.
         /// Useful for things like popups or modals that need to be rendered at the top level.
@@ -875,6 +888,7 @@ namespace Prowl.PaperUI
                 parentHandle.Data.ChildIndices.Remove(CurrentParent.Index);
 
             RootElement.Data.ChildIndices.Add(CurrentParent.Index);
+            CurrentParent.Data.ParentIndex = RootElement.Index;
         }
 
         /// <summary>

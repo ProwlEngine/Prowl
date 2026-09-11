@@ -144,8 +144,8 @@ namespace Prowl.PaperUI
             GuiProp.Width, GuiProp.Height, GuiProp.MinWidth, GuiProp.MaxWidth, GuiProp.MinHeight, GuiProp.MaxHeight,
             GuiProp.PaddingLeft, GuiProp.PaddingRight, GuiProp.PaddingTop, GuiProp.PaddingBottom,
             GuiProp.Left, GuiProp.Right, GuiProp.Top, GuiProp.Bottom,
-            GuiProp.ChildLeft, GuiProp.ChildRight, GuiProp.ChildTop, GuiProp.ChildBottom,
-            GuiProp.RowBetween, GuiProp.ColBetween,
+            GuiProp.AnchorLeft, GuiProp.AnchorRight, GuiProp.AnchorTop, GuiProp.AnchorBottom,
+            GuiProp.Gap, GuiProp.LineGap,
             GuiProp.BackgroundColor, GuiProp.BorderColor, GuiProp.BorderWidth, GuiProp.Rounded,
             GuiProp.TextColor, GuiProp.FontSize, GuiProp.AspectRatio,
             GuiProp.TranslateX, GuiProp.TranslateY, GuiProp.ScaleX, GuiProp.ScaleY, GuiProp.Rotate, GuiProp.BackdropBlur,
@@ -502,8 +502,9 @@ namespace Prowl.PaperUI
                     _p.Draw((cv, rect) => DrawPhaseBar(cv, rect));
 
                 Label("prof_legend", PhaseLegend(), TextDim, 13, 24);
+                Label("prof_layout", $"Layout: {_p.LayoutStatistics.MeasuredNodes} measures, {_p.LayoutStatistics.ArrangedNodes} arrangements, {_p.LayoutStatistics.ArrangeCacheHits} reused subtrees", TextDim, 13, 22);
 
-                using (_p.Row("prof_fbar").Width(_p.Percent(100)).Height(30).BackgroundColor(BG2).ChildTop().ChildBottom().Enter())
+                using (_p.Row("prof_fbar").Width(_p.Percent(100)).Height(30).BackgroundColor(BG2).AlignItems(LayoutAlignment.Center).Enter())
                 {
                     // Record button: red while capturing. Pause it to freeze a frame, then pan/zoom/inspect.
                     _p.Box("prof_rec").Width(_p.Auto).Height(24).Padding(12, 12, 0, 0).Margin(4, 4, 0, 0).Rounded(4)

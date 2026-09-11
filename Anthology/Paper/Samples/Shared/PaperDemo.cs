@@ -236,7 +236,7 @@ namespace Shared
                     .Height(Gui.Auto)
                     .Rounded(8)
                     .BackgroundColor(Themes.primaryColor)
-                    .AspectRatio(0.5f)
+                    .AspectRatio(2f)
                     .Enter())
                 {
                     using (Gui.Column("UpgradeContent")

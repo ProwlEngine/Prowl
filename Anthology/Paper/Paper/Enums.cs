@@ -19,7 +19,11 @@ public enum LayoutType
     /// <summary>
     /// Elements are arranged vertically from top to bottom.
     /// </summary>
-    Column
+    Column,
+    /// <summary>Equal-width grid columns with content-height rows.</summary>
+    Grid,
+    /// <summary>Children overlap in the same content box.</summary>
+    Overlay
 }
 
 /// <summary>

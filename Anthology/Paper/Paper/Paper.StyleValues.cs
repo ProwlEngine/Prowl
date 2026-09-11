@@ -32,8 +32,8 @@ namespace Prowl.PaperUI
         public float AspectRatio;
         public UnitValue Width, Height, MinWidth, MaxWidth, MinHeight, MaxHeight;
         public UnitValue Left, Right, Top, Bottom;
-        public UnitValue MinLeft, MaxLeft, MinRight, MaxRight, MinTop, MaxTop, MinBottom, MaxBottom;
-        public UnitValue ChildLeft, ChildRight, ChildTop, ChildBottom, RowBetween, ColBetween;
+        public UnitValue AnchorLeft, AnchorRight, AnchorTop, AnchorBottom;
+        public float Gap, LineGap;
         public UnitValue PaddingLeft, PaddingRight, PaddingTop, PaddingBottom;
         public float TranslateX, TranslateY, ScaleX, ScaleY, Rotate, OriginX, OriginY, SkewX, SkewY;
         public Transform2D Transform;
@@ -45,6 +45,8 @@ namespace Prowl.PaperUI
         public FontQuality TextQuality;
 
         public readonly bool Has(GuiProp p) => (_set & (1UL << (int)p)) != 0;
+
+        internal readonly ulong LayoutMask => _set & (((1UL << ((int)GuiProp.PaddingBottom + 1)) - 1) ^ ((1UL << (int)GuiProp.AspectRatio) - 1));
 
         #region Typed access
 
@@ -65,24 +67,16 @@ namespace Prowl.PaperUI
             GuiProp.Right => PropKind.Unit,
             GuiProp.Top => PropKind.Unit,
             GuiProp.Bottom => PropKind.Unit,
-            GuiProp.MinLeft => PropKind.Unit,
-            GuiProp.MaxLeft => PropKind.Unit,
-            GuiProp.MinRight => PropKind.Unit,
-            GuiProp.MaxRight => PropKind.Unit,
-            GuiProp.MinTop => PropKind.Unit,
-            GuiProp.MaxTop => PropKind.Unit,
-            GuiProp.MinBottom => PropKind.Unit,
-            GuiProp.MaxBottom => PropKind.Unit,
-            GuiProp.ChildLeft => PropKind.Unit,
-            GuiProp.ChildRight => PropKind.Unit,
-            GuiProp.ChildTop => PropKind.Unit,
-            GuiProp.ChildBottom => PropKind.Unit,
-            GuiProp.RowBetween => PropKind.Unit,
-            GuiProp.ColBetween => PropKind.Unit,
+            GuiProp.AnchorLeft => PropKind.Unit,
+            GuiProp.AnchorRight => PropKind.Unit,
+            GuiProp.AnchorTop => PropKind.Unit,
+            GuiProp.AnchorBottom => PropKind.Unit,
             GuiProp.PaddingLeft => PropKind.Unit,
             GuiProp.PaddingRight => PropKind.Unit,
             GuiProp.PaddingTop => PropKind.Unit,
             GuiProp.PaddingBottom => PropKind.Unit,
+            GuiProp.Gap => PropKind.Float,
+            GuiProp.LineGap => PropKind.Float,
             GuiProp.BackgroundColor => PropKind.Color,
             GuiProp.BorderColor => PropKind.Color,
             GuiProp.TextColor => PropKind.Color,
@@ -102,6 +96,8 @@ namespace Prowl.PaperUI
             switch (p)
             {
                 case GuiProp.BorderWidth: return ref v.BorderWidth;
+                case GuiProp.Gap: return ref v.Gap;
+                case GuiProp.LineGap: return ref v.LineGap;
                 case GuiProp.BackdropBlur: return ref v.BackdropBlur;
                 case GuiProp.AspectRatio: return ref v.AspectRatio;
                 case GuiProp.TranslateX: return ref v.TranslateX;
@@ -136,20 +132,10 @@ namespace Prowl.PaperUI
                 case GuiProp.Right: return ref v.Right;
                 case GuiProp.Top: return ref v.Top;
                 case GuiProp.Bottom: return ref v.Bottom;
-                case GuiProp.MinLeft: return ref v.MinLeft;
-                case GuiProp.MaxLeft: return ref v.MaxLeft;
-                case GuiProp.MinRight: return ref v.MinRight;
-                case GuiProp.MaxRight: return ref v.MaxRight;
-                case GuiProp.MinTop: return ref v.MinTop;
-                case GuiProp.MaxTop: return ref v.MaxTop;
-                case GuiProp.MinBottom: return ref v.MinBottom;
-                case GuiProp.MaxBottom: return ref v.MaxBottom;
-                case GuiProp.ChildLeft: return ref v.ChildLeft;
-                case GuiProp.ChildRight: return ref v.ChildRight;
-                case GuiProp.ChildTop: return ref v.ChildTop;
-                case GuiProp.ChildBottom: return ref v.ChildBottom;
-                case GuiProp.RowBetween: return ref v.RowBetween;
-                case GuiProp.ColBetween: return ref v.ColBetween;
+                case GuiProp.AnchorLeft: return ref v.AnchorLeft;
+                case GuiProp.AnchorRight: return ref v.AnchorRight;
+                case GuiProp.AnchorTop: return ref v.AnchorTop;
+                case GuiProp.AnchorBottom: return ref v.AnchorBottom;
                 case GuiProp.PaddingLeft: return ref v.PaddingLeft;
                 case GuiProp.PaddingRight: return ref v.PaddingRight;
                 case GuiProp.PaddingTop: return ref v.PaddingTop;
@@ -362,6 +348,8 @@ namespace Prowl.PaperUI
             GuiProp.BackgroundGradient => BackgroundGradient,
             GuiProp.BorderColor => BorderColor,
             GuiProp.BorderWidth => BorderWidth,
+            GuiProp.Gap => Gap,
+            GuiProp.LineGap => LineGap,
             GuiProp.Rounded => Rounded,
             GuiProp.BoxShadow => BoxShadow,
             GuiProp.BackdropBlur => BackdropBlur,
@@ -376,20 +364,10 @@ namespace Prowl.PaperUI
             GuiProp.Right => Right,
             GuiProp.Top => Top,
             GuiProp.Bottom => Bottom,
-            GuiProp.MinLeft => MinLeft,
-            GuiProp.MaxLeft => MaxLeft,
-            GuiProp.MinRight => MinRight,
-            GuiProp.MaxRight => MaxRight,
-            GuiProp.MinTop => MinTop,
-            GuiProp.MaxTop => MaxTop,
-            GuiProp.MinBottom => MinBottom,
-            GuiProp.MaxBottom => MaxBottom,
-            GuiProp.ChildLeft => ChildLeft,
-            GuiProp.ChildRight => ChildRight,
-            GuiProp.ChildTop => ChildTop,
-            GuiProp.ChildBottom => ChildBottom,
-            GuiProp.RowBetween => RowBetween,
-            GuiProp.ColBetween => ColBetween,
+            GuiProp.AnchorLeft => AnchorLeft,
+            GuiProp.AnchorRight => AnchorRight,
+            GuiProp.AnchorTop => AnchorTop,
+            GuiProp.AnchorBottom => AnchorBottom,
             GuiProp.PaddingLeft => PaddingLeft,
             GuiProp.PaddingRight => PaddingRight,
             GuiProp.PaddingTop => PaddingTop,
@@ -428,20 +406,10 @@ namespace Prowl.PaperUI
             GuiProp.Right => Right,
             GuiProp.Top => Top,
             GuiProp.Bottom => Bottom,
-            GuiProp.MinLeft => MinLeft,
-            GuiProp.MaxLeft => MaxLeft,
-            GuiProp.MinRight => MinRight,
-            GuiProp.MaxRight => MaxRight,
-            GuiProp.MinTop => MinTop,
-            GuiProp.MaxTop => MaxTop,
-            GuiProp.MinBottom => MinBottom,
-            GuiProp.MaxBottom => MaxBottom,
-            GuiProp.ChildLeft => ChildLeft,
-            GuiProp.ChildRight => ChildRight,
-            GuiProp.ChildTop => ChildTop,
-            GuiProp.ChildBottom => ChildBottom,
-            GuiProp.RowBetween => RowBetween,
-            GuiProp.ColBetween => ColBetween,
+            GuiProp.AnchorLeft => AnchorLeft,
+            GuiProp.AnchorRight => AnchorRight,
+            GuiProp.AnchorTop => AnchorTop,
+            GuiProp.AnchorBottom => AnchorBottom,
             GuiProp.PaddingLeft => PaddingLeft,
             GuiProp.PaddingRight => PaddingRight,
             GuiProp.PaddingTop => PaddingTop,

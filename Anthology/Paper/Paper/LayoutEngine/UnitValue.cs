@@ -18,6 +18,7 @@ namespace Prowl.PaperUI.LayoutEngine;
 /// </summary>
 public struct UnitValue : IEquatable<UnitValue>
 {
+    internal readonly Prowl.Scaffold.Length ToLayoutLength() => new(Px, Pct, Grow, AutoFactor, Shrink);
     /// <summary>Raw pixel offset.</summary>
     public float Px;
 

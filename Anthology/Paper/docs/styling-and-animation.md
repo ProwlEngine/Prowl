@@ -7,9 +7,9 @@ Every stylable property is a `GuiProp` enum value:
 - **Visual:** `BackgroundColor`, `BackgroundGradient`, `BackgroundImage`, `BorderColor`,
   `BorderWidth`, `Rounded`, `BoxShadow`, `BackdropBlur`
 - **Layout sizing:** `AspectRatio`, `Width`, `Height`, `MinWidth`, `MaxWidth`, `MinHeight`, `MaxHeight`
-- **Positioning:** `Left`, `Right`, `Top`, `Bottom`, `MinLeft`, `MaxLeft`, `MinRight`, `MaxRight`, `MinTop`, `MaxTop`, `MinBottom`, `MaxBottom`
-- **Child layout:** `ChildLeft`, `ChildRight`, `ChildTop`, `ChildBottom`
-- **Spacing:** `RowBetween`, `ColBetween`
+- **Margins:** `Left`, `Right`, `Top`, `Bottom`
+- **Anchors (self-directed elements):** `AnchorLeft`, `AnchorRight`, `AnchorTop`, `AnchorBottom`
+- **Spacing between children:** `Gap`, `LineGap`
 - **Padding:** `PaddingLeft`, `PaddingRight`, `PaddingTop`, `PaddingBottom`
 - **Transform:** `TranslateX`, `TranslateY`, `ScaleX`, `ScaleY`, `Rotate`, `OriginX`, `OriginY`, `SkewX`, `SkewY`, `Transform`
 - **Text:** `TextColor`, `WordSpacing`, `LetterSpacing`, `LineHeight`, `TabSize`, `FontSize`, `TextQuality`

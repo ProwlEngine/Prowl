@@ -81,7 +81,9 @@ For a complete guide, tutorials, and API reference, please visit the **[Official
             - DirectX, Web, Unity
     - Fluent API
     - Flexible Layout System
-        - Rows, Columns & Custom Positioning
+        - Rows, Columns, Grid, Overlay & Custom Positioning
+        - Persistent layout caching and automatic dirty tracking
+        - Alignment, justification, wrapping and cached content measurement
         - Pixel, Percentage, Stretch or Auto for Positioning and Sizing
     - A Powerful Built-in Animation System
         - Many built-in Easing functions
@@ -171,7 +173,39 @@ That should result in the following UI:
 
 ## Layouting
 
-Paper provides a mighty layout engine based on the Morphorm library.
+Layout is cached between frames. Re-declaring identical geometry or changing only paint does not
+recalculate it. Text, dimensions, hierarchy and content revisions invalidate the affected layout.
+
+```csharp
+using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
+
+using (paper.Grid("cards").Columns(3).Height(UnitValue.Auto).Gap(8).LineGap(12).Enter())
+{
+    paper.Box("first").Height(60);
+    paper.Box("second").Height(90).AlignSelf(LayoutAlignment.Center);
+}
+
+paper.Box("anchored")
+    .PositionType(PositionType.SelfDirected)
+    .AnchorLeft(12).AnchorRight(12).AnchorBottom(8)
+    .Height(32);
+```
+
+Every layout property is an ordinary style property, so all of them animate, inherit and work in
+state variants. `Overlay`, `AlignItems`, `AlignSelf`, `JustifyContent` and `ReverseLayout` control
+child placement. `Padding` insets a container, `Gap` and `LineGap` separate its children, and
+`Margin` is an element's own spacing. Grid uses equal columns and content-height rows.
+
+For custom intrinsic content, `ContentSizer(callback)` runs every frame, which is the safe default.
+`ContentSizer(callback, revision)` caches the result instead and re-runs only when the revision
+changes, and `ContentSizer(width, height)` is cached automatically. Callbacks must return finite
+nonnegative sizes and must not touch layout while measuring.
+
+Resolution, DPI and fallback font changes invalidate on their own. For content Paper cannot see,
+call `MarkLayoutDirty()` inside the element's scope, or `MarkLayoutDirty(id)`,
+`MarkSubtreeLayoutDirty()` and `MarkAllLayoutDirty()` on the Paper instance.
+`LayoutStatistics` reports work counts and cache hits from the last frame.
 
 ```cs
 // Row container (horizontal layout)
@@ -319,7 +353,8 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 
 ## Dependencies 📦
 
-- [Prowl.Quill](https://github.com/ProwlEngine/Prowl.Quill)
+- [Prowl.Quill](../Quill)
+- [Prowl.Scaffold](../Scaffold)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -334,4 +369,3 @@ Distributed under the MIT License. See [LICENSE](//LICENSE) for more information
 ### [Join our Discord server! 🎉](https://discord.gg/BqnJ9Rn4sn)
 [![Discord](https://img.shields.io/discord/1151582593519722668?logo=discord
 )](https://discord.gg/BqnJ9Rn4sn)
-

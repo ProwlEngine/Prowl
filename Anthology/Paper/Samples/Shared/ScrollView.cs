@@ -47,9 +47,8 @@ public static class ScrollView
             .Position(0, -scrollY)
             .Width(width - ScrollBarWidth)
             .Height(UnitValue.Auto)
-            .ChildLeft(paddingLeft).ChildRight(paddingRight)
-            .ChildTop(paddingTop).ChildBottom(paddingBottom)
-            .RowBetween(rowSpacing);
+            .Padding(paddingLeft, paddingRight, paddingTop, paddingBottom)
+            .Gap(rowSpacing);
 
         contentBuilder.OnPostLayout((contentHandle, contentRect) =>
         {

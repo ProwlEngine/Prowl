@@ -13,22 +13,6 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI.LayoutEngine;
 
-/// <summary>How leftover main-axis space is distributed across items on a wrapped line.</summary>
-public enum WrapJustify
-{
-    /// <summary>Pack items at the start of each line (leftover space trails at the end).</summary>
-    Start,
-    /// <summary>Center items on each line.</summary>
-    Center,
-    /// <summary>Pack items at the end of each line.</summary>
-    End,
-    /// <summary>Distribute leftover space as equal gaps between items.</summary>
-    SpaceBetween,
-    /// <summary>Distribute leftover space as equal gaps around every item.</summary>
-    SpaceAround,
-    /// <summary>Grow every item on the line equally so the line consumes the full width.</summary>
-    Fill,
-}
 
 /// <summary> Configuration data for a UI element, including its identifiers, interactivity flags, event callbacks, layout properties, and font settings. </summary>
 public struct ElementData
@@ -96,6 +80,13 @@ public struct ElementData
     // Layout properties
     public LayoutType LayoutType;
     public PositionType PositionType;
+    internal LayoutAlignment? _alignItems, _alignSelf;
+    internal LayoutJustification? _justify;
+    internal int _gridColumns;
+    internal bool _reverseLayout;
+    internal Prowl.Scaffold.Size? _intrinsicSize;
+    internal long _contentRevision;
+    internal bool _cacheContentSizer;
 
     // Text properties
     public bool IsMarkdown;
@@ -116,8 +107,6 @@ public struct ElementData
 
     /// <summary>Flex-wrap: parent-directed children flow onto new lines when they overrun the main axis.</summary>
     public bool ContentWrap;
-    /// <summary>How leftover main-axis space on each wrapped line is distributed.</summary>
-    public WrapJustify WrapJustify;
 
     // Cached text layout objects (RichText is persisted across frames via element storage so animation start time survives -- see Paper.Core.cs ProcessText / DrawText paths.)
     internal Quill.Canvas.QuillMarkdown? _quillMarkdown;
@@ -218,7 +207,6 @@ public struct ElementData
             Truncate = false,
             TextAlignment = TextAlignment.Left,
             ContentWrap = false,
-            WrapJustify = WrapJustify.Start,
             _quillMarkdown = null,
             _quillRichText = null,
             _textLayout = null,

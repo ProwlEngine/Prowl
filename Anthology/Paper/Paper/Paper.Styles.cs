@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Prowl.Scribe;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.PaperUI.Utilities;
@@ -35,29 +36,22 @@ namespace Prowl.PaperUI
         MinHeight,
         MaxHeight,
 
-        // Positioning
+        // Margins. In flow these space the element from its siblings and its parent's edges.
         Left,
         Right,
         Top,
         Bottom,
-        MinLeft,
-        MaxLeft,
-        MinRight,
-        MaxRight,
-        MinTop,
-        MaxTop,
-        MinBottom,
-        MaxBottom,
 
-        // Child layout
-        ChildLeft,
-        ChildRight,
-        ChildTop,
-        ChildBottom,
+        // Anchors for SelfDirected elements, measured from the parent's content box.
+        // Auto means unanchored; anchoring both edges of an axis stretches the element across it.
+        AnchorLeft,
+        AnchorRight,
+        AnchorTop,
+        AnchorBottom,
 
-        // Spacing
-        RowBetween,
-        ColBetween,
+        // Spacing between children, matching Scaffold Gap/LineGap.
+        Gap,
+        LineGap,
 
         // Padding (parent-side inset; pure layout, no visual)
         PaddingLeft,
@@ -301,6 +295,65 @@ namespace Prowl.PaperUI
 
         // Inheritance (opt-in via InheritStyle; usually null).
         private ElementStyle? _parent;
+        private StyleValues _layoutSnapshot;
+        private ElementStyle? _layoutParentSnapshot;
+        private long _layoutRevision, _layoutParentRevision, _layoutCheckEpoch;
+        private ulong _layoutDirtyMask, _previousLayoutMask;
+
+        // Compare resolved declaration values across frames, not setter calls: BeginFrame resets
+        // and redeclares styles even when the resulting geometry inputs stay identical.
+        internal long GetLayoutRevision(long epoch)
+        {
+            if (_layoutCheckEpoch == epoch)
+            {
+                return _layoutRevision;
+            }
+
+            long parentRevision = _parent?.GetLayoutRevision(epoch) ?? 0;
+            if (_layoutRevision == 0 || _layoutDirtyMask != 0 || !ReferenceEquals(_parent, _layoutParentSnapshot) || parentRevision != _layoutParentRevision)
+            {
+                _layoutSnapshot = _current;
+                _layoutSnapshot.BackgroundImage = null;
+                _layoutRevision++;
+                _layoutParentSnapshot = _parent;
+                _layoutParentRevision = parentRevision;
+            }
+
+            _layoutDirtyMask = 0;
+            _previousLayoutMask = _current.LayoutMask;
+            _layoutCheckEpoch = epoch;
+            return _layoutRevision;
+        }
+        private void TrackLayoutProperty(GuiProp property)
+        {
+            if (property < GuiProp.AspectRatio || property > GuiProp.PaddingBottom)
+            {
+                return;
+            }
+
+            ulong bit = 1UL << (int)property;
+            bool same = _current.Has(property) == _layoutSnapshot.Has(property) && StyleValues.SameValue(property, ref _current, ref _layoutSnapshot);
+            if (same)
+            {
+                _layoutDirtyMask &= ~bit;
+            }
+            else
+            {
+                _layoutDirtyMask |= bit;
+            }
+
+            _layoutCheckEpoch = 0;
+        }
+        private void TrackLayoutMask(ulong mask)
+        {
+            for (int p = (int)GuiProp.AspectRatio; p <= (int)GuiProp.PaddingBottom; p++)
+            {
+                if ((mask & (1UL << p)) != 0)
+                {
+                    TrackLayoutProperty((GuiProp)p);
+                }
+            }
+        }
 
         // The default value for every property, as a single StyleValues (mask left at 0 = "unset").
         // BeginFrame copies this into _current to revert an element to defaults each frame.
@@ -318,6 +371,10 @@ namespace Prowl.PaperUI
         public void BeginFrame()
         {
             _current = _defaultStyleValues;
+            // Previously declared layout properties are dirty until redeclared identically;
+            // omitted declarations therefore revert to defaults without scanning every field.
+            _layoutDirtyMask = _previousLayoutMask;
+            _layoutCheckEpoch = 0;
             _transitions?.BeginFrame();
         }
 
@@ -327,6 +384,7 @@ namespace Prowl.PaperUI
         public void SetParent(ElementStyle? currentStyle)
         {
             _parent = currentStyle;
+            _layoutCheckEpoch = 0;
         }
 
         /// <summary>
@@ -357,7 +415,7 @@ namespace Prowl.PaperUI
         public UnitValue GetUnit(GuiProp property)
         {
             if (_parent != null && !_current.Has(property))
-                return (UnitValue)_parent.GetValue(property);
+                return _parent.GetUnit(property);
             return _current.GetUnit(property);
         }
 
@@ -371,6 +429,8 @@ namespace Prowl.PaperUI
         public object GetBackgroundImage() => (_parent != null && !_current.Has(GuiProp.BackgroundImage)) ? _parent.GetValue(GuiProp.BackgroundImage) : _current.BackgroundImage;
         public Color GetTextColor() => (_parent != null && !_current.Has(GuiProp.TextColor)) ? (Color)_parent.GetValue(GuiProp.TextColor) : _current.TextColor;
         public float GetAspectRatio() => (_parent != null && !_current.Has(GuiProp.AspectRatio)) ? (float)_parent.GetValue(GuiProp.AspectRatio) : _current.AspectRatio;
+        public float GetGap() => (_parent != null && !_current.Has(GuiProp.Gap)) ? (float)_parent.GetValue(GuiProp.Gap) : _current.Gap;
+        public float GetLineGap() => (_parent != null && !_current.Has(GuiProp.LineGap)) ? (float)_parent.GetValue(GuiProp.LineGap) : _current.LineGap;
         public float GetFontSize() => (_parent != null && !_current.Has(GuiProp.FontSize)) ? (float)_parent.GetValue(GuiProp.FontSize) : _current.FontSize;
         public float GetLineHeight() => (_parent != null && !_current.Has(GuiProp.LineHeight)) ? (float)_parent.GetValue(GuiProp.LineHeight) : _current.LineHeight;
         public float GetLetterSpacing() => (_parent != null && !_current.Has(GuiProp.LetterSpacing)) ? (float)_parent.GetValue(GuiProp.LetterSpacing) : _current.LetterSpacing;
@@ -382,16 +442,28 @@ namespace Prowl.PaperUI
         /// Sets a property value directly (already-resolved values such as the root size). In the new
         /// model this is the same as declaring a value for the frame.
         /// </summary>
-        public void SetDirectValue<TValue>(GuiProp property, TValue value) => _current.Set(property, value);
+        public void SetDirectValue<TValue>(GuiProp property, TValue value)
+        {
+            _current.Set(property, value);
+            TrackLayoutProperty(property);
+        }
 
         /// <summary>
         /// Declares a property's value for this frame. Applied straight to the current values; if the
         /// property is animating, the transition pass (Update) overrides it with the tweened value.
         /// </summary>
-        public void SetNextValue<TValue>(GuiProp property, TValue value) => _current.Set(property, value);
+        public void SetNextValue<TValue>(GuiProp property, TValue value)
+        {
+            _current.Set(property, value);
+            TrackLayoutProperty(property);
+        }
 
         /// <summary>Folds every value a template declares into this element's current values.</summary>
-        internal void MergeValues(ref StyleValues values) => StyleValues.MergeInto(ref values, ref _current);
+        internal void MergeValues(ref StyleValues values)
+        {
+            StyleValues.MergeInto(ref values, ref _current);
+            TrackLayoutMask(values.LayoutMask);
+        }
 
         /// <summary>
         /// Configures a transition for a property this frame (re-declared each frame, as before).
@@ -405,7 +477,11 @@ namespace Prowl.PaperUI
         /// </summary>
         public void Update(float deltaTime)
         {
-            _transitions?.Advance(deltaTime, ref _current, this);
+            if (_transitions != null)
+            {
+                _transitions.Advance(deltaTime, ref _current, this);
+                TrackLayoutMask(_current.LayoutMask);
+            }
         }
 
         /// <summary>
@@ -499,24 +575,16 @@ namespace Prowl.PaperUI
             d.Right = UnitValue.Auto;
             d.Top = UnitValue.Auto;
             d.Bottom = UnitValue.Auto;
-            d.MinLeft = UnitValue.Pixels(float.MinValue);
-            d.MaxLeft = UnitValue.Pixels(float.MaxValue);
-            d.MinRight = UnitValue.Pixels(float.MinValue);
-            d.MaxRight = UnitValue.Pixels(float.MaxValue);
-            d.MinTop = UnitValue.Pixels(float.MinValue);
-            d.MaxTop = UnitValue.Pixels(float.MaxValue);
-            d.MinBottom = UnitValue.Pixels(float.MinValue);
-            d.MaxBottom = UnitValue.Pixels(float.MaxValue);
-            d.ChildLeft = UnitValue.Auto;
-            d.ChildRight = UnitValue.Auto;
-            d.ChildTop = UnitValue.Auto;
-            d.ChildBottom = UnitValue.Auto;
-            d.RowBetween = UnitValue.Auto;
-            d.ColBetween = UnitValue.Auto;
+            d.AnchorLeft = UnitValue.Auto;
+            d.AnchorRight = UnitValue.Auto;
+            d.AnchorTop = UnitValue.Auto;
+            d.AnchorBottom = UnitValue.Auto;
             d.PaddingLeft = UnitValue.Pixels(0);
             d.PaddingRight = UnitValue.Pixels(0);
             d.PaddingTop = UnitValue.Pixels(0);
             d.PaddingBottom = UnitValue.Pixels(0);
+            d.Gap = 0.0f;
+            d.LineGap = 0.0f;
 
             // Transform
             d.TranslateX = 0.0f;

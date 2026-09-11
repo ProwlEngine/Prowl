@@ -202,7 +202,7 @@ public sealed partial class PaperDevTools
     private void BuildHeader(float w)
     {
         using (_p.Row("__dt_header").Width(_p.Percent(100)).Height(HeaderH).BackgroundColor(BG2)
-            .ChildTop().ChildBottom().Enter())
+            .AlignItems(LayoutAlignment.Center).Enter())
         {
             for (int i = 0; i < Tabs.Length; i++)
             {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -186,45 +186,28 @@ namespace Prowl.PaperUI
         /// <summary>Sets the bottom position of the element.</summary>
         public T Bottom(in UnitValue bottom) => SetStyleProperty(GuiProp.Bottom, bottom);
 
-        /// <summary>Sets the minimum left position of the element.</summary>
-        public T MinLeft(in UnitValue minLeft) => SetStyleProperty(GuiProp.MinLeft, minLeft);
 
-        /// <summary>Sets the maximum left position of the element.</summary>
-        public T MaxLeft(in UnitValue maxLeft) => SetStyleProperty(GuiProp.MaxLeft, maxLeft);
+        /// <summary>Anchors a SelfDirected element to its parent's left content edge. Auto is unanchored.</summary>
+        public T AnchorLeft(in UnitValue anchorLeft) => SetStyleProperty(GuiProp.AnchorLeft, anchorLeft);
 
-        /// <summary>Sets the minimum right position of the element.</summary>
-        public T MinRight(in UnitValue minRight) => SetStyleProperty(GuiProp.MinRight, minRight);
+        /// <summary>Anchors a SelfDirected element to its parent's right content edge. Auto is unanchored.</summary>
+        public T AnchorRight(in UnitValue anchorRight) => SetStyleProperty(GuiProp.AnchorRight, anchorRight);
 
-        /// <summary>Sets the maximum right position of the element.</summary>
-        public T MaxRight(in UnitValue maxRight) => SetStyleProperty(GuiProp.MaxRight, maxRight);
+        /// <summary>Anchors a SelfDirected element to its parent's top content edge. Auto is unanchored.</summary>
+        public T AnchorTop(in UnitValue anchorTop) => SetStyleProperty(GuiProp.AnchorTop, anchorTop);
 
-        /// <summary>Sets the minimum top position of the element.</summary>
-        public T MinTop(in UnitValue minTop) => SetStyleProperty(GuiProp.MinTop, minTop);
-
-        /// <summary>Sets the maximum top position of the element.</summary>
-        public T MaxTop(in UnitValue maxTop) => SetStyleProperty(GuiProp.MaxTop, maxTop);
-
-        /// <summary>Sets the minimum bottom position of the element.</summary>
-        public T MinBottom(in UnitValue minBottom) => SetStyleProperty(GuiProp.MinBottom, minBottom);
-
-        /// <summary>Sets the maximum bottom position of the element.</summary>
-        public T MaxBottom(in UnitValue maxBottom) => SetStyleProperty(GuiProp.MaxBottom, maxBottom);
+        /// <summary>Anchors a SelfDirected element to its parent's bottom content edge. Auto is unanchored.
+        /// Anchoring both edges of an axis stretches the element across it.</summary>
+        public T AnchorBottom(in UnitValue anchorBottom) => SetStyleProperty(GuiProp.AnchorBottom, anchorBottom);
 
         /// <summary>
-        /// The element's own outer spacing on each side. Each side maps to the corresponding
+        /// The element's own outer spacing on each side, mapping to the
         /// <see cref="GuiProp.Left"/>/<see cref="GuiProp.Right"/>/<see cref="GuiProp.Top"/>/<see cref="GuiProp.Bottom"/>
-        /// style property, which the layout engine treats as MainBefore / MainAfter / CrossBefore / CrossAfter
-        /// depending on the parent's row/column direction.
+        /// style properties. Auto means no margin. Use the parent's padding for a uniform inset and
+        /// its <see cref="Gap(float)"/> for the space between siblings.
         /// <para>
-        /// Default per side is <see cref="UnitValue.Auto"/>, which means "no preference" and lets the parent's
-        /// <see cref="ChildLeft(in UnitValue)"/>/<see cref="ChildRight(in UnitValue)"/>/<see cref="ChildTop(in UnitValue)"/>/<see cref="ChildBottom(in UnitValue)"/>
-        /// fill in for the first/last child, or the parent's <see cref="RowBetween(in UnitValue)"/>/<see cref="ColBetween(in UnitValue)"/>
-        /// fill in between two siblings whose adjacent margins are both Auto. Setting a concrete value here
-        /// opts that side out of parent-side defaulting.
-        /// </para>
-        /// <para>
-        /// Stretch values (e.g. <c>Stretch(1)</c>) on a margin make the element compete with siblings for
-        /// leftover space on that axis > useful for centering or pushing.
+        /// A stretch value makes the edge a flexible spacer that competes for leftover space, which
+        /// is how a single element is centered or pushed without a wrapper.
         /// </para>
         /// </summary>
         public T Margin(in UnitValue all) => Margin(all, all, all, all);
@@ -242,70 +225,12 @@ namespace Prowl.PaperUI
             return SetStyleProperty(GuiProp.Bottom, bottom);
         }
 
-        /// <summary>
-        /// Default left-side spacing filled into any child whose own <see cref="Margin(in UnitValue)"/> left side
-        /// is still <see cref="UnitValue.Auto"/>. Together with <see cref="ChildRight(in UnitValue)"/>,
-        /// <see cref="ChildTop(in UnitValue)"/>, <see cref="ChildBottom(in UnitValue)"/>,
-        /// <see cref="RowBetween(in UnitValue)"/>, and <see cref="ColBetween(in UnitValue)"/>, this is how the
-        /// engine expresses CSS-style <c>justify-content</c> alignment > by putting <see cref="UnitValue.Stretch(float)"/>
-        /// values into the slots between or around children, the layout engine grows those slots to consume leftover space.
-        /// <para>
-        /// Common alignment recipes (set on the parent, with default-margin children):
-        /// <list type="table">
-        ///   <listheader><term>Effect</term><description>Recipe</description></listheader>
-        ///   <item><term>Pack at start (default)</term><description>no parent setting needed</description></item>
-        ///   <item><term>Pack at end</term><description><c>.ChildLeft()</c> (or <c>.ChildTop()</c> for column layout)</description></item>
-        ///   <item><term>Center</term><description><c>.ChildLeft().ChildRight()</c> (or top/bottom)</description></item>
-        ///   <item><term>Space between siblings</term><description><c>.ColBetween()</c> (row layout) or <c>.RowBetween()</c> (column layout)</description></item>
-        ///   <item><term>Space around siblings</term><description><c>.ChildLeft().ChildRight().ColBetween()</c></description></item>
-        /// </list>
-        /// </para>
-        /// <para>
-        /// The no-argument overload defaults to <see cref="UnitValue.StretchOne"/> > the alignment use case > because
-        /// that is the value users almost always want here. A pixel value (e.g. <c>.ChildLeft(8)</c>) acts as a default
-        /// margin the child can still override; for the more common case of guaranteed inner spacing that does not
-        /// depend on child settings, prefer <see cref="Padding(in UnitValue)"/> instead.
-        /// </para>
-        /// </summary>
-        public T ChildLeft(in UnitValue childLeft) => SetStyleProperty(GuiProp.ChildLeft, childLeft);
 
-        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
-        public T ChildLeft() => ChildLeft(UnitValue.StretchOne);
+        /// <summary>Space between adjacent children along the layout direction.</summary>
+        public T Gap(float gap) => SetStyleProperty(GuiProp.Gap, gap);
 
-        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
-        public T ChildRight(in UnitValue childRight) => SetStyleProperty(GuiProp.ChildRight, childRight);
-
-        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
-        public T ChildRight() => ChildRight(UnitValue.StretchOne);
-
-        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
-        public T ChildTop(in UnitValue childTop) => SetStyleProperty(GuiProp.ChildTop, childTop);
-
-        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
-        public T ChildTop() => ChildTop(UnitValue.StretchOne);
-
-        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
-        public T ChildBottom(in UnitValue childBottom) => SetStyleProperty(GuiProp.ChildBottom, childBottom);
-
-        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
-        public T ChildBottom() => ChildBottom(UnitValue.StretchOne);
-
-        /// <summary> Sets the spacing inserted between two adjacent children in a column-direction container, used when the upper child's bottom and lower child's top margins are both still auto. </summary>
-        public T RowBetween(in UnitValue rowBetween) => SetStyleProperty(GuiProp.RowBetween, rowBetween);
-
-        /// <inheritdoc cref="RowBetween(in UnitValue)"/>
-        public T RowBetween() => RowBetween(UnitValue.StretchOne);
-
-        /// <summary>
-        /// Default spacing inserted between two adjacent children in a row-direction container, under the
-        /// same conditions as <see cref="RowBetween(in UnitValue)"/>. The no-argument overload defaults to
-        /// <see cref="UnitValue.StretchOne"/> for space-between-style alignment. See
-        /// <see cref="ChildLeft(in UnitValue)"/> for the full alignment recipe table.
-        /// </summary>
-        public T ColBetween(in UnitValue colBetween) => SetStyleProperty(GuiProp.ColBetween, colBetween);
-
-        /// <inheritdoc cref="ColBetween(in UnitValue)"/>
-        public T ColBetween() => ColBetween(UnitValue.StretchOne);
+        /// <summary>Space between wrapped lines or grid rows.</summary>
+        public T LineGap(float lineGap) => SetStyleProperty(GuiProp.LineGap, lineGap);
 
         /// <summary> Sets the inner padding on the left side of the element. </summary>
         public T PaddingLeft(in UnitValue paddingLeft) => SetStyleProperty(GuiProp.PaddingLeft, paddingLeft);
@@ -513,7 +438,7 @@ namespace Prowl.PaperUI
         {
             if (condition)
             {
-                foreach(var styleName in names)
+                foreach (var styleName in names)
                     _owner._paper.ApplyStyleWithStates(_handle, styleName);
             }
             return this;
@@ -709,7 +634,7 @@ namespace Prowl.PaperUI
 
         public ElementBuilder StyleIf(bool condition, params string[] names)
         {
-            if(condition)
+            if (condition)
                 foreach (var name in names)
                     _paper.ApplyStyleWithStates(_handle, name);
             return this;
@@ -990,6 +915,43 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>Arrange children in the given number of equal-width columns.</summary>
+        public ElementBuilder Columns(int columns)
+        {
+            _handle.Data.LayoutType = PaperUI.LayoutType.Grid;
+            _handle.Data._gridColumns = columns;
+            return this;
+        }
+        /// <summary>Arrange children in overlapping layers.</summary>
+        public ElementBuilder Overlay()
+        {
+            _handle.Data.LayoutType = PaperUI.LayoutType.Overlay;
+            return this;
+        }
+        /// <summary>Set the default cross-axis alignment of children.</summary>
+        public ElementBuilder AlignItems(LayoutAlignment alignment)
+        {
+            _handle.Data._alignItems = alignment;
+            return this;
+        }
+        /// <summary>Override the cross-axis alignment of this element.</summary>
+        public ElementBuilder AlignSelf(LayoutAlignment alignment)
+        {
+            _handle.Data._alignSelf = alignment;
+            return this;
+        }
+        /// <summary>Distribute leftover space along the layout direction.</summary>
+        public ElementBuilder JustifyContent(LayoutJustification justify)
+        {
+            _handle.Data._justify = justify;
+            return this;
+        }
+        /// <summary>Reverse the layout order without changing declaration order.</summary>
+        public ElementBuilder ReverseLayout(bool reverse = true)
+        {
+            _handle.Data._reverseLayout = reverse;
+            return this;
+        }
         /// <summary>Sets how the element is positioned within its parent.</summary>
         /// <param name="positionType">Position strategy (SelfDirected or ParentDirected)</param>
         public ElementBuilder PositionType(PositionType positionType)
@@ -1038,6 +1000,21 @@ namespace Prowl.PaperUI
         public ElementBuilder ContentSizer(Func<float?, float?, (float, float)?> sizer)
         {
             _handle.Data.ContentSizer = sizer;
+            _handle.Data._intrinsicSize = null;
+            _handle.Data._cacheContentSizer = false;
+            return this;
+        }
+
+        /// <summary>
+        /// Caches the sizer's result across frames instead of calling it every frame.
+        /// Increment the revision when the measured content changes.
+        /// </summary>
+        public ElementBuilder ContentSizer(Func<float?, float?, (float, float)?> sizer, long revision)
+        {
+            _handle.Data.ContentSizer = sizer;
+            _handle.Data._intrinsicSize = null;
+            _handle.Data._cacheContentSizer = true;
+            _handle.Data._contentRevision = revision;
             return this;
         }
 
@@ -1049,7 +1026,8 @@ namespace Prowl.PaperUI
         /// <returns>This builder for method chaining</returns>
         public ElementBuilder ContentSizer(float width, float height)
         {
-            _handle.Data.ContentSizer = (a, b) => (width, height);
+            _handle.Data.ContentSizer = null;
+            _handle.Data._intrinsicSize = new Prowl.Scaffold.Size(width, height);
             return this;
         }
 
@@ -1060,6 +1038,7 @@ namespace Prowl.PaperUI
         public ElementBuilder ClearContentSizer()
         {
             _handle.Data.ContentSizer = null;
+            _handle.Data._intrinsicSize = null;
             return this;
         }
 
@@ -1174,20 +1153,13 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary> Flex-wrap the parent-directed children: when they overrun this element's main axis they flow onto a new line, and the element auto-grows on the cross axis to fit every line. Use the container's RowBetween/ColBetween as the gap between items and lines. Children should use a fixed or auto CROSS size. A child that is Stretch/Grow on the cross axis spans the full container height and overlaps the lines below it (it is sized before lines are formed); this is warned about once at runtime. </summary>
+        /// <summary> Flex-wrap the parent-directed children: when they overrun this element's main axis they flow onto a new line, and the element auto-grows on the cross axis to fit every line. Space them with Gap (between items) and LineGap (between lines). Cross-axis stretch is resolved against the wrapped line size. Use fixed or auto cross sizes for content-driven lines. </summary>
         public ElementBuilder WrapContent(bool wrap = true)
         {
             _handle.Data.ContentWrap = wrap;
             return this;
         }
 
-        /// <summary>How leftover space on each wrapped line is distributed (implies <see cref="WrapContent"/>).</summary>
-        public ElementBuilder WrapJustify(WrapJustify justify)
-        {
-            _handle.Data.WrapJustify = justify;
-            _handle.Data.ContentWrap = true;
-            return this;
-        }
 
         /// <summary>
         /// Sets an image to be drawn inside the element, filling the element's layout rect.
@@ -2029,7 +2001,7 @@ namespace Prowl.PaperUI
                 }
             }
 
-            if(_paper.IsParentFocused && isMultiLine)
+            if (_paper.IsParentFocused && isMultiLine)
             {
                 // If a text input field is focused and its a Multi-Line input field, Then Tab navigation is disabled
                 // Since we want tab to actually add the tab character
