@@ -152,7 +152,7 @@ public class TerrainEditor : CustomEditor
         var m = Origami.Current.Metrics;
         using (paper.Row(id).Width(UnitValue.StretchOne).Height(UnitValue.Auto).MinHeight(34)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.SpacingLarge)
-            .Padding(9, 9, 6, 6).Rounded(8).RowBetween(m.SpacingMedium)
+            .Padding(9, 9, 6, 6).Rounded(8).Gap(m.SpacingMedium)
             .BackgroundColor(EditorTheme.WithAlpha(EditorTheme.Amber400, 26))
             .BorderColor(EditorTheme.WithAlpha(EditorTheme.Amber400, 71)).BorderWidth(1).Enter())
         {
@@ -176,7 +176,7 @@ public class TerrainEditor : CustomEditor
         using (paper.Column(id).Width(UnitValue.StretchOne).Height(UnitValue.Auto).Margin(0, 0, 0, 6).Enter())
         {
             using (paper.Row($"{id}_r").Width(UnitValue.StretchOne).Height(24)
-                .Padding(12, 12, 2, 8).RowBetween(7).IsNotInteractable().Enter())
+                .Padding(12, 12, 2, 8).Gap(7).IsNotInteractable().Enter())
             {
                 paper.Box($"{id}_i").Width(14).Height(UnitValue.StretchOne).IsNotInteractable()
                     .Icon(paper, icon, EditorTheme.AccentText, size: 13f);
@@ -230,7 +230,7 @@ public class TerrainEditor : CustomEditor
 
         // Layer list.
         using (paper.Column($"{id}_layers").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-            .Padding(8, 8, 0, 0).ColBetween(2).Enter())
+            .Padding(8, 8, 0, 0).Gap(2).Enter())
         {
             for (int i = 0; i < data.LayerCount; i++)
             {
@@ -238,7 +238,7 @@ public class TerrainEditor : CustomEditor
                 bool selected = PaintLayer == i;
                 Texture2D? albedo = data.Layers[i].Albedo.Res;
                 string lname = albedo.IsValid() ? albedo.Name : $"Layer {i}";
-                using (paper.Row($"{id}_l{i}").Width(UnitValue.StretchOne).Height(28).Rounded(7).Padding(8, 8, 0, 0).RowBetween(8)
+                using (paper.Row($"{id}_l{i}").Width(UnitValue.StretchOne).Height(28).Rounded(7).Padding(8, 8, 0, 0).Gap(8)
                     .BackgroundColor(selected ? EditorTheme.Selected : SColor.Transparent)
                     .Hovered.BackgroundColor(selected ? EditorTheme.Selected : EditorTheme.Hover).End()
                     .OnClick(_ => PaintLayer = idx).Enter())
@@ -540,7 +540,7 @@ public class TerrainEditor : CustomEditor
         var m = Origami.Current.Metrics;
         var semi = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
         using (paper.Row(id).Width(UnitValue.StretchOne).Height(22)
-            .Margin(m.PaddingLarge, m.PaddingLarge, 14, 4).RowBetween(4).Enter())
+            .Margin(m.PaddingLarge, m.PaddingLarge, 14, 4).Gap(4).Enter())
         {
             if (semi != null)
                 paper.Box($"{id}_t").Width(UnitValue.StretchOne).Height(UnitValue.StretchOne).IsNotInteractable()
@@ -570,7 +570,7 @@ public class TerrainEditor : CustomEditor
         var m = Origami.Current.Metrics;
         using (paper.Row(id).Width(UnitValue.StretchOne).Height(UnitValue.Auto).MinHeight(32)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.Spacing)
-            .Padding(10, 10, 8, 8).Rounded(8).RowBetween(7)
+            .Padding(10, 10, 8, 8).Rounded(8).Gap(7)
             .BackgroundColor(EditorTheme.WithAlpha(EditorTheme.Blue400, 20))
             .BorderColor(EditorTheme.WithAlpha(EditorTheme.Blue400, 51)).BorderWidth(1).Enter())
         {
@@ -595,7 +595,7 @@ public class TerrainEditor : CustomEditor
         for (int r = 0; r < rows; r++)
         {
             using (paper.Row($"{id}_r{r}").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-                .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(6).Enter())
+                .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(6).Enter())
             {
                 for (int c = 0; c < cols; c++)
                 {
@@ -606,7 +606,7 @@ public class TerrainEditor : CustomEditor
                         bool sel = selected == idx;
                         var tint = SwatchColor(idx);
                         using (paper.Column($"{id}_t{idx}").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                            .Padding(3, 3, 6, 6).ColBetween(5).Rounded(9)
+                            .Padding(3, 3, 6, 6).Gap(5).Rounded(9)
                             .BackgroundColor(sel ? EditorTheme.Selected : SColor.Transparent)
                             .Hovered.BackgroundColor(sel ? EditorTheme.Selected : EditorTheme.Hover).End()
                             .BorderColor(sel ? EditorTheme.WithAlpha(EditorTheme.Accent, 102) : SColor.Transparent).BorderWidth(1)

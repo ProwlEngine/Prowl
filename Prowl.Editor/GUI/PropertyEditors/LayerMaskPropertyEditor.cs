@@ -38,7 +38,7 @@ public class LayerMaskPropertyEditor : PropertyEditor
 
         // Height(Auto) so the multi-select trigger's chip wrapping reflows the column instead of
         // overflowing and overlapping the next field.
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
         {
             if (!string.IsNullOrEmpty(label))
             {

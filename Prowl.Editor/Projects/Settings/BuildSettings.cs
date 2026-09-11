@@ -109,7 +109,7 @@ public sealed class BuildSettings : ProjectSettingsBase
             int idx = i;
             var scene = Scenes[i];
 
-            using (paper.Row($"bld_scene_{i}").Height(EditorTheme.RowHeight).RowBetween(4).ChildLeft(4).Enter())
+            using (paper.Row($"bld_scene_{i}").Height(EditorTheme.RowHeight).Gap(4).PaddingLeft(4).Enter())
             {
                 // Index
                 paper.Box($"bld_si_{i}")
@@ -128,7 +128,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                     : scene.SceneGuid.ToString()[..8];
 
                 paper.Box($"bld_sn_{i}")
-                    .Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Height(EditorTheme.RowHeight).PaddingLeft(4)
                     .Text(displayName, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
@@ -162,7 +162,7 @@ public sealed class BuildSettings : ProjectSettingsBase
         }
 
         // Add scene buttons
-        using (paper.Row("bld_add_row").Height(EditorTheme.RowHeight).RowBetween(6).ChildLeft(4).Enter())
+        using (paper.Row("bld_add_row").Height(EditorTheme.RowHeight).Gap(6).PaddingLeft(4).Enter())
         {
             Origami.Button(paper, "bld_add_open", $"{EditorIcons.Plus} Add Open Scene", () =>
                 {

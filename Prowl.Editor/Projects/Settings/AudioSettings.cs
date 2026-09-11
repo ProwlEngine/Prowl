@@ -69,7 +69,7 @@ public class AudioSettings : ProjectSettingsBase
         Origami.Label(paper, "audio_latency",
             $"About {BufferSize * 1000.0f / System.Math.Max(1, SampleRate):F1} ms of output latency.").Show();
 
-        using (paper.Row("audio_out_row").Height(26).RowBetween(4).Enter())
+        using (paper.Row("audio_out_row").Height(26).Gap(4).Enter())
         {
             Origami.Header(paper, "audio_out_hdr", "Outputs").Underline().Show();
             Origami.Button(paper, "audio_out_refresh", "Refresh", () => s_devices = null).Show();
@@ -115,7 +115,7 @@ public class AudioSettings : ProjectSettingsBase
     /// <summary>A row of buttons for a small fixed set of values, with the current one highlighted.</summary>
     private static void DrawChoice(Paper paper, string id, string label, int[] options, int current, string suffix, System.Action<int> onChange)
     {
-        using (paper.Row($"{id}_row").Height(26).RowBetween(4).Enter())
+        using (paper.Row($"{id}_row").Height(26).Gap(4).Enter())
         {
             Origami.Label(paper, $"{id}_lbl", label).Show();
 

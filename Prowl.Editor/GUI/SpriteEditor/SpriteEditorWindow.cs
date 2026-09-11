@@ -267,7 +267,7 @@ public class SpriteEditorWindow : DockPanel
     private void DrawToolbar(Paper paper)
     {
         using (paper.Row("se_toolbar").Width(UnitValue.Stretch()).Height(36)
-            .Padding(8, 4).ColBetween(6).Enter())
+            .Padding(8, 4).Enter())
         {
             if (!IsSingle)
             {
@@ -299,7 +299,7 @@ public class SpriteEditorWindow : DockPanel
             .Layer(Layer.Overlay + 1)
             .BackgroundColor(Origami.Current.Popover)
             .BorderColor(System.Drawing.Color.FromArgb(255, 60, 62, 72)).BorderWidth(1).Rounded(6)
-            .Padding(8).ColBetween(6)
+            .Padding(8).Gap(6)
             .StopEventPropagation()
             .Enter())
         {
@@ -907,7 +907,7 @@ public class SpriteEditorWindow : DockPanel
     private void DrawSidebar(Paper paper, float windowHeight)
     {
         using (paper.Column("se_side").Width(300).Height(UnitValue.Stretch())
-            .Padding(8).ColBetween(6).Clip().Enter())
+            .Padding(8).Gap(6).Clip().Enter())
         {
             DrawAssetSettings(paper);
             if (Valid(_selected))

@@ -80,7 +80,7 @@ public class ComponentPopoutPanel : DockPanel
                 .FirstOrDefault() as AddComponentMenuAttribute;
             string icon = attr?.Icon ?? EditorIcons.Cube;
 
-            using (paper.Row("cpop_header").Height(28).ChildLeft(8).RowBetween(6).Enter())
+            using (paper.Row("cpop_header").Height(28).PaddingLeft(8).Gap(6).Enter())
             {
                 paper.Box("cpop_icon")
                     .Width(20).Height(28)
@@ -93,7 +93,7 @@ public class ComponentPopoutPanel : DockPanel
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("cpop_go")
-                    .Height(28).ChildRight(8)
+                    .Height(28).PaddingRight(8)
                     .Text(Loc.Get("component.on", new { name = go.Name }), font).TextColor(EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
             }

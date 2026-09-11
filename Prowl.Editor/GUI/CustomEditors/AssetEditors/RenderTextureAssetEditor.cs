@@ -97,7 +97,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
                     v => edits.Formats[index] = v).Show());
         }
 
-        using (paper.Row($"{id}_fmt_btns").Height(26).RowBetween(6).Enter())
+        using (paper.Row($"{id}_fmt_btns").Height(26).Gap(6).Enter())
         {
             Origami.Button(paper, $"{id}_fmt_add", $"{EditorIcons.Plus}  Add",
                 () => edits.Formats.Add(TextureImageFormat.Color4b)).Width(90).Show();

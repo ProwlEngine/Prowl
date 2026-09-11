@@ -208,7 +208,7 @@ public class UIImageEditor : CustomEditor
     {
         EditorGUI.Row(paper, id, "Pixels Per Unit Multiplier", () =>
         {
-            using (paper.Row($"{id}_row").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+            using (paper.Row($"{id}_row").Height(EditorTheme.RowHeight).Gap(4).Enter())
             {
                 using (paper.Box($"{id}_n").Width(UnitValue.Stretch()).Enter())
                     Origami.NumericField<float>(paper, $"{id}_n_v", img.PixelsPerUnitMultiplier,

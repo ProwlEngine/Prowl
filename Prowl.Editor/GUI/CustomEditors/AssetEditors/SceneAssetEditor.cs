@@ -45,7 +45,7 @@ public class SceneAssetEditor : AssetImporterEditor
 
         // Quick-facts chips.
         using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
-            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
+            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
         {
             EditorGUI.StatChip(paper, $"{id}_st_name", $"{EditorIcons.Shapes}  {sceneName}", font);
             EditorGUI.StatChip(paper, $"{id}_st_deps", $"{deps.Count} reference{(deps.Count == 1 ? "" : "s")}", font);

@@ -145,7 +145,7 @@ public abstract class AssetImporterEditor
 
         using (paper.Row($"{id}_applybar").Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
-            .RowBetween(m.SpacingMedium).Enter())
+            .Gap(m.SpacingMedium).Enter())
         {
             // Pushes both buttons to the right.
             paper.Box($"{id}_applybar_spacer").Height(1).IsNotInteractable();

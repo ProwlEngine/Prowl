@@ -326,7 +326,7 @@ public static class PackageImportDialog
             .Height(32)
             .BackgroundColor(EditorTheme.Neutral200)
             .Rounded(8)
-            .ChildLeft(12)
+            .PaddingLeft(12)
             .Enter())
         {
             string fileName = Path.GetFileName(_packagePath);
@@ -354,7 +354,7 @@ public static class PackageImportDialog
         using (paper.Row("pkgimp_settings_warn")
             .Height(36)
             .BackgroundColor(EditorTheme.Amber300)
-            .ChildLeft(12).RowBetween(8)
+            .PaddingLeft(12).Gap(8)
             .Enter())
         {
             paper.Box("pkgimp_warn_ico")
@@ -429,7 +429,7 @@ public static class PackageImportDialog
         using (paper.Column("pkgimp_detail")
             .Width(detailWidth).Height(height)
             .Padding(16, 16, 16, 0)
-            .ColBetween(8)
+            .Gap(8)
             .Enter())
         {
             if (_selectedAssetPath == null || _manifest == null)
@@ -501,7 +501,7 @@ public static class PackageImportDialog
 
             using (paper.Row("pkgimp_d_status")
                 .Height(RowHeight)
-                .RowBetween(8)
+                .Gap(8)
                 .Enter())
             {
                 paper.Box("pkgimp_d_status_lbl")
@@ -523,7 +523,7 @@ public static class PackageImportDialog
     {
         using (paper.Row(id)
             .Height(RowHeight)
-            .RowBetween(8)
+            .Gap(8)
             .Enter())
         {
             paper.Box($"{id}_lbl")
@@ -545,8 +545,8 @@ public static class PackageImportDialog
     {
         using (paper.Row("pkgimp_bottom")
             .Height(44)
-            .ChildRight(12).ChildBottom(10).ChildTop(10)
-            .RowBetween(8)
+            .PaddingRight(12).PaddingBottom(10).PaddingTop(10)
+            .Gap(8)
             .Enter())
         {
             int enabledCount = _enabledPaths.Count;
@@ -555,7 +555,7 @@ public static class PackageImportDialog
             int replaceCount = _assetActions.Count(kv => kv.Value == ImportAction.Replace && _enabledPaths.Contains(kv.Key));
 
             paper.Box("pkgimp_count")
-                .Height(24).ChildLeft(12)
+                .Height(24).PaddingLeft(12)
                 .Text(Loc.Get("package.import_count", new { enabled = enabledCount, total = totalCount, add = addCount, replace = replaceCount }), font)
                 .TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall)

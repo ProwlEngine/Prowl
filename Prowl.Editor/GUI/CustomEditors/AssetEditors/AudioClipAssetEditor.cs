@@ -158,7 +158,7 @@ public class AudioClipAssetEditor : ImportSettingsEditor
     {
         if (clip.IsNotValid()) return;
 
-        using (paper.Row($"{id}_transport").Height(26).RowBetween(4).Enter())
+        using (paper.Row($"{id}_transport").Height(26).Gap(4).Enter())
         {
             bool playing = AudioPreview.PlayingClip == clip!.AssetID && AudioPreview.IsPlaying;
 

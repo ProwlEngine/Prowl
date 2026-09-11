@@ -187,7 +187,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     {
         var m = Origami.Current.Metrics;
 
-        using (paper.Row($"{id}_toolbar").Height(28).ColBetween(m.SpacingMedium)
+        using (paper.Row($"{id}_toolbar").Height(28)
             .Margin(0, 0, m.Spacing, m.Spacing).Enter())
         {
             Origami.Button(paper, $"{id}_add", "Add Group", () =>
@@ -236,7 +236,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         var m = Origami.Current.Metrics;
         AudioMixerSnapshot selected = mixer.FindSnapshot(_snapshot);
 
-        using (paper.Row($"{id}_snaps").Height(26).ColBetween(m.SpacingSmall)
+        using (paper.Row($"{id}_snaps").Height(26)
             .Margin(0, 0, 0, m.Spacing).Enter())
         {
             paper.Box($"{id}_snaps_lbl").Width(70).Height(22)
@@ -285,7 +285,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
 
         // Editing one is a second row rather than a popup: the thing being edited is the mixer behind
         // it, and a dialog over the console would hide what a recapture is about to record.
-        using (paper.Row($"{id}_snap_edit").Height(26).ColBetween(m.SpacingSmall)
+        using (paper.Row($"{id}_snap_edit").Height(26)
             .Margin(0, 0, 0, m.Spacing).Enter())
         {
             AudioMixerSnapshot editing = selected;
@@ -337,7 +337,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
             .Vertical(false).Horizontal(true).Padding(m.Spacing)
             .Body(() =>
             {
-                using (paper.Row($"{id}_strips").Height(UnitValue.Stretch()).ColBetween(m.SpacingSmall).Enter())
+                using (paper.Row($"{id}_strips").Height(UnitValue.Stretch()).Enter())
                 {
                     for (int i = 0; i < strips.Count; i++)
                         DrawStrip(paper, id, mixer, strips[i], i);
@@ -355,7 +355,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         bool master = ReferenceEquals(group, mixer.Master);
 
         using (paper.Column(stripId).Width(StripWidth).Height(UnitValue.Stretch())
-            .Rounded(m.ContainerRounding).Padding(m.SpacingSmall).RowBetween(m.SpacingSmall)
+            .Rounded(m.ContainerRounding).Padding(m.SpacingSmall)
             .BackgroundColor(selected ? EditorTheme.Selected : EditorTheme.Glass)
             .BorderColor(selected ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(1)
             .OnClick(group.Identity, (identity, _) => _selected = identity)
@@ -386,8 +386,8 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     /// <summary>The meter and the fader, side by side, which is the pairing the panel exists for.</summary>
     private static void DrawFaderRow(Paper paper, string stripId, AudioMixerGroup group)
     {
-        using (paper.Row($"{stripId}_fader_row").Height(FaderHeight).ColBetween(6)
-            .ChildLeft().ChildRight().Enter())
+        using (paper.Row($"{stripId}_fader_row").Height(FaderHeight)
+            .JustifyContent(LayoutJustification.Center).Enter())
         {
             float peak = group.PeakLevel;
 
@@ -412,7 +412,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     {
         AudioMixerGroup captured = group;
 
-        using (paper.Row($"{stripId}_ms").Height(22).ColBetween(4).Enter())
+        using (paper.Row($"{stripId}_ms").Height(22).Enter())
         {
             Origami.Button(paper, $"{stripId}_mute", "M", () => captured.Mute = !captured.Mute)
                 .Width(UnitValue.Stretch()).Height(22)
@@ -511,7 +511,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
 
         Origami.Separator(paper, $"{id}_sep_sel").Show();
 
-        using (paper.Row($"{id}_sel_hdr").Height(30).ColBetween(m.SpacingMedium).Enter())
+        using (paper.Row($"{id}_sel_hdr").Height(30).Enter())
         {
             Origami.Header(paper, $"{id}_sel_h", $"{EditorIcons.WaveSquare}  {group.GroupName}").Show();
 

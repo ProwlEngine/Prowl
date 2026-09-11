@@ -507,7 +507,7 @@ internal static class CurvePopover
             using (paper.Row($"{id}_bar")
                 .PositionType(PositionType.SelfDirected)
                 .Position(m.Spacing, barY).Size(EditorW - m.SpacingLarge, m.RowHeight)
-                .RowBetween(m.Spacing).Enter())
+                .Gap(m.Spacing).Enter())
             {
                 Origami.Button(paper, $"{id}_fit", "Fit", () =>
                 {

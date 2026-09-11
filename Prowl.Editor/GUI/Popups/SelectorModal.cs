@@ -114,7 +114,7 @@ public static class SelectorModal
     private static void DrawHeader(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Row("sel_header")
-            .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
+            .Height(32).PaddingLeft(12).PaddingRight(8).Gap(8)
             .BackgroundColor(EditorTheme.Neutral200)
             .Enter())
         {
@@ -140,7 +140,7 @@ public static class SelectorModal
 
     private static void DrawSearchBar(Paper paper, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row("sel_searchrow").Height(30).Margin(6, 6, 6, 0).RowBetween(4).Enter())
+        using (paper.Row("sel_searchrow").Height(30).Margin(6, 6, 6, 0).Gap(4).Enter())
         {
             Origami.SearchField(paper, "sel_search", _searchText, v => _searchText = v).Show();
         }
@@ -152,7 +152,7 @@ public static class SelectorModal
 
     private static void DrawTabs(Paper paper, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row("sel_tabs").Height(28).Margin(6, 6, 0, 0).RowBetween(2).Enter())
+        using (paper.Row("sel_tabs").Height(28).Margin(6, 6, 0, 0).Gap(2).Enter())
         {
             DrawTabButton(paper, font, "sel_tab_scene", $"{EditorIcons.Sitemap}  {Loc.Get("panel.scene")}", SelectorTabs.Scene);
             DrawTabButton(paper, font, "sel_tab_assets", $"{EditorIcons.FolderOpen}  {Loc.Get("menu.assets")}", SelectorTabs.Assets);
@@ -197,7 +197,7 @@ public static class SelectorModal
         {
             // None option always first
             paper.Box("sel_s_none")
-                .Height(EditorTheme.RowHeight).ChildLeft(8)
+                .Height(EditorTheme.RowHeight).PaddingLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                 .Rounded(3)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
@@ -260,7 +260,7 @@ public static class SelectorModal
         string id, string name, string detail, string icon, object value)
     {
         using (paper.Row(id)
-            .Height(EditorTheme.RowHeight).ChildLeft(8).RowBetween(4)
+            .Height(EditorTheme.RowHeight).PaddingLeft(8).Gap(4)
             .Hovered.BackgroundColor(EditorTheme.Purple400).End()
             .Rounded(3)
             .OnClick(value, (val, _) =>
@@ -283,7 +283,7 @@ public static class SelectorModal
             if (!string.IsNullOrEmpty(detail))
             {
                 paper.Box($"{id}_detail")
-                    .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
+                    .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).PaddingRight(4)
                     .Text(detail, font).TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
             }
@@ -326,7 +326,7 @@ public static class SelectorModal
         {
             // None option always first
             paper.Box("sel_a_none")
-                .Height(EditorTheme.RowHeight).ChildLeft(8)
+                .Height(EditorTheme.RowHeight).PaddingLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                 .Rounded(3)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
@@ -349,7 +349,7 @@ public static class SelectorModal
                 {
                     using (paper.Row($"sel_ar_{row}")
                         .Height(totalCellH)
-                        .RowBetween(4)
+                        .Gap(4)
                         .Enter())
                     {
                         for (int j = 0; j < cols && i + j < items.Count; j++)

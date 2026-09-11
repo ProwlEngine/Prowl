@@ -180,7 +180,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Buttons ===
             Origami.Header(paper, "h_btn", "Buttons").Show();
 
-            using (paper.Row("btn_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+            using (paper.Row("btn_row").Height(EditorTheme.RowHeight).Gap(6).Enter())
             {
                 Origami.Button(paper, "btn1", "Click Me", () => _clickCount++).Show();
                 Origami.Button(paper, "btn2", "Reset", () => ResetAll()).Show();
@@ -193,7 +193,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Toggle switches ===
             Origami.Header(paper, "h_togbtn", "Toggles").Show();
 
-            using (paper.Row("togbtn_row").Height(EditorTheme.RowHeight).RowBetween(12).Enter())
+            using (paper.Row("togbtn_row").Height(EditorTheme.RowHeight).Gap(12).Enter())
             {
                 Origami.Switch(paper, "tbtn_a", _toggleBtnA, v => _toggleBtnA = v)
                     .Primary().LabelRight("Wireframe").Show();
@@ -248,7 +248,7 @@ public class WidgetPlaygroundPanel : DockPanel
 
             Origami.Foldout(paper, "fo_1", "Advanced Settings").Body(() =>
             {
-                using (paper.Column("fo_1_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
+                using (paper.Column("fo_1_c").Height(UnitValue.Auto).PaddingLeft(16).Enter())
                 {
                     EditorGUI.Row(paper, "fo_speed", "Speed", () =>
                         Origami.NumericField<float>(paper, "fo_speed_v", _floatValue, v => _floatValue = v).Show());
@@ -258,7 +258,7 @@ public class WidgetPlaygroundPanel : DockPanel
 
             Origami.Foldout(paper, "fo_2", "Debug Options").Body(() =>
             {
-                using (paper.Column("fo_2_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
+                using (paper.Column("fo_2_c").Height(UnitValue.Auto).PaddingLeft(16).Enter())
                 {
                     Origami.Checkbox(paper, "fo_dbg", _toggleB, v => _toggleB = v).LabelRight("Show Wireframe").Show();
                     EditorGUI.Row(paper, "fo_iter", "Iterations", () =>
@@ -337,7 +337,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(6)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                .ChildLeft(16).ChildTop(8)
+                .PaddingLeft(16).PaddingTop(8)
                 .Enter())
             {
                 if (EditorTheme.DefaultFont != null)
@@ -367,7 +367,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Modal Dialog ===
             Origami.Header(paper, "h_modal", "Modal Dialog").Show();
 
-            using (paper.Row("modal_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+            using (paper.Row("modal_row").Height(EditorTheme.RowHeight).Gap(6).Enter())
             {
                 Origami.Button(paper, "btn_confirm", "Confirm Dialog", () => Origami.Confirm("Delete Object",
                     "Are you sure you want to delete this object?",
@@ -382,7 +382,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Toasts ===
             Origami.Header(paper, "h_toast", "Toast Notifications").Show();
 
-            using (paper.Row("toast_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+            using (paper.Row("toast_row").Height(EditorTheme.RowHeight).Gap(6).Enter())
             {
                 Origami.Button(paper, "btn_toast_info", "Info", () => Toasts.Info("Info", "Something happened")).Show();
                 Origami.Button(paper, "btn_toast_ok", "Success", () => Toasts.Success("Saved", "Scene saved successfully")).Show();

@@ -175,7 +175,7 @@ public class ConsolePanel : DockPanel
 
         using (paper.Column("con_tb_col").Height(34).Enter())
         {
-            using (paper.Row("con_tb").Height(33).Padding(10, 8, 0, 0).RowBetween(4).Enter())
+            using (paper.Row("con_tb").Height(33).Padding(10, 8, 0, 0).Gap(4).Enter())
             {
                 LevelChip(paper, font, "con_collapse", EditorIcons.LayerGroup_I,
                     _collapse ? EditorTheme.AccentText : EditorTheme.InkDim, Loc.Get("console.collapse"), null, _collapse, false, () => _collapse = !_collapse);
@@ -205,7 +205,7 @@ public class ConsolePanel : DockPanel
         var mono = EditorTheme.FontMono ?? font;
         Color ic = dim ? Color.FromArgb(115, iconColor.R, iconColor.G, iconColor.B) : iconColor;
 
-        using (p.Row(id).Width(UnitValue.Auto).Height(24).Rounded(6).Padding(8, 8, 0, 0).RowBetween(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        using (p.Row(id).Width(UnitValue.Auto).Height(24).Rounded(6).Padding(8, 8, 0, 0).Gap(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .BackgroundColor(on ? EditorTheme.Glass : Color.Transparent)
             .BorderColor(on ? EditorTheme.BorderSoft : Color.Transparent).BorderWidth(1)
             .Transition(GuiProp.BackgroundColor, 0.15f).Transition(GuiProp.BorderColor, 0.15f)

@@ -183,7 +183,7 @@ internal sealed class GradientEditorModal : IModal
             .Rounded(m.ContainerRounding)
             .DropShadow(0, 4, 24, 0, Color.FromArgb(100, 0, 0, 0))
             .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge)
-            .ColBetween(m.SpacingMedium)
+            .Gap(m.SpacingMedium)
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()

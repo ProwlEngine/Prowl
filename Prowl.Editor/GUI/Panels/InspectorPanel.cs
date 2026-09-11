@@ -398,7 +398,7 @@ public class InspectorPanel : DockPanel
         }
 
         using (paper.Row("insp_header")
-            .Height(40).Padding(4, 0, 4, 4).RowBetween(8)
+            .Height(40).Padding(4, 0, 4, 4).Gap(8)
             .Enter())
         {
             // Large icon
@@ -411,7 +411,7 @@ public class InspectorPanel : DockPanel
                 .FontSize(18f)
                 .Alignment(TextAlignment.MiddleCenter);
 
-            using (paper.Column("insp_h_info").Height(32).ColBetween(1).Enter())
+            using (paper.Column("insp_h_info").Height(32).Gap(1).Enter())
             {
                 paper.Box("insp_h_name")
                     .Height(18)
@@ -659,11 +659,11 @@ public class InspectorPanel : DockPanel
         }
 
         // Header with sub-asset badge
-        using (paper.Row("insp_sub_header").Height(28).ChildLeft(8).RowBetween(6).Enter())
+        using (paper.Row("insp_sub_header").Height(28).PaddingLeft(8).Gap(6).Enter())
         {
             paper.Box("insp_sub_badge")
                 .Width(UnitValue.Auto).Height(20)
-                .ChildLeft(6).ChildRight(6)
+                .PaddingLeft(6).PaddingRight(6)
                 .BackgroundColor(EditorTheme.Selected)
                 .Rounded(4)
                 .Text(Loc.Get("inspector.sub_asset"), font)
@@ -819,7 +819,7 @@ public class InspectorPanel : DockPanel
 
         // Edits live on the cached instance until they are written, so leaving the asset selected
         // does not lose them, but nothing else will write them either.
-        using (paper.Row("insp_asset_fields_bar").Height(UnitValue.Auto).RowBetween(8).Enter())
+        using (paper.Row("insp_asset_fields_bar").Height(UnitValue.Auto).Gap(8).Enter())
         {
             Origami.Button(paper, "insp_asset_fields_save",
                 $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
@@ -877,7 +877,7 @@ public class InspectorPanel : DockPanel
         Origami.Header(paper, "log_hdr", $"{icon}  {log.Severity}").Show();
 
         // Time + count
-        using (paper.Row("log_meta").Height(EditorTheme.RowHeight).RowBetween(8).Enter())
+        using (paper.Row("log_meta").Height(EditorTheme.RowHeight).Gap(8).Enter())
         {
             Origami.Label(paper, "log_time", $"{Loc.Get("inspector.time")}: {log.Time}").Show();
             if (log.Count > 1)
@@ -957,7 +957,7 @@ public class InspectorPanel : DockPanel
         }
 
         paper.Box(id)
-            .Height(EditorTheme.RowHeight).ChildLeft(8).Rounded(3)
+            .Height(EditorTheme.RowHeight).PaddingLeft(8).Rounded(3)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text($"{icon}  {displayName}", font)
             .TextColor(EditorTheme.Ink500)

@@ -185,7 +185,7 @@ public class PhysicsSettings : ProjectSettingsBase
         float labelW = 100f;
 
         // Header row with rotated labels (just show abbreviated names)
-        using (paper.Row("phys_cm_hdr").Height(cellSize).ChildLeft(labelW).RowBetween(1).Enter())
+        using (paper.Row("phys_cm_hdr").Height(cellSize).PaddingLeft(labelW).Gap(1).Enter())
         {
             foreach (int j in activeIndices)
             {
@@ -200,7 +200,7 @@ public class PhysicsSettings : ProjectSettingsBase
         // Matrix rows
         foreach (int i in activeIndices)
         {
-            using (paper.Row($"phys_cmr_{i}").Height(cellSize).RowBetween(1).Enter())
+            using (paper.Row($"phys_cmr_{i}").Height(cellSize).Gap(1).Enter())
             {
                 paper.Box($"phys_cml_{i}")
                     .Width(labelW).Height(cellSize)

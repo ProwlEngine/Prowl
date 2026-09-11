@@ -91,7 +91,7 @@ public sealed class BuildProgressModal : IModal
 
         using (paper.Row("bpm_head").Width(UnitValue.Stretch()).Height(headH)
             .BackgroundColor(theme.Glass).RoundedTop(13f)
-            .Padding(13, 13, 0, 0).RowBetween(8).Enter())
+            .Padding(13, 13, 0, 0).Gap(8).Enter())
         {
             paper.Box("bpm_ico").Width(16).Height(headH).IsNotInteractable()
                 .Text(EditorIcons.Hammer, font).TextColor(EditorTheme.Accent)
@@ -113,7 +113,7 @@ public sealed class BuildProgressModal : IModal
         var mono = EditorTheme.FontMono ?? font;
 
         using (paper.Column("bpm_body").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-            .Padding(13, 13, 13, 13).ColBetween(10).Enter())
+            .Padding(13, 13, 13, 13).Gap(10).Enter())
         {
             // The last line the build logged, which is the only part of it worth a glance mid build.
             paper.Box("bpm_state").Width(UnitValue.Stretch()).Height(16).IsNotInteractable()
@@ -124,7 +124,7 @@ public sealed class BuildProgressModal : IModal
                 .Thickness(8).ShowPercent("F0").Show();
 
             using (paper.Row("bpm_actions").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                .ChildLeft(UnitValue.Stretch()).Enter())
+                .JustifyContent(LayoutJustification.End).Enter())
             {
                 if (cancelling)
                 {

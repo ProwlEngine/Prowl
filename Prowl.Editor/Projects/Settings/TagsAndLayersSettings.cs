@@ -55,7 +55,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
             int idx = i;
             bool isBuiltin = i < 7;
 
-            using (paper.Row($"tl_tag_{i}").Height(24).RowBetween(4).ChildLeft(8).ChildRight(4).Enter())
+            using (paper.Row($"tl_tag_{i}").Height(24).Gap(4).PaddingLeft(8).PaddingRight(4).Enter())
             {
                 // Name: same control for every row; built-in tags are locked.
                 using (paper.Box($"tl_tag_name_{i}").Width(UnitValue.Stretch()).Height(22).Enter())
@@ -124,7 +124,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
 
             if (isBuiltin)
             {
-                using (paper.Row($"tl_layer_{i}").Height(24).RowBetween(4).ChildLeft(8).Enter())
+                using (paper.Row($"tl_layer_{i}").Height(24).Gap(4).PaddingLeft(8).Enter())
                 {
                     paper.Box($"tl_layer_idx_{i}")
                         .Width(24).Height(22)
@@ -133,7 +133,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                         .Alignment(TextAlignment.MiddleRight);
 
                     paper.Box($"tl_layer_name_{i}")
-                        .Height(22).ChildLeft(4)
+                        .Height(22).PaddingLeft(4)
                         .Text(Layers[i], font).TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleLeft);

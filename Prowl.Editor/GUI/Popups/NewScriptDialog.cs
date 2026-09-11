@@ -63,7 +63,7 @@ public static class NewScriptDialog
         const float listWidth = 220f;
 
         // Template list on the left, details + name field on the right.
-        using (paper.Row("scr_body").Height(bodyHeight).RowBetween(10).Enter())
+        using (paper.Row("scr_body").Height(bodyHeight).Gap(10).Enter())
         {
             // Template list wrapped in a ScrollView so 14+ templates don't overflow.
             using (paper.Box("scr_tpls_frame")
@@ -114,7 +114,7 @@ public static class NewScriptDialog
             // Details / inputs
             using (paper.Column("scr_details")
                        .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
-                       .RowBetween(8).Enter())
+                       .Enter())
             {
                 var tpl = s_templates[s_selectedIndex];
                 if (font != null)
@@ -168,7 +168,7 @@ public static class NewScriptDialog
         // Footer buttons right-aligned Cancel + Create. The Create button is a real
         // EditorGUI.Button when valid; when invalid we render a visually-disabled Box
         // so the user sees the error hint rather than clicking a dead button.
-        using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).ChildLeft(UnitValue.Stretch()).RowBetween(8).Enter())
+        using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).JustifyContent(LayoutJustification.End).Gap(8).Enter())
         {
             Origami.Button(paper, "scr_cancel", Loc.Get("common.cancel"), () => { Modal.Pop(); }).Width(90).Show();
 

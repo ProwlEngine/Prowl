@@ -589,9 +589,9 @@ public static class ProjectLauncher
             .PositionType(PositionType.SelfDirected)
             .Position(0, y)
             .Size(w, stripHeight)
-            .ChildLeft(UnitValue.StretchOne)
-            .ChildRight(UnitValue.StretchOne)
-            .RowBetween(6)
+            .JustifyContent(LayoutJustification.Center)
+
+            .Gap(6)
             .OnClick(_ => AdvanceTip())
             .Enter())
         {

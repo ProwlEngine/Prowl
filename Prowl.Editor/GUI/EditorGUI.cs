@@ -40,7 +40,7 @@ public static class EditorGUI
         {
             // Inspector rhythm: the between-row gap is a Spacing-driven bottom margin (not vertical
             // padding) so hand-drawn rows line up with the reflection-drawn PropertyGrid. Compact rows
-            // rely on their host column's ColBetween instead, so they take no bottom margin.
+            // rely on their host column's Gap instead, so they take no bottom margin.
             DrawRowLine(paper, id, label, drawControl, m, labelWidth, compact, minHeight,
                 vpad: 0, bottomMargin: compact ? 0f : m.SpacingLarge);
             return;
@@ -66,7 +66,7 @@ public static class EditorGUI
         var labelColor = compact ? EditorTheme.Ink500 : Origami.Current.Ink.C300;
         float labelSize = compact ? EditorTheme.FontSizeSmall : m.FontSize;
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh)
-            .Padding(hpad, hpad, vpad, vpad).RowBetween(m.Padding)
+            .Padding(hpad, hpad, vpad, vpad).Gap(m.Padding)
             .Margin(0, 0, 0, bottomMargin).Enter())
         {
             if (!string.IsNullOrEmpty(label) && font != null)
@@ -174,12 +174,12 @@ public static class EditorGUI
     public static void TextAlignmentRow(Paper paper, string id, string label, TextAlign value, Action<TextAlign> setter)
     {
         var font = EditorTheme.DefaultFont;
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+        using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(6).Enter())
         {
             if (font != null)
                 paper.Box($"{id}_lbl")
                     .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
-                    .ChildLeft(4).IsNotInteractable()
+                    .PaddingLeft(4).IsNotInteractable()
                     .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
 
             Origami.ButtonGroup(paper, $"{id}_h", TextAlignHIndex(value),
@@ -227,7 +227,7 @@ public static class EditorGUI
 
         using (paper.Column(id).Width(width).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         using (paper.Column($"{id}_grp").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-            .Padding(8, 8, 10, 10).ColBetween(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
+            .Padding(8, 8, 10, 10).Gap(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         {
             foreach (var (cid, label, icon) in cats)
             {
@@ -290,7 +290,7 @@ public static class EditorGUI
             if (!string.IsNullOrEmpty(title) && font != null)
             {
                 using (paper.Row($"{id}_gh").Height(32).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0)
-                    .RowBetween(m.SpacingMedium).IsNotInteractable().Enter())
+                    .Gap(m.SpacingMedium).IsNotInteractable().Enter())
                 {
                     if (!string.IsNullOrEmpty(icon))
                         paper.Box($"{id}_gi").Width(16).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()

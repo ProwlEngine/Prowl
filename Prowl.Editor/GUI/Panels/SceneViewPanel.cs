@@ -128,7 +128,7 @@ public class SceneViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
             .Width(34).Height(UnitValue.Auto)
-            .Rounded(9).Padding(5, 5, 5, 5).ColBetween(3)
+            .Rounded(9).Padding(5, 5, 5, 5).Gap(3)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
@@ -215,7 +215,7 @@ public class SceneViewPanel : DockPanel
                     .Alignment(TextAlignment.MiddleCenter);
 
                 using (paper.Row("sv_no_scene_btn_row")
-                    .Height(30).RowBetween(8)
+                    .Height(30).Gap(8)
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");

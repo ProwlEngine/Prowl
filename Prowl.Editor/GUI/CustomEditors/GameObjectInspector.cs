@@ -66,9 +66,9 @@ public static class GameObjectInspector
     {
         bool expanded = IsExpanded(id);
         var semi = EditorTheme.FontSemiBold ?? font;
-        using (paper.Row($"{id}_head").Height(30).Padding(10, 8, 0, 0).RowBetween(7).Enter())
+        using (paper.Row($"{id}_head").Height(30).Padding(10, 8, 0, 0).Gap(7).Enter())
         {
-            var clickRow = paper.Row($"{id}_hclick").Width(UnitValue.Stretch()).Height(30).RowBetween(7)
+            var clickRow = paper.Row($"{id}_hclick").Width(UnitValue.Stretch()).Height(30).Gap(7)
                 .Hovered.BackgroundColor(Color.FromArgb(13, EditorTheme.Purple400)).End()
                 .OnClick(id, (i, _) => ToggleSection(i));
             if (onDragStart != null)
@@ -96,7 +96,7 @@ public static class GameObjectInspector
     private static void SelDropdown(Paper paper, Prowl.Scribe.FontFile font, string id,
         string? label, string value, string[] options, int current, Action<int> onSelect, bool chevron, UnitValue width)
     {
-        using (paper.Row(id).Width(width).Height(26).Rounded(7).Padding(9, 9, 0, 0).RowBetween(6)
+        using (paper.Row(id).Width(width).Height(26).Rounded(7).Padding(9, 9, 0, 0).Gap(6)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Hovered.BorderColor(EditorTheme.BorderStrong).End()
@@ -151,7 +151,7 @@ public static class GameObjectInspector
 
     private static void DrawMultiHeader(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
     {
-        using (paper.Row("gim_header").Height(EditorTheme.RowHeight).Margin(0, 6).RowBetween(6).Enter())
+        using (paper.Row("gim_header").Height(EditorTheme.RowHeight).Margin(0, 6).Gap(6).Enter())
         {
             paper.Box("gim_icon").Margin(6, 6, 0, 6).FontSize(EditorTheme.FontSize * 1.5f).Width(UnitValue.Auto).Text(EditorIcons.Cubes, font);
 
@@ -171,7 +171,7 @@ public static class GameObjectInspector
                 .LabelRight(Loc.Get("inspector.static")).Show();
         }
 
-        using (paper.Row("gim_tag_layer").Height(22).RowBetween(6).Enter())
+        using (paper.Row("gim_tag_layer").Height(22).Gap(6).Enter())
         {
             var tagNames = TagLayerManager.tags.ToArray();
             bool tagMixed = gos.Select(g => g.Tag).Distinct().Count() > 1;
@@ -206,7 +206,7 @@ public static class GameObjectInspector
 
     private static void DrawMultiTransform(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
     {
-        paper.Box("gim_transform_header").Height(22).ChildLeft(8)
+        paper.Box("gim_transform_header").Height(22).PaddingLeft(8)
             .Text($"{EditorIcons.ArrowsUpDownLeftRight}  {Loc.Get("inspector.transform")}", font)
             .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
@@ -262,7 +262,7 @@ public static class GameObjectInspector
             string icon = GetComponentIcon((MonoBehaviour)instances[0]);
 
             using (paper.Row($"{compId}_header")
-                .Height(24).BackgroundColor(EditorTheme.Neutral300).Rounded(3).ChildLeft(4).RowBetween(4).Enter())
+                .Height(24).BackgroundColor(EditorTheme.Neutral300).Rounded(3).PaddingLeft(4).Gap(4).Enter())
             {
                 bool allEn = instances.All(o => ((MonoBehaviour)o).Enabled);
                 Origami.Checkbox(paper, $"{compId}_en", allEn,
@@ -310,7 +310,7 @@ public static class GameObjectInspector
             .Height(26)
             .Margin(0, 0, 8, 4)
             .Padding(11, 11, 0, 0)
-            .RowBetween(8)
+            .Gap(8)
             .Enter())
         {
             Origami.Checkbox(paper, "gi_enabled", go.Enabled,
@@ -350,7 +350,7 @@ public static class GameObjectInspector
             .Height(26)
             .Margin(0, 0, 4, 0)
             .Padding(11, 11, 0, 0)
-            .RowBetween(7)
+            .Gap(7)
             .Enter())
         {
             var tagNames = TagLayerManager.tags.ToArray();
@@ -408,7 +408,7 @@ public static class GameObjectInspector
     private static void DrawInlineLabeled(Paper paper, string id, string label,
         Prowl.Scribe.FontFile font, Action drawControl)
     {
-        using (paper.Row(id).Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        using (paper.Row(id).Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).Gap(4).Enter())
         {
             paper.Box($"{id}_lbl")
                 .Width(UnitValue.Auto).Height(EditorTheme.RowHeight)
@@ -491,13 +491,13 @@ public static class GameObjectInspector
         var rt = go.RectTransform!;
         var t = go.Transform;
 
-        paper.Box("gi_rt_header").Height(22).ChildLeft(8)
+        paper.Box("gi_rt_header").Height(22).PaddingLeft(8)
             .Text($"{EditorIcons.VectorSquare}  Rect Transform", font)
             .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
         // Top block: 4x4 anchor preset grid on the left, position + size fields filling the rest.
-        using (paper.Row("gi_rt_top").Height(UnitValue.Auto).RowBetween(8).Margin(4, 4, 2, 2).Enter())
+        using (paper.Row("gi_rt_top").Height(UnitValue.Auto).Gap(8).Margin(4, 4, 2, 2).Enter())
         {
             DrawAnchorPresetGrid(paper, font, go, rt);
 
@@ -579,14 +579,14 @@ public static class GameObjectInspector
             .BackgroundColor(EditorTheme.Neutral200)
             .BorderColor(EditorTheme.Ink100).BorderWidth(1)
             .Rounded(3)
-            .ChildLeft(GridPad).ChildRight(GridPad).ChildTop(GridPad).ChildBottom(GridPad)
-            .ColBetween(CellGap)
+            .PaddingLeft(GridPad).PaddingRight(GridPad).PaddingTop(GridPad).PaddingBottom(GridPad)
+            .Gap(CellGap)
             .Enter())
         {
             for (int row = 0; row < 4; row++)
             {
                 using (paper.Row($"gi_rt_apreset_r{row}")
-                    .Height(CellSize).RowBetween(CellGap).Enter())
+                    .Height(CellSize).Gap(CellGap).Enter())
                 {
                     for (int col = 0; col < 4; col++)
                     {
@@ -767,7 +767,7 @@ public static class GameObjectInspector
 
         EditorGUI.Row(paper, "gi_rt_pos", "Position", () =>
         {
-            using (paper.Row("gi_rt_pos_r").Height(UnitValue.Auto).RowBetween(6).Enter())
+            using (paper.Row("gi_rt_pos_r").Height(UnitValue.Auto).Gap(6).Enter())
             {
                 if (sx)
                     NumCell(paper, "gi_rt_pos_x", "Left", AxisXColor, OffsetMin(p.X, s.X, pv.X), nv =>
@@ -805,7 +805,7 @@ public static class GameObjectInspector
 
         EditorGUI.Row(paper, "gi_rt_size", "Size", () =>
         {
-            using (paper.Row("gi_rt_size_r").Height(UnitValue.Auto).RowBetween(6).Enter())
+            using (paper.Row("gi_rt_size_r").Height(UnitValue.Auto).Gap(6).Enter())
             {
                 if (sx)
                     NumCell(paper, "gi_rt_size_x", "Right", AxisXColor, -OffsetMax(p.X, s.X, pv.X), nv =>
@@ -1071,7 +1071,7 @@ public static class GameObjectInspector
 
     private static void DrawAddComponentButton(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
-        using (paper.Row("gi_add_comp_row").Height(28).ChildLeft(20).ChildRight(20).Enter())
+        using (paper.Row("gi_add_comp_row").Height(28).PaddingLeft(20).PaddingRight(20).Enter())
         {
             var trigger = paper.Box("gi_add_comp")
                 .Height(28).Rounded(4)
@@ -1143,7 +1143,7 @@ public static class GameObjectInspector
         {
             // Top row: label + buttons
             using (paper.Row("gi_prefab_bar")
-                .Height(24).RowBetween(4)
+                .Height(24).Gap(4)
                 .Enter())
             {
                 paper.Box("gi_prefab_icon")
@@ -1309,7 +1309,7 @@ public static class GameObjectInspector
             .Height(EditorTheme.RowHeight)
             .BackgroundColor(EditorTheme.Neutral300)
             .Rounded(3).Margin(0, 0, 0, 1)
-            .ChildLeft(6).RowBetween(4)
+            .PaddingLeft(6).Gap(4)
             .Enter())
         {
             paper.Box($"gi_add_name_{key}")
@@ -1331,7 +1331,7 @@ public static class GameObjectInspector
     private static void DrawOverrideGroupHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject root,
         string title, PrefabUtility.OverrideDescription first, bool canApply, int key)
     {
-        using (paper.Row($"gi_ovg_{key}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        using (paper.Row($"gi_ovg_{key}").Height(EditorTheme.RowHeight).Gap(4).Enter())
         {
             paper.Box($"gi_ovg_name_{key}")
                 .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
@@ -1365,7 +1365,7 @@ public static class GameObjectInspector
             .Height(EditorTheme.RowHeight)
             .BackgroundColor(EditorTheme.Neutral300)
             .Rounded(3).Margin(12, 0, 0, 1)
-            .ChildLeft(6).RowBetween(4)
+            .PaddingLeft(6).Gap(4)
             .Enter())
         {
             paper.Box($"gi_ov_member_{key}")

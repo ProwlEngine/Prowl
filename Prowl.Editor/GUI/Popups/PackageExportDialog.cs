@@ -158,7 +158,7 @@ public static class PackageExportDialog
             .Height(32)
             .BackgroundColor(EditorTheme.Neutral200)
             .Rounded(8)
-            .ChildLeft(12)
+            .PaddingLeft(12)
             .Enter())
         {
             paper.Box("pkgexp_title_text")
@@ -355,7 +355,7 @@ public static class PackageExportDialog
         using (paper.Column("pkgexp_options")
             .Height(90)
             .Padding(12, 12, 8, 0)
-            .ColBetween(6)
+            .Gap(6)
             .Enter())
         {
             string depLabel = _dependencyPaths.Count > 0
@@ -371,7 +371,7 @@ public static class PackageExportDialog
             // Output path
             using (paper.Row("pkgexp_path_row")
                 .Height(EditorTheme.RowHeight)
-                .RowBetween(6)
+                .Gap(6)
                 .Enter())
             {
                 paper.Box("pkgexp_path_lbl")
@@ -406,15 +406,15 @@ public static class PackageExportDialog
     {
         using (paper.Row("pkgexp_bottom")
             .Height(40)
-            .ChildRight(12).ChildBottom(8).ChildTop(8)
-            .RowBetween(8)
+            .PaddingRight(12).PaddingBottom(8).PaddingTop(8)
+            .Gap(8)
             .Enter())
         {
             int enabledCount = _enabledPaths.Count;
             int totalInTree = _explicitPaths.Count + (_includeDependencies ? _dependencyPaths.Count : 0);
 
             paper.Box("pkgexp_count")
-                .Height(24).ChildLeft(12)
+                .Height(24).PaddingLeft(12)
                 .Text(Loc.Get("package.selected_count", new { enabled = enabledCount, total = totalInTree }), font)
                 .TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall)

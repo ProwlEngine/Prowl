@@ -41,7 +41,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Main properties header
         paper.Box($"{id}_main_h")
             .Height(EditorTheme.RowHeight)
-            .ChildLeft(8)
+            .PaddingLeft(8)
             .BackgroundColor(EditorTheme.Neutral300)
             .Rounded(2)
             .Margin(UnitValue.Auto, EditorTheme.Spacing)
@@ -276,7 +276,7 @@ public class ParticleSystemComponentEditor : CustomEditor
     {
         float fs = EditorTheme.FontSize;
 
-        using (paper.Row(id).Height(EditorTheme.RowHeight + 4).RowBetween(4).ChildLeft(4).Enter())
+        using (paper.Row(id).Height(EditorTheme.RowHeight + 4).Gap(4).PaddingLeft(4).Enter())
         {
             if (ps.IsPlaying)
             {
@@ -324,7 +324,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                 .Padding(6, 6, 3, 3)
                 .Enter())
             {
-                using (paper.Row($"{id}_bh{i}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+                using (paper.Row($"{id}_bh{i}").Height(EditorTheme.RowHeight).Gap(4).Enter())
                 {
                     paper.Box($"{id}_bl{i}")
                         .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)

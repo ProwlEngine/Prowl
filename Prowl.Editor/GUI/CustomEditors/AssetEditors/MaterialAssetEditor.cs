@@ -154,7 +154,7 @@ public class MaterialAssetEditor : AssetImporterEditor
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                .ChildLeft(8).ChildRight(8).RowBetween(6)
+                .PaddingLeft(8).PaddingRight(8).Gap(6)
                 .OnClick(0, (_, _) => ToggleShaderPicker(ownerGuid));
 
             using (trigger.Enter())
