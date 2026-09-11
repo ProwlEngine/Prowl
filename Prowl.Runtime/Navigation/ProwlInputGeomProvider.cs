@@ -45,6 +45,24 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
             => MinX <= maxX && MaxX >= minX && MinZ <= maxZ && MaxZ >= minZ;
     }
 
+    /// <summary>World-space XZ rect a flatten can be limited to. No Y bound: a rebuild's vertical
+    /// range comes from the bake, not from the region being rebuilt.</summary>
+    internal readonly struct ClipRect
+    {
+        public readonly float MinX, MinZ, MaxX, MaxZ;
+
+        public ClipRect(float minX, float minZ, float maxX, float maxZ)
+        {
+            MinX = minX;
+            MinZ = minZ;
+            MaxX = maxX;
+            MaxZ = maxZ;
+        }
+
+        public bool OverlapsXZ(float minX, float minZ, float maxX, float maxZ)
+            => MinX <= maxX && MaxX >= minX && MinZ <= maxZ && MaxZ >= minZ;
+    }
+
     private readonly List<AreaMesh> _areaMeshes = [];
     private readonly RcVec3f _boundsMin;
     private readonly RcVec3f _boundsMax;
@@ -60,10 +78,18 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
     /// Flatten sources into per-area world-space soups. Vertices are transformed by each
     /// source's matrix here, on the calling thread, so the provider itself has no dependency
     /// on live Transforms and is safe to hand to a background build.
+    /// <para/>
+    /// <paramref name="clip"/> drops triangles that cannot reach the tiles being built, which is
+    /// what keeps a one-tile rebuild off the cost of the whole scene's geometry; null takes
+    /// everything. Vertices are still transformed either way, so the reported mesh bounds cover
+    /// every source regardless.
     /// </summary>
-    public ProwlInputGeomProvider(IReadOnlyList<NavMeshGeometrySource> sources, int defaultArea = NavMeshAreas.Walkable)
+    public ProwlInputGeomProvider(IReadOnlyList<NavMeshGeometrySource> sources, int defaultArea, ClipRect? clip)
     {
         ArgumentNullException.ThrowIfNull(sources);
+
+        bool hasClip = clip.HasValue;
+        ClipRect rect = clip ?? default;
 
         // Group source indices by resolved area. Order within a group is preserved, and
         // groups are keyed in first-seen order, so identical input yields identical output.
@@ -139,6 +165,20 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
                     int i0 = source.Indices[t + 0], i1 = source.Indices[t + 1], i2 = source.Indices[t + 2];
                     if ((uint)i0 >= source.Vertices.Length || (uint)i1 >= source.Vertices.Length || (uint)i2 >= source.Vertices.Length)
                         continue;
+
+                    if (hasClip)
+                    {
+                        // AABB overlap, not corner containment: a triangle wider than the rect has
+                        // all three corners outside it and still covers every tile in it.
+                        int o0 = (vBase + i0) * 3, o1 = (vBase + i1) * 3, o2 = (vBase + i2) * 3;
+                        if (!rect.OverlapsXZ(
+                                MathF.Min(verts[o0], MathF.Min(verts[o1], verts[o2])),
+                                MathF.Min(verts[o0 + 2], MathF.Min(verts[o1 + 2], verts[o2 + 2])),
+                                MathF.Max(verts[o0], MathF.Max(verts[o1], verts[o2])),
+                                MathF.Max(verts[o0 + 2], MathF.Max(verts[o1 + 2], verts[o2 + 2]))))
+                            continue;
+                    }
+
                     tris[tWrite++] = vBase + i0;
                     tris[tWrite++] = vBase + (flip ? i2 : i1);
                     tris[tWrite++] = vBase + (flip ? i1 : i2);

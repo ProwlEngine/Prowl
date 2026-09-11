@@ -486,6 +486,185 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.Equal(NavMeshPathStatus.PathPartial, path.Status);
     }
 
+    // Whether the swap landed is asked of the wall's own top surface, not of a path across the
+    // floor: a carve in flight removes and re-adds tiles, and a path crossing one of those comes
+    // back partial for reasons that have nothing to do with the swap.
+    private static readonly Float3 s_wallTop = new(0, 4, 0);
+
+    private NavMeshSurface WalledFloor(Scene scene, NavMeshSurface surface, out GameObject wall)
+    {
+        wall = CreateGameObject("Wall");
+        scene.Add(wall);
+        wall.AddComponent<BoxCollider>().Size = new Float3(2, 4, 20);
+        wall.Transform.Position = new Float3(0, 2, 0);
+        return surface;
+    }
+
+    private NavMeshObstacle Carver(Scene scene, out GameObject crate)
+    {
+        crate = CreateGameObject("Crate");
+        scene.Add(crate);
+        crate.Transform.Position = new Float3(0, 1, 8);
+        NavMeshObstacle obstacle = crate.AddComponent<NavMeshObstacle>();
+        obstacle.Size = new Float3(3, 3, 3);
+        return obstacle;
+    }
+
+    /// <summary>
+    /// A tile swap cannot run against a cache mid-carve, and draining the carve queue inline
+    /// costs milliseconds per queued tile under the write lock. So an apply that arrives while a
+    /// carve is in flight is held and lands on the frame the pump settles, instead of paying for
+    /// the drain or being refused.
+    /// </summary>
+    [Fact]
+    public async Task ApplyRebuiltTiles_DuringAPendingCarve_LandsOnTheSettledFrame()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        // A wall across the floor, voxelized into a batch while the cache is still settled.
+        WalledFloor(scene, surface, out _);
+        Assert.False(Walkable(scene, s_wallTop));
+
+        var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
+        List<(int X, int Z, List<byte[]> Layers)> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        Assert.NotEmpty(rebuilt);
+
+        // A carve well off the wall, queued but not yet pumped.
+        Carver(scene, out _);
+        Assert.True(surface.Instance!.CachePending);
+
+        Assert.True(surface.ApplyRebuiltTiles(rebuilt, out int rebuiltTiles));
+        Assert.Equal(rebuilt.Count, rebuiltTiles);
+
+        // Held, not applied: the wall is not in the mesh yet.
+        Assert.False(Walkable(scene, s_wallTop));
+
+        Assert.True(TickUntil(scene, () => Walkable(scene, s_wallTop)) >= 0,
+            "the held swap should land once the carve settles");
+    }
+
+    /// <summary>
+    /// A cache is not guaranteed to settle: an obstacle moving every frame re-queues a remove and
+    /// an add from every LateUpdate, and the pump refills as fast as it drains. Waiting on that
+    /// would hold the swap forever and grow the queue with every rebuild, so the wait is bounded
+    /// and the swap pays the inline drain instead.
+    /// </summary>
+    [Fact]
+    public async Task ApplyRebuiltTiles_BehindACacheThatNeverSettles_StillLands()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        WalledFloor(scene, surface, out _);
+        var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
+        List<(int X, int Z, List<byte[]> Layers)> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        Assert.NotEmpty(rebuilt);
+
+        // One rebuild per frame against an obstacle that straddles four tiles and re-queues a
+        // remove and an add every frame: the backlog grows faster than the pump drains it, so the
+        // pump never reports settled and the drain never finds a frame it can apply on.
+        scene.Navigation.MaxTileUpdatesPerFrame = 1;
+        Runtime.NavMeshData data = surface.RuntimeData!;
+        float ts = data.TileWorldSize;
+        var crossing = new Float3(
+            (float)data.Origin.X + ts * MathF.Round((0f - (float)data.Origin.X) / ts), 1,
+            (float)data.Origin.Z + ts * MathF.Round((0f - (float)data.Origin.Z) / ts));
+
+        NavMeshObstacle obstacle = Carver(scene, out GameObject crate);
+        crate.Transform.Position = crossing;
+        obstacle.CarveOnlyStationary = false;
+        obstacle.CarvingMoveThreshold = 0.01f;
+
+        int moves = 0;
+        void Churn(int ticks)
+        {
+            for (int i = 0; i < ticks && !Walkable(scene, s_wallTop); i++)
+            {
+                crate.Transform.Position = crossing + new Float3(moves++ % 2 == 0 ? 0.2f : -0.2f, 0, 0);
+                Tick(scene, 1);
+            }
+        }
+
+        // An obstacle queues from LateUpdate, so the backlog only exists from the second frame on
+        // — before that the cache has nothing queued and reports settled however moved the
+        // obstacle is.
+        Churn(3);
+        Assert.True(surface.Instance!.CachePending);
+        Assert.True(surface.ApplyRebuiltTiles(rebuilt, out _));
+
+        // The premise: while the backlog lasts, the swap cannot land the ordinary way.
+        Churn(3);
+        Assert.False(Walkable(scene, s_wallTop), "the cache was supposed to be starved here");
+
+        Churn(40);
+        Assert.True(Walkable(scene, s_wallTop), "a swap held behind a cache that never settles must still land");
+    }
+
+    /// <summary>
+    /// A held swap whose navmesh went away must be dropped, not applied to whatever replaced it:
+    /// its layers were voxelized against the grid of an instance that is no longer live.
+    /// </summary>
+    [Fact]
+    public async Task ApplyRebuiltTiles_HeldPastUnregistration_IsDropped()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        WalledFloor(scene, surface, out _);
+        var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
+        List<(int X, int Z, List<byte[]> Layers)> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        Assert.NotEmpty(rebuilt);
+
+        Carver(scene, out _);
+        Assert.True(surface.Instance!.CachePending);
+        Assert.True(surface.ApplyRebuiltTiles(rebuilt, out _));
+
+        surface.Enabled = false;
+        Tick(scene, 5);
+        Assert.Null(surface.Instance);
+
+        // Re-registering instantiates from the asset, which the held batch never reached.
+        surface.Enabled = true;
+        Tick(scene, 10);
+        Assert.NotNull(surface.Instance);
+        Assert.False(Walkable(scene, s_wallTop));
+    }
+
+    /// <summary>
+    /// A swap applied directly has to come last. A held batch was voxelized earlier, so landing it
+    /// afterwards reverts the tiles the newer rebuild just wrote — and because the asset mirror is
+    /// rewritten with it, nothing downstream can tell.
+    /// </summary>
+    [Fact]
+    public async Task ApplyRebuiltTiles_HeldBatch_DoesNotOverwriteANewerRebuild()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        WalledFloor(scene, surface, out GameObject wall);
+        var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
+        List<(int X, int Z, List<byte[]> Layers)> walled = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        Assert.NotEmpty(walled);
+
+        Carver(scene, out _);
+        Assert.True(surface.Instance!.CachePending);
+        Assert.True(surface.ApplyRebuiltTiles(walled, out _));
+
+        // The wall is gone again, and a synchronous rebuild says so — issued after the held batch
+        // that still describes it, so the held batch must not be what the tiles end up holding.
+        wall.Enabled = false;
+        Assert.True(surface.RebuildTiles(region, surface.CollectSources(region), out int rebuiltTiles));
+        Assert.True(rebuiltTiles > 0);
+
+        Tick(scene, 20);
+        Assert.False(Walkable(scene, s_wallTop), "an older held batch landed on top of a newer rebuild");
+    }
+
     /// <summary>
     /// A crowd agent routes around a carve rather than walking through it — the two halves of
     /// the feature (carving, crowd) had no test that exercised them together.

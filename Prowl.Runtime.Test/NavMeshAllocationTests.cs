@@ -85,4 +85,25 @@ public class NavMeshAllocationTests
             }
         }
     }
+
+    /// <summary>
+    /// A partial rebuild clips its geometry to the tiles it is building, and the test for that is
+    /// AABB overlap, not corner containment: one quad covering the whole world has no corner
+    /// anywhere near the tile being rebuilt, and is still the only thing the tile stands on.
+    /// </summary>
+    [Fact]
+    public void RebuildTiles_WithGeometryLargerThanTheRegion_StillRasterizes()
+    {
+        Float3[] verts = [new(0, 0, 0), new(0, 0, 96), new(96, 0, 96), new(96, 0, 0)];
+        var worldQuad = new NavMeshGeometrySource(verts, [0, 1, 2, 0, 2, 3], Float4x4.Identity);
+
+        var data = NavMeshBuilder.Build(TestSettings(), [worldQuad],
+            worldBounds: new AABB(new Float3(0, -1, 0), new Float3(96, 1, 96)));
+        Assert.NotNull(data);
+
+        // The middle tile: every corner of the quad is a tile away in both axes.
+        List<(int X, int Z, List<byte[]> Layers)> tiles = NavMeshBuilder.BuildTilesInBounds(
+            data!, [worldQuad], new Float3(40, -1, 40), new Float3(56, 1, 56));
+        Assert.Contains(tiles, t => t.Layers.Count > 0);
+    }
 }

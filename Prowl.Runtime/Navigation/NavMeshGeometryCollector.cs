@@ -358,7 +358,9 @@ public static class NavMeshGeometryCollector
     /// <summary>
     /// Collect a terrain as a decimated height grid. Samples are spaced no finer than the bake
     /// voxel size — Recast re-voxelizes at that resolution anyway, so finer triangles are pure
-    /// waste (a 1k heightmap would otherwise contribute ~2M triangles). Holes are skipped.
+    /// waste (a 1k heightmap would otherwise contribute ~2M triangles). Holes are skipped, and a
+    /// bounds filter clips the sampled range rather than only rejecting the terrain outright, so a
+    /// partial rebuild pays for its own tiles instead of the whole heightmap.
     /// <para/>
     /// Heights come from <see cref="TerrainData"/> in terrain-local space, placed by the object's
     /// transform exactly as <see cref="TerrainCollider"/> places the physics heightfield — so a
@@ -387,36 +389,57 @@ public static class NavMeshGeometryCollector
         float cellSize = data.Size / (res - 1);
         Float3 scale = terrain.Transform.LossyScale;
         float localVoxelSize = voxelSize / Math.Max(1e-4f, Math.Max(MathF.Abs(scale.X), MathF.Abs(scale.Z)));
-        int stride = Math.Max(1, (int)MathF.Floor(Math.Max(localVoxelSize, cellSize) / cellSize));
+        // Capped at res - 1 because a wider stride samples nothing beyond the two edges anyway,
+        // and an unbounded one (cellSize of a zero-sized terrain saturates the cast) overflows
+        // the round-up in SampleCeil.
+        int stride = Math.Clamp((int)MathF.Floor(Math.Max(localVoxelSize, cellSize) / cellSize), 1, res - 1);
 
-        // Sampled grid dimensions (always include the far edge).
-        List<int> steps = [];
-        for (int i = 0; i < res - 1; i += stride) steps.Add(i);
-        steps.Add(res - 1);
-        int n = steps.Count;
-
-        var vertices = new Float3[n * n];
-        for (int zi = 0; zi < n; zi++)
+        // A partial rebuild wants a handful of tiles, and sampling the whole terrain for them is
+        // the dominant cost of one. Clipping is per axis, so X and Z get their own index range.
+        int x0 = 0, x1 = res - 1, z0 = 0, z1 = res - 1;
+        if (bounds is AABB clip)
         {
-            for (int xi = 0; xi < n; xi++)
+            // Corner-transformed, not a box transform: under rotation the local box of a world
+            // box is not that box with its axes swapped around.
+            AABB local = terrain.Transform.InverseTransformAABB(clip);
+            x0 = SampleFloor(local.Min.X, cellSize, stride, res);
+            x1 = SampleCeil(local.Max.X, cellSize, stride, res);
+            z0 = SampleFloor(local.Min.Z, cellSize, stride, res);
+            z1 = SampleCeil(local.Max.Z, cellSize, stride, res);
+            if (x0 >= x1 || z0 >= z1) return;
+        }
+
+        // Sampled grid dimensions (always include the far edge of the range).
+        List<int> xSteps = [];
+        for (int i = x0; i < x1; i += stride) xSteps.Add(i);
+        xSteps.Add(x1);
+        List<int> zSteps = [];
+        for (int i = z0; i < z1; i += stride) zSteps.Add(i);
+        zSteps.Add(z1);
+        int nx = xSteps.Count, nz = zSteps.Count;
+
+        var vertices = new Float3[nx * nz];
+        for (int zi = 0; zi < nz; zi++)
+        {
+            for (int xi = 0; xi < nx; xi++)
             {
-                int x = steps[xi], z = steps[zi];
-                vertices[zi * n + xi] = new Float3(x * cellSize, data.GetHeight(x, z) * data.Height, z * cellSize);
+                int x = xSteps[xi], z = zSteps[zi];
+                vertices[zi * nx + xi] = new Float3(x * cellSize, data.GetHeight(x, z) * data.Height, z * cellSize);
             }
         }
 
-        List<int> indices = new(6 * (n - 1) * (n - 1));
-        for (int zi = 0; zi < n - 1; zi++)
+        List<int> indices = new(6 * (nx - 1) * (nz - 1));
+        for (int zi = 0; zi < nz - 1; zi++)
         {
-            for (int xi = 0; xi < n - 1; xi++)
+            for (int xi = 0; xi < nx - 1; xi++)
             {
                 // A cell is a hole if any source cell under the decimated quad is a hole.
-                if (AnyHole(data, steps[xi], steps[zi], steps[xi + 1], steps[zi + 1])) continue;
+                if (AnyHole(data, xSteps[xi], zSteps[zi], xSteps[xi + 1], zSteps[zi + 1])) continue;
 
-                int v00 = zi * n + xi;
-                int v01 = (zi + 1) * n + xi;
-                int v11 = (zi + 1) * n + xi + 1;
-                int v10 = zi * n + xi + 1;
+                int v00 = zi * nx + xi;
+                int v01 = (zi + 1) * nx + xi;
+                int v11 = (zi + 1) * nx + xi + 1;
+                int v10 = zi * nx + xi + 1;
                 // Up-facing winding (CCW viewed from +Y), matching the builder's convention.
                 indices.Add(v00); indices.Add(v01); indices.Add(v11);
                 indices.Add(v00); indices.Add(v11); indices.Add(v10);
@@ -425,6 +448,28 @@ public static class NavMeshGeometryCollector
         if (indices.Count == 0) return;
 
         results.Add(new NavMeshGeometrySource(vertices, [.. indices], localToWorld, area));
+    }
+
+    /// <summary>
+    /// Heightmap index bracketing a terrain-local coordinate, snapped outwards onto the stride
+    /// grid an unclipped collect samples. The snap is what keeps a clipped source decimating to
+    /// the same surface: sampling the same span at a shifted phase gives different heights, and a
+    /// rebuilt tile would then step away from a neighbour that was not rebuilt. One sample of
+    /// slack covers the quads straddling the clip edge.
+    /// </summary>
+    private static int SampleFloor(float local, float cellSize, int stride, int res)
+    {
+        int i = (int)MathF.Floor(Math.Clamp(local / cellSize, 0f, res - 1f));
+        i = Math.Max(0, i - 1);
+        return i - i % stride;
+    }
+
+    /// <inheritdoc cref="SampleFloor"/>
+    private static int SampleCeil(float local, float cellSize, int stride, int res)
+    {
+        int i = (int)MathF.Ceiling(Math.Clamp(local / cellSize, 0f, res - 1f));
+        i = Math.Min(res - 1, i + 1);
+        return Math.Min(res - 1, (i + stride - 1) / stride * stride);
     }
 
     private static bool AnyHole(TerrainData data, int x0, int z0, int x1, int z1)

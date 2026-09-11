@@ -93,6 +93,9 @@ public sealed class NavMeshInstance
 
     private volatile bool _retired;
 
+    /// <summary>Unregistered: nothing queued against this instance can still land.</summary>
+    internal bool Retired => _retired;
+
     internal bool TryAcquire()
     {
         if (_retired) return false;
@@ -590,6 +593,7 @@ public sealed class NavMeshWorld
         foreach (NavMeshInstance instance in toRemove)
             instance.Retire();
         _pendingLinkTiles.Clear();
+        _deferredTileSwaps.Clear();
         _crowds.Clear();
         if (toRemove.Count > 0)
         {
@@ -1091,6 +1095,92 @@ public sealed class NavMeshWorld
                 instance.CachePending = false;
                 NavMeshSettled?.Invoke();
             }
+        }
+
+        DrainDeferredTileSwaps();
+    }
+
+    // Tile swaps waiting for their instance's carve queue to drain. A swap cannot run against a
+    // cache mid-carve (an obstacle's pending list names the tiles the swap would replace, and the
+    // next Update then throws on the bumped salt), and draining inline costs milliseconds per tile
+    // under the write lock — so the swap waits for the pump to reach a settled frame instead.
+    private readonly Queue<(NavMeshInstance Instance, Action Apply, int Waits)> _deferredTileSwaps = new();
+
+    // A cache is not guaranteed to settle at all: an obstacle that moves every frame re-queues a
+    // remove and an add from every LateUpdate, so the pump can refill as fast as it drains. Waiting
+    // on that forever would never apply the swap and would grow the queue with every rebuild, so
+    // after this many passes the swap pays the inline drain instead. Sized past a normal carve,
+    // which settles in a few frames at MaxTileUpdatesPerFrame.
+    private const int MaxTileSwapWaits = 8;
+
+    // A deferred apply calls back into ApplyRebuiltTilesNow, which flushes this queue: without the
+    // flag that would re-enter the drain and dequeue behind its own back.
+    private bool _applyingDeferredSwap;
+
+    /// <summary>Run <paramref name="apply"/> on the first frame <paramref name="instance"/>'s tile
+    /// cache is settled, or after <see cref="MaxTileSwapWaits"/> passes regardless. FIFO, and at
+    /// most one per instance per frame since an apply queues carve work of its own. Main thread
+    /// only.</summary>
+    internal void DeferTileSwap(NavMeshInstance instance, Action apply)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        ArgumentNullException.ThrowIfNull(apply);
+        _deferredTileSwaps.Enqueue((instance, apply, 0));
+    }
+
+    /// <summary>
+    /// Apply everything held for this instance, in issue order. A swap applied directly has to come
+    /// last or an older held batch lands on top of it and silently reverts those tiles.
+    /// </summary>
+    internal void FlushDeferredTileSwaps(NavMeshInstance instance)
+    {
+        if (_applyingDeferredSwap) return; // already applying in order
+        for (int waiting = _deferredTileSwaps.Count; waiting > 0; waiting--)
+        {
+            (NavMeshInstance queued, Action apply, int waits) = _deferredTileSwaps.Dequeue();
+            if (!ReferenceEquals(queued, instance))
+                _deferredTileSwaps.Enqueue((queued, apply, waits));
+            else if (!queued.Retired)
+                RunTileSwap(apply);
+        }
+    }
+
+    /// <summary>
+    /// Apply what the pump has settled. One rotation of the queue, so a swap that still cannot run
+    /// goes to the back without overtaking anything that was already behind it, and an apply that
+    /// re-flags its instance leaves the rest of that instance's swaps for later frames.
+    /// </summary>
+    private void DrainDeferredTileSwaps()
+    {
+        for (int waiting = _deferredTileSwaps.Count; waiting > 0; waiting--)
+        {
+            (NavMeshInstance instance, Action apply, int waits) = _deferredTileSwaps.Dequeue();
+            if (instance.Retired) continue; // its navmesh is gone; the batch has nothing to land on
+
+            if (instance.CachePending && waits < MaxTileSwapWaits)
+                _deferredTileSwaps.Enqueue((instance, apply, waits + 1));
+            else
+                RunTileSwap(apply);
+        }
+    }
+
+    private void RunTileSwap(Action apply)
+    {
+        _applyingDeferredSwap = true;
+        try
+        {
+            apply();
+        }
+        catch (Exception ex)
+        {
+            // Without this a Detour throw from the swap surfaces from the scene's update as a
+            // once-only error, far from the rebuild that queued it, and takes the rest of the
+            // frame's swaps with it.
+            Debug.LogError($"[Navigation] A deferred tile swap threw and was dropped: {ex.Message}\n{ex.StackTrace}");
+        }
+        finally
+        {
+            _applyingDeferredSwap = false;
         }
     }
 

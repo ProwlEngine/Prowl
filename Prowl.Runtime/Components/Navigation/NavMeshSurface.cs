@@ -81,8 +81,14 @@ public class NavMeshSurface : MonoBehaviour
     [Tooltip("The baked navmesh. Assigned by baking, or point it at an existing .navmesh asset.")]
     public AssetRef<NavMeshData> NavMeshData;
 
-    [Tooltip("Draw the walkable surface in the scene view even when this object is not selected — the only way to watch obstacles carve while playing, since entering play mode clears the selection. Debug aid: it re-triangulates the whole mesh on every frame a carve or rebuild is converging, so leave it off in scenes you are profiling.")]
+    [Tooltip("Draw the walkable surface in the scene view even when this object is not selected — the only way to watch obstacles carve while playing, since entering play mode clears the selection. Debug aid: it re-triangulates the whole mesh every time one settles, so leave it off in scenes you are profiling.")]
     public bool AlwaysShowNavMesh;
+
+    [Tooltip("Add the height-detail wireframe to the overlay — the triangles Recast fits inside each polygon to follow the ground. Off by default: on a large mesh it is thousands of extra lines a frame.")]
+    public bool ShowNavMeshDetail;
+
+    [Tooltip("Add a marker per navmesh vertex to the overlay, polygon corners picked out from detail vertices. Off by default: each one is eight triangles a frame.")]
+    public bool ShowNavMeshVertices;
 
     private NavMeshInstance? _instance;
     private Runtime.NavMeshData? _runtimeData;
@@ -125,7 +131,8 @@ public class NavMeshSurface : MonoBehaviour
         // stays referenced by the scene's NavMeshWorld until scene teardown.
         if (_debugWorld != null)
         {
-            _debugWorld.NavMeshChanged -= InvalidateDebugTriangulation;
+            _debugWorld.NavMeshSettled -= InvalidateDebugTriangulation;
+            _debugWorld.NavMeshChanged -= MarkDebugTriangulationStale;
             _debugWorld = null;
         }
         _debugTriangulation = null;
@@ -330,8 +337,14 @@ public class NavMeshSurface : MonoBehaviour
     /// World rect the collectors must cover for a rebuild of <paramref name="worldBounds"/>:
     /// the affected TILES (rebuilds rasterize whole tiles, so sources clipped to just the
     /// changed AABB would erase the rest of a partially-covered tile) plus the erosion border.
+    /// Null when there is no grid to derive it from, meaning collect everything.
+    /// <para/>
+    /// Public because <see cref="RebuildTiles(AABB, IReadOnlyList{NavMeshGeometrySource})"/> makes
+    /// covering this rect the caller's job, and getting it wrong leaves holes in the tiles the
+    /// changed region only partly covers rather than failing outright. Collectors clip terrain to
+    /// the filter they are given, so a filter of just the changed AABB is not conservative.
     /// </summary>
-    private AABB? RebuildCollectionBounds(AABB worldBounds)
+    public AABB? RebuildCollectionBounds(AABB worldBounds)
     {
         Runtime.NavMeshData? data = _runtimeData;
         if (data.IsNotValid() || data!.TileWorldSize <= 0) return null; // no grid: collect everything
@@ -357,8 +370,9 @@ public class NavMeshSurface : MonoBehaviour
     /// geometry, for games whose world isn't visible to the collectors (custom renderers,
     /// custom collision). Pass the bounds of the CHANGED geometry — the affected tile set is
     /// derived from them, expanded by the erosion border. Sources need only cover those tiles
-    /// plus the border (derive from <see cref="NavMeshBuildSettings.EffectiveTileSize"/> and
-    /// <see cref="NavMeshBuildSettings.EffectiveVoxelSize"/>) — never the whole bake.
+    /// plus the border — never the whole bake — and <see cref="RebuildCollectionBounds"/> returns
+    /// exactly that rect to collect against. Covering less is not a cheaper rebuild: the tiles the
+    /// changed region only partly covers come back with holes where the sources stopped.
     /// An empty source list is valid and empties the affected tiles.
     /// </summary>
     public bool RebuildTiles(AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources)
@@ -382,7 +396,7 @@ public class NavMeshSurface : MonoBehaviour
         volumes ??= CollectVolumes(RebuildCollectionBounds(worldBounds));
         List<(int X, int Z, List<byte[]> Layers)> rebuilt = NavMeshBuilder.BuildTilesInBounds(
             data!, sources, worldBounds.Min, worldBounds.Max, DefaultArea, volumes: volumes);
-        return ApplyRebuiltTiles(rebuilt, out rebuiltTiles);
+        return ApplyRebuiltTilesNow(rebuilt, out rebuiltTiles); // a synchronous rebuild is live when it returns
     }
 
     /// <summary>
@@ -415,12 +429,54 @@ public class NavMeshSurface : MonoBehaviour
     /// <summary>
     /// Swap rebuilt tiles (from <see cref="RebuildTilesAsync"/> or
     /// <see cref="NavMeshBuilder.BuildTilesInBounds"/>) into the live TileCache and mirror them
-    /// into the asset. Main thread only. The swap quiesces pending obstacle work, replaces each
-    /// tile's layers, refreshes every obstacle's touched-tile list (stale after a tile
-    /// replacement bumps its salt), then rebuilds the new tiles with carves re-applied.
-    /// Returns false, leaving the tiles as they were, when the cache cannot be quiesced.
+    /// into the asset. Main thread only.
+    /// <para/>
+    /// A cache with carve work in flight cannot take a swap, and draining it inline costs
+    /// milliseconds per queued tile under the write lock — so the swap is held and applied on the
+    /// first frame the pump reports the cache settled, usually the next one. Anything that queues
+    /// tile work sets the flag, a link rebuild included, so one of those in the same frame defers
+    /// the swap too. A cache that will not settle at all — an obstacle moving every frame re-queues
+    /// as fast as the pump drains — stops the wait after a few passes and pays the drain. Use
+    /// <see cref="ApplyRebuiltTilesNow"/> when the tiles have to be live before the call returns.
+    /// <para/>
+    /// Returns false only when there is nothing to apply to (no live navmesh, no tiles);
+    /// true means applied or held. A held swap keeps the layer blobs handed to it, so do not
+    /// recycle them until it lands.
     /// </summary>
     public bool ApplyRebuiltTiles(List<(int X, int Z, List<byte[]> Layers)> rebuilt, out int rebuiltTiles)
+    {
+        ArgumentNullException.ThrowIfNull(rebuilt);
+        rebuiltTiles = 0;
+        NavMeshWorld? world = World;
+        NavMeshInstance? instance = _instance;
+        if (world == null || instance == null || _runtimeData.IsNotValid() || rebuilt.Count == 0)
+            return false;
+
+        if (!instance.CachePending)
+            return ApplyRebuiltTilesNow(rebuilt, out rebuiltTiles);
+
+        rebuiltTiles = rebuilt.Count;
+        // The caller's list outlives the call now, and a destructible world is exactly the sort of
+        // caller that reuses one. Copying the entries is enough; the blobs inside are read-only.
+        List<(int X, int Z, List<byte[]> Layers)> held = [.. rebuilt];
+        world.DeferTileSwap(instance, () =>
+        {
+            // Re-registered since (a rebake, a disable/enable): these layers were voxelized
+            // against the grid of a navmesh that is no longer the live one, so they cannot be
+            // applied to the one that replaced it.
+            if (ReferenceEquals(_instance, instance))
+                ApplyRebuiltTilesNow(held, out _);
+        });
+        return true;
+    }
+
+    /// <inheritdoc cref="ApplyRebuiltTiles"/>
+    /// <remarks>Applies within the call instead of waiting for a settled frame: the swap quiesces
+    /// pending obstacle work, replaces each tile's layers, refreshes every obstacle's touched-tile
+    /// list (stale after a tile replacement bumps its salt), then rebuilds the new tiles with
+    /// carves re-applied. Returns false, leaving the tiles as they were, when the cache cannot be
+    /// quiesced.</remarks>
+    public bool ApplyRebuiltTilesNow(List<(int X, int Z, List<byte[]> Layers)> rebuilt, out int rebuiltTiles)
     {
         ArgumentNullException.ThrowIfNull(rebuilt);
         rebuiltTiles = 0;
@@ -428,6 +484,10 @@ public class NavMeshSurface : MonoBehaviour
         Runtime.NavMeshData? data = _runtimeData;
         if (world == null || _instance == null || data.IsNotValid() || rebuilt.Count == 0)
             return false;
+
+        // Anything already held for this navmesh has to land first: it was issued earlier, and
+        // applying it afterwards would revert the tiles this call is about to write.
+        world.FlushDeferredTileSwaps(_instance);
 
         bool applied = false;
         world.MutateTileCache(_instance, cache =>
@@ -612,10 +672,17 @@ public class NavMeshSurface : MonoBehaviour
     // or the surface gains/loses a live registration (entering or leaving play mode).
     private Runtime.NavMeshData? _debugSource;
     private bool _debugFromLive;
+    private int _debugStructureGeneration = -1;
+    // ~4 Hz at 60 fps: fast enough to watch a carve, slow enough that the cost stops mattering.
+    private const int DebugStaleDraws = 15;
+    private bool _debugStale;
+    private int _debugDrawsSinceTriangulation;
     private List<(Float3 Position, bool Corner)>? _debugVertexMarkers;
     private List<(Float3 A, Float3 B)>? _debugDetailEdges;
 
     private void InvalidateDebugTriangulation() => _debugTriangulation = null;
+
+    private void MarkDebugTriangulationStale() => _debugStale = true;
 
     /// <summary>Unselected drawing: only the walkable overlay, and only when asked for. Watching
     /// obstacles carve needs it while something else is selected — and entering play mode clears
@@ -651,22 +718,45 @@ public class NavMeshSurface : MonoBehaviour
         NavMeshWorld? world = World;
         if (world != null && _debugWorld != world)
         {
-            if (_debugWorld != null) _debugWorld.NavMeshChanged -= InvalidateDebugTriangulation;
-            world.NavMeshChanged += InvalidateDebugTriangulation;
+            if (_debugWorld != null)
+            {
+                _debugWorld.NavMeshSettled -= InvalidateDebugTriangulation;
+                _debugWorld.NavMeshChanged -= MarkDebugTriangulationStale;
+            }
+            world.NavMeshSettled += InvalidateDebugTriangulation;
+            world.NavMeshChanged += MarkDebugTriangulationStale;
             _debugWorld = world;
             _debugTriangulation = null;
         }
+
+        // Registration changes raise no Settled at all, so the generation counter covers those.
+        if (world != null && _debugStructureGeneration != world.StructureGeneration)
+        {
+            _debugStructureGeneration = world.StructureGeneration;
+            _debugTriangulation = null;
+        }
+
+        // Settled invalidates at once; a mesh that merely changed waits. A re-triangulation costs
+        // milliseconds and megabytes, and Changed fires on every frame a carve is converging, so
+        // paying it per frame is what this rate limit is for. The limit rather than nothing because
+        // a cache is not guaranteed to settle: an obstacle moving every frame re-queues as fast as
+        // the pump drains, and watching one carve is what this overlay is for.
+        _debugDrawsSinceTriangulation++;
+        if (_debugStale && _debugDrawsSinceTriangulation >= DebugStaleDraws)
+            _debugTriangulation = null;
 
         // Prefer this surface's own live navmesh: it is the one carving and rebuilds change.
         // Asking the world for the agent type instead would draw a rival surface's mesh here.
         bool live = _instance != null;
         if (_debugTriangulation == null || _debugFromLive != live || !ReferenceEquals(_debugSource, data))
         {
+            _debugStale = false;
+            _debugDrawsSinceTriangulation = 0;
             _debugTriangulation = live ? world!.CalculateTriangulation(AgentTypeId) : data.CalculateTriangulation();
             _debugFromLive = live;
             _debugSource = data;
-            _debugVertexMarkers = BuildVertexMarkers(_debugTriangulation.Value);
-            _debugDetailEdges = BuildDetailEdges(_debugTriangulation.Value);
+            _debugVertexMarkers = null; // built on demand below, so an unticked toggle costs nothing
+            _debugDetailEdges = null;
         }
 
         NavMeshTriangulation tri = _debugTriangulation.Value;
@@ -699,8 +789,10 @@ public class NavMeshSurface : MonoBehaviour
             Debug.DrawLine(edge.A + lift, edge.B + lift, c);
         }
 
-        DrawDetailWireframe(_debugDetailEdges, lift);
-        DrawVertexMarkers(_debugVertexMarkers, lift);
+        if (ShowNavMeshDetail)
+            DrawDetailWireframe(_debugDetailEdges ??= BuildDetailEdges(tri), lift);
+        if (ShowNavMeshVertices)
+            DrawVertexMarkers(_debugVertexMarkers ??= BuildVertexMarkers(tri), lift);
 
         foreach (NavMeshConnection con in tri.Connections)
             DrawConnection(con, lift);

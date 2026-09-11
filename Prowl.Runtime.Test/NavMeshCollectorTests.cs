@@ -398,6 +398,164 @@ public class NavMeshCollectorTests : RuntimeTestBase
         AssertBakeIntegrity(BakeTerrain(scene), WigglyPlateau, 24f);
     }
 
+    /// <summary>
+    /// A bounded collect has to sample the same grid an unbounded one does. The heights come from
+    /// a decimated grid, so sampling the same span at a shifted phase describes a different
+    /// surface — a rebuilt tile would then step away from the neighbour it shares a seam with,
+    /// which nothing downstream can repair. Coverage matters as much as reduction: the quads
+    /// straddling the region's edge have to be there.
+    /// </summary>
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(37f)] // rotated: the region's local box is not the world box with swapped axes
+    public void Terrain_BoundedCollect_SamplesTheSameGridAndCoversTheRegion(float yawDegrees)
+    {
+        Scene scene = CreateScene(enable: true);
+        TerrainComponent terrain = AddTerrain(scene, RollingHills);
+        terrain.Transform.LocalEulerAngles = new Float3(0, yawDegrees, 0);
+
+        // Coarse enough that sampling actually decimates (a stride of 1 samples every cell, and
+        // then there is no phase to get wrong): 2 units over 0.5-unit cells strides by 4.
+        const float voxelSize = 2f;
+        List<NavMeshGeometrySource> whole = [];
+        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+            LayerMask.Everything, voxelSize, NavMeshAreas.Walkable, whole);
+        Assert.Single(whole);
+
+        // A world-space region well inside the terrain, whatever the yaw is.
+        var region = new AABB(new Float3(20, -8, 20), new Float3(28, 16, 28));
+        List<NavMeshGeometrySource> bounded = [];
+        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+            LayerMask.Everything, voxelSize, NavMeshAreas.Walkable, bounded, region);
+        Assert.Single(bounded);
+
+        Assert.True(bounded[0].TriangleCount < whole[0].TriangleCount / 4,
+            $"bounded collect took {bounded[0].TriangleCount} of {whole[0].TriangleCount} triangles");
+
+        // Same grid: every sampled vertex is one the unbounded collect produced, exactly.
+        HashSet<Float3> wholeVerts = [.. whole[0].Vertices];
+        foreach (Float3 v in bounded[0].Vertices)
+            Assert.Contains(v, wholeVerts);
+
+        // And the region is covered: the sampled span reaches past it on all four sides.
+        Float3 min = Float4x4.TransformPoint(bounded[0].Vertices[0], bounded[0].Transform), max = min;
+        foreach (Float3 v in bounded[0].Vertices)
+        {
+            Float3 world = Float4x4.TransformPoint(v, bounded[0].Transform);
+            min = Maths.Min(min, world);
+            max = Maths.Max(max, world);
+        }
+        Assert.True(min.X <= region.Min.X && min.Z <= region.Min.Z && max.X >= region.Max.X && max.Z >= region.Max.Z,
+            $"sampled span {min}..{max} does not cover {region.Min}..{region.Max}");
+    }
+
+    /// <summary>
+    /// Rebuilding one tile must cost what that tile covers, not what the scene holds. Before the
+    /// range clip a partial rebuild re-sampled the whole heightmap and re-flattened every triangle
+    /// of it — hundreds of milliseconds and tens of megabytes on a real terrain, per carve.
+    /// </summary>
+    [Fact]
+    public void Terrain_OneTileRebuild_DoesNotPayForTheWholeHeightmap()
+    {
+        Scene scene = CreateScene(enable: true);
+        AddTerrain(scene, RollingHills);
+
+        NavMeshBuildSettings settings = TestSettings();
+        List<NavMeshGeometrySource> whole = [];
+        NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+            LayerMask.Everything, settings.EffectiveVoxelSize, NavMeshAreas.Walkable, whole);
+        NavMeshData? data = NavMeshBuilder.Build(settings, whole);
+        Assert.NotNull(data);
+
+        var region = new AABB(new Float3(20, -8, 20), new Float3(24, 16, 24));
+        long Rebuild()
+        {
+            List<NavMeshGeometrySource> sources = [];
+            NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
+                LayerMask.Everything, settings.EffectiveVoxelSize, NavMeshAreas.Walkable, sources, region);
+            List<(int X, int Z, List<byte[]> Layers)> tiles =
+                NavMeshBuilder.BuildTilesInBounds(data!, sources, region.Min, region.Max);
+            Assert.Contains(tiles, t => t.Layers.Count > 0);
+            return sources[0].TriangleCount;
+        }
+
+        Rebuild(); // warm the pools
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        long triangles = Rebuild();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        // 0.29 MB from 200 triangles as it stands; 4.32 MB from 32768 without the clipping.
+        Assert.True(allocated < 1024 * 1024,
+            $"one-tile rebuild allocated {allocated / 1024.0 / 1024.0:0.00} MB from {triangles} triangles");
+    }
+
+    /// <summary>
+    /// End to end, on the geometry the clipping actually matters for: rebuilding part of a baked
+    /// terrain against UNCHANGED geometry has to put the surface back exactly where it was, inside
+    /// the region and across the seam into the tiles it did not touch. The source-level test above
+    /// proves the samples are on the same grid; this proves the tiles built from them agree with
+    /// the ones beside them.
+    /// </summary>
+    [Fact]
+    public void Terrain_PartialRebuild_ReproducesTheSameSurface()
+    {
+        Scene scene = CreateScene(enable: true);
+        AddTerrain(scene, RollingHills);
+
+        GameObject surfaceGo = CreateGameObject("NavMeshSurface");
+        scene.Add(surfaceGo);
+        var surface = surfaceGo.AddComponent<NavMeshSurface>();
+        ApplyFastBakeSettings(surface);
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        // Probe well past the region, so a tile the rebuild only partly covers is included.
+        var probes = new List<Float3>();
+        for (float z = 10; z <= 44; z += 2)
+            for (float x = 10; x <= 44; x += 2)
+                probes.Add(new Float3(x, 12, z));
+
+        // A probe landing on a polygon edge can miss the mesh even on a clean bake, so the baseline
+        // is whatever was on it — what matters is that the rebuild takes nothing away.
+        List<float> before = SampleHeights(scene, probes);
+        int onMesh = before.Count(h => !float.IsNaN(h));
+        Assert.True(onMesh > probes.Count * 0.9, $"only {onMesh} of {probes.Count} probes were on the baked mesh");
+
+        var region = new AABB(new Float3(22, 0, 22), new Float3(32, 24, 32));
+        Assert.True(surface.RebuildTiles(region));
+
+        List<float> after = SampleHeights(scene, probes);
+        float worst = 0f;
+        Float3 worstAt = default;
+        for (int i = 0; i < probes.Count; i++)
+        {
+            if (float.IsNaN(before[i])) continue;
+            Assert.False(float.IsNaN(after[i]), $"the rebuild left no navmesh under {probes[i]}");
+            float moved = MathF.Abs(after[i] - before[i]);
+            if (moved > worst) { worst = moved; worstAt = probes[i]; }
+        }
+
+        Assert.True(worst < 0.005f, $"the rebuilt surface moved {worst:0.000} at {worstAt}");
+    }
+
+    /// <summary>Navmesh height directly under each probe, NaN where there is none. A generous
+    /// radius is needed for hilly ground and lets a hit snap sideways onto a neighbouring polygon,
+    /// so a hole would read as a surface at the wrong height — hence the XZ check.</summary>
+    private static List<float> SampleHeights(Scene scene, List<Float3> probes)
+    {
+        var heights = new List<float>(probes.Count);
+        foreach (Float3 p in probes)
+        {
+            if (scene.Navigation.SamplePosition(p, out NavMeshHit hit, 13f, NavMesh.AllAreas)
+                && MathF.Abs((float)(hit.Position.X - p.X)) < 0.5f
+                && MathF.Abs((float)(hit.Position.Z - p.Z)) < 0.5f)
+                heights.Add((float)hit.Position.Y);
+            else
+                heights.Add(float.NaN);
+        }
+        return heights;
+    }
+
     private static float WigglyPlateau(float x, float z)
     {
         float x0 = 24f + 2.5f * MathF.Sin(z * 0.45f) + 1.2f * MathF.Sin(z * 1.3f);

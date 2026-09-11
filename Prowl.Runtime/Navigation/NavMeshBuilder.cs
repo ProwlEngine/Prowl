@@ -58,7 +58,7 @@ public static class NavMeshBuilder
         if (inputTriangles == 0)
             return null;
 
-        var geom = new ProwlInputGeomProvider(sources, defaultArea);
+        var geom = new ProwlInputGeomProvider(sources, defaultArea, clip: null); // a full bake wants every triangle
         if (geom.TriangleCount == 0)
             return null;
         AddVolumes(geom, volumes);
@@ -194,8 +194,8 @@ public static class NavMeshBuilder
     }
 
     /// <summary>
-    /// Prologue of the partial-rebuild path: builds the geometry provider, applies volumes, and
-    /// derives the affected tile range. The grid-anchoring invariant lives here:
+    /// Prologue of the partial-rebuild path: derives the affected tile range, builds the geometry
+    /// provider clipped to it, and applies volumes. The grid-anchoring invariant lives here:
     /// <para/>
     /// XZ always anchors to the ORIGINAL bake bounds, never the current geometry, or tile (0,0)
     /// shifts and every tile misaligns against the live navmesh. Y follows the CURRENT geometry
@@ -212,33 +212,15 @@ public static class NavMeshBuilder
         out int minTx, out int maxTx, out int minTz, out int maxTz)
     {
         minTx = maxTx = minTz = maxTz = 0;
+        geom = null;
         float cs = data.Settings.EffectiveVoxelSize;
-
-        int inputTriangles = 0;
-        for (int i = 0; i < sources.Count; i++)
-            inputTriangles += sources[i].TriangleCount;
-        geom = inputTriangles > 0 ? new ProwlInputGeomProvider(sources, defaultArea) : null;
-        if (geom != null && geom.TriangleCount == 0) geom = null; // all triangles were degenerate/dropped
-        if (geom != null) AddVolumes(geom, volumes); // volumes only re-mark rasterized geometry
 
         bmin = new RcVec3f((float)data.BoundsMin.X, (float)data.BoundsMin.Y, (float)data.BoundsMin.Z);
         bmax = new RcVec3f((float)data.BoundsMax.X, (float)data.BoundsMax.Y, (float)data.BoundsMax.Z);
-        if (geom != null)
-        {
-            // Layer heights are stored relative to the heightfield's own bmin.Y, and the tile
-            // cache rebases a neighbour's layer by a WHOLE number of voxel heights. Dropping to
-            // the geometry directly would put a rebuilt tile's floor a fraction of a voxel off
-            // its neighbours', which the seam cannot express: step down in whole ch instead.
-            float geomMinY = geom.GetMeshBoundsMin().Y;
-            if (geomMinY < bmin.Y)
-            {
-                float ch = data.Settings.EffectiveVoxelHeight;
-                bmin.Y -= MathF.Ceiling((bmin.Y - geomMinY) / ch) * ch;
-            }
 
-            bmax.Y = Math.Max(bmax.Y, geom.GetMeshBoundsMax().Y);
-        }
-
+        // The tile range first, geometry second: it depends only on the bake's XZ bounds, so
+        // nothing is flattened for a region that turns out to be off the navmesh, and the range
+        // is what the flatten gets clipped to.
         float ts = data.TileWorldSize;
         if (ts <= 0) return false;
         RcRecast.CalcGridSize(bmin, bmax, cs, out int gridX, out int gridZ);
@@ -254,6 +236,44 @@ public static class NavMeshBuilder
         maxTx = Math.Clamp((int)MathF.Floor(((float)worldMax.X + border - bmin.X) / ts), 0, tilesX - 1);
         minTz = Math.Clamp((int)MathF.Floor(((float)worldMin.Z - border - bmin.Z) / ts), 0, tilesZ - 1);
         maxTz = Math.Clamp((int)MathF.Floor(((float)worldMax.Z + border - bmin.Z) / ts), 0, tilesZ - 1);
+
+        int inputTriangles = 0;
+        for (int i = 0; i < sources.Count; i++)
+            inputTriangles += sources[i].TriangleCount;
+
+        // Each tile rasterizes its own square widened by the erosion border, so the union over
+        // the range is everything that can contribute a span. Written in RcBuilderConfig's own
+        // association (+ ts, then + border, never (maxTx + 1) * ts) so the edges come out bit
+        // identical to the bounds it derives; folding them rounds the rect a fraction of a voxel
+        // inside the tile it is meant to cover.
+        var clip = new ProwlInputGeomProvider.ClipRect(
+            bmin.X + minTx * ts - border, bmin.Z + minTz * ts - border,
+            bmin.X + maxTx * ts + ts + border, bmin.Z + maxTz * ts + ts + border);
+
+        geom = inputTriangles > 0 ? new ProwlInputGeomProvider(sources, defaultArea, clip) : null;
+        if (geom != null && geom.TriangleCount == 0) geom = null; // all triangles were degenerate/dropped/clipped
+        if (geom != null) AddVolumes(geom, volumes); // volumes only re-mark rasterized geometry
+
+        if (geom != null)
+        {
+            // Layer heights are stored relative to the heightfield's own bmin.Y, and the tile
+            // cache rebases a neighbour's layer by a WHOLE number of voxel heights. Dropping to
+            // the geometry directly would put a rebuilt tile's floor a fraction of a voxel off
+            // its neighbours', which the seam cannot express: step down in whole ch instead.
+            // Clipped sources make this the REGION's Y range rather than the scene's, which is
+            // safe because a clipped collect still covers the whole rect above — so nothing that
+            // can produce a span here falls outside the heightfield — and the result is still a
+            // whole multiple of ch from the bake's floor, which is what the seam needs.
+            float geomMinY = geom.GetMeshBoundsMin().Y;
+            if (geomMinY < bmin.Y)
+            {
+                float ch = data.Settings.EffectiveVoxelHeight;
+                bmin.Y -= MathF.Ceiling((bmin.Y - geomMinY) / ch) * ch;
+            }
+
+            bmax.Y = Math.Max(bmax.Y, geom.GetMeshBoundsMax().Y);
+        }
+
         return true;
     }
 
