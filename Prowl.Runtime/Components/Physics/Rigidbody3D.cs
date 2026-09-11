@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 using Jitter2;
@@ -311,15 +310,6 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeIgnore]
     internal RigidBody _body;
 
-    // The collider each live contact is against, recorded when the contact forms. OnCollisionEnd runs
-    // after Jitter has freed the contact data, so this is the only way it can still name the surface.
-    private readonly Dictionary<Arbiter, Collider> _contactColliders = [];
-
-    // Entries normally leave on EndCollide, but a contact that ends because the *other* body was
-    // removed raises no such event, and the orphan would pin a destroyed Collider and its GameObject
-    // for the life of this body. Swept out once the map outgrows this, which is rare enough to be free.
-    private int _contactPruneWatermark = 16;
-
     /// <summary>
     /// Ensures the underlying Jitter body exists. Body creation normally happens in OnEnable, but
     /// game code can touch a rigidbody (e.g. set velocity or add a force) in the same frame it is
@@ -327,7 +317,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void EnsureBody()
     {
-        if (_body != null && !_body.Handle.IsZero) return;
+        if (_body?.IsValid == true) return;
         var scene = GameObject.IsValid() ? GameObject.Scene : null;
         World? world = scene.IsValid() ? scene.Physics?.World : null;
         if (world != null) CreateBody(world);
@@ -356,7 +346,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         var userData = otherBody.Tag as RigidBodyUserData;
 
         Collider collider = ResolveOtherCollider(arbiter, otherBody);
-        _contactColliders[arbiter] = collider;
 
         // Contact data lives in unmanaged memory that is valid only while the arbiter is.
         ref ContactData data = ref arbiter.Handle.Data;
@@ -375,9 +364,9 @@ public sealed class Rigidbody3D : MonoBehaviour
         RigidBody otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
         var userData = otherBody.Tag as RigidBodyUserData;
 
-        // Jitter frees the contact data before raising this, so the shape ids are already gone and
-        // there is no contact point to report. The collider is recovered from what Begin recorded.
-        _contactColliders.Remove(arbiter, out Collider collider);
+        // Jitter keeps the arbiter valid during EndCollide, so its shape ids can still resolve the
+        // collider directly. Contact details remain zero because an end event has no contact point.
+        Collider collider = ResolveOtherCollider(arbiter, otherBody);
 
         SceneDispatcher.CollisionEnd(GameObject, new Collision(
             userData?.Rigidbody, collider.IsValid() ? collider : null, Float3.Zero, Float3.Zero, 0.0f));
@@ -414,7 +403,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         // Route through CreateBody so a body created here is wired up the same as one from OnEnable.
         // A raw CreateRigidBody would leave the collision events unhooked and the body out of the
         // transform-sync set, and OnEnable would then skip creation because a body already exists.
-        if (_body == null || _body.Handle.IsZero)
+        if (_body?.IsValid != true)
         {
             CreateBody(world);
             return;
@@ -427,7 +416,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void Update()
     {
-        if (_body == null || _body.Handle.IsZero) return;
+        if (_body?.IsValid != true) return;
 
         // Dynamic AND kinematic bodies move within the simulation (kinematic via LinearVelocity /
         // MovePosition), so the transform must follow the body. Only static bodies don't move - writing
@@ -472,7 +461,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void ApplyConstraints()
     {
-        if (constraints == RigidbodyConstraints.None || _body == null || _body.Handle.IsZero) return;
+        if (constraints == RigidbodyConstraints.None || _body?.IsValid != true) return;
         if (!_hasLockedPose) { CaptureLockedPose(); return; }
 
         JVector velocity = _body.Velocity;
@@ -500,28 +489,11 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     private void CaptureLockedPose()
     {
-        if (_body == null || _body.Handle.IsZero) return;
+        if (_body?.IsValid != true) return;
 
         _lockedPosition = _body.Position;
         _lockedOrientation = _body.Orientation;
         _hasLockedPose = true;
-    }
-
-    /// <summary>
-    /// Drops per-contact colliders whose arbiter is dead or has been recycled onto another pair. Jitter
-    /// pools arbiters and zeroes the handle on return, and a recycled one that involves this body again
-    /// has already been overwritten by BeginCollide, so both cases are cheap to spot.
-    /// </summary>
-    private void PruneContactColliders()
-    {
-        if (_contactColliders.Count < _contactPruneWatermark) return;
-
-        foreach (Arbiter arbiter in _contactColliders.Keys.ToArray())
-            if (arbiter.Handle.IsZero || (arbiter.Body1 != _body && arbiter.Body2 != _body))
-                _contactColliders.Remove(arbiter);
-
-        // Re-baselined off what survived, so a body legitimately holding many contacts stops sweeping.
-        _contactPruneWatermark = Math.Max(16, _contactColliders.Count * 2);
     }
 
     /// <summary>
@@ -531,9 +503,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     internal void CapturePose()
     {
         ApplyConstraints();
-        PruneContactColliders();
 
-        if (_body == null || _body.Handle.IsZero) return;
+        if (_body?.IsValid != true) return;
 
         _previousPosition = _currentPosition;
         _previousRotation = _currentRotation;
@@ -553,7 +524,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void ResetPose()
     {
-        if (_body == null || _body.Handle.IsZero) { _hasPose = false; return; }
+        if (_body?.IsValid != true) { _hasPose = false; return; }
 
         _currentPosition = _previousPosition = ToFloat3(_body.Position);
         _currentRotation = _previousRotation = ToQuaternion(_body.Orientation);
@@ -566,7 +537,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnEnable()
     {
-        if (_body == null || _body.Handle.IsZero)
+        if (_body?.IsValid != true)
         {
             CreateBody(GameObject.Scene.Physics.World);
         }
@@ -580,7 +551,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void ClaimChildColliders()
     {
-        if (_body == null || _body.Handle.IsZero)
+        if (_body?.IsValid != true)
             return;
 
         // Get all colliders in this GameObject and its children
@@ -596,18 +567,16 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnDisable()
     {
-        if (_body == null || _body.Handle.IsZero) return;
+        if (_body?.IsValid != true) return;
 
         // Take the colliders off while the body is still alive, so their shapes are removed cleanly.
         Collider[] colliders = GetComponentsInChildren<Collider>().ToArray();
         foreach (Collider collider in colliders)
             if (collider.IsValid()) collider.Detach();
 
-        // Unhook collision events. Removing the body discards its arbiters without raising EndCollide,
-        // so the per-contact colliders have to be dropped here.
+        // Unhook collision events before removing the body.
         _body.BeginCollide -= OnJitterBeginCollide;
         _body.EndCollide -= OnJitterEndCollide;
-        _contactColliders.Clear();
 
         GameObject.Scene.Physics.UnregisterBody(this);
         GameObject.Scene.Physics.World?.Remove(_body);
@@ -649,7 +618,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     internal void ApplyMassInertia()
     {
-        if (_body == null || _body.Handle.IsZero) return;
+        if (_body?.IsValid != true) return;
 
         try
         {
@@ -730,7 +699,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     internal void SyncTransformToBody()
     {
-        if (_body == null || _body.Handle.IsZero) return;
+        if (_body?.IsValid != true) return;
         if (Transform.Version == _lastSyncedTransformVersion) return;
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version;
@@ -837,7 +806,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         EnsureBody();
         body = _body;
-        return body != null && !body.Handle.IsZero;
+        return body?.IsValid == true;
     }
 
     /// <summary>
@@ -875,7 +844,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         get
         {
-            if (_body == null || _body.Handle.IsZero) return Transform.Position;
+            if (_body?.IsValid != true) return Transform.Position;
 
             JVector weighted = JVector.Zero;
             float totalMass = 0.0f;

@@ -163,7 +163,7 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     internal void Detach()
     {
-        if (_attachedBody != null && _attachedShapes != null && !_attachedBody.Handle.IsZero)
+        if (_attachedBody?.IsValid == true && _attachedShapes != null)
         {
             // Only try to remove shapes if the body is still registered with the physics world
             // (If the rigidbody was already removed, the shapes are already gone)
@@ -205,7 +205,7 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     private void RegisterShapes()
     {
-        if (_attachedBody == null || _attachedBody.Handle.IsZero)
+        if (_attachedBody?.IsValid != true)
             return;
 
         // Create shapes based on whether we're attached to a Rigidbody3D or static
