@@ -435,12 +435,9 @@ public class NavMeshLinkTests : RuntimeTestBase
         Assert.Equal(1, CountOffMeshPolys(surface));
     }
 
-    /// <summary>
-    /// A stopped agent parked within a link's trigger radius must never enter it. The crowd triggers
-    /// an off-mesh connection on proximity, not on motion, so without the fork's maxSpeed guard a
-    /// stopped agent is animated across the gap while it is meant to be standing still — and it
-    /// arrives on the far island with IsStopped still set. This is the only test of that guard.
-    /// </summary>
+    /// <summary>A stopped agent parked within a link's trigger radius must never enter it: the crowd
+    /// triggers an off-mesh connection on proximity, not on motion, so without the fork's maxSpeed
+    /// guard it is animated across the gap while it is meant to be standing still.</summary>
     [Fact]
     public void Agent_StoppedBesideALink_NeverEntersIt()
     {
@@ -465,7 +462,6 @@ public class NavMeshLinkTests : RuntimeTestBase
         Assert.True(TickUntil(scene, () => agent.HasPath) >= 0);
 
         Float3 parked = agent.Transform.Position;
-        // The premise the guard is tested against: parked inside the trigger radius the crowd uses.
         Assert.True(Float3.Distance(parked, new Float3(-3, 0, 0)) < agent.Radius * 2.25f,
             $"parked {Float3.Distance(parked, new Float3(-3, 0, 0)):0.00} from the link, outside the trigger radius");
         bool entered = false;
@@ -475,8 +471,7 @@ public class NavMeshLinkTests : RuntimeTestBase
             if (agent.IsOnOffMeshLink) entered = true;
         }
 
-        // A path is what makes this non-vacuous: the trigger is skipped outright for an agent with
-        // no move target, so without one the assertion below would hold for the wrong reason.
+        // Non-vacuity: the trigger is skipped outright for an agent with no move target.
         Assert.True(agent.HasPath);
         Assert.False(entered, "a stopped agent must not be animated across a link");
         Assert.True(Float3.Distance(agent.Transform.Position, parked) < 1e-3,

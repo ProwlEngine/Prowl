@@ -128,14 +128,12 @@ public class NavMeshObstacle : MonoBehaviour
     private float _blockerRadius, _blockerHeight;
     private bool _warnedBlockerUnplaced;
 
-    // Transform state the live carve was registered with, re-checked each LateUpdate because the
-    // footprint follows the Transform and no setter sees that. Rotation is compared by quaternion dot
-    // product: no per-frame Euler conversion, no wrap false-positives at ±180°.
+    // Transform state the live carve was registered with, re-checked each LateUpdate because no
+    // setter sees a Transform change. Rotation compares by dot product: no ±180° wrap false-positives.
     private Quaternion _appliedRotation = Quaternion.Identity;
     private Float3 _appliedScale = Float3.One;
 
-    // A box loses its yaw, and either shape with an offset Center swings its world centre around the
-    // Transform — so a rotating rig moves the hole without the position ever changing.
+    // An offset Center swings the world centre around the Transform, so rotation moves a cylinder too.
     private bool RotationChanged()
         => (Shape == NavMeshObstacleShape.Box || !Center.Equals(Float3.Zero))
             && Math.Abs(Quaternion.Dot(Transform.Rotation, _appliedRotation)) < 0.9999;
@@ -428,31 +426,20 @@ public class NavMeshObstacle : MonoBehaviour
     }
 
     /// <summary>
-    /// How far below the obstacle the carve has to start. The cells it must mark are keyed by their
-    /// stored span height, and the navmesh surface sits above that by two independent lifts:
-    /// <list type="bullet">
-    /// <item><c>GetCornerHeight</c> takes the highest of the surrounding cells within the walkable
-    /// climb, so a polygon corner is at most <c>(int)(climb / ch) * ch</c> above a given column —
-    /// bounded by the climb itself, because that division truncates;</item>
-    /// <item>the detail builder then lifts every interior vertex by one cell height, unconditionally
-    /// and with no relation to climb.</item>
-    /// </list>
-    /// Hence climb plus one voxel height. Capped at the agent height because that is the real
-    /// guarantee about what shares a column: two walkable surfaces are at least that far apart, so a
-    /// deeper reach could carve a floor below the one the obstacle stands on — reachable only with an
-    /// authored climb taller than the agent, which nothing validates.
+    /// How far below the obstacle the carve has to start. The navmesh surface sits above the column it
+    /// was built from by the walkable climb (<c>GetCornerHeight</c>) plus one cell height (the detail
+    /// builder's unconditional lift of interior vertices). Capped at the agent height: two walkable
+    /// surfaces are at least that far apart, so a deeper reach could carve the floor below.
     /// </summary>
     private static float CarveDrop(NavMeshBuildSettings settings)
         => Math.Min(Math.Max(0f, settings.AgentMaxClimb) + settings.EffectiveVoxelHeight,
                     Math.Max(0f, settings.AgentHeight));
 
-    /// <param name="agentRadius">Envelope of the navmesh being carved. The hole is widened by it
-    /// because a navmesh stores where an agent's CENTRE may be, not where its body fits: a bake
-    /// pulls the mesh this far back from every wall, and a carve that did not would let agents
-    /// walk their centre onto the obstacle's surface and stand half inside it.</param>
-    /// <param name="drop">How far below the obstacle to start the carve, from
-    /// <see cref="CarveDrop"/>. Without it an obstacle resting on a point <c>SamplePosition</c>
-    /// returned begins above every cell in its own footprint and marks nothing.</param>
+    /// <param name="agentRadius">The hole is widened by it because a navmesh stores where an agent's
+    /// CENTRE may be, not where its body fits: a carve that did not would let agents stand half inside
+    /// the obstacle.</param>
+    /// <param name="drop">From <see cref="CarveDrop"/>. Without it an obstacle resting on a point
+    /// <c>SamplePosition</c> returned begins above every cell it means to mark.</param>
     private long AddToCache(DtTileCache cache, float agentRadius, float drop)
     {
         Float3 scale = Transform.LossyScale;
@@ -467,8 +454,7 @@ public class NavMeshObstacle : MonoBehaviour
             return cache.AddObstacle(basePos, radius + clearance, height + drop);
         }
 
-        // Erosion clearance is a footprint concern, so it goes on XZ only — and the drop goes DOWN
-        // only, since growing the box upward would carve under whatever the obstacle passes beneath.
+        // Grown on XZ and downward only: upward would carve under whatever the obstacle passes beneath.
         Float3 half = ScaledBoxHalfExtents(scale);
         var halfExtents = new RcVec3f(half.X + clearance, half.Y + drop * 0.5f, half.Z + clearance);
         float yawRadians = (float)(Transform.Rotation.EulerAngles.Y * Maths.Deg2Rad);
@@ -504,12 +490,9 @@ public class NavMeshObstacle : MonoBehaviour
                 _refs.Remove(instance);
     }
 
-    /// <summary>
-    /// The obstacle as authored, standing upright however the object is pitched or rolled, because
-    /// Detour orients a box obstacle by yaw alone and drawing the full transform would promise a tilt
-    /// the navmesh never cuts. Not the carved volume: that is wider by the agent radius on XZ and
-    /// reaches <see cref="CarveDrop"/> further down, neither of which is known without a live navmesh.
-    /// </summary>
+    /// <summary>The obstacle as authored, upright however the object is pitched or rolled, because
+    /// Detour orients a box obstacle by yaw alone. Not the carved volume, which is wider by the agent
+    /// radius and reaches <see cref="CarveDrop"/> lower.</summary>
     public override void DrawGizmosSelected()
     {
         var color = new Color(1f, 0.5f, 0.1f, 1f);
