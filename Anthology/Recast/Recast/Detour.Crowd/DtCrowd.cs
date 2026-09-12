@@ -285,6 +285,57 @@ namespace Prowl.Recast.Detour.Crowd
             return ag;
         }
 
+        /// Move @p agent to @p pos snapped onto the navmesh, dropping its path, target and
+        /// velocity — the same state AddAgent leaves a new agent in. False, and the agent
+        /// untouched, when no polygon is near @p pos.
+        ///
+        /// The DtCrowdAgent object survives, so references held to it stay valid; removing and
+        /// re-adding the agent to teleport it does not.
+        public bool WarpAgent(DtCrowdAgent agent, RcVec3f pos)
+        {
+            // Identity, not presence: every crowd numbers its own agents from zero, so an agent
+            // belonging to another crowd would otherwise take a polyref from this navmesh.
+            if (agent == null || GetAgent(agent.idx) != agent)
+            {
+                return false;
+            }
+
+            IDtQueryFilter filter = GetFilter(agent.option.queryFilterType);
+            if (filter == null)
+            {
+                return false;
+            }
+
+            var status = _navQuery.FindNearestPoly(pos, _agentPlacementHalfExtents, filter, out var refs, out var nearestPt, out var _);
+            if (status.Failed() || refs == 0)
+            {
+                return false;
+            }
+
+            ResetMoveTarget(agent);
+
+            agent.corridor.Reset(refs, nearestPt);
+            agent.boundary.Reset();
+            agent.partial = false;
+
+            agent.topologyOptTime = 0;
+            agent.targetReplanTime = 0;
+            agent.targetReplanWaitTime = 0;
+            agent.nneis = 0;
+            agent.ncorners = 0;
+
+            agent.nvel = RcVec3f.Zero;
+            agent.vel = RcVec3f.Zero;
+            agent.npos = nearestPt;
+            agent.desiredSpeed = 0;
+
+            // A live animation would keep overwriting npos from the link the agent was crossing.
+            agent.animation.active = false;
+
+            agent.state = DtCrowdAgentState.DT_CROWDAGENT_STATE_WALKING;
+            return true;
+        }
+
         public DtCrowdAgent GetAgent(int idx)
         {
             return _agents.GetValueOrDefault(idx);
@@ -355,8 +406,11 @@ namespace Prowl.Recast.Detour.Crowd
         ///  @param[in]		pos		Target position, inside @p refs.
         ///  @param[in]		path	Polygon path from the agent's current polygon to @p refs.
         ///  @param[in]		npath	Number of polygons in @p path.
+        ///  @param[in]     partial True when @p path stops short of the requested destination.
+        ///                         Advisory only: the crowd clears it on any internal replan, so a
+        ///                         caller that needs it durably tracks the destination itself.
         /// @return True if the path was adopted.
-        public bool SetAgentPath(DtCrowdAgent agent, long refs, RcVec3f pos, Span<long> path, int npath)
+        public bool SetAgentPath(DtCrowdAgent agent, long refs, RcVec3f pos, Span<long> path, int npath, bool partial)
         {
             if (refs == 0 || npath <= 0 || npath > path.Length || path[npath - 1] != refs)
             {
@@ -368,7 +422,7 @@ namespace Prowl.Recast.Detour.Crowd
             agent.targetPathQueryResult = null;
             agent.targetReplan = false;
             agent.targetReplanTime = 0;
-            agent.partial = false;
+            agent.partial = partial;
 
             // Same order the planner uses when a path completes: install the corridor, force the
             // boundary to rebuild around it, then mark the target valid.
@@ -573,6 +627,9 @@ namespace Prowl.Recast.Detour.Crowd
                         ag.corridor.Reset(agentRef, agentPos);
                         ag.partial = false;
                         ag.targetState = DtMoveRequestState.DT_CROWDAGENT_TARGET_NONE;
+                        // Every other route to TARGET_NONE clears the desired velocity. Without this the
+                        // agent coasts on its last dvel, since nothing recomputes it once the target is gone.
+                        ag.dvel = RcVec3f.Zero;
                     }
                 }
 
@@ -1096,6 +1153,13 @@ namespace Prowl.Recast.Detour.Crowd
 
                 if (ag.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_NONE
                     || ag.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_VELOCITY)
+                {
+                    continue;
+                }
+
+                // tmax below divides by maxSpeed, and a halted agent has none: it would enter the
+                // link with an infinite crossing time and never come off it.
+                if (ag.option.maxSpeed <= 0)
                 {
                     continue;
                 }

@@ -2123,14 +2123,26 @@ namespace Prowl.Recast.Detour.TileCache
             public readonly int[] areas;
 
             public DtTileBorderGrid(int width, int height, int border)
+                : this(width, height, border,
+                    new int[(width + border * 2) * (height + border * 2)],
+                    new int[(width + border * 2) * (height + border * 2)])
+            {
+            }
+
+            /// Over caller-owned buffers, each at least (width + 2*border) * (height + 2*border)
+            /// long. Only that prefix is touched — and it is reset here, since a border cell no
+            /// neighbour covers is left as it was found — so a buffer grown for a bigger tile can be
+            /// handed back for a smaller one.
+            public DtTileBorderGrid(int width, int height, int border, int[] heights, int[] areas)
             {
                 this.width = width;
                 this.height = height;
                 this.border = border;
-                int gw = width + border * 2, gh = height + border * 2;
-                heights = new int[gw * gh];
-                areas = new int[gw * gh];
-                Array.Fill(heights, -1);
+                this.heights = heights;
+                this.areas = areas;
+                int cells = (width + border * 2) * (height + border * 2);
+                Array.Fill(heights, -1, 0, cells);
+                Array.Clear(areas, 0, cells);
             }
 
             /// Index by core cell coordinates; the border lives at -border..-1 and width..width+border-1.
@@ -2155,7 +2167,7 @@ namespace Prowl.Recast.Detour.TileCache
         /// Tile seams still stitch: portal edges lie exactly on the tile boundary lines, where
         /// simplification cannot move them, and each converted edge takes its portal direction
         /// from the layer's own connection bits.
-        public static DtTileCacheContourSet BuildTileCacheContoursWatershed(RcContext ctx, DtTileCacheLayer layer,
+        public static DtTileCacheContourSet BuildTileCacheContoursWatershed(RcContext ctx, RcRegionScratch regionScratch, DtTileCacheLayer layer,
             RcCompactHeightfield chf, in DtTileCacheParams cacheParams)
         {
             if (HasInteriorLayerPortals(layer))
@@ -2165,7 +2177,7 @@ namespace Prowl.Recast.Detour.TileCache
             try
             {
                 RcRegions.BuildDistanceField(ctx, chf);
-                RcRegions.BuildRegions(ctx, chf, cacheParams.minRegionArea, cacheParams.mergeRegionArea);
+                RcRegions.BuildRegions(ctx, chf, cacheParams.minRegionArea, cacheParams.mergeRegionArea, regionScratch);
                 rcset = RcContours.BuildContours(ctx, chf, cacheParams.maxSimplificationError,
                     cacheParams.maxEdgeLen, RcBuildContoursFlags.RC_CONTOUR_TESS_WALL_EDGES);
             }
@@ -2731,8 +2743,11 @@ namespace Prowl.Recast.Detour.TileCache
         /// case in a built environment, and this runs on every tile build rather than once.
         private static bool IsLevel(DtTileCacheLayer layer)
         {
+            // The header's extent, not the array's: a layer may be carried in a buffer sized for a
+            // bigger tile, and its tail says nothing about this one.
             int height = -1;
-            for (int i = 0; i < layer.heights.Length; i++)
+            int cells = layer.header.width * layer.header.height;
+            for (int i = 0; i < cells; i++)
             {
                 if (layer.heights[i] == NoSurface) continue;
                 if (height < 0) height = layer.heights[i];
@@ -2752,7 +2767,10 @@ namespace Prowl.Recast.Detour.TileCache
         /// Spans pack densely, exactly like a real compact heightfield: array-wide passes index by
         /// span, so padded slots would leak their sentinel values into the aggregates those passes
         /// take.
-        public static RcCompactHeightfield ToCompactHeightfield(DtTileBorderGrid grid, in DtTileCacheParams cacheParams)
+        /// Taking the heightfield and its arrays from <paramref name="scratch"/> when one is given,
+        /// so a build that runs per carve stops re-allocating them; null allocates per call.
+        public static RcCompactHeightfield ToCompactHeightfield(DtTileBorderGrid grid, in DtTileCacheParams cacheParams,
+            DtTileCacheBuildScratch scratch)
         {
             int b = grid.border;
             int width = grid.width + b * 2, depth = grid.height + b * 2;
@@ -2762,7 +2780,7 @@ namespace Prowl.Recast.Detour.TileCache
                 if (grid.heights[i] >= 0)
                     spanCount++;
 
-            RcCompactHeightfield chf = new RcCompactHeightfield();
+            RcCompactHeightfield chf = scratch != null ? scratch.Chf : new RcCompactHeightfield();
             chf.width = width;
             chf.height = depth;
             chf.borderSize = b;
@@ -2771,9 +2789,16 @@ namespace Prowl.Recast.Detour.TileCache
             chf.walkableClimb = (int)MathF.Floor(cacheParams.walkableClimb / cacheParams.ch);
             chf.cs = cacheParams.cs;
             chf.ch = cacheParams.ch;
-            chf.cells = new RcCompactCell[width * depth];
-            chf.spans = new RcCompactSpan[spanCount];
-            chf.areas = new int[spanCount];
+            chf.cells = scratch != null ? scratch.ChfCells(width * depth) : new RcCompactCell[width * depth];
+            chf.spans = scratch != null ? scratch.ChfSpans(spanCount) : new RcCompactSpan[spanCount];
+            chf.areas = scratch != null ? scratch.ChfAreas(spanCount) : new int[spanCount];
+
+            // The fields the later stages own, back to what a fresh heightfield would carry. Nothing
+            // on this path reads them before they are written, and this is what keeps that true: a
+            // reused heightfield would otherwise hand the previous tile's numbers to whoever starts.
+            chf.dist = null;
+            chf.maxDistance = 0;
+            chf.maxRegions = 0;
 
             RcCompactSpanBuilder span = RcCompactSpanBuilder.NewBuilder();
             int cur = 0;

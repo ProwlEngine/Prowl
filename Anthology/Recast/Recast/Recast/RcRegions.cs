@@ -32,6 +32,10 @@ namespace Prowl.Recast
     {
         const int RC_NULL_NEI = 0xffff;
 
+        /// Level stacks the watershed pass rotates through, shared with RcRegionScratch so the pooled
+        /// set cannot be sized differently from the loop that indexes it.
+        internal const int NB_STACKS = 8;
+
         public static int CalculateDistanceField(RcCompactHeightfield chf, int[] src)
         {
             int maxDist;
@@ -300,7 +304,6 @@ namespace Prowl.Recast
                 int cy = back.y;
                 int ci = back.index;
                 stack.RemoveAt(stack.Count - 1);
-
 
                 ref RcCompactSpan cs = ref chf.spans[ci];
 
@@ -572,7 +575,6 @@ namespace Prowl.Recast
                 dstStack.Add(srcStack[j]);
             }
         }
-
 
         private static void RemoveAdjacentNeighbours(RcRegion reg)
         {
@@ -1656,6 +1658,13 @@ namespace Prowl.Recast
         /// @see rcCompactHeightfield, rcCompactSpan, rcBuildDistanceField, rcBuildRegionsMonotone, rcConfig
         public static void BuildRegions(RcContext ctx, RcCompactHeightfield chf, int minRegionArea,
             int mergeRegionArea)
+            => BuildRegions(ctx, chf, minRegionArea, mergeRegionArea, null);
+
+        /// <inheritdoc cref="BuildRegions(RcContext, RcCompactHeightfield, int, int)"/>
+        /// Taking its working buffers from @p scratch when one is given, which is what a caller
+        /// partitioning one heightfield after another wants; null allocates them per call as before.
+        public static void BuildRegions(RcContext ctx, RcCompactHeightfield chf, int minRegionArea,
+            int mergeRegionArea, RcRegionScratch scratch)
         {
             using var timer = ctx.ScopedTimer(RcTimerLabel.RC_TIMER_BUILD_REGIONS);
 
@@ -1665,18 +1674,24 @@ namespace Prowl.Recast
 
             ctx.StartTimer(RcTimerLabel.RC_TIMER_BUILD_REGIONS_WATERSHED);
 
-            const int LOG_NB_STACKS = 3;
-            const int NB_STACKS = 1 << LOG_NB_STACKS;
-            List<List<RcLevelStackEntry>> lvlStacks = new List<List<RcLevelStackEntry>>();
-            for (int i = 0; i < NB_STACKS; ++i)
+            List<List<RcLevelStackEntry>> lvlStacks;
+            if (scratch != null)
             {
-                lvlStacks.Add(new List<RcLevelStackEntry>(256));
+                lvlStacks = scratch.LevelStacks();
+            }
+            else
+            {
+                lvlStacks = new List<List<RcLevelStackEntry>>();
+                for (int i = 0; i < NB_STACKS; ++i)
+                {
+                    lvlStacks.Add(new List<RcLevelStackEntry>(256));
+                }
             }
 
-            List<RcLevelStackEntry> stack = new List<RcLevelStackEntry>(256);
+            List<RcLevelStackEntry> stack = scratch != null ? scratch.Stack() : new List<RcLevelStackEntry>(256);
 
-            int[] srcReg = new int[chf.spanCount];
-            int[] srcDist = new int[chf.spanCount];
+            int[] srcReg = scratch != null ? scratch.SrcReg(chf.spanCount) : new int[chf.spanCount];
+            int[] srcDist = scratch != null ? scratch.SrcDist(chf.spanCount) : new int[chf.spanCount];
 
             int regionId = 1;
             int level = (chf.maxDistance + 1) & ~1;
