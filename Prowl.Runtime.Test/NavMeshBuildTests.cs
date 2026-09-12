@@ -1,6 +1,11 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+
+using Prowl.Recast.Core;
 using Prowl.Recast.Detour;
 
 using Prowl.Echo;
@@ -701,4 +706,43 @@ public class NavMeshBuildTests
         int[] indices = [0, 1, 2, 0, 2, 3];
         return new NavMeshGeometrySource(verts, indices, Float4x4.Identity);
     }
+    /// <summary>
+    /// Recast's own log calls reach Prowl's Debug rather than stdout, and its per-polygon progress
+    /// chatter is dropped — the seed walk dead-ends once per polygon on the tile-cache path, which
+    /// was hundreds of console lines per registration on a large map.
+    /// </summary>
+    [Fact]
+    public void RecastLogSink_ForwardsWarningsAndDropsProgress()
+    {
+        // Reading a const does not trigger a static constructor, so ask for it explicitly; in
+        // production any call into the builder runs it before Recast can log.
+        RuntimeHelpers.RunClassConstructor(typeof(NavMeshTileBuilder).TypeHandle);
+
+        Action<RcLogCategory, string>? installed = RcContext.Sink;
+        Assert.NotNull(installed);
+
+        List<string> logged = [];
+        void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
+        {
+            if (severity == LogSeverity.Warning) logged.Add(message);
+        }
+
+        Debug.OnLog += Capture;
+        try
+        {
+            var ctx = new RcContext();
+            ctx.Log(RcLogCategory.RC_LOG_PROGRESS, "walk dead-ended");
+            ctx.Warn("a contour was truncated");
+
+            Assert.Single(logged);
+            Assert.Contains("a contour was truncated", logged[0]);
+        }
+        finally
+        {
+            Debug.OnLog -= Capture;
+            // Process-global: leave it as the static constructor set it.
+            RcContext.Sink = installed;
+        }
+    }
+
 }

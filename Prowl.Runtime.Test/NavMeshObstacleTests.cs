@@ -170,6 +170,90 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)), "and leave the hole it came from");
     }
 
+    /// <summary>
+    /// A box obstacle placed on a point from SamplePosition has to carve there. MarkBoxArea keeps a
+    /// cell only when its stored span height falls inside the box's voxel range, and the navmesh
+    /// surface sits above the column top it was built from — one voxel on flat ground, one to two
+    /// cells on a slope with height detail on. A box resting exactly on the sampled point therefore
+    /// starts above every cell it means to mark and carves nothing at all.
+    /// <para/>
+    /// The guard depends on the lift actually realised at whichever column the sample lands on, which
+    /// contouring decides — so this can rot into passing without the fix rather than failing wrongly.
+    /// NavCarveFixTest key Q in the NavMeshTest project is the coverage that runs on real terrain.
+    /// </summary>
+    [Fact]
+    public void Obstacle_RestingOnASampledPointOnASlope_StillCarves()
+    {
+        Scene scene = CreateScene(enable: true);
+
+        GameObject ramp = CreateGameObject("Ramp");
+        scene.Add(ramp);
+        ramp.AddComponent<BoxCollider>().Size = new Float3(30, 1, 30);
+        ramp.Transform.Position = new Float3(0, 0, 0);
+        ramp.Transform.Rotation = Quaternion.FromEuler(new Float3(0, 0, 35f));
+
+        GameObject surfaceGo = CreateGameObject("NavMeshSurface");
+        scene.Add(surfaceGo);
+        var surface = surfaceGo.AddComponent<NavMeshSurface>();
+        ApplyFastBakeSettings(surface);
+        surface.UseGeometry = NavMeshCollectGeometry.PhysicsColliders;
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        // Wherever the navmesh actually is on the slope — the whole point is that this is not the
+        // collider's surface.
+        Assert.True(scene.Navigation.SamplePosition(new Float3(0, 6, 0), out NavMeshHit on, 8f, NavMesh.AllAreas),
+            "the ramp has to bake walkable for this test to mean anything");
+
+        GameObject obstacleGo = CreateGameObject("Crate");
+        scene.Add(obstacleGo);
+        var obstacle = obstacleGo.AddComponent<NavMeshObstacle>();
+        obstacle.Shape = NavMeshObstacleShape.Box;
+        // A small footprint on a steep slope is the reproducing case: a wide one always catches cells
+        // further up the ramp whose stored heights fall inside the box whatever its base is.
+        obstacle.Size = new Float3(1.5f, 3, 1.5f);
+        // Resting on the sampled point, which is how a caller places a crate on the ground.
+        obstacleGo.Transform.Position = on.Position + new Float3(0, 1.5f, 0);
+
+        Assert.True(TickUntil(scene, () => !scene.Navigation.SamplePosition(on.Position, out _, 0.3f, NavMesh.AllAreas)) >= 0,
+            "a box resting on the sampled point must carve it");
+    }
+
+    /// <summary>
+    /// The carve reads Transform.LossyScale when it is issued, so scaling the obstacle (or a parent)
+    /// afterwards has to re-issue it. No setter sees a Transform change, which is why rotation is
+    /// already compared per frame; scale was not, so the hole stayed at its old size for both shapes.
+    /// </summary>
+    [Fact]
+    public void Obstacle_ScalingItsParent_ResizesTheCarve()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject parent = CreateGameObject("Rig");
+        scene.Add(parent);
+        GameObject obstacleGo = CreateGameObject("Crate");
+        scene.Add(obstacleGo);
+        obstacleGo.SetParent(parent);
+        obstacleGo.Transform.LocalPosition = new Float3(0, 1, 0);
+
+        var obstacle = obstacleGo.AddComponent<NavMeshObstacle>();
+        obstacle.Shape = NavMeshObstacleShape.Box;
+        obstacle.Size = new Float3(2, 3, 2);
+
+        // The hole is the footprint widened by the agent radius, so ±1.5 at this size.
+        var inside = new Float3(0, 0.2f, 0);
+        var outsideUntilDoubled = new Float3(2f, 0.2f, 0);
+        Assert.True(TickUntil(scene, () => !Walkable(scene, inside)) >= 0);
+        Assert.True(Walkable(scene, outsideUntilDoubled));
+
+        parent.Transform.LocalScale = new Float3(2, 1, 2);
+
+        Assert.True(TickUntil(scene, () => !Walkable(scene, outsideUntilDoubled)) >= 0,
+            "the carve should follow the scale out to the doubled footprint");
+    }
+
     /// <summary>An obstacle carves a hole (paths detour, the hole is unwalkable) and removing
     /// it restores the surface — all through incremental frame updates, no rebake.</summary>
     [Fact]
@@ -633,15 +717,25 @@ public class NavMeshObstacleTests : RuntimeTestBase
         // — before that the cache has nothing queued and reports settled however moved the
         // obstacle is.
         Churn(3);
-        Assert.True(surface.Instance!.CachePending);
+
+        // The premise the bound exists for: this cache does not settle, ever.
+        for (int i = 0; i < 20; i++)
+        {
+            Assert.True(surface.Instance!.CachePending, $"the cache settled on frame {i}, so nothing is being starved");
+            Churn(1);
+        }
+
         Assert.True(surface.ApplyRebuiltTiles(rebuilt, out _));
 
-        // The premise: while the backlog lasts, the swap cannot land the ordinary way.
-        Churn(3);
+        // And while the backlog lasts the swap cannot land the ordinary way.
+        Churn(1);
         Assert.False(Walkable(scene, s_wallTop), "the cache was supposed to be starved here");
 
-        Churn(40);
-        Assert.True(Walkable(scene, s_wallTop), "a swap held behind a cache that never settles must still land");
+        // Bounded by the constant rather than a generous number, so a regression in the bound shows
+        // up here instead of passing on slack.
+        Churn(NavMeshWorld.MaxTileSwapWaits);
+        Assert.True(Walkable(scene, s_wallTop),
+            $"a swap held behind a cache that never settles must land within {NavMeshWorld.MaxTileSwapWaits + 1} passes");
     }
 
     /// <summary>

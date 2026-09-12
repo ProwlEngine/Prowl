@@ -122,7 +122,7 @@ public sealed class NavMeshBuildOverrides
     [Tooltip("Use an explicit voxel size instead of deriving it from the agent radius (radius / 3). Smaller voxels capture finer geometry and cost more bake time and memory.")]
     public bool OverrideVoxelSize = false;
 
-    [Tooltip("Explicit XZ voxel size in world units, used when Override Voxel Size is on. The navmesh cannot represent features smaller than this.")]
+    [Tooltip("Explicit XZ voxel size in world units, used when Override Voxel Size is on. The navmesh cannot represent features smaller than this, and its surface sits above the geometry - one voxel height (half this) on flat ground, up to two on uneven ground with height detail on. Lower this to reduce that gap.")]
     [EnableIf(nameof(OverrideVoxelSize))]
     public float VoxelSize = 0.1666667f;
 

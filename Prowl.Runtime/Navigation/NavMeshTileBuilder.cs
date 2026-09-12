@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
@@ -12,6 +13,7 @@ using Prowl.Recast.Detour.TileCache.Io.Compress;
 using Prowl.Recast;
 using Prowl.Recast.Geom;
 
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -24,6 +26,42 @@ namespace Prowl.Runtime;
 /// </summary>
 internal static class NavMeshTileBuilder
 {
+    // Recast logs through a context, and a build owns one per thread, so the fork routes them to a
+    // static sink. Progress is dropped: its only source is the per-polygon seed walk, which dead-ends
+    // as a matter of course on the cache path.
+    //
+    // Debug.Log is not safe to call concurrently — it swaps Console.ForegroundColor around the write
+    // and hands the message to OnLog subscribers that touch editor state — and tiles mesh on workers.
+    // With an engine loop running, a worker's message is posted to it. Without one (tests, tools) there
+    // is nothing to post to, so the lock is all that keeps two workers out of Debug at once; it does
+    // not serialise against the rest of the engine's own logging.
+    private static readonly Lock s_recastLogLock = new();
+
+    static NavMeshTileBuilder()
+    {
+        RcContext.Sink = static (category, message) =>
+        {
+            if (category == RcLogCategory.RC_LOG_PROGRESS) return;
+
+            MainThreadContext? loop = MainThreadContext.Current;
+            if (loop != null && !loop.IsMainThread)
+            {
+                loop.Post(_ => Report(category, message), null);
+                return;
+            }
+
+            lock (s_recastLogLock) Report(category, message);
+        };
+    }
+
+    private static void Report(RcLogCategory category, string message)
+    {
+        // An error from Recast is a span or a tile that silently did not make it into the build, which
+        // is missing navmesh from a bake that reports success — not a warning.
+        if (category == RcLogCategory.RC_LOG_ERROR) Debug.LogError($"[Navigation] {message}");
+        else Debug.LogWarning($"[Navigation] {message}");
+    }
+
     /// <summary>The single poly flag Prowl sets on every built polygon. Detour ignores polys
     /// with zero flags, so something must be set; area-based filtering happens in
     /// <see cref="NavMeshQueryFilter"/> against the poly's area, not its flags.</summary>

@@ -128,14 +128,19 @@ public class NavMeshObstacle : MonoBehaviour
     private float _blockerRadius, _blockerHeight;
     private bool _warnedBlockerUnplaced;
 
-    // Rotation the live carve was registered with, re-checked each LateUpdate because a box's
-    // footprint follows the Transform and no setter sees that turn. Compared by quaternion dot
+    // Transform state the live carve was registered with, re-checked each LateUpdate because the
+    // footprint follows the Transform and no setter sees that. Rotation is compared by quaternion dot
     // product: no per-frame Euler conversion, no wrap false-positives at ±180°.
     private Quaternion _appliedRotation = Quaternion.Identity;
+    private Float3 _appliedScale = Float3.One;
 
+    // A box loses its yaw, and either shape with an offset Center swings its world centre around the
+    // Transform — so a rotating rig moves the hole without the position ever changing.
     private bool RotationChanged()
-        => Shape == NavMeshObstacleShape.Box
+        => (Shape == NavMeshObstacleShape.Box || !Center.Equals(Float3.Zero))
             && Math.Abs(Quaternion.Dot(Transform.Rotation, _appliedRotation)) < 0.9999;
+
+    private bool ScaleChanged() => Float3.DistanceSquared(Transform.LossyScale, _appliedScale) > 1e-8;
 
     /// The geometry setters and inspector edits both land here: a live carve is cut again at the
     /// new shape, and one that is not applied is left for the carve machinery to place.
@@ -208,7 +213,7 @@ public class NavMeshObstacle : MonoBehaviour
         // captures the rotation it carved at, so running the pickup first (its flag is set by any
         // NavMeshChanged, including the cache pump.s own convergence events) would record the new
         // rotation without re-carving and swallow the drift for good.
-        if (RotationChanged()) ReapplyCarve();
+        if (RotationChanged() || ScaleChanged()) ReapplyCarve();
 
         if (_refsPruneNeeded)
         {
@@ -411,20 +416,44 @@ public class NavMeshObstacle : MonoBehaviour
         {
             NavMeshInstance? instance = _world.GetInstance(type.Id);
             if (instance == null || _refs.ContainsKey(instance)) continue;
-            long obstacleRef = AddToCache(instance.TileCache, instance.NavMeshData.Settings.AgentRadius);
+            NavMeshBuildSettings settings = instance.NavMeshData.Settings;
+            long obstacleRef = AddToCache(instance.TileCache, settings.AgentRadius, CarveDrop(settings));
             if (obstacleRef == 0) continue;
             _refs[instance] = obstacleRef;
             instance.MarkCachePending();
         }
         _carveApplied = true;
         _appliedRotation = Transform.Rotation;
+        _appliedScale = Transform.LossyScale;
     }
+
+    /// <summary>
+    /// How far below the obstacle the carve has to start. The cells it must mark are keyed by their
+    /// stored span height, and the navmesh surface sits above that by two independent lifts:
+    /// <list type="bullet">
+    /// <item><c>GetCornerHeight</c> takes the highest of the surrounding cells within the walkable
+    /// climb, so a polygon corner is at most <c>(int)(climb / ch) * ch</c> above a given column —
+    /// bounded by the climb itself, because that division truncates;</item>
+    /// <item>the detail builder then lifts every interior vertex by one cell height, unconditionally
+    /// and with no relation to climb.</item>
+    /// </list>
+    /// Hence climb plus one voxel height. Capped at the agent height because that is the real
+    /// guarantee about what shares a column: two walkable surfaces are at least that far apart, so a
+    /// deeper reach could carve a floor below the one the obstacle stands on — reachable only with an
+    /// authored climb taller than the agent, which nothing validates.
+    /// </summary>
+    private static float CarveDrop(NavMeshBuildSettings settings)
+        => Math.Min(Math.Max(0f, settings.AgentMaxClimb) + settings.EffectiveVoxelHeight,
+                    Math.Max(0f, settings.AgentHeight));
 
     /// <param name="agentRadius">Envelope of the navmesh being carved. The hole is widened by it
     /// because a navmesh stores where an agent's CENTRE may be, not where its body fits: a bake
     /// pulls the mesh this far back from every wall, and a carve that did not would let agents
     /// walk their centre onto the obstacle's surface and stand half inside it.</param>
-    private long AddToCache(DtTileCache cache, float agentRadius)
+    /// <param name="drop">How far below the obstacle to start the carve, from
+    /// <see cref="CarveDrop"/>. Without it an obstacle resting on a point <c>SamplePosition</c>
+    /// returned begins above every cell in its own footprint and marks nothing.</param>
+    private long AddToCache(DtTileCache cache, float agentRadius, float drop)
     {
         Float3 scale = Transform.LossyScale;
         Float3 worldCenter = Transform.TransformPoint(Center);
@@ -434,16 +463,17 @@ public class NavMeshObstacle : MonoBehaviour
         {
             (float radius, float height) = ScaledCylinder(scale);
             // Cylinder obstacles anchor at the base center.
-            var basePos = new RcVec3f((float)worldCenter.X, (float)(worldCenter.Y - height * 0.5f), (float)worldCenter.Z);
-            return cache.AddObstacle(basePos, radius + clearance, height);
+            var basePos = new RcVec3f((float)worldCenter.X, (float)(worldCenter.Y - height * 0.5f - drop), (float)worldCenter.Z);
+            return cache.AddObstacle(basePos, radius + clearance, height + drop);
         }
 
-        // Clearance horizontally only: erosion is a footprint concern, and growing the box
-        // vertically would start carving under things the obstacle passes beneath.
+        // Erosion clearance is a footprint concern, so it goes on XZ only — and the drop goes DOWN
+        // only, since growing the box upward would carve under whatever the obstacle passes beneath.
         Float3 half = ScaledBoxHalfExtents(scale);
-        var halfExtents = new RcVec3f(half.X + clearance, half.Y, half.Z + clearance);
+        var halfExtents = new RcVec3f(half.X + clearance, half.Y + drop * 0.5f, half.Z + clearance);
         float yawRadians = (float)(Transform.Rotation.EulerAngles.Y * Maths.Deg2Rad);
-        return cache.AddBoxObstacle(new RcVec3f((float)worldCenter.X, (float)worldCenter.Y, (float)worldCenter.Z), halfExtents, yawRadians);
+        var centre = new RcVec3f((float)worldCenter.X, (float)(worldCenter.Y - drop * 0.5f), (float)worldCenter.Z);
+        return cache.AddBoxObstacle(centre, halfExtents, yawRadians);
     }
 
     /// <summary>Queue removal of the carve everywhere it is registered.</summary>
@@ -475,10 +505,10 @@ public class NavMeshObstacle : MonoBehaviour
     }
 
     /// <summary>
-    /// The volume this obstacle actually carves, which is not the volume its Transform describes:
-    /// both shapes stand upright however the object is pitched or rolled, because Detour orients a
-    /// box obstacle by yaw alone. Drawing the full transform would promise a tilt the navmesh
-    /// never cuts.
+    /// The obstacle as authored, standing upright however the object is pitched or rolled, because
+    /// Detour orients a box obstacle by yaw alone and drawing the full transform would promise a tilt
+    /// the navmesh never cuts. Not the carved volume: that is wider by the agent radius on XZ and
+    /// reaches <see cref="CarveDrop"/> further down, neither of which is known without a live navmesh.
     /// </summary>
     public override void DrawGizmosSelected()
     {

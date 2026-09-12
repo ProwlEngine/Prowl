@@ -474,6 +474,10 @@ public sealed class NavMeshWorld
     /// Raised when queued work finishes and the navmesh is stable again. A carve spans several
     /// frames, and anything expensive — re-pathing a crowd, rebuilding a cached triangulation —
     /// wants to run once at the end rather than on each of them.
+    /// <para/>
+    /// MAY NEVER FIRE: an obstacle moving every frame re-queues work as fast as the pump drains it.
+    /// Anything that must happen eventually needs its own bound, as the deferred tile swap has. The
+    /// agent is safe without one because an invalid corridor is replanned on its own timer.
     /// </summary>
     public event Action? NavMeshSettled;
 
@@ -1103,7 +1107,7 @@ public sealed class NavMeshWorld
     // on that forever would never apply the swap and would grow the queue with every rebuild, so
     // after this many passes the swap pays the inline drain instead. Sized past a normal carve,
     // which settles in a few frames at MaxTileUpdatesPerFrame.
-    private const int MaxTileSwapWaits = 8;
+    internal const int MaxTileSwapWaits = 8;
 
     // A deferred apply calls back into ApplyRebuiltTilesNow, which flushes this queue: without the
     // flag that would re-enter the drain and dequeue behind its own back.

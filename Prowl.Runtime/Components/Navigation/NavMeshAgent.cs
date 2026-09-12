@@ -77,7 +77,7 @@ public class NavMeshAgent : MonoBehaviour
     [Tooltip("Agent height (used by the crowd for vertical overlap checks).")]
     [SerializeField] private float height = 2.0f;
 
-    [Tooltip("Vertical offset between the navmesh surface and the Transform position.")]
+    [Tooltip("Vertical offset between the navmesh surface and the Transform position. The surface itself sits above the ground it was baked from - one voxel height on flat ground, up to two on uneven ground with height detail on - so this is where a visual is pulled back down onto it.")]
     [SerializeField] private float baseOffset = 0f;
 
     [Header("Steering")]
