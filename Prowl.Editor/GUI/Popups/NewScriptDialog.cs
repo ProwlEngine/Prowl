@@ -168,47 +168,22 @@ public static class NewScriptDialog
         // Footer buttons right-aligned Cancel + Create. The Create button is a real
         // EditorGUI.Button when valid; when invalid we render a visually-disabled Box
         // so the user sees the error hint rather than clicking a dead button.
-        using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).JustifyContent(LayoutJustification.End).Gap(8).Enter())
+        using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).JustifyContent(LayoutJustification.End).Margin(0,0,0,8).Gap(8).Enter())
         {
             Origami.Button(paper, "scr_cancel", Loc.Get("common.cancel"), () => { Modal.Pop(); }).Width(90).Show();
 
             if (ok)
             {
-                using (paper.Box("scr_create")
-                           .Width(110).Height(EditorTheme.RowHeight).Rounded(3)
-                           .BackgroundColor(EditorTheme.Purple400)
-                           .Hovered.BackgroundColor(EditorTheme.Purple500).End()
-                           .BorderWidth(1).BorderColor(EditorTheme.Purple400)
-                           .OnClick(0, (_, _) => DoCreate())
-                           .Enter())
+
+                Origami.Button(paper, "scr_create", Loc.Get("launcher.create"), () =>
                 {
-                    if (font != null)
-                        paper.Box("scr_create_lbl")
-                            .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                            .Text(Loc.Get("launcher.create"), font)
-                            .TextColor(EditorTheme.Ink700)
-                            .FontSize(EditorTheme.FontSize)
-                            .Alignment(TextAlignment.MiddleCenter)
-                            .IsNotInteractable();
-                }
+                    DoCreate();
+                }).Primary().Width(90).Show();
+
             }
             else
             {
-                using (paper.Box("scr_create_disabled")
-                           .Width(110).Height(EditorTheme.RowHeight).Rounded(3)
-                           .BackgroundColor(EditorTheme.Neutral200)
-                           .BorderWidth(1).BorderColor(EditorTheme.Neutral100)
-                           .Enter())
-                {
-                    if (font != null)
-                        paper.Box("scr_create_dis_lbl")
-                            .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                            .Text(Loc.Get("launcher.create"), font)
-                            .TextColor(EditorTheme.Ink300)
-                            .FontSize(EditorTheme.FontSize)
-                            .Alignment(TextAlignment.MiddleCenter)
-                            .IsNotInteractable();
-                }
+                Origami.Button(paper, "scr_create_disabled", Loc.Get("launcher.create"), null).Primary().Disabled(true).Width(90).Show();
             }
         }
     }
