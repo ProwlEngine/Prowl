@@ -694,13 +694,6 @@ namespace Prowl.Recast.Detour.TileCache
 
                             ob.pending.Add(j);
                         }
-
-                        // A footprint over a column with no compressed layer touches nothing, so the
-                        // per-tile loop below never runs for it: completing it here is what makes it
-                        // PROCESSED deterministically, rather than whenever some unrelated tile is
-                        // next rebuilt. Only a PROCESSED obstacle is re-listed against a layer added
-                        // there later.
-                        if (ob.pending.Count == 0) CompleteObstacle(ob);
                     }
                     else if (req.action == DtObstacleRequestAction.REQUEST_REMOVE)
                     {
@@ -717,11 +710,11 @@ namespace Prowl.Recast.Detour.TileCache
 
                             ob.pending.Add(j);
                         }
-
-                        // Same for a removal, where the slot is what waits: it only reaches EMPTY and
-                        // returns to the free list through CompleteObstacle, and nothing else frees it.
-                        if (ob.pending.Count == 0) CompleteObstacle(ob);
                     }
+
+                    // Either branch can leave nothing pending: a footprint over a column with no
+                    // compressed layer touches no tile, so the per-tile loop below never completes it.
+                    if (ob.pending.Count == 0) CompleteObstacle(ob);
                 }
 
                 m_reqs.Clear();
@@ -742,10 +735,8 @@ namespace Prowl.Recast.Detour.TileCache
                     if (ob.state == DtObstacleState.DT_OBSTACLE_PROCESSING
                         || ob.state == DtObstacleState.DT_OBSTACLE_REMOVING)
                     {
-                        // Only this obstacle's own last pending tile completes it, as ForgetTileRef
-                        // already required: an obstacle whose request has not been drained yet has an
-                        // empty list, and completing it on someone else's tile build left it PROCESSED
-                        // with a pending list nothing would ever drain.
+                        // An obstacle whose request is not drained yet has an empty pending list, and
+                        // completing it on another tile's build leaves a list nothing would ever drain.
                         if (ob.pending.Remove(refs) && 0 == ob.pending.Count)
                         {
                             CompleteObstacle(ob);

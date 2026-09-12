@@ -41,9 +41,7 @@ namespace Prowl.Recast.Core
     public class RcContext
     {
         /// Where Warn and Log go when a host sets one. Static because a build owns a context per
-        /// thread, so there is no single instance for a host to configure. Unset, messages keep going
-        /// to the console, which is what running the tests from a terminal expects. A sink must not
-        /// throw; one that does is swallowed rather than failing the build it was logging about.
+        /// thread, so there is no single instance to configure; unset, messages go to the console.
         public static Action<RcLogCategory, string> Sink;
 
         private readonly ThreadLocal<Dictionary<string, RcAtomicLong>> _timerStart;

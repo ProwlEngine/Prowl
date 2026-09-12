@@ -627,6 +627,9 @@ namespace Prowl.Recast.Detour.Crowd
                         ag.corridor.Reset(agentRef, agentPos);
                         ag.partial = false;
                         ag.targetState = DtMoveRequestState.DT_CROWDAGENT_TARGET_NONE;
+                        // Every other route to TARGET_NONE clears the desired velocity. Without this the
+                        // agent coasts on its last dvel, since nothing recomputes it once the target is gone.
+                        ag.dvel = RcVec3f.Zero;
                     }
                 }
 
