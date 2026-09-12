@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -92,6 +92,8 @@ public struct ElementData
     public bool IsMarkdown;
     public bool IsRichText;
     public string Paragraph;
+    /// <summary>Set to draw every character as this one, for password fields.</summary>
+    public char? MaskChar;
     public FontFile Font;
     public FontFile FontBold;
     public FontFile FontItalic;
@@ -201,6 +203,7 @@ public struct ElementData
             IsMarkdown = false,
             IsRichText = false,
             Paragraph = null,
+            MaskChar = null,
             Font = null,
             FontStyle = FontStyle.Regular,
             WrapMode = TextWrapMode.NoWrap,

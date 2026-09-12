@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -1084,6 +1084,17 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Draws this element's text as a mask character, for passwords and anything else that
+        /// should not be readable over someone's shoulder. The element keeps the real text, so
+        /// measuring and hit testing still work on it.
+        /// </summary>
+        public ElementBuilder IsPassword(char mask = '*')
+        {
+            _handle.Data.MaskChar = mask;
+            return this;
+        }
+
         /// <summary> Sets the text content of the element, parsing it as Markdown with custom font faces for bold, italic, bold-italic, and monospace styles. </summary>
         public ElementBuilder Markdown(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
         {
@@ -1331,22 +1342,6 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Returns the value to display for layout/render purposes. When a mask char is set,
-        /// every non-newline character is replaced with the mask. Newlines pass through so
-        /// multi-line cursor / selection math doesn't get confused.
-        /// </summary>
-        private static string GetDisplayValue(string value, in TextInputSettings settings)
-        {
-            if (!settings.MaskChar.HasValue || string.IsNullOrEmpty(value))
-                return value;
-            char mask = settings.MaskChar.Value;
-            var sb = new System.Text.StringBuilder(value.Length);
-            foreach (char c in value)
-                sb.Append(c == '\n' || c == '\r' ? c : mask);
-            return sb.ToString();
-        }
-
-        /// <summary>
         /// Internal state container for text input data to reduce storage operations.
         /// Supports both single-line and multi-line text input.
         /// </summary>
@@ -1533,6 +1528,7 @@ namespace Prowl.PaperUI
             settings.Alignment = Scribe.TextAlignment.Left;
             settings.MaxWidth = (float)maxWidth;
             settings.WrapMode = (isMultiLine && inputSettings.DoWrap) ? Scribe.TextWrapMode.Wrap : TextWrapMode.NoWrap;
+            settings.Customizer = TextMask.For(inputSettings.MaskChar);
 
             return settings;
         }
@@ -2017,7 +2013,7 @@ namespace Prowl.PaperUI
                 {
                     var currentState = LoadTextInputState(value, isMultiLine);
                     var textSettings = CreateTextLayoutSettings(settings, true, (float)(width ?? float.MaxValue));
-                    var textLayout = _paper.CreateLayout(GetDisplayValue(currentState.Value, settings), textSettings);
+                    var textLayout = _paper.CreateLayout(currentState.Value, textSettings);
 
                     // textSettings.PixelSize is in logical-with-DPI units (CreateTextLayoutSettings
                     // pre-scales). textLayout.Size is pixel-space - divide by FramebufferScale to
@@ -2060,7 +2056,7 @@ namespace Prowl.PaperUI
                 var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
                 var newPosition = Maths.Clamp(
-                    CalculateTextPosition(GetDisplayValue(currentState.Value, settings), settings, isMultiLine, clickPos, clickPosY),
+                    CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
 
                 if (IsShiftPressed())
@@ -2092,7 +2088,7 @@ namespace Prowl.PaperUI
                 var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
                 var clickPosition = Maths.Clamp(
-                    CalculateTextPosition(GetDisplayValue(currentState.Value, settings), settings, isMultiLine, clickPos, clickPosY),
+                    CalculateTextPosition(currentState.Value, settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
 
                 // Select the word at the clicked position. Word boundaries are computed against the real string - masked text has no real word boundaries (it's all the same glyph).
@@ -2113,7 +2109,7 @@ namespace Prowl.PaperUI
                 var currentState = LoadTextInputState(value, isMultiLine);
                 var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
-                var pos = Maths.Clamp(CalculateTextPosition(GetDisplayValue(currentState.Value, settings), settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
+                var pos = Maths.Clamp(CalculateTextPosition(currentState.Value, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
 
                 currentState.CursorPosition = pos;
                 currentState.SelectionStart = pos;
@@ -2147,7 +2143,7 @@ namespace Prowl.PaperUI
                 // Clamp scroll offsets after auto-scroll (textLayout.Size is pixel-space; convert
                 // to logical via FramebufferScale).
                 var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, e.ElementRect.Size.X);
-                var displayValue = GetDisplayValue(currentState.Value, settings);
+                var displayValue = currentState.Value;
                 var textLayout = _paper.CreateLayout(displayValue, layoutSettings);
                 float visibleWidth = e.ElementRect.Size.X;
                 float visibleHeight = e.ElementRect.Size.Y;
@@ -2224,10 +2220,9 @@ namespace Prowl.PaperUI
                     float invFb = 1.0f / canvas.FramebufferScale;
                     var fontSize = elHandle.Data._elementStyle.GetFontSize();
 
-                    // Draw text or placeholder. Mask the visible text when MaskChar is set; the
-                    // underlying renderState.Value stays untouched so cursor / selection /
-                    // clipboard logic operates on the real string.
-                    var visibleValue = GetDisplayValue(renderState.Value, settings);
+                    // The layout settings carry the mask, so what is drawn is the real string and
+                    // cursor, selection and clipboard all stay on it too.
+                    var visibleValue = renderState.Value;
                     if (string.IsNullOrEmpty(renderState.Value))
                     {
                         canvas.DrawText(settings.Placeholder, (float)(r.Min.X), (float)r.Min.Y, settings.PlaceholderColor, layoutSettings);
@@ -2361,7 +2356,7 @@ namespace Prowl.PaperUI
 
             if (isMultiLine)
             {
-                var textLayout = _paper.CreateLayout(GetDisplayValue(state.Value, settings), CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth));
+                var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth));
                 var cursorPos = textLayout.GetCursorPosition(state.CursorPosition) * invFb;
 
                 float visibleWidth = _handle.Data.LayoutWidth;
@@ -2390,11 +2385,11 @@ namespace Prowl.PaperUI
                 // pixel-space; convert to logical.
                 var fontSize = _handle.Data._elementStyle.GetFontSize();
                 var letterSpacing = _handle.Data._elementStyle.GetLetterSpacing();
-                var displayValue = GetDisplayValue(state.Value, settings);
+                var displayValue = state.Value;
                 // MeasureText returns logical units already (Canvas divides its pixel result by FramebufferScale).
                 var textSize = _paper.MeasureText(displayValue, CreateTextLayoutSettings(settings, false, float.MaxValue));
 
-                var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition) * invFb;
+                var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition, settings.MaskChar) * invFb;
 
                 float visibleWidth = _handle.Data.LayoutWidth;
                 if (visibleWidth == 0)
@@ -2426,10 +2421,11 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Calculates the cursor position for a specific character index using TextLayout.
         /// </summary>
-        private Float2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index)
+        private Float2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index, char? mask = null)
         {
             if (string.IsNullOrEmpty(text) || index <= 0) return Float2.Zero;
             var settings = TextLayoutSettings.Default;
+            settings.Customizer = TextMask.For(mask);
             settings.Font = font;
             settings.PixelSize = (float)fontSize;
             settings.LetterSpacing = (float)letterSpacing;
