@@ -315,7 +315,7 @@ namespace Prowl.Scribe
             tls.MaxWidth = width;
             tls.Alignment = TextAlignment.Left;
             tls.Font = baseFont;
-            tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, baseFont, styles, settings);
+            tls.Customizer = (ref GlyphStyle g) => g.Font = ResolveFontForIndex(g.CharIndex, fontSystem, baseFont, styles, settings);
 
             var tl = fontSystem.CreateLayout(text, tls);
             var linkRanges = new List<IntRange>();
@@ -508,7 +508,7 @@ namespace Prowl.Scribe
                     tls.MaxWidth = float.MaxValue;
                     tls.Alignment = AlignToText(cell.Align);
                     tls.Font = settings.ParagraphFont;
-                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, settings.ParagraphFont, styles, settings);
+                    tls.Customizer = (ref GlyphStyle g) => g.Font = ResolveFontForIndex(g.CharIndex, fontSystem, settings.ParagraphFont, styles, settings);
 
                     var tl = fontSystem.CreateLayout(inlines.text, tls);
                     cellNoWrapLayouts[r][c] = tl;
@@ -569,7 +569,7 @@ namespace Prowl.Scribe
                         tls.MaxWidth = colW[c];
                         tls.Alignment = AlignToText(cell.Align);
                         tls.Font = settings.ParagraphFont;
-                        tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, settings.ParagraphFont, styles, settings);
+                        tls.Customizer = (ref GlyphStyle g) => g.Font = ResolveFontForIndex(g.CharIndex, fontSystem, settings.ParagraphFont, styles, settings);
 
                         tl = fontSystem.CreateLayout(text, tls);
                     }

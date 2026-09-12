@@ -90,7 +90,12 @@ namespace Prowl.Scribe
         // once per quality and scaled to any display size at draw time.
         public FontQuality Quality;
 
-        public Func<int, FontFile> FontSelector; // optional: index in the full string -> font
+        /// <summary>
+        /// Optional hook called once per character, free to change the font, size, spacing, quality
+        /// or even the character itself. Whatever it returns is what the text is shaped, measured,
+        /// wrapped and drawn with.
+        /// </summary>
+        public GlyphCustomizer Customizer;
 
         public static TextLayoutSettings Default => new TextLayoutSettings {
             PixelSize = 16,
@@ -104,6 +109,17 @@ namespace Prowl.Scribe
             MaxWidth = 0,
             Quality = FontQuality.Normal
         };
+
+        /// <summary>How one character is laid out, after the customizer has had its say.</summary>
+        internal GlyphStyle StyleFor(int index, int codepoint)
+        {
+            var style = new GlyphStyle(index, codepoint, Font, PixelSize, LetterSpacing, WordSpacing, Quality);
+            Customizer?.Invoke(ref style);
+
+            if (style.PixelSize <= 0f) style.PixelSize = PixelSize;
+            style.Font ??= Font;
+            return style;
+        }
     }
 
     public struct GlyphInstance

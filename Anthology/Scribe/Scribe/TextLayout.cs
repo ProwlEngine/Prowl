@@ -11,20 +11,27 @@ namespace Prowl.Scribe
         public TextLayoutSettings Settings { get; private set; }
         public string Text { get; private set; }
 
-        // The baseline all glyphs on a line sit on, measured down from the line's top edge. One
-        // value per layout: glyphs from a fallback font share the primary font's baseline rather
-        // than each sitting on their own, which is what keeps mixed-font text on one line straight.
-        private float _baseline;
-        private bool _baselineSet;
-        private float _lineHeight;
+        // The font whose metrics set the current line's box, and the largest size placed on it.
+        // Glyphs from a fallback font share the primary font's baseline rather than each sitting on
+        // their own, which is what keeps mixed-font text on one line straight. A line is not
+        // measured until it closes, since a glyph later on it can be taller than anything before it.
+        private FontFile _lineFont;
+        private float _lineMaxSize;
 
         // Last glyph placed on the current line, so the pair it forms with a following space can be
         // kerned. Cleared at every line start, where there is nothing to its left.
         private FontFile _prevFont;
         private int _prevGlyph;
+        private float _prevSize;
 
         // Pen of the last character that took up width, which is where a combining mark goes.
         private float _basePenX;
+
+        // One resolved style per character, built once per layout and only when there is a
+        // customizer to consult. The list is reused, so re-laying out the same text allocates
+        // nothing. A surrogate pair's two indices hold the same entry.
+        private readonly List<GlyphStyle> _charStyles = new List<GlyphStyle>();
+        private bool _customized;
 
         /// <summary>
         /// How far past the wrap width something may reach and still be kept on the line. A browser
@@ -49,18 +56,6 @@ namespace Prowl.Scribe
         private FontSystem _fontSystem;
 
         /// <summary>
-        /// Distance from the top of a line to the baseline its glyphs sit on. Anything a line is
-        /// given beyond the font's own ascent-to-descent box is leading, and half of it belongs
-        /// above the text, so a raised <see cref="TextLayoutSettings.LineHeight"/> centres the line
-        /// rather than pushing it down.
-        /// </summary>
-        private static float BaselineFor(FontSystem fontSystem, FontFile font, float pixelSize, float lineHeight)
-        {
-            fontSystem.GetScaledVMetrics(font, pixelSize, out float asc, out float desc, out _);
-            return (lineHeight - (asc - desc)) * 0.5f + asc;
-        }
-
-        /// <summary>
         /// Snapshot of <see cref="FontSystem.AtlasVersion"/> taken when the layout was built.
         /// If the atlas grows or fallback fonts change later, this will be less than the font
         /// system's current version - meaning any <see cref="AtlasGlyph"/> references held by
@@ -83,6 +78,8 @@ namespace Prowl.Scribe
         {
             public float X0, Y0, X1, Y1; // corner offsets relative to the draw origin
             public float U0, V0, U1, V1; // atlas UVs
+            public int CharIndex;        // so a GlyphModifier can map a quad back to the source text
+            public float PixelSize;
         }
 
         public TextLayout()
@@ -145,10 +142,9 @@ namespace Prowl.Scribe
             int len = text.Length;
 
             float pixelSize = Settings.PixelSize;
-            // Real font line height (ascent + |descent| + line gap) rather than a flat multiple of the
-            // pixel size, so spacing matches the font's design and stays consistent with RichTextLayout.
-            float lineHeight = GetLineHeight(fontSystem) * Settings.LineHeight;
-            float spaceWidth = GetSpaceWidth(fontSystem);
+            BuildCharStyles();
+
+            float spaceWidth = GetSpaceWidth(fontSystem, Settings.Font, pixelSize, Settings.Quality);
             float spaceAdvance = spaceWidth + Settings.WordSpacing;
 
             // Words are shaped one at a time, so the pairs that straddle a space are not covered by
@@ -163,29 +159,26 @@ namespace Prowl.Scribe
             bool wrapEnabled = Settings.WrapMode == TextWrapMode.Wrap && Settings.MaxWidth > 0f;
             float maxWidth = Settings.MaxWidth;
 
-            // With no primary font the baseline comes from the first glyph actually placed.
-            _lineHeight = lineHeight;
-            _prevFont = null; _prevGlyph = 0; _basePenX = 0f;
-            _baselineSet = Settings.Font != null;
-            if (_baselineSet) _baseline = BaselineFor(fontSystem, Settings.Font, pixelSize, lineHeight);
+            _basePenX = 0f;
+            _spaceSize = 0f; // the memoised space width belongs to the previous font and quality
+            StartLine();
 
             // Reusable shaped-glyph buffer for the current content word (kerning/ligatures folded in).
             var wordGlyphs = _wordGlyphs ??= new List<ShapedGlyph>();
 
             while (i < len)
             {
-                char ch = text[i];
+                int ch = CodepointAt(i);
 
                 // Explicit newline. A carriage return is one too, and a CRLF pair is a single break
                 // rather than two, which is what any text that has been near Windows looks like.
                 if (ch == '\n' || ch == '\r')
                 {
-                    FinalizeLine(ref line, currentY, lineHeight, i, currentX);
+                    currentY += FinalizeLine(fontSystem, ref line, currentY, i, currentX);
                     currentX = 0f;
-                    currentY += lineHeight;
-                    i += ch == '\r' && i + 1 < len && text[i + 1] == '\n' ? 2 : 1;
+                    i += ch == '\r' && i + 1 < len && CodepointAt(i + 1) == '\n' ? 2 : 1;
                     line = new Line(new Float2(0, currentY), i);
-                    _prevFont = null; _prevGlyph = 0;
+                    StartLine();
                     hasTrailingNewline = true;
                     continue;
                 }
@@ -209,22 +202,24 @@ namespace Prowl.Scribe
                 if (IsBreakingSpace(ch))
                 {
                     int s = i;
-                    while (i < len && IsBreakingSpace(text[i])
-                           && text[i] != '\n' && text[i] != '\r' && text[i] != '\t') i++;
-                    int count = i - s;
+                    while (i < len && IsBreakingSpace(CodepointAt(i)))
+                    {
+                        int w = CodepointAt(i);
+                        if (w == '\n' || w == '\r' || w == '\t') break;
+                        i++;
+                    }
 
-                    float runAdvance = spaceAdvance * count
-                                     + PairKern(fontSystem, _prevFont, _prevGlyph, spaceFont, spaceIndex, pixelSize);
+                    float runAdvance = SpaceRunAdvance(fontSystem, s, i, spaceAdvance)
+                                     + PairKern(fontSystem, _prevFont, _prevGlyph, spaceFont, spaceIndex, SizeAt(s, pixelSize));
                     afterSpace = true;
 
                     if (wrapEnabled && Exceeds(currentX + runAdvance, maxWidth) && line.Glyphs.Count > 0)
                     {
                         // wrap before the run
-                        FinalizeLine(ref line, currentY, lineHeight, s, currentX);
+                        currentY += FinalizeLine(fontSystem, ref line, currentY, s, currentX);
                         currentX = 0f;
-                        currentY += lineHeight;
                         line = new Line(new Float2(0, currentY), i);
-                        _prevFont = null; _prevGlyph = 0;
+                        StartLine();
                         afterSpace = false;
                     }
                     else
@@ -240,8 +235,7 @@ namespace Prowl.Scribe
                 int wordEnd = FindWordEnd(i);
                 hasTrailingNewline = false;
 
-                fontSystem.ShapeRun(text, wordStart, wordEnd, Settings.Font, Settings.FontSelector,
-                                    pixelSize, Settings.Quality, wordGlyphs);
+                fontSystem.ShapeRun(text, wordStart, wordEnd, Settings, _charStyles, wordGlyphs);
                 if (wordGlyphs.Count == 0)
                 {
                     i = wordEnd;
@@ -256,7 +250,7 @@ namespace Prowl.Scribe
                     ShapedGlyph sg = wordGlyphs[g];
                     if (sg.Cluster < 0 || sg.Cluster >= len) continue;
 
-                    char c = text[sg.Cluster];
+                    int c = CodepointAt(sg.Cluster);
                     bool invisible = IsInvisible(c);
                     if (!invisible && !IsNonSpacing(c)) continue;
 
@@ -268,7 +262,7 @@ namespace Prowl.Scribe
                 // Word width: advance (kerning included) plus letter spacing per cluster.
                 float wordWidth = 0f;
                 for (int g = 0; g < wordGlyphs.Count; g++)
-                    wordWidth += wordGlyphs[g].Advance + Settings.LetterSpacing;
+                    wordWidth += wordGlyphs[g].Advance + wordGlyphs[g].LetterSpacing;
 
                 // The pair that straddles the boundary this run starts at, which shaping the run on
                 // its own cannot see. Across a space that is the space and the first glyph; where a
@@ -278,7 +272,7 @@ namespace Prowl.Scribe
                 FontFile leftFont = afterSpace ? spaceFont : _prevFont;
                 int leftGlyph = afterSpace ? spaceIndex : _prevGlyph;
                 float leadKern = PairKern(fontSystem, leftFont, leftGlyph,
-                                          firstGlyph?.Font, firstGlyph?.GlyphIndex ?? 0, pixelSize);
+                                          firstGlyph?.Font, firstGlyph?.GlyphIndex ?? 0, wordGlyphs[0].PixelSize);
                 afterSpace = false;
 
                 if (wrapEnabled && Exceeds(currentX + leadKern + wordWidth, maxWidth))
@@ -288,22 +282,20 @@ namespace Prowl.Scribe
                     {
                         // A soft hyphen is invisible right up until the line breaks at it, which is
                         // this moment, and then it is a hyphen like any other.
-                        if (wordStart > 0 && text[wordStart - 1] == '­')
-                            EmitHyphen(fontSystem, line, ref currentX, pixelSize, wordStart - 1);
+                        if (wordStart > 0 && CodepointAt(wordStart - 1) == '­')
+                            EmitHyphen(fontSystem, line, ref currentX, SizeAt(wordStart - 1, pixelSize), wordStart - 1);
 
-                        FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
+                        currentY += FinalizeLine(fontSystem, ref line, currentY, wordStart, currentX);
                         currentX = 0f;
-                        currentY += lineHeight;
                         line = new Line(new Float2(0, currentY), wordStart);
-                        _prevFont = null; _prevGlyph = 0;
+                        StartLine();
                         leadKern = 0f;
                     }
 
                     // A word too wide for a whole line is split at cluster boundaries.
                     if (Exceeds(wordWidth, maxWidth))
                     {
-                        PlaceLongWord(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
-                                      wordGlyphs, pixelSize, Settings.LetterSpacing, maxWidth);
+                        PlaceLongWord(fontSystem, ref line, ref currentX, ref currentY, wordGlyphs, maxWidth);
                         i = wordEnd;
                         continue;
                     }
@@ -311,7 +303,7 @@ namespace Prowl.Scribe
 
                 currentX += leadKern;
                 for (int g = 0; g < wordGlyphs.Count; g++)
-                    EmitShaped(fontSystem, line, wordGlyphs[g], ref currentX, pixelSize, Settings.LetterSpacing);
+                    EmitShaped(fontSystem, line, wordGlyphs[g], ref currentX);
 
                 i = wordEnd;
             }
@@ -319,7 +311,7 @@ namespace Prowl.Scribe
             // Finalize last line
             // Always finalize if: has glyphs, is the first line, or was created by a trailing newline
             if (line.Glyphs.Count > 0 || Lines.Count == 0 || hasTrailingNewline)
-                FinalizeLine(ref line, currentY, lineHeight, i, currentX);
+                FinalizeLine(fontSystem, ref line, currentY, i, currentX);
         }
 
         // Reusable shaped-glyph buffer for the current content word.
@@ -328,25 +320,23 @@ namespace Prowl.Scribe
         // Places an already-shaped word that is too wide for one line, breaking at cluster boundaries
         // (never inside a ligature).
         private void PlaceLongWord(FontSystem fontSystem, ref Line line, ref float currentX,
-            ref float currentY, float lineHeight, List<ShapedGlyph> glyphs, float pixelSize,
-            float letterSpacing, float maxWidth)
+            ref float currentY, List<ShapedGlyph> glyphs, float maxWidth)
         {
             for (int g = 0; g < glyphs.Count; g++)
             {
                 var sg = glyphs[g];
-                float adv = sg.Advance + letterSpacing;
+                float adv = sg.Advance + sg.LetterSpacing;
 
                 if (line.Glyphs.Count > 0 && Exceeds(currentX + adv, maxWidth))
                 {
                     int clusterIndex = sg.Cluster;
-                    FinalizeLine(ref line, currentY, lineHeight, clusterIndex, currentX);
+                    currentY += FinalizeLine(fontSystem, ref line, currentY, clusterIndex, currentX);
                     currentX = 0f;
-                    currentY += lineHeight;
                     line = new Line(new Float2(0, currentY), clusterIndex);
-                    _prevFont = null; _prevGlyph = 0;
+                    StartLine();
                 }
 
-                EmitShaped(fontSystem, line, sg, ref currentX, pixelSize, letterSpacing);
+                EmitShaped(fontSystem, line, sg, ref currentX);
             }
         }
 
@@ -357,17 +347,17 @@ namespace Prowl.Scribe
             if (glyph == null) return;
 
             var gm = fontSystem.GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, pixelSize, Settings.Font) ?? default;
-            line.Glyphs.Add(new GlyphInstance(glyph, new Float2(currentX + gm.OffsetX, gm.OffsetY + _baseline),
+            NoteLineGlyph(glyph.Font, pixelSize);
+            line.Glyphs.Add(new GlyphInstance(glyph, new Float2(currentX + gm.OffsetX, gm.OffsetY),
                                               '-', gm.AdvanceWidth, pixelSize, charIndex, 1));
             currentX += gm.AdvanceWidth;
         }
 
         // Emits one shaped glyph at the current pen X, advancing the pen. (Line.Glyphs is a reference,
         // so passing the struct by value is fine - only its list is mutated here.)
-        private void EmitShaped(FontSystem fontSystem, Line line, ShapedGlyph sg, ref float currentX,
-            float pixelSize, float letterSpacing)
+        private void EmitShaped(FontSystem fontSystem, Line line, ShapedGlyph sg, ref float currentX)
         {
-            float advance = sg.Advance + letterSpacing;
+            float advance = sg.Advance + sg.LetterSpacing;
             var atlas = sg.Glyph;
             if (atlas == null)
             {
@@ -375,13 +365,10 @@ namespace Prowl.Scribe
                 return;
             }
 
+            float pixelSize = sg.PixelSize;
             var gm = fontSystem.GetGlyphMetricsByIndex(atlas.Font, atlas.GlyphIndex, pixelSize, Settings.Font) ?? default;
-            if (!_baselineSet)
-            {
-                _baseline = BaselineFor(fontSystem, atlas.Font, pixelSize, _lineHeight);
-                _baselineSet = true;
-            }
-            char ch = sg.Cluster >= 0 && sg.Cluster < Text.Length ? Text[sg.Cluster] : '\0';
+            NoteLineGlyph(atlas.Font, pixelSize);
+            int ch = sg.Cluster >= 0 && sg.Cluster < Text.Length ? CodepointAt(sg.Cluster) : '\0';
 
             // A combining mark belongs over the character it follows. The pen has already moved past
             // that character, so drawing at the pen would land the accent on the next letter along.
@@ -390,14 +377,15 @@ namespace Prowl.Scribe
 
             line.Glyphs.Add(new GlyphInstance(
                 atlas,
-                new Float2(penX + gm.OffsetX, gm.OffsetY + _baseline),
-                ch, advance, pixelSize, sg.Cluster, sg.CharCount));
+                new Float2(penX + gm.OffsetX, gm.OffsetY),
+                ch <= 0xFFFF ? (char)ch : '\0', advance, pixelSize, sg.Cluster, sg.CharCount));
 
             if (!nonSpacing)
             {
                 _basePenX = currentX;
                 _prevFont = atlas.Font;
                 _prevGlyph = atlas.GlyphIndex;
+                _prevSize = pixelSize;
             }
 
             currentX += advance;
@@ -415,50 +403,142 @@ namespace Prowl.Scribe
 
         // Natural line height of the primary font at the current size (ascent + |descent| + lineGap).
         // Falls back to the pixel size when there is no font.
-        private float GetLineHeight(FontSystem fontSystem)
+        private float GetSpaceWidth(FontSystem fontSystem, FontFile font, float pixelSize, FontQuality quality)
         {
-            var font = Settings.Font;
-            if (font == null)
-                return Settings.PixelSize;
-            fontSystem.GetScaledVMetrics(font, Settings.PixelSize, out float asc, out float desc, out float gap);
-            float h = asc - desc + gap; // descent is negative
-            return h > 0f ? h : Settings.PixelSize;
+            var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', font, quality);
+            if (spaceGlyph == null) return pixelSize * 0.25f;
+            var gm = fontSystem.GetGlyphMetricsByIndex(spaceGlyph.Font, spaceGlyph.GlyphIndex, pixelSize, Settings.Font);
+            return gm?.AdvanceWidth ?? pixelSize * 0.25f;
         }
 
-        private float GetSpaceWidth(FontSystem fontSystem)
+        /// <summary>The codepoint laid out at a character index, which a customizer may have changed.</summary>
+        private int CodepointAt(int index) => _customized ? _charStyles[index].Codepoint : Text[index];
+
+        private float SizeAt(int index, float fallback) => _customized ? _charStyles[index].PixelSize : fallback;
+
+        // Resolves every character up front, so the customizer is asked once each and the rest of
+        // layout simply reads what it decided.
+        private void BuildCharStyles()
         {
-            var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.Font, Settings.Quality);
-            if (spaceGlyph == null) return Settings.PixelSize * 0.25f;
-            var gm = fontSystem.GetGlyphMetricsByIndex(spaceGlyph.Font, spaceGlyph.GlyphIndex, Settings.PixelSize, Settings.Font);
-            return gm?.AdvanceWidth ?? Settings.PixelSize * 0.25f;
+            _charStyles.Clear();
+            _customized = Settings.Customizer != null;
+            if (!_customized) return;
+
+            string text = Text;
+            int i = 0;
+            while (i < text.Length)
+            {
+                char c = text[i];
+                int codepoint = c;
+                int charCount = 1;
+                if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                {
+                    codepoint = char.ConvertToUtf32(c, text[i + 1]);
+                    charCount = 2;
+                }
+
+                var style = Settings.StyleFor(i, codepoint);
+                for (int k = 0; k < charCount; k++) _charStyles.Add(style);
+                i += charCount;
+            }
+        }
+
+        // Width of a run of spaces. Uniform text multiplies one width by the count; only a customizer
+        // makes it worth measuring them one at a time.
+        private float SpaceRunAdvance(FontSystem fontSystem, int start, int end, float spaceAdvance)
+        {
+            if (!_customized) return spaceAdvance * (end - start);
+
+            float total = 0f;
+            for (int k = start; k < end; k++)
+            {
+                var style = _charStyles[k];
+                if (style.PixelSize != _spaceSize || !ReferenceEquals(style.Font, _spaceFont)
+                    || style.Quality != _spaceQuality)
+                {
+                    _spaceSize = style.PixelSize;
+                    _spaceFont = style.Font;
+                    _spaceQuality = style.Quality;
+                    _spaceWidth = GetSpaceWidth(fontSystem, style.Font, style.PixelSize, style.Quality);
+                }
+
+                total += _spaceWidth + style.WordSpacing;
+            }
+
+            return total;
+        }
+
+        private float _spaceSize;
+        private float _spaceWidth;
+        private FontFile _spaceFont;
+        private FontQuality _spaceQuality;
+
+        // Opens a line. Nothing to its left, and no glyph on it yet to set its box.
+        private void StartLine()
+        {
+            _prevFont = null;
+            _prevGlyph = 0;
+            _prevSize = 0f;
+            _lineFont = Settings.Font;
+            // With a customizer the line box comes from what is actually on the line, so text that
+            // is all small gets a small line rather than one sized for the base.
+            _lineMaxSize = _customized ? 0f : Settings.PixelSize;
+        }
+
+        // Records a glyph against the line box. The tallest glyph wins, and with no primary font the
+        // first one placed decides whose metrics the line is measured with.
+        private void NoteLineGlyph(FontFile font, float pixelSize)
+        {
+            _lineFont ??= font;
+            if (pixelSize > _lineMaxSize) _lineMaxSize = pixelSize;
+        }
+
+        // Height and baseline of the line about to be closed. Anything a line is given beyond the
+        // font's own ascent-to-descent box is leading, and half of it belongs above the text, so a
+        // raised LineHeight centres the line rather than pushing it down.
+        private void LineMetrics(FontSystem fontSystem, out float height, out float baseline)
+        {
+            float size = _lineMaxSize > 0f ? _lineMaxSize : Settings.PixelSize;
+            if (_lineFont == null)
+            {
+                height = size * Settings.LineHeight;
+                baseline = 0f;
+                return;
+            }
+
+            fontSystem.GetScaledVMetrics(_lineFont, size, out float asc, out float desc, out float gap);
+            float natural = asc - desc + gap; // descent is negative
+            height = (natural > 0f ? natural : size) * Settings.LineHeight;
+            baseline = (height - (asc - desc)) * 0.5f + asc;
         }
 
         /// <summary>
         /// Whether a space is one a line may break at. A no-break space is a space to look at and a
         /// letter to lay out, so it belongs inside the word rather than between words.
         /// </summary>
-        private static bool IsBreakingSpace(char c)
-            => char.IsWhiteSpace(c) && c != ' ' && c != ' ' && c != ' ';
+        private static bool IsBreakingSpace(int c)
+            => c <= 0xFFFF && char.IsWhiteSpace((char)c) && c != ' ' && c != ' ' && c != ' ';
 
         /// <summary>Characters that take up no room and are only there to offer a break.</summary>
-        private static bool IsInvisible(char c) => c == '​' || c == '­';
+        private static bool IsInvisible(int c) => c == '​' || c == '­';
 
         /// <summary>
         /// A combining mark belongs on top of the character before it, so it takes no width of its
         /// own. Some fonts, monospace ones especially, still give their mark glyphs a full advance,
         /// which would push the rest of the line along by a cell per accent.
         /// </summary>
-        private static bool IsNonSpacing(char c)
-            => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
-               == System.Globalization.UnicodeCategory.NonSpacingMark;
+        private static bool IsNonSpacing(int c)
+            => c <= 0xFFFF
+               && System.Globalization.CharUnicodeInfo.GetUnicodeCategory((char)c)
+                  == System.Globalization.UnicodeCategory.NonSpacingMark;
 
         /// <summary>A line may break straight after these, with no space involved.</summary>
-        private static bool BreaksAfter(char c)
+        private static bool BreaksAfter(int c)
             => c == '-' || c == '‐' || c == '‒' || c == '–' || c == '—'
                || c == '​' || c == '­';
 
         /// <summary>A line may break just before these.</summary>
-        private static bool BreaksBefore(char c) => c == '—';
+        private static bool BreaksBefore(int c) => c == '—';
 
         // A run is the most a line can hold without a break inside it: up to the next space, the next
         // line break, or the next dash-like character a line is allowed to break around.
@@ -467,7 +547,7 @@ namespace Prowl.Scribe
             int index = startIndex;
             while (index < Text.Length)
             {
-                char c = Text[index];
+                int c = CodepointAt(index);
                 if (IsBreakingSpace(c) || c == '\n' || c == '\r') break;
                 if (index > startIndex && BreaksBefore(c)) break;
 
@@ -477,8 +557,20 @@ namespace Prowl.Scribe
             return index;
         }
 
-        private void FinalizeLine(ref Line line, float y, float lineHeight, int endIndex, float currentX)
+        private float FinalizeLine(FontSystem fontSystem, ref Line line, float y, int endIndex, float currentX)
         {
+            LineMetrics(fontSystem, out float lineHeight, out float baseline);
+
+            // Glyphs are placed relative to the baseline, which is not known until the line closes
+            // and the tallest glyph on it has been seen.
+            var glyphs = line.Glyphs;
+            for (int g = 0; g < glyphs.Count; g++)
+            {
+                var gi = glyphs[g];
+                gi.Position = new Float2(gi.Position.X, gi.Position.Y + baseline);
+                glyphs[g] = gi;
+            }
+
             line.Position = new Float2(0, y);
             line.Height = lineHeight;
             // The pen has already advanced past every glyph and space on the line, so it is the
@@ -487,6 +579,7 @@ namespace Prowl.Scribe
             line.Width = currentX;
             line.EndIndex = endIndex;
             Lines.Add(line);
+            return lineHeight;
         }
 
         private void ApplyAlignment()

@@ -547,13 +547,20 @@ namespace Prowl.Scribe
         /// maximal same-font segments (per fallback/selector resolution); shaping and kerning apply
         /// within a segment. Results are appended to <paramref name="output"/>.
         /// </summary>
-        internal void ShapeRun(string text, int start, int end, FontFile requestedFont,
-            Func<int, FontFile> selector, float pixelSize, FontQuality quality, List<ShapedGlyph> output)
+        internal void ShapeRun(string text, int start, int end, in TextLayoutSettings settings,
+            List<GlyphStyle> styles, List<ShapedGlyph> output)
         {
             output.Clear();
             var buf = _shapeBuf ??= new List<GsubGlyph>();
             buf.Clear();
+
+            FontFile primary = settings.Font;
+            bool customized = styles.Count > 0;
+            var uniform = new GlyphStyle(0, 0, primary, settings.PixelSize,
+                                         settings.LetterSpacing, settings.WordSpacing, settings.Quality);
+
             FontFile runFont = null;
+            var runStyle = uniform;
 
             int i = start;
             while (i < end)
@@ -571,47 +578,53 @@ namespace Prowl.Scribe
                     charCount = 1;
                 }
 
-                FontFile reqFont = selector != null ? (selector(i) ?? requestedFont) : requestedFont;
-                var ag = reqFont != null ? GetOrCreateGlyph(codepoint, reqFont, quality) : null;
+                var style = customized ? styles[i] : uniform;
+                if (customized) codepoint = style.Codepoint;
+
+                var ag = style.Font != null ? GetOrCreateGlyph(codepoint, style.Font, style.Quality) : null;
 
                 if (ag == null)
                 {
                     // Missing in every font: flush so shaping/kerning doesn't cross the gap, then skip.
-                    FlushSubRun(runFont, buf, pixelSize, quality, output, requestedFont);
+                    FlushSubRun(runFont, buf, runStyle, output, primary);
                     buf.Clear();
                     runFont = null;
                     i += charCount;
                     continue;
                 }
 
-                if (runFont != null && !ReferenceEquals(ag.Font, runFont))
+                // Anything that scales the outlines or picks different metrics ends the sub-run,
+                // since shaping and kerning either side of one are not comparable.
+                if (runFont != null && (!ReferenceEquals(ag.Font, runFont) || !runStyle.ShapesWith(style)))
                 {
-                    FlushSubRun(runFont, buf, pixelSize, quality, output, requestedFont);
+                    FlushSubRun(runFont, buf, runStyle, output, primary);
                     buf.Clear();
                 }
 
                 runFont = ag.Font;
+                runStyle = style;
                 buf.Add(new GsubGlyph(ag.GlyphIndex, i, charCount));
                 i += charCount;
             }
 
-            FlushSubRun(runFont, buf, pixelSize, quality, output, requestedFont);
+            FlushSubRun(runFont, buf, runStyle, output, primary);
             buf.Clear();
         }
 
-        private void FlushSubRun(FontFile font, List<GsubGlyph> buf, float pixelSize, FontQuality quality,
+        private void FlushSubRun(FontFile font, List<GsubGlyph> buf, in GlyphStyle style,
                                  List<ShapedGlyph> output, FontFile primary)
         {
             if (font == null || buf.Count == 0)
                 return;
 
+            float pixelSize = style.PixelSize;
             font.ApplyGsub(buf);
             float scale = GetScale(font, primary, pixelSize);
 
             for (int k = 0; k < buf.Count; k++)
             {
                 var gg = buf[k];
-                var atlas = GetOrCreateGlyphByIndex(gg.Glyph, font, quality);
+                var atlas = GetOrCreateGlyphByIndex(gg.Glyph, font, style.Quality);
 
                 int adv = 0, lsb = 0;
                 font.GetGlyphHorizontalMetrics(gg.Glyph, ref adv, ref lsb);
@@ -623,7 +636,9 @@ namespace Prowl.Scribe
                     Glyph = atlas,
                     Advance = advance,
                     Cluster = gg.Cluster,
-                    CharCount = gg.CharCount
+                    CharCount = gg.CharCount,
+                    PixelSize = pixelSize,
+                    LetterSpacing = style.LetterSpacing
                 });
             }
         }
@@ -660,10 +675,23 @@ namespace Prowl.Scribe
             return layout;
         }
 
+        /// <summary>
+        /// Rebuilds a caller-owned layout in place, bypassing the layout cache.
+        ///
+        /// The cache matches a <see cref="TextLayoutSettings.Customizer"/> by identity and trusts it
+        /// to answer the same for the same character. One that closes over state which changes
+        /// between layouts breaks that, so it belongs here rather than in <see cref="CreateLayout"/>.
+        /// </summary>
+        public void UpdateLayout(TextLayout layout, string text, TextLayoutSettings settings)
+        {
+            if (layout == null) throw new ArgumentNullException(nameof(layout));
+            layout.UpdateLayout(text ?? string.Empty, settings, this);
+        }
+
         LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
             => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
                    s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font.GetHashCode(),
-                   s.Quality, s.FontSelector != null);
+                   s.Quality, s.Customizer);
 
         #endregion
 
@@ -706,6 +734,18 @@ namespace Prowl.Scribe
         }
 
         public void DrawLayout(TextLayout layout, Float2 position, FontColor color)
+            => DrawLayout(layout, position, color, null);
+
+        /// <summary>
+        /// Draws a layout, giving <paramref name="modifier"/> the chance to adjust every glyph on
+        /// its way out. The cached quad geometry is untouched, so the layout is still shaped once
+        /// and only the per-frame adjustment is repeated. That is what makes animated text cheap.
+        ///
+        /// A modifier receives each glyph's four corners and may move them independently, so
+        /// rotation, shear and per-glyph scaling are all expressible without Scribe knowing what
+        /// effect is being applied. Decoration bars arrive with a <c>CharIndex</c> of -1.
+        /// </summary>
+        public void DrawLayout(TextLayout layout, Float2 position, FontColor color, GlyphModifier modifier)
         {
             if (layout.Lines.Count == 0) return;
 
@@ -734,6 +774,42 @@ namespace Prowl.Scribe
                 var q = quads[i];
                 float x0 = position.X + q.X0, y0 = position.Y + q.Y0;
                 float x1 = position.X + q.X1, y1 = position.Y + q.Y1;
+
+                if (modifier != null)
+                {
+                    var glyph = new GlyphDraw
+                    {
+                        CharIndex = q.CharIndex,
+                        GlyphIndex = i,
+                        PixelSize = q.PixelSize,
+                        TopLeft = new Float2(x0, y0),
+                        TopRight = new Float2(x1, y0),
+                        BottomLeft = new Float2(x0, y1),
+                        BottomRight = new Float2(x1, y1),
+                        Color = color,
+                        Visible = true
+                    };
+
+                    modifier(ref glyph);
+                    if (!glyph.Visible)
+                    {
+                        continue;
+                    }
+
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.TopLeft.X, glyph.TopLeft.Y, 0), glyph.Color, new Float2(q.U0, q.V0)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.TopRight.X, glyph.TopRight.Y, 0), glyph.Color, new Float2(q.U1, q.V0)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.BottomLeft.X, glyph.BottomLeft.Y, 0), glyph.Color, new Float2(q.U0, q.V1)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyph.BottomRight.X, glyph.BottomRight.Y, 0), glyph.Color, new Float2(q.U1, q.V1)));
+
+                    indices.Add(vertexCount);
+                    indices.Add(vertexCount + 1);
+                    indices.Add(vertexCount + 2);
+                    indices.Add(vertexCount + 1);
+                    indices.Add(vertexCount + 3);
+                    indices.Add(vertexCount + 2);
+                    vertexCount += 4;
+                    continue;
+                }
 
                 vertices.Add(new IFontRenderer.Vertex(new Float3(x0, y0, 0), color, new Float2(q.U0, q.V0)));
                 vertices.Add(new IFontRenderer.Vertex(new Float3(x1, y0, 0), color, new Float2(q.U1, q.V0)));
@@ -817,6 +893,8 @@ namespace Prowl.Scribe
                         X1 = penX + (float)(glyph.RegionX1 * sc),
                         Y1 = baselineY + (float)(-glyph.RegionY0 * sc),
                         U0 = glyph.U0, V0 = glyph.V0, U1 = glyph.U1, V1 = glyph.V1,
+                        CharIndex = glyphInstance.CharIndex,
+                        PixelSize = ps,
                     });
                 }
 
@@ -861,6 +939,8 @@ namespace Prowl.Scribe
                     X0 = x0, Y0 = top - margin,
                     X1 = x1, Y1 = top + thickness + margin,
                     U0 = u0, V0 = v0, U1 = u1, V1 = v1,
+                    // A decoration bar belongs to no single character.
+                    CharIndex = -1,
                 });
             }
         }

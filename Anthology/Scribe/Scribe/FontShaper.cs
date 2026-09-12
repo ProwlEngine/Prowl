@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Prowl.Scribe.Internal;
 using static Prowl.Scribe.Internal.Common;
 
@@ -30,6 +30,8 @@ namespace Prowl.Scribe
         public float Advance;   // scaled pixels, including kerning to the next glyph in the run
         public int Cluster;     // source char index where the cluster starts
         public int CharCount;   // number of source chars in this cluster
+        public float PixelSize; // size this glyph was shaped at
+        public float LetterSpacing;
     }
 
     // GSUB glyph substitution (ligatures, ccmp, etc.) plus the shared OpenType layout-table
