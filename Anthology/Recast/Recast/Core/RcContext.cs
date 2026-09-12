@@ -40,6 +40,12 @@ namespace Prowl.Recast.Core
     /// @ingroup recast
     public class RcContext
     {
+        /// Where Warn and Log go when a host sets one. Static because a build owns a context per
+        /// thread, so there is no single instance for a host to configure. Unset, messages keep going
+        /// to the console, which is what running the tests from a terminal expects. A sink must not
+        /// throw; one that does is swallowed rather than failing the build it was logging about.
+        public static Action<RcLogCategory, string> Sink;
+
         private readonly ThreadLocal<Dictionary<string, RcAtomicLong>> _timerStart;
         private readonly ConcurrentDictionary<string, RcAtomicLong> _timerAccum;
 
@@ -67,13 +73,25 @@ namespace Prowl.Recast.Core
                 .AddAndGet(RcFrequency.Ticks - _timerStart.Value?[label.Name].Read() ?? 0);
         }
 
-        public void Warn(string message)
-        {
-            Console.WriteLine(message);
-        }
+        public void Warn(string message) => Log(RcLogCategory.RC_LOG_WARNING, message);
 
         public void Log(RcLogCategory logLevel, string message)
         {
+            Action<RcLogCategory, string> sink = Sink;
+            if (sink != null)
+            {
+                try
+                {
+                    sink(logLevel, message);
+                }
+                catch (Exception)
+                {
+                    // A logger cannot be allowed to abort a tile build.
+                }
+
+                return;
+            }
+
             Console.WriteLine(message);
         }
 

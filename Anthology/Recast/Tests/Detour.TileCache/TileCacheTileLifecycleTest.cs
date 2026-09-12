@@ -156,6 +156,99 @@ public class TileCacheTileLifecycleTest : AbstractTileCacheTest
         Assert.Equal(0, again);
     }
 
+    /// An obstacle whose footprint covers no compressed layer touches no tile, so the per-tile loop
+    /// that completes an obstacle never runs for it. Without completion it sits in PROCESSING — and
+    /// a removal never reaches EMPTY, leaking the slot for the life of the cache.
+    [Fact]
+    public void ZeroTouchObstacle_CompletesAndFreesItsSlot()
+    {
+        DtTileCache tc = BuildDungeonCache(out _);
+
+        long far = tc.AddObstacle(new RcVec3f(1000f, 0f, 1000f), 1f, 2f);
+        Assert.True(tc.Update(8));
+
+        DtTileCacheObstacle obstacle = tc.GetObstacleByRef(far);
+        Assert.Empty(obstacle.pending);
+        Assert.Equal(DtObstacleState.DT_OBSTACLE_PROCESSED, obstacle.state);
+
+        tc.RemoveObstacle(far);
+        Assert.True(tc.Update(8));
+        Assert.Equal(DtObstacleState.DT_OBSTACLE_EMPTY, obstacle.state);
+
+        // The freed slot is reusable, and its salt moved on so the old ref cannot resolve to the new
+        // obstacle.
+        long again = tc.AddObstacle(new RcVec3f(1000f, 0f, 1000f), 1f, 2f);
+        Assert.NotEqual(far, again);
+        Assert.Same(obstacle, tc.GetObstacleByRef(again));
+    }
+
+    /// An obstacle is completed by its OWN last pending tile, not by whichever tile happens to be
+    /// rebuilt next. A request is only drained on an Update with no rebuilds outstanding, so an
+    /// obstacle queued behind one sits in PROCESSING with an empty pending list — and completing it
+    /// there left it PROCESSED holding a list the per-tile loop would never drain again.
+    [Fact]
+    public void ObstacleAwaitingItsRequest_IsNotCompletedByAnotherTilesRebuild()
+    {
+        DtTileCache tc = BuildDungeonCache(out _);
+
+        // A wide obstacle so its rebuilds outlast one Update slice, leaving the request loop shut.
+        long wide = tc.AddObstacle(new RcVec3f(-1.815208f, 9.998184f, -20.307983f), 25f, 4f);
+        Assert.False(tc.Update(1));
+        Assert.NotEmpty(tc.GetObstacleByRef(wide).pending);
+
+        // Queued behind those rebuilds: its own request cannot be drained yet, so it has been told
+        // nothing about which tiles it touches.
+        long queued = tc.AddObstacle(new RcVec3f(-1.815208f, 9.998184f, -20.307983f), 1f, 2f);
+        DtTileCacheObstacle obstacle = tc.GetObstacleByRef(queued);
+        Assert.Equal(DtObstacleState.DT_OBSTACLE_PROCESSING, obstacle.state);
+        Assert.Empty(obstacle.pending);
+
+        // This slice rebuilds a tile for the FIRST obstacle. That must not complete the second.
+        Assert.False(tc.Update(1));
+        Assert.Equal(DtObstacleState.DT_OBSTACLE_PROCESSING, obstacle.state);
+
+        // Once its own request is drained and its tiles built, it completes with nothing left over.
+        while (!tc.Update(8))
+        {
+        }
+
+        Assert.Equal(DtObstacleState.DT_OBSTACLE_PROCESSED, obstacle.state);
+        Assert.Empty(obstacle.pending);
+    }
+
+    /// The reachable consequence: an obstacle placed over a column with no layer, then a layer added
+    /// there. RefreshObstacleTouchedTiles skips anything not PROCESSED, so only a completed obstacle
+    /// picks the new tile up — and Prowl's tile-replacement path depends on exactly that listing.
+    [Fact]
+    public void ObstacleOverAnUnbakedColumn_ListsTheTileThatArrives()
+    {
+        DtTileCache tc = BuildDungeonCache(out List<long> refs);
+        long target = FindMeshedTile(tc, refs);
+        Assert.NotEqual(0, target);
+
+        DtTileCacheLayerHeader header = tc.GetTileByRef(target).header;
+        byte[] data = tc.GetTileByRef(target).data;
+        float cs = tc.GetParams().cs;
+        var centre = new RcVec3f(
+            header.bmin.X + (header.minx + header.maxx + 1) * 0.5f * cs,
+            header.bmin.Y + 1f,
+            header.bmin.Z + (header.miny + header.maxy + 1) * 0.5f * cs);
+
+        // Empty the column, then place the obstacle over it: nothing for it to touch.
+        tc.RemoveTile(target);
+        long obstacleRef = tc.AddObstacle(centre, 1f, 2f);
+        Assert.True(tc.Update(8));
+        DtTileCacheObstacle obstacle = tc.GetObstacleByRef(obstacleRef);
+        Assert.Empty(obstacle.pending);
+        Assert.Equal(DtObstacleState.DT_OBSTACLE_PROCESSED, obstacle.state);
+
+        // The layer arrives. Neither the add nor the refresh queues a build, so Prowl asks for one
+        // itself; what matters here is that the obstacle now knows about the tile.
+        Assert.True(tc.TryAddTile(data, 0, out long arrived));
+        Assert.NotEqual(0, arrived);
+        tc.RefreshObstacleTouchedTiles();
+        Assert.Contains(arrived, obstacle.touched);
+    }
     /// The refresh has to widen by the seam border exactly as the add path does: a tile an obstacle
     /// reaches only through that border still carves it, and would otherwise be dropped from the
     /// obstacle's list the first time it was replaced.

@@ -1068,8 +1068,12 @@ namespace Prowl.Recast
         }
 
 
+        /// deadEndCategory is what to log if the walk cannot reach the centre. The caller decides:
+        /// seeding from the centre is the designed path for a polygon with no single region, so a
+        /// dead-end there is a quality note; anywhere else it means the height patch is seeded off a
+        /// cell the polygon may not own, and the BFS that follows assumes otherwise.
         public static void SeedArrayWithPolyCenter(RcContext ctx, RcCompactHeightfield chf, int[] meshpoly, int poly, int npoly,
-            int[] verts, int bs, RcHeightPatch hp, List<int> array)
+            int[] verts, int bs, RcHeightPatch hp, List<int> array, RcLogCategory deadEndCategory)
         {
             // Note: Reads to the compact heightfield are offset by border size (bs)
             // since border size offset is already removed from the polymesh vertices.
@@ -1133,7 +1137,8 @@ namespace Prowl.Recast
             {
                 if (array.Count < 3)
                 {
-                    ctx.Warn("Walk towards polygon center failed to reach center");
+                    ctx.Log(deadEndCategory,
+                        "GetHeightData: seed walk stopped short of the polygon centre; height patch seeded off-centre");
                     break;
                 }
 
@@ -1298,7 +1303,11 @@ namespace Prowl.Recast
             // then use the center as the seed point.
             if (empty)
             {
-                SeedArrayWithPolyCenter(ctx, chf, meshpolys, poly, npoly, verts, bs, hp, queue);
+                // A polygon with no single region is seeded from its centre by design, and every
+                // polygon takes that path on the tile-cache route, where the poly mesh carries no
+                // region ids at all — so a dead-end there is expected rather than a fault.
+                SeedArrayWithPolyCenter(ctx, chf, meshpolys, poly, npoly, verts, bs, hp, queue,
+                    region == RcRecast.RC_MULTIPLE_REGS ? RcLogCategory.RC_LOG_PROGRESS : RcLogCategory.RC_LOG_WARNING);
             }
 
             const int RETRACT_SIZE = 256;
