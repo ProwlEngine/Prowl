@@ -157,7 +157,7 @@ namespace Prowl.Recast.Detour.Crowd
                 dir.X = dir0.X - dir1.X * len0 * 0.5f;
                 dir.Y = 0;
                 dir.Z = dir0.Z - dir1.Z * len0 * 0.5f;
-                dir = RcVec3f.Normalize(dir);
+                dir = RcVec.SafeNormalize(dir);
             }
 
             return dir;
@@ -170,7 +170,9 @@ namespace Prowl.Recast.Detour.Crowd
             {
                 dir = RcVec3f.Subtract(corners[0].pos, npos);
                 dir.Y = 0;
-                dir = RcVec3f.Normalize(dir);
+                // A corner can land on the agent - FindCorners keeps one carrying an off-mesh link
+                // however close it is - and Normalize turns that into NaN rather than zero.
+                dir = RcVec.SafeNormalize(dir);
             }
 
             return dir;

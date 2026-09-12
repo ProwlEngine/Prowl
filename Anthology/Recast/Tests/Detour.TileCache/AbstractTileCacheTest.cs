@@ -38,8 +38,31 @@ public class AbstractTileCacheTest
 
     public DtTileCache GetTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility)
     {
-        DtTileCacheParams option = new DtTileCacheParams();
         RcRecast.CalcTileCount(geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax(), m_cellSize, m_tileSize, m_tileSize, out var tw, out var th);
+        return GetTileCache(geom, order, cCompatibility, tw * th * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE);
+    }
+
+    /// A cache on the bordered path — watershed partitioning and height detail, which is what a
+    /// tile's border grid exists for and what Prowl bakes with. The plain cache above leaves both
+    /// off, so it never reads its neighbours' layers at all.
+    public DtTileCache GetBorderedTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility)
+    {
+        RcRecast.CalcTileCount(geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax(), m_cellSize, m_tileSize, m_tileSize, out var tw, out var th);
+        DtTileCache tc = GetTileCache(geom, order, cCompatibility, tw * th * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE,
+            watershedPartition: true, detailSampleDist: m_cellSize * 6);
+        return tc;
+    }
+
+    public DtTileCache GetTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility, int maxTiles)
+        => GetTileCache(geom, order, cCompatibility, maxTiles, watershedPartition: false, detailSampleDist: 0);
+
+    public DtTileCache GetTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility, int maxTiles,
+        bool watershedPartition, float detailSampleDist)
+    {
+        DtTileCacheParams option = new DtTileCacheParams();
+        option.watershedPartition = watershedPartition;
+        option.detailSampleDist = detailSampleDist;
+        option.detailSampleMaxError = m_cellHeight;
         option.ch = m_cellHeight;
         option.cs = m_cellSize;
         option.orig = geom.GetMeshBoundsMin();
@@ -49,7 +72,7 @@ public class AbstractTileCacheTest
         option.walkableRadius = m_agentRadius;
         option.walkableClimb = m_agentMaxClimb;
         option.maxSimplificationError = m_edgeMaxError;
-        option.maxTiles = tw * th * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE;
+        option.maxTiles = maxTiles;
         option.maxObstacles = 128;
 
         DtNavMeshParams navMeshParams = new DtNavMeshParams();

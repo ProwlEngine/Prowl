@@ -587,7 +587,6 @@ namespace Prowl.Recast
                 int t = i * 4;
                 if (tris[t + 0] == -1 || tris[t + 1] == -1 || tris[t + 2] == -1)
                 {
-                    Console.Error.WriteLine($"delaunayHull: Removing dangling face {i} [{tris[t]},{tris[t + 1]},{tris[t + 2]}]");
                     tris[t + 0] = tris[tris.Count - 4];
                     tris[t + 1] = tris[tris.Count - 3];
                     tris[t + 2] = tris[tris.Count - 2];
@@ -1069,8 +1068,10 @@ namespace Prowl.Recast
         }
 
 
+        /// deadEndCategory is what to log if the walk cannot reach the centre: expected where
+        /// centre-seeding is by design, elsewhere a patch seeded off a cell the polygon may not own.
         public static void SeedArrayWithPolyCenter(RcContext ctx, RcCompactHeightfield chf, int[] meshpoly, int poly, int npoly,
-            int[] verts, int bs, RcHeightPatch hp, List<int> array)
+            int[] verts, int bs, RcHeightPatch hp, List<int> array, RcLogCategory deadEndCategory)
         {
             // Note: Reads to the compact heightfield are offset by border size (bs)
             // since border size offset is already removed from the polymesh vertices.
@@ -1134,7 +1135,8 @@ namespace Prowl.Recast
             {
                 if (array.Count < 3)
                 {
-                    ctx.Warn("Walk towards polygon center failed to reach center");
+                    ctx.Log(deadEndCategory,
+                        "GetHeightData: seed walk stopped short of the polygon centre; height patch seeded off-centre");
                     break;
                 }
 
@@ -1299,7 +1301,10 @@ namespace Prowl.Recast
             // then use the center as the seed point.
             if (empty)
             {
-                SeedArrayWithPolyCenter(ctx, chf, meshpolys, poly, npoly, verts, bs, hp, queue);
+                // On the tile-cache route the poly mesh carries no region ids, so every polygon is
+                // seeded from its centre and a dead-end there is expected rather than a fault.
+                SeedArrayWithPolyCenter(ctx, chf, meshpolys, poly, npoly, verts, bs, hp, queue,
+                    region == RcRecast.RC_MULTIPLE_REGS ? RcLogCategory.RC_LOG_PROGRESS : RcLogCategory.RC_LOG_WARNING);
             }
 
             const int RETRACT_SIZE = 256;
