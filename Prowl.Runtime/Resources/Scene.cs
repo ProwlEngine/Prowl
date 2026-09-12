@@ -223,6 +223,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public PhysicsWorld Physics { get { EnsureNotDisposed(); return _physics; } }
 
     [SerializeIgnore]
+    private readonly NavMeshWorld _navigation = new();
+
+    /// <summary>This scene's navigation state (registered navmeshes, queries, crowd). The static
+    /// <see cref="NavMesh"/> facade forwards to the current scene's world.</summary>
+    public NavMeshWorld Navigation { get { EnsureNotDisposed(); return _navigation; } }
+
+    [SerializeIgnore]
     private readonly SceneDispatcher _dispatcher = new();
 
     /// <summary>The scene's dispatch point for per-frame component callbacks and physics events.</summary>
@@ -809,6 +816,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Clear the physics world
         _physics.Clear();
 
+        // Clear the navigation world (waits out in-flight queries)
+        _navigation.Clear();
+
         // Dispose all GameObjects which will also remove them from the scene. Dispose() (not the raw
         // OnDispose() body) sets IsDisposed and is idempotent, so the flat list's double-hits on
         // already-disposed children are no-ops.
@@ -890,6 +900,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (IsDisposed) return;
         _dispatcher.RunStart();
+
+        // Navigation (crowd steering) advances on the variable update, before component Updates
+        // so gameplay code sees fresh agent state. A crowd that blows up must not crash the frame,
+        // and does so every frame, so it is reported once.
+        try { _navigation.Update(Time.DeltaTime); }
+        catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
+
         _dispatcher.RunUpdate();
         _dispatcher.RunLateUpdate();
 

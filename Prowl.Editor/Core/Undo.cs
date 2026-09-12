@@ -80,6 +80,12 @@ public static class Undo
             if (target == null) return;
 
             CopyFieldsFromEcho(target, TargetType, state);
+
+            // Restoring writes fields directly, exactly as the property grid does, so the object
+            // needs the same notification an edit gives it. Without this, anything that applies its
+            // fields to live state — a collider's shape, a rigidbody's mass, a nav obstacle's carve —
+            // keeps the value being undone.
+            if (target is EngineObject engineObject && engineObject.IsValid()) engineObject.OnValidate();
         }
     }
 

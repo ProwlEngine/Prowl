@@ -784,5 +784,59 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Null(Assets.Get(g));
     }
 
+    /// <summary>
+    /// A .navmesh is written and read as binary Echo. Its payload is compressed voxelization
+    /// blobs, which as text become base64 — bigger, slower to parse, and no more readable. A
+    /// text one does not parse as binary, so it fails the import outright rather than loading
+    /// as something wrong; rebaking is the migration.
+    /// </summary>
+    [Fact]
+    public void NavMesh_RoundTripsAsBinary_AndRejectsText()
+    {
+        NavMeshData? baked = NavMeshBuilder.Build(new NavMeshBuildSettings(), [FlatQuad(20f)]);
+        Assert.NotNull(baked);
+        EchoObject echo = Serializer.Serialize(typeof(object), baked!);
+
+        echo.WriteToBinary(new FileInfo(AssetAbsolutePath("Baked.navmesh")));
+        Guid guid = Assets.ImportFile("Baked.navmesh");
+        Assert.NotEqual(Guid.Empty, guid);
+
+        var loaded = Assets.Get(guid) as NavMeshData;
+        Assert.NotNull(loaded);
+        Assert.Equal(baked!.CacheLayers.Count, loaded!.CacheLayers.Count);
+
+        File.WriteAllText(AssetAbsolutePath("Legacy.navmesh"), echo.WriteToString());
+        Assert.Null(Assets.Get(Assets.ImportFile("Legacy.navmesh")));
+    }
+
+    /// <summary>A rebake goes over the asset the surface references, so renaming the file does not
+    /// leave the next bake writing a second asset beside it.</summary>
+    [Fact]
+    public void NavMeshBake_TargetsTheAssignedAssetWhateverItIsNamed()
+    {
+        NavMeshData? baked = NavMeshBuilder.Build(new NavMeshBuildSettings(), [FlatQuad(20f)]);
+        Assert.NotNull(baked);
+        Serializer.Serialize(typeof(object), baked!).WriteToBinary(new FileInfo(AssetAbsolutePath("Renamed By User.navmesh")));
+        Guid guid = Assets.ImportFile("Renamed By User.navmesh");
+        Assert.NotEqual(Guid.Empty, guid);
+
+        var go = new GameObject("Surface");
+        var surface = go.AddComponent<NavMeshSurface>();
+
+        // No asset yet: the first bake picks a name from the scene and agent type.
+        Assert.EndsWith(".navmesh", Inspector.NavMeshSurfaceEditor.BakePath(surface));
+        Assert.DoesNotContain("Renamed By User", Inspector.NavMeshSurfaceEditor.BakePath(surface));
+
+        surface.NavMeshData = new AssetRef<NavMeshData>(guid);
+
+        Assert.Equal("Renamed By User.navmesh", Inspector.NavMeshSurfaceEditor.BakePath(surface));
+    }
+
+    private static NavMeshGeometrySource FlatQuad(float size)
+    {
+        Prowl.Vector.Float3[] verts = [new(0, 0, 0), new(0, 0, size), new(size, 0, size), new(size, 0, 0)];
+        return new NavMeshGeometrySource(verts, [0, 1, 2, 0, 2, 3], Prowl.Vector.Float4x4.Identity);
+    }
+
     #endregion
 }

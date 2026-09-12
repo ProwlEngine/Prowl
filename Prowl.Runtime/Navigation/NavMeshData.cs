@@ -1,0 +1,311 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
+using System.Threading.Tasks;
+
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
+
+using Prowl.Vector;
+
+namespace Prowl.Runtime;
+
+/// <summary>
+/// A baked navmesh as a standalone <c>.navmesh</c> asset: the compressed layers plus everything
+/// needed to reinstantiate a <see cref="DtNavMesh"/> at load time. Built by
+/// <see cref="NavMeshBuilder"/> and registered through <see cref="NavMeshWorld.AddNavMeshData"/>.
+/// Independent of any scene, so a procedural world can build one at runtime.
+/// </summary>
+public sealed class NavMeshData : EngineObject
+{
+    /// <summary>One serialized Detour tile.</summary>
+    public sealed class NavMeshTile
+    {
+        public int X;
+        public int Z;
+        public byte[] Data = [];
+    }
+
+    /// <summary>One off-mesh link the cache re-injects when it rebuilds a tile.
+    /// The serializable mirror of <see cref="NavMeshLinkSource"/>.</summary>
+    public sealed class NavMeshLinkEntry
+    {
+        public Float3 Start;
+        public Float3 End;
+        public float Width;
+        public bool Bidirectional;
+        public int Area = NavMeshAreas.Jump;
+        public int UserId;
+
+        public NavMeshLinkSource ToSource() => new(Start, End, Width, Bidirectional, Area, UserId);
+
+        public static NavMeshLinkEntry From(NavMeshLinkSource source) => new()
+        {
+            Start = source.Start,
+            End = source.End,
+            Width = source.Width,
+            Bidirectional = source.Bidirectional,
+            Area = source.Area,
+            UserId = source.UserId,
+        };
+    }
+
+    /// <summary>Current serialized-tile format version. Bump when the tile byte format changes
+    /// (e.g. a Prowl.Recast upgrade changing Detour's tile layout), so stale assets fail with a
+    /// clear message instead of a deserialize throw.</summary>
+    public const int CurrentFormatVersion = 1;
+
+    /// <summary>Oldest format version this engine still reads. Anything older must be rebaked.</summary>
+    public const int MinReadableFormatVersion = 1;
+
+    /// <summary>The format version this asset's tiles were serialized with.</summary>
+    public int FormatVersion = CurrentFormatVersion;
+
+    /// <summary>The settings this navmesh was built with (a snapshot — later inspector edits
+    /// to a surface do not retroactively change it). Rebuilds reuse these for consistency.</summary>
+    public NavMeshBuildSettings Settings = new();
+
+    /// <summary>World-space bounds of the baked geometry.</summary>
+    public Float3 BoundsMin;
+
+    /// <summary>World-space bounds of the baked geometry.</summary>
+    public Float3 BoundsMax;
+
+    /// <summary>Origin of the tile grid (world space). Tile (x, z) starts at
+    /// Origin + (x * TileWorldSize, 0, z * TileWorldSize).</summary>
+    public Float3 Origin;
+
+    /// <summary>Side length of one tile in world units.</summary>
+    public float TileWorldSize;
+
+    /// <summary>Capacity the Detour navmesh is initialized with.</summary>
+    public int MaxTiles;
+
+    /// <summary>Per-tile polygon capacity the Detour navmesh is initialized with.</summary>
+    public int MaxPolys;
+
+    /// <summary>
+    /// Compressed voxelization layers, one or more per tile. Each blob is self-describing (tile
+    /// coordinates and layer index live in its header); a tile contributes several vertical
+    /// layers where floors overlap. The TileCache contours these into Detour tiles, which is
+    /// what lets an obstacle re-carve a tile without re-voxelizing the world.
+    /// </summary>
+    public List<NavMeshTile> CacheLayers = [];
+
+    /// <summary>
+    /// A copy for one consumer's private use, so runtime tile and link rewrites do not land on
+    /// an asset every other consumer of the same <c>.navmesh</c> is reading. The blobs are
+    /// shared rather than duplicated: a rebuild replaces entries in these lists and never edits
+    /// one in place, so the copy costs two lists rather than the megabytes they point at.
+    /// </summary>
+    public NavMeshData Clone() => new()
+    {
+        Name = Name,
+        FormatVersion = FormatVersion,
+        Settings = Settings.Clone(),
+        BoundsMin = BoundsMin,
+        BoundsMax = BoundsMax,
+        Origin = Origin,
+        TileWorldSize = TileWorldSize,
+        MaxTiles = MaxTiles,
+        MaxPolys = MaxPolys,
+        CacheLayers = [.. CacheLayers],
+        Links = [.. Links],
+    };
+
+    /// <summary>
+    /// Baked tile coordinates overlapping <paramref name="worldBounds"/>, inclusive; false when
+    /// none do. Intersecting with the tiles that were actually baked keeps the range bounded by
+    /// the navmesh — a range taken straight from a caller's rect spans every coordinate in it,
+    /// however few tiles exist.
+    /// </summary>
+    internal bool TryGetTileRange(AABB worldBounds, out int minTx, out int maxTx, out int minTz, out int maxTz)
+    {
+        minTx = maxTx = minTz = maxTz = 0;
+        if (TileWorldSize <= 0) return false;
+
+        int rx0 = (int)Math.Floor((worldBounds.Min.X - Origin.X) / TileWorldSize);
+        int rx1 = (int)Math.Floor((worldBounds.Max.X - Origin.X) / TileWorldSize);
+        int rz0 = (int)Math.Floor((worldBounds.Min.Z - Origin.Z) / TileWorldSize);
+        int rz1 = (int)Math.Floor((worldBounds.Max.Z - Origin.Z) / TileWorldSize);
+
+        bool found = false;
+        foreach (NavMeshTile tile in CacheLayers)
+        {
+            if (tile.X < rx0 || tile.X > rx1 || tile.Z < rz0 || tile.Z > rz1) continue;
+            if (!found)
+            {
+                minTx = maxTx = tile.X;
+                minTz = maxTz = tile.Z;
+                found = true;
+                continue;
+            }
+
+            minTx = Math.Min(minTx, tile.X);
+            maxTx = Math.Max(maxTx, tile.X);
+            minTz = Math.Min(minTz, tile.Z);
+            maxTz = Math.Max(maxTz, tile.Z);
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Off-mesh links. Tiles are rebuilt from geometry-only layers whenever an obstacle carves
+    /// or a region regenerates — anything baked into them is regenerated away — so links live
+    /// here and are re-injected on every tile build. Kept in step with the live
+    /// <see cref="NavMeshLink"/>s by <see cref="NavMeshSurface.RebuildLinkTiles"/>.
+    /// </summary>
+    public List<NavMeshLinkEntry> Links = [];
+
+    /// <summary>True when there is at least one layer to instantiate.</summary>
+    public bool HasTiles => CacheLayers != null && CacheLayers.Count > 0;
+
+    private void ValidateVersion()
+    {
+        if (FormatVersion < MinReadableFormatVersion || FormatVersion > CurrentFormatVersion)
+            throw new InvalidOperationException($"NavMeshData '{Name}' has tile format version {FormatVersion}; this engine reads versions {MinReadableFormatVersion}..{CurrentFormatVersion}. Rebake the navmesh.");
+    }
+
+    private DtNavMesh CreateEmptyNavMesh()
+    {
+        int maxTiles = Math.Max(1, MaxTiles);
+        int maxPolys = Math.Max(1, MaxPolys);
+        if (CacheLayers.Count > maxTiles)
+        {
+            // Every vertical layer occupies its own navmesh tile slot, and multi-layer tiles
+            // (overlapping floors, bridges) are the point of the layer set — size honestly
+            // from the actual layer count, re-splitting the shared 22 id bits with the same
+            // arithmetic the bake used (tile bits capped at 14).
+            int tileBits = Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(CacheLayers.Count)), 14);
+            maxTiles = 1 << tileBits;
+            maxPolys = 1 << (22 - tileBits);
+        }
+
+        var navMesh = new DtNavMesh();
+        var navParams = new DtNavMeshParams
+        {
+            orig = new RcVec3f((float)Origin.X, (float)Origin.Y, (float)Origin.Z),
+            tileWidth = TileWorldSize,
+            tileHeight = TileWorldSize,
+            maxTiles = maxTiles,
+            maxPolys = maxPolys,
+        };
+
+        DtStatus status = navMesh.Init(navParams, NavMeshTileBuilder.VertsPerPoly);
+        if (status.Failed())
+            throw new InvalidOperationException($"Failed to initialize DtNavMesh from NavMeshData '{Name}': {status}");
+        return navMesh;
+    }
+
+    /// <summary>
+    /// Triangulate this baked navmesh without registering it — for editor gizmos and tooling
+    /// that need to visualize an asset the scene isn't running. Instantiates a throwaway
+    /// navmesh, so cache the result rather than calling it per frame.
+    /// </summary>
+    public NavMeshTriangulation CalculateTriangulation()
+    {
+        if (!HasTiles) return NavMeshTriangulation.Empty;
+        try
+        {
+            // The layers only become polygons once a cache contours them, so this instantiates
+            // one that carves nothing and is discarded with the navmesh it built.
+            return NavMeshTriangulation.FromNavMesh(CreateTileCache(1).GetNavMesh());
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[Navigation] Could not triangulate NavMeshData '{Name}': {e.Message}");
+            return NavMeshTriangulation.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Instantiate a TileCache (and its owned navmesh) from the compressed layers, seeded
+    /// synchronously so the mesh is queryable immediately. Obstacles added later rebuild
+    /// affected tiles incrementally via <c>DtTileCache.Update</c>.
+    /// </summary>
+    /// <param name="maxObstacles">Obstacle capacity the cache is created with.</param>
+    public Prowl.Recast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles)
+        => CreateTileCache(maxObstacles, out _);
+
+    /// <inheritdoc cref="CreateTileCache(int)"/>
+    /// <param name="maxObstacles">Obstacle capacity the cache is created with.</param>
+    /// <param name="meshProcess">The cache's link registry, so live <see cref="NavMeshLink"/>s
+    /// can update the connections that later tile builds inject.</param>
+    internal Prowl.Recast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles,
+        out NavMeshTileBuilder.ProwlTileCacheMeshProcess meshProcess)
+    {
+        ValidateVersion();
+        DtNavMesh navMesh = CreateEmptyNavMesh();
+        Prowl.Recast.Detour.TileCache.DtTileCache cache = NavMeshTileBuilder.CreateTileCache(this, navMesh, maxObstacles, out meshProcess);
+
+        // Add every layer before meshing any: a seam is built from both sides' cells, so a tile
+        // meshed while its neighbours are missing describes that seam differently than they will,
+        // and the two surfaces end up a fraction of a voxel apart along an edge they share.
+        var tileRefs = new List<long>(CacheLayers.Count);
+        foreach (NavMeshTile layer in CacheLayers)
+        {
+            if (layer?.Data == null || layer.Data.Length == 0) continue;
+            long tileRef = cache.AddTile(layer.Data, 0);
+            if (tileRef == 0)
+            {
+                Debug.LogWarning($"[Navigation] NavMeshData '{Name}': failed to add cache layer for tile ({layer.X}, {layer.Z}).");
+                continue;
+            }
+            tileRefs.Add(tileRef);
+        }
+
+        MeshTiles(cache, tileRefs);
+        return cache;
+    }
+
+    /// <summary>
+    /// Mesh every layer. This is the whole cost of registering a navmesh — 0.65–1.5 ms per tile, on
+    /// the main thread inside OnEnable — so it fans out: the build half of a tile touches no navmesh
+    /// state, and only the commit does. Safe here and nowhere else, because the mesh is not
+    /// published until this returns, so no query can be running and nothing can carve.
+    /// <para/>
+    /// Commits run serially in ref order, which is what makes the result identical to a serial
+    /// bake: tile linking follows the order tiles are added. Measured on a 256-tile bake: 85 ms
+    /// against 500 ms, for 9% more allocation (a neighbour-layer cache per worker instead of one).
+    /// </summary>
+    private static void MeshTiles(Prowl.Recast.Detour.TileCache.DtTileCache cache, List<long> tileRefs)
+    {
+        if (tileRefs.Count < 2)
+        {
+            foreach (long tileRef in tileRefs)
+                cache.BuildNavMeshTile(tileRef);
+            return;
+        }
+
+        var built = new DtMeshData?[tileRefs.Count];
+        try
+        {
+            // Loop-local scratch rather than thread-static, as NavMeshBuilder.Build does: a
+            // thread-static one would outlive the registration by the life of the pool thread,
+            // pinning a tile's worth of decompressed layers per worker. Unlike that one this takes
+            // the whole pool rather than leaving a core free — the thread that would use it is the
+            // one blocked here.
+            Parallel.For(0, tileRefs.Count,
+                () => new Prowl.Recast.Detour.TileCache.DtTileCacheBuildScratch(),
+                (int i, ParallelLoopState _, Prowl.Recast.Detour.TileCache.DtTileCacheBuildScratch scratch) =>
+                {
+                    built[i] = cache.BuildTileMeshData(tileRefs[i], scratch);
+                    return scratch;
+                },
+                _ => { });
+        }
+        catch (AggregateException e) when (e.InnerException != null)
+        {
+            // A one-tile navmesh takes the serial path above and throws whatever the build threw;
+            // callers should not have to unwrap only when the bake happened to have more tiles.
+            ExceptionDispatchInfo.Capture(e.InnerException).Throw();
+        }
+
+        for (int i = 0; i < tileRefs.Count; i++)
+            cache.CommitTile(tileRefs[i], built[i]);
+    }
+}

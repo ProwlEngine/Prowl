@@ -1,0 +1,941 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.TileCache;
+
+using Prowl.Echo;
+using Prowl.Vector;
+
+namespace Prowl.Runtime;
+
+/// <summary>Which objects a <see cref="NavMeshSurface"/> bake considers.</summary>
+public enum NavMeshCollectObjects
+{
+    /// <summary>Every active object in the scene.</summary>
+    All,
+    /// <summary>Every active object whose geometry intersects the surface's volume
+    /// (<see cref="NavMeshSurface.Center"/> / <see cref="NavMeshSurface.Size"/>).</summary>
+    Volume,
+    /// <summary>Only this GameObject and its children.</summary>
+    Children,
+}
+
+/// <summary>
+/// Bakes and registers a navmesh for one agent type. The baked result is a standalone
+/// <see cref="NavMeshData"/> asset, which the surface registers with the scene's
+/// <see cref="NavMeshWorld"/> on enable. Rebuilds run synchronously, in the background
+/// (<see cref="BuildNavMeshAsync"/>), or per-tile for localized geometry changes
+/// (<see cref="RebuildTiles"/>).
+/// <para/>
+/// Registration is the whole of this component's lifecycle — there is no per-frame work — and it
+/// runs in the editor as well as in play: obstacles can only carve a live navmesh and the overlay
+/// draws one, so without it a scene's baked navmesh stays unregistered until something bakes again.
+/// </summary>
+[ExecuteAlways]
+[AddComponentMenu("Navigation/NavMesh Surface")]
+[ComponentIcon("")] // map icon
+public class NavMeshSurface : MonoBehaviour
+{
+    [Header("Bake")]
+    [Tooltip("The agent type this navmesh is built for (radius, height, slope, climb come from the project's agent table). Agents only use navmeshes of their own type. One surface per agent type per scene.")]
+    [NavMeshAgentType]
+    [SerializeField] private int agentTypeId = NavMeshAgentTypes.Humanoid;
+
+    [Tooltip("Surface-level rasterization settings (voxel/tile sizes and Recast detail). Most bakes never need to change these.")]
+    [HideInInspector] // drawn inside the editor's Advanced foldout
+    [SerializeField] private NavMeshBuildOverrides buildOverrides = new();
+
+    /// <summary>The resolved bake input: the agent type's envelope composed with this
+    /// surface's <see cref="BuildOverrides"/>. What gets handed to
+    /// <see cref="NavMeshBuilder.Build"/>; a fresh snapshot each call.</summary>
+    public NavMeshBuildSettings ResolveBuildSettings()
+        => NavMeshAgentTypes.GetBuildSettings(AgentTypeId, BuildOverrides);
+
+    [Tooltip("Which objects contribute bake geometry. NavMeshAgents and their children never contribute — agents walk the mesh rather than forming it.")]
+    [SerializeField] private NavMeshCollectObjects collectObjects = NavMeshCollectObjects.All;
+
+    [Tooltip("Volume center (local to this GameObject) when CollectObjects is Volume.")]
+    [ShowIf(nameof(IsVolumeMode))]
+    [SerializeField] private Float3 center;
+
+    [Tooltip("Volume size when CollectObjects is Volume.")]
+    [ShowIf(nameof(IsVolumeMode))]
+    [SerializeField] private Float3 size = new(10, 10, 10);
+
+    [Tooltip("Only objects on these layers contribute bake geometry.")]
+    [SerializeField] private LayerMask layers = LayerMask.Everything;
+
+    [Tooltip("Voxelize render meshes or physics colliders.")]
+    [SerializeField] private NavMeshCollectGeometry useGeometry = NavMeshCollectGeometry.RenderMeshes;
+
+    [Tooltip("Area applied to all walkable geometry in this bake.")]
+    [NavMeshArea]
+    [HideInInspector] // drawn inside the editor's Advanced foldout (Unity keeps it there too)
+    [SerializeField] private int defaultArea = NavMeshAreas.Walkable;
+
+    [Tooltip("The baked navmesh. Assigned by baking, or point it at an existing .navmesh asset.")]
+    // A field, not a property, like MeshRenderer.Mesh: AssetRef<T> caches its resolved instance as
+    // a side effect of .Res, and a property hands out a copy — so every read would resolve from the
+    // database again and the async-load dedup the cache drives would never engage.
+    public AssetRef<NavMeshData> NavMeshData;
+
+    [Tooltip("Draw the walkable surface in the scene view even when this object is not selected — the only way to watch obstacles carve while playing, since entering play mode clears the selection. Debug aid: it re-triangulates the whole mesh every time one settles, so leave it off in scenes you are profiling.")]
+    [SerializeField] private bool alwaysShowNavMesh;
+
+    [Tooltip("Add the height-detail wireframe to the overlay — the triangles Recast fits inside each polygon to follow the ground. Off by default: on a large mesh it is thousands of extra lines a frame.")]
+    [SerializeField] private bool showNavMeshDetail;
+
+    [Tooltip("Add a marker per navmesh vertex to the overlay, polygon corners picked out from detail vertices. Off by default: each one is eight triangles a frame.")]
+    [SerializeField] private bool showNavMeshVertices;
+
+    private NavMeshInstance? _instance;
+    private Runtime.NavMeshData? _runtimeData;
+    private bool IsVolumeMode => CollectObjects == NavMeshCollectObjects.Volume;
+
+    /// <summary>The live navmesh registration, while enabled and a navmesh is loaded.</summary>
+    public NavMeshInstance? Instance => _instance;
+
+    /// <summary>
+    /// What the live navmesh was built from, and what rebuilds rewrite. Null while unregistered.
+    /// For a <c>.navmesh</c> asset this is a private copy made at registration, because the object
+    /// the database hands out is shared by every surface pointing at it and by the next scene that
+    /// loads it. For a navmesh built at runtime and handed over through
+    /// <see cref="ApplyNavMeshData"/> it is that object itself — nothing else owns it.
+    /// </summary>
+    public Runtime.NavMeshData? RuntimeData => _runtimeData;
+
+    public int AgentTypeId { get => agentTypeId; set => agentTypeId = value; }
+    public NavMeshBuildOverrides BuildOverrides { get => buildOverrides; set => buildOverrides = value; }
+    public NavMeshCollectObjects CollectObjects { get => collectObjects; set => collectObjects = value; }
+    public Float3 Center { get => center; set => center = value; }
+    public Float3 Size { get => size; set => size = value; }
+    public LayerMask Layers { get => layers; set => layers = value; }
+    public NavMeshCollectGeometry UseGeometry { get => useGeometry; set => useGeometry = value; }
+    public int DefaultArea { get => defaultArea; set => defaultArea = value; }
+    public bool AlwaysShowNavMesh { get => alwaysShowNavMesh; set => alwaysShowNavMesh = value; }
+    public bool ShowNavMeshDetail { get => showNavMeshDetail; set => showNavMeshDetail = value; }
+    public bool ShowNavMeshVertices { get => showNavMeshVertices; set => showNavMeshVertices = value; }
+
+    /// <summary>The scene's navigation world, or null when not in a scene.</summary>
+    private NavMeshWorld? World
+    {
+        get
+        {
+            var scene = GameObject.IsValid() ? GameObject.Scene : null;
+            return scene.IsValid() ? scene.Navigation : null;
+        }
+    }
+
+    public override void OnEnable()
+    {
+        World?.RegisterSurface(this);
+        Register();
+    }
+
+    public override void OnDisable()
+    {
+        World?.UnregisterSurface(this);
+        Unregister();
+
+        // Release the debug-overlay subscription; without this every surface ever selected
+        // stays referenced by the scene's NavMeshWorld until scene teardown.
+        if (_debugWorld != null)
+        {
+            _debugWorld.NavMeshSettled -= InvalidateDebugTriangulation;
+            _debugWorld.NavMeshChanged -= MarkDebugTriangulationStale;
+            _debugWorld = null;
+        }
+        _debugTriangulation = null;
+    }
+
+    private void Register()
+    {
+        if (_instance != null) return;
+        NavMeshWorld? world = World;
+        if (world == null) return;
+
+        // The navmesh has to be present now: registration happens once on enable and nothing
+        // retries it — a transient null from async streaming would leave the scene permanently
+        // without one. Block-load it, as the mesh and terrain colliders do for the same reason.
+        NavMeshData.EnsureLoaded();
+
+        Runtime.NavMeshData? data = NavMeshData.Res;
+        if (data.IsNotValid() || !data!.HasTiles) return;
+
+        // Copy only what the asset database owns. A .navmesh asset is shared with every other
+        // surface pointing at it and with the next scene that loads it, so runtime tile and link
+        // rewrites must not land on it. One built at runtime and handed over through
+        // ApplyNavMeshData has no other owner — copying it would just cost a list per
+        // registration and throw away every rebuild since the original bake on re-registering.
+        // (Two surfaces of DIFFERENT types handed the same runtime data still share it.)
+        _runtimeData = NavMeshData.AssetID == Guid.Empty ? data : data.Clone();
+        _instance = world.AddNavMeshData(_runtimeData);
+        if (_instance == null) _runtimeData = null;
+    }
+
+    private void Unregister()
+    {
+        if (_instance == null) return;
+        World?.RemoveNavMeshData(_instance);
+        _instance = null;
+        _runtimeData = null;
+    }
+
+    #region Building
+
+    /// <summary>
+    /// Collect geometry and bake the navmesh synchronously, then (re)register it with the
+    /// scene. Blocks the calling thread for the duration of the bake — prefer
+    /// <see cref="BuildNavMeshAsync"/> during gameplay.
+    /// </summary>
+    public bool BuildNavMesh()
+    {
+        Runtime.NavMeshData? data = BuildNavMeshData();
+        if (data == null) return false;
+
+        ApplyNavMeshData(data);
+        return true;
+    }
+
+    /// <summary>
+    /// Collect geometry and bake synchronously, returning the result without registering it.
+    /// For callers that persist the bake first and register the saved asset instead, so the
+    /// tiles are meshed once rather than once per registration.
+    /// </summary>
+    public Runtime.NavMeshData? BuildNavMeshData()
+    {
+        NavMeshBuildSettings settings = ResolveBuildSettings(); // one resolve per bake: collection and build must agree
+        List<NavMeshGeometrySource> sources = CollectSources(null, settings.EffectiveVoxelSize);
+        Runtime.NavMeshData? data = NavMeshBuilder.Build(settings, sources, DefaultArea,
+            threads: Math.Max(1, Environment.ProcessorCount - 1), worldBounds: ExplicitWorldBounds(),
+            volumes: CollectVolumes(null), links: CollectLinks(null));
+        if (data == null)
+            Debug.LogWarning($"[Navigation] Bake of '{GameObject.Name}' produced no walkable geometry.");
+
+        return data;
+    }
+
+    /// <summary>In Volume mode the volume is an explicit statement of the bake's extent, so
+    /// the tile grid spans it even where no geometry exists yet (rooms opening up later can be
+    /// added via <see cref="RebuildTiles(AABB, IReadOnlyList{NavMeshGeometrySource})"/>).</summary>
+    private AABB? ExplicitWorldBounds()
+        => CollectObjects == NavMeshCollectObjects.Volume ? VolumeBounds : null;
+
+    /// <summary>World-space extent of the Volume-mode box.</summary>
+    private AABB VolumeBounds => AABB.FromCenterAndSize(Transform.TransformPoint(Center), Size);
+
+    /// <summary>
+    /// Bake in the background: geometry is collected on the calling (main) thread, the
+    /// voxelization runs on the thread pool. Apply the result with
+    /// <see cref="ApplyNavMeshData"/> from the main thread when the task completes.
+    /// </summary>
+    public Task<NavMeshData?> BuildNavMeshAsync(CancellationToken cancellation = default)
+    {
+        NavMeshBuildSettings settings = ResolveBuildSettings(); // resolved on the main thread, once per bake
+        List<NavMeshGeometrySource> sources = CollectSources(null, settings.EffectiveVoxelSize);
+        List<NavMeshAreaVolume> volumes = CollectVolumes(null); // main thread: touches Transforms
+        List<NavMeshLinkSource> links = CollectLinks(null);
+        int defaultArea = DefaultArea;
+        AABB? worldBounds = ExplicitWorldBounds();
+        return Task.Run(() => NavMeshBuilder.Build(settings, sources, defaultArea,
+            threads: Math.Max(1, Environment.ProcessorCount - 1), cancellation, worldBounds, volumes, links), cancellation);
+    }
+
+    /// <summary>
+    /// Swap in a freshly built navmesh: replaces this surface's data (as a runtime resource)
+    /// and its registration in the scene. Main thread only.
+    /// </summary>
+    public void ApplyNavMeshData(NavMeshData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        Unregister();
+        NavMeshData = data;
+        Register();
+    }
+
+    /// <summary>Re-register the currently assigned <see cref="NavMeshData"/> (e.g. after the
+    /// asset reference was swapped by an editor bake).</summary>
+    public void RefreshRegistration()
+    {
+        Unregister();
+        Register();
+    }
+
+    /// <summary>
+    /// Rebuild only the tiles intersecting <paramref name="worldBounds"/> against the current
+    /// scene geometry (via this surface's collectors) and swap them into the live navmesh —
+    /// cost scales with the changed volume, not the map size. The tile grid stays anchored to
+    /// the original bake, so geometry outside the original bounds needs a full
+    /// <see cref="BuildNavMesh"/>. Requires an enabled surface with a registered navmesh.
+    /// </summary>
+    public bool RebuildTiles(AABB worldBounds)
+    {
+        Runtime.NavMeshData? data = _runtimeData;
+        if (data.IsNotValid()) return false;
+        // Collection (terrain decimation) uses the BAKED voxel size, same as the tiles being
+        // rebuilt — the current agent table may disagree with the bake this grid came from.
+        AABB? collectionBounds = RebuildCollectionBounds(worldBounds);
+        return RebuildTiles(worldBounds,
+            CollectSources(collectionBounds, data!.Settings.EffectiveVoxelSize), out _,
+            CollectVolumes(collectionBounds));
+    }
+
+    /// <summary>
+    /// Replace the live link set and re-contour the tiles overlapping <paramref name="worldBounds"/>.
+    /// No re-voxelization: the compressed layers are untouched, which is what makes this cheap next
+    /// to <see cref="RebuildTiles(AABB)"/>. False when this surface has no live navmesh.
+    /// </summary>
+    /// <param name="worldBounds">Region whose tiles pick up the change, normally the link's endpoints.</param>
+    /// <param name="links">The surface's complete link set. Null collects the scene's
+    /// <see cref="NavMeshLink"/>s; pass a list to skip the scene scan.</param>
+    public bool RebuildLinkTiles(AABB worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
+        => RebuildLinkTiles([worldBounds], links);
+
+    /// <inheritdoc cref="RebuildLinkTiles(AABB, IReadOnlyList{NavMeshLinkSource})"/>
+    /// <param name="worldBounds">Regions whose tiles pick up the change. A tile several of them cover
+    /// re-contours once, which is the point of handing a frame's link edits over together.</param>
+    /// <param name="links">The surface's complete link set. Null collects the scene's
+    /// <see cref="NavMeshLink"/>s.</param>
+    public bool RebuildLinkTiles(ReadOnlySpan<AABB> worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
+    {
+        NavMeshInstance? instance = Instance;
+        Runtime.NavMeshData? data = _runtimeData;
+        if (instance == null || data.IsNotValid()) return false;
+        if (data!.TileWorldSize <= 0) return false;
+
+        links ??= CollectLinks(null);
+        NavMeshWorld? world = World;
+        if (world == null) return false;
+
+        // Resolved before the write lock is taken, so worker-thread queries do not block on it.
+        HashSet<(int X, int Z)> tiles = [];
+        foreach (AABB bounds in worldBounds)
+            if (data.TryGetTileRange(bounds, out int tx0, out int tx1, out int tz0, out int tz1))
+                for (int tz = tz0; tz <= tz1; tz++)
+                    for (int tx = tx0; tx <= tx1; tx++)
+                        tiles.Add((tx, tz));
+
+        world.MutateTileCache(instance, cache =>
+        {
+            // Always replace the link set, even with no tiles in range: it is what tiles rebuilt
+            // later — by a carve, or by a rebuild of a neighbouring region — will be built from.
+            instance.TileCacheLinks.SetLinks(links, data.Settings.AgentRadius);
+
+            foreach ((int tx, int tz) in tiles)
+                foreach (long tileRef in cache.GetTilesAt(tx, tz))
+                    cache.BuildNavMeshTile(tileRef);
+        });
+
+        // Mirror onto the runtime copy, so a rebuild that re-instantiates it starts from the
+        // link set the live mesh is using. The .navmesh asset is left alone: a link moving is a
+        // scene edit, and the baked artifact answers for it at the next bake.
+        data.Links.Clear();
+        foreach (NavMeshLinkSource link in links)
+            data.Links.Add(Runtime.NavMeshData.NavMeshLinkEntry.From(link));
+        return true;
+    }
+
+    /// <summary>
+    /// World rect the collectors must cover for a rebuild of <paramref name="worldBounds"/>: the
+    /// affected TILES plus the erosion border, because rebuilds rasterize whole tiles. Null when
+    /// there is no grid to derive it from, meaning collect everything.
+    /// <para/>
+    /// Public because the explicit-sources overload makes covering this rect the caller's job, and
+    /// getting it wrong leaves holes rather than failing. Collectors clip terrain to the filter they
+    /// are given, so the changed AABB alone is not conservative.
+    /// </summary>
+    public AABB? RebuildCollectionBounds(AABB worldBounds)
+    {
+        Runtime.NavMeshData? data = _runtimeData;
+        if (data.IsNotValid() || data!.TileWorldSize <= 0) return null; // no grid: collect everything
+
+        float ts = data.TileWorldSize;
+        // Conservative world-space erosion border (CalcBorder cells = ceil(radius/cs) + 3).
+        // Derived from the live copy's snapshot settings — the grid being rebuilt is the one the
+        // navmesh was baked with, not whatever the surface's current configuration says.
+        float border = data.Settings.AgentRadius + 4f * data.Settings.EffectiveVoxelSize;
+
+        double minTx = Math.Floor((worldBounds.Min.X - border - data.Origin.X) / ts);
+        double maxTx = Math.Floor((worldBounds.Max.X + border - data.Origin.X) / ts);
+        double minTz = Math.Floor((worldBounds.Min.Z - border - data.Origin.Z) / ts);
+        double maxTz = Math.Floor((worldBounds.Max.Z + border - data.Origin.Z) / ts);
+
+        return new AABB(
+            new Float3((float)(data.Origin.X + minTx * ts - border), (float)data.BoundsMin.Y - 1, (float)(data.Origin.Z + minTz * ts - border)),
+            new Float3((float)(data.Origin.X + (maxTx + 1) * ts + border), (float)data.BoundsMax.Y + 1, (float)(data.Origin.Z + (maxTz + 1) * ts + border)));
+    }
+
+    /// <summary>
+    /// Rebuild the tiles intersecting <paramref name="worldBounds"/> from caller-supplied
+    /// geometry, for games whose world the collectors cannot see. Pass the bounds of the CHANGED
+    /// geometry; the affected tile set derives from them plus the erosion border, and
+    /// <see cref="RebuildCollectionBounds"/> returns exactly the rect to collect against. Covering
+    /// less is not a cheaper rebuild — partly covered tiles come back with holes. An empty source
+    /// list is valid and empties the affected tiles.
+    /// </summary>
+    public bool RebuildTiles(AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources)
+        => RebuildTiles(worldBounds, sources, out _);
+
+    /// <inheritdoc cref="RebuildTiles(AABB, IReadOnlyList{NavMeshGeometrySource})"/>
+    /// <param name="rebuiltTiles">Number of tiles rebuilt or emptied, for cost profiling.</param>
+    /// <param name="volumes">Area volumes applied to the rebuilt tiles. Null (the default)
+    /// collects the scene's <see cref="NavMeshModifierVolume"/>s over the affected region —
+    /// note that collection walks the scene's active objects, so callers who chose explicit
+    /// sources to avoid scene scans should pass an empty list (no volumes, no scan) or their
+    /// own list.</param>
+    public bool RebuildTiles(AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources, out int rebuiltTiles,
+        IReadOnlyList<NavMeshAreaVolume>? volumes = null)
+    {
+        rebuiltTiles = 0;
+        Runtime.NavMeshData? data = _runtimeData;
+        if (World == null || _instance == null || data.IsNotValid())
+            return false;
+
+        volumes ??= CollectVolumes(RebuildCollectionBounds(worldBounds));
+        List<(int X, int Z, List<byte[]> Layers)> rebuilt = NavMeshBuilder.BuildTilesInBounds(
+            data!, sources, worldBounds.Min, worldBounds.Max, DefaultArea, volumes: volumes);
+        return ApplyRebuiltTilesNow(rebuilt, out rebuiltTiles); // a synchronous rebuild is live when it returns
+    }
+
+    /// <summary>
+    /// Voxelize the affected tiles on the thread pool, off the frame. The returned tiles are
+    /// NOT yet live — apply them with <see cref="ApplyRebuiltTiles"/> from the main thread.
+    /// Sequencing rules: do not run two rebuilds of overlapping regions concurrently, and do
+    /// not interleave with a full rebake — the build reads the asset's grid anchoring and the
+    /// apply assumes it is unchanged since dispatch.
+    /// </summary>
+    public Task<List<(int X, int Z, List<byte[]> Layers)>> RebuildTilesAsync(
+        AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources, CancellationToken cancellation = default,
+        IReadOnlyList<NavMeshAreaVolume>? volumes = null)
+    {
+        // The surface's own copy, not the asset: the background build reads the tile grid off
+        // it, and it must be the grid the live mesh is on.
+        Runtime.NavMeshData? data = _runtimeData;
+        if (data.IsNotValid())
+            return Task.FromResult(new List<(int, int, List<byte[]>)>());
+
+        // Volumes are collected on the calling (main) thread — they touch Transforms; the
+        // resulting payload is self-contained for the background build. The null default scans
+        // the scene's active objects — explicit-sources callers who avoid scene scans on
+        // purpose should pass [] (or their own list) instead.
+        volumes ??= CollectVolumes(RebuildCollectionBounds(worldBounds));
+        int defaultArea = DefaultArea;
+        return Task.Run(() => NavMeshBuilder.BuildTilesInBounds(
+            data!, sources, worldBounds.Min, worldBounds.Max, defaultArea, cancellation, volumes), cancellation);
+    }
+
+    /// <summary>
+    /// Swap rebuilt tiles (from <see cref="RebuildTilesAsync"/> or
+    /// <see cref="NavMeshBuilder.BuildTilesInBounds"/>) into the live TileCache and mirror them
+    /// into the asset. Main thread only.
+    /// <para/>
+    /// A cache with carve work in flight cannot take a swap, and draining it inline costs milliseconds
+    /// per queued tile under the write lock — so the swap is held until the frame the pump reports the
+    /// cache settled, usually the next one. Anything queuing tile work sets that flag, a link rebuild
+    /// included. A cache that never settles (an obstacle moving every frame re-queues as fast as the
+    /// pump drains) gives up after a few passes and pays the drain. Use
+    /// <see cref="ApplyRebuiltTilesNow"/> when the tiles must be live before the call returns.
+    /// <para/>
+    /// False only when there is nothing to apply to; true means applied OR held. A held swap keeps
+    /// the layer blobs handed to it, so do not recycle them until it lands.
+    /// </summary>
+    public bool ApplyRebuiltTiles(List<(int X, int Z, List<byte[]> Layers)> rebuilt, out int rebuiltTiles)
+    {
+        ArgumentNullException.ThrowIfNull(rebuilt);
+        rebuiltTiles = 0;
+        NavMeshWorld? world = World;
+        NavMeshInstance? instance = _instance;
+        if (world == null || instance == null || _runtimeData.IsNotValid() || rebuilt.Count == 0)
+            return false;
+
+        if (!instance.CachePending)
+            return ApplyRebuiltTilesNow(rebuilt, out rebuiltTiles);
+
+        rebuiltTiles = rebuilt.Count;
+        // The caller's list outlives the call now, and a destructible world is exactly the sort of
+        // caller that reuses one. Copying the entries is enough; the blobs inside are read-only.
+        List<(int X, int Z, List<byte[]> Layers)> held = [.. rebuilt];
+        world.DeferTileSwap(instance, () =>
+        {
+            // Re-registered since (a rebake, a disable/enable): these layers were voxelized
+            // against the grid of a navmesh that is no longer the live one, so they cannot be
+            // applied to the one that replaced it.
+            if (ReferenceEquals(_instance, instance))
+                ApplyRebuiltTilesNow(held, out _);
+        });
+        return true;
+    }
+
+    /// <inheritdoc cref="ApplyRebuiltTiles"/>
+    /// <remarks>Applies within the call instead of waiting for a settled frame: the swap quiesces
+    /// pending obstacle work, replaces each tile's layers, refreshes every obstacle's touched-tile
+    /// list (stale after a tile replacement bumps its salt), then rebuilds the new tiles with
+    /// carves re-applied. Returns false, leaving the tiles as they were, when the cache cannot be
+    /// quiesced.</remarks>
+    public bool ApplyRebuiltTilesNow(List<(int X, int Z, List<byte[]> Layers)> rebuilt, out int rebuiltTiles)
+    {
+        ArgumentNullException.ThrowIfNull(rebuilt);
+        rebuiltTiles = 0;
+        NavMeshWorld? world = World;
+        Runtime.NavMeshData? data = _runtimeData;
+        if (world == null || _instance == null || data.IsNotValid() || rebuilt.Count == 0)
+            return false;
+
+        // Anything already held for this navmesh has to land first: it was issued earlier, and
+        // applying it afterwards would revert the tiles this call is about to write.
+        world.FlushDeferredTileSwaps(_instance);
+
+        bool applied = false;
+        world.MutateTileCache(_instance, cache =>
+        {
+            // Quiesce: every obstacle settles and no pending rebuild references the tiles being
+            // replaced. Unbounded slices, unlike the per-frame pump's budget — this runs inline
+            // on the main thread and cannot proceed unquiesced, so paying the whole queue here
+            // beats abandoning the caller's rebuild. A request enqueues its tiles only once the
+            // previous batch drains, so a few passes always suffice.
+            bool converged = false;
+            for (int i = 0; i < 8 && !converged; i++)
+                converged = cache.Update(int.MaxValue);
+            if (!converged)
+            {
+                // Replacing tiles an obstacle is still mid-carve on desyncs its pending list.
+                Debug.LogWarning("[Navigation] ApplyRebuiltTiles: the tile cache would not settle; the tile swap was skipped and the navmesh keeps its current tiles. The pump keeps draining, so a later rebuild can succeed.");
+                return;
+            }
+
+            var addedRefs = new List<long>();
+            foreach ((int x, int z, List<byte[]> blobs) in rebuilt)
+            {
+                foreach (long tileRef in cache.GetTilesAt(x, z))
+                    cache.RemoveTile(tileRef);
+
+                foreach (byte[] blob in blobs)
+                {
+                    if (!cache.TryAddTile(blob, 0, out long added))
+                        Debug.LogWarning($"[Navigation] ApplyRebuiltTiles: the tile pool is full; a layer for tile ({x}, {z}) was dropped. Raise the agent type's tile capacity.");
+                    else if (added == 0)
+                        Debug.LogWarning($"[Navigation] ApplyRebuiltTiles: layer for tile ({x}, {z}) collided with an existing layer slot and was skipped.");
+                    else
+                        addedRefs.Add(added);
+                }
+            }
+
+            cache.RefreshObstacleTouchedTiles();
+
+            foreach (long added in addedRefs)
+                cache.BuildNavMeshTile(added); // re-contours with carves applied via the refreshed lists
+
+            applied = true;
+        });
+
+        if (!applied) return false;
+        rebuiltTiles = rebuilt.Count;
+
+        // Mirror the swap into this surface's runtime copy so a later re-instantiation agrees
+        // with the live mesh; the .navmesh asset on disk is not touched. Obstacles are runtime
+        // state and never serialize, so the copy holds clean regenerated layers. Single pass
+        // over the tile list: RemoveAll-per-tile would be O(total x rebuilt).
+        var replaced = new HashSet<(int, int)>(rebuilt.Count);
+        foreach ((int x, int z, _) in rebuilt)
+            replaced.Add((x, z));
+        data!.CacheLayers.RemoveAll(t => replaced.Contains((t.X, t.Z)));
+        foreach ((int x, int z, List<byte[]> blobs) in rebuilt)
+            foreach (byte[] blob in blobs)
+                data.CacheLayers.Add(new Runtime.NavMeshData.NavMeshTile { X = x, Z = z, Data = blob });
+
+        return true;
+    }
+
+    /// <summary>Collect this surface's bake geometry from the scene (main thread).</summary>
+    public List<NavMeshGeometrySource> CollectSources() => CollectSources(null);
+
+    /// <inheritdoc cref="CollectSources(AABB?, float)"/>
+    public List<NavMeshGeometrySource> CollectSources(AABB? filterBounds)
+        => CollectSources(filterBounds, ResolveBuildSettings().EffectiveVoxelSize);
+
+    /// <summary>
+    /// Collect this surface's bake geometry, restricted to objects whose bounds intersect
+    /// <paramref name="filterBounds"/>, a conservative test against transformed local bounds, so a
+    /// partial rebuild's collection cost scales with the changed region. Volume mode composes: the
+    /// volume intersects the filter. <paramref name="terrainVoxelSize"/> must match the settings the
+    /// geometry will be voxelized with, or terrain decimates at a different phase.
+    /// </summary>
+    public List<NavMeshGeometrySource> CollectSources(AABB? filterBounds, float terrainVoxelSize)
+    {
+        List<NavMeshGeometrySource> sources = [];
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsNotValid()) return sources;
+        if (!TryResolveCollectionBounds(filterBounds, out AABB? bounds))
+            return sources; // filter rect entirely outside the volume
+
+        IEnumerable<GameObject> objects = CollectObjects == NavMeshCollectObjects.Children
+            ? EnumerateSelfAndChildren(GameObject)
+            : scene!.ActiveObjects;
+
+        NavMeshGeometryCollector.Collect(objects, UseGeometry, Layers, terrainVoxelSize, DefaultArea, sources, bounds, AgentTypeId);
+        return sources;
+    }
+
+    /// <summary>
+    /// Compose an optional world-space filter with the Volume-mode extent (the one bounds
+    /// rule shared by geometry and volume collection). False when the intersection is empty —
+    /// nothing can be collected.
+    /// </summary>
+    private bool TryResolveCollectionBounds(AABB? filterBounds, out AABB? bounds)
+    {
+        bounds = filterBounds;
+        if (CollectObjects != NavMeshCollectObjects.Volume) return true;
+
+        AABB volume = VolumeBounds;
+        if (bounds is AABB b)
+        {
+            if (!b.Intersects(volume)) return false;
+            bounds = b.ClippedBy(volume);
+        }
+        else
+        {
+            bounds = volume;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Collect the scene's <see cref="NavMeshModifierVolume"/>s that apply to this surface's
+    /// agent type (main thread), optionally restricted to volumes overlapping
+    /// <paramref name="filterBounds"/>. Same object scoping (CollectObjects/Layers) as
+    /// geometry collection.
+    /// </summary>
+    public List<NavMeshAreaVolume> CollectVolumes(AABB? filterBounds)
+    {
+        List<NavMeshAreaVolume> volumes = [];
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsNotValid()) return volumes;
+        if (!TryResolveCollectionBounds(filterBounds, out AABB? bounds))
+            return volumes;
+
+        IEnumerable<GameObject> objects = CollectObjects == NavMeshCollectObjects.Children
+            ? EnumerateSelfAndChildren(GameObject)
+            : scene!.ActiveObjects;
+
+        NavMeshGeometryCollector.CollectModifierVolumes(objects, Layers, AgentTypeId, volumes, bounds);
+        return volumes;
+    }
+
+    /// <summary>
+    /// Collect the scene's <see cref="NavMeshLink"/>s that apply to this surface's agent type
+    /// (main thread), optionally restricted to links overlapping
+    /// <paramref name="filterBounds"/>. Same object scoping (CollectObjects/Layers) as
+    /// geometry collection.
+    /// </summary>
+    public List<NavMeshLinkSource> CollectLinks(AABB? filterBounds)
+    {
+        List<NavMeshLinkSource> links = [];
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsNotValid()) return links;
+        if (!TryResolveCollectionBounds(filterBounds, out AABB? bounds))
+            return links;
+
+        // Scene-wide collection reads the world's registry rather than every GameObject: a link
+        // edit re-collects on the spot, so this runs at gameplay rate. Children mode still walks,
+        // because what it scopes to is the hierarchy.
+        if (CollectObjects == NavMeshCollectObjects.Children)
+            NavMeshGeometryCollector.CollectLinks(EnumerateSelfAndChildren(GameObject), Layers, AgentTypeId, links, bounds);
+        else
+            NavMeshGeometryCollector.CollectLinks(scene!.Navigation.Links, Layers, AgentTypeId, links, bounds);
+        return links;
+    }
+
+    private static IEnumerable<GameObject> EnumerateSelfAndChildren(GameObject root)
+    {
+        yield return root;
+        foreach (GameObject child in root.Children)
+        {
+            if (child.IsNotValid()) continue;
+            foreach (GameObject go in EnumerateSelfAndChildren(child))
+                yield return go;
+        }
+    }
+
+    #endregion
+
+    #region Gizmos
+
+    private NavMeshTriangulation? _debugTriangulation;
+    private NavMeshWorld? _debugWorld;
+    // What the cached triangulation was built from, so it rebuilds when the asset is swapped
+    // or the surface gains/loses a live registration (entering or leaving play mode).
+    private Runtime.NavMeshData? _debugSource;
+    private bool _debugFromLive;
+    private int _debugStructureGeneration = -1;
+    // ~4 Hz at 60 fps: fast enough to watch a carve, slow enough that the cost stops mattering.
+    private const int DebugStaleDraws = 15;
+    private bool _debugStale;
+    private int _debugDrawsSinceTriangulation;
+    private List<(Float3 Position, bool Corner)>? _debugVertexMarkers;
+    private List<(Float3 A, Float3 B)>? _debugDetailEdges;
+
+    private void InvalidateDebugTriangulation() => _debugTriangulation = null;
+
+    private void MarkDebugTriangulationStale() => _debugStale = true;
+
+    /// <summary>Unselected drawing: only the walkable overlay, and only when asked for. Watching
+    /// obstacles carve needs it while something else is selected — and entering play mode clears
+    /// the selection outright, so selection-only drawing cannot show a runtime carve at all.
+    /// </summary>
+    public override void DrawGizmos()
+    {
+        if (AlwaysShowNavMesh) DrawWalkableOverlay();
+    }
+
+    public override void DrawGizmosSelected()
+    {
+        if (CollectObjects == NavMeshCollectObjects.Volume)
+            Debug.DrawWireCube(Transform.TransformPoint(Center), Size * 0.5f, Color.Cyan);
+
+        Runtime.NavMeshData? data = NavMeshData.Res;
+        if (data.IsNotValid() || !data!.HasTiles)
+            return;
+
+        Debug.DrawWireCube((data.BoundsMin + data.BoundsMax) * 0.5f, (data.BoundsMax - data.BoundsMin) * 0.5f, Color.Blue);
+
+        // Already drawn unselected — drawing it twice would double the blend.
+        if (!AlwaysShowNavMesh) DrawWalkableOverlay();
+    }
+
+    /// <summary>The walkable surface, colored per area. Cached; invalidated on navmesh change.</summary>
+    private void DrawWalkableOverlay()
+    {
+        Runtime.NavMeshData? data = NavMeshData.Res;
+        if (data.IsNotValid() || !data!.HasTiles)
+            return;
+
+        NavMeshWorld? world = World;
+        if (world != null && _debugWorld != world)
+        {
+            if (_debugWorld != null)
+            {
+                _debugWorld.NavMeshSettled -= InvalidateDebugTriangulation;
+                _debugWorld.NavMeshChanged -= MarkDebugTriangulationStale;
+            }
+            world.NavMeshSettled += InvalidateDebugTriangulation;
+            world.NavMeshChanged += MarkDebugTriangulationStale;
+            _debugWorld = world;
+            _debugTriangulation = null;
+        }
+
+        // Registration changes raise no Settled at all, so the generation counter covers those.
+        if (world != null && _debugStructureGeneration != world.StructureGeneration)
+        {
+            _debugStructureGeneration = world.StructureGeneration;
+            _debugTriangulation = null;
+        }
+
+        // Settled invalidates at once; a mesh that merely changed waits. A re-triangulation costs
+        // milliseconds and megabytes, and Changed fires on every frame a carve is converging, so
+        // paying it per frame is what this rate limit is for. The limit rather than nothing because
+        // a cache is not guaranteed to settle: an obstacle moving every frame re-queues as fast as
+        // the pump drains, and watching one carve is what this overlay is for.
+        _debugDrawsSinceTriangulation++;
+        if (_debugStale && _debugDrawsSinceTriangulation >= DebugStaleDraws)
+            _debugTriangulation = null;
+
+        // Prefer this surface's own live navmesh: it is the one carving and rebuilds change.
+        // Asking the world for the agent type instead would draw a rival surface's mesh here.
+        bool live = _instance != null;
+        if (_debugTriangulation == null || _debugFromLive != live || !ReferenceEquals(_debugSource, data))
+        {
+            _debugStale = false;
+            _debugDrawsSinceTriangulation = 0;
+            _debugTriangulation = live ? world!.CalculateTriangulation(AgentTypeId) : data.CalculateTriangulation();
+            _debugFromLive = live;
+            _debugSource = data;
+            _debugVertexMarkers = null; // built on demand below, so an unticked toggle costs nothing
+            _debugDetailEdges = null;
+        }
+
+        NavMeshTriangulation tri = _debugTriangulation.Value;
+        // Lift off the surface so the overlay doesn't z-fight the floor. Sized past the mesh's
+        // own error band: quantized heights interpolated between samples can dip a few
+        // centimetres below finely-tessellated ground, and fragments under the ground take the
+        // gizmo shader's faded occluded styling in patches.
+        var lift = new Float3(0, 0.08f, 0);
+        for (int t = 0; t < tri.Areas.Length; t++)
+        {
+            Color color = AreaColor(tri.Areas[t]);
+            Debug.DrawTriangle(
+                tri.Vertices[tri.Indices[t * 3 + 0]] + lift,
+                tri.Vertices[tri.Indices[t * 3 + 1]] + lift,
+                tri.Vertices[tri.Indices[t * 3 + 2]] + lift,
+                color);
+        }
+
+        // Polygon outlines over the fill, the way Unity draws its navmesh: the walkable border
+        // dark and solid, inner polygon edges light, tile seams warm — so the mesh's structure
+        // reads at a glance and a wrong edge points at itself.
+        foreach (NavMeshEdge edge in tri.Edges)
+        {
+            Color c = edge.Kind switch
+            {
+                NavMeshEdgeKind.Border => new Color(0.05f, 0.12f, 0.35f, 1f),
+                NavMeshEdgeKind.TilePortal => new Color(0.9f, 0.55f, 0.15f, 1f),
+                _ => new Color(0.65f, 0.85f, 1f, 0.9f),
+            };
+            Debug.DrawLine(edge.A + lift, edge.B + lift, c);
+        }
+
+        if (ShowNavMeshDetail)
+            DrawDetailWireframe(_debugDetailEdges ??= BuildDetailEdges(tri), lift);
+        if (ShowNavMeshVertices)
+            DrawVertexMarkers(_debugVertexMarkers ??= BuildVertexMarkers(tri), lift);
+
+        foreach (NavMeshConnection con in tri.Connections)
+            DrawConnection(con, lift);
+    }
+
+    /// <summary>Each height-detail edge once. Neighbouring triangles share two thirds of their
+    /// edges, so drawing three per triangle submits most of them twice and doubles the alpha
+    /// where they overlap. Built with the markers, once per triangulation.</summary>
+    private static List<(Float3 A, Float3 B)> BuildDetailEdges(NavMeshTriangulation tri)
+    {
+        var seen = new HashSet<(int, int)>(tri.Areas.Length * 2);
+        var edges = new List<(Float3, Float3)>(tri.Areas.Length * 2);
+        for (int t = 0; t < tri.Areas.Length; t++)
+        {
+            for (int e = 0; e < 3; e++)
+            {
+                int i = tri.Indices[t * 3 + e];
+                int j = tri.Indices[t * 3 + (e + 1) % 3];
+                if (seen.Add((Math.Min(i, j), Math.Max(i, j))))
+                    edges.Add((tri.Vertices[i], tri.Vertices[j]));
+            }
+        }
+
+        return edges;
+    }
+
+    /// <summary>The height-detail triangle edges, faint: the carpet inside each polygon,
+    /// distinct from the polygon outlines drawn on top of it.</summary>
+    private static void DrawDetailWireframe(List<(Float3 A, Float3 B)>? edges, Float3 lift)
+    {
+        if (edges == null) return;
+
+        var c = new Color(1f, 1f, 1f, 0.18f);
+        foreach ((Float3 a, Float3 b) in edges)
+            Debug.DrawLine(a + lift, b + lift, c);
+    }
+
+    /// <summary>
+    /// One dot per distinct vertex position: white for polygon corners, orange for vertices the
+    /// height detail added. The triangulation repeats shared corners per polygon, so markers dedupe
+    /// by position and a corner wins a tie. Built once per triangulation rebuild, drawn every frame.
+    /// </summary>
+    private static List<(Float3 Position, bool Corner)> BuildVertexMarkers(NavMeshTriangulation tri)
+    {
+        var seen = new Dictionary<(int, int, int), bool>(tri.Vertices.Length);
+        for (int v = 0; v < tri.Vertices.Length; v++)
+        {
+            Float3 p = tri.Vertices[v];
+            var key = ((int)Math.Round(p.X * 128), (int)Math.Round(p.Y * 128), (int)Math.Round(p.Z * 128));
+            bool corner = tri.IsPolygonCorner[v];
+            if (seen.TryGetValue(key, out bool wasCorner) && (wasCorner || !corner))
+                continue;
+            seen[key] = corner;
+        }
+
+        var markers = new List<(Float3, bool)>(seen.Count);
+        foreach (KeyValuePair<(int, int, int), bool> m in seen)
+            markers.Add((new Float3(m.Key.Item1 / 128f, m.Key.Item2 / 128f, m.Key.Item3 / 128f), m.Value));
+        return markers;
+    }
+
+    private static void DrawVertexMarkers(List<(Float3 Position, bool Corner)>? markers, Float3 lift)
+    {
+        if (markers == null) return;
+
+        var cornerColor = new Color(1f, 1f, 1f, 1f);
+        var detailColor = new Color(1f, 0.6f, 0.1f, 1f);
+        // One size for both: colour already says which is which, and a corner drawn larger
+        // reads as more important than the detail vertex beside it when they are the same
+        // thing to everything downstream.
+        foreach ((Float3 position, bool corner) in markers)
+            DrawSolidDot(position + lift, 0.03f, corner ? cornerColor : detailColor);
+    }
+
+    /// <summary>A tiny solid octahedron: reads as a dot from any angle, unlike a wire sphere,
+    /// and costs eight small triangles.</summary>
+    private static void DrawSolidDot(Float3 p, float r, Color color)
+    {
+        var xp = new Float3(r, 0, 0); var yp = new Float3(0, r, 0); var zp = new Float3(0, 0, r);
+        Debug.DrawTriangle(p + yp, p + xp, p + zp, color);
+        Debug.DrawTriangle(p + yp, p + zp, p - xp, color);
+        Debug.DrawTriangle(p + yp, p - xp, p - zp, color);
+        Debug.DrawTriangle(p + yp, p - zp, p + xp, color);
+        Debug.DrawTriangle(p - yp, p + zp, p + xp, color);
+        Debug.DrawTriangle(p - yp, p - xp, p + zp, color);
+        Debug.DrawTriangle(p - yp, p - zp, p - xp, color);
+        Debug.DrawTriangle(p - yp, p + xp, p - zp, color);
+    }
+
+    /// <summary>Endpoint marker size, shared so a link's own gizmo matches the overlay.</summary>
+    internal const float EndpointGizmoRadius = 0.15f;
+
+    /// <summary>
+    /// One off-mesh connection, drawn where the navmesh put it rather than where the component
+    /// asked: endpoints that snapped elsewhere show it, and a link that never attached is
+    /// visibly absent. Opaque, because the translucent surface fill is a poor read for a line.
+    /// </summary>
+    internal static void DrawConnection(NavMeshConnection con, Float3 lift)
+    {
+        Color area = AreaColor(con.Area);
+        var color = new Color(area.R, area.G, area.B, 1f);
+        Float3 start = con.Start + lift, end = con.End + lift;
+
+        Debug.DrawLine(start, end, color);
+        Debug.DrawWireSphere(start, EndpointGizmoRadius, color);
+        Debug.DrawWireSphere(end, EndpointGizmoRadius, color);
+
+        // Measured flat: the markings read as ground plan, and a steep link would otherwise
+        // splay them out of the surface.
+        var flat = new Float3(end.X - start.X, 0, end.Z - start.Z);
+        double length = Math.Sqrt(flat.X * flat.X + flat.Z * flat.Z);
+        if (length <= 1e-4) return;
+        var forward = new Float3((float)(flat.X / length), 0, (float)(flat.Z / length));
+        var perp = new Float3(-forward.Z, 0, forward.X);
+
+        // The width the connection actually covers, as a bar across each end.
+        if (con.Radius > 0f)
+        {
+            Float3 half = perp * con.Radius;
+            Debug.DrawLine(start - half, start + half, color);
+            Debug.DrawLine(end - half, end + half, color);
+        }
+
+        // One-way connections get an arrowhead; a bidirectional one is just the line.
+        if (con.Bidirectional) return;
+        Float3 back = end - forward * (EndpointGizmoRadius * 3f);
+        Float3 barb = perp * (EndpointGizmoRadius * 1.5f);
+        Debug.DrawLine(end, back + barb, color);
+        Debug.DrawLine(end, back - barb, color);
+    }
+
+    /// <summary>Stable debug color for an area index (Walkable is the familiar navmesh blue).</summary>
+    public static Color AreaColor(int areaIndex)
+    {
+        if (areaIndex == NavMeshAreas.Walkable) return new Color(0f, 0.75f, 1f, 0.35f);
+        // Deterministic hue per area index.
+        float hue = (areaIndex * 137.5f) % 360f / 360f;
+        float r = Math.Abs(hue * 6f - 3f) - 1f;
+        float g = 2f - Math.Abs(hue * 6f - 2f);
+        float b = 2f - Math.Abs(hue * 6f - 4f);
+        return new Color(Math.Clamp(r, 0f, 1f), Math.Clamp(g, 0f, 1f), Math.Clamp(b, 0f, 1f), 0.35f);
+    }
+
+    #endregion
+}

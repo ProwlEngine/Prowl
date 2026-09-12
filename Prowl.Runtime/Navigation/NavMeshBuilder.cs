@@ -1,0 +1,369 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
+using Prowl.Recast;
+
+using Prowl.Vector;
+
+namespace Prowl.Runtime;
+
+/// <summary>
+/// Builds a <see cref="NavMeshData"/> from collected geometry. Pure CPU work over an
+/// already-flattened triangle soup — no Transform or GameObject access — so it is safe to run
+/// on a background thread once the sources have been collected on the main thread.
+/// Navmeshes are always built tiled so they can be partially rebuilt later
+/// (see <c>NavMeshSurface.RebuildTiles</c>).
+/// </summary>
+public static class NavMeshBuilder
+{
+    /// <summary>
+    /// Build a complete navmesh from geometry sources. Returns null when nothing walkable was
+    /// produced (no geometry, all down-facing, cancelled) — never an empty NavMeshData.
+    /// </summary>
+    /// <param name="settings">Agent envelope + voxelization parameters. Snapshotted into the result.</param>
+    /// <param name="sources">Collected geometry. Vertices are transformed by each source's matrix during flattening.</param>
+    /// <param name="defaultArea">Area for sources that don't specify one (see <see cref="NavMeshAreas"/>).</param>
+    /// <param name="threads">Worker threads for tile building. 0 or 1 builds single-threaded (deterministic tile order).</param>
+    /// <param name="cancellation">Cancels between tiles; a cancelled build returns null.</param>
+    /// <param name="worldBounds">Explicit XZ extent for the tile grid. Size the grid from this rather
+    /// than from the geometry so <c>RebuildTiles</c> can add tiles anywhere inside it later. The
+    /// vertical range still unions with the geometry.</param>
+    /// <param name="volumes">Convex area volumes stamped over the rasterized geometry. They never
+    /// create walkable surface; a Not Walkable volume erases it.</param>
+    /// <param name="links">Off-mesh connections, placed in the tile containing their start point and
+    /// re-injected as each tile is contoured — runtime tiles rebuild from geometry-only layers.</param>
+    public static NavMeshData? Build(NavMeshBuildSettings settings, IReadOnlyList<NavMeshGeometrySource> sources,
+        int defaultArea = NavMeshAreas.Walkable, int threads = 0, CancellationToken cancellation = default,
+        AABB? worldBounds = null, IReadOnlyList<NavMeshAreaVolume>? volumes = null,
+        IReadOnlyList<NavMeshLinkSource>? links = null)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(sources);
+
+        int inputTriangles = 0;
+        for (int i = 0; i < sources.Count; i++)
+            inputTriangles += sources[i].TriangleCount;
+        if (inputTriangles == 0)
+            return null;
+
+        var geom = new ProwlInputGeomProvider(sources, defaultArea, clip: null); // a full bake wants every triangle
+        if (geom.TriangleCount == 0)
+            return null;
+        AddVolumes(geom, volumes);
+
+        settings = settings.Clone();
+        ResolveTileSize(settings);
+
+        float cs = settings.EffectiveVoxelSize;
+        int tileVoxels = settings.EffectiveTileSize;
+        RcConfig cfg = CreateConfig(settings, defaultArea);
+
+        RcVec3f bmin = geom.GetMeshBoundsMin();
+        RcVec3f bmax = geom.GetMeshBoundsMax();
+        if (worldBounds is AABB wb)
+        {
+            // XZ extent from the caller; Y is the union of both so no geometry falls outside
+            // the heightfield's vertical range.
+            bmin = new RcVec3f((float)wb.Min.X, Math.Min(bmin.Y, (float)wb.Min.Y), (float)wb.Min.Z);
+            bmax = new RcVec3f((float)wb.Max.X, Math.Max(bmax.Y, (float)wb.Max.Y), (float)wb.Max.Z);
+        }
+
+        RcRecast.CalcGridSize(bmin, bmax, cs, out int gridX, out int gridZ);
+        int tilesX = (gridX + tileVoxels - 1) / tileVoxels;
+        int tilesZ = (gridZ + tileVoxels - 1) / tileVoxels;
+
+        var data = new NavMeshData
+        {
+            Settings = settings,
+            BoundsMin = new Float3(bmin.X, bmin.Y, bmin.Z),
+            BoundsMax = new Float3(bmax.X, bmax.Y, bmax.Z),
+            Origin = new Float3(bmin.X, bmin.Y, bmin.Z),
+            TileWorldSize = tileVoxels * cs,
+            MaxTiles = GetMaxTiles(bmin, bmax, cs, tileVoxels),
+            MaxPolys = GetMaxPolysPerTile(bmin, bmax, cs, tileVoxels),
+        };
+
+        // Detour packs tile + poly ids into shared reference bits (tile bits cap at 14), so a
+        // large enough grid overflows MaxTiles — AddTile then drops tiles at instantiation.
+        // Surface it at bake time, where the fix (larger tiles / tighter bounds) is actionable.
+        if (tilesX * tilesZ > data.MaxTiles)
+            Debug.LogWarning($"[Navigation] Bake grid is {tilesX}x{tilesZ} = {tilesX * tilesZ} tiles but the navmesh can only address {data.MaxTiles}; tiles beyond capacity will fail to add. Increase TileSize or shrink the bake bounds.");
+
+        // Compressed voxelization blobs per tile, contoured on demand by the TileCache. The
+        // results array is indexed by tile, keeping output order deterministic regardless of
+        // thread scheduling.
+        var layerResults = new List<byte[]>?[tilesX * tilesZ];
+        if (threads > 1)
+        {
+            // Loop-local scratch, not thread-static: a bake fans out over pool threads, and a
+            // thread-static set on one of those would outlive the bake by the life of the thread,
+            // pinning a tile's worth of span pages per worker. This still recycles across every
+            // tile a partition builds, then goes out of scope with the loop.
+            Parallel.For(0, tilesX * tilesZ,
+                new ParallelOptions { MaxDegreeOfParallelism = threads, CancellationToken = CancellationToken.None },
+                () => new NavMeshTileBuilder.TileBuildScratch(),
+                (i, _, scratch) =>
+                {
+                    if (cancellation.IsCancellationRequested) return scratch;
+                    layerResults[i] = NavMeshTileBuilder.BuildTileLayers(geom, cfg, bmin, bmax, i % tilesX, i / tilesX, scratch);
+                    return scratch;
+                },
+                _ => { });
+        }
+        else
+        {
+            for (int i = 0; i < layerResults.Length; i++)
+            {
+                if (cancellation.IsCancellationRequested) return null;
+                layerResults[i] = NavMeshTileBuilder.BuildTileLayers(geom, cfg, bmin, bmax, i % tilesX, i / tilesX);
+            }
+        }
+
+        if (cancellation.IsCancellationRequested)
+            return null;
+
+        for (int i = 0; i < layerResults.Length; i++)
+        {
+            List<byte[]>? blobs = layerResults[i];
+            if (blobs == null) continue;
+            foreach (byte[] blob in blobs)
+                data.CacheLayers.Add(new NavMeshData.NavMeshTile { X = i % tilesX, Z = i / tilesX, Data = blob });
+        }
+
+        // A bake that rasterized nothing walkable returns null, not an empty NavMeshData —
+        // every consumer rejects tile-less data anyway, and null keeps the "produced no
+        // walkable geometry" diagnostics accurate downstream.
+        if (data.CacheLayers.Count == 0)
+            return null;
+
+        if (links != null)
+            foreach (NavMeshLinkSource link in links)
+                data.Links.Add(NavMeshData.NavMeshLinkEntry.From(link));
+
+        Debug.Log($"[Navigation] Baked {data.CacheLayers.Count} cache layers ({tilesX}x{tilesZ} grid, {geom.TriangleCount} input triangles, {data.Links.Count} links).");
+        return data;
+    }
+
+    /// <summary>
+    /// Rebuild the compressed layers of the tiles intersecting
+    /// <paramref name="worldMin"/>..<paramref name="worldMax"/> against fresh geometry, keeping
+    /// the original bake's tile grid. A region entirely outside the baked bounds is a no-op —
+    /// growing the bounds needs a full rebuild. Returns one entry per affected tile; an empty
+    /// layer list means the tile is now empty. Apply with <c>NavMeshSurface.ApplyRebuiltTiles</c>,
+    /// which refreshes obstacle state so existing carves re-apply to the regenerated tiles.
+    /// </summary>
+    public static List<(int X, int Z, List<byte[]> Layers)> BuildTilesInBounds(NavMeshData data,
+        IReadOnlyList<NavMeshGeometrySource> sources, Float3 worldMin, Float3 worldMax,
+        int defaultArea = NavMeshAreas.Walkable, CancellationToken cancellation = default,
+        IReadOnlyList<NavMeshAreaVolume>? volumes = null)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(sources);
+
+        var results = new List<(int, int, List<byte[]>)>();
+        RcConfig cfg = CreateConfig(data.Settings, defaultArea);
+
+        if (!TryPrepareRebuild(data, sources, defaultArea, volumes, worldMin, worldMax, cfg,
+            out ProwlInputGeomProvider? geom, out RcVec3f bmin, out RcVec3f bmax,
+            out int minTx, out int maxTx, out int minTz, out int maxTz))
+            return results;
+
+        for (int tz = minTz; tz <= maxTz; tz++)
+        {
+            for (int tx = minTx; tx <= maxTx; tx++)
+            {
+                if (cancellation.IsCancellationRequested) return results;
+                List<byte[]> layers = geom == null ? [] : NavMeshTileBuilder.BuildTileLayers(geom, cfg, bmin, bmax, tx, tz);
+                results.Add((tx, tz, layers));
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Prologue of the partial-rebuild path: derives the affected tile range, builds the geometry
+    /// provider clipped to it, and applies volumes.
+    /// <para/>
+    /// XZ anchors to the ORIGINAL bake bounds, never the current geometry, or tile (0,0) shifts and
+    /// every tile misaligns against the live navmesh. Y follows the current geometry because Recast
+    /// clips spans to the heightfield's vertical range — except when there is no geometry, since an
+    /// empty provider reports (0,0,0) and would drag the bake down to Y=0. Empty sources still empty
+    /// the affected tiles, and a region wholly outside the baked bounds returns false rather than
+    /// clamping onto the nearest tile column.
+    /// </summary>
+    private static bool TryPrepareRebuild(NavMeshData data, IReadOnlyList<NavMeshGeometrySource> sources,
+        int defaultArea, IReadOnlyList<NavMeshAreaVolume>? volumes, Float3 worldMin, Float3 worldMax,
+        RcConfig cfg, out ProwlInputGeomProvider? geom, out RcVec3f bmin, out RcVec3f bmax,
+        out int minTx, out int maxTx, out int minTz, out int maxTz)
+    {
+        minTx = maxTx = minTz = maxTz = 0;
+        geom = null;
+        float cs = data.Settings.EffectiveVoxelSize;
+
+        bmin = new RcVec3f((float)data.BoundsMin.X, (float)data.BoundsMin.Y, (float)data.BoundsMin.Z);
+        bmax = new RcVec3f((float)data.BoundsMax.X, (float)data.BoundsMax.Y, (float)data.BoundsMax.Z);
+
+        // The tile range first, geometry second: it depends only on the bake's XZ bounds, so
+        // nothing is flattened for a region that turns out to be off the navmesh, and the range
+        // is what the flatten gets clipped to.
+        float ts = data.TileWorldSize;
+        if (ts <= 0) return false;
+        RcRecast.CalcGridSize(bmin, bmax, cs, out int gridX, out int gridZ);
+        int tilesX = (gridX + cfg.TileSizeX - 1) / cfg.TileSizeX;
+        int tilesZ = (gridZ + cfg.TileSizeZ - 1) / cfg.TileSizeZ;
+
+        float border = cfg.BorderSize * cs;
+        if ((float)worldMax.X + border < bmin.X || (float)worldMin.X - border > bmax.X
+            || (float)worldMax.Z + border < bmin.Z || (float)worldMin.Z - border > bmax.Z)
+            return false;
+
+        minTx = Math.Clamp((int)MathF.Floor(((float)worldMin.X - border - bmin.X) / ts), 0, tilesX - 1);
+        maxTx = Math.Clamp((int)MathF.Floor(((float)worldMax.X + border - bmin.X) / ts), 0, tilesX - 1);
+        minTz = Math.Clamp((int)MathF.Floor(((float)worldMin.Z - border - bmin.Z) / ts), 0, tilesZ - 1);
+        maxTz = Math.Clamp((int)MathF.Floor(((float)worldMax.Z + border - bmin.Z) / ts), 0, tilesZ - 1);
+
+        int inputTriangles = 0;
+        for (int i = 0; i < sources.Count; i++)
+            inputTriangles += sources[i].TriangleCount;
+
+        // Each tile rasterizes its own square widened by the erosion border, so the union over
+        // the range is everything that can contribute a span. Written in RcBuilderConfig's own
+        // association (+ ts, then + border, never (maxTx + 1) * ts) so the edges come out bit
+        // identical to the bounds it derives; folding them rounds the rect a fraction of a voxel
+        // inside the tile it is meant to cover.
+        var clip = new ProwlInputGeomProvider.ClipRect(
+            bmin.X + minTx * ts - border, bmin.Z + minTz * ts - border,
+            bmin.X + maxTx * ts + ts + border, bmin.Z + maxTz * ts + ts + border);
+
+        geom = inputTriangles > 0 ? new ProwlInputGeomProvider(sources, defaultArea, clip) : null;
+        if (geom != null && geom.TriangleCount == 0) geom = null; // all triangles were degenerate/dropped/clipped
+        if (geom != null) AddVolumes(geom, volumes); // volumes only re-mark rasterized geometry
+
+        if (geom != null)
+        {
+            // Layer heights are stored relative to the heightfield's own bmin.Y, and the tile
+            // cache rebases a neighbour's layer by a WHOLE number of voxel heights. Dropping to
+            // the geometry directly would put a rebuilt tile's floor a fraction of a voxel off
+            // its neighbours', which the seam cannot express: step down in whole ch instead.
+            // With clipped sources this is the REGION's Y range, not the scene's, which is still a
+            // whole multiple of ch from the bake's floor.
+            float geomMinY = geom.GetMeshBoundsMin().Y;
+            if (geomMinY < bmin.Y)
+            {
+                float ch = data.Settings.EffectiveVoxelHeight;
+                bmin.Y -= MathF.Ceiling((bmin.Y - geomMinY) / ch) * ch;
+            }
+
+            bmax.Y = Math.Max(bmax.Y, geom.GetMeshBoundsMax().Y);
+        }
+
+        return true;
+    }
+
+    /// <summary>Hand area volumes to the provider as Recast convex volumes; the stock pipeline
+    /// applies them to the compact heightfield after rasterization (RcBuilder.Build →
+    /// MarkConvexPolyArea), which only re-marks spans geometry produced — Not Walkable maps to
+    /// the null area and erases them.</summary>
+    private static void AddVolumes(ProwlInputGeomProvider geom, IReadOnlyList<NavMeshAreaVolume>? volumes)
+    {
+        if (volumes == null) return;
+        foreach (NavMeshAreaVolume volume in volumes)
+        {
+            if (volume.Footprint == null || volume.Footprint.Length < 3) continue;
+            float[] verts = new float[volume.Footprint.Length * 3];
+            for (int i = 0; i < volume.Footprint.Length; i++)
+            {
+                verts[i * 3 + 0] = (float)volume.Footprint[i].X;
+                verts[i * 3 + 1] = volume.MinY;
+                verts[i * 3 + 2] = (float)volume.Footprint[i].Z;
+            }
+            geom.AddConvexVolume(new RcConvexVolume
+            {
+                verts = verts,
+                hmin = volume.MinY,
+                hmax = volume.MaxY,
+                areaMod = new RcAreaModification(ProwlInputGeomProvider.DetourAreaFor(volume.Area)),
+            });
+        }
+    }
+
+    private static RcConfig CreateConfig(NavMeshBuildSettings settings, int defaultArea)
+    {
+        float cs = settings.EffectiveVoxelSize;
+        int tileVoxels = settings.EffectiveTileSize;
+
+        // Contouring, polygonization and detail sampling all happen in the TileCache at runtime,
+        // which uses its own fixed parameters — the values RcConfig needs for those stages are
+        // never read on this path. Only rasterization, filtering, erosion and region culling are.
+        return new RcConfig(
+            useTiles: true,
+            tileSizeX: tileVoxels,
+            tileSizeZ: tileVoxels,
+            borderSize: RcConfig.CalcBorder(settings.AgentRadius, cs),
+            partition: RcPartition.WATERSHED,
+            cellSize: cs,
+            cellHeight: settings.EffectiveVoxelHeight,
+            agentMaxSlope: settings.AgentMaxSlope,
+            agentHeight: settings.AgentHeight,
+            agentRadius: settings.AgentRadius,
+            agentMaxClimb: settings.AgentMaxClimb,
+            minRegionArea: settings.MinRegionArea,
+            mergeRegionArea: 0,
+            edgeMaxLen: 0,
+            edgeMaxError: settings.EdgeMaxError,
+            vertsPerPoly: NavMeshTileBuilder.VertsPerPoly,
+            detailSampleDist: 0,
+            detailSampleMaxError: 0,
+            filterLowHangingObstacles: settings.FilterLowHangingObstacles,
+            filterLedgeSpans: settings.FilterLedgeSpans,
+            filterWalkableLowHeightSpans: settings.FilterWalkableLowHeightSpans,
+            walkableAreaMod: new RcAreaModification(ProwlInputGeomProvider.DetourAreaFor(defaultArea)),
+            buildMeshDetail: false);
+    }
+
+    /// <summary>
+    /// Pin the resolved tile size into <paramref name="settings"/> so the bake, the serialized
+    /// asset, its TileCache, and later rebuilds all agree on one value.
+    /// <para/>
+    /// A compressed layer header stores tile dimensions as BYTES: a tile wider than
+    /// <see cref="NavMeshBuildSettings.MaxTileSize"/> voxels wraps and decompresses as an empty
+    /// layer, so the bake "succeeds" with no polygons. <see cref="NavMeshBuildSettings.EffectiveTileSize"/>
+    /// clamps to prevent that; this just warns when the clamp actually moved the user's value.
+    /// </summary>
+    private static void ResolveTileSize(NavMeshBuildSettings settings)
+    {
+        int resolved = settings.EffectiveTileSize;
+
+        if (settings.OverrideTileSize && settings.TileSize != resolved)
+            Debug.LogWarning($"[Navigation] Tile size must be 16..{NavMeshBuildSettings.MaxTileSize} voxels (a layer header stores tile dimensions in a byte, and tiles below 16 are all border); {settings.TileSize} was clamped to {resolved}. Carving cost scales with tile size, so smaller is usually better within that range.");
+
+        settings.OverrideTileSize = true;
+        settings.TileSize = resolved;
+    }
+
+    // Tile/poly capacity split: Detour packs tile id + poly id into one reference, so bits
+    // given to tiles are taken from polys. 22 total id bits, tile bits capped at 14
+    // (the Recast demos' arithmetic).
+
+    private static int GetMaxTiles(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
+        => 1 << GetTileBits(bmin, bmax, cellSize, tileSize);
+
+    private static int GetMaxPolysPerTile(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
+        => 1 << (22 - GetTileBits(bmin, bmax, cellSize, tileSize));
+
+    private static int GetTileBits(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
+    {
+        RcRecast.CalcGridSize(bmin, bmax, cellSize, out int sizeX, out int sizeZ);
+        int tilesX = (sizeX + tileSize - 1) / tileSize;
+        int tilesZ = (sizeZ + tileSize - 1) / tileSize;
+        return Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(tilesX * tilesZ)), 14);
+    }
+}
