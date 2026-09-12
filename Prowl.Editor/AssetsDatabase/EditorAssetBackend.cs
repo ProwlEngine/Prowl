@@ -484,10 +484,15 @@ public class EditorAssetBackend : AssetBackendBase
             var entry = _guidToEntry[existingGuid];
             long currentTicks = File.GetLastWriteTimeUtc(file).Ticks;
 
+            // Only assets that produce an object have a cache to go missing. A script produces none,
+            // so testing for one marks every script dirty on every scan, and reimporting a script asks
+            // for a recompile.
+            bool cacheMissing = entry.MainAssetTypeName != null && !File.Exists(GetCachePath(existingGuid));
+
             // Reimport if the file changed, its cache is missing, OR the importer's version was
             // bumped (a new editor build with changed import logic must re-run stale caches).
             if (entry.LastModifiedTicks != currentTicks
-                || !File.Exists(GetCachePath(existingGuid))
+                || cacheMissing
                 || (importer != null && entry.ImporterVersion != importer.Version))
                 entry.NeedsReimport = true;
 
@@ -793,6 +798,16 @@ public class EditorAssetBackend : AssetBackendBase
                 RemoveSubAssets(entry, includeThumbnails: true);
                 entry.SubAssets = Array.Empty<SubAssetEntry>();
                 entry.NeedsReimport = false;
+
+                // An importer that succeeded without producing an object has still done its whole job,
+                // so record it as imported. Left at zero the next scan reads the file as changed, which
+                // for a script means asking for a recompile every time anything triggers a scan.
+                if (success)
+                {
+                    entry.LastModifiedTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
+                    entry.ImporterVersion = importer.Version;
+                }
+
                 return false;
             }
 
