@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Recast.Detour.Crowd;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -27,6 +28,83 @@ public class NavMeshCrowdTests : RuntimeTestBase
         agent.CollisionQueryRange = 2f; // corridor-scale steering
         return agent;
     }
+
+    /// <summary>
+    /// Avoidance costs the same whether an agent is going anywhere or not, and the crowd only steers
+    /// one that has both a move target and a speed to spend — so for the rest it would plan around a
+    /// desired velocity that is provably zero. Measured at 90% of a standing crowd's navigation cost.
+    /// </summary>
+    [Fact]
+    public void Agent_WithNothingToSteerTowards_StopsPayingForAvoidance()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+
+        NavMeshAgent idle = AddAgent(scene, new Float3(0, 0, 0));
+        NavMeshAgent walker = AddAgent(scene, new Float3(-1.2f, 0, 0));
+        Tick(scene, 2);
+        Assert.True(idle.IsOnNavMesh);
+        Assert.True(walker.IsOnNavMesh);
+
+        Assert.True(walker.SetDestination(new Float3(6, 0, 0)));
+        Assert.True(TickUntil(scene, () => walker.NativeAgent!.nneis > 0) >= 0,
+            "the two have to see each other or neither would engage anyway");
+        Tick(scene, 2);
+
+        // Asserted on the crowd's live flags rather than the component's intent: pushing the params
+        // is the part that changes what DtCrowd runs.
+        Assert.True(PlansAvoidance(walker), "a walker with a neighbour in range must plan around it");
+
+        // The idle one sees the walker just as well, and still does not plan.
+        Assert.True(idle.NativeAgent!.nneis > 0, "the idle agent should still have the walker as a neighbour");
+        Assert.False(PlansAvoidance(idle));
+
+        // Somewhere to be, and it pays again.
+        Assert.True(idle.SetDestination(new Float3(0, 0, 6)));
+        Assert.True(TickUntil(scene, () => PlansAvoidance(idle)) >= 0,
+            "an agent with a destination and a neighbour must plan around it");
+
+        // Halting drops it again while keeping the path: maxSpeed 0 scales steering to zero. The
+        // target and the neighbour are folded into the wait so no other clause can explain the drop.
+        idle.IsStopped = true;
+        Assert.True(TickUntil(scene, () => !PlansAvoidance(idle)
+            && idle.NativeAgent!.nneis > 0
+            && idle.NativeAgent.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_VALID) >= 0,
+            "a halted agent must stop planning while it still has a target and a neighbour in range");
+        Assert.True(idle.HasPath, "halting must not throw the path away");
+    }
+
+    /// <summary>
+    /// The half of the optimization that must not change: everyone else still avoids an agent that
+    /// has stopped planning, because a neighbour enters the obstacle query from its position and
+    /// velocity rather than from its own flags.
+    /// </summary>
+    [Fact]
+    public void Agent_NotPlanningAvoidance_IsStillAvoidedByOthers()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+
+        NavMeshAgent idle = AddAgent(scene, new Float3(0, 0, 0));
+        NavMeshAgent walker = AddAgent(scene, new Float3(-6, 0, 0));
+        Tick(scene, 2);
+
+        // Straight down +X, through where the idle agent stands.
+        Assert.True(walker.SetDestination(new Float3(6, 0, 0)));
+
+        double worstOffset = 0;
+        for (int i = 0; i < 400 && walker.RemainingDistance > 1f; i++)
+        {
+            Tick(scene, 1);
+            Assert.False(PlansAvoidance(idle), "the idle agent must never start planning here");
+            worstOffset = Math.Max(worstOffset, Math.Abs(walker.Transform.Position.Z));
+        }
+
+        Assert.True(walker.RemainingDistance <= 1f, "the walker never got past the idle agent");
+        Assert.True(worstOffset > idle.Radius,
+            $"the walker drove through the idle agent instead of around it, worst lateral offset {worstOffset:0.###}");
+    }
+
+    private static bool PlansAvoidance(NavMeshAgent agent)
+        => (agent.NativeAgent!.option.updateFlags & DtCrowdAgentUpdateFlags.DT_CROWD_OBSTACLE_AVOIDANCE) != 0;
 
     /// <summary>
     /// An agent walking a straight line must not shiver as it brakes into its destination. Facing

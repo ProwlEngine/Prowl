@@ -706,25 +706,30 @@ public class NavMeshBuildTests
         int[] indices = [0, 1, 2, 0, 2, 3];
         return new NavMeshGeometrySource(verts, indices, Float4x4.Identity);
     }
-    /// <summary>
-    /// Recast's own log calls reach Prowl's Debug rather than stdout, and its per-polygon progress
-    /// chatter is dropped — the seed walk dead-ends once per polygon on the tile-cache path, which
-    /// was hundreds of console lines per registration on a large map.
-    /// </summary>
+
+    /// <summary>Recast's own log calls reach Prowl's Debug rather than stdout, and its per-polygon
+    /// progress chatter is dropped.</summary>
     [Fact]
     public void RecastLogSink_ForwardsWarningsAndDropsProgress()
     {
-        // Reading a const does not trigger a static constructor, so ask for it explicitly; in
-        // production any call into the builder runs it before Recast can log.
+        // Reading a const does not trigger a static constructor, so ask for it explicitly.
         RuntimeHelpers.RunClassConstructor(typeof(NavMeshTileBuilder).TypeHandle);
 
         Action<RcLogCategory, string>? installed = RcContext.Sink;
         Assert.NotNull(installed);
 
-        List<string> logged = [];
+        // A bake finishing on a worker from an earlier test logs through the same sink, so the
+        // capture is locked and matched by text rather than counted.
+        List<string> warnings = [];
+        List<string> errors = [];
+        object gate = new();
         void Capture(string message, DebugStackTrace? trace, LogSeverity severity)
         {
-            if (severity == LogSeverity.Warning) logged.Add(message);
+            lock (gate)
+            {
+                if (severity == LogSeverity.Warning) warnings.Add(message);
+                if (severity == LogSeverity.Error) errors.Add(message);
+            }
         }
 
         Debug.OnLog += Capture;
@@ -733,9 +738,19 @@ public class NavMeshBuildTests
             var ctx = new RcContext();
             ctx.Log(RcLogCategory.RC_LOG_PROGRESS, "walk dead-ended");
             ctx.Warn("a contour was truncated");
+            // An error is a span or tile silently missing from a bake that reported success.
+            ctx.Log(RcLogCategory.RC_LOG_ERROR, "rcAddSpan: Out of memory.");
 
-            Assert.Single(logged);
-            Assert.Contains("a contour was truncated", logged[0]);
+            // The sink posts to the engine loop when one exists and this is not its thread, so
+            // whether these arrive synchronously depends on what else has run. Drain it either way.
+            Prowl.Runtime.Tasks.MainThreadContext.Current?.Pump();
+
+            string[] warned, errored;
+            lock (gate) { warned = [.. warnings]; errored = [.. errors]; }
+
+            Assert.Contains(warned, m => m.Contains("a contour was truncated"));
+            Assert.DoesNotContain(warned, m => m.Contains("walk dead-ended"));
+            Assert.Contains(errored, m => m.Contains("Out of memory"));
         }
         finally
         {
@@ -744,5 +759,4 @@ public class NavMeshBuildTests
             RcContext.Sink = installed;
         }
     }
-
 }

@@ -535,7 +535,7 @@ public class NavMeshAgent : MonoBehaviour
             maxAcceleration = Acceleration,
             // Every rebuild of the params goes through here, so a stopped agent stays stopped
             // across an avoidance toggle, a filter change or an inspector edit.
-            maxSpeed = _isStopped ? 0f : Speed,
+            maxSpeed = _isStopped ? 0f : Math.Max(0f, Speed),
             collisionQueryRange = CollisionQueryRange > 0f ? CollisionQueryRange : radius * 12f,
             pathOptimizationRange = PathOptimizationRange > 0f ? PathOptimizationRange : radius * 30f,
             updateFlags = updateFlags,
@@ -883,11 +883,18 @@ public class NavMeshAgent : MonoBehaviour
 
         // Avoidance samples a DISCRETE set of candidate velocities, so running it with nothing in
         // range rounds the result and walks the agent sideways off a straight line. Engaged only when
-        // something is in range — boundary segments included, so a wall still counts. Both are read
-        // from the last crowd step, so engaging lags a frame.
+        // something is in range — boundary segments included, so a wall counts — and only while the
+        // agent can move: with no target the crowd skips steering, and maxSpeed 0 scales the result to
+        // zero, so dvel is zero and the sampler, whose pattern is built from it, plans zero. Worth 90%
+        // of a standing crowd's cost. Neighbours and boundary come from the last crowd step, so
+        // engaging lags a frame.
         if (ObstacleAvoidanceQuality != ObstacleAvoidanceType.NoObstacleAvoidance)
         {
-            bool engage = _agent.nneis > 0 || _agent.boundary.GetSegmentCount() > 0;
+            // A velocity-controlled agent is the exception: that branch of the crowd's steering
+            // ignores maxSpeed, so its dvel is whatever was commanded.
+            bool steering = _agent.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_VELOCITY
+                || (_agent.targetState != DtMoveRequestState.DT_CROWDAGENT_TARGET_NONE && _agent.option.maxSpeed > 0);
+            bool engage = steering && (_agent.nneis > 0 || _agent.boundary.GetSegmentCount() > 0);
             if (engage != AvoidanceEngaged)
             {
                 AvoidanceEngaged = engage;
