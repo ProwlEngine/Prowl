@@ -4,6 +4,7 @@
 using System;
 using System.Buffers;
 
+using Prowl.Echo;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.Crowd;
@@ -68,64 +69,152 @@ public class NavMeshAgent : MonoBehaviour
     [Header("Agent")]
     [Tooltip("The agent type whose navmesh this agent walks on.")]
     [NavMeshAgentType]
-    public int AgentTypeId = NavMeshAgentTypes.Humanoid;
+    [SerializeField] private int agentTypeId = NavMeshAgentTypes.Humanoid;
 
     [Tooltip("Agent radius for avoidance and crowd separation.")]
-    public float Radius = 0.5f;
+    [SerializeField] private float radius = 0.5f;
 
     [Tooltip("Agent height (used by the crowd for vertical overlap checks).")]
-    public float Height = 2.0f;
+    [SerializeField] private float height = 2.0f;
 
     [Tooltip("Vertical offset between the navmesh surface and the Transform position.")]
-    public float BaseOffset = 0f;
+    [SerializeField] private float baseOffset = 0f;
 
     [Header("Steering")]
     [Tooltip("Maximum movement speed in world units/second.")]
-    public float Speed = 3.5f;
+    [SerializeField] private float speed = 3.5f;
 
     [Tooltip("Maximum turning speed in degrees/second, applied when UpdateRotation is on.")]
-    public float AngularSpeed = 120f;
+    [SerializeField] private float angularSpeed = 120f;
 
     [Tooltip("Maximum acceleration in world units/second².")]
-    public float Acceleration = 8f;
+    [SerializeField] private float acceleration = 8f;
 
     [Tooltip("Stop this far short of the destination.")]
-    public float StoppingDistance = 0f;
+    [SerializeField] private float stoppingDistance = 0f;
 
     [Tooltip("Decelerate to a stop as the destination is approached instead of overshooting.")]
-    public bool AutoBraking = true;
+    [SerializeField] private bool autoBraking = true;
 
     [Header("Obstacle Avoidance")]
     [Tooltip("Avoidance quality: higher avoids more reliably and costs more CPU.")]
     [InspectorName("Quality")]
-    public ObstacleAvoidanceType ObstacleAvoidanceQuality = ObstacleAvoidanceType.MedQualityObstacleAvoidance;
+    [SerializeField] private ObstacleAvoidanceType obstacleAvoidanceQuality = ObstacleAvoidanceType.MedQualityObstacleAvoidance;
 
     [Tooltip("Agents with lower priority values are avoided by agents with higher values (0 = most important, 99 = least). Mapped to crowd separation weight.")]
     [Range(0, 99)]
-    public int AvoidancePriority = 50;
+    [SerializeField] private int avoidancePriority = 50;
 
     [Tooltip("Push away from nearby agents (crowd separation). Disable when units should pack tightly or walk single file through corridors.")]
-    public bool Separation = true;
+    [SerializeField] private bool separation = true;
 
     [Tooltip("How far steering scans for neighbours and navmesh borders, in world units. 0 derives it from the radius (radius x 12, the open-level default). On tile maps, ranges wider than the corridors keep the borders inside view in every direction and make avoidance oscillate - tune this down toward the corridor width.")]
-    public float CollisionQueryRange = 0f;
+    [SerializeField] private float collisionQueryRange = 0f;
 
     [Tooltip("Path visibility optimization range, in world units. 0 derives it from the radius (radius x 30).")]
-    public float PathOptimizationRange = 0f;
+    [SerializeField] private float pathOptimizationRange = 0f;
 
     [Header("Pathfinding")]
     [Tooltip("Areas this agent may traverse.")]
     [NavMeshAreaMask]
-    public int AreaMask = NavMeshAreas.AllAreas;
+    [SerializeField] private int areaMask = NavMeshAreas.AllAreas;
 
     [Tooltip("Automatically re-path when the navmesh changes under the current path.")]
-    public bool AutoRepath = true;
+    [SerializeField] private bool autoRepath = true;
 
     [Tooltip("Write the crowd position to the Transform each frame.")]
-    public bool UpdatePosition = true;
+    [SerializeField] private bool updatePosition = true;
 
     [Tooltip("Rotate the Transform to face the movement direction.")]
-    public bool UpdateRotation = true;
+    [SerializeField] private bool updateRotation = true;
+
+    /// <summary>Writing this re-places the agent on its new type's crowd, keeping its destination.
+    /// One agent type per navmesh, so this is a move between crowds rather than a parameter.</summary>
+    public int AgentTypeId
+    {
+        get => agentTypeId;
+        set
+        {
+            if (agentTypeId == value) return;
+            agentTypeId = value;
+            if (_agent != null) Unregister();
+            TryRegister(); // the new type may have a navmesh where the old one had none
+        }
+    }
+
+    // The nine members below feed the crowd agent's parameters, so writing one pushes it straight
+    // into the live agent; AreaMask additionally re-derives the steering filter slot, which
+    // RefreshParams does anyway. Unchanged values are skipped: a refresh releases and retakes a
+    // filter slot.
+    public float Radius
+    {
+        get => radius;
+        set { if (radius == value) return; radius = value; RefreshParams(); }
+    }
+
+    public float Height
+    {
+        get => height;
+        set { if (height == value) return; height = value; RefreshParams(); }
+    }
+
+    public float Speed
+    {
+        get => speed;
+        set { if (speed == value) return; speed = value; RefreshParams(); }
+    }
+
+    public float Acceleration
+    {
+        get => acceleration;
+        set { if (acceleration == value) return; acceleration = value; RefreshParams(); }
+    }
+
+    public ObstacleAvoidanceType ObstacleAvoidanceQuality
+    {
+        get => obstacleAvoidanceQuality;
+        set { if (obstacleAvoidanceQuality == value) return; obstacleAvoidanceQuality = value; RefreshParams(); }
+    }
+
+    public int AvoidancePriority
+    {
+        get => avoidancePriority;
+        set { if (avoidancePriority == value) return; avoidancePriority = value; RefreshParams(); }
+    }
+
+    public bool Separation
+    {
+        get => separation;
+        set { if (separation == value) return; separation = value; RefreshParams(); }
+    }
+
+    public float CollisionQueryRange
+    {
+        get => collisionQueryRange;
+        set { if (collisionQueryRange == value) return; collisionQueryRange = value; RefreshParams(); }
+    }
+
+    public float PathOptimizationRange
+    {
+        get => pathOptimizationRange;
+        set { if (pathOptimizationRange == value) return; pathOptimizationRange = value; RefreshParams(); }
+    }
+
+    public int AreaMask
+    {
+        get => areaMask;
+        set { if (areaMask == value) return; areaMask = value; RefreshParams(); }
+    }
+
+    // Read where they are used, every frame or on the event that needs them, so there is nothing
+    // for a setter to apply.
+    public float BaseOffset { get => baseOffset; set => baseOffset = value; }
+    public float AngularSpeed { get => angularSpeed; set => angularSpeed = value; }
+    public float StoppingDistance { get => stoppingDistance; set => stoppingDistance = value; }
+    public bool AutoBraking { get => autoBraking; set => autoBraking = value; }
+    public bool AutoRepath { get => autoRepath; set => autoRepath = value; }
+    public bool UpdatePosition { get => updatePosition; set => updatePosition = value; }
+    public bool UpdateRotation { get => updateRotation; set => updateRotation = value; }
 
     private NavMeshWorld? _world;
     private DtCrowdAgent? _agent;
@@ -136,12 +225,10 @@ public class NavMeshAgent : MonoBehaviour
     // The crowd entry _agent registered with, for filter-slot bookkeeping (same capture
     // rationale as _crowd).
     private NavMeshCrowdEntry? _crowdEntry;
-    // The crowd filter slot this agent steers with, and the AreaMask baked into it — the mask
-    // is re-checked each LateUpdate so writing the AreaMask field "just works" like Unity.
+    // The crowd filter slot this agent steers with.
     private int _filterSlot;
-    private int _slotAreaMask = NavMeshAreas.AllAreas;
-    // The agent type this agent registered under, re-checked each LateUpdate so writing the
-    // AgentTypeId field re-places the agent on its new type's crowd (Unity does the same).
+    // The agent type this agent registered under: what a stale agent must be detached against,
+    // which is not necessarily the AgentTypeId gameplay has since written.
     private int _registeredAgentTypeId;
     private NavMeshQueryFilter? _filter;
     private Float3 _destination;
@@ -367,10 +454,10 @@ public class NavMeshAgent : MonoBehaviour
         // Our crowd may have been dropped with its navmesh (rebake/regenerate); our crowd agent
         // and filter slot died with it, so forget both and fall through to re-registration
         // (which re-requests the remembered destination). MUST compare against
-        // _registeredAgentTypeId, not AgentTypeId: if gameplay rewrote the field before the
-        // LateUpdate drift check runs, the registered type's crowd is still alive and still
-        // contains our agent — forgetting it here would strand a ghost agent and leak its
-        // filter-slot refcount. Type changes are handled only by the drift check.
+        // _registeredAgentTypeId, not AgentTypeId: the inspector writes the backing field, so the
+        // two diverge until OnValidate runs, and the registered type's crowd is still alive and
+        // still holds our agent — forgetting it here would strand a ghost agent and leak its
+        // filter-slot refcount. Moving between types is the AgentTypeId setter's job.
         if (_agent != null && _world != null && !ReferenceEquals(_world.GetNativeCrowd(_registeredAgentTypeId), _crowd))
         {
             _agent = null;
@@ -408,7 +495,6 @@ public class NavMeshAgent : MonoBehaviour
         NavMeshCrowdEntry entry = _world.EnsureCrowd(instance);
         _crowdEntry = entry;
         _registeredAgentTypeId = AgentTypeId;
-        _slotAreaMask = AreaMask;
         _filterSlot = entry.AcquireFilterSlot(AreaMask, _filter?.CostOverrides, GameObject.Name);
         _agent = entry.Crowd.AddAgent(ToRc(Transform.Position - new Float3(0, BaseOffset, 0)), BuildAgentParams());
         _crowd = entry.Crowd;
@@ -461,10 +547,10 @@ public class NavMeshAgent : MonoBehaviour
         };
     }
 
-    /// <summary>Push current inspector values (speed, radius, avoidance, area mask/costs ...)
-    /// into the live crowd agent. Called automatically on validate, on
-    /// <see cref="SetAreaCost"/>, and when the <see cref="AreaMask"/> field changes; call
-    /// manually after changing other fields from code mid-simulation.</summary>
+    /// <summary>Push the steering properties (speed, radius, avoidance, area mask and costs) into
+    /// the live crowd agent. Every setter that feeds them calls this, as do an inspector edit and
+    /// <see cref="SetAreaCost"/>, so it is only needed by hand after mutating the cost table
+    /// through <see cref="Filter"/> directly.</summary>
     public void RefreshParams()
     {
         if (_agent == null || _crowd == null) return;
@@ -474,14 +560,20 @@ public class NavMeshAgent : MonoBehaviour
         if (_crowdEntry != null)
         {
             _crowdEntry.ReleaseFilterSlot(_filterSlot);
-            _slotAreaMask = AreaMask;
             _filterSlot = _crowdEntry.AcquireFilterSlot(AreaMask, _filter?.CostOverrides, GameObject.Name);
         }
 
         _crowd.UpdateAgentParameters(_agent, BuildAgentParams());
     }
 
-    public override void OnValidate() => RefreshParams();
+    // The inspector writes the backing field, so a setter never sees an authored edit — and a type
+    // change is a move between crowds rather than a parameter, which RefreshParams cannot do.
+    public override void OnValidate()
+    {
+        if (_agent != null && agentTypeId != _registeredAgentTypeId) Unregister();
+        if (_agent == null) TryRegister();
+        RefreshParams();
+    }
 
     #endregion
 
@@ -671,9 +763,8 @@ public class NavMeshAgent : MonoBehaviour
     /// Mid-hop across an off-mesh link the corridor already begins at the landing point, so the
     /// walk is measured from there rather than from where the agent hangs.
     /// <para/>
-    /// Areas are tested per POLYGON rather than per corner, as Unity does. A path that only clips
-    /// the corner of an excluded polygon stops at it, even though no corner of the straight path
-    /// lies inside it.
+    /// Areas are tested per POLYGON rather than per corner, as Unity does, so a path that only clips
+    /// the corner of an excluded polygon still stops at it.
     /// </summary>
     public bool SamplePathPosition(int areaMask, float maxDistance, out NavMeshHit hit)
     {
@@ -790,26 +881,10 @@ public class NavMeshAgent : MonoBehaviour
             return;
         }
 
-        // Public fields can be written directly (Unity-style), so cheap per-frame int compares
-        // keep the crowd in sync without requiring RefreshParams calls: a changed AgentTypeId
-        // re-places the agent on its new type's crowd (keeping its destination), a changed
-        // AreaMask re-derives the steering filter slot. Cost overrides go through
-        // SetAreaCost, which refreshes itself.
-        if (AgentTypeId != _registeredAgentTypeId)
-        {
-            Unregister();
-            TryRegister();
-            if (_agent == null) return;
-        }
-        if (AreaMask != _slotAreaMask)
-            RefreshParams();
-
-        // Velocity-obstacle sampling is the expensive half of a crowd step, and it picks from a
-        // DISCRETE set of candidate velocities, so running it with nothing in range still rounds
-        // the result and walks the agent sideways off a straight line. Skip it only when nothing
-        // is in range at all — that includes navmesh boundary segments, so an agent alone beside
-        // a wall still has the wall to keep off. Both are read from the last crowd step, so
-        // engaging lags a frame, which is fine at the metres-out range they're gathered from.
+        // Avoidance samples a DISCRETE set of candidate velocities, so running it with nothing in
+        // range rounds the result and walks the agent sideways off a straight line. Engaged only when
+        // something is in range — boundary segments included, so a wall still counts. Both are read
+        // from the last crowd step, so engaging lags a frame.
         if (ObstacleAvoidanceQuality != ObstacleAvoidanceType.NoObstacleAvoidance)
         {
             bool engage = _agent.nneis > 0 || _agent.boundary.GetSegmentCount() > 0;
@@ -826,11 +901,9 @@ public class NavMeshAgent : MonoBehaviour
         if (UpdateRotation)
         {
             // Face where the agent STEERS, not where it moves: actual velocity carries avoidance
-            // corrections that don't shrink with speed, so braking into a goal lets them take
-            // over its direction and the agent shivers along a dead-straight path. The two gates
-            // below stop the heading chasing a vector that no longer means anything — one too
-            // slow to have a direction, one pointing at a target already underfoot, where
-            // following it would just spin the agent in place.
+            // corrections that do not shrink with speed, so braking into a goal lets them take over
+            // the heading and the agent shivers. The gates below drop a vector too slow to have a
+            // direction, or pointing at a target already underfoot.
             const double MinFacingSpeedSq = 0.01; // 0.1 m/s
             Float3 face = ToFloat3(_agent.dvel);
             double speedSq = face.X * face.X + face.Z * face.Z;

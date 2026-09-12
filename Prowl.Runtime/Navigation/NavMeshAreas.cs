@@ -8,17 +8,16 @@ using System.Threading;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// The project-wide navigation area table: up to 32 named areas with per-area path costs,
-/// addressed by index and combined into 32-bit area masks (matching Unity's area model).
-/// Area 0 is Walkable, area 1 is Not Walkable, area 2 is Jump; 3..31 are user-defined.
+/// The project-wide navigation area table: up to 32 named areas with per-area path costs, addressed
+/// by index and combined into 32-bit masks (Unity's model). Area 0 is Walkable, 1 is Not Walkable,
+/// 2 is Jump; 3..31 are user-defined.
 /// <para/>
-/// Internally Detour stores a 6-bit area id per polygon where 0 (<c>RC_NULL_AREA</c>) is
-/// reserved for "not part of the navmesh", so Prowl area index <c>i</c> is stored as Detour
-/// area <c>i + 1</c>. <see cref="ToDetourArea"/> / <see cref="FromDetourArea"/> are the only
-/// places that offset is applied — never hand-roll it. BAKE-side conversions go through
-/// <c>ProwlInputGeomProvider.DetourAreaFor</c> instead, which additionally maps
-/// <see cref="NotWalkable"/> to the null area (calling <see cref="ToDetourArea"/> directly on
-/// a source/volume area silently resurrects traversable "Not Walkable" polys).
+/// Detour stores area <c>i</c> as <c>i + 1</c>, because its 0 is the null area meaning "not part of
+/// the navmesh". <see cref="ToDetourArea"/> / <see cref="FromDetourArea"/> are the only places that
+/// offset is applied — never hand-roll it. Bake-side conversions go through
+/// <c>ProwlInputGeomProvider.DetourAreaFor</c>, which additionally maps <see cref="NotWalkable"/> to
+/// the null area; calling <see cref="ToDetourArea"/> on a source area instead silently resurrects
+/// traversable "Not Walkable" polys.
 /// </summary>
 public static class NavMeshAreas
 {

@@ -117,12 +117,10 @@ internal static class NavMeshTileBuilder
     }
 
     /// <summary>
-    /// Build one tile's compressed layers: area-aware pooled rasterization, the standard
-    /// filter + compact + erode + volume-marking steps, then heightfield layers compressed into
-    /// self-describing blobs. Returns an empty list for tiles no geometry overlaps — the common
-    /// case on bounded bakes of mostly-sealed worlds — without paying for a heightfield.
-    /// Contours/polymeshes are NOT built here — the TileCache builds them per tile at runtime,
-    /// which is what lets obstacles re-carve without re-voxelizing.
+    /// Build one tile's compressed layers: rasterize, filter, compact, erode, mark volumes, then
+    /// compress the heightfield layers into self-describing blobs. Empty for a tile no geometry
+    /// overlaps, without paying for a heightfield. Contours and polymeshes are NOT built here — the
+    /// TileCache builds them per tile at runtime, which is what lets obstacles re-carve.
     /// </summary>
     /// <param name="reusable">Scratch to build through, so its span pages survive into the next
     /// tile. Null shares the calling thread's.</param>
@@ -220,10 +218,9 @@ internal static class NavMeshTileBuilder
     /// inclusion/exclusion is the query filter's job, and areas already carry the Prowl mapping
     /// from the baked layers.
     /// <para/>
-    /// This is also where the navmesh gets its off-mesh links. The cache re-contours a whole
-    /// tile whenever an obstacle carves or a region regenerates, discarding anything previously
-    /// built into it, so connections cannot be baked in once — they are re-supplied here on
-    /// every tile build, and Detour keeps only those whose start point lands in the tile.
+    /// Also where the navmesh gets its off-mesh links. A carve re-contours the whole tile and
+    /// discards what was built into it, so connections cannot be baked in once: they are re-supplied
+    /// on every tile build, and Detour keeps those whose start point lands in the tile.
     /// </summary>
     public sealed class ProwlTileCacheMeshProcess : IDtTileCacheMeshProcess
     {
@@ -335,12 +332,10 @@ internal static class NavMeshTileBuilder
             // turns off.
             detailSampleDist = settings.BuildHeightDetail ? settings.EffectiveVoxelSize * 6 : 0,
             detailSampleMaxError = settings.EffectiveVoxelHeight,
-            // Watershed partitioning with standard contouring, not the cache's monotone sweep:
-            // avoids sub-voxel ribbon slivers on slopes and keeps holes in regions that enclose
-            // them. The edge cap is loose on purpose — over-splitting floods flat floors with
-            // polygons and gives the crowd extra portal corners to steer around. Area thresholds
-            // are cell counts converted from world units (not Recast's flat default), so voxel
-            // size doesn't change the mesh's character between rebakes.
+            // Standard watershed contouring instead of the cache's monotone sweep: avoids slivers on
+            // slopes. Thresholds are cell counts converted from world units, so voxel size does not
+            // change the mesh between rebakes; the edge cap is loose on purpose, since over-splitting
+            // floods flat floors with polygons and the crowd with portal corners.
             watershedPartition = true,
             minRegionArea = (int)(settings.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
             mergeRegionArea = (int)(20f / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),

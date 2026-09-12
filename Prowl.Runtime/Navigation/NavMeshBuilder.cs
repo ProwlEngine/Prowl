@@ -32,18 +32,13 @@ public static class NavMeshBuilder
     /// <param name="defaultArea">Area for sources that don't specify one (see <see cref="NavMeshAreas"/>).</param>
     /// <param name="threads">Worker threads for tile building. 0 or 1 builds single-threaded (deterministic tile order).</param>
     /// <param name="cancellation">Cancels between tiles; a cancelled build returns null.</param>
-    /// <param name="worldBounds">Explicit XZ extent for the tile grid. Supply this when the
-    /// walkable world will GROW after baking (destructible/streamed maps): the grid and tile
-    /// capacity size from it instead of the initial geometry, so <c>RebuildTiles</c> can add
-    /// tiles anywhere inside it. Vertical range still unions with the geometry, since callers
-    /// know their footprint but not their height.</param>
-    /// <param name="volumes">Convex area volumes stamped over the rasterized geometry (from
-    /// <see cref="NavMeshModifierVolume"/>s, or built directly). Volumes never create
-    /// walkable surface; a Not Walkable volume erases it.</param>
-    /// <param name="links">Off-mesh connections placed in the tiles containing their start
-    /// points (from <see cref="NavMeshLink"/>s, or built directly). Stored on the asset and
-    /// re-injected as each tile is contoured, since tiles are rebuilt from geometry-only layers
-    /// at runtime.</param>
+    /// <param name="worldBounds">Explicit XZ extent for the tile grid. Size the grid from this rather
+    /// than from the geometry so <c>RebuildTiles</c> can add tiles anywhere inside it later. The
+    /// vertical range still unions with the geometry.</param>
+    /// <param name="volumes">Convex area volumes stamped over the rasterized geometry. They never
+    /// create walkable surface; a Not Walkable volume erases it.</param>
+    /// <param name="links">Off-mesh connections, placed in the tile containing their start point and
+    /// re-injected as each tile is contoured — runtime tiles rebuild from geometry-only layers.</param>
     public static NavMeshData? Build(NavMeshBuildSettings settings, IReadOnlyList<NavMeshGeometrySource> sources,
         int defaultArea = NavMeshAreas.Walkable, int threads = 0, CancellationToken cancellation = default,
         AABB? worldBounds = null, IReadOnlyList<NavMeshAreaVolume>? volumes = null,
@@ -195,16 +190,14 @@ public static class NavMeshBuilder
 
     /// <summary>
     /// Prologue of the partial-rebuild path: derives the affected tile range, builds the geometry
-    /// provider clipped to it, and applies volumes. The grid-anchoring invariant lives here:
+    /// provider clipped to it, and applies volumes.
     /// <para/>
-    /// XZ always anchors to the ORIGINAL bake bounds, never the current geometry, or tile (0,0)
-    /// shifts and every tile misaligns against the live navmesh. Y follows the CURRENT geometry
-    /// since Recast clips spans to the heightfield's vertical range — skipped when there's no
-    /// geometry, since an empty provider reports (0,0,0) and would widen bakes off Y=0. Empty
-    /// sources are still legitimate (a region walled in completely): the affected tiles are
-    /// emptied rather than skipped, since "no geometry" is not "no change". The range expands by
-    /// the erosion border, and a region entirely outside the baked bounds returns false rather
-    /// than clamping onto the nearest edge column.
+    /// XZ anchors to the ORIGINAL bake bounds, never the current geometry, or tile (0,0) shifts and
+    /// every tile misaligns against the live navmesh. Y follows the current geometry because Recast
+    /// clips spans to the heightfield's vertical range — except when there is no geometry, since an
+    /// empty provider reports (0,0,0) and would drag the bake down to Y=0. Empty sources still empty
+    /// the affected tiles, and a region wholly outside the baked bounds returns false rather than
+    /// clamping onto the nearest tile column.
     /// </summary>
     private static bool TryPrepareRebuild(NavMeshData data, IReadOnlyList<NavMeshGeometrySource> sources,
         int defaultArea, IReadOnlyList<NavMeshAreaVolume>? volumes, Float3 worldMin, Float3 worldMax,
@@ -260,10 +253,8 @@ public static class NavMeshBuilder
             // cache rebases a neighbour's layer by a WHOLE number of voxel heights. Dropping to
             // the geometry directly would put a rebuilt tile's floor a fraction of a voxel off
             // its neighbours', which the seam cannot express: step down in whole ch instead.
-            // Clipped sources make this the REGION's Y range rather than the scene's, which is
-            // safe because a clipped collect still covers the whole rect above — so nothing that
-            // can produce a span here falls outside the heightfield — and the result is still a
-            // whole multiple of ch from the bake's floor, which is what the seam needs.
+            // With clipped sources this is the REGION's Y range, not the scene's, which is still a
+            // whole multiple of ch from the bake's floor.
             float geomMinY = geom.GetMeshBoundsMin().Y;
             if (geomMinY < bmin.Y)
             {

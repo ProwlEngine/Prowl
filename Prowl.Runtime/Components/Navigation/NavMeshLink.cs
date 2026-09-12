@@ -4,63 +4,122 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Echo;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Connects two navmesh positions that aren't walkably connected — a jump over a gap, a drop
-/// off a ledge, a ladder. Mirrors Unity's NavMeshLink: agents whose area mask includes
-/// <see cref="Area"/> traverse the link automatically as part of pathing (the crowd animates
-/// the hop; manual traversal is not supported). Links are BAKED data: they are collected into
-/// bakes like geometry, and changing one at runtime requires rebuilding the tiles around its
-/// endpoints — which this component does itself when <see cref="AutoRebuild"/> is on. A bake
-/// keeps its links beside its layers and re-injects them whenever a tile is re-contoured, so
-/// carving and links coexist.
-/// A link's traversal cost comes from its area's cost; to price a link individually, give it
-/// its own area with the desired cost.
+/// Connects two navmesh positions that aren't walkably connected — a jump over a gap, a drop off a
+/// ledge, a ladder. Agents whose area mask includes <see cref="Area"/> traverse it as part of
+/// pathing; the crowd animates the hop and manual traversal is not supported. Links are BAKED data,
+/// kept beside the layers and re-injected whenever a tile is re-contoured, so carving and links
+/// coexist; with <see cref="AutoRebuild"/> on this component rebuilds the tiles around its endpoints
+/// when it changes. Traversal cost comes from the area's cost, so price a link by giving it its own
+/// area. Enabled outside play too, because a bake gathers links from the registry only enabled links
+/// are in.
 /// </summary>
-// A link has to be enabled to be registered, and a bake gathers its links from that registry —
-// so a link inert outside play mode would go missing from every bake pressed in the editor.
-// Being live also means editing one re-contours the tiles around it there, the way it does in
-// play, and the surface overlay redraws the connection to match.
 [ExecuteAlways]
 [AddComponentMenu("Navigation/NavMesh Link")]
 [ComponentIcon("")] // link icon
 public class NavMeshLink : MonoBehaviour
 {
     [Tooltip("Link start position, local to this GameObject.")]
-    public Float3 StartPoint = new(0, 0, -2.5f);
+    [SerializeField] private Float3 startPoint = new(0, 0, -2.5f);
 
     [Tooltip("Link end position, local to this GameObject.")]
-    public Float3 EndPoint = new(0, 0, 2.5f);
+    [SerializeField] private Float3 endPoint = new(0, 0, 2.5f);
 
     [Tooltip("World-space width of the link: how wide a span of the edge it covers, which is also how far its endpoints may snap to reach walkable surface. 0 uses the agent's own radius.")]
-    public float Width;
+    [SerializeField] private float width;
 
     [Tooltip("Whether the link can be traversed in both directions.")]
-    public bool Bidirectional = true;
+    [SerializeField] private bool bidirectional = true;
 
     [Tooltip("The link's area. Traversal cost comes from this area's cost, and agents whose mask excludes it won't use the link.")]
     [NavMeshArea]
-    public int Area = NavMeshAreas.Jump;
+    [SerializeField] private int area = NavMeshAreas.Jump;
 
     [Tooltip("Whether the link is traversable. Toggling at runtime rebuilds the affected tiles (with Auto Rebuild on).")]
-    public bool Activated = true;
+    [SerializeField] private bool activated = true;
 
     [Tooltip("Follow Transform movement at runtime by rebuilding the affected tiles when the endpoints move. Meant for occasional repositioning, not per-frame motion — every move pays a partial rebuild.")]
-    public bool AutoUpdatePosition;
+    [SerializeField] private bool autoUpdatePosition;
 
     [Tooltip("Automatically rebuild the affected tiles of matching surfaces when this link changes (enable/disable, Activated, moves with Auto Update Position). Turn off in games that manage rebuilds themselves with explicit sources.")]
-    public bool AutoRebuild = true;
+    [SerializeField] private bool autoRebuild = true;
 
     [Tooltip("Apply to bakes of every agent type. Turn off to pick specific types.")]
-    public bool AffectAllAgentTypes = true;
+    [SerializeField] private bool affectAllAgentTypes = true;
 
     [Tooltip("Agent types whose bakes include this link, when not affecting all.")]
     [NavMeshAgentType]
     [EnableIf(nameof(UsesExplicitAgentTypes))]
-    public List<int> AffectedAgentTypeIds = [];
+    [SerializeField] private List<int> affectedAgentTypeIds = [];
+
+    // Writing any part of the definition re-offers the link and rebuilds around both its old and
+    // new endpoints, so a spawn-then-configure write lands without waiting for a frame. Each one
+    // no-ops on an unchanged value: an edit costs partial rebuilds, not a field assignment.
+    public Float3 StartPoint
+    {
+        get => startPoint;
+        set { if (startPoint.Equals(value)) return; startPoint = value; ApplyChange(edited: true, moved: false); }
+    }
+
+    public Float3 EndPoint
+    {
+        get => endPoint;
+        set { if (endPoint.Equals(value)) return; endPoint = value; ApplyChange(edited: true, moved: false); }
+    }
+
+    public float Width
+    {
+        get => width;
+        set { if (width == value) return; width = value; ApplyChange(edited: true, moved: false); }
+    }
+
+    public bool Bidirectional
+    {
+        get => bidirectional;
+        set { if (bidirectional == value) return; bidirectional = value; ApplyChange(edited: true, moved: false); }
+    }
+
+    public int Area
+    {
+        get => area;
+        set { if (area == value) return; area = value; ApplyChange(edited: true, moved: false); }
+    }
+
+    /// <summary>Toggling this rebuilds the affected tiles in place; the endpoints have not moved,
+    /// so there is only the one region to revisit.</summary>
+    public bool Activated
+    {
+        get => activated;
+        set { if (activated == value) return; activated = value; ApplyChange(edited: false, moved: false); }
+    }
+
+    /// <summary>Which surfaces the link resolves against is part of its definition: narrowing the
+    /// scope has to rebuild the surfaces it is coming off, which is why this applies like an edit.</summary>
+    public bool AffectAllAgentTypes
+    {
+        get => affectAllAgentTypes;
+        set { if (affectAllAgentTypes == value) return; affectAllAgentTypes = value; ApplyChange(edited: true, moved: false); }
+    }
+
+    public List<int> AffectedAgentTypeIds
+    {
+        get => affectedAgentTypeIds;
+        set
+        {
+            if (ReferenceEquals(affectedAgentTypeIds, value)) return;
+            affectedAgentTypeIds = value;
+            ApplyChange(edited: true, moved: false);
+        }
+    }
+
+    // LateUpdate and RequestRebuild read these when they run, so there is nothing to apply.
+    public bool AutoUpdatePosition { get => autoUpdatePosition; set => autoUpdatePosition = value; }
+    public bool AutoRebuild { get => autoRebuild; set => autoRebuild = value; }
 
     /// <summary>Persistent id stamped on the baked connections, resolving a traversing agent back
     /// to this component (<see cref="NavMeshAgent.CurrentOffMeshLinkData"/>). Derived from the
@@ -86,15 +145,10 @@ public class NavMeshLink : MonoBehaviour
 
     private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
 
-    // The state the navmesh last saw, for change detection in LateUpdate. World endpoints size
-    // the rebuild regions; the authored fields are tracked separately so writing them after
-    // AddComponent (spawn-then-configure) re-applies the link without needing
-    // AutoUpdatePosition, which is about following the Transform.
+    // The state the navmesh last saw. World endpoints size the rebuild regions and follow the
+    // Transform, which no setter sees; the applied Activated flag is what tells OnDisable whether
+    // this link was contributing anything worth rebuilding away.
     private Float3 _appliedStart, _appliedEnd;
-    private Float3 _appliedStartPoint, _appliedEndPoint;
-    private float _appliedWidth;
-    private int _appliedArea;
-    private bool _appliedBidirectional;
     private bool _appliedActive;
     // Agent-type scoping decides which surfaces the link resolves against, so it is part of the
     // definition too; the id list is copied rather than aliased, or the comparison would be
@@ -104,27 +158,15 @@ public class NavMeshLink : MonoBehaviour
 
     private void CaptureAppliedDefinition()
     {
-        _appliedStart = WorldStart;
-        _appliedEnd = WorldEnd;
-        _appliedStartPoint = StartPoint;
-        _appliedEndPoint = EndPoint;
-        _appliedWidth = Width;
-        _appliedArea = Area;
-        _appliedBidirectional = Bidirectional;
-        _appliedActive = Activated;
+        CaptureAppliedState();
         CaptureAppliedScope();
     }
 
     /// <summary>Everything except the scope (see <see cref="CaptureAppliedScope"/>).</summary>
-    private void CaptureAppliedGeometry()
+    private void CaptureAppliedState()
     {
         _appliedStart = WorldStart;
         _appliedEnd = WorldEnd;
-        _appliedStartPoint = StartPoint;
-        _appliedEndPoint = EndPoint;
-        _appliedWidth = Width;
-        _appliedArea = Area;
-        _appliedBidirectional = Bidirectional;
         _appliedActive = Activated;
     }
 
@@ -146,15 +188,8 @@ public class NavMeshLink : MonoBehaviour
             || _appliedAffectAllAgentTypes
             || _appliedAgentTypeIds.Contains(agentTypeId);
 
-    private bool DefinitionChanged()
-        => !StartPoint.Equals(_appliedStartPoint)
-            || !EndPoint.Equals(_appliedEndPoint)
-            || Width != _appliedWidth
-            || Area != _appliedArea
-            || Bidirectional != _appliedBidirectional
-            || AffectAllAgentTypes != _appliedAffectAllAgentTypes
-            || AgentTypeIdsChanged();
-
+    /// <summary>The one authored value a setter cannot see: the id list can be edited in place, so
+    /// it is still compared per frame.</summary>
     private bool AgentTypeIdsChanged()
     {
         int count = AffectedAgentTypeIds?.Count ?? 0;
@@ -162,6 +197,30 @@ public class NavMeshLink : MonoBehaviour
         for (int i = 0; i < count; i++)
             if (AffectedAgentTypeIds![i] != _appliedAgentTypeIds[i]) return true;
         return false;
+    }
+
+    /// The setters, an inspector edit and AutoUpdatePosition all land here: rebuild around the OLD
+    /// endpoints so those tiles drop the stale connection, then around the new ones so they gain it.
+    private void ApplyChange(bool edited, bool moved)
+    {
+        Float3 oldStart = _appliedStart, oldEnd = _appliedEnd;
+        bool relocated = moved || edited;
+        CaptureAppliedState();
+
+        // An edited link has to be re-offered to every instance: catch-up only attempts each
+        // one once, and the earlier attempt applied the old definition.
+        if (edited) _catchUpDone.Clear();
+
+        RequestRebuild(oldStart, oldEnd);
+        if (relocated) RequestRebuild(_appliedStart, _appliedEnd);
+        CaptureAppliedScope(); // both rebuilds have seen the outgoing scope
+    }
+
+    // The inspector writes the backing field, so a setter never sees an authored edit.
+    public override void OnValidate()
+    {
+        if (GameObject.IsNotValid()) return; // WorldStart needs a Transform
+        ApplyChange(edited: true, moved: false);
     }
 
     private NavMeshWorld? _world;
@@ -273,25 +332,10 @@ public class NavMeshLink : MonoBehaviour
             if (Activated) CatchUp();
         }
 
-        bool activeChanged = Activated != _appliedActive;
-        bool edited = DefinitionChanged();
+        bool edited = AgentTypeIdsChanged();
         bool moved = AutoUpdatePosition
             && (Float3.Distance(WorldStart, _appliedStart) > 0.01 || Float3.Distance(WorldEnd, _appliedEnd) > 0.01);
-        if (!activeChanged && !edited && !moved) return;
-
-        // Rebuild around both the old and the new endpoints: the old tiles drop the stale
-        // connection, the new ones gain it.
-        Float3 oldStart = _appliedStart, oldEnd = _appliedEnd;
-        bool relocated = moved || edited;
-        CaptureAppliedGeometry();
-
-        // An edited link has to be re-offered to every instance: catch-up only attempts each
-        // one once, and the earlier attempt applied the old definition.
-        if (edited) _catchUpDone.Clear();
-
-        RequestRebuild(oldStart, oldEnd);
-        if (relocated) RequestRebuild(_appliedStart, _appliedEnd);
-        CaptureAppliedScope(); // both rebuilds have seen the outgoing scope
+        if (edited || moved) ApplyChange(edited, moved);
     }
 
     /// <summary>Rebuild the tiles around both endpoints on every registered surface this link

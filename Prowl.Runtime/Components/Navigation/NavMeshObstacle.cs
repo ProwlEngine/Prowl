@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Echo;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour.TileCache;
 
@@ -21,58 +22,93 @@ public enum NavMeshObstacleShape
 }
 
 /// <summary>
-/// Blocks agents while enabled — a parked vehicle, a dropped crate, a placed building. Mirrors
-/// Unity's NavMeshObstacle, including both of its modes:
+/// Blocks agents while enabled — a parked vehicle, a dropped crate, a placed building.
 /// <para/>
-/// <see cref="Carve"/> on cuts a hole in the navmesh, so pathfinding routes around it. Affected
-/// tiles rebuild incrementally over the following frames; with <see cref="CarveOnlyStationary"/>
-/// the hole lifts while moving and re-applies once still for <see cref="CarvingTimeToStationary"/>.
+/// <see cref="Carve"/> on cuts a hole in the navmesh so pathfinding routes around it; the affected
+/// tiles rebuild over the following frames, and with <see cref="CarveOnlyStationary"/> the hole lifts
+/// while moving and re-applies once still for <see cref="CarvingTimeToStationary"/>. Carving runs in
+/// the editor too, so placing a building shows the hole it will cut.
 /// <para/>
-/// <see cref="Carve"/> off is Unity's velocity-obstacle mode: the mesh stays untouched and the
-/// obstacle joins each crowd as an immovable neighbour instead, so agents steer around it
-/// locally. Costs nothing per move — the right mode for something that moves often — but paths
-/// are computed as if it weren't there, so an agent with no other route presses against it.
+/// <see cref="Carve"/> off is Unity's velocity-obstacle mode: the mesh is untouched and the obstacle
+/// joins each crowd as an immovable neighbour, so agents steer around it locally. Free to move, but
+/// paths are computed as if it weren't there, so an agent with no other route presses against it.
 /// <para/>
-/// Either way the object's own geometry stays out of bakes: it's a runtime thing, and
-/// voxelizing it would freeze a hole where it happened to be standing.
+/// Either way the object's own geometry stays out of bakes — voxelizing it would freeze a hole where
+/// it happened to be standing.
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Obstacle")]
 [ComponentIcon("")] // road barrier
-// Carving runs in the editor as well as in play, so placing a building shows the hole it will
-// cut without entering play mode. Only the live navmesh is affected — the baked asset never
-// stores carves — and the velocity-obstacle path stays play-only, since it is crowd steering.
 [ExecuteAlways]
 public class NavMeshObstacle : MonoBehaviour
 {
     [Tooltip("Obstacle shape. Both stand upright: a cylinder has no tilt, and a box is oriented by yaw only.")]
-    public NavMeshObstacleShape Shape = NavMeshObstacleShape.Box;
+    [SerializeField] private NavMeshObstacleShape shape = NavMeshObstacleShape.Box;
 
     [Tooltip("Obstacle center, local to this GameObject.")]
-    public Float3 Center;
+    [SerializeField] private Float3 center;
 
     [Tooltip("Box size, local (scaled by the Transform).")]
     [ShowIf(nameof(IsBox))]
-    public Float3 Size = new(1, 1, 1);
+    [SerializeField] private Float3 size = new(1, 1, 1);
 
     [Tooltip("Cylinder radius (scaled by the largest horizontal Transform scale).")]
     [ShowIf(nameof(IsCylinder))]
-    public float Radius = 0.5f;
+    [SerializeField] private float radius = 0.5f;
 
     [Tooltip("Cylinder height (scaled by the vertical Transform scale).")]
     [ShowIf(nameof(IsCylinder))]
-    public float Height = 2f;
+    [SerializeField] private float height = 2f;
 
     [Tooltip("On: cut a hole in the navmesh so paths route around this. Off: leave the mesh alone and make agents steer around it locally instead — cheaper, and the right choice for something that moves, but paths still lead through it.")]
-    public bool Carve = true;
+    [SerializeField] private bool carve = true;
 
     [Tooltip("Only carve while stationary: the carve lifts while the obstacle moves and re-applies once it has settled. Off re-carves on every move beyond the threshold — much more expensive for frequently-moving obstacles.")]
-    public bool CarveOnlyStationary = true;
+    [SerializeField] private bool carveOnlyStationary = true;
 
     [Tooltip("Movement beyond this distance (world units) counts as moving.")]
-    public float CarvingMoveThreshold = 0.1f;
+    [SerializeField] private float carvingMoveThreshold = 0.1f;
 
     [Tooltip("Seconds the obstacle must be still before it carves again (with Carve Only Stationary).")]
-    public float CarvingTimeToStationary = 0.5f;
+    [SerializeField] private float carvingTimeToStationary = 0.5f;
+
+    // Writing any of the five geometry members re-carves at once, so a spawn-then-configure write
+    // lands without waiting for a frame. Each one no-ops on an unchanged value: a re-carve is a
+    // tile rebuild, not a field assignment.
+    public NavMeshObstacleShape Shape
+    {
+        get => shape;
+        set { if (shape == value) return; shape = value; ReapplyCarve(); }
+    }
+
+    public Float3 Center
+    {
+        get => center;
+        set { if (center.Equals(value)) return; center = value; ReapplyCarve(); }
+    }
+
+    public Float3 Size
+    {
+        get => size;
+        set { if (size.Equals(value)) return; size = value; ReapplyCarve(); }
+    }
+
+    public float Radius
+    {
+        get => radius;
+        set { if (radius == value) return; radius = value; ReapplyCarve(); }
+    }
+
+    public float Height
+    {
+        get => height;
+        set { if (height == value) return; height = value; ReapplyCarve(); }
+    }
+
+    // LateUpdate reads these every frame, so there is nothing for a setter to apply.
+    public bool Carve { get => carve; set => carve = value; }
+    public bool CarveOnlyStationary { get => carveOnlyStationary; set => carveOnlyStationary = value; }
+    public float CarvingMoveThreshold { get => carvingMoveThreshold; set => carvingMoveThreshold = value; }
+    public float CarvingTimeToStationary { get => carvingTimeToStationary; set => carvingTimeToStationary = value; }
 
     private bool IsBox => Shape == NavMeshObstacleShape.Box;
     private bool IsCylinder => Shape == NavMeshObstacleShape.Cylinder;
@@ -92,31 +128,26 @@ public class NavMeshObstacle : MonoBehaviour
     private float _blockerRadius, _blockerHeight;
     private bool _warnedBlockerUnplaced;
 
-    // Geometry the live carve was registered with, re-checked each LateUpdate so writing the
-    // public fields after AddComponent (spawn-then-configure) re-carves — the same drift-check
-    // pattern as NavMeshAgent's AgentTypeId/AreaMask. Rotation compares quaternions by dot
+    // Rotation the live carve was registered with, re-checked each LateUpdate because a box's
+    // footprint follows the Transform and no setter sees that turn. Compared by quaternion dot
     // product: no per-frame Euler conversion, no wrap false-positives at ±180°.
-    private NavMeshObstacleShape _appliedShape;
-    private Float3 _appliedSize;
-    private float _appliedRadius, _appliedHeight;
     private Quaternion _appliedRotation = Quaternion.Identity;
 
-    private void CaptureAppliedGeometry()
+    private bool RotationChanged()
+        => Shape == NavMeshObstacleShape.Box
+            && Math.Abs(Quaternion.Dot(Transform.Rotation, _appliedRotation)) < 0.9999;
+
+    /// The geometry setters and inspector edits both land here: a live carve is cut again at the
+    /// new shape, and one that is not applied is left for the carve machinery to place.
+    private void ReapplyCarve()
     {
-        _appliedShape = Shape;
-        _appliedSize = Size;
-        _appliedRadius = Radius;
-        _appliedHeight = Height;
-        _appliedRotation = Transform.Rotation;
+        if (!_carveApplied) return;
+        RemoveCarve();
+        TryApplyCarve();
     }
 
-    private bool GeometryChanged()
-        => Shape != _appliedShape
-            || !Size.Equals(_appliedSize)
-            || Radius != _appliedRadius
-            || Height != _appliedHeight
-            || (Shape == NavMeshObstacleShape.Box
-                && Math.Abs(Quaternion.Dot(Transform.Rotation, _appliedRotation)) < 0.9999);
+    // The inspector writes the backing field, so a setter never sees an authored edit.
+    public override void OnValidate() => ReapplyCarve();
 
     public override void OnEnable()
     {
@@ -173,15 +204,11 @@ public class NavMeshObstacle : MonoBehaviour
         // hole this obstacle carves, avoided by agents already routing around it.
         if (_blockers.Count > 0) RemoveBlockers();
 
-        // Geometry drift MUST be evaluated before the new-instance pickup below: TryApplyCarve
-        // captures the applied-geometry snapshot, so running the pickup first (its flag is set
-        // by any NavMeshChanged — including the cache pump's own convergence events) would
-        // record the new field values without re-carving and swallow the drift for good.
-        if (_carveApplied && GeometryChanged())
-        {
-            RemoveCarve();
-            TryApplyCarve();
-        }
+        // Rotation drift MUST be evaluated before the new-instance pickup below: TryApplyCarve
+        // captures the rotation it carved at, so running the pickup first (its flag is set by any
+        // NavMeshChanged, including the cache pump.s own convergence events) would record the new
+        // rotation without re-carving and swallow the drift for good.
+        if (RotationChanged()) ReapplyCarve();
 
         if (_refsPruneNeeded)
         {
@@ -390,12 +417,9 @@ public class NavMeshObstacle : MonoBehaviour
             instance.MarkCachePending();
         }
         _carveApplied = true;
-        CaptureAppliedGeometry();
+        _appliedRotation = Transform.Rotation;
     }
 
-    // No try/catch: verified against Prowl.Recast — AllocObstacle grows its pool and
-    // the request queue is an unbounded list, so Add*Obstacle never throws and never returns
-    // 0 for capacity (maxObstacles only sizes the initial id encoding).
     /// <param name="agentRadius">Envelope of the navmesh being carved. The hole is widened by it
     /// because a navmesh stores where an agent's CENTRE may be, not where its body fits: a bake
     /// pulls the mesh this far back from every wall, and a carve that did not would let agents

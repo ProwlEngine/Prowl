@@ -14,12 +14,10 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// A baked navmesh as a standalone, serializable asset (stored as a <c>.navmesh</c> file):
-/// the Detour tiles as raw bytes plus everything needed to reinstantiate a
-/// <see cref="DtNavMesh"/> at load time. Produced by <see cref="NavMeshBuilder"/> in the
-/// editor or at runtime, consumed by <see cref="NavMeshWorld.AddNavMeshData"/>. Like
-/// <see cref="Resources.TerrainData"/>, the asset is independent of any scene — procedural
-/// worlds can build one at runtime and register it without an editor bake.
+/// A baked navmesh as a standalone <c>.navmesh</c> asset: the compressed layers plus everything
+/// needed to reinstantiate a <see cref="DtNavMesh"/> at load time. Built by
+/// <see cref="NavMeshBuilder"/> and registered through <see cref="NavMeshWorld.AddNavMeshData"/>.
+/// Independent of any scene, so a procedural world can build one at runtime.
 /// </summary>
 public sealed class NavMeshData : EngineObject
 {
@@ -244,11 +242,9 @@ public sealed class NavMeshData : EngineObject
         DtNavMesh navMesh = CreateEmptyNavMesh();
         Prowl.Recast.Detour.TileCache.DtTileCache cache = NavMeshTileBuilder.CreateTileCache(this, navMesh, maxObstacles, out meshProcess);
 
-        // Every layer goes in before any of them is meshed. A tile's seam with its neighbour is
-        // built from both sides' cells, so a tile meshed while its neighbours are still missing
-        // reads its own side only and describes the seam differently than the neighbour later
-        // does — the two surfaces then meet a fraction of a voxel apart along an edge they
-        // should share exactly.
+        // Add every layer before meshing any: a seam is built from both sides' cells, so a tile
+        // meshed while its neighbours are missing describes that seam differently than they will,
+        // and the two surfaces end up a fraction of a voxel apart along an edge they share.
         var tileRefs = new List<long>(CacheLayers.Count);
         foreach (NavMeshTile layer in CacheLayers)
         {

@@ -11,9 +11,8 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// An off-mesh connection an agent can actually traverse, at the endpoints Detour snapped onto
-/// walkable polygons — which is not necessarily where the <see cref="NavMeshLink"/> that produced
-/// it asked for. A link that reached nothing walkable is reported here not at all, which is the
-/// only way to tell it failed short of watching an agent refuse to cross.
+/// walkable polygons rather than where the <see cref="NavMeshLink"/> asked for. A link that reached
+/// nothing walkable is absent here, which is the only way to tell it failed.
 /// </summary>
 public readonly struct NavMeshConnection(Float3 start, Float3 end, float radius, int area, bool bidirectional, int linkId)
 {
@@ -33,11 +32,9 @@ public readonly struct NavMeshConnection(Float3 start, Float3 end, float radius,
     public readonly int LinkId = linkId;
 
     /// <summary>
-    /// Read one of a tile's connections, unless it is not traversable end to end. Detour keeps
-    /// the stub in the tile whichever end failed, so the test is on the links themselves.
-    /// Everything worth reporting hangs off the connection's polygon rather than the connection
-    /// — the area, and the endpoints, since <c>con.pos</c> holds what was asked for while the
-    /// polygon's vertices hold where the ends snapped to.
+    /// Read one of a tile's connections, unless it is not traversable end to end — Detour keeps the
+    /// stub whichever end failed, so the test is on the links. The area and endpoints come from the
+    /// connection's polygon: <c>con.pos</c> holds what was asked for, its vertices where it snapped.
     /// </summary>
     internal static bool TryFrom(DtMeshTile tile, DtOffMeshConnection con, out NavMeshConnection connection)
     {
@@ -54,11 +51,9 @@ public readonly struct NavMeshConnection(Float3 start, Float3 end, float radius,
     }
 
     /// <summary>
-    /// A connection's two ends are attached independently — the start when its own tile is
-    /// built, the far end when the tile it lands in is — and each leaves a link on the
-    /// connection's polygon tagged with which end it is. An end that found nothing walkable
-    /// within the connection's radius leaves none, and an agent arriving at a connection with
-    /// no far end has nowhere to come out: the path across is partial, not complete.
+    /// The two ends attach independently, each as its own tile is built, leaving a link on the
+    /// connection's polygon tagged with which end it is. An end that found nothing walkable leaves
+    /// none, and an agent arriving with no far end has nowhere to come out.
     /// </summary>
     private static bool IsAttachedAtBothEnds(DtMeshTile tile, DtPoly poly)
     {
@@ -106,10 +101,9 @@ public readonly struct NavMeshEdge(Float3 a, Float3 b, NavMeshEdgeKind kind)
 }
 
 /// <summary>
-/// A triangulated snapshot of a navmesh, for debug drawing and user tooling
-/// (matches Unity's NavMeshTriangulation). Triangles come from each polygon's height detail,
-/// which is the surface an agent is actually placed on — a polygon's own corners describe only
-/// its outline, and reading heights from those alone flattens whatever the polygon spans.
+/// A triangulated snapshot of a navmesh, for debug drawing and user tooling. Triangles come from
+/// each polygon's height detail, which is the surface an agent is placed on; its corners describe
+/// only the outline, and reading heights from those flattens whatever the polygon spans.
 /// </summary>
 public struct NavMeshTriangulation
 {

@@ -3,6 +3,8 @@
 
 using System.Collections.Generic;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime;
 
 /// <summary>
@@ -20,26 +22,33 @@ namespace Prowl.Runtime;
 public class NavMeshModifier : MonoBehaviour
 {
     [Tooltip("Exclude this object's geometry from navmesh bakes entirely.")]
-    public bool IgnoreFromBuild;
+    [SerializeField] private bool ignoreFromBuild;
 
     [Tooltip("Stamp this object's bake geometry with Area instead of the surface's default.")]
-    public bool OverrideArea;
+    [SerializeField] private bool overrideArea;
 
     [Tooltip("The area applied when Override Area is on.")]
     [NavMeshArea]
     [EnableIf(nameof(OverrideArea))]
-    public int Area = NavMeshAreas.Walkable;
+    [SerializeField] private int area = NavMeshAreas.Walkable;
 
     [Tooltip("Also apply to child objects. A child's own modifier always takes precedence.")]
-    public bool ApplyToChildren = true;
+    [SerializeField] private bool applyToChildren = true;
 
     [Tooltip("Apply to bakes of every agent type. Turn off to pick specific types.")]
-    public bool AffectAllAgentTypes = true;
+    [SerializeField] private bool affectAllAgentTypes = true;
 
     [Tooltip("Agent types whose bakes this modifier affects, when not affecting all.")]
     [NavMeshAgentType]
     [EnableIf(nameof(UsesExplicitAgentTypes))]
-    public List<int> AffectedAgentTypeIds = [];
+    [SerializeField] private List<int> affectedAgentTypeIds = [];
+
+    public bool IgnoreFromBuild { get => ignoreFromBuild; set => ignoreFromBuild = value; }
+    public bool OverrideArea { get => overrideArea; set => overrideArea = value; }
+    public int Area { get => area; set => area = value; }
+    public bool ApplyToChildren { get => applyToChildren; set => applyToChildren = value; }
+    public bool AffectAllAgentTypes { get => affectAllAgentTypes; set => affectAllAgentTypes = value; }
+    public List<int> AffectedAgentTypeIds { get => affectedAgentTypeIds; set => affectedAgentTypeIds = value; }
 
     private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
 

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.TileCache;
 
+using Prowl.Echo;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -27,15 +28,15 @@ public enum NavMeshCollectObjects
 
 /// <summary>
 /// Bakes and registers a navmesh for one agent type. The baked result is a standalone
-/// <see cref="NavMeshData"/> asset; at runtime the surface registers it with the scene's
-/// <see cref="NavMeshWorld"/> on enable. Rebuilds can run synchronously, in the background
+/// <see cref="NavMeshData"/> asset, which the surface registers with the scene's
+/// <see cref="NavMeshWorld"/> on enable. Rebuilds run synchronously, in the background
 /// (<see cref="BuildNavMeshAsync"/>), or per-tile for localized geometry changes
-/// (<see cref="RebuildTiles"/> — destructible worlds rebuild only what changed).
+/// (<see cref="RebuildTiles"/>).
+/// <para/>
+/// Registration is the whole of this component's lifecycle — there is no per-frame work — and it
+/// runs in the editor as well as in play: obstacles can only carve a live navmesh and the overlay
+/// draws one, so without it a scene's baked navmesh stays unregistered until something bakes again.
 /// </summary>
-// Registration is the whole of this component's lifecycle — there is no per-frame work — and the
-// editor needs it as much as play does: an obstacle can only carve a live navmesh, and the scene
-// view's overlay draws one. Without this, opening a scene leaves its baked navmesh unregistered
-// until something bakes again, so carve previews only work in the session you pressed Bake in.
 [ExecuteAlways]
 [AddComponentMenu("Navigation/NavMesh Surface")]
 [ComponentIcon("")] // map icon
@@ -44,11 +45,11 @@ public class NavMeshSurface : MonoBehaviour
     [Header("Bake")]
     [Tooltip("The agent type this navmesh is built for (radius, height, slope, climb come from the project's agent table). Agents only use navmeshes of their own type. One surface per agent type per scene.")]
     [NavMeshAgentType]
-    public int AgentTypeId = NavMeshAgentTypes.Humanoid;
+    [SerializeField] private int agentTypeId = NavMeshAgentTypes.Humanoid;
 
     [Tooltip("Surface-level rasterization settings (voxel/tile sizes and Recast detail). Most bakes never need to change these.")]
     [HideInInspector] // drawn inside the editor's Advanced foldout
-    public NavMeshBuildOverrides BuildOverrides = new();
+    [SerializeField] private NavMeshBuildOverrides buildOverrides = new();
 
     /// <summary>The resolved bake input: the agent type's envelope composed with this
     /// surface's <see cref="BuildOverrides"/>. What gets handed to
@@ -57,38 +58,41 @@ public class NavMeshSurface : MonoBehaviour
         => NavMeshAgentTypes.GetBuildSettings(AgentTypeId, BuildOverrides);
 
     [Tooltip("Which objects contribute bake geometry. NavMeshAgents and their children never contribute — agents walk the mesh rather than forming it.")]
-    public NavMeshCollectObjects CollectObjects = NavMeshCollectObjects.All;
+    [SerializeField] private NavMeshCollectObjects collectObjects = NavMeshCollectObjects.All;
 
     [Tooltip("Volume center (local to this GameObject) when CollectObjects is Volume.")]
     [ShowIf(nameof(IsVolumeMode))]
-    public Float3 Center;
+    [SerializeField] private Float3 center;
 
     [Tooltip("Volume size when CollectObjects is Volume.")]
     [ShowIf(nameof(IsVolumeMode))]
-    public Float3 Size = new(10, 10, 10);
+    [SerializeField] private Float3 size = new(10, 10, 10);
 
     [Tooltip("Only objects on these layers contribute bake geometry.")]
-    public LayerMask Layers = LayerMask.Everything;
+    [SerializeField] private LayerMask layers = LayerMask.Everything;
 
     [Tooltip("Voxelize render meshes or physics colliders.")]
-    public NavMeshCollectGeometry UseGeometry = NavMeshCollectGeometry.RenderMeshes;
+    [SerializeField] private NavMeshCollectGeometry useGeometry = NavMeshCollectGeometry.RenderMeshes;
 
     [Tooltip("Area applied to all walkable geometry in this bake.")]
     [NavMeshArea]
     [HideInInspector] // drawn inside the editor's Advanced foldout (Unity keeps it there too)
-    public int DefaultArea = NavMeshAreas.Walkable;
+    [SerializeField] private int defaultArea = NavMeshAreas.Walkable;
 
     [Tooltip("The baked navmesh. Assigned by baking, or point it at an existing .navmesh asset.")]
+    // A field, not a property, like MeshRenderer.Mesh: AssetRef<T> caches its resolved instance as
+    // a side effect of .Res, and a property hands out a copy — so every read would resolve from the
+    // database again and the async-load dedup the cache drives would never engage.
     public AssetRef<NavMeshData> NavMeshData;
 
     [Tooltip("Draw the walkable surface in the scene view even when this object is not selected — the only way to watch obstacles carve while playing, since entering play mode clears the selection. Debug aid: it re-triangulates the whole mesh every time one settles, so leave it off in scenes you are profiling.")]
-    public bool AlwaysShowNavMesh;
+    [SerializeField] private bool alwaysShowNavMesh;
 
     [Tooltip("Add the height-detail wireframe to the overlay — the triangles Recast fits inside each polygon to follow the ground. Off by default: on a large mesh it is thousands of extra lines a frame.")]
-    public bool ShowNavMeshDetail;
+    [SerializeField] private bool showNavMeshDetail;
 
     [Tooltip("Add a marker per navmesh vertex to the overlay, polygon corners picked out from detail vertices. Off by default: each one is eight triangles a frame.")]
-    public bool ShowNavMeshVertices;
+    [SerializeField] private bool showNavMeshVertices;
 
     private NavMeshInstance? _instance;
     private Runtime.NavMeshData? _runtimeData;
@@ -105,6 +109,18 @@ public class NavMeshSurface : MonoBehaviour
     /// <see cref="ApplyNavMeshData"/> it is that object itself — nothing else owns it.
     /// </summary>
     public Runtime.NavMeshData? RuntimeData => _runtimeData;
+
+    public int AgentTypeId { get => agentTypeId; set => agentTypeId = value; }
+    public NavMeshBuildOverrides BuildOverrides { get => buildOverrides; set => buildOverrides = value; }
+    public NavMeshCollectObjects CollectObjects { get => collectObjects; set => collectObjects = value; }
+    public Float3 Center { get => center; set => center = value; }
+    public Float3 Size { get => size; set => size = value; }
+    public LayerMask Layers { get => layers; set => layers = value; }
+    public NavMeshCollectGeometry UseGeometry { get => useGeometry; set => useGeometry = value; }
+    public int DefaultArea { get => defaultArea; set => defaultArea = value; }
+    public bool AlwaysShowNavMesh { get => alwaysShowNavMesh; set => alwaysShowNavMesh = value; }
+    public bool ShowNavMeshDetail { get => showNavMeshDetail; set => showNavMeshDetail = value; }
+    public bool ShowNavMeshVertices { get => showNavMeshVertices; set => showNavMeshVertices = value; }
 
     /// <summary>The scene's navigation world, or null when not in a scene.</summary>
     private NavMeshWorld? World
@@ -272,28 +288,21 @@ public class NavMeshSurface : MonoBehaviour
     }
 
     /// <summary>
-    /// Re-collect this surface's <see cref="NavMeshLink"/>s into the live navmesh and rebuild
-    /// the tiles overlapping <paramref name="worldBounds"/> so the change takes effect. Cheap
-    /// next to a geometry rebuild: the compressed layers are untouched and only the affected
-    /// tiles are re-contoured from them, with the new link set injected — where
-    /// <see cref="RebuildTiles(AABB)"/> has to re-voxelize. Returns false when this surface has
-    /// no live navmesh.
+    /// Replace the live link set and re-contour the tiles overlapping <paramref name="worldBounds"/>.
+    /// No re-voxelization: the compressed layers are untouched, which is what makes this cheap next
+    /// to <see cref="RebuildTiles(AABB)"/>. False when this surface has no live navmesh.
     /// </summary>
-    /// <param name="worldBounds">Region whose tiles pick up the change — normally the link's
-    /// endpoints. The registry is replaced wholesale; only these tiles re-contour.</param>
-    /// <param name="links">The surface's complete link set. Null (the default) collects the
-    /// scene's <see cref="NavMeshLink"/>s; games driving navigation from explicit sources pass
-    /// their own list and skip the scene scan.</param>
+    /// <param name="worldBounds">Region whose tiles pick up the change, normally the link's endpoints.</param>
+    /// <param name="links">The surface's complete link set. Null collects the scene's
+    /// <see cref="NavMeshLink"/>s; pass a list to skip the scene scan.</param>
     public bool RebuildLinkTiles(AABB worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
         => RebuildLinkTiles([worldBounds], links);
 
     /// <inheritdoc cref="RebuildLinkTiles(AABB, IReadOnlyList{NavMeshLinkSource})"/>
-    /// <param name="worldBounds">Regions whose tiles pick up the change. A tile several of them
-    /// cover re-contours once — which is the whole point of handing a frame's link edits over
-    /// together rather than applying them one at a time.</param>
-    /// <param name="links">The surface's complete link set. Null (the default) collects the
-    /// scene's <see cref="NavMeshLink"/>s; games driving navigation from explicit sources pass
-    /// their own list and skip the collection.</param>
+    /// <param name="worldBounds">Regions whose tiles pick up the change. A tile several of them cover
+    /// re-contours once, which is the point of handing a frame's link edits over together.</param>
+    /// <param name="links">The surface's complete link set. Null collects the scene's
+    /// <see cref="NavMeshLink"/>s.</param>
     public bool RebuildLinkTiles(ReadOnlySpan<AABB> worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
     {
         NavMeshInstance? instance = Instance;
@@ -334,15 +343,13 @@ public class NavMeshSurface : MonoBehaviour
     }
 
     /// <summary>
-    /// World rect the collectors must cover for a rebuild of <paramref name="worldBounds"/>:
-    /// the affected TILES (rebuilds rasterize whole tiles, so sources clipped to just the
-    /// changed AABB would erase the rest of a partially-covered tile) plus the erosion border.
-    /// Null when there is no grid to derive it from, meaning collect everything.
+    /// World rect the collectors must cover for a rebuild of <paramref name="worldBounds"/>: the
+    /// affected TILES plus the erosion border, because rebuilds rasterize whole tiles. Null when
+    /// there is no grid to derive it from, meaning collect everything.
     /// <para/>
-    /// Public because <see cref="RebuildTiles(AABB, IReadOnlyList{NavMeshGeometrySource})"/> makes
-    /// covering this rect the caller's job, and getting it wrong leaves holes in the tiles the
-    /// changed region only partly covers rather than failing outright. Collectors clip terrain to
-    /// the filter they are given, so a filter of just the changed AABB is not conservative.
+    /// Public because the explicit-sources overload makes covering this rect the caller's job, and
+    /// getting it wrong leaves holes rather than failing. Collectors clip terrain to the filter they
+    /// are given, so the changed AABB alone is not conservative.
     /// </summary>
     public AABB? RebuildCollectionBounds(AABB worldBounds)
     {
@@ -367,13 +374,11 @@ public class NavMeshSurface : MonoBehaviour
 
     /// <summary>
     /// Rebuild the tiles intersecting <paramref name="worldBounds"/> from caller-supplied
-    /// geometry, for games whose world isn't visible to the collectors (custom renderers,
-    /// custom collision). Pass the bounds of the CHANGED geometry — the affected tile set is
-    /// derived from them, expanded by the erosion border. Sources need only cover those tiles
-    /// plus the border — never the whole bake — and <see cref="RebuildCollectionBounds"/> returns
-    /// exactly that rect to collect against. Covering less is not a cheaper rebuild: the tiles the
-    /// changed region only partly covers come back with holes where the sources stopped.
-    /// An empty source list is valid and empties the affected tiles.
+    /// geometry, for games whose world the collectors cannot see. Pass the bounds of the CHANGED
+    /// geometry; the affected tile set derives from them plus the erosion border, and
+    /// <see cref="RebuildCollectionBounds"/> returns exactly the rect to collect against. Covering
+    /// less is not a cheaper rebuild — partly covered tiles come back with holes. An empty source
+    /// list is valid and empties the affected tiles.
     /// </summary>
     public bool RebuildTiles(AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources)
         => RebuildTiles(worldBounds, sources, out _);
@@ -431,17 +436,15 @@ public class NavMeshSurface : MonoBehaviour
     /// <see cref="NavMeshBuilder.BuildTilesInBounds"/>) into the live TileCache and mirror them
     /// into the asset. Main thread only.
     /// <para/>
-    /// A cache with carve work in flight cannot take a swap, and draining it inline costs
-    /// milliseconds per queued tile under the write lock — so the swap is held and applied on the
-    /// first frame the pump reports the cache settled, usually the next one. Anything that queues
-    /// tile work sets the flag, a link rebuild included, so one of those in the same frame defers
-    /// the swap too. A cache that will not settle at all — an obstacle moving every frame re-queues
-    /// as fast as the pump drains — stops the wait after a few passes and pays the drain. Use
-    /// <see cref="ApplyRebuiltTilesNow"/> when the tiles have to be live before the call returns.
+    /// A cache with carve work in flight cannot take a swap, and draining it inline costs milliseconds
+    /// per queued tile under the write lock — so the swap is held until the frame the pump reports the
+    /// cache settled, usually the next one. Anything queuing tile work sets that flag, a link rebuild
+    /// included. A cache that never settles (an obstacle moving every frame re-queues as fast as the
+    /// pump drains) gives up after a few passes and pays the drain. Use
+    /// <see cref="ApplyRebuiltTilesNow"/> when the tiles must be live before the call returns.
     /// <para/>
-    /// Returns false only when there is nothing to apply to (no live navmesh, no tiles);
-    /// true means applied or held. A held swap keeps the layer blobs handed to it, so do not
-    /// recycle them until it lands.
+    /// False only when there is nothing to apply to; true means applied OR held. A held swap keeps
+    /// the layer blobs handed to it, so do not recycle them until it lands.
     /// </summary>
     public bool ApplyRebuiltTiles(List<(int X, int Z, List<byte[]> Layers)> rebuilt, out int rebuiltTiles)
     {
@@ -559,12 +562,10 @@ public class NavMeshSurface : MonoBehaviour
 
     /// <summary>
     /// Collect this surface's bake geometry, restricted to objects whose bounds intersect
-    /// <paramref name="filterBounds"/> (conservative test against transformed local bounds) —
-    /// partial rebuilds pass their affected-tile rect so collection cost scales with the changed
-    /// region. Volume mode composes: the volume intersects with the filter.
-    /// <paramref name="terrainVoxelSize"/> sets terrain decimation granularity — pass whatever
-    /// settings the geometry will be voxelized with (bakes: freshly resolved; partial rebuilds:
-    /// the asset's snapshot).
+    /// <paramref name="filterBounds"/>, a conservative test against transformed local bounds, so a
+    /// partial rebuild's collection cost scales with the changed region. Volume mode composes: the
+    /// volume intersects the filter. <paramref name="terrainVoxelSize"/> must match the settings the
+    /// geometry will be voxelized with, or terrain decimates at a different phase.
     /// </summary>
     public List<NavMeshGeometrySource> CollectSources(AABB? filterBounds, float terrainVoxelSize)
     {
@@ -831,11 +832,9 @@ public class NavMeshSurface : MonoBehaviour
     }
 
     /// <summary>
-    /// One solid dot per distinct vertex position: white for polygon corners — the welded,
-    /// tile-stitched structure — orange for vertices the height detail added. The triangulation
-    /// repeats shared corners once per polygon, so markers dedupe by position; a corner and a
-    /// detail vertex landing on the same spot counts as the corner, the stronger claim. Built
-    /// once per triangulation rebuild — this draws every frame.
+    /// One dot per distinct vertex position: white for polygon corners, orange for vertices the
+    /// height detail added. The triangulation repeats shared corners per polygon, so markers dedupe
+    /// by position and a corner wins a tie. Built once per triangulation rebuild, drawn every frame.
     /// </summary>
     private static List<(Float3 Position, bool Corner)> BuildVertexMarkers(NavMeshTriangulation tri)
     {

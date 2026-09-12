@@ -38,9 +38,8 @@ public static class NavMeshGeometryCollector
     /// <param name="voxelSize">Bake voxel size, used to decimate terrain sampling.</param>
     /// <param name="defaultArea">Area recorded on collected sources.</param>
     /// <param name="results">Receives the collected sources.</param>
-    /// <param name="bounds">Optional world-space filter: objects whose (conservatively
-    /// transformed) local bounds miss it are skipped before any vertex work, so partial
-    /// rebuilds don't pay whole-scene collection.</param>
+    /// <param name="bounds">Optional world-space filter. Objects whose conservatively transformed
+    /// local bounds miss it are skipped before any vertex work.</param>
     /// <param name="agentTypeId">The bake's agent type, used to decide which
     /// <see cref="NavMeshModifier"/>s apply.</param>
     public static void Collect(IEnumerable<GameObject> objects, NavMeshCollectGeometry geometry, LayerMask layers,

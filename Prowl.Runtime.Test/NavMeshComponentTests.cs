@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -653,6 +654,161 @@ public class NavMeshComponentTests : RuntimeTestBase
         Assert.Equal(0f, discarded.Distance, 3);
         Assert.True(discarded.Hit);
         Assert.NotEqual(0, discarded.Mask & NavMesh.AllAreas);
+    }
+
+    /// <summary>
+    /// Writing a steering property reaches the live crowd agent at once. It used to take a
+    /// LateUpdate for AreaMask (and nothing at all for the rest without a RefreshParams call), so
+    /// the assertions are made with no tick in between.
+    /// </summary>
+    [Fact]
+    public void Agent_WritingSteeringProperties_ReachesTheCrowdWithoutATick()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        Tick(scene, 2);
+        Assert.True(agent.IsOnNavMesh);
+
+        agent.Speed = 9f;
+        agent.Radius = 0.75f;
+        Assert.Equal(9f, agent.NativeAgent!.option.maxSpeed, 3);
+        Assert.Equal(0.75f, agent.NativeAgent.option.radius, 3);
+
+        // The mask is baked into a crowd filter slot rather than the params, so this proves the
+        // slot was re-derived rather than the field just being stored.
+        int noJump = NavMesh.AllAreas & ~(1 << NavMeshAreas.Jump);
+        int before = agent.NativeAgent.option.queryFilterType;
+        agent.AreaMask = noJump;
+        Assert.NotEqual(before, agent.NativeAgent!.option.queryFilterType);
+    }
+
+    /// <summary>Writing AgentTypeId re-places the agent on the new type's crowd immediately. With
+    /// no navmesh for that type it comes off the mesh, which is the honest answer — and it goes
+    /// back on when pointed at a type that has one.</summary>
+    [Fact]
+    public void Agent_WritingAgentTypeId_MovesItBetweenCrowds()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        Tick(scene, 2);
+        Assert.True(agent.IsOnNavMesh);
+
+        object? first = agent.NativeAgent;
+        agent.AgentTypeId = NavMeshAgentTypes.Humanoid + 7; // no surface bakes this type
+        Assert.False(agent.IsOnNavMesh);
+
+        agent.AgentTypeId = surface.AgentTypeId;
+        Assert.True(agent.IsOnNavMesh);
+        Assert.NotSame(first, agent.NativeAgent);
+    }
+
+    /// <summary>
+    /// The navigation components serialize through camelCase backing fields, and every scene saved
+    /// before that wrote the public field's PascalCase name. Echo matches a key case-insensitively,
+    /// so those scenes still load — asserted because the failure mode is a component that silently
+    /// comes back with defaults.
+    /// </summary>
+    [Fact]
+    public void Components_LoadValuesSavedUnderTheOldFieldNames()
+    {
+        var surface = FromOldScene<NavMeshSurface>(("AgentTypeId", 7), ("DefaultArea", NavMeshAreas.Jump),
+            ("Size", new Float3(3, 4, 5)), ("AlwaysShowNavMesh", true));
+        Assert.Equal(7, surface.AgentTypeId);
+        Assert.Equal(NavMeshAreas.Jump, surface.DefaultArea);
+        Assert.Equal(new Float3(3, 4, 5), surface.Size);
+        Assert.True(surface.AlwaysShowNavMesh);
+
+        var volume = FromOldScene<NavMeshModifierVolume>(("Center", new Float3(1, 2, 3)), ("Area", NavMeshAreas.Jump),
+            ("AffectAllAgentTypes", false));
+        Assert.Equal(new Float3(1, 2, 3), volume.Center);
+        Assert.Equal(NavMeshAreas.Jump, volume.Area);
+        Assert.False(volume.AffectAllAgentTypes);
+
+        var modifier = FromOldScene<NavMeshModifier>(("IgnoreFromBuild", true), ("OverrideArea", true),
+            ("Area", NavMeshAreas.Jump), ("ApplyToChildren", false));
+        Assert.True(modifier.IgnoreFromBuild);
+        Assert.True(modifier.OverrideArea);
+        Assert.Equal(NavMeshAreas.Jump, modifier.Area);
+        Assert.False(modifier.ApplyToChildren);
+
+        var agent = FromOldScene<NavMeshAgent>(("Speed", 9f), ("AreaMask", 5), ("StoppingDistance", 1.5f),
+            ("ObstacleAvoidanceQuality", ObstacleAvoidanceType.HighQualityObstacleAvoidance));
+        Assert.Equal(9f, agent.Speed);
+        Assert.Equal(5, agent.AreaMask);
+        Assert.Equal(1.5f, agent.StoppingDistance);
+        Assert.Equal(ObstacleAvoidanceType.HighQualityObstacleAvoidance, agent.ObstacleAvoidanceQuality);
+
+        var obstacle = FromOldScene<NavMeshObstacle>(("Shape", NavMeshObstacleShape.Cylinder),
+            ("Size", new Float3(2, 3, 4)), ("Radius", 1.25f), ("Carve", false));
+        Assert.Equal(NavMeshObstacleShape.Cylinder, obstacle.Shape);
+        Assert.Equal(new Float3(2, 3, 4), obstacle.Size);
+        Assert.Equal(1.25f, obstacle.Radius);
+        Assert.False(obstacle.Carve);
+
+        var link = FromOldScene<NavMeshLink>(("StartPoint", new Float3(1, 0, 2)), ("Width", 3f),
+            ("Area", NavMeshAreas.Jump), ("Bidirectional", false), ("Activated", false));
+        Assert.Equal(new Float3(1, 0, 2), link.StartPoint);
+        Assert.Equal(3f, link.Width);
+        Assert.Equal(NavMeshAreas.Jump, link.Area);
+        Assert.False(link.Bidirectional);
+        Assert.False(link.Activated);
+    }
+
+    /// <summary>
+    /// The inspector writes the backing field and then calls OnValidate — it never goes through a
+    /// setter. A type change is a move between crowds rather than a parameter push, so OnValidate
+    /// has to notice it; otherwise the agent keeps steering on the old type's crowd while its
+    /// queries resolve against the new type's navmesh, and polygon refs cross between them.
+    /// </summary>
+    [Fact]
+    public void Agent_AgentTypeIdEditedThroughTheField_StillMovesBetweenCrowds()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        Tick(scene, 2);
+        Assert.True(agent.IsOnNavMesh);
+
+        SetFieldAsTheInspectorWould(agent, "agentTypeId", NavMeshAgentTypes.Humanoid + 7);
+        agent.OnValidate();
+        Assert.False(agent.IsOnNavMesh, "no surface bakes that type, so the agent must come off the mesh");
+
+        SetFieldAsTheInspectorWould(agent, "agentTypeId", surface.AgentTypeId);
+        agent.OnValidate();
+        Assert.True(agent.IsOnNavMesh);
+    }
+
+    private static void SetFieldAsTheInspectorWould(object target, string backingField, object value)
+    {
+        System.Reflection.FieldInfo? field = target.GetType().GetField(backingField,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(target, value);
+    }
+
+    private static T FromOldScene<T>(params (string Key, object Value)[] fields) where T : MonoBehaviour
+    {
+        EchoObject compound = EchoObject.NewCompound();
+        foreach ((string key, object value) in fields)
+            compound.Add(key, Serializer.Serialize(value.GetType(), value));
+
+        T? loaded = Serializer.Deserialize<T>(compound);
+        Assert.NotNull(loaded);
+        return loaded!;
     }
 
     private static NavMeshGeometrySource FloorQuad(float minX, float minZ, float maxX, float maxZ)

@@ -83,12 +83,10 @@ public sealed class NavMeshInstance
 
     internal void InvalidateLinkIds() => _connections = null;
 
-    // ReaderWriterLockSlim owns kernel wait handles that only Dispose releases, and disposing
-    // one while a thread is inside it throws on that thread rather than this one. Since a worker
-    // can ask for a query at any moment — including the instant this instance is unregistered —
-    // users are counted: one for the registration, one per outstanding lease or mutation, and
-    // whichever is last out disposes. A count that reached zero cannot be revived, so that
-    // happens exactly once and with nobody inside.
+    // ReaderWriterLockSlim owns kernel wait handles that only Dispose releases, and disposing one
+    // while a thread is inside it throws on that thread. Users: one for the registration plus one
+    // per lease or mutation; the last out disposes, and a count that reached zero cannot be revived,
+    // so a worker can never enter a disposed lock.
     private int _users = 1;
 
     private volatile bool _retired;
@@ -620,10 +618,8 @@ public sealed class NavMeshWorld
 
     /// <summary>
     /// Run a mutation against an instance's TileCache under the write lock (layer
-    /// regeneration, bulk obstacle edits). In-flight queries finish first. Pooled queries
-    /// survive the mutation — verified against Prowl.Recast, a DtNavMeshQuery holds only the
-    /// mesh reference plus node pools it clears on entry, no cached tile state, so discarding
-    /// the pool here would only churn tens-of-KB objects for nothing.
+    /// regeneration, bulk obstacle edits). In-flight queries finish first, and pooled queries survive
+    /// the mutation: a DtNavMeshQuery holds only the mesh reference and node pools it clears on entry.
     /// <para/>
     /// Threading: fires <see cref="NavMeshChanged"/> synchronously on the calling thread (see
     /// <see cref="AddNavMeshData"/> — same main-thread contract).
@@ -1050,14 +1046,10 @@ public sealed class NavMeshWorld
         // is drained this frame rather than waiting for the next.
         DrainLinkTiles();
 
-        // Carving is not: an obstacle queues its carve from OnEnable, which runs in the editor
-        // too, and without a pump that request would sit unprocessed forever. Pumping outside
-        // play is also what makes the scene view's overlay show a carve as you position a
-        // building. Only the live navmesh changes; obstacles never touch the baked asset.
-        //
-        // Only instances with queued work are pumped — an idle cache would report up-to-date
-        // immediately anyway, but skipping it means a navmesh nothing ever carves costs nothing
-        // per frame at all.
+        // Pumped outside play too: obstacles queue carves from OnEnable in the editor, and the
+        // overlay shows a carve as a building is positioned. Only the live navmesh changes; the baked
+        // asset never stores carves. Only flagged instances are pumped, so a navmesh nothing carves
+        // costs nothing per frame.
         _cachePumpScratch.Clear();
         lock (_instancesLock)
         {

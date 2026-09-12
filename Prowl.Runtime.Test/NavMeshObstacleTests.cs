@@ -141,6 +141,35 @@ public class NavMeshObstacleTests : RuntimeTestBase
             "Once the carve has converged the instance should drop out of the pump again.");
     }
 
+    /// <summary>
+    /// Writing an obstacle's authored geometry re-carves at once. Center in particular was never
+    /// part of the per-frame drift check the setters replaced, so moving a carve by Center alone
+    /// did nothing at all until the obstacle's Transform happened to move.
+    /// </summary>
+    [Fact]
+    public void Obstacle_WritingCenter_MovesTheCarve()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject obstacleGo = CreateGameObject("Crate");
+        scene.Add(obstacleGo);
+        obstacleGo.Transform.Position = new Float3(0, 1, 0);
+        var obstacle = obstacleGo.AddComponent<NavMeshObstacle>();
+        obstacle.Shape = NavMeshObstacleShape.Box;
+        obstacle.Size = new Float3(4, 3, 4);
+
+        Assert.True(TickUntil(scene, () => !Walkable(scene, new Float3(0, 0.2f, 0))) >= 0);
+        Assert.True(Walkable(scene, new Float3(6, 0.2f, 0)));
+
+        obstacle.Center = new Float3(6, 0, 0);
+
+        Assert.True(TickUntil(scene, () => !Walkable(scene, new Float3(6, 0.2f, 0))) >= 0,
+            "the carve should follow Center to its new position");
+        Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)), "and leave the hole it came from");
+    }
+
     /// <summary>An obstacle carves a hole (paths detour, the hole is unwalkable) and removing
     /// it restores the surface — all through incremental frame updates, no rebake.</summary>
     [Fact]

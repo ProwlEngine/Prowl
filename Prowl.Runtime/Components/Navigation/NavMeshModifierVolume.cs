@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 
+using Prowl.Echo;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -22,22 +23,28 @@ namespace Prowl.Runtime;
 public class NavMeshModifierVolume : MonoBehaviour
 {
     [Tooltip("Volume center, local to this GameObject.")]
-    public Float3 Center;
+    [SerializeField] private Float3 center;
 
     [Tooltip("Volume size, local to this GameObject (scaled and rotated by the Transform).")]
-    public Float3 Size = new(4, 3, 4);
+    [SerializeField] private Float3 size = new(4, 3, 4);
 
     [Tooltip("The area stamped inside the volume. Not Walkable erases walkability (punches a hole).")]
     [NavMeshArea]
-    public int Area = NavMeshAreas.Walkable;
+    [SerializeField] private int area = NavMeshAreas.Walkable;
 
     [Tooltip("Apply to bakes of every agent type. Turn off to pick specific types.")]
-    public bool AffectAllAgentTypes = true;
+    [SerializeField] private bool affectAllAgentTypes = true;
 
     [Tooltip("Agent types whose bakes this volume affects, when not affecting all.")]
     [NavMeshAgentType]
     [EnableIf(nameof(UsesExplicitAgentTypes))]
-    public List<int> AffectedAgentTypeIds = [];
+    [SerializeField] private List<int> affectedAgentTypeIds = [];
+
+    public Float3 Center { get => center; set => center = value; }
+    public Float3 Size { get => size; set => size = value; }
+    public int Area { get => area; set => area = value; }
+    public bool AffectAllAgentTypes { get => affectAllAgentTypes; set => affectAllAgentTypes = value; }
+    public List<int> AffectedAgentTypeIds { get => affectedAgentTypeIds; set => affectedAgentTypeIds = value; }
 
     private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
 
