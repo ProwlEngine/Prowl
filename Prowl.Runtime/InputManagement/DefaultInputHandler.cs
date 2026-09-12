@@ -21,28 +21,27 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
     /// <summary>
-    /// The system clipboard as text. Empty when the clipboard holds content that isn't convertible
-    /// to text - an image, a file list, a shell object.
+    /// The system clipboard as text. Empty when the clipboard holds content that cannot be converted
+    /// to text, such as an image, a file list or a shell object.
     /// </summary>
-    /// <remarks>
-    /// GLFW reports "no text on the clipboard" by raising FormatUnavailable rather than returning
-    /// null, and Silk surfaces that as <see cref="GlfwException"/>, so the empty case can only be
-    /// detected by catching it - there is no format-query API to check first. The catch is narrowed
-    /// to that one type on purpose: a missing keyboard or a disposed context is a real fault and
-    /// should still surface.
-    /// </remarks>
     public string Clipboard
     {
         get
         {
             if (Context.Keyboards.Count == 0) return "";
+            if (OperatingSystem.IsWindows() && !Win32Clipboard.HasText()) return "";
+
             try { return Context.Keyboards[0].ClipboardText ?? ""; }
             catch (GlfwException) { return ""; }
         }
         set
         {
             if (Context.Keyboards.Count == 0) return;
-            Context.Keyboards[0].ClipboardText = value ?? "";
+
+            // Another application holding the clipboard fails the open, which GLFW reports the same
+            // way it reports everything else.
+            try { Context.Keyboards[0].ClipboardText = value ?? ""; }
+            catch (GlfwException) { }
         }
     }
 
