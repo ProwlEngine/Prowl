@@ -461,10 +461,17 @@ namespace Prowl.Recast.Detour.TileCache
             return header;
         }
 
-        // Cylinder obstacle
+        /// Cylinder obstacle. Zero when the cache is already carrying @p maxObstacles, which is the
+        /// same "no obstacle" ref RemoveObstacle ignores, so a caller that stores it unchecked
+        /// simply has nothing to remove later.
         public long AddObstacle(RcVec3f pos, float radius, float height)
         {
             DtTileCacheObstacle ob = AllocObstacle();
+            if (ob == null)
+            {
+                return 0;
+            }
+
             ob.type = DtTileCacheObstacleType.DT_OBSTACLE_CYLINDER;
 
             ob.cylinder.pos = pos;
@@ -474,10 +481,16 @@ namespace Prowl.Recast.Detour.TileCache
             return AddObstacleRequest(ob).refs;
         }
 
-        // Aabb obstacle
+        /// Aabb obstacle.
+        /// <inheritdoc cref="AddObstacle"/>
         public long AddBoxObstacle(RcVec3f bmin, RcVec3f bmax)
         {
             DtTileCacheObstacle ob = AllocObstacle();
+            if (ob == null)
+            {
+                return 0;
+            }
+
             ob.type = DtTileCacheObstacleType.DT_OBSTACLE_BOX;
 
             ob.box.bmin = bmin;
@@ -486,10 +499,16 @@ namespace Prowl.Recast.Detour.TileCache
             return AddObstacleRequest(ob).refs;
         }
 
-        // Box obstacle: can be rotated in Y
+        /// Box obstacle: can be rotated in Y.
+        /// <inheritdoc cref="AddObstacle"/>
         public long AddBoxObstacle(RcVec3f center, RcVec3f extents, float yRadians)
         {
             DtTileCacheObstacle ob = AllocObstacle();
+            if (ob == null)
+            {
+                return 0;
+            }
+
             ob.type = DtTileCacheObstacleType.DT_OBSTACLE_ORIENTED_BOX;
             ob.orientedBox.center = center;
             ob.orientedBox.extents = extents;
@@ -518,11 +537,20 @@ namespace Prowl.Recast.Detour.TileCache
             m_reqs.Add(req);
         }
 
+        /// An obstacle from the free list, or a new one while the pool is under @p maxObstacles.
+        /// Null once it is full, which the Add*Obstacle entry points turn into a zero ref. The pool
+        /// only ever grows: a removed obstacle goes on the free list rather than out of the list, so
+        /// the count is the high water mark and the cap bounds it for the life of the cache.
         private DtTileCacheObstacle AllocObstacle()
         {
             DtTileCacheObstacle o = m_nextFreeObstacle;
             if (o == null)
             {
+                if (m_obstacles.Count >= m_params.maxObstacles)
+                {
+                    return null;
+                }
+
                 o = new DtTileCacheObstacle(m_obstacles.Count);
                 m_obstacles.Add(o);
             }
@@ -837,15 +865,43 @@ namespace Prowl.Recast.Detour.TileCache
         /// tile at a time. Committing in ref order reproduces a serial build exactly — AddTile
         /// inserts at the head of the position hash chain and connects neighbours in chain order,
         /// so the link tables depend on commit order and nothing else.
+        ///
+        /// Throws when the navmesh refuses the tile. Both reasons are mis-configuration rather than
+        /// anything a frame can recover from: a navmesh whose tile pool is smaller than the layers
+        /// this cache holds, or a position the preceding RemoveTile did not actually free. Silence
+        /// here is worse than a throw, because the only symptom is a hole in the navmesh exactly
+        /// where a tile was rebuilt.
         public void CommitTile(long refs, DtMeshData meshData)
         {
             DtCompressedTile tile = ResolveTile(refs);
 
             m_navmesh.RemoveTile(m_navmesh.GetTileRefAt(tile.header.tx, tile.header.ty, tile.header.tlayer));
-            if (meshData != null)
+            if (meshData == null)
             {
-                m_navmesh.AddTile(meshData, 0, 0, out var result);
+                return;
             }
+
+            DtStatus status = m_navmesh.AddTile(meshData, 0, 0, out _);
+            if (status.Failed())
+            {
+                throw new Exception(DescribeFailedCommit(tile, status));
+            }
+        }
+
+        private string DescribeFailedCommit(DtCompressedTile tile, DtStatus status)
+        {
+            string where = $"tile ({tile.header.tx}, {tile.header.ty}) layer {tile.header.tlayer}";
+            if (status.Has(DtStatus.DT_OUT_OF_MEMORY))
+            {
+                return $"The navmesh could not take {where}: its tile pool of {m_navmesh.GetMaxTiles()} is full, while this cache holds up to {m_params.maxTiles} layers. A navmesh tile slot holds ONE vertical layer, so size the navmesh from the grid scaled by the layers a tile may stack, not from the grid alone.";
+            }
+
+            if (status.Has(DtStatus.DT_ALREADY_OCCUPIED))
+            {
+                return $"The navmesh already holds {where}, which the commit was meant to replace. Its position was not freed, so the cache and the navmesh disagree about what is where.";
+            }
+
+            return $"The navmesh refused {where}: {status}.";
         }
 
         private DtCompressedTile ResolveTile(long refs)

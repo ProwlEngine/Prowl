@@ -54,7 +54,15 @@ namespace Prowl.Recast.Detour.TileCache
         public int mergeRegionArea;
         public int maxEdgeLen;
 
+        /// Compressed layer slots the cache holds. A navmesh tile slot holds ONE vertical layer, so
+        /// size the navmesh this cache feeds to match: anything the cache accepts past the navmesh's
+        /// own capacity is refused on commit.
         public int maxTiles;
+
+        /// Obstacles the cache may carry at once. Enforced: Add*Obstacle returns a zero ref once the
+        /// pool is full rather than growing past it, so leaving this at 0 admits no obstacles at all.
+        /// Removed obstacles return to a free list and can be reused, so this bounds live obstacles
+        /// rather than total additions.
         public int maxObstacles;
     }
 }

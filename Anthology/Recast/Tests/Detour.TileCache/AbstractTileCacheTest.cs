@@ -56,8 +56,11 @@ public class AbstractTileCacheTest
     public DtTileCache GetTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility, int maxTiles)
         => GetTileCache(geom, order, cCompatibility, maxTiles, watershedPartition: false, detailSampleDist: 0);
 
+    /// <param name="maxObstacles">Obstacle capacity, which the cache enforces.</param>
+    /// <param name="navMeshMaxTiles">Tile slots the navmesh behind the cache is given. Lower than
+    /// <paramref name="maxTiles"/> to exercise a cache that outgrows the navmesh it feeds.</param>
     public DtTileCache GetTileCache(IRcInputGeomProvider geom, RcByteOrder order, bool cCompatibility, int maxTiles,
-        bool watershedPartition, float detailSampleDist)
+        bool watershedPartition, float detailSampleDist, int maxObstacles = 128, int navMeshMaxTiles = 256)
     {
         DtTileCacheParams option = new DtTileCacheParams();
         option.watershedPartition = watershedPartition;
@@ -73,13 +76,13 @@ public class AbstractTileCacheTest
         option.walkableClimb = m_agentMaxClimb;
         option.maxSimplificationError = m_edgeMaxError;
         option.maxTiles = maxTiles;
-        option.maxObstacles = 128;
+        option.maxObstacles = maxObstacles;
 
         DtNavMeshParams navMeshParams = new DtNavMeshParams();
         navMeshParams.orig = geom.GetMeshBoundsMin();
         navMeshParams.tileWidth = m_tileSize * m_cellSize;
         navMeshParams.tileHeight = m_tileSize * m_cellSize;
-        navMeshParams.maxTiles = 256;
+        navMeshParams.maxTiles = navMeshMaxTiles;
         navMeshParams.maxPolys = 16384;
 
         var navMesh = new DtNavMesh();
