@@ -182,6 +182,7 @@
   "inspector.tag": "Tag",
   "inspector.layer": "Couche",
   "inspector.transform": "Transform",
+  "inspector.recttransform": "Rect Transform",
   "inspector.position": "Position",
   "inspector.rotation": "Rotation",
   "inspector.scale": "Echelle",

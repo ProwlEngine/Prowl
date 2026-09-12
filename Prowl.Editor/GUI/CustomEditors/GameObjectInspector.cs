@@ -490,14 +490,21 @@ public static class GameObjectInspector
     {
         var rt = go.RectTransform!;
         var t = go.Transform;
+        var goId = go.Identifier;
 
-        paper.Box("gi_rt_header").Height(22).PaddingLeft(8)
-            .Text($"{EditorIcons.VectorSquare}  Rect Transform", font)
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+        bool expanded = SectionHeader(paper, font, $"gi_recttransform_{goId}", EditorIcons.VectorSquare,
+            Loc.Get("inspector.recttransform"), EditorTheme.Ink500, () =>
+            {
+                EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, () => ResetTransform(go));
+                EditorGUI.HeaderIconButton(paper, "gi_tf_dots", EditorIcons.EllipsisVertical, () =>
+                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                        b.Item(Loc.Get("inspector.reset"), () => ResetTransform(go), icon: EditorIcons.ArrowRotateRight)));
+            });
+
+        if (!expanded) return;
 
         // Top block: 4x4 anchor preset grid on the left, position + size fields filling the rest.
-        using (paper.Row("gi_rt_top").Height(UnitValue.Auto).Gap(8).Margin(4, 4, 2, 2).Enter())
+        using (paper.Row("gi_rt_top").Height(UnitValue.Auto).Gap(8).Margin(8, 4, 2, 2).Enter())
         {
             DrawAnchorPresetGrid(paper, font, go, rt);
 

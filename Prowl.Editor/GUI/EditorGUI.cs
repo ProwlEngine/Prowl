@@ -174,13 +174,13 @@ public static class EditorGUI
     public static void TextAlignmentRow(Paper paper, string id, string label, TextAlign value, Action<TextAlign> setter)
     {
         var font = EditorTheme.DefaultFont;
-        using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(6).Enter())
+        using (paper.Row(id).Height(EditorTheme.RowHeight).Padding(EditorTheme.Padding*2, EditorTheme.Padding*2,0,0).Gap(6).Enter())
         {
             if (font != null)
                 paper.Box($"{id}_lbl")
                     .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
                     .PaddingLeft(4).IsNotInteractable()
-                    .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+                    .Text(label, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSize);
 
             Origami.ButtonGroup(paper, $"{id}_h", TextAlignHIndex(value),
                     idx => setter(TextAlignVFlag(TextAlignVIndex(value)) | TextAlignHFlag(idx)))

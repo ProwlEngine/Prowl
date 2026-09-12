@@ -182,6 +182,7 @@
   "inspector.tag": "タグ",
   "inspector.layer": "レイヤー",
   "inspector.transform": "トランスフォーム",
+  "inspector.recttransform": "レクト トランスフォーム",
   "inspector.position": "位置",
   "inspector.rotation": "回転",
   "inspector.scale": "スケール",

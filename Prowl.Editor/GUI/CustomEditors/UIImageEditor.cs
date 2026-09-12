@@ -30,46 +30,47 @@ public class UIImageEditor : CustomEditor
 
         Undo.Snapshot(img);
 
-        DrawSourceRow(paper, $"{id}_src", img);
-
-        paper.Box($"{id}_sp0").Height(EditorTheme.Spacing);
-
-        EditorGUI.Row(paper, $"{id}_color", "Color", () =>
-            Origami.ColorField(paper, $"{id}_color_v", img.Color, v => img.Color = v).Show());
-
-        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material",
-            typeof(AssetRef<Material>), img.Material,
-            v => img.Material = (AssetRef<Material>)v!, 0);
-
-        BoolRow(paper, $"{id}_ray", "Raycast Target", img.RaycastTarget, v => img.RaycastTarget = v);
-
-        paper.Box($"{id}_sp1").Height(EditorTheme.Spacing * 2);
-
-        Origami.Header(paper, $"{id}_h_type", "Image Settings").Show();
-
-        EditorGUI.Row(paper, $"{id}_type", "Image Type", () =>
-            Origami.EnumDropdown<ImageType>(paper, $"{id}_type_v", img.Type, v => img.Type = v).Show());
-
-        switch (img.Type)
+        using (paper.Box($"{id}_main_container").Height(in UnitValue.Auto).Gap(EditorTheme.Spacing * 2f).Enter())
         {
-            case ImageType.Simple:
-                DrawSimpleOptions(paper, $"{id}_simple", img);
-                break;
-            case ImageType.Sliced:
-                DrawSlicedOptions(paper, $"{id}_sliced", img);
-                break;
-            case ImageType.Tiled:
-                DrawTiledOptions(paper, $"{id}_tiled", img);
-                break;
-            case ImageType.Filled:
-                DrawFilledOptions(paper, $"{id}_filled", img);
-                break;
+            DrawSourceRow(paper, $"{id}_src", img);
+
+            PropertyGridUtils.DrawField(paper, $"{id}_color", "Color", typeof(Color), img.Color,
+                v => img.Color = (Color)v!, 0);
+
+            PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material",
+                typeof(AssetRef<Material>), img.Material,
+                v => img.Material = (AssetRef<Material>)v!, 0);
+
+            PropertyGridUtils.DrawField(paper, $"{id}_ray", "Raycast Target", typeof(bool), img.RaycastTarget,
+                v => img.RaycastTarget = (bool)v!, 0);
+
+            Origami.Header(paper, $"{id}_h_type", "Image Settings").Show();
+
+            PropertyGridUtils.DrawField(paper, $"{id}_type", "Image Type", typeof(ImageType), img.Type,
+                v => img.Type = (ImageType)v!, 0);
+
+
+            switch (img.Type)
+            {
+                case ImageType.Simple:
+                    DrawSimpleOptions(paper, $"{id}_simple", img);
+                    break;
+                case ImageType.Sliced:
+                    DrawSlicedOptions(paper, $"{id}_sliced", img);
+                    break;
+                case ImageType.Tiled:
+                    DrawTiledOptions(paper, $"{id}_tiled", img);
+                    break;
+                case ImageType.Filled:
+                    DrawFilledOptions(paper, $"{id}_filled", img);
+                    break;
+            }
         }
     }
 
     private static void BoolRow(Paper paper, string id, string label, bool value, Action<bool> setter)
-        => EditorGUI.Row(paper, id, label, () =>
-            Origami.Checkbox(paper, $"{id}_v", value, setter).Show());
+        => PropertyGridUtils.DrawField(paper, id, label, typeof(bool), value,
+            v => setter((bool)v!));
 
     /// <summary>
     /// A sliced sprite (one that carries a border) is almost always meant to be drawn nine-sliced, so on
