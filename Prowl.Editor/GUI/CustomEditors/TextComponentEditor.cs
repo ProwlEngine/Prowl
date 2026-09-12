@@ -3,10 +3,14 @@
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Editor.Inspector;
 
@@ -26,11 +30,16 @@ public class TextComponentEditor : CustomEditor
         // ── Text Input ────────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_text", "Text Input").Show();
 
-        // Full-width multi-line area
-        // Sits outside InspectorRow so it isn't clamped to a single row's height.
-        Origami.TextArea(paper, $"{id}_text", text.Text, v => text.Text = v ?? string.Empty, rows: 6)
-            .Placeholder("Enter text...")
-            .Show();
+        int rows = 6;
+
+        using (paper.Box($"{id}_text_box_container").Padding(10).Height(in UnitValue.Auto).Enter())
+        {
+            // Full-width multi-line area
+            // Sits outside InspectorRow so it isn't clamped to a single row's height.
+            Origami.TextArea(paper, $"{id}_text", text.Text, v => text.Text = v ?? string.Empty, rows: rows)
+                .Placeholder("Enter text...")
+                .Show();
+        }
 
         paper.Box($"{id}_sp0").Height(6);
 
@@ -40,31 +49,32 @@ public class TextComponentEditor : CustomEditor
         PropertyGridUtils.DrawField(paper, $"{id}_font", "Font Asset", typeof(AssetRef<FontAsset>), text.Font,
             v => text.Font = (AssetRef<FontAsset>)v!, 0);
 
-        paper.Box($"{id}_sp0.1").Height(6);
+        //paper.Box($"{id}_sp0.1").Height(6);
 
-        EditorGUI.Row(paper, $"{id}_size", "Font Size", () =>
-            Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => text.Size = v).Show());
+        using (paper.Box($"{id}_text_properties").Height(in UnitValue.Auto).Gap(EditorTheme.Spacing * 2f).Enter())
+        {
 
-        paper.Box($"{id}_sp0.15").Height(6);
+            PropertyGridUtils.DrawField(paper, $"{id}_font", "Font Asset", typeof(int), text.Size,
+                v => text.Size = (int)v!, 0);
 
-        EditorGUI.Row(paper, $"{id}_quality", "Quality", () =>
-            Origami.EnumDropdown<Prowl.Scribe.FontQuality>(paper, $"{id}_quality_v", text.Quality, v => text.Quality = v).Show());
+            PropertyGridUtils.DrawField(paper, $"{id}_size", "Font Size", typeof(Prowl.Scribe.FontQuality),
+                text.Quality,
+                v => text.Quality = (Prowl.Scribe.FontQuality)v!, 0);
 
-        paper.Box($"{id}_sp0.18").Height(6);
+            PropertyGridUtils.DrawField(paper, $"{id}_quality", "Quality", typeof(Prowl.Scribe.FontQuality),
+                text.Quality,
+                v => text.Quality = (Prowl.Scribe.FontQuality)v!, 0);
 
-        Origami.Checkbox(paper, $"{id}_rich", text.RichTextEnabled, v => text.RichTextEnabled = v)
-            .LabelRight("Rich Text").Show();
+            PropertyGridUtils.DrawField(paper, $"{id}_richtext", "Rich Text", typeof(bool), text.RichTextEnabled,
+                v => text.RichTextEnabled = (bool)v!, 0);
 
-        paper.Box($"{id}_sp0.2").Height(6);
 
-        EditorGUI.Row(paper, $"{id}_color", "Color", () =>
-        Origami.ColorField(paper, $"{id}_color_f", text.Color, v => text.Color = v).Show());
+            PropertyGridUtils.DrawField(paper, $"{id}_color", "Color", typeof(Color), text.Color,
+                v => text.Color = (Color)v!, 0);
 
-        paper.Box($"{id}_sp0.3").Height(6);
+            EditorGUI.TextAlignmentRow(paper, $"{id}_align", "Alignment", text.Alignment, v => text.Alignment = v);
+        }
 
-        EditorGUI.TextAlignmentRow(paper, $"{id}_align", "Alignment", text.Alignment, v => text.Alignment = v);
-
-        paper.Box($"{id}_sp1").Height(6);
 
         // ── Extra Settings ────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_extra", "Extra Settings").Show();

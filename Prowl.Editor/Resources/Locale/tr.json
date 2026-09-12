@@ -204,6 +204,7 @@
   "inspector.tag": "Etiket",
   "inspector.layer": "Katman",
   "inspector.transform": "Transform",
+  "inspector.recttransform": "Rect Transform",
   "inspector.position": "Konum",
   "inspector.rotation": "Donus",
   "inspector.scale": "Olcek",

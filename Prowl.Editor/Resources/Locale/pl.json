@@ -204,6 +204,7 @@
   "inspector.tag": "Tag",
   "inspector.layer": "Warstwa",
   "inspector.transform": "Transform",
+  "inspector.recttransform": "Rect Transform",
   "inspector.position": "Pozycja",
   "inspector.rotation": "Rotacja",
   "inspector.scale": "Skala",

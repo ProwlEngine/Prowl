@@ -204,6 +204,7 @@
   "inspector.tag": "Тег",
   "inspector.layer": "Слой",
   "inspector.transform": "Транс��ормация",
+  "inspector.recttransform": "Прямое преобразование",
   "inspector.position": "Позиция",
   "inspector.rotation": "Вра��ение",
   "inspector.scale": "Масштаб",

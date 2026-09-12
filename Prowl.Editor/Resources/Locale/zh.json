@@ -204,6 +204,7 @@
   "inspector.tag": "标签",
   "inspector.layer": "层",
   "inspector.transform": "变换",
+  "inspector.recttransform": "矩形变换",
   "inspector.position": "位置",
   "inspector.rotation": "旋转",
   "inspector.scale": "缩放",

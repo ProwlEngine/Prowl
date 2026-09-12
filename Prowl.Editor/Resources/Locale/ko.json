@@ -204,6 +204,7 @@
   "inspector.tag": "태그",
   "inspector.layer": "레이어",
   "inspector.transform": "트랜스폼",
+  "inspector.recttransform": "직사각형 변환",
   "inspector.position": "위치",
   "inspector.rotation": "회전",
   "inspector.scale": "크기",
