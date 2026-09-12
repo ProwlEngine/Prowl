@@ -28,9 +28,9 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     {
         get
         {
-            if (Context.Keyboards.Count == 0) return "";
-            if (OperatingSystem.IsWindows() && !Win32Clipboard.HasText()) return "";
+            if (OperatingSystem.IsWindows()) return Win32Clipboard.ReadText() ?? "";
 
+            if (Context.Keyboards.Count == 0) return "";
             try { return Context.Keyboards[0].ClipboardText ?? ""; }
             catch (GlfwException) { return ""; }
         }
