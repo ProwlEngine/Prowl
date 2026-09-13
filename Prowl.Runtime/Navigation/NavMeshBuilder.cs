@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.TileCache;
 using Prowl.Recast;
 
 using Prowl.Vector;
@@ -93,8 +94,12 @@ public static class NavMeshBuilder
         // Detour packs tile + poly ids into shared reference bits (tile bits cap at 14), so a
         // large enough grid overflows MaxTiles — AddTile then drops tiles at instantiation.
         // Surface it at bake time, where the fix (larger tiles / tighter bounds) is actionable.
+        // One slot per vertical layer, so a grid that fits only as single-layer tiles has no room
+        // left for the second layer a bridge or a walkway needs.
         if (tilesX * tilesZ > data.MaxTiles)
-            Debug.LogWarning($"[Navigation] Bake grid is {tilesX}x{tilesZ} = {tilesX * tilesZ} tiles but the navmesh can only address {data.MaxTiles}; tiles beyond capacity will fail to add. Increase TileSize or shrink the bake bounds.");
+            Debug.LogWarning($"[Navigation] Bake grid is {tilesX}x{tilesZ} = {tilesX * tilesZ} tiles but the navmesh can only address {data.MaxTiles} layer slots; tiles beyond capacity will fail to add. Increase TileSize or shrink the bake bounds.");
+        else if (tilesX * tilesZ * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE > data.MaxTiles)
+            Debug.LogWarning($"[Navigation] Bake grid is {tilesX}x{tilesZ} = {tilesX * tilesZ} tiles and the navmesh addresses {data.MaxTiles} layer slots, under the {DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE} per tile it is sized for; tiles that stack many vertical layers may not fit. Increase TileSize or shrink the bake bounds.");
 
         // Compressed voxelization blobs per tile, contoured on demand by the TileCache. The
         // results array is indexed by tile, keeping output order deterministic regardless of
@@ -352,18 +357,25 @@ public static class NavMeshBuilder
     // Tile/poly capacity split: Detour packs tile id + poly id into one reference, so bits
     // given to tiles are taken from polys. 22 total id bits, tile bits capped at 14
     // (the Recast demos' arithmetic).
+    //
+    // A navmesh tile slot holds ONE vertical layer, not one grid tile, so the budget is the grid
+    // scaled by the layers a tile is expected to stack, which is how the Recast tile cache samples
+    // size theirs. Without that factor a flat bake budgets exactly its own layer count and the
+    // first runtime rebuild that stacks a second layer anywhere overflows. DtNavMesh.AddTile
+    // reports that only through a status the tile cache discards, so the tiles simply go missing.
 
     private static int GetMaxTiles(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
         => 1 << GetTileBits(bmin, bmax, cellSize, tileSize);
 
     private static int GetMaxPolysPerTile(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
-        => 1 << (22 - GetTileBits(bmin, bmax, cellSize, tileSize));
+        => 1 << (NavMeshData.TileAndPolyIdBits - GetTileBits(bmin, bmax, cellSize, tileSize));
 
     private static int GetTileBits(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
     {
         RcRecast.CalcGridSize(bmin, bmax, cellSize, out int sizeX, out int sizeZ);
         int tilesX = (sizeX + tileSize - 1) / tileSize;
         int tilesZ = (sizeZ + tileSize - 1) / tileSize;
-        return Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(tilesX * tilesZ)), 14);
+        int slots = tilesX * tilesZ * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE;
+        return Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(slots)), NavMeshData.MaxTileBits);
     }
 }

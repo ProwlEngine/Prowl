@@ -260,10 +260,19 @@ public class NavMeshAgent : MonoBehaviour
         {
             _filter ??= new NavMeshQueryFilter();
             _filter.AreaMask = AreaMask;
-            _filter.AgentTypeId = AgentTypeId;
+            _filter.AgentTypeId = QueryAgentTypeId;
             return _filter;
         }
     }
+
+    /// <summary>
+    /// The navmesh this agent's queries must run against: while registered, the one its crowd agent
+    /// actually lives on. Poly refs are per navmesh, so handing the crowd one resolved against a
+    /// different type's mesh is meaningless. The two diverge whenever the inspector writes
+    /// <c>agentTypeId</c> straight to the backing field, which no setter sees, until OnValidate
+    /// moves the agent between crowds.
+    /// </summary>
+    private int QueryAgentTypeId => _agent != null ? _registeredAgentTypeId : AgentTypeId;
 
     #region Destination / movement state
 
@@ -613,7 +622,7 @@ public class NavMeshAgent : MonoBehaviour
         DtCrowd? crowd = _crowd;
         if (crowd == null) return false;
 
-        if (!_world.TryRentQuery(out NavMeshQueryLease lease, AgentTypeId)) return false;
+        if (!_world.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return false;
         using (lease)
         {
             lease.Query.FindNearestPoly(ToRc(target), crowd.GetQueryExtents(), Filter, out long polyRef, out RcVec3f nearest, out _);
@@ -706,7 +715,7 @@ public class NavMeshAgent : MonoBehaviour
     public void Move(Float3 offset)
     {
         if (_agent == null || _world == null) return;
-        if (!_world.TryRentQuery(out NavMeshQueryLease lease, AgentTypeId)) return;
+        if (!_world.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return;
 
         using (lease)
         {
@@ -778,7 +787,7 @@ public class NavMeshAgent : MonoBehaviour
         int polyCount = _agent.corridor.GetPathCount();
         if (polyCount <= 0 || corridor.Length < polyCount) return true;
 
-        if (!_world.TryRentQuery(out NavMeshQueryLease lease, AgentTypeId)) return true;
+        if (!_world.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return true;
         using (lease)
         {
             DtNavMesh mesh = lease.Query.GetAttachedNavMesh();

@@ -232,7 +232,7 @@ public class NavMeshLink : MonoBehaviour
 
     /// <summary>Does this link apply to bakes for the given agent type?</summary>
     public bool AffectsAgentType(int agentTypeId)
-        => AffectAllAgentTypes || AffectedAgentTypeIds.Contains(agentTypeId);
+        => AffectAllAgentTypes || AffectedAgentTypeIds?.Contains(agentTypeId) == true;
 
     /// <summary>World-space start position.</summary>
     public Float3 WorldStart => Transform.TransformPoint(StartPoint);

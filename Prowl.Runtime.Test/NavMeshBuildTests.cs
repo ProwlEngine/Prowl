@@ -205,6 +205,48 @@ public class NavMeshBuildTests
         Assert.Null(NavMeshBuilder.Build(TestSettings(), []));
     }
 
+    /// <summary>
+    /// A navmesh tile slot holds one vertical layer, so a flat bake has to budget room for the
+    /// layers a later rebuild stacks. Sized from the grid alone, a flat 20x20 floor budgets
+    /// exactly the four layers it bakes, and a platform added at runtime has nowhere to go:
+    /// the cache takes the blobs and DtNavMesh silently drops half the tiles on commit.
+    /// </summary>
+    [Fact]
+    public void RebuiltTiles_ThatStackANewLayer_AllReachTheNavMesh()
+    {
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [FlatQuad()]);
+        Assert.NotNull(data);
+        Assert.True(data!.MaxTiles > data.CacheLayers.Count,
+            $"a flat bake must leave room to stack layers, got {data.MaxTiles} slots for {data.CacheLayers.Count} layers.");
+
+        var world = new NavMeshWorld();
+        NavMeshInstance? instance = world.AddNavMeshData(data);
+        Assert.NotNull(instance);
+
+        // A platform is built over the floor: every tile it covers now needs a second layer.
+        List<(int X, int Z, List<byte[]> Layers)> rebuilt = NavMeshBuilder.BuildTilesInBounds(
+            data, [FlatQuad(), Raised(2, 2, 18, 18, 5)], new Float3(0, -1, 0), new Float3(20, 10, 20));
+        Assert.NotEmpty(rebuilt);
+
+        int expected = 0;
+        foreach ((int _, int _, List<byte[]> blobs) in rebuilt) expected += blobs.Count;
+        Assert.True(expected > data.CacheLayers.Count, "the platform must actually stack a layer.");
+
+        SwapRebuiltTiles(world, instance!, rebuilt);
+
+        DtNavMesh navMesh = instance!.NativeNavMesh;
+        int live = 0;
+        for (int t = 0; t < navMesh.GetMaxTiles(); t++)
+            if (navMesh.GetTile(t)?.data?.header != null) live++;
+
+        Assert.Equal(expected, live);
+    }
+
+    /// <summary>An up-facing quad at an arbitrary rect and height, for stacking over a floor.</summary>
+    private static NavMeshGeometrySource Raised(float x0, float z0, float x1, float z1, float y) => new(
+        [new(x0, y, z0), new(x0, y, z1), new(x1, y, z1), new(x1, y, z0)],
+        [0, 1, 2, 0, 2, 3], Float4x4.Identity);
+
     [Fact]
     public void Build_AppliesDefaultAreaToPolys()
     {

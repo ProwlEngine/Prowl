@@ -50,7 +50,7 @@ public class NavMeshModifierVolume : MonoBehaviour
 
     /// <summary>Does this volume apply to bakes for the given agent type?</summary>
     public bool AffectsAgentType(int agentTypeId)
-        => AffectAllAgentTypes || AffectedAgentTypeIds.Contains(agentTypeId);
+        => AffectAllAgentTypes || AffectedAgentTypeIds?.Contains(agentTypeId) == true;
 
     /// <summary>The world-space convex prism this volume marks (rotation and scale applied).</summary>
     public NavMeshAreaVolume ComputeAreaVolume()

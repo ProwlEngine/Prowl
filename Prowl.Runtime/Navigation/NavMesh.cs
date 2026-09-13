@@ -31,10 +31,13 @@ public static class NavMesh
 
     /// <summary>Calculate a path between two points. Returns true when a complete or partial
     /// path was found; <paramref name="path"/> carries the corners and exact status.</summary>
-    public static bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, int areaMask, NavMeshPath path)
-        => World?.CalculatePath(sourcePosition, targetPosition, areaMask, path) ?? MarkInvalid(path);
+    /// <param name="agentTypeId">Whose navmesh to path over. Agent types each have their own, so a
+    /// query left on the default answers for the default type however many others are registered.</param>
+    public static bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, int areaMask, NavMeshPath path,
+        int agentTypeId = NavMeshAgentTypes.Humanoid)
+        => World?.CalculatePath(sourcePosition, targetPosition, areaMask, path, agentTypeId) ?? MarkInvalid(path);
 
-    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath)"/>
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)"/>
     public static bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshQueryFilter filter, NavMeshPath path)
         => World?.CalculatePath(sourcePosition, targetPosition, filter, path) ?? MarkInvalid(path);
 
@@ -45,15 +48,17 @@ public static class NavMesh
     }
 
     /// <summary>Find the closest navmesh point within <paramref name="maxDistance"/> of a position.</summary>
-    public static bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, int areaMask)
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
+    public static bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, int areaMask,
+        int agentTypeId = NavMeshAgentTypes.Humanoid)
     {
         NavMeshWorld? world = World;
-        if (world != null) return world.SamplePosition(sourcePosition, out hit, maxDistance, areaMask);
+        if (world != null) return world.SamplePosition(sourcePosition, out hit, maxDistance, areaMask, agentTypeId);
         hit = default;
         return false;
     }
 
-    /// <inheritdoc cref="SamplePosition(Float3, out NavMeshHit, float, int)"/>
+    /// <inheritdoc cref="SamplePosition(Float3, out NavMeshHit, float, int, int)"/>
     public static bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter)
     {
         NavMeshWorld? world = World;
@@ -63,26 +68,30 @@ public static class NavMesh
     }
 
     /// <summary>Trace a walkability ray along the navmesh. Returns true when blocked before the target.</summary>
-    public static bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, int areaMask)
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
+    public static bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, int areaMask,
+        int agentTypeId = NavMeshAgentTypes.Humanoid)
     {
         NavMeshWorld? world = World;
-        if (world != null) return world.Raycast(sourcePosition, targetPosition, out hit, areaMask);
+        if (world != null) return world.Raycast(sourcePosition, targetPosition, out hit, areaMask, agentTypeId);
         hit = default;
         return false;
     }
 
     /// <summary>Locate the closest navmesh border edge from a point.</summary>
-    public static bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, int areaMask)
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
+    public static bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, int areaMask,
+        int agentTypeId = NavMeshAgentTypes.Humanoid)
     {
         NavMeshWorld? world = World;
-        if (world != null) return world.FindClosestEdge(sourcePosition, out hit, areaMask);
+        if (world != null) return world.FindClosestEdge(sourcePosition, out hit, areaMask, agentTypeId: agentTypeId);
         hit = default;
         return false;
     }
 
     /// <summary>Triangulate the current navmesh for debug drawing or user tooling.</summary>
-    public static NavMeshTriangulation CalculateTriangulation()
-        => World?.CalculateTriangulation() ?? NavMeshTriangulation.Empty;
+    public static NavMeshTriangulation CalculateTriangulation(int agentTypeId = NavMeshAgentTypes.Humanoid)
+        => World?.CalculateTriangulation(agentTypeId) ?? NavMeshTriangulation.Empty;
 
     /// <summary>Register a baked navmesh with the current scene. Returns its handle, or null —
     /// including when the agent type already has one (see <see cref="NavMeshWorld.AddNavMeshData"/>).</summary>

@@ -373,9 +373,10 @@ internal static class NavMeshTileBuilder
             minRegionArea = (int)(settings.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
             mergeRegionArea = (int)(20f / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
             maxEdgeLen = 24,
-            // Layer capacity: tiles can stack several vertical layers each, and the baked
-            // layer count is a hard floor.
-            maxTiles = Math.Max(Math.Max(1, data.MaxTiles) * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE, data.CacheLayers.Count),
+            // Exactly the navmesh's own layer capacity. A cache sized above it would accept blobs
+            // the navmesh then drops on commit, reported only through a status the cache discards.
+            // Matched, an overflow surfaces as a failed AddTile the caller can report.
+            maxTiles = data.ResolveCapacity().MaxTiles,
             maxObstacles = Math.Max(1, maxObstacles),
         };
 

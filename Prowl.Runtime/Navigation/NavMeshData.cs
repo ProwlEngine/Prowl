@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.TileCache;
 
 using Prowl.Vector;
 
@@ -81,11 +82,20 @@ public sealed class NavMeshData : EngineObject
     /// <summary>Side length of one tile in world units.</summary>
     public float TileWorldSize;
 
-    /// <summary>Capacity the Detour navmesh is initialized with.</summary>
+    /// <summary>Navmesh tile slots this asset was baked for. A slot holds one VERTICAL LAYER,
+    /// not one grid tile, so this is the grid scaled by the layers a tile is expected to stack.
+    /// <see cref="ResolveCapacity"/> is what instantiation actually uses.</summary>
     public int MaxTiles;
 
-    /// <summary>Per-tile polygon capacity the Detour navmesh is initialized with.</summary>
+    /// <summary>Per-tile polygon capacity the Detour navmesh is initialized with. Shares
+    /// Detour's reference bits with <see cref="MaxTiles"/>, so the two move together.</summary>
     public int MaxPolys;
+
+    /// <summary>Total id bits a Detour polygon reference splits between tile and polygon.</summary>
+    internal const int TileAndPolyIdBits = 22;
+
+    /// <summary>Ceiling on the tile half of that split (the Recast demos' arithmetic).</summary>
+    internal const int MaxTileBits = 14;
 
     /// <summary>
     /// Compressed voxelization layers, one or more per tile. Each blob is self-describing (tile
@@ -170,20 +180,32 @@ public sealed class NavMeshData : EngineObject
             throw new InvalidOperationException($"NavMeshData '{Name}' has tile format version {FormatVersion}; this engine reads versions {MinReadableFormatVersion}..{CurrentFormatVersion}. Rebake the navmesh.");
     }
 
+    /// <summary>
+    /// The tile and polygon capacities this asset instantiates with. Every vertical layer occupies
+    /// its own navmesh tile slot, and multi-layer tiles (overlapping floors, bridges) are the point
+    /// of the layer set, so the budget must exceed the baked layer count rather than merely reach
+    /// it: a rebuild that stacks a new layer has to land somewhere. An asset whose layers already
+    /// fill its baked budget (one baked before the budget carried the layer factor, or a scene that
+    /// stacks deeper than the bake allowed for) is re-sized from its actual layer count, splitting
+    /// the shared id bits with the same arithmetic the bake used.
+    /// <para/>
+    /// The tile cache is created with the same tile count, so a layer the cache accepts always has
+    /// somewhere to land. Detour drops tiles past capacity through a status the cache discards, so
+    /// the two must never disagree.
+    /// </summary>
+    internal (int MaxTiles, int MaxPolys) ResolveCapacity()
+    {
+        int slots = Math.Max(1, MaxTiles);
+        if (CacheLayers.Count >= slots)
+            slots = CacheLayers.Count * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE;
+
+        int tileBits = Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(slots)), MaxTileBits);
+        return (1 << tileBits, 1 << (TileAndPolyIdBits - tileBits));
+    }
+
     private DtNavMesh CreateEmptyNavMesh()
     {
-        int maxTiles = Math.Max(1, MaxTiles);
-        int maxPolys = Math.Max(1, MaxPolys);
-        if (CacheLayers.Count > maxTiles)
-        {
-            // Every vertical layer occupies its own navmesh tile slot, and multi-layer tiles
-            // (overlapping floors, bridges) are the point of the layer set — size honestly
-            // from the actual layer count, re-splitting the shared 22 id bits with the same
-            // arithmetic the bake used (tile bits capped at 14).
-            int tileBits = Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(CacheLayers.Count)), 14);
-            maxTiles = 1 << tileBits;
-            maxPolys = 1 << (22 - tileBits);
-        }
+        (int maxTiles, int maxPolys) = ResolveCapacity();
 
         var navMesh = new DtNavMesh();
         var navParams = new DtNavMeshParams

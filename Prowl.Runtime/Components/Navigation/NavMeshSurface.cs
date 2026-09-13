@@ -322,7 +322,7 @@ public class NavMeshSurface : MonoBehaviour
                     for (int tx = tx0; tx <= tx1; tx++)
                         tiles.Add((tx, tz));
 
-        world.MutateTileCache(instance, cache =>
+        bool applied = world.MutateTileCache(instance, cache =>
         {
             // Always replace the link set, even with no tiles in range: it is what tiles rebuilt
             // later — by a carve, or by a rebuild of a neighbouring region — will be built from.
@@ -332,6 +332,10 @@ public class NavMeshSurface : MonoBehaviour
                 foreach (long tileRef in cache.GetTilesAt(tx, tz))
                     cache.BuildNavMeshTile(tileRef);
         });
+
+        // Unregistered between the check above and here, so nothing ran: the runtime copy has to
+        // keep the link set the live mesh was actually built from.
+        if (!applied) return false;
 
         // Mirror onto the runtime copy, so a rebuild that re-instantiates it starts from the
         // link set the live mesh is using. The .navmesh asset is left alone: a link moving is a

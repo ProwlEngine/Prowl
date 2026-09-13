@@ -54,5 +54,5 @@ public class NavMeshModifier : MonoBehaviour
 
     /// <summary>Does this modifier apply to bakes for the given agent type?</summary>
     public bool AffectsAgentType(int agentTypeId)
-        => AffectAllAgentTypes || AffectedAgentTypeIds.Contains(agentTypeId);
+        => AffectAllAgentTypes || AffectedAgentTypeIds?.Contains(agentTypeId) == true;
 }

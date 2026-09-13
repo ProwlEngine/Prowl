@@ -482,8 +482,11 @@ public sealed class NavMeshWorld
 
     #region Registration
 
-    /// <summary>Obstacle capacity navmeshes are instantiated with. Set BEFORE the surface
-    /// registers — applied at instantiation.</summary>
+    /// <summary>
+    /// How many obstacles one navmesh may carve at once. Set BEFORE the surface registers, since it
+    /// is applied at instantiation. Enforced: a <see cref="NavMeshObstacle"/> that enables once the
+    /// pool is full cuts no hole and warns. Disabling one frees its slot for the next.
+    /// </summary>
     public int TileCacheMaxObstacles = 256;
 
     /// <summary>Tiles each instance may rebuild per frame while draining queued carves. Higher
@@ -594,8 +597,14 @@ public sealed class NavMeshWorld
         foreach (NavMeshInstance instance in toRemove)
             instance.Retire();
         _pendingLinkTiles.Clear();
+        _drainingLinkTiles.Clear();
         _deferredTileSwaps.Clear();
         _crowds.Clear();
+        // The component registries go too. Teardown disposes GameObjects after this, and their
+        // OnDisable unregisters them one by one, but a component already destroyed never will:
+        // leaving its entry keeps the scene's whole object graph alive behind this world.
+        _links.Clear();
+        _surfaces.Clear();
         if (toRemove.Count > 0)
         {
             StructureGeneration++;
@@ -627,13 +636,14 @@ public sealed class NavMeshWorld
     /// Threading: fires <see cref="NavMeshChanged"/> synchronously on the calling thread (see
     /// <see cref="AddNavMeshData"/> — same main-thread contract).
     /// </summary>
-    public void MutateTileCache(NavMeshInstance instance, Action<Prowl.Recast.Detour.TileCache.DtTileCache> mutation)
+    /// <returns>False when the instance is no longer registered, so the mutation did not run.</returns>
+    public bool MutateTileCache(NavMeshInstance instance, Action<Prowl.Recast.Detour.TileCache.DtTileCache> mutation)
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(mutation);
         // Unregistered: its cache is no longer anyone's navmesh, and its lock may already be
         // gone. An async rebuild finishing after its surface was torn down lands here.
-        if (!instance.TryAcquire()) return;
+        if (!instance.TryAcquire()) return false;
 
         instance.Lock.EnterWriteLock();
         try
@@ -650,6 +660,7 @@ public sealed class NavMeshWorld
         instance.CachePending = true;
         instance.InvalidateLinkIds();
         NavMeshChanged?.Invoke();
+        return true;
     }
 
     // Link id -> the enabled component that owns it, for resolving a crowd agent's off-mesh
@@ -767,11 +778,11 @@ public sealed class NavMeshWorld
 
     #region Queries
 
-    private static NavMeshQueryFilter GetScratchFilter(int areaMask)
+    private static NavMeshQueryFilter GetScratchFilter(int areaMask, int agentTypeId)
     {
         NavMeshQueryFilter filter = t_scratchFilter ??= new NavMeshQueryFilter();
         filter.AreaMask = areaMask;
-        filter.AgentTypeId = 0;
+        filter.AgentTypeId = agentTypeId;
         return filter;
     }
 
@@ -780,10 +791,13 @@ public sealed class NavMeshWorld
 
     /// <summary>Calculate a path between two points. Returns true when the resulting path is
     /// complete or partial; <paramref name="path"/> carries the corners and exact status.</summary>
-    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, int areaMask, NavMeshPath path)
-        => CalculatePath(sourcePosition, targetPosition, GetScratchFilter(areaMask), path);
+    /// <param name="agentTypeId">Whose navmesh to path over. Agent types each have their own, so a
+    /// query left on the default answers for the default type however many others are registered.</param>
+    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, int areaMask, NavMeshPath path,
+        int agentTypeId = NavMeshAgentTypes.Humanoid)
+        => CalculatePath(sourcePosition, targetPosition, GetScratchFilter(areaMask, agentTypeId), path);
 
-    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath)"/>
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)"/>
     public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshQueryFilter filter, NavMeshPath path)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -851,10 +865,12 @@ public sealed class NavMeshWorld
 
     /// <summary>Find the closest point on the navmesh within <paramref name="maxDistance"/> of
     /// <paramref name="sourcePosition"/>.</summary>
-    public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, int areaMask)
-        => SamplePosition(sourcePosition, out hit, maxDistance, GetScratchFilter(areaMask));
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
+    public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, int areaMask,
+        int agentTypeId = NavMeshAgentTypes.Humanoid)
+        => SamplePosition(sourcePosition, out hit, maxDistance, GetScratchFilter(areaMask, agentTypeId));
 
-    /// <inheritdoc cref="SamplePosition(Float3, out NavMeshHit, float, int)"/>
+    /// <inheritdoc cref="SamplePosition(Float3, out NavMeshHit, float, int, int)"/>
     public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -886,10 +902,12 @@ public sealed class NavMeshWorld
 
     /// <summary>Trace a walkability ray along the navmesh surface. Returns true when the ray is
     /// blocked before the target; <paramref name="hit"/> holds the blocking edge either way.</summary>
-    public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, int areaMask)
-        => Raycast(sourcePosition, targetPosition, out hit, GetScratchFilter(areaMask));
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
+    public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, int areaMask,
+        int agentTypeId = NavMeshAgentTypes.Humanoid)
+        => Raycast(sourcePosition, targetPosition, out hit, GetScratchFilter(areaMask, agentTypeId));
 
-    /// <inheritdoc cref="Raycast(Float3, Float3, out NavMeshHit, int)"/>
+    /// <inheritdoc cref="Raycast(Float3, Float3, out NavMeshHit, int, int)"/>
     public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, NavMeshQueryFilter filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -944,11 +962,12 @@ public sealed class NavMeshWorld
     /// <summary>Locate the closest navmesh border edge from a point.</summary>
     /// <param name="maxDistance">How far to search. Cost grows with it and an edge beyond it is
     /// not found, so pass the widest gap that matters; the default searches the whole mesh.</param>
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
     public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, int areaMask,
-        float maxDistance = EdgeSearchDistanceFromBounds)
-        => FindClosestEdge(sourcePosition, out hit, GetScratchFilter(areaMask), maxDistance);
+        float maxDistance = EdgeSearchDistanceFromBounds, int agentTypeId = NavMeshAgentTypes.Humanoid)
+        => FindClosestEdge(sourcePosition, out hit, GetScratchFilter(areaMask, agentTypeId), maxDistance);
 
-    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, int, float)"/>
+    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, int, float, int)"/>
     public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter,
         float maxDistance = EdgeSearchDistanceFromBounds)
     {

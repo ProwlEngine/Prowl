@@ -209,7 +209,7 @@ public class NavMeshObstacle : MonoBehaviour
 
         // Rotation drift MUST be evaluated before the new-instance pickup below: TryApplyCarve
         // captures the rotation it carved at, so running the pickup first (its flag is set by any
-        // NavMeshChanged, including the cache pump.s own convergence events) would record the new
+        // NavMeshChanged, including the cache pump's own convergence events) would record the new
         // rotation without re-carving and swallow the drift for good.
         if (RotationChanged() || ScaleChanged()) ReapplyCarve();
 
@@ -416,7 +416,15 @@ public class NavMeshObstacle : MonoBehaviour
             if (instance == null || _refs.ContainsKey(instance)) continue;
             NavMeshBuildSettings settings = instance.NavMeshData.Settings;
             long obstacleRef = AddToCache(instance.TileCache, settings.AgentRadius, CarveDrop(settings));
-            if (obstacleRef == 0) continue;
+            if (obstacleRef == 0)
+            {
+                // The cache is carrying its full obstacle pool. The component looks configured and
+                // cuts nothing, so say so: once per agent type, since every obstacle that spawns
+                // after the pool fills hits this and a per-object message would be a wall of them.
+                Debug.LogWarningOnce($"Navigation.ObstaclePoolFull.{type.Id}",
+                    $"[Navigation] The {NavMeshAgentTypes.GetName(type.Id)} navmesh is already carving {instance.TileCache.GetParams().maxObstacles} obstacles; '{GameObject.Name}' and any further ones cut no hole. Raise NavMeshWorld.TileCacheMaxObstacles before the surface registers.");
+                continue;
+            }
             _refs[instance] = obstacleRef;
             instance.MarkCachePending();
         }
