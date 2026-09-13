@@ -315,6 +315,76 @@ public class NavMeshLinkTests : RuntimeTestBase
     }
 
     /// <summary>
+    /// The shape of a scene reload: a link baked in, then switched off while no navmesh is live. A
+    /// link that never enables has nothing to take itself back out, so registration has to notice the
+    /// baked connection the scene no longer has.
+    /// </summary>
+    [Fact]
+    public void Link_TurnedOffWhileTheNavMeshWasOffline_IsRemovedOnRegistration()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        NavMeshLink disabled = AddLink(scene);
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+        Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+
+        surface.GameObject.Enabled = false;
+        disabled.GameObject.Enabled = false;
+        surface.GameObject.Enabled = true;
+        Tick(scene, 2);
+        Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+
+        disabled.GameObject.Enabled = true;
+        Tick(scene, 3);
+        Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+
+        surface.GameObject.Enabled = false;
+        disabled.Activated = false;
+        surface.GameObject.Enabled = true;
+        Tick(scene, 2);
+        Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+    }
+
+    /// <summary>An edit made while no navmesh is live leaves the baked connection under the same id,
+    /// so catch-up takes it as present. Registration compares the definition and rebuilds it.</summary>
+    [Fact]
+    public void Link_EditedWhileTheNavMeshWasOffline_IsRebuiltOnRegistration()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        NavMeshLink link = AddLink(scene);
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        surface.GameObject.Enabled = false;
+        link.EndPoint = new Float3(3, 0, 20); // now lands on nothing
+        surface.GameObject.Enabled = true;
+        Tick(scene, 2);
+
+        Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+    }
+
+    /// <summary>Not Walkable is the null area in Detour, which area masks cannot exclude, so a link
+    /// given it must contribute no connection rather than an untraversable-in-name one.</summary>
+    [Fact]
+    public void Link_NotWalkableArea_IsNeverTraversable()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        NavMeshLink link = AddLink(scene);
+        link.Area = NavMeshAreas.NotWalkable;
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 3);
+        Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+
+        link.Area = NavMeshAreas.Jump;
+        Tick(scene, 3);
+        Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+
+        link.Area = NavMeshAreas.NotWalkable;
+        Tick(scene, 3);
+        Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
+    }
+
+    /// <summary>
     /// Agent-type scoping is part of the link's definition, so writing it after AddComponent has
     /// to re-resolve like the endpoints do. Narrowing the scope must also REMOVE the link from
     /// the surfaces it no longer applies to, which needs the rebuild to visit the outgoing scope

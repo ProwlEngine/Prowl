@@ -247,6 +247,28 @@ public class NavMeshModifierTests : RuntimeTestBase
         Assert.True(maxDeviation > 1.5, $"Path should route around the hole (max |z| = {maxDeviation:0.00}).");
     }
 
+    /// <summary>A Not Walkable volume is a wall for erosion like Not Walkable geometry is: the navmesh
+    /// stops an agent radius short of its face, so an agent at the edge does not stand half inside.</summary>
+    [Fact]
+    public void ModifierVolume_NotWalkable_KeepsAgentRadiusClear()
+    {
+        Scene scene = CreateScene(enable: true);
+        AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+
+        GameObject volumeGo = CreateGameObject("Hole");
+        scene.Add(volumeGo);
+        var volume = volumeGo.AddComponent<NavMeshModifierVolume>();
+        volume.Size = new Float3(4, 3, 4); // faces at +-2
+        volume.Area = NavMeshAreas.NotWalkable;
+
+        NavMeshSurface surface = AddSurface(scene);
+        Assert.True(surface.BuildNavMesh());
+        float radius = surface.RuntimeData!.Settings.AgentRadius;
+
+        Assert.True(scene.Navigation.FindClosestEdge(new Float3(0, 0, 4.5f), out NavMeshHit hit, NavMesh.AllAreas, 5f));
+        Assert.True(hit.Position.Z >= 2f + radius * 0.8f, $"The hole's edge sits at z={hit.Position.Z:0.00}, inside the agent radius of the volume face at z=2.");
+    }
+
     /// <summary>A rotated volume marks its rotated footprint, not its axis-aligned box: a
     /// 45°-yawed square's corner regions stay unmarked while its center is marked.</summary>
     [Fact]

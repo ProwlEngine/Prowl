@@ -187,9 +187,17 @@ internal static class NavMeshTileBuilder
             if (chf.areas[i] == ProwlInputGeomProvider.NotWalkableRasterArea)
                 chf.areas[i] = RcRecast.RC_NULL_AREA;
 
-        RcAreas.ErodeWalkableArea(ctx, cfg.WalkableRadius, chf);
+        // Not Walkable volumes erase before erosion for the same reason. The rest only restamp
+        // surviving spans, and marking skips null spans, so they can safely follow it.
         foreach (RcConvexVolume vol in geom.ConvexVolumes())
-            RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
+            if (vol.areaMod.Value == RcRecast.RC_NULL_AREA)
+                RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
+
+        RcAreas.ErodeWalkableArea(ctx, cfg.WalkableRadius, chf);
+
+        foreach (RcConvexVolume vol in geom.ConvexVolumes())
+            if (vol.areaMod.Value != RcRecast.RC_NULL_AREA)
+                RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
 
         // Cull islands too small to stand on (Unity's Min Region Area). Regions are built here
         // only to find the spans to erase — BuildRegions zeroes the region id of anything it
@@ -274,6 +282,9 @@ internal static class NavMeshTileBuilder
 
             foreach (NavMeshLinkSource link in links)
             {
+                // Its Detour area would be the null area, which the query filters still let through.
+                if (link.Area == NavMeshAreas.NotWalkable) continue;
+
                 crossings.Clear();
                 link.ExpandCrossings(radius, crossings);
                 foreach ((Float3 start, Float3 end) in crossings)

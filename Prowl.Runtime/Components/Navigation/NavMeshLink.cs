@@ -307,7 +307,8 @@ public class NavMeshLink : MonoBehaviour
     /// </summary>
     private void CatchUp()
     {
-        if (!AutoRebuild || _world == null) return;
+        // A Not Walkable link is never in the mesh, so looking for it would rebuild on every registration.
+        if (!AutoRebuild || _world == null || Area == NavMeshAreas.NotWalkable) return;
 
         // Replaced instances (full rebakes) would otherwise be pinned by the checked set.
         _catchUpDone.RemoveWhere(i => _world.GetInstance(i.AgentTypeId) != i);
@@ -354,27 +355,10 @@ public class NavMeshLink : MonoBehaviour
         }
     }
 
-    /// <summary>Dirty the tiles around both endpoints: one region when the padded regions overlap
-    /// (the common short ladder/ledge link), two when they don't — a merged AABB across a long
-    /// link would dirty everything between the endpoints. The world applies them, so a frame that
-    /// moves many links re-contours each affected tile once however many of them touched it.
-    /// </summary>
+    /// <summary>Dirty the tiles around both endpoints. The world applies them, so a frame that moves
+    /// many links re-contours each affected tile once however many of them touched it.</summary>
     private void MarkEndpointRegions(NavMeshSurface surface, Float3 start, Float3 end)
-    {
-        if (_world == null) return;
-
-        float pad = Width * 0.5f + 1f;
-        AABB startRegion = new AABB(start, start).Expanded(pad);
-        AABB endRegion = new AABB(end, end).Expanded(pad);
-
-        if (startRegion.Intersects(endRegion))
-            _world.MarkLinkTilesDirty(surface, startRegion.Encapsulating(endRegion));
-        else
-        {
-            _world.MarkLinkTilesDirty(surface, startRegion);
-            _world.MarkLinkTilesDirty(surface, endRegion);
-        }
-    }
+        => _world?.MarkLinkEndpointsDirty(surface, start, end, Width);
 
     /// <summary>
     /// Draws whatever the navmesh made of this link — the same connection the surface's overlay

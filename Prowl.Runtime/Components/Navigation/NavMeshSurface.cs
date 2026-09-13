@@ -141,7 +141,7 @@ public class NavMeshSurface : MonoBehaviour
     public override void OnDisable()
     {
         World?.UnregisterSurface(this);
-        Unregister();
+        Unregister(handOver: true);
 
         // Release the debug-overlay subscription; without this every surface ever selected
         // stays referenced by the scene's NavMeshWorld until scene teardown.
@@ -176,13 +176,21 @@ public class NavMeshSurface : MonoBehaviour
         // (Two surfaces of DIFFERENT types handed the same runtime data still share it.)
         _runtimeData = NavMeshData.AssetID == Guid.Empty ? data : data.Clone();
         _instance = world.AddNavMeshData(_runtimeData);
-        if (_instance == null) _runtimeData = null;
+        if (_instance == null)
+        {
+            _runtimeData = null;
+            return;
+        }
+
+        world.QueueLinkReconcile(this);
     }
 
-    private void Unregister()
+    /// <param name="handOver">Let a spare surface of the type take the navmesh over. Off while this
+    /// surface re-registers, or the spare claims the type before this one can take it back.</param>
+    private void Unregister(bool handOver)
     {
         if (_instance == null) return;
-        World?.RemoveNavMeshData(_instance);
+        World?.RemoveNavMeshData(_instance, handOver);
         _instance = null;
         _runtimeData = null;
     }
@@ -255,17 +263,21 @@ public class NavMeshSurface : MonoBehaviour
     {
         ArgumentNullException.ThrowIfNull(data);
 
-        Unregister();
         NavMeshData = data;
-        Register();
+        RefreshRegistration();
     }
 
     /// <summary>Re-register the currently assigned <see cref="NavMeshData"/> (e.g. after the
     /// asset reference was swapped by an editor bake).</summary>
     public void RefreshRegistration()
     {
-        Unregister();
+        int? previousType = _instance?.AgentTypeId;
+        Unregister(handOver: false);
         Register();
+
+        // This surface no longer provides the type it held (its data was cleared, has no tiles, or
+        // was baked for another type), so a spare takes it over as it would on a disable.
+        if (previousType is int type) World?.RegisterSpareSurface(type);
     }
 
     /// <summary>
@@ -344,6 +356,41 @@ public class NavMeshSurface : MonoBehaviour
         foreach (NavMeshLinkSource link in links)
             data.Links.Add(Runtime.NavMeshData.NavMeshLinkEntry.From(link));
         return true;
+    }
+
+    /// <summary>
+    /// Dirty the tiles of every link the registered navmesh disagrees with the scene about. A link
+    /// catches itself up when it is missing, but one that was disabled, deactivated, deleted or
+    /// rescoped since the bake never enables to take itself back out, and one edited while this
+    /// surface was unregistered is already present under the same id. Both are found here by
+    /// comparing definitions, and the drain rebuilds their tiles from the live set.
+    /// </summary>
+    internal void MarkStaleBakedLinks()
+    {
+        NavMeshWorld? world = World;
+        Runtime.NavMeshData? data = _runtimeData;
+        if (world == null || _instance == null || data.IsNotValid()) return;
+
+        List<NavMeshLinkSource> live = CollectLinks(null);
+
+        foreach (Runtime.NavMeshData.NavMeshLinkEntry baked in data!.Links)
+            if (!live.Exists(link => SameLink(link, baked)))
+                world.MarkLinkEndpointsDirty(this, baked.Start, baked.End, baked.Width);
+
+        foreach (NavMeshLinkSource link in live)
+            if (!data.Links.Exists(baked => SameLink(link, baked)))
+                world.MarkLinkEndpointsDirty(this, link.Start, link.End, link.Width);
+    }
+
+    private static bool SameLink(NavMeshLinkSource live, Runtime.NavMeshData.NavMeshLinkEntry baked)
+    {
+        const float Tolerance = 1e-4f;
+        return live.UserId == baked.UserId
+            && live.Bidirectional == baked.Bidirectional
+            && live.Area == baked.Area
+            && MathF.Abs(live.Width - baked.Width) < Tolerance
+            && Float3.Distance(live.Start, baked.Start) < Tolerance
+            && Float3.Distance(live.End, baked.End) < Tolerance;
     }
 
     /// <summary>

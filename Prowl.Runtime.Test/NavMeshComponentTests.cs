@@ -103,6 +103,44 @@ public class NavMeshComponentTests : RuntimeTestBase
         Assert.True(scene.Navigation.SamplePosition(new Float3(0, 0.2f, 0), out _, 0.5f, NavMesh.AllAreas));
     }
 
+    /// <summary>Rebaking the registered surface must keep the navmesh on it. Re-registration briefly
+    /// leaves the type without one, and a spare surface of the type used to claim it in that gap,
+    /// discarding the fresh bake.</summary>
+    [Fact]
+    public void Surfaces_RebakingTheRegisteredOne_KeepsItRegistered()
+    {
+        Debug.ClearReportedOnce();
+        try
+        {
+            (Scene scene, NavMeshSurface first) = CreateBakedFloorScene();
+            GameObject secondGo = CreateGameObject("SecondSurface");
+            scene.Add(secondGo);
+            var second = secondGo.AddComponent<NavMeshSurface>();
+            ApplyFastBakeSettings(second);
+            Assert.True(second.BuildNavMesh());
+            Assert.Null(second.Instance);
+
+            Assert.True(first.BuildNavMesh());
+            Assert.NotNull(first.Instance);
+            Assert.Null(second.Instance);
+            Assert.Same(first.Instance, scene.Navigation.GetInstance(first.AgentTypeId));
+
+            first.RefreshRegistration();
+            Assert.NotNull(first.Instance);
+            Assert.Null(second.Instance);
+
+            // Clearing the registered surface's data still hands the type over.
+            first.NavMeshData = default;
+            first.RefreshRegistration();
+            Assert.Null(first.Instance);
+            Assert.NotNull(second.Instance);
+        }
+        finally
+        {
+            Debug.ClearReportedOnce();
+        }
+    }
+
     /// <summary>
     /// Agent-type resolution end to end: two types with different radii baked from the same
     /// scene produce two navmeshes, and a corridor passable for the small type is eroded shut

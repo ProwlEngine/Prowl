@@ -217,8 +217,10 @@ public static class NavMeshGeometryCollector
 
         foreach (NavMeshLink link in links)
         {
-            // EnabledInHierarchy already folds in the GameObject's own state.
-            if (link.IsNotValid() || !link.EnabledInHierarchy || !link.Activated || !link.AffectsAgentType(agentTypeId))
+            // EnabledInHierarchy already folds in the GameObject's own state. A Not Walkable link is
+            // one nothing may traverse, so it contributes no connection at all.
+            if (link.IsNotValid() || !link.EnabledInHierarchy || !link.Activated || !link.AffectsAgentType(agentTypeId)
+                || link.Area == NavMeshAreas.NotWalkable)
                 continue;
             if (!layers.HasLayer(link.GameObject.LayerIndex)) continue;
 

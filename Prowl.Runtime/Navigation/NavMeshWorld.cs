@@ -554,7 +554,11 @@ public sealed class NavMeshWorld
     }
 
     /// <summary>Unregister a navmesh. Blocks until in-flight queries on it finish.</summary>
-    public void RemoveNavMeshData(NavMeshInstance? instance)
+    public void RemoveNavMeshData(NavMeshInstance? instance) => RemoveNavMeshData(instance, handOver: true);
+
+    /// <inheritdoc cref="RemoveNavMeshData(NavMeshInstance?)"/>
+    /// <param name="handOver">Register a spare surface of the type once this one is gone.</param>
+    internal void RemoveNavMeshData(NavMeshInstance? instance, bool handOver)
     {
         if (instance == null) return;
 
@@ -578,10 +582,16 @@ public sealed class NavMeshWorld
         StructureGeneration++;
         NavMeshChanged?.Invoke();
 
-        // Registration only ever runs from OnEnable, so without this a scene with a spare surface
-        // of the type loses navigation entirely the moment the registered one is deleted.
-        for (int i = 0; i < _surfaces.Count && GetInstance(instance.AgentTypeId) == null; i++)
-            if (_surfaces[i].AgentTypeId == instance.AgentTypeId && _surfaces[i].Instance == null)
+        if (handOver) RegisterSpareSurface(instance.AgentTypeId);
+    }
+
+    /// <summary>Registers an enabled, unregistered surface of the agent type while the type has no
+    /// navmesh. Registration only ever runs from OnEnable, so without this a scene with a spare
+    /// surface of the type loses navigation entirely the moment the registered one goes away.</summary>
+    internal void RegisterSpareSurface(int agentTypeId)
+    {
+        for (int i = 0; i < _surfaces.Count && GetInstance(agentTypeId) == null; i++)
+            if (_surfaces[i].AgentTypeId == agentTypeId && _surfaces[i].Instance == null)
                 _surfaces[i].RefreshRegistration();
     }
 
@@ -598,6 +608,7 @@ public sealed class NavMeshWorld
             instance.Retire();
         _pendingLinkTiles.Clear();
         _drainingLinkTiles.Clear();
+        _pendingLinkReconcile.Clear();
         _deferredTileSwaps.Clear();
         _crowds.Clear();
         // The component registries go too. Teardown disposes GameObjects after this, and their
@@ -702,6 +713,23 @@ public sealed class NavMeshWorld
     {
         _surfaces.Remove(surface);
         _pendingLinkTiles.Remove(surface);
+        _pendingLinkReconcile.Remove(surface);
+    }
+
+    // Surfaces that registered since the last Update, whose baked links still have to be checked
+    // against the scene. Held a frame so every link enabled alongside the surface (a scene loading)
+    // is in the registry before the comparison runs.
+    private readonly HashSet<NavMeshSurface> _pendingLinkReconcile = [];
+
+    internal void QueueLinkReconcile(NavMeshSurface surface) => _pendingLinkReconcile.Add(surface);
+
+    private void ReconcileBakedLinks()
+    {
+        if (_pendingLinkReconcile.Count == 0) return;
+
+        foreach (NavMeshSurface surface in _pendingLinkReconcile)
+            if (surface.IsValid()) surface.MarkStaleBakedLinks();
+        _pendingLinkReconcile.Clear();
     }
 
     // Link tiles waiting to re-contour, per surface. A link edit dirties the tiles around both
@@ -721,6 +749,25 @@ public sealed class NavMeshWorld
         if (!_pendingLinkTiles.TryGetValue(surface, out List<AABB>? regions))
             _pendingLinkTiles[surface] = regions = _regionPool.Count > 0 ? _regionPool.Pop() : [];
         regions.Add(region);
+    }
+
+    /// <summary>Dirty the tiles around a link's two endpoints: one region when the padded ends
+    /// overlap (the common short ladder or ledge), two when they don't, since a single box across a
+    /// long link would dirty every tile between its ends.</summary>
+    internal void MarkLinkEndpointsDirty(NavMeshSurface surface, Float3 start, Float3 end, float width)
+    {
+        float pad = width * 0.5f + 1f;
+        AABB startRegion = new AABB(start, start).Expanded(pad);
+        AABB endRegion = new AABB(end, end).Expanded(pad);
+
+        if (startRegion.Intersects(endRegion))
+        {
+            MarkLinkTilesDirty(surface, startRegion.Encapsulating(endRegion));
+            return;
+        }
+
+        MarkLinkTilesDirty(surface, startRegion);
+        MarkLinkTilesDirty(surface, endRegion);
     }
 
     private void DrainLinkTiles()
@@ -1066,6 +1113,7 @@ public sealed class NavMeshWorld
         // the previous frame's edits — one frame of latency in exchange for a frame's worth of
         // them costing one pass. Immediately before the pump, so the tile work a rebuild queues
         // is drained this frame rather than waiting for the next.
+        ReconcileBakedLinks();
         DrainLinkTiles();
 
         // Pumped outside play too: obstacles queue carves from OnEnable in the editor, and the
