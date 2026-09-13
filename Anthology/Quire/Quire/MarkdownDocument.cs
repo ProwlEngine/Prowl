@@ -35,6 +35,7 @@ public sealed partial class MarkdownDocument
         _source = source ?? string.Empty;
         _blocks.Clear();
         _inlines.Clear();
+        _linkDepth = 0;
         ParseDocument();
     }
 

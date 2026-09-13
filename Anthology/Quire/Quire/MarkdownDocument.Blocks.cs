@@ -220,14 +220,16 @@ public sealed partial class MarkdownDocument
             }
 
             bool done = false;
+            var task = default(TextSpan);
             int textStart = markerEnd;
             if (TryParseTaskMarker(textStart, LineEnd(line), out bool isChecked, out int afterTask))
             {
                 done = isChecked;
+                task = new TextSpan(textStart, 3);
                 textStart = afterTask;
             }
 
-            int item = AddBlock(BlockKind.ListItem, level: ordinal, flag: done);
+            int item = AddBlock(BlockKind.ListItem, level: ordinal, flag: done, info: task);
             AppendChild(list, item, ref first, ref last);
 
             int lead0 = AddBlock(BlockKind.Paragraph);

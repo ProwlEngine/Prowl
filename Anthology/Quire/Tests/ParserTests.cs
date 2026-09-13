@@ -168,12 +168,17 @@ public class ParserTests
     [Fact]
     public void ParsesTaskListItems()
     {
-        var d = Doc("- [ ] todo\n- [x] done\n");
+        var d = Doc("- [ ] todo\n- [x] done\n- plain\n");
         var list = TopLevel(d)[0];
         var items = Kids(d, list).ToList();
-        Assert.Equal(2, items.Count);
+        Assert.Equal(3, items.Count);
         Assert.False(d.GetBlock(items[0]).Flag);
         Assert.True(d.GetBlock(items[1]).Flag);
+
+        // An unchecked task and a plain item both have Flag false; the marker is what tells them apart.
+        Assert.Equal("[ ]", d.TextOf(d.GetBlock(items[0]).Info));
+        Assert.Equal("[x]", d.TextOf(d.GetBlock(items[1]).Info));
+        Assert.True(d.GetBlock(items[2]).Info.IsEmpty);
         Assert.Equal("todo", Text(d, d.GetBlock(items[0]).FirstChild));
     }
 

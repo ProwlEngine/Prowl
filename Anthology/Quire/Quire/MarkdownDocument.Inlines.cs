@@ -34,6 +34,10 @@ public sealed partial class MarkdownDocument
     /// <summary>Parse one run of inline content, returning the first inline or -1.</summary>
     private int ParseInlines(TextSpan span) => ParseInlineRange(span.Start, span.Start + span.Length);
 
+    // How many link labels the parse is inside. A link cannot hold another link, so inside one every
+    // link form is read as plain text.
+    private int _linkDepth;
+
     private int ParseInlineRange(int start, int end)
     {
         int first = -1, last = -1;
@@ -103,12 +107,14 @@ public sealed partial class MarkdownDocument
                 }
             }
 
-            if (c == '[')
+            if (c == '[' && _linkDepth == 0)
             {
                 if (TryParseLink(i, end, out int afterLink, out TextSpan label, out TextSpan href, out TextSpan title))
                 {
                     FlushText(i);
+                    _linkDepth++;
                     int children = ParseInlineRange(label.Start, label.Start + label.Length);
+                    _linkDepth--;
                     AppendInline(AddInline(InlineKind.Link, href: href, title: title, firstChild: children), ref first, ref last);
                     i = afterLink;
                     textStart = i;
@@ -116,12 +122,23 @@ public sealed partial class MarkdownDocument
                 }
             }
 
-            if (c == '<' && TryParseAutolink(i, end, out int afterAuto, out TextSpan target))
+            if (c == '<' && _linkDepth == 0 && TryParseAutolink(i, end, out int afterAuto, out TextSpan target))
             {
                 FlushText(i);
                 int label = AddInline(InlineKind.Text, text: target);
                 AppendInline(AddInline(InlineKind.Link, href: target, firstChild: label), ref first, ref last);
                 i = afterAuto;
+                textStart = i;
+                continue;
+            }
+
+            if (c == 'h' && _linkDepth == 0 && TryParseBareUrl(i, start, end, out int urlEnd))
+            {
+                FlushText(i);
+                var url = new TextSpan(i, urlEnd - i);
+                int label = AddInline(InlineKind.Text, text: url);
+                AppendInline(AddInline(InlineKind.Link, href: url, firstChild: label), ref first, ref last);
+                i = urlEnd;
                 textStart = i;
                 continue;
             }
@@ -144,6 +161,89 @@ public sealed partial class MarkdownDocument
     }
 
     private static bool IsWordChar(char c) => char.IsLetterOrDigit(c);
+
+    /// <summary>
+    /// A bare http or https URL in running text, the way people actually write them. It ends at
+    /// whitespace, and trailing punctuation that belongs to the sentence is left out, as is a closing
+    /// parenthesis with no opener inside the URL, so "(see http://x.com/q)" links just the URL.
+    /// </summary>
+    private bool TryParseBareUrl(int index, int rangeStart, int end, out int urlEnd)
+    {
+        urlEnd = index;
+        if (index > rangeStart && IsWordChar(_source[index - 1]))
+        {
+            return false;
+        }
+
+        int host;
+        if (StartsWith(index, end, "https://")) host = index + 8;
+        else if (StartsWith(index, end, "http://")) host = index + 7;
+        else return false;
+
+        int stop = host;
+        while (stop < end && !char.IsWhiteSpace(_source[stop]) && _source[stop] != '<')
+        {
+            stop++;
+        }
+
+        int opens = Count(host, stop, '(');
+        int closes = Count(host, stop, ')');
+        while (stop > host)
+        {
+            char last = _source[stop - 1];
+            if (last is '.' or ',' or ':' or ';' or '!' or '?' or '*' or '_' or '~' or '\'' or '"')
+            {
+                stop--;
+                continue;
+            }
+
+            if (last == ')' && closes > opens)
+            {
+                stop--;
+                closes--;
+                continue;
+            }
+
+            break;
+        }
+
+        if (stop <= host)
+        {
+            return false;
+        }
+
+        urlEnd = stop;
+        return true;
+    }
+
+    private bool StartsWith(int index, int end, string prefix)
+    {
+        if (index + prefix.Length > end)
+        {
+            return false;
+        }
+
+        for (int k = 0; k < prefix.Length; k++)
+        {
+            if (char.ToLowerInvariant(_source[index + k]) != prefix[k])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private int Count(int from, int to, char c)
+    {
+        int n = 0;
+        for (int k = from; k < to; k++)
+        {
+            if (_source[k] == c) n++;
+        }
+
+        return n;
+    }
 
     /// <summary>Matches &lt;https://host/path&gt; and &lt;mailto:someone&gt;.</summary>
     private bool TryParseAutolink(int start, int end, out int after, out TextSpan target)

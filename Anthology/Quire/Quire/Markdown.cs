@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace Prowl.Quire;
 
@@ -13,7 +13,7 @@ public readonly record struct TextSpan(int Start, int Length)
 
 public enum BlockKind : byte
 {
-    /// <summary>The implicit container holding a document's top-level blocks.</summary>
+    /// <summary>The implicit container holding a document's outermost blocks.</summary>
     Document,
     Paragraph,
     Heading,
@@ -58,18 +58,20 @@ public enum TableAlign : byte
     Right
 }
 
-/// <summary>A block-level node. Children are a linked list through
-/// <see cref="FirstChild"/> and <see cref="NextSibling"/>; -1 terminates.</summary>
+/// <summary>A block node. Children are a linked list through
+/// <see cref="FirstChild"/> and <see cref="NextSibling"/>, ended by -1.</summary>
 public readonly struct Block
 {
     public readonly BlockKind Kind;
     /// <summary>Heading level 1-6, or a list item's ordinal.</summary>
     public readonly int Level;
-    /// <summary>Ordered list, or a checked task item.</summary>
+    /// <summary>Ordered list, a checked task item, or a table's header row.</summary>
     public readonly bool Flag;
     public readonly TableAlign Align;
-    /// <summary>Code block body, or a fenced block's info string for <see cref="Info"/>.</summary>
+    /// <summary>Code block body.</summary>
     public readonly TextSpan Text;
+    /// <summary>A fenced code block's info string, or a task item's <c>[ ]</c> marker. A list item
+    /// with an empty <see cref="Info"/> is not a task, whatever <see cref="Flag"/> says.</summary>
     public readonly TextSpan Info;
     public readonly int FirstInline;
     public readonly int FirstChild;
@@ -90,7 +92,7 @@ public readonly struct Block
 }
 
 /// <summary>An inline node. Children are a linked list through <see cref="FirstChild"/> and
-/// <see cref="NextSibling"/>; -1 terminates.</summary>
+/// <see cref="NextSibling"/>, ended by -1.</summary>
 public readonly struct Inline
 {
     public readonly InlineKind Kind;
