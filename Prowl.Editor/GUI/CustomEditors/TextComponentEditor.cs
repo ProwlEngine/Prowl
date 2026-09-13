@@ -52,9 +52,6 @@ public class TextComponentEditor : CustomEditor
 
         paper.Box($"{id}_sp0.18").Height(6);
 
-        Origami.Checkbox(paper, $"{id}_rich", text.RichTextEnabled, v => text.RichTextEnabled = v)
-            .LabelRight("Rich Text").Show();
-
         paper.Box($"{id}_sp0.2").Height(6);
 
         EditorGUI.Row(paper, $"{id}_color", "Color", () =>

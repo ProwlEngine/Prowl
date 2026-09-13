@@ -90,8 +90,8 @@ internal sealed class UIFontSystem : IFontRenderer
     }
 
     // ---- Mesh capture -------------------------------------------------------------------------
-    // A text component sets a capture target + coordinate mapping, calls Scribe's DrawLayout /
-    // RichTextLayout.Draw (which drive DrawQuads below), then clears it. Single-threaded UI build,
+    // A text component sets a capture target + coordinate mapping, calls Scribe's DrawLayout
+    // (which drives DrawQuads below), then clears it. Single-threaded UI build,
     // so a single set of fields is fine.
     private UIMeshBuilder? _target;
     private float _originX;
@@ -99,7 +99,7 @@ internal sealed class UIFontSystem : IFontRenderer
     private float _scale = 1f;
 
     /// <summary>
-    /// Route the next <see cref="System"/>.<c>DrawLayout</c> / rich-text draw into <paramref name="builder"/>,
+    /// Route the next <see cref="System"/>.<c>DrawLayout</c> into <paramref name="builder"/>,
     /// mapping Scribe's +Y-down layout space (origin passed as (0,0)) into element-local +Y-up space:
     /// <c>x -> (originX + x) * scale</c>, <c>y -> (baseY - y) * scale</c>. UI text uses the default
     /// unit scale; the 3D <c>TextMeshComponent</c> passes a world-units-per-pixel scale so the same
@@ -121,7 +121,7 @@ internal sealed class UIFontSystem : IFontRenderer
 
     /// <summary>
     /// Scribe's draw callback: append its generated glyph triangles to the active capture target,
-    /// transformed into element-local space, keeping per-vertex colour (so rich text works).
+    /// transformed into element-local space, keeping per-vertex colour.
     /// </summary>
     public void DrawQuads(object texture, ReadOnlySpan<IFontRenderer.Vertex> vertices, ReadOnlySpan<int> indices)
     {
