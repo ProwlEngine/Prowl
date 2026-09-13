@@ -110,7 +110,7 @@ public class SnapshotViewerPanel : DockPanel
 
     private void DrawToolbar(Paper paper)
     {
-        using (paper.Row("snap_toolbar").Height(ToolbarHeight).ColBetween(6).Padding(6).Enter())
+        using (paper.Row("snap_toolbar").Height(ToolbarHeight).Gap(6).Padding(6).Enter())
         {
             Origami.Label(paper, "snap_toolbar_name", _snapshot != null ? _snapshot.Name ?? $"Frame {_snapshot.FrameIndex}" : "No snapshot")
                 .Heading()

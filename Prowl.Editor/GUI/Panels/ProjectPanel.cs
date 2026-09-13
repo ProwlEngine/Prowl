@@ -3,25 +3,26 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.Registries;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.Popups;
+using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Prefabs;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
 
+using static Prowl.Editor.GUI.EditorGUI;
+
 using Color = System.Drawing.Color;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Utils;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Projects;
 using Prowl.Graphite;
-using Prowl.Editor.Prefabs;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -277,7 +278,7 @@ public class ProjectPanel : DockPanel
         {
             using (paper.Row("proj_toolbar")
                 .Height(ToolbarHeight - 1)
-                .ChildLeft(8).ChildRight(8).RowBetween(5)
+                .PaddingLeft(8).PaddingRight(8).Gap(5)
                 .Enter())
             {
                 NavBtn(paper, font, "proj_back", EditorIcons.ChevronLeft, _navBack.Count > 0, NavBack);
@@ -373,7 +374,7 @@ public class ProjectPanel : DockPanel
 
             paper.Box("proj_foot_ico1").Width(14).Height(FooterHeight).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Text(EditorIcons.Image, font).TextColor(EditorTheme.InkFaint).FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-            using (paper.Row("proj_foot_sld_wrap").Width(90).Height(FooterHeight).ChildTop(UnitValue.StretchOne).ChildBottom(UnitValue.StretchOne).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+            using (paper.Row("proj_foot_sld_wrap").Width(90).Height(FooterHeight).AlignItems(LayoutAlignment.Center).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 Origami.Slider(paper, "proj_thumb_slider", _thumbnailSize, v => _thumbnailSize = v, MinThumbSize, MaxThumbSize)
                     .ShowValue(false).Width(90f).TrackThickness(4).ThumbSize(12).Height(18).Show();
             paper.Box("proj_foot_ico2").Width(16).Height(FooterHeight).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
@@ -844,7 +845,7 @@ public class ProjectPanel : DockPanel
                 {
                     var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
-                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, it.RelativePath, subType));
                 }
                 else
                 {
@@ -1208,7 +1209,7 @@ public class ProjectPanel : DockPanel
         // (wrapping) name. A full-width sub-asset drawer inserted after an expanded card forces a
         // line break, so it lands on its own row (like the CSS grid's `grid-column: 1/-1`).
         using (paper.Row("proj_grid_wrap").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-            .WrapContent().RowBetween(6).Enter())
+            .WrapContent().Gap(12).LineGap(6).Enter())
         {
             for (int i = 0; i < entries.Count; i++)
             {
@@ -1254,7 +1255,7 @@ public class ProjectPanel : DockPanel
         bool isSelected = Selection.IsSelected(sub);
 
         using (paper.Column($"proj_sub_{sub.Guid}").Width(62).Height(UnitValue.Auto).Margin(0, 6, 0, 6)
-            .Padding(3, 3, 5, 5).Rounded(8).ColBetween(5)
+            .Padding(3, 3, 5, 5).Rounded(8).Gap(5)
             .BackgroundColor(isSelected ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
             .OnClick((sub, idx, subObjects), (cap, e) =>
@@ -1268,7 +1269,7 @@ public class ProjectPanel : DockPanel
             {
                 var db = EditorAssetBackend.Instance;
                 Type? subType = db?.GetSubAssets(s.ParentGuid).FirstOrDefault(x => x.Guid == s.Guid)?.Type;
-                DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, subType));
+                DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, s.RelativePath, subType));
             })
             .Tooltip(sub.Name)
             .Enter())
@@ -1342,7 +1343,7 @@ public class ProjectPanel : DockPanel
                 {
                     var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
-                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, it.RelativePath, subType));
                     return;
                 }
 
@@ -1445,7 +1446,7 @@ public class ProjectPanel : DockPanel
             {
                 bool expanded = _expandedAssets.Contains(item.Guid);
                 using (paper.Row($"{id}_sb").PositionType(PositionType.SelfDirected).Position(cellSize - 34, -2)
-                    .Width(UnitValue.Auto).Height(17).Rounded(9).Padding(6, 6, 0, 0).RowBetween(3)
+                    .Width(UnitValue.Auto).Height(17).Rounded(9).Padding(6, 6, 0, 0).Gap(3)
                     .BackgroundColor(EditorTheme.Accent).DropShadow(0, 2, 8, 0, Color.FromArgb(128, 0, 0, 0))
                     .StopEventPropagation()
                     .OnClick(item.Guid, (guid, _) =>

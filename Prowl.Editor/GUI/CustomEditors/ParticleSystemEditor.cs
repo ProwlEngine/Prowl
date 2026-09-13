@@ -1,20 +1,20 @@
-using Prowl.Vector;
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
-using VColor = Prowl.Vector.Color;
-using Gradient = Prowl.Vector.Gradient;
+using Prowl.Vector;
 
+using Gradient = Prowl.Vector.Gradient;
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.GUI;
+using VColor = Prowl.Vector.Color;
 namespace Prowl.Editor.Inspector;
 
 // ================================================================
@@ -41,7 +41,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Main properties header
         paper.Box($"{id}_main_h")
             .Height(EditorTheme.RowHeight)
-            .ChildLeft(8)
+            .PaddingLeft(8)
             .BackgroundColor(EditorTheme.Neutral300)
             .Rounded(2)
             .Margin(UnitValue.Auto, EditorTheme.Spacing)
@@ -276,7 +276,7 @@ public class ParticleSystemComponentEditor : CustomEditor
     {
         float fs = EditorTheme.FontSize;
 
-        using (paper.Row(id).Height(EditorTheme.RowHeight + 4).RowBetween(4).ChildLeft(4).Enter())
+        using (paper.Row(id).Height(EditorTheme.RowHeight + 4).Gap(4).PaddingLeft(4).Enter())
         {
             if (ps.IsPlaying)
             {
@@ -324,7 +324,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                 .Padding(6, 6, 3, 3)
                 .Enter())
             {
-                using (paper.Row($"{id}_bh{i}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+                using (paper.Row($"{id}_bh{i}").Height(EditorTheme.RowHeight).Gap(4).Enter())
                 {
                     paper.Box($"{id}_bl{i}")
                         .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)

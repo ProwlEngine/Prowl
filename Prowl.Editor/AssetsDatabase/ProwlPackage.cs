@@ -413,6 +413,7 @@ public static class ProwlPackage
         }
     }
 
+    /// <summary> Collect all asset paths under a folder, used when exporting a folder selection. </summary>
     public static List<string> CollectFolderAssets(string folderRelativePath)
     {
         var project = Project.Current;

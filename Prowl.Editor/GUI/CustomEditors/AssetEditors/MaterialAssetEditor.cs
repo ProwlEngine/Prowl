@@ -5,6 +5,9 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -13,8 +16,6 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Projects;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Material))]
@@ -154,7 +155,7 @@ public class MaterialAssetEditor : AssetImporterEditor
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                .ChildLeft(8).ChildRight(8).RowBetween(6)
+                .PaddingLeft(8).PaddingRight(8).Gap(6)
                 .OnClick(0, (_, _) => ToggleShaderPicker(ownerGuid));
 
             using (trigger.Enter())

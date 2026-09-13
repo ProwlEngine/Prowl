@@ -11,8 +11,8 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
-using VColor = Prowl.Vector.Color;
 using TextAlign = Prowl.Runtime.UI.TextAlignment;
+using VColor = Prowl.Vector.Color;
 
 namespace Prowl.Editor.GUI;
 
@@ -40,7 +40,7 @@ public static class EditorGUI
         {
             // Inspector rhythm: the between-row gap is a Spacing-driven bottom margin (not vertical
             // padding) so hand-drawn rows line up with the reflection-drawn PropertyGrid. Compact rows
-            // rely on their host column's ColBetween instead, so they take no bottom margin.
+            // rely on their host column's Gap instead, so they take no bottom margin.
             DrawRowLine(paper, id, label, drawControl, m, labelWidth, compact, minHeight,
                 vpad: 0, bottomMargin: compact ? 0f : m.SpacingLarge);
             return;
@@ -66,7 +66,7 @@ public static class EditorGUI
         var labelColor = compact ? EditorTheme.Ink500 : Origami.Current.Ink.C300;
         float labelSize = compact ? EditorTheme.FontSizeSmall : m.FontSize;
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh)
-            .Padding(hpad, hpad, vpad, vpad).RowBetween(m.Padding)
+            .Padding(hpad, hpad, vpad, vpad).Gap(m.Padding)
             .Margin(0, 0, 0, bottomMargin).Enter())
         {
             if (!string.IsNullOrEmpty(label) && font != null)
@@ -116,22 +116,27 @@ public static class EditorGUI
     //  Project Settings row helpers — Row + widget + auto EditorRegistries.SaveSettings()
     // =====================================================================
 
+    /// <summary> A label + text field settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsTextField(Paper paper, string id, string label, string value, Action<string> setter)
         => Row(paper, id, label, () =>
             Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
 
+    /// <summary> A label + int slider settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsIntSlider(Paper paper, string id, string label, int value, int min, int max, Action<int> setter)
         => Row(paper, id, label, () =>
             Origami.IntSlider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max).Show());
 
+    /// <summary> A label + enum dropdown settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter) where T : struct, Enum
         => Row(paper, id, label, () =>
             Origami.EnumDropdown(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
 
+    /// <summary> A checkbox with a right-aligned label settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsCheckbox(Paper paper, string id, string label, bool value, Action<bool> setter)
         => Origami.Checkbox(paper, id, value, v => { setter(v); EditorRegistries.SaveSettings(); })
             .LabelRight(label).Show();
 
+    /// <summary> A label + slider settings row with a readout. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsSliderField(Paper paper, string id, string label, float value, float min, float max,
         Action<float> setter, string format = "F2")
         => Row(paper, id, label, () =>
@@ -158,7 +163,7 @@ public static class EditorGUI
         => Row(paper, id, label, () =>
             Origami.IntSlider(paper, $"{id}_v", value, setter, min, max).Show());
 
-    /// <summary>A foldout section with an enable toggle — shared by particle modules and image-effect sections.</summary>
+    /// <summary> A foldout section with an enable toggle, shared by particle modules and image-effect sections. </summary>
     public static void ModuleSection(Paper paper, string id, string icon, string label,
         bool enabled, Action<bool> setEnabled, Action draw)
         => Origami.Foldout(paper, id, $"{icon}  {label}")
@@ -169,12 +174,12 @@ public static class EditorGUI
     public static void TextAlignmentRow(Paper paper, string id, string label, TextAlign value, Action<TextAlign> setter)
     {
         var font = EditorTheme.DefaultFont;
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+        using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(6).Enter())
         {
             if (font != null)
                 paper.Box($"{id}_lbl")
                     .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
-                    .ChildLeft(4).IsNotInteractable()
+                    .PaddingLeft(4).IsNotInteractable()
                     .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
 
             Origami.ButtonGroup(paper, $"{id}_h", TextAlignHIndex(value),
@@ -222,7 +227,7 @@ public static class EditorGUI
 
         using (paper.Column(id).Width(width).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         using (paper.Column($"{id}_grp").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-            .Padding(8, 8, 10, 10).ColBetween(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
+            .Padding(8, 8, 10, 10).Gap(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         {
             foreach (var (cid, label, icon) in cats)
             {
@@ -305,7 +310,7 @@ public static class EditorGUI
             if (!string.IsNullOrEmpty(title) && font != null)
             {
                 using (paper.Row($"{id}_gh").Height(32).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0)
-                    .RowBetween(m.SpacingMedium).IsNotInteractable().Enter())
+                    .Gap(m.SpacingMedium).IsNotInteractable().Enter())
                 {
                     if (!string.IsNullOrEmpty(icon))
                         paper.Box($"{id}_gi").Width(16).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()

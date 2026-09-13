@@ -51,9 +51,9 @@ public sealed class ProfilerPassInspector : IDisposable
             ClearTextureCache();
         }
 
-        using (paper.Column("rdp_pass_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
+        using (paper.Column("rdp_pass_viewer").Height(UnitValue.Auto).Gap(InspectorKit.SectionGap).Enter())
         {
-            using (paper.Row("rdp_pass_header").Height(InspectorKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+            using (paper.Row("rdp_pass_header").Height(InspectorKit.SelectionViewerHeaderHeight).Gap(8f).Enter())
             {
                 Origami.Label(paper, "rdp_pass_title", pass.Name)
                     .Heading()
@@ -74,7 +74,7 @@ public sealed class ProfilerPassInspector : IDisposable
             }
 
             float resourceCardWidth = (width - 8f) / 2f;
-            using (paper.Row("rdp_pass_io_row").Height(UnitValue.Auto).ColBetween(8f).Enter())
+            using (paper.Row("rdp_pass_io_row").Height(UnitValue.Auto).Gap(8f).Enter())
             {
                 DrawResourceCard(paper, "rdp_pass_inputs", "Inputs", pass.Inputs, resolver, resourceCardWidth);
                 DrawResourceCard(paper, "rdp_pass_outputs", "Outputs", pass.Outputs, resolver, resourceCardWidth);
@@ -296,7 +296,7 @@ public sealed class ProfilerPassInspector : IDisposable
 
     private static void DrawRenderOperationsSection(Paper paper, string viewName, ProfiledPass pass, IProfilerHistory history)
     {
-        using (paper.Column("rdp_pv_renderops_col").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_pv_renderops_col").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
             DrawGeometryChart(paper, viewName, pass.Index, history);
             DrawRenderingChart(paper, viewName, pass.Index, history);

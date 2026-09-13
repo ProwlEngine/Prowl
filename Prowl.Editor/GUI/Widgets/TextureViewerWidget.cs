@@ -62,10 +62,10 @@ public sealed class TextureViewerBuilder
             .BorderWidth(1f)
             .Rounded(EditorTheme.Roundness)
             .Padding(8f)
-            .ColBetween(6f)
+            .Gap(6f)
             .Enter())
         {
-            using (_paper.Row($"{_id}_hdr").Height(20f).ColBetween(8f).Enter())
+            using (_paper.Row($"{_id}_hdr").Height(20f).Gap(8f).Enter())
             {
                 Origami.Label(_paper, $"{_id}_title", _textureName)
                     .Subheading()

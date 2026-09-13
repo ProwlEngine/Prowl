@@ -3,7 +3,6 @@ using System;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Registries;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -11,6 +10,8 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 namespace Prowl.Editor.Inspector;
 
@@ -44,7 +45,7 @@ public class SceneAssetEditor : AssetImporterEditor
 
         // Quick-facts chips.
         using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
-            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
+            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
         {
             EditorGUI.StatChip(paper, $"{id}_st_name", $"{EditorIcons.Shapes}  {sceneName}", font);
             EditorGUI.StatChip(paper, $"{id}_st_deps", $"{deps.Count} reference{(deps.Count == 1 ? "" : "s")}", font);

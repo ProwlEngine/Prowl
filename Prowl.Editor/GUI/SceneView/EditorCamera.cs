@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
@@ -80,6 +80,7 @@ public class EditorCamera
         if (_camera.IsOrthographic)
         {
             _camera.ProjectionMode = Camera.ProjectionType.Perspective;
+            _camera.FarClipPlane = _perspectiveFarClip;
             _orbitDistance = MathF.Max(0.1f, _camera.OrthographicSize / MathF.Max(1e-4f, halfFov));
             UpdateTransform();
             _position = focus - _cameraObject.Transform.Forward * _orbitDistance;
@@ -89,20 +90,48 @@ public class EditorCamera
         {
             _camera.ProjectionMode = Camera.ProjectionType.Orthographic;
             _camera.OrthographicSize = MathF.Max(MinOrthographicSize, _orbitDistance * halfFov);
+            SyncOrthographicDepth();
         }
     }
 
-    /// <summary>Keeps the orbit distance in step with the orthographic box, so orbiting, panning and
-    /// a switch back to perspective all still work off the same sense of scale.</summary>
     private void SetOrthographicSize(float size)
     {
         _camera.OrthographicSize = Math.Clamp(size, MinOrthographicSize, MaxOrthographicSize);
-        float halfFov = MathF.Tan(Maths.ToRadians(_camera.FieldOfView) * 0.5f);
-        _orbitDistance = MathF.Max(0.1f, _camera.OrthographicSize / MathF.Max(1e-4f, halfFov));
+        SyncOrthographicDepth();
+    }
+
+    /// <summary>
+    /// Keeps the visible slab centred on the focus point and sized with the zoom.
+    /// </summary>
+    /// <remarks>
+    /// Where the camera sits along the view axis decides nothing about what an orthographic view
+    /// covers, so the depth range has to come from the zoom instead. Left alone it does not: zooming
+    /// out widens the box while the clip planes stay put, and once the camera has been pushed further
+    /// back than the far plane reaches, the focus point and everything around it fall outside the
+    /// frustum and are culled. Backing off with the box and reaching as far past the focus as behind
+    /// it makes the clip planes the only thing that stops the view, which is what an orthographic
+    /// camera should feel like.
+    /// </remarks>
+    private void SyncOrthographicDepth()
+    {
+        if (!_camera.IsOrthographic) return;
+
+        // Captured first: both terms of it are about to move.
+        Float3 focus = ViewFocusPoint;
+
+        float backOff = MathF.Max(_camera.OrthographicSize * 4f, MinOrthographicDepth);
+        _orbitDistance = backOff;
+        _camera.FarClipPlane = backOff * 2f;
+        _position = focus - _cameraObject.Transform.Forward * backOff;
+        UpdateTransform();
     }
 
     private const float MinOrthographicSize = 0.01f;
     private const float MaxOrthographicSize = 10000f;
+    private const float MinOrthographicDepth = 10f;
+
+    /// <summary>Far plane to put back when leaving orthographic, which moves it to suit the zoom.</summary>
+    private float _perspectiveFarClip;
 
     /// <summary>Set the camera position directly.</summary>
     public void SetPosition(Float3 position)
@@ -120,6 +149,7 @@ public class EditorCamera
         UpdateTransform();
     }
 
+    /// <summary> Creates a hidden GameObject with a Camera component configured for editor scene rendering. </summary>
     public EditorCamera()
     {
         _cameraObject = new GameObject("EditorCamera");
@@ -130,6 +160,7 @@ public class EditorCamera
         _camera.FieldOfView = 60f;
         _camera.NearClipPlane = 0.01f;
         _camera.FarClipPlane = 1000f;
+        _perspectiveFarClip = _camera.FarClipPlane;
         _camera.ClearFlags = CameraClearFlags.Skybox;
 
         UpdateTransform();
@@ -378,6 +409,7 @@ public class EditorCamera
         return _position + _cameraObject.Transform.Forward * _orbitDistance;
     }
 
+    /// <summary> Moves the camera to frame the currently selected objects, centering on their combined bounds or average position. </summary>
     public void FocusSelection()
     {
         Float3 min = new(float.MaxValue);
@@ -443,6 +475,7 @@ public class EditorCamera
             AccumulateRendererBounds(child, ref min, ref max, ref any);
     }
 
+    /// <summary> Sets the camera's yaw and pitch without changing its position. Pitch is clamped to +/-89 degrees. </summary>
     public void SetOrientation(float yaw, float pitch)
     {
         _yaw = yaw;
@@ -450,6 +483,7 @@ public class EditorCamera
         UpdateTransform();
     }
 
+    /// <summary> Converts a screen-space coordinate into a world-space ray using the editor camera's projection. </summary>
     public Ray ScreenPointToRay(Float2 screenPos, Float2 panelSize)
     {
         return _camera.ScreenPointToRay(screenPos, panelSize);
@@ -474,6 +508,7 @@ public class EditorCamera
         _cameraObject.Transform.LocalEulerAngles = new Float3(_pitch, _yaw, 0);
     }
 
+    /// <summary> Releases all cloned image effects and disposes the render target. </summary>
     public void Dispose()
     {
         if (_renderTarget.IsValid()) _renderTarget.Dispose();

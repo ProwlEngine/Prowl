@@ -18,9 +18,9 @@ public static class ProfilerObjectInspector
             return;
         }
 
-        using (paper.Column("rdp_obj_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
+        using (paper.Column("rdp_obj_viewer").Height(UnitValue.Auto).Gap(InspectorKit.SectionGap).Enter())
         {
-            using (paper.Row("rdp_obj_header").Height(InspectorKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+            using (paper.Row("rdp_obj_header").Height(InspectorKit.SelectionViewerHeaderHeight).Gap(8f).Enter())
             {
                 Origami.Label(paper, "rdp_obj_title", obj.Label)
                     .Heading()
@@ -59,7 +59,7 @@ public static class ProfilerObjectInspector
 
     private static void DrawPropertiesCard(Paper paper, ProfiledCallingObject obj)
     {
-        using (paper.Column("rdp_obj_properties_rows").Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column("rdp_obj_properties_rows").Height(UnitValue.Auto).Gap(2f).Enter())
         {
             EditorGUI.StatRow(paper, "rdp_obj_label", "Label", obj.Label);
             EditorGUI.StatRow(paper, "rdp_obj_material", "Material", obj.MaterialName);
@@ -76,7 +76,7 @@ public static class ProfilerObjectInspector
     private static void DrawContextCard(Paper paper, ProfiledView? view, ProfiledPass? pass,
         ProfiledCommandBuffer? commandBuffer, ProfiledPipeline? pipeline)
     {
-        using (paper.Column("rdp_obj_context_rows").Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column("rdp_obj_context_rows").Height(UnitValue.Auto).Gap(2f).Enter())
         {
             if (pipeline != null)
             {

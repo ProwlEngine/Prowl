@@ -14,13 +14,16 @@ namespace Prowl.Editor.GUI.SceneView;
 /// <summary>Registration record for one discovered <see cref="SceneTool"/>.</summary>
 public sealed class SceneToolEntry
 {
+    /// <summary> The registered tool instance. </summary>
     public required SceneTool Tool { get; init; }
 
     /// <summary>Component the tool is scoped to, or null for a tool that is always available.</summary>
     public Type? ComponentType { get; init; }
 
+    /// <summary> Optional group label for organizing this tool in the tool strip. </summary>
     public string? Group { get; init; }
 
+    /// <summary> True if the tool is always available (no component scope). </summary>
     public bool IsGlobal => ComponentType == null;
 }
 
@@ -62,11 +65,13 @@ public static class SceneToolManager
         _entries.Sort((a, b) => a.Tool.Order.CompareTo(b.Tool.Order));
     }
 
+    /// <summary> Returns the entry for the given tool, or null if the tool is not registered. </summary>
     public static SceneToolEntry? EntryFor(SceneTool tool) => _entries.FirstOrDefault(e => e.Tool == tool);
 
     /// <summary>Look up a registered tool instance, for a tool that wants to talk to another.</summary>
     public static T? Get<T>() where T : SceneTool => _entries.Select(e => e.Tool).OfType<T>().FirstOrDefault();
 
+    /// <summary> Returns true if the tool is currently live (ticking this frame). </summary>
     public static bool IsLive(SceneTool tool) => _live.Contains(tool);
 
     /// <summary>

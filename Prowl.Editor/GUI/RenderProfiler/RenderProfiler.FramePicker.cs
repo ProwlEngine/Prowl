@@ -131,7 +131,7 @@ public partial class RenderProfilerPanel
         using (paper.Column("rdp_stats_content")
             .Width(200)
             .Padding(10)
-            .RowBetween(4)
+            .Gap(4)
             .Enter())
         {
             ProfiledFrame frame = SelectedFrame;

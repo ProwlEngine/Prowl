@@ -1,29 +1,30 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Inspector;
 using Prowl.Editor.Importers;
+using Prowl.Editor.Inspector;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Core;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Utils;
 
 namespace Prowl.Editor;
 
+/// <summary> Describes an entry in the asset creation menu, defining the type, display name, file extension, icon, sort order, and optional factory for creating a new instance. </summary>
 public struct AssetMenuEntry
 {
     public Type Type;
@@ -34,10 +35,12 @@ public struct AssetMenuEntry
     public Func<EngineObject>? Factory;
 }
 
+/// <summary> Central registry that discovers and provides access to all editor extensions: custom editors, importers, property editors, scene tools, drop handlers, project settings, file icons, script templates, and asset menu entries. Scans loaded assemblies on initialization. </summary>
 public static class EditorRegistries
 {
     #region Types
 
+    /// <summary> Describes a registered project settings page, including its type, display name, icon, sort order, whether it is exported to builds, and the singleton instance. </summary>
     public struct SettingsEntry
     {
         public Type Type;
@@ -48,6 +51,7 @@ public static class EditorRegistries
         public ProjectSettingsBase Instance;
     }
 
+    /// <summary> Handles a double-click on an asset in the project browser. Returns true if the event was handled. </summary>
     public delegate bool AssetDoubleClickHandler(string relativePath, Guid guid);
 
     private struct DropHandlerEntry
@@ -104,8 +108,10 @@ public static class EditorRegistries
 
     private static bool _initialized;
 
+    /// <summary> Resets all registries to their uninitialized state, rescans all assemblies, and triggers project-opened callbacks. </summary>
     public static void Reinitialize() { ClearAll(); Initialize(); OnProjectOpened(); }
 
+    /// <summary> Clears every registry, unsubscribes all editor callbacks, and resets the build target registry to built-in values. </summary>
     public static void ClearAll()
     {
         _initialized = false;
@@ -143,6 +149,7 @@ public static class EditorRegistries
         _initOnLoadMethods.Clear();
     }
 
+    /// <summary> Scans all loaded assemblies for editor extensions (custom editors, importers, scene tools, project settings, file icons, script templates, etc.) and populates the registries. Safe to call multiple times; subsequent calls are no-ops. </summary>
     public static void Initialize()
     {
         if (_initialized) return;
@@ -302,12 +309,19 @@ public static class EditorRegistries
         if (type.IsAbstract || !typeof(ISceneDropHandler).IsAssignableFrom(type)) return;
         var attr = type.GetCustomAttribute<SceneDropHandlerAttribute>();
         if (attr == null) return;
-        _dropHandlers.Add(new DropHandlerEntry
+        try
         {
-            AssetType = attr.TargetType,
-            Order = attr.Order,
-            Handler = (ISceneDropHandler)Activator.CreateInstance(type)!,
-        });
+            _dropHandlers.Add(new DropHandlerEntry
+            {
+                AssetType = attr.TargetType,
+                Order = attr.Order,
+                Handler = (ISceneDropHandler)Activator.CreateInstance(type)!,
+            });
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Editor] Drop handler '{type.Name}' could not be created: {ex.Message}");
+        }
     }
 
     private static void ScanProjectSettings(Type type)
@@ -315,15 +329,22 @@ public static class EditorRegistries
         if (type.IsAbstract || !typeof(ProjectSettingsBase).IsAssignableFrom(type)) return;
         var attr = type.GetCustomAttribute<ProjectSettingsAttribute>();
         if (attr == null) return;
-        _settingsEntries.Add(new SettingsEntry
+        try
         {
-            Type = type,
-            Name = attr.Name,
-            Icon = attr.Icon,
-            Order = attr.Order,
-            ExportToBuild = attr.ExportToBuild,
-            Instance = (ProjectSettingsBase)Activator.CreateInstance(type)!,
-        });
+            _settingsEntries.Add(new SettingsEntry
+            {
+                Type = type,
+                Name = attr.Name,
+                Icon = attr.Icon,
+                Order = attr.Order,
+                ExportToBuild = attr.ExportToBuild,
+                Instance = (ProjectSettingsBase)Activator.CreateInstance(type)!,
+            });
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Editor] Project settings '{type.Name}' could not be created: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -466,6 +487,34 @@ public static class EditorRegistries
     public static AssetImporterEditor? GetAssetEditor(Type type) => LookupEditor(type, _assetEditorTypes, _assetEditorCache);
 
     /// <summary>
+    /// Creates a registered editor or importer, containing anything its constructor throws. These are
+    /// user types reached while drawing the inspector or importing a file, so letting one escape would
+    /// take the editor down over a single bad custom editor.
+    /// </summary>
+    private static bool TryCreate<T>(Type type, out T? instance) where T : class
+    {
+        instance = null;
+        try
+        {
+            instance = Activator.CreateInstance(type) as T;
+            if (instance is not null) return true;
+
+            Runtime.Debug.LogError($"[Editor] '{type.Name}' is not a {typeof(T).Name}, so it was ignored.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Exception cause = ex is TargetInvocationException { InnerException: not null } wrapped
+                ? wrapped.InnerException!
+                : ex;
+
+            Runtime.Debug.LogError($"[Editor] '{type.Name}' threw while being created, so it was " +
+                                   $"ignored. {cause.GetType().Name}: {cause.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// The editor for an asset, preferring one registered for its importer over one registered for
     /// its type. Several formats can import to the same asset type while needing different settings.
     /// </summary>
@@ -476,7 +525,12 @@ public static class EditorRegistries
             if (_assetEditorByImporterCache.TryGetValue(entry.ImporterType, out var cached)) return cached;
 
             if (_assetEditorTypesByImporter.TryGetValue(entry.ImporterType, out var editorType))
-                return _assetEditorByImporterCache[entry.ImporterType] = (AssetImporterEditor)Activator.CreateInstance(editorType)!;
+            {
+                if (TryCreate(editorType, out AssetImporterEditor? editor))
+                    return _assetEditorByImporterCache[entry.ImporterType] = editor!;
+
+                return null;
+            }
         }
 
         return GetAssetEditor(entry.MainAssetType);
@@ -488,19 +542,19 @@ public static class EditorRegistries
         for (var t = targetType; t != null; t = t.BaseType)
         {
             if (!types.TryGetValue(t, out var editorType)) continue;
-            return cache[targetType] = (T)Activator.CreateInstance(editorType)!;
+            return TryCreate(editorType, out T? made) ? cache[targetType] = made! : null;
         }
         if (checkInterfaces)
             foreach (var iface in targetType.GetInterfaces())
                 if (types.TryGetValue(iface, out var editorType))
-                    return cache[targetType] = (T)Activator.CreateInstance(editorType)!;
+                    return TryCreate(editorType, out T? made) ? cache[targetType] = made! : null;
         return null;
     }
 
     public static AssetImporter? GetImporter(string extension)
     {
         if (_importersByExt.TryGetValue(NormalizeExt(extension), out var type))
-            return (AssetImporter)Activator.CreateInstance(type)!;
+            return TryCreate(type, out AssetImporter? importer) ? importer : null;
         return null;
     }
 
@@ -510,7 +564,7 @@ public static class EditorRegistries
     public static AssetImporter? CreateImporterByName(string typeName)
     {
         if (_importersByName.TryGetValue(typeName, out var type))
-            return (AssetImporter)Activator.CreateInstance(type)!;
+            return TryCreate(type, out AssetImporter? importer) ? importer : null;
         return null;
     }
 
@@ -577,6 +631,7 @@ public static class EditorRegistries
 
     #region Settings
 
+    /// <summary> Returns the registered settings instance of the specified type. If the registry has not been initialized, triggers initialization. Falls back to a transient default with a warning if the type is not registered. </summary>
     public static T GetSettings<T>() where T : ProjectSettingsBase
     {
         foreach (var entry in _settingsEntries)
@@ -593,6 +648,7 @@ public static class EditorRegistries
         return (T)Activator.CreateInstance(typeof(T))!;
     }
 
+    /// <summary> Saves all registered project settings entries to YAML files in the project settings directory. </summary>
     public static void SaveSettings()
     {
         var project = Project.Current;
@@ -601,6 +657,7 @@ public static class EditorRegistries
         foreach (var entry in _settingsEntries) SaveSettings(entry);
     }
 
+    /// <summary> Saves a single settings entry to a YAML file named after the entry in the project settings directory. </summary>
     public static void SaveSettings(SettingsEntry entry)
     {
         var project = Project.Current;
@@ -614,6 +671,7 @@ public static class EditorRegistries
         catch (Exception ex) { Debug.LogError($"Failed to save settings '{entry.Name}': {ex.Message}"); }
     }
 
+    /// <summary> Resets all settings entries to their defaults and loads saved values from disk. Called when a project is opened. </summary>
     public static void OnProjectOpened()
     {
         foreach (var entry in _settingsEntries)
@@ -682,7 +740,21 @@ public static class EditorRegistries
     {
         RegisterFileIcons(EditorIcons.FileCode, ".cs", ".js", ".ts", ".py", ".lua");
         RegisterFileIcons(EditorIcons.WandMagicSparkles, ".shader", ".glsl", ".hlsl", ".shadergraph");
-        RegisterFileIcons(EditorIcons.FileImage, ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".psd", ".hdr");
+        RegisterFileIcons(EditorIcons.FileImage,
+            ".png", ".apng",
+            ".jpg", ".jpeg", ".jpe", ".jfif",
+            ".bmp", ".dib",
+            ".gif",
+            ".tga", ".icb", ".vda", ".vst",
+            ".tif", ".tiff",
+            ".webp",
+            ".psd", ".psb",
+            ".dds",
+            ".exr",
+            ".hdr", ".pic", ".rgbe",
+            ".ico", ".cur",
+            ".pnm", ".pbm", ".pgm", ".ppm", ".pam",
+            ".dng", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".orf", ".rw2", ".raf", ".pef", ".srw");
         RegisterFileIcons(EditorIcons.FileAudio, ".mp3", ".wav", ".ogg", ".flac");
         RegisterFileIcons(EditorIcons.FileVideo, ".mp4", ".avi", ".mkv", ".mov");
         RegisterFileIcons(EditorIcons.VectorSquare, ".fbx", ".obj", ".gltf", ".glb", ".dae", ".mesh");

@@ -24,9 +24,7 @@ public sealed class EditorSvgIcon : IOrigamiIcon
     private readonly float _viewHeight;
     private SvgElement? _element;
 
-    /// <param name="pathData">The SVG path "d" data.</param>
-    /// <param name="viewWidth">viewBox width the path is authored in.</param>
-    /// <param name="viewHeight">viewBox height the path is authored in.</param>
+    /// <summary> Initializes a new EditorSvgIcon with the given SVG path data and viewBox dimensions. Non-positive view dimensions default to 1. </summary>
     public EditorSvgIcon(string pathData, float viewWidth, float viewHeight)
     {
         _pathData = pathData ?? string.Empty;
@@ -48,6 +46,7 @@ public sealed class EditorSvgIcon : IOrigamiIcon
         return _element;
     }
 
+    /// <summary> Draws the SVG path into the given rect, aspect-fit and centered, tinted with the specified color. </summary>
     public void Draw(Canvas canvas, Rect rect, Color color, float strokeWidth = 1.5f)
     {
         if (string.IsNullOrEmpty(_pathData)) return;

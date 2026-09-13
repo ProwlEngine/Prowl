@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI.Widgets;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Editor.GUI.Widgets;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
 
 using TextAlign = Prowl.Runtime.UI.TextAlignment;
 namespace Prowl.Editor.GUI.Panels;
@@ -244,7 +244,7 @@ public class WidgetPlaygroundPanel : DockPanel
 
             // === Chip / CtaButton / HeaderIconButton / ToolbarIconBtn ===
             EditorGUI.SectionHeader(paper, "h_buttons", "Chip / CtaButton / Icon Buttons");
-            using (paper.Row("chip_row").Height(28).RowBetween(8).Enter())
+            using (paper.Row("chip_row").Height(28).Gap(8).Enter())
             {
                 EditorGUI.Chip(paper, "chip_1", "Chip Button", () => { });
                 EditorGUI.CtaButton(paper, "cta_1", "Call To Action", EditorTheme.Accent, () => { });
@@ -262,7 +262,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === StatChip ===
             EditorGUI.SectionHeader(paper, "h_stat", "Stat Chip");
             if (EditorTheme.DefaultFont != null)
-                using (paper.Row("stat_row").Height(22).RowBetween(6).Enter())
+                using (paper.Row("stat_row").Height(22).Gap(6).Enter())
                 {
                     EditorGUI.StatChip(paper, "stat_1", "Loaded: 42", EditorTheme.DefaultFont);
                     EditorGUI.StatChip(paper, "stat_2", "Memory: 128 MB", EditorTheme.DefaultFont);

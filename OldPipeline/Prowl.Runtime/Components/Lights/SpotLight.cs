@@ -81,7 +81,7 @@ public class SpotLight : Light
         view = Float4x4.CreateLookTo(position, forward, Transform.Up);
     }
 
-    public override void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
+    public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
     {
         if (!DoCastShadows())
         {

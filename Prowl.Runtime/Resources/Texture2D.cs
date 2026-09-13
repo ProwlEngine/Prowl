@@ -4,8 +4,6 @@
 using System;
 using System.IO;
 
-using ImageMagick;
-
 using Prowl.Echo;
 using Prowl.Graphite;
 
@@ -241,37 +239,40 @@ public sealed class Texture2D : Texture, ISerializable
         SetWrapModes(addressU, addressV);
     }
 
-    #region ImageMagick integration
+    #region Image loading
 
+    /// <summary>Decodes into the layout and row order an upload wants, so no repacking follows.</summary>
+    private static Aperture.DecodeOptions DecodeToUploadLayout => new()
+    {
+        // Tightly packed R,G,B,A, which is what Color4b and TexSubImage2D expect.
+        TargetPixelFormat = Aperture.PixelFormat.Rgba8,
+        // The GPU's texture origin is the lower left, and writing rows in that order costs
+        // nothing here where flipping afterwards is a second pass over the whole image.
+        FlipVertically = true,
+        RowAlignment = 4,
+    };
 
     /// <summary>
-    /// Creates a <see cref="Texture2D"/> from a <see cref="MagickImage"/>.
+    /// Creates a <see cref="Texture2D"/> from an already decoded image.
     /// </summary>
-    public static Texture2D FromImage(MagickImage image, bool generateMipmaps = false)
+    /// <param name="image">The image to create the <see cref="Texture2D"/> with. Must be Rgba8.</param>
+    /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
+    public static Texture2D FromImage(Aperture.Image image, bool generateMipmaps = false)
     {
         ArgumentNullException.ThrowIfNull(image);
 
-        image.Flip();
+        if (image.PixelFormat != Aperture.PixelFormat.Rgba8)
+            throw new ArgumentException(TextureFormatMustBeColor4bError, nameof(image));
 
-        image.ColorSpace = ColorSpace.sRGB;
-        image.ColorType = ColorType.TrueColorAlpha;
+        Aperture.ImageFrame frame = image.RootFrame;
 
-        // Magick.NET-Q8's native quantum is 8-bit, so this is always the actual decoded precision
-        // regardless of source depth - a 16-bit PNG/.hdr/.exr source is quantized to 8-bit here (a
-        // library limitation, not a choice this code makes).
-        //
-        // Read straight from Magick's own pixel cache instead of ToByteArray(PixelMapping.RGBA),
-        // which would allocate a whole extra managed byte[] just to re-pack data that's already in
-        // the right layout. ColorType.TrueColorAlpha above forces the cache to tightly-packed R,G,B,A
-        // - exactly the byte layout Color4b/TexSubImage2D expects for Q8's byte-quantum pixels - so
-        // the raw pointer can go straight to the GPU with no extra copy.
-        Texture2D texture = new(image.Width, image.Height, generateMipmaps, PixelFormat.R8_G8_B8_A8_UNorm);
+        Texture2D texture = new((uint)image.Width, (uint)image.Height, generateMipmaps, PixelFormat.R8_G8_B8_A8_UNorm);
         try
         {
-            nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
             unsafe
             {
-                texture.SetDataPtr((void*)pixels, 0, 0, image.Width, image.Height);
+                fixed (byte* pixels = frame.Pixels)
+                    texture.SetDataPtr(pixels, 0, 0, (uint)image.Width, (uint)image.Height);
             }
 
             if (generateMipmaps)
@@ -291,7 +292,9 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
     {
-        using var image = new MagickImage(stream);
+        ArgumentNullException.ThrowIfNull(stream);
+
+        using Aperture.Image image = Aperture.Image.Load(stream, DecodeToUploadLayout);
         return FromImage(image, generateMipmaps);
     }
 
@@ -300,7 +303,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public static Texture2D FromFile(string file, bool generateMipmaps = false)
     {
-        using var image = new MagickImage(file);
+        using Aperture.Image image = Aperture.Image.Load(file, DecodeToUploadLayout);
         return FromImage(image, generateMipmaps);
     }
 

@@ -23,9 +23,13 @@ public sealed class NebulaBackground
     private static Color Col(int r, int g, int b, float a = 1f) => Color32.FromArgb((int)Math.Round(a * 255), r, g, b);
 
     // Per-layer visibility + the raw void colour behind everything (all settable from the theme).
+    /// <summary> Whether to draw the coloured nebula gradients. </summary>
     public bool ShowClouds = true;    // the coloured nebula gradients
+    /// <summary> Whether to draw the tileable starfield. </summary>
     public bool ShowStars = true;
+    /// <summary> Whether to draw the occasional comets. </summary>
     public bool ShowComets = true;
+    /// <summary> The solid colour drawn behind all other layers. </summary>
     public System.Drawing.Color VoidColor = System.Drawing.Color.FromArgb(6, 4, 9);
 
     // Theme tint (primary/secondary); the whole nebula is coloured from these.
@@ -49,6 +53,7 @@ public sealed class NebulaBackground
     private const float CloudSpeed = 0.045f;
     private const float CloudTurn = 2.5f;
 
+    /// <summary> Initialises the four nebula clouds with randomised positions, sizes and colours. </summary>
     public NebulaBackground(Paper paper)
     {
         _paper = paper;
@@ -61,6 +66,7 @@ public sealed class NebulaBackground
             _clouds[i] = new Cloud { cx = sx[i], cy = sy[i], ang = (float)(_rng.NextDouble() * MathF.Tau), rf = cr[i], color = cc[i], phase = (float)(_rng.NextDouble() * 6.28f), timer = 0f };
     }
 
+    /// <summary> Advances the nebula animation (clouds and comets) by the given time delta. </summary>
     public void Update(float dt)
     {
         _time += dt;
@@ -147,7 +153,10 @@ public sealed class NebulaBackground
                 _comets[i] = new Comet
                 {
                     active = true,
-                    x = cx0, y = cy0, dx = cdx, dy = cdy,
+                    x = cx0,
+                    y = cy0,
+                    dx = cdx,
+                    dy = cdy,
                     speed = (float)(0.09 + _rng.NextDouble() * 0.07),
                     len = (float)(0.08 + _rng.NextDouble() * 0.06),
                     dur = (float)(2.8 + _rng.NextDouble() * 1.8)
@@ -192,6 +201,7 @@ public sealed class NebulaBackground
         _paper.Renderer.SetTextureData(_starTex, new IntRect(0, 0, T, T), data);
     }
 
+    /// <summary> Draws the full nebula background (void fill, clouds, stars and comets) into the specified rectangle. </summary>
     public void Draw(Canvas vg, Rect rect)
     {
         if (_starTex == null) BuildStarTexture();
@@ -226,29 +236,29 @@ public sealed class NebulaBackground
                     vg.DrawImage(_starTex, tx, ty, StarTexSize, StarTexSize);
 
         if (ShowComets)
-        foreach (var c in _comets)
-        {
-            if (!c.active) continue;
-            float env = MathF.Sin(c.life * MathF.PI);
-            if (env <= 0.01f) continue;
-            float hx = x + c.x * w, hy = y + c.y * h;
-            float vx = c.dx * w, vy = c.dy * h;
-            float vlen = MathF.Max(1e-4f, MathF.Sqrt(vx * vx + vy * vy));
-            float ux = vx / vlen, uy = vy / vlen;
-            float L = c.len * w;
-            float tlx = hx - ux * L, tly = hy - uy * L;
-            float perpx = -uy, perpy = ux, hw = 1.7f;
-            vg.SaveState();
-            vg.SetLinearBrush(hx, hy, tlx, tly, Lighten(_primary, 0.55f, env * 0.85f), Lighten(_primary, 0.55f, 0f));
-            vg.BeginPath();
-            vg.MoveTo(hx + perpx * hw, hy + perpy * hw);
-            vg.LineTo(hx - perpx * hw, hy - perpy * hw);
-            vg.LineTo(tlx, tly);
-            vg.ClosePath();
-            vg.FillComplexAA();
-            vg.RestoreState();
-            vg.BeginPath(); vg.Circle(hx, hy, 2.2f); vg.SetFillColor(Col(255, 255, 255, env)); vg.Fill();
-        }
+            foreach (var c in _comets)
+            {
+                if (!c.active) continue;
+                float env = MathF.Sin(c.life * MathF.PI);
+                if (env <= 0.01f) continue;
+                float hx = x + c.x * w, hy = y + c.y * h;
+                float vx = c.dx * w, vy = c.dy * h;
+                float vlen = MathF.Max(1e-4f, MathF.Sqrt(vx * vx + vy * vy));
+                float ux = vx / vlen, uy = vy / vlen;
+                float L = c.len * w;
+                float tlx = hx - ux * L, tly = hy - uy * L;
+                float perpx = -uy, perpy = ux, hw = 1.7f;
+                vg.SaveState();
+                vg.SetLinearBrush(hx, hy, tlx, tly, Lighten(_primary, 0.55f, env * 0.85f), Lighten(_primary, 0.55f, 0f));
+                vg.BeginPath();
+                vg.MoveTo(hx + perpx * hw, hy + perpy * hw);
+                vg.LineTo(hx - perpx * hw, hy - perpy * hw);
+                vg.LineTo(tlx, tly);
+                vg.ClosePath();
+                vg.FillComplexAA();
+                vg.RestoreState();
+                vg.BeginPath(); vg.Circle(hx, hy, 2.2f); vg.SetFillColor(Col(255, 255, 255, env)); vg.Fill();
+            }
 
         RadialFill(vg, x, y, w, h, x + w * 0.5f, y + h * 0.4f, big * 0.55f, big * 0.9f, Col(0, 0, 0, 0f), Col(0, 0, 0, 0.55f));
     }

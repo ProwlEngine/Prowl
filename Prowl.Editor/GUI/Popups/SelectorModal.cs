@@ -26,19 +26,15 @@ namespace Prowl.Editor.GUI.Popups;
 [Flags]
 public enum SelectorTabs
 {
+    /// <summary> Scene tab: lists GameObjects and components from the current scene. </summary>
     Scene = 1,
+    /// <summary> Assets tab: lists project and built-in assets with thumbnails. </summary>
     Assets = 2,
+    /// <summary> Both tabs: shows both Scene and Assets tabs. </summary>
     Both = Scene | Assets,
 }
 
-/// <summary>
-/// Unified asset/scene selector modal. Provides two tabs:
-/// <list type="bullet">
-///   <item><b>Scene</b> lists GameObjects and components from the current scene (list view).</item>
-///   <item><b>Assets</b> lists project + built-in assets with thumbnails (grid view).</item>
-/// </list>
-/// Only one selector can be open at a time.
-/// </summary>
+/// <summary> Unified asset/scene selector modal. Provides a Scene tab (lists GameObjects and components from the current scene) and an Assets tab (lists project and built-in assets with thumbnails). Only one selector can be open at a time. </summary>
 public static class SelectorModal
 {
     // ---- State ----
@@ -70,6 +66,7 @@ public static class SelectorModal
         _handle.Open(DrawInternal, closeOnBackdrop: true);
     }
 
+    /// <summary> Close the selector modal and clear the callback. </summary>
     public static void Close()
     {
         _callback = null;
@@ -118,7 +115,7 @@ public static class SelectorModal
     private static void DrawHeader(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Row("sel_header")
-            .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
+            .Height(32).PaddingLeft(12).PaddingRight(8).Gap(8)
             .BackgroundColor(EditorTheme.Neutral200)
             .Enter())
         {
@@ -144,7 +141,7 @@ public static class SelectorModal
 
     private static void DrawSearchBar(Paper paper, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row("sel_searchrow").Height(30).Margin(6, 6, 6, 0).RowBetween(4).Enter())
+        using (paper.Row("sel_searchrow").Height(30).Margin(6, 6, 6, 0).Gap(4).Enter())
         {
             Origami.SearchField(paper, "sel_search", _searchText, v => _searchText = v).Show();
         }
@@ -156,7 +153,7 @@ public static class SelectorModal
 
     private static void DrawTabs(Paper paper, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row("sel_tabs").Height(28).Margin(6, 6, 0, 0).RowBetween(2).Enter())
+        using (paper.Row("sel_tabs").Height(28).Margin(6, 6, 0, 0).Gap(2).Enter())
         {
             DrawTabButton(paper, font, "sel_tab_scene", $"{EditorIcons.Sitemap}  {Loc.Get("panel.scene")}", SelectorTabs.Scene);
             DrawTabButton(paper, font, "sel_tab_assets", $"{EditorIcons.FolderOpen}  {Loc.Get("menu.assets")}", SelectorTabs.Assets);
@@ -201,7 +198,7 @@ public static class SelectorModal
         {
             // None option always first
             paper.Box("sel_s_none")
-                .Height(EditorTheme.RowHeight).ChildLeft(8)
+                .Height(EditorTheme.RowHeight).PaddingLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                 .Rounded(3)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
@@ -264,7 +261,7 @@ public static class SelectorModal
         string id, string name, string detail, string icon, object value)
     {
         using (paper.Row(id)
-            .Height(EditorTheme.RowHeight).ChildLeft(8).RowBetween(4)
+            .Height(EditorTheme.RowHeight).PaddingLeft(8).Gap(4)
             .Hovered.BackgroundColor(EditorTheme.Purple400).End()
             .Rounded(3)
             .OnClick(value, (val, _) =>
@@ -287,7 +284,7 @@ public static class SelectorModal
             if (!string.IsNullOrEmpty(detail))
             {
                 paper.Box($"{id}_detail")
-                    .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
+                    .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).PaddingRight(4)
                     .Text(detail, font).TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
             }
@@ -310,14 +307,16 @@ public static class SelectorModal
             return;
         }
 
-        var items = db.FindAllOfType(_targetType).Take(200).ToList();
+        // Exact then prefix matches sort ahead so the closest ones survive the cap.
+        var all = db.FindAllOfType(_targetType);
+        var matches = string.IsNullOrEmpty(_searchText)
+            ? all
+            : all.Where(i => i.name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                 .OrderBy(i => i.name.Equals(_searchText, StringComparison.OrdinalIgnoreCase) ? 0
+                             : i.name.StartsWith(_searchText, StringComparison.OrdinalIgnoreCase) ? 1 : 2)
+                 .ThenBy(i => i.name, StringComparer.OrdinalIgnoreCase);
 
-        // Filter by search
-        if (!string.IsNullOrEmpty(_searchText))
-        {
-            items = items.Where(i =>
-                i.name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)).ToList();
-        }
+        var items = matches.Take(200).ToList();
 
         const float cellSize = 72f;
         const float labelH = 18f;
@@ -328,7 +327,7 @@ public static class SelectorModal
         {
             // None option always first
             paper.Box("sel_a_none")
-                .Height(EditorTheme.RowHeight).ChildLeft(8)
+                .Height(EditorTheme.RowHeight).PaddingLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                 .Rounded(3)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
@@ -351,7 +350,7 @@ public static class SelectorModal
                 {
                     using (paper.Row($"sel_ar_{row}")
                         .Height(totalCellH)
-                        .RowBetween(4)
+                        .Gap(4)
                         .Enter())
                     {
                         for (int j = 0; j < cols && i + j < items.Count; j++)

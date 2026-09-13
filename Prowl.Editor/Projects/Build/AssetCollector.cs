@@ -9,9 +9,12 @@ namespace Prowl.Editor.Build;
 /// </summary>
 public static class AssetCollector
 {
+    /// <summary> Holds the result of an asset collection: all discovered assets and a map of Resources load paths to their GUIDs. </summary>
     public struct CollectionResult
     {
+        /// <summary> All assets collected for the build, including scenes, dependencies, Resources assets, and sub-assets. </summary>
         public HashSet<Guid> AllAssets;
+        /// <summary> Maps Resources asset load paths (everything after the last "Resources/" segment, without extension) to their GUIDs. </summary>
         public Dictionary<string, Guid> ResourcesMap; // load path -> guid
     }
 

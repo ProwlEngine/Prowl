@@ -29,7 +29,7 @@ public sealed class ProfilerShaderInspector
             return;
         }
 
-        using (paper.Column("rdp_sh_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
+        using (paper.Column("rdp_sh_viewer").Height(UnitValue.Auto).Gap(InspectorKit.SectionGap).Enter())
         {
             DrawHeader(paper, pipeline);
             DrawShaderCard(paper, pipeline);
@@ -42,7 +42,7 @@ public sealed class ProfilerShaderInspector
 
     private static void DrawHeader(Paper paper, ProfiledPipeline pipeline)
     {
-        using (paper.Row("rdp_sh_header").Height(InspectorKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+        using (paper.Row("rdp_sh_header").Height(InspectorKit.SelectionViewerHeaderHeight).Gap(8f).Enter())
         {
             Origami.Label(paper, "rdp_sh_title", pipeline.ShaderName)
                 .Heading()
@@ -73,7 +73,7 @@ public sealed class ProfilerShaderInspector
     {
         InspectorKit.SectionCard(paper, "rdp_sh_shader", "Shader", () =>
         {
-            using (paper.Column("rdp_sh_shader_rows").Height(UnitValue.Auto).ColBetween(2f).Enter())
+            using (paper.Column("rdp_sh_shader_rows").Height(UnitValue.Auto).Gap(2f).Enter())
             {
                 EditorGUI.StatRow(paper, "rdp_sh_name", "Shader", pipeline.ShaderName);
                 EditorGUI.StatRow(paper, "rdp_sh_pass", "Pass", pipeline.ShaderPassName);
@@ -171,7 +171,7 @@ public sealed class ProfilerShaderInspector
                     return;
             }
 
-            using (paper.Column("rdp_sh_state_tabcol").Height(UnitValue.Auto).ColBetween(6f).Enter())
+            using (paper.Column("rdp_sh_state_tabcol").Height(UnitValue.Auto).Gap(6f).Enter())
             {
                 Origami.Tabs(paper, "rdp_sh_state_tabs", _stateTab, i => _stateTab = i)
                     .Tab("Rasterizer")
@@ -211,7 +211,7 @@ public sealed class ProfilerShaderInspector
 
     private static void DrawRasterizerState(Paper paper, string id, RasterizerStateDescription raster)
     {
-        using (paper.Column(id).Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column(id).Height(UnitValue.Auto).Gap(2f).Enter())
         {
             EditorGUI.StatRow(paper, $"{id}_cull", "Cull Face", raster.CullMode.ToString());
             EditorGUI.StatRow(paper, $"{id}_front", "Front Face", raster.FrontFace.ToString());
@@ -223,7 +223,7 @@ public sealed class ProfilerShaderInspector
 
     private static void DrawBlendState(Paper paper, string id, BlendStateDescription blend)
     {
-        using (paper.Column(id).Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column(id).Height(UnitValue.Auto).Gap(2f).Enter())
         {
             EditorGUI.StatRow(paper, $"{id}_factor", "Blend Factor", FormatColor(blend.BlendFactor));
             EditorGUI.StatRow(paper, $"{id}_atoc", "Alpha To Coverage", Enabled(blend.AlphaToCoverageEnabled));
@@ -237,7 +237,7 @@ public sealed class ProfilerShaderInspector
 
     private static void DrawBlendAttachment(Paper paper, string id, int index, BlendAttachmentDescription attachment)
     {
-        using (paper.Column(id).Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column(id).Height(UnitValue.Auto).Gap(2f).Enter())
         {
             Origami.Label(paper, $"{id}_title", $"Attachment {index}")
                 .Subheading()
@@ -260,7 +260,7 @@ public sealed class ProfilerShaderInspector
 
     private static void DrawDepthStencilState(Paper paper, string id, DepthStencilStateDescription ds)
     {
-        using (paper.Column(id).Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column(id).Height(UnitValue.Auto).Gap(2f).Enter())
         {
             EditorGUI.StatRow(paper, $"{id}_dptest", "Depth Test", Enabled(ds.DepthTestEnabled));
             EditorGUI.StatRow(paper, $"{id}_dpwrite", "Depth Write", Enabled(ds.DepthWriteEnabled));
@@ -278,7 +278,7 @@ public sealed class ProfilerShaderInspector
 
     private static void DrawStencilFace(Paper paper, string id, string title, StencilBehaviorDescription behavior)
     {
-        using (paper.Column(id).Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column(id).Height(UnitValue.Auto).Gap(2f).Enter())
         {
             Origami.Label(paper, $"{id}_title", title)
                 .Subheading()

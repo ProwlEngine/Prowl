@@ -18,9 +18,9 @@ public static class ProfilerCommandBufferInspector
             return;
         }
 
-        using (paper.Column("rdp_cb_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
+        using (paper.Column("rdp_cb_viewer").Height(UnitValue.Auto).Gap(InspectorKit.SectionGap).Enter())
         {
-            using (paper.Row("rdp_cb_header").Height(InspectorKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+            using (paper.Row("rdp_cb_header").Height(InspectorKit.SelectionViewerHeaderHeight).Gap(8f).Enter())
             {
                 Origami.Label(paper, "rdp_cb_title", commandBuffer.Name)
                     .Heading()
@@ -60,7 +60,7 @@ public static class ProfilerCommandBufferInspector
 
     private static void DrawRenderOperationsSection(Paper paper, ProfiledView? view, ProfiledCommandBuffer commandBuffer)
     {
-        using (paper.Column("rdp_cb_renderops_col").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_cb_renderops_col").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
             DrawGeometryStats(paper, commandBuffer);
             DrawRenderingStats(paper, commandBuffer);

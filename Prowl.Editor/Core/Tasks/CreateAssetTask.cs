@@ -1,22 +1,24 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.IO;
 
 using Prowl.Echo;
-using Prowl.Editor.GUI.Popups;
-using Prowl.Runtime;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.Theming;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.Core.Tasks;
 
 // TODO: This uses hardcoded asset types? Maybe we should rewrite Creating assets to be a more embedded feature into the Project panel? Rather then an EditorTask
 
+/// <summary> Provides asset creation operations for the Project panel, supporting assets, folders, scripts, and shaders. </summary>
 public class CreateAssetTask : EditorTask
 {
 
+    /// <summary> Specifies the type of asset to create. </summary>
     public enum AssetType
     {
         Asset,
@@ -27,6 +29,7 @@ public class CreateAssetTask : EditorTask
 
     public AssetType TaskType = AssetType.Asset;
 
+    /// <summary> Starts a rename overlay for the specified content item, with optional callbacks for confirmation and cancellation. </summary>
     public void StartRename(ContentItem item, bool inTree = false, Action<string>? onConfirm = null, Action? onCancel = null)
     {
         string id = inTree ? $"proj_folder_{item.RelativePath}" : $"proj_asset_{item.RelativePath}";
@@ -40,6 +43,7 @@ public class CreateAssetTask : EditorTask
         }, onCancel);
     }
 
+    /// <summary> Begins the asset creation workflow: navigates to the target folder, shows a rename overlay, then creates the asset based on TaskType. </summary>
     public async void BeginCreateTask(AssetMenuEntry entry, string relativeFolder)
     {
         var panel = ProjectPanel.Instance;
@@ -88,6 +92,7 @@ public class CreateAssetTask : EditorTask
         }
     }
 
+    /// <summary> Creates a shader file from the embedded template and returns its relative path, or null on failure. </summary>
     public static string? CreateShader(string shaderName, string relativeFolder)
     {
         string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
@@ -103,15 +108,25 @@ public class CreateAssetTask : EditorTask
             return null;
         }
 
-        using (StreamReader reader = new StreamReader(stream))
+        try
         {
-            File.WriteAllText(filePath, reader.ReadToEnd().Replace("{[shaderName]}", shaderName));
-        }
+            using (StreamReader reader = new StreamReader(stream))
+            {
+                File.WriteAllText(filePath, reader.ReadToEnd().Replace("{[shaderName]}", shaderName));
+            }
 
-        EditorAssetBackend.Instance?.InvalidateFolderIndex();
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+            EditorAssetBackend.Instance?.InvalidateFolderIndex();
+            Debug.Log($"Created shader: {name}");
+            return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to create shader '{shaderName}': {ex.Message}");
+            return null;
+        }
     }
 
+    /// <summary> Creates a folder on disk with a meta file and returns its relative path, or null if the parent folder does not exist. </summary>
     public static string? CreateFolder(string folderName, string relativeFolder)
     {
         string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
@@ -143,8 +158,8 @@ public class CreateAssetTask : EditorTask
         {
             var instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
             var echo = Serializer.Serialize(typeof(object), instance);
-            if (echo != null)
-                File.WriteAllText(filePath, echo.WriteToString());
+            if (echo == null) return null;
+            File.WriteAllText(filePath, echo.WriteToString());
 
             EditorAssetBackend.Instance?.InvalidateFolderIndex();
             Debug.Log($"Created {entry.Name}: {name}");

@@ -103,7 +103,7 @@ public partial class RenderProfilerPanel : DockPanel
         using (paper.Row("rdp_toolbar")
             .Height(ToolbarHeight)
             .Padding(6)
-            .RowBetween(6)
+            .Gap(6)
             .Enter())
         {
             Origami.IconButton(paper, "record", EditorIcons.CircleDot_I, TogglePaused)

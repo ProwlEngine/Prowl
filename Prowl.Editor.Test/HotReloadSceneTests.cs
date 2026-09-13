@@ -150,7 +150,7 @@ public class HotReloadSceneTests : EditorTestHarness
             {
                 options.AssemblyBytes = AssemblyBytesResolver;
 
-                foreach (var prefix in new[] { "Silk.NET", "Jitter2", "Magick.NET" })
+                foreach (var prefix in new[] { "Silk.NET", "Jitter2" })
                     options.Scope.ExcludePrefix(prefix);
 
                 options.Scope.Include(typeof(GameObject).Assembly);                          // Prowl.Runtime

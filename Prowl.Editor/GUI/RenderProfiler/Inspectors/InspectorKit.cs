@@ -121,7 +121,7 @@ public static class InspectorKit
 
     public static void StatGroup(Paper paper, string id, string title, params (string Label, string Value)[] stats)
     {
-        using (paper.Column(id + "_group").Height(UnitValue.Auto).ColBetween(4f).Enter())
+        using (paper.Column(id + "_group").Height(UnitValue.Auto).Gap(4f).Enter())
         {
             Origami.Label(paper, id + "_title", title)
                 .SM()
@@ -130,7 +130,7 @@ public static class InspectorKit
                 .Height(ChartTitleHeight)
                 .Show();
 
-            using (paper.Row(id + "_tiles").Height(UnitValue.Auto).RowBetween(8f).Enter())
+            using (paper.Row(id + "_tiles").Height(UnitValue.Auto).Gap(8f).Enter())
             {
                 for (int i = 0; i < stats.Length; i++)
                     StatTile(paper, $"{id}_t{i}", stats[i].Label, stats[i].Value);
@@ -147,7 +147,7 @@ public static class InspectorKit
             .BorderWidth(1f)
             .Rounded(EditorTheme.Roundness)
             .Padding(8f, 6f)
-            .ColBetween(2f)
+            .Gap(2f)
             .Enter())
         {
             Origami.Label(paper, id + "_val", value)

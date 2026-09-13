@@ -16,9 +16,12 @@ namespace Prowl.Editor.GUI.Popups;
 /// </summary>
 public static class RenameOverlay
 {
+    /// <summary> Specifies whether the rename field appears at the top or bottom of the item. </summary>
     public enum Position
     {
+        /// <summary> The rename field appears at the top of the item. </summary>
         Top,
+        /// <summary> The rename field appears at the bottom of the item. </summary>
         Bottom
     }
 
@@ -28,8 +31,10 @@ public static class RenameOverlay
     private static Action? _onCancel;
     private static string? _activeId;
 
+    /// <summary> Whether a rename operation is currently active. </summary>
     public static bool IsActive => _active;
 
+    /// <summary> Begins a rename operation for the given item. onConfirm is called with the final text when confirmed; onCancel is called when cancelled or when blank input is confirmed. </summary>
     public static void Begin(string itemId, string initialText, Action<string> onConfirm, Action? onCancel = null)
     {
         _active = true;
@@ -39,6 +44,7 @@ public static class RenameOverlay
         _onCancel = onCancel;
     }
 
+    /// <summary> Cancels the active rename operation and invokes the onCancel callback. </summary>
     public static void Cancel()
     {
         if (!_active) return;
@@ -64,6 +70,7 @@ public static class RenameOverlay
         _activeId = null;
     }
 
+    /// <summary> Returns true if a rename operation is active and targets the specified itemId. </summary>
     public static bool IsRenaming(string itemId) => _active && _activeId == itemId;
 
     /// <summary>

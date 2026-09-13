@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using ImageMagick;
 
 using Prowl.Editor.Build;
 using Prowl.Editor.Importers;
@@ -31,12 +30,7 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
         EditorRegistries.OnProjectOpened();
 
         string pngPath = AssetAbsolutePath("PersistTexture.png");
-        var color = new MagickColor(R, G, B, A);
-        using (var image = new MagickImage(color, TexSize, TexSize))
-        {
-            image.Format = MagickFormat.Png;
-            image.Write(pngPath);
-        }
+        TestImages.WriteSolidPng(pngPath, TexSize, R, G, B, A);
         Guid texGuid = Assets.ImportFile("PersistTexture.png");
         Assert.NotEqual(Guid.Empty, texGuid);
 
@@ -84,9 +78,9 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
                 {
                     MySprite.EnsureLoaded();
                     var sprite = MySprite.Res;
-                    sprite?.Texture.EnsureLoaded();
-                    var tex = sprite?.Texture.Res;
-                    System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={tex.IsValid()}|width={tex?.Width}|height={tex?.Height}");
+                    if (sprite.IsValid()) sprite.Texture.EnsureLoaded();
+                    var tex = sprite.IsValid() ? sprite.Texture.Res : null;
+                    System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={tex.IsValid()}|width={(tex.IsValid() ? tex.Width : 0)}|height={(tex.IsValid() ? tex.Height : 0)}");
                 }
             }
             """);

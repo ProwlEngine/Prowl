@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 using Prowl.Runtime.Resources;
 
 using Xunit;
@@ -23,6 +25,15 @@ public sealed class PhysicsListener : MonoBehaviour
     public override void OnTriggerEnter(Rigidbody3D other) => Enters++;
     public override void OnTriggerStay(Rigidbody3D other) => Stays++;
     public override void OnTriggerExit(Rigidbody3D other) => Exits++;
+}
+
+/// <summary>Throws from every per-frame callback, standing in for any user script that misbehaves.</summary>
+public sealed class ThrowingTick : MonoBehaviour
+{
+    public override void Start() => throw new InvalidOperationException("start");
+    public override void Update() => throw new InvalidOperationException("update");
+    public override void LateUpdate() => throw new InvalidOperationException("late");
+    public override void FixedUpdate() => throw new InvalidOperationException("fixed");
 }
 
 /// <summary>Overrides nothing the per-frame loops dispatch, so it is never registered for ticking.</summary>
@@ -63,6 +74,39 @@ public class SceneDispatcherTests : RuntimeTestBase
         var scene = CreateScene(enable: true);
         var go = CreateGameObject();
         return (scene, go);
+    }
+
+    /// <summary>
+    /// A component throwing out of a lifecycle callback is a user script bug, not an engine one. It
+    /// must be reported and stepped over, the way the render and gizmo callbacks already are, rather
+    /// than unwinding into the frame loop, which rethrows and takes the editor down.
+    /// </summary>
+    [Fact]
+    public void AThrowingCallback_IsContainedRatherThanUnwinding()
+    {
+        var (scene, go) = NewSceneGo();
+        go.AddComponent<ThrowingTick>();
+        scene.Add(go);
+
+        Update(scene);
+        StepPhysics(scene);
+    }
+
+    /// <summary>The components either side of a throwing one still get their callbacks.</summary>
+    [Fact]
+    public void AThrowingCallback_DoesNotStopTheComponentsAroundIt()
+    {
+        TickLog.Entries.Clear();
+
+        var (scene, go) = NewSceneGo();
+        var a = go.AddComponent<TagTick>(); a.Mark = "a";
+        go.AddComponent<ThrowingTick>();
+        var c = go.AddComponent<TagTick>(); c.Mark = "c";
+        scene.Add(go);
+
+        Update(scene);
+
+        Assert.Equal(new[] { "a", "c" }, TickLog.Entries);
     }
 
     // Unregistering moves the array's tail into the hole, so ordering has to come from the registration

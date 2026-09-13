@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Reflection;
 
@@ -13,9 +13,9 @@ using Prowl.Quill;
 using Prowl.Rosetta;
 using Prowl.Vector;
 
-using Color = System.Drawing.Color;
-
 using static Prowl.Editor.GUI.EditorGUI;
+
+using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI;
 
@@ -25,6 +25,7 @@ namespace Prowl.Editor.GUI;
 /// </summary>
 public static class ProjectLauncher
 {
+    /// <summary> Gets whether the project launcher is currently open. </summary>
     public static bool IsOpen { get; private set; } = true;
 
     private static string _newProjectName = "Untitled";
@@ -83,6 +84,7 @@ public static class ProjectLauncher
     private static int _tipIndex;
     private static float _tipTimer;
 
+    /// <summary> Sets the default new-project path and resets the launcher to its initial state. </summary>
     public static void Initialize()
     {
         _newProjectPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Prowl Projects");
@@ -99,11 +101,13 @@ public static class ProjectLauncher
         _tipTimer = 0;
     }
 
+    /// <summary> Closes the project launcher. </summary>
     public static void Close()
     {
         IsOpen = false;
     }
 
+    /// <summary> Draws the project launcher window and its contents. Has no effect if IsOpen is false and forceDraw is false. </summary>
     public static void Draw(Paper paper, float dt, bool forceDraw = false)
     {
         if (!IsOpen && !forceDraw) return;
@@ -374,9 +378,13 @@ public static class ProjectLauncher
                     Loc.Get("launcher.delete_confirm_body", new { name = entry.Name }),
                     () =>
                     {
-                        try { if (Directory.Exists(entry.Path)) Directory.Delete(entry.Path, true); }
+                        try
+                        {
+                            if (Directory.Exists(entry.Path))
+                                Directory.Delete(entry.Path, true);
+                            RecentProjects.Remove(entry.Path);
+                        }
                         catch (Exception ex) { Runtime.Debug.LogError($"Failed to delete project: {ex.Message}"); }
-                        RecentProjects.Remove(entry.Path);
                     }), icon: EditorIcons.Trash, danger: true);
             }
         });
@@ -581,9 +589,9 @@ public static class ProjectLauncher
             .PositionType(PositionType.SelfDirected)
             .Position(0, y)
             .Size(w, stripHeight)
-            .ChildLeft(UnitValue.StretchOne)
-            .ChildRight(UnitValue.StretchOne)
-            .RowBetween(6)
+            .JustifyContent(LayoutJustification.Center)
+
+            .Gap(6)
             .OnClick(_ => AdvanceTip())
             .Enter())
         {

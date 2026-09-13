@@ -165,15 +165,7 @@ public static class GameObjectClipboard
         return results;
     }
 
-    /// <summary>
-    /// Filter a selection to only include root-level objects whose ancestors are
-    /// NOT also in the selection. This prevents duplicating a child that's already
-    /// included inside a selected parent's hierarchy.
-    /// </summary>
-    /// <summary>
-    /// Drop any GameObject that already has an ancestor in the set, so an operation applied to a
-    /// selection runs once per subtree rather than once per selected object.
-    /// </summary>
+    /// <summary> Filters out GameObjects that have an ancestor also in the set, so an operation runs once per subtree rather than once per selected object. </summary>
     public static List<GameObject> FilterToRoots(IEnumerable<GameObject> gameObjects)
     {
         var set = new HashSet<GameObject>(gameObjects);

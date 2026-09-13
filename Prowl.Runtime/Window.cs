@@ -151,18 +151,6 @@ public static class Window
         set { InternalWindow.IsVisible = value; }
     }
 
-    public static bool VSync
-    {
-        get { return Graphics.Device.SyncToVerticalBlank; }
-        set { Graphics.Device.SyncToVerticalBlank = value; }
-    }
-
-    public static float FramesPerSecond
-    {
-        get { return (float)InternalWindow.FramesPerSecond; }
-        set { InternalWindow.FramesPerSecond = value; InternalWindow.UpdatesPerSecond = value; }
-    }
-
     public static nint Handle
     {
         get { return InternalWindow.Handle; }
@@ -176,7 +164,7 @@ public static class Window
         get { return isFocused; }
     }
 
-    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool VSync = true)
+    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool vsync = false)
     {
         MoltenVKMacWorkaround(Backend);
 
@@ -184,7 +172,8 @@ public static class Window
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
-        options.VSync = VSync;
+        options.VSync = vsync;
+        Application.VSync = vsync;
         options.API = SilkApiFor(Backend);
         // Update / Render are driven manually from MainLoop, and SwapBuffers is called
         // explicitly after EndFrame, so Silk must not swap on its own.
@@ -196,7 +185,7 @@ public static class Window
             Debug = true,
             EnableValidation = true,
             SwapchainDepthFormat = Graphite.PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = VSync,
+            SyncToVerticalBlank = Application.VSync,
             PreferStandardClipSpaceYDirection = true,
             PreferDepthRangeZeroToOne = true,
         };
@@ -288,6 +277,8 @@ public static class Window
             Render?.Invoke(delta);
             FrameEnd?.Invoke();
             PostRender?.Invoke(delta);
+
+            Application.WaitForNextFrame();
         }
     }
 
@@ -346,6 +337,8 @@ public static class Window
         // Stop background asset loading first so no load runs during teardown (it would
         // otherwise race scene unload and try to submit GPU work after the render thread exits).
         AssetLoader.Stop();
+        Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
+
         Closing?.Invoke();
         WindowInputHandler.Dispose();
         Graphics.Device?.Dispose();

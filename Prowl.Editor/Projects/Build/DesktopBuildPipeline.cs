@@ -5,9 +5,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security;
 using System.Text;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,9 +15,8 @@ using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
-using Prowl.Runtime;
-
 using Prowl.Editor.Utils;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;
 
@@ -77,6 +76,7 @@ public class DesktopBuildPipeline : BuildPipeline
     private sealed record CopiedAssemblies(List<string> FileNames);
     private sealed record PackagedAssets(int Count);
 
+    /// <summary> Builds the project for the configured desktop target, running all stages from validation through finalization, and returns the build result including output path, errors, and duration. </summary>
     public override async Task<BuildResult> BuildAsync(
         string projectPath,
         BuildSettings settings,
@@ -725,7 +725,7 @@ public class DesktopBuildPipeline : BuildPipeline
         var plan = context.GetOutput<DesktopPlan>();
 
         // Engine-custom natives (e.g. miniaudioex) that NuGet does not provide. The NuGet ones
-        // (glfw3, soft_oal, Magick.Native) are already handled by dotnet publish.
+        // (glfw3, soft_oal) are already handled by dotnet publish.
         context.Log("Copying native libraries...");
         CopyEngineNatives(plan.OutputDirectory, plan.Profile.Target, ct);
 
@@ -923,6 +923,7 @@ public class DesktopBuildPipeline : BuildPipeline
         return resources;
     }
 
+    /// <summary> Appends MSBuild PackageReference items for the runtime's NuGet dependencies to the given StringBuilder, reading package metadata embedded in the compiled runtime assembly. </summary>
     public void ListDependencies(StringBuilder sb)
     {
         // Read PackageReferences from assembly metadata embedded by the MSBuild

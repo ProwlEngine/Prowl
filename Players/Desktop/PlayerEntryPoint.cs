@@ -65,7 +65,7 @@ public static class PlayerEntryPoint
                     break;
 
                 case "--fps" when int.TryParse(args[i + 1], out int fps):
-                    options.TargetFps = fps;
+                    options.TargetFrameRate = fps;
                     break;
             }
         }

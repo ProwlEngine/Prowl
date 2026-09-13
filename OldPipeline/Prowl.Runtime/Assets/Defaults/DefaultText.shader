@@ -81,7 +81,11 @@ Pass "DefaultText"
 			float sdfScreenPxRange(vec2 uv) {
 				vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(_MainTex, 0));
 				vec2 screenTexSize = vec2(1.0) / fwidth(uv);
-				return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+				// Per axis, then the smaller of the two. A glyph is scaled evenly so both agree, but
+				// an underline is stretched far along X and barely at all along Y, and it is the Y
+				// edges that carry the gradient. Averaging the two would harden them to a step.
+				vec2 range = unitRange * screenTexSize;
+				return max(min(range.x, range.y), 1.0);
 			}
 
 			void main()

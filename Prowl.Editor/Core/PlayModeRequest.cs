@@ -4,15 +4,10 @@
 namespace Prowl.Editor;
 
 /// <summary>
-/// A request to start or stop play mode, handed to every subscriber of
-/// <see cref="EditorApplication.PlayModeRequested"/> before anything happens.
+/// A request to start or stop play mode, handed to every subscriber of EditorApplication.PlayModeRequested before anything happens.
+/// 
+/// A handler that needs user input before the transition can proceed (for example, because of unapplied asset edits) calls Defer and is responsible for re-issuing the request once the user has decided. Re-issuing runs the request through the same path, avoiding the need for a stored continuation.
 /// </summary>
-/// <remarks>
-/// A handler holding work the user has to decide about first, unapplied asset edits being the case
-/// this exists for, calls <see cref="Defer"/> and owns asking again once they have decided. Deciding
-/// is what re-runs the request, so the transition happens through the same path either way rather
-/// than through a stored continuation that has to be kept correct.
-/// </remarks>
 public sealed class PlayModeRequest
 {
     internal PlayModeRequest(bool entering) => Entering = entering;

@@ -42,9 +42,9 @@ public sealed class ProfilerViewInspector
             return;
         }
 
-        using (paper.Column("rdp_view_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
+        using (paper.Column("rdp_view_viewer").Height(UnitValue.Auto).Gap(InspectorKit.SectionGap).Enter())
         {
-            using (paper.Row("rdp_view_header").Height(InspectorKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+            using (paper.Row("rdp_view_header").Height(InspectorKit.SelectionViewerHeaderHeight).Gap(8f).Enter())
             {
                 Origami.Label(paper, "rdp_view_title", view.Name)
                     .Heading()
@@ -93,7 +93,7 @@ public sealed class ProfilerViewInspector
 
     private static void DrawViewRenderOperationsSection(Paper paper, ProfiledView view, IProfilerHistory history)
     {
-        using (paper.Column("rdp_vv_renderops_col").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_vv_renderops_col").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
             DrawViewGeometryChart(paper, view.Name, history);
             DrawViewRenderingChart(paper, view.Name, history);
@@ -123,7 +123,7 @@ public sealed class ProfilerViewInspector
     // rides along as a stat readout next to the chart title instead of its own series.
     private static void DrawViewPixelProcessingChart(Paper paper, ProfiledView view, IProfilerHistory history)
     {
-        using (paper.Column("rdp_vv_pixelproc").Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (paper.Column("rdp_vv_pixelproc").Height(UnitValue.Auto).Gap(2f).Enter())
         {
             using (paper.Row("rdp_vv_pixelproc_stat_row").Height(16f).Enter())
             {

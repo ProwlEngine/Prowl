@@ -21,9 +21,12 @@ public class PlatformBuildProfile
     /// </summary>
     public List<string> ScriptingDefineSymbols { get; set; } = [];
 
+    /// <summary> Returns the type of build pipeline used for this platform, or null if none is configured. </summary>
     public virtual Type? GetPipelineType() => null;
 
+    /// <summary> Resets all profile properties to their default values. </summary>
     public virtual void ToDefault() { }
 
+    /// <summary> Adds platform-specific scripting define symbols to the given list. </summary>
     public virtual void ModifyDefines(List<string> defines) { }
 }

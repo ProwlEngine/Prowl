@@ -6,14 +6,13 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Editor.GUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
-
-using Prowl.Editor.GUI;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>

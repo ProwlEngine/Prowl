@@ -6,7 +6,6 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Theming;
@@ -17,6 +16,8 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
@@ -195,7 +196,7 @@ public class EnvironmentPanel : DockPanel
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         var s = scene.LightmapBake;
-        void Touch() => EditorSceneManager.MarkDirty();
+        void Touch() { scene.LightmapBake = s; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 
@@ -238,7 +239,7 @@ public class EnvironmentPanel : DockPanel
 
         using (paper.Column($"{id}_card").Height(UnitValue.Auto).Margin(m.PaddingLarge, m.PaddingLarge, 16, 0)
             .Padding(12, 12, 12, 12).Rounded(9).BackgroundColor(EditorTheme.Glass)
-            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).ColBetween(10).Enter())
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Gap(10).Enter())
         {
             if (baking)
             {
@@ -250,7 +251,7 @@ public class EnvironmentPanel : DockPanel
             }
             else
             {
-                using (paper.Row($"{id}_info").Height(UnitValue.Auto).MinHeight(18).RowBetween(8).Enter())
+                using (paper.Row($"{id}_info").Height(UnitValue.Auto).MinHeight(18).Gap(8).Enter())
                 {
                     paper.Box($"{id}_info_i").Width(14).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Text(hasBaked ? EditorIcons.Check : EditorIcons.Sun, font)
@@ -261,7 +262,7 @@ public class EnvironmentPanel : DockPanel
                         .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 }
 
-                using (paper.Row($"{id}_btns").Height(34).RowBetween(8).Enter())
+                using (paper.Row($"{id}_btns").Height(34).Gap(8).Enter())
                 {
                     EditorGUI.CtaButton(paper, $"{id}_bake", $"{EditorIcons.Sun}  {Loc.Get("env.generate_lighting")}", EditorTheme.Accent,
                         () =>

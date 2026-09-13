@@ -46,6 +46,7 @@ public static partial class PrefabUtility
         {
             if (_field != null) _field.SetValue(target, value);
             else if (_property!.CanWrite) _property.SetValue(target, value);
+            else throw new InvalidOperationException($"Property '{_property.Name}' is read-only and cannot be overridden.");
         }
 
         public static Member Find(object target, string name)
@@ -126,7 +127,7 @@ public static partial class PrefabUtility
 
         foreach (GameObject child in root.Children)
         {
-            if (child.IsPrefabInstance && child.PrefabAssetId != boundaryPrefabId) continue;
+            if (IsSeparateInstance(child, boundaryPrefabId)) continue;
 
             GameObject? found = FindBySourceIdentifier(child, sourceId, boundaryPrefabId);
             if (found != null) return found;

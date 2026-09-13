@@ -31,6 +31,7 @@ public sealed class EditorGlyphIcon : IOrigamiIcon
     private readonly float _scale;
     private readonly GlyphWeight _weight;
 
+    /// <summary> Initializes a new EditorGlyphIcon with the specified glyph character, scale factor (clamped to a minimum of 0.05), and Font Awesome weight. </summary>
     public EditorGlyphIcon(string glyph, float scale = 0.82f, GlyphWeight weight = GlyphWeight.Auto)
     {
         _glyph = glyph ?? string.Empty;
@@ -38,6 +39,7 @@ public sealed class EditorGlyphIcon : IOrigamiIcon
         _weight = weight;
     }
 
+    /// <summary> Draws the glyph centered within the specified rectangle, using the configured font weight and scale. </summary>
     public void Draw(Canvas canvas, Rect rect, Color color, float strokeWidth = 1.5f)
     {
         var font = _weight switch

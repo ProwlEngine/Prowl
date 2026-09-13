@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -129,6 +129,7 @@ public sealed class HandleContext
     //  Lifecycle
     // ================================================================
 
+    /// <summary> Resolve the previous frame's registered controls, set all frame state (camera, viewport, mouse, input), and begin the deferred draw list for this frame. </summary>
     public void BeginFrame(Camera camera, Rect viewportAbsolute, Float2 mouseLocal, bool viewportHovered)
     {
         // Resolve everything registered since the last BeginFrame, then start a fresh accumulator.
@@ -213,7 +214,7 @@ public sealed class HandleContext
         {
             float delta = screenDistance - _pendingDistance;
             bool wins = delta < -DepthTieBandPixels    // clearly nearer the cursor
-                || (delta <= DepthTieBandPixels && depth <= _pendingDepth); // overlapping: in front wins
+                            || (MathF.Abs(delta) <= DepthTieBandPixels && depth <= _pendingDepth); // overlapping: in front wins
             if (!wins) return;
         }
 

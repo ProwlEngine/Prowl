@@ -25,7 +25,7 @@ public static class ProfilerFrameInspector
             return;
         }
 
-        using (paper.Column("rdp_frame_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
+        using (paper.Column("rdp_frame_viewer").Height(UnitValue.Auto).Gap(InspectorKit.SectionGap).Enter())
         {
             using (paper.Row("rdp_frame_header").Height(InspectorKit.SelectionViewerHeaderHeight).Enter())
             {
@@ -61,7 +61,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawRenderOperationsSection(Paper paper, IProfilerHistory history)
     {
-        using (paper.Column("rdp_fv_renderops").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_fv_renderops").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
             DrawGeometryChart(paper, "rdp_fv_geometry_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
             DrawRenderingChart(paper, "rdp_fv_rendering_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
@@ -72,11 +72,11 @@ public static class ProfilerFrameInspector
 
     private static void DrawResidentMemorySection(Paper paper, ProfiledFrame frame, IProfilerHistory history)
     {
-        using (paper.Column("rdp_fv_resmem").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_fv_resmem").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
-            using (paper.Row("rdp_fv_resmem_row").Height(UnitValue.Auto).RowBetween(8f).Enter())
+            using (paper.Row("rdp_fv_resmem_row").Height(UnitValue.Auto).Gap(8f).Enter())
             {
-                using (paper.Column("rdp_fv_resmem_left").Width(InspectorKit.VramColumnWidth).Height(UnitValue.Auto).ColBetween(6f).Enter())
+                using (paper.Column("rdp_fv_resmem_left").Width(InspectorKit.VramColumnWidth).Height(UnitValue.Auto).Gap(6f).Enter())
                 {
                     DrawVramDonut(paper, "rdp_fv_vram_chart", InspectorKit.VramColumnWidth, frame);
 
@@ -90,7 +90,7 @@ public static class ProfilerFrameInspector
                     DrawUsageLegend(paper, "rdp_fv_usage_legend", frame);
                 }
 
-                using (paper.Column("rdp_fv_resmem_right").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+                using (paper.Column("rdp_fv_resmem_right").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
                 {
                     DrawUsageChart(paper, "rdp_fv_usage_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
                     DrawBufferUsageChart(paper, "rdp_fv_bufferusage_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
@@ -135,7 +135,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawBufferOperationsSection(Paper paper, IProfilerHistory history)
     {
-        using (paper.Column("rdp_fv_bufferops").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_fv_bufferops").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
             DrawBufferOpsCountChart(paper, "rdp_fv_bufferops_count_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
             DrawBufferOpsBytesChart(paper, "rdp_fv_bufferops_bytes_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
@@ -145,7 +145,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawSwapchainSection(Paper paper, IProfilerHistory history)
     {
-        using (paper.Column("rdp_fv_swapchain").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_fv_swapchain").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
             DrawSwapchainOpsChart(paper, "rdp_fv_swap_ops_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
         }
@@ -154,7 +154,7 @@ public static class ProfilerFrameInspector
 
     private static void DrawBarriersSection(Paper paper, IProfilerHistory history)
     {
-        using (paper.Column("rdp_fv_barriers").Height(UnitValue.Auto).ColBetween(InspectorKit.ChartRowGap).Enter())
+        using (paper.Column("rdp_fv_barriers").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
         {
             DrawBarrierOpsChart(paper, "rdp_fv_barrier_ops_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
         }

@@ -1561,6 +1561,214 @@ public class AudioTests : RuntimeTestBase
         Assert.Same(music, mixer.FindGroup("Music"));
     }
 
+    // A snapshot is the mixer as it was, so it has to hold what a mix actually consists of: the levels,
+    // the mutes, and the effect parameters, and putting it back has to restore all of it.
+    [Fact]
+    public void Snapshot_RecordsAndRestoresTheWholeMix()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        var filter = new FilterEffect { Type = FilterType.Lowpass, Frequency = 8000f };
+        music.AddEffect(filter);
+
+        music.VolumeDB = -6f;
+
+        AudioMixerSnapshot normal = mixer.CaptureSnapshot("Normal");
+
+        // What going underwater does to it.
+        music.VolumeDB = -20f;
+        music.Mute = true;
+        filter.Frequency = 400f;
+
+        AudioMixerSnapshot underwater = mixer.CaptureSnapshot("Underwater");
+
+        mixer.ApplySnapshot(normal);
+
+        Assert.Equal(-6f, music.VolumeDB);
+        Assert.False(music.Mute);
+        Assert.Equal(8000f, filter.Frequency);
+        Assert.Same(normal, mixer.ActiveSnapshot);
+
+        mixer.ApplySnapshot(underwater);
+
+        Assert.Equal(-20f, music.VolumeDB);
+        Assert.True(music.Mute);
+        Assert.Equal(400f, filter.Frequency);
+    }
+
+    // A bus is recorded by identity, so a snapshot keeps pointing at the same bus after a rename, the
+    // same way a source's output reference does.
+    [Fact]
+    public void Snapshot_FollowsABusThroughARename()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        music.VolumeDB = -12f;
+
+        AudioMixerSnapshot snapshot = mixer.CaptureSnapshot("Quiet");
+
+        music.GroupName = "Background Music";
+        music.VolumeDB = 0f;
+
+        mixer.ApplySnapshot(snapshot);
+
+        Assert.Equal(-12f, music.VolumeDB);
+    }
+
+    // The recorded mixes are part of the asset, or they would have to be rebuilt every session.
+    [Fact]
+    public void Snapshots_RoundTripWithTheMixer()
+    {
+        var mixer = new AudioMixer();
+        mixer.AddGroup("Music").VolumeDB = -9f;
+        mixer.CaptureSnapshot("Quiet");
+
+        var restored = Serializer.Deserialize<AudioMixer>(Serializer.Serialize(mixer))!;
+
+        Assert.Single(restored.Snapshots);
+
+        AudioMixerSnapshot snapshot = restored.FindSnapshot("Quiet")!;
+        AudioMixerGroup music = restored.FindGroup("Music")!;
+
+        music.VolumeDB = 0f;
+        restored.ApplySnapshot(snapshot);
+
+        Assert.Equal(-9f, music.VolumeDB);
+    }
+
+    // Moving to a snapshot over a duration has to pass through the values in between, and arrive.
+    [Fact]
+    public void TransitionTo_EasesTheMixAcrossAndArrives()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+
+        music.VolumeDB = 0f;
+        AudioMixerSnapshot loud = mixer.CaptureSnapshot("Loud");
+
+        music.VolumeDB = -20f;
+        AudioMixerSnapshot quiet = mixer.CaptureSnapshot("Quiet");
+
+        mixer.ApplySnapshot(loud);
+        Assert.Equal(0f, music.VolumeDB);
+
+        mixer.TransitionTo(quiet, 1f);
+
+        Assert.True(mixer.IsTransitioning);
+        Assert.Same(quiet, mixer.ActiveSnapshot);
+
+        // Nothing has moved until time passes, and the first tick has nothing to measure against.
+        AudioMixer.TickTransitions();
+        Assert.Equal(0f, music.VolumeDB);
+
+        System.Threading.Thread.Sleep(120);
+        AudioMixer.TickTransitions();
+
+        Assert.True(music.VolumeDB < 0f, "the transition never started moving");
+        Assert.True(music.VolumeDB > -20f, "the transition jumped straight to the end");
+
+        // And it finishes rather than easing forever.
+        System.Threading.Thread.Sleep(1100);
+        AudioMixer.TickTransitions();
+
+        Assert.Equal(-20f, music.VolumeDB, 3);
+        Assert.False(mixer.IsTransitioning);
+    }
+
+    // A transition with no time to run in is the same request as putting the mixer there.
+    [Fact]
+    public void TransitionTo_WithNoDuration_LandsAtOnce()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+
+        music.VolumeDB = -30f;
+        AudioMixerSnapshot quiet = mixer.CaptureSnapshot("Quiet");
+
+        music.VolumeDB = 0f;
+        mixer.TransitionTo(quiet, 0f);
+
+        Assert.Equal(-30f, music.VolumeDB);
+        Assert.False(mixer.IsTransitioning);
+    }
+
+    // Soloing a bus has to leave the path it takes to the output audible, or soloing a child would
+    // silence the master it feeds and you would hear nothing at all.
+    [Fact]
+    public void Solo_KeepsTheSoloedBusAndThePathToTheOutput()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup master = mixer.Master;
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        AudioMixerGroup drums = mixer.AddGroup("Drums", music);
+        AudioMixerGroup sfx = mixer.AddGroup("SFX");
+
+        Assert.False(mixer.AnySolo);
+        Assert.False(master.SilencedBySolo);
+
+        music.Solo = true;
+
+        Assert.True(mixer.AnySolo);
+
+        // The soloed bus, what it feeds, and what feeds it all stay audible.
+        Assert.False(music.SilencedBySolo);
+        Assert.False(master.SilencedBySolo);
+        Assert.False(drums.SilencedBySolo);
+
+        // Anything off that path does not.
+        Assert.True(sfx.SilencedBySolo);
+
+        mixer.ClearSolo();
+
+        Assert.False(mixer.AnySolo);
+        Assert.False(sfx.SilencedBySolo);
+    }
+
+    // Soloing is a way of listening, not a property of the mix, so a project that opened with a bus
+    // soloed would be a mystery with no visible cause.
+    [Fact]
+    public void Solo_IsNotSaved()
+    {
+        var mixer = new AudioMixer();
+        mixer.AddGroup("Music").Solo = true;
+
+        var restored = Serializer.Deserialize<AudioMixer>(Serializer.Serialize(mixer))!;
+
+        Assert.False(restored.AnySolo);
+        Assert.False(restored.FindGroup("Music")!.Solo);
+    }
+
+    // Moving a bus is the one edit that can describe a loop, and a loop is a graph where each bus
+    // waits on the next one forever.
+    [Fact]
+    public void SetParent_MovesABusAndRefusesALoop()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup master = mixer.Master;
+        AudioMixerGroup music = mixer.AddGroup("Music");
+        AudioMixerGroup drums = mixer.AddGroup("Drums", music);
+
+        Assert.True(music.IsAncestorOf(drums));
+        Assert.False(drums.IsAncestorOf(music));
+
+        // Out of Music, straight to the master.
+        Assert.True(mixer.SetParent(drums, master));
+        Assert.Same(master, drums.Parent);
+        Assert.False(music.IsAncestorOf(drums));
+
+        // And back again.
+        Assert.True(mixer.SetParent(drums, music));
+        Assert.Same(music, drums.Parent);
+
+        // Music already feeds into Drums, so this would be a loop.
+        Assert.False(mixer.SetParent(music, drums));
+        Assert.Same(master, music.Parent);
+
+        // A bus cannot feed itself either, and the master has nowhere else to go.
+        Assert.False(mixer.SetParent(music, music));
+        Assert.False(mixer.SetParent(master, music));
+    }
+
     // Removing a bus must not orphan what fed into it, or those sources go silent rather than moving
     // up to the parent bus.
     [Fact]

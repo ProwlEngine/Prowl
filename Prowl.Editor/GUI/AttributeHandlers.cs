@@ -252,7 +252,7 @@ public class TextAreaAttributeHandler : OrigamiUI.AttributeHandler
         var m = theme.Metrics;
 
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
-            .RowBetween(m.SpacingMedium).Margin(0, 0, 0, m.SpacingSmall).Enter())
+            .Gap(m.SpacingMedium).Margin(0, 0, 0, m.SpacingSmall).Enter())
         {
             var font = theme.Font;
             var ink = theme.Ink;

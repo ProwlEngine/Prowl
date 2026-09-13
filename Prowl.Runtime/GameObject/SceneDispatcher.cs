@@ -291,7 +291,9 @@ internal sealed class SceneDispatcher
             MonoBehaviour c = items[i];
             if (c.IsDisposed || c.HasStarted || !c.EnabledInHierarchy) continue;
 
-            c.InternalStart();
+            try { c.InternalStart(); }
+            catch (Exception ex) { Report(c, nameof(MonoBehaviour.Start), ex); }
+
             anyStarted |= c.HasStarted;
         }
 
@@ -306,7 +308,10 @@ internal sealed class SceneDispatcher
         for (int i = 0; i < count; i++)
         {
             MonoBehaviour c = items[i];
-            if (!c.IsDisposed && c.EnabledInHierarchy) c.InternalUpdate();
+            if (c.IsDisposed || !c.EnabledInHierarchy) continue;
+
+            try { c.InternalUpdate(); }
+            catch (Exception ex) { Report(c, nameof(MonoBehaviour.Update), ex); }
         }
     }
 
@@ -316,7 +321,10 @@ internal sealed class SceneDispatcher
         for (int i = 0; i < count; i++)
         {
             MonoBehaviour c = items[i];
-            if (!c.IsDisposed && c.EnabledInHierarchy) c.InternalLateUpdate();
+            if (c.IsDisposed || !c.EnabledInHierarchy) continue;
+
+            try { c.InternalLateUpdate(); }
+            catch (Exception ex) { Report(c, nameof(MonoBehaviour.LateUpdate), ex); }
         }
     }
 
@@ -326,7 +334,10 @@ internal sealed class SceneDispatcher
         for (int i = 0; i < count; i++)
         {
             MonoBehaviour c = items[i];
-            if (!c.IsDisposed && c.EnabledInHierarchy) c.InternalFixedUpdate();
+            if (c.IsDisposed || !c.EnabledInHierarchy) continue;
+
+            try { c.InternalFixedUpdate(); }
+            catch (Exception ex) { Report(c, nameof(MonoBehaviour.FixedUpdate), ex); }
         }
     }
 

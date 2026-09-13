@@ -14,13 +14,14 @@ using ShaderProperty = Prowl.Runtime.Rendering.Shaders.ShaderProperty;
 
 namespace Prowl.Editor.Importers;
 
-
+/// <summary> Imports .shader files into runtime Shader assets, parsing GLSL source and resolving #include directives. </summary>
 [ImporterFor(".shader")]
 public class ShaderImporter : AssetImporter
 {
     public override int Version => 4; // Bumped: on-demand compilation setting
 
 
+    /// <summary> Parses the shader source file, resolves #include directives from the file directory, Assets root, and built-in engine defaults, then sets the resulting Shader as the main asset. </summary>
     public override bool Import(ImportContext ctx)
     {
         string source = File.ReadAllText(ctx.AbsolutePath);

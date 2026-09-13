@@ -132,6 +132,7 @@ public sealed class BuildProgress
         Interlocked.Exchange(ref _state, StateComplete);
     }
 
+    /// <summary> Returns all log messages concatenated, one per line. </summary>
     public override string ToString()
     {
         var sb = new StringBuilder();

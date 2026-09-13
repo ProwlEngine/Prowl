@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Prowl.Editor.Build;
 
-/// <summary>One stage and what has to finish before it may start.</summary>
+/// <summary> One stage and what has to finish before it may start. </summary>
 public sealed record StageNode
 {
     public required BuildStage Stage { get; init; }
@@ -29,6 +29,7 @@ public sealed class StageGraph
 {
     private readonly Dictionary<BuildStage, StageNode> _nodes;
 
+    /// <summary> Validates that no stage is declared twice, all dependencies exist in the graph, and there are no cycles. Throws ArgumentException when any of those conditions is violated. </summary>
     public StageGraph(IEnumerable<StageNode> nodes)
     {
         _nodes = new Dictionary<BuildStage, StageNode>();

@@ -147,6 +147,98 @@ public sealed class AudioMixerGroup : EngineObject
         }
     }
 
+    [SerializeIgnore]
+    private bool _solo;
+
+    /// <summary>
+    /// Hears this bus on its own. Deliberately not saved: soloing is something you do while listening
+    /// to a mix, not a property of it, and a project that opened with a bus soloed would be a mystery.
+    /// </summary>
+    /// <remarks>
+    /// While anything is soloed, a bus sounds only if it is the soloed one, is inside it, or is on the
+    /// path it takes to the output. That last part is what makes soloing a child audible at all: every
+    /// bus between it and the master has to keep passing audio.
+    /// </remarks>
+    public bool Solo
+    {
+        get => _solo;
+        set
+        {
+            if (_solo == value) return;
+
+            _solo = value;
+
+            // Soloing one bus changes what every other bus does, so the whole mixer is re-applied.
+            AudioMixer owner = _mixer;
+
+            if (owner.IsValid()) owner.ApplyVolumes();
+            else ApplyVolume();
+        }
+    }
+
+    /// <summary>True when a solo somewhere in this mixer is what is keeping this bus quiet.</summary>
+    public bool SilencedBySolo
+    {
+        get
+        {
+            AudioMixer owner = _mixer;
+
+            if (owner.IsNotValid() || !owner.AnySolo) return false;
+
+            foreach (AudioMixerGroup soloed in owner.Groups)
+            {
+                if (soloed.IsNotValid() || !soloed._solo) continue;
+
+                if (ReferenceEquals(soloed, this) || IsAncestorOf(soloed) || soloed.IsAncestorOf(this))
+                    return false;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>True when <paramref name="other"/> feeds into this bus, however far down.</summary>
+    public bool IsAncestorOf(AudioMixerGroup other)
+    {
+        AudioMixerGroup at = other.IsValid() ? other.Parent : null;
+        int steps = 0;
+
+        // Bounded because a hand edited asset can describe a loop, and ValidateHierarchy only
+        // straightens out the ones it can see from the root.
+        while (at.IsValid() && steps++ < 64)
+        {
+            if (ReferenceEquals(at, this)) return true;
+            at = at.Parent;
+        }
+
+        return false;
+    }
+
+    // Written by the audio thread once per block, read by whatever is drawing meters. A float write is
+    // atomic, and a reader that catches the previous block's value is showing a meter one block stale.
+    [SerializeIgnore]
+    private volatile float _peakLevel;
+
+    /// <summary>
+    /// Loudest sample this bus produced in the block it last processed, 0 when nothing is asking for
+    /// levels. Ask through <see cref="RequestMetering"/> for as long as you want it kept up to date.
+    /// </summary>
+    public float PeakLevel => _peakLevel;
+
+    private static long s_meteringRequestedTick;
+
+    /// <summary>
+    /// Asks every bus to measure what it is producing. Call it each frame that meters are on screen.
+    /// </summary>
+    /// <remarks>
+    /// Off by default because it is a pass over every block of every bus, on the audio thread, for a
+    /// number nobody is looking at. Asking expires on its own so a window that closes, or an editor
+    /// that stops drawing, does not leave the work running.
+    /// </remarks>
+    public static void RequestMetering() => s_meteringRequestedTick = Environment.TickCount64;
+
+    private static bool MeteringWanted => Environment.TickCount64 - s_meteringRequestedTick < 500;
+
     /// <summary>The group this one feeds into, or null if it is the mixer's root.</summary>
     public AudioMixerGroup Parent
     {
@@ -270,7 +362,9 @@ public sealed class AudioMixerGroup : EngineObject
         if (_nativeGroup.pointer == IntPtr.Zero || _builtForDevice != AudioContext.DeviceGeneration)
             return;
 
-        MiniAudioNative.ma_sound_group_set_volume(_nativeGroup, _mute ? 0.0f : DecibelsToLinear(_volumeDB));
+        bool silent = _mute || SilencedBySolo;
+
+        MiniAudioNative.ma_sound_group_set_volume(_nativeGroup, silent ? 0.0f : DecibelsToLinear(_volumeDB));
     }
 
     /// <summary>Effects applied to everything routed into this group, in order.</summary>
@@ -365,6 +459,9 @@ public sealed class AudioMixerGroup : EngineObject
         try
         {
             *frameCountOut = _chain.Process(framesIn[0], *frameCountIn, framesOut[0], *frameCountOut, channels);
+
+            if (MeteringWanted)
+                _peakLevel = Peak(framesOut[0], (int)(*frameCountOut * channels));
         }
         catch (Exception ex)
         {
@@ -377,6 +474,21 @@ public sealed class AudioMixerGroup : EngineObject
             if (framesOut != null && framesOut[0] != null)
                 new Span<float>(framesOut[0], (int)(*frameCountOut * channels)).Clear();
         }
+    }
+
+    /// <summary>Loudest absolute sample in a block, which is what a meter shows.</summary>
+    private static unsafe float Peak(float* samples, int count)
+    {
+        float peak = 0.0f;
+
+        for (int i = 0; i < count; i++)
+        {
+            float magnitude = Maths.Abs(samples[i]);
+
+            if (magnitude > peak) peak = magnitude;
+        }
+
+        return peak;
     }
 
     internal void ReleaseNative()
@@ -471,6 +583,9 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
     [SerializeField, HideInInspector]
     private List<AudioMixerGroup> _groups = [];
 
+    [SerializeField, HideInInspector]
+    private List<AudioMixerSnapshot> _snapshots = [];
+
     /// <summary>Every group in the mixer. The first is the root that all others eventually feed into.</summary>
     public IReadOnlyList<AudioMixerGroup> Groups
     {
@@ -483,6 +598,68 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
 
     /// <summary>The root group everything in this mixer feeds into.</summary>
     public AudioMixerGroup Master => Groups.Count > 0 ? _groups[0] : null;
+
+    /// <summary>True while any bus in this mixer is soloed, which is what silences the rest.</summary>
+    public bool AnySolo
+    {
+        get
+        {
+            foreach (AudioMixerGroup group in _groups)
+                if (group.IsValid() && group.Solo) return true;
+
+            return false;
+        }
+    }
+
+    /// <summary>Clears every solo in the mixer.</summary>
+    public void ClearSolo()
+    {
+        foreach (AudioMixerGroup group in _groups)
+            if (group.IsValid()) group.Solo = false;
+    }
+
+    /// <summary>
+    /// Pushes every bus's level across again. Needed after anything that changes what a bus should be
+    /// doing without touching its own fields, which is what a solo somewhere else is.
+    /// </summary>
+    public void ApplyVolumes()
+    {
+        EnsureBound();
+
+        foreach (AudioMixerGroup group in _groups)
+            if (group.IsValid()) group.OnValidate();
+    }
+
+    /// <summary>
+    /// Re-routes <paramref name="group"/> to feed <paramref name="parent"/>, or the output when that is
+    /// null. Refuses anything that would make a bus feed itself, directly or through its own children.
+    /// </summary>
+    public bool SetParent(AudioMixerGroup group, AudioMixerGroup parent)
+    {
+        EnsureBound();
+
+        int index = _groups.IndexOf(group);
+
+        // The root has nowhere else to go: everything else in the mixer already feeds it.
+        if (index <= 0) return false;
+
+        if (parent.IsValid() && (ReferenceEquals(parent, group) || group.IsAncestorOf(parent)))
+        {
+            Debug.LogWarning($"'{group.GroupName}' cannot feed '{parent.GroupName}', which already feeds it.");
+            return false;
+        }
+
+        int parentIndex = parent.IsValid() ? _groups.IndexOf(parent) : 0;
+
+        if (parentIndex < 0 || parentIndex == group.ParentIndex) return false;
+
+        group.ParentIndex = parentIndex;
+
+        // Its node is attached to the bus it used to feed, so it has to be built again against the new
+        // one. Releasing takes the buses feeding it with it, and tells any source attached to let go.
+        group.ReleaseNative();
+        return true;
+    }
 
     public AudioMixer()
     {
@@ -574,6 +751,189 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
                 group.ReleaseNative();
         }
     }
+
+    #region Snapshots
+
+    /// <summary>Every recorded mix this mixer can be moved to.</summary>
+    public IReadOnlyList<AudioMixerSnapshot> Snapshots => _snapshots;
+
+    /// <summary>The snapshot this mixer was last moved to, or is on its way to.</summary>
+    public AudioMixerSnapshot ActiveSnapshot { get; private set; }
+
+    /// <summary>True while a transition between snapshots is still running.</summary>
+    public bool IsTransitioning => _transition != null;
+
+    /// <summary>Finds a snapshot by name, or null. Names are compared exactly.</summary>
+    public AudioMixerSnapshot FindSnapshot(string name)
+    {
+        foreach (AudioMixerSnapshot snapshot in _snapshots)
+            if (snapshot != null && snapshot.Name == name) return snapshot;
+
+        return null;
+    }
+
+    /// <summary>Records the mixer as it is now under a new name, and returns the snapshot.</summary>
+    public AudioMixerSnapshot CaptureSnapshot(string name)
+    {
+        EnsureBound();
+
+        var snapshot = new AudioMixerSnapshot { Name = name };
+        snapshot.CaptureFrom(this);
+        _snapshots.Add(snapshot);
+        return snapshot;
+    }
+
+    public bool RemoveSnapshot(AudioMixerSnapshot snapshot)
+    {
+        if (ReferenceEquals(snapshot, ActiveSnapshot)) ActiveSnapshot = null;
+
+        return _snapshots.Remove(snapshot);
+    }
+
+    /// <summary>Puts the mixer into a recorded mix at once, with nothing to ease.</summary>
+    public void ApplySnapshot(AudioMixerSnapshot snapshot)
+    {
+        if (snapshot == null) return;
+
+        EnsureBound();
+
+        MixerParameters.Walk(this, (path, _, apply) =>
+        {
+            float? recorded = snapshot.Find(path);
+
+            // A parameter the snapshot never recorded is one that did not exist when it was taken, so
+            // it is left where it is rather than being reset to a value nobody chose.
+            if (recorded.HasValue) apply(recorded.Value);
+        });
+
+        _transition = null;
+        ActiveSnapshot = snapshot;
+    }
+
+    /// <summary>
+    /// Moves the mixer to a recorded mix over <paramref name="seconds"/>, which is what a change of
+    /// scene, a pause menu or going underwater actually is.
+    /// </summary>
+    /// <remarks>
+    /// Starts from wherever the mixer is now rather than from whatever it was last told to be, so a
+    /// transition interrupted by another one carries on from what you can currently hear instead of
+    /// jumping back. Flags cross at the half way mark, since a mute has no midpoint to ease through.
+    /// </remarks>
+    public void TransitionTo(AudioMixerSnapshot snapshot, float seconds)
+    {
+        if (snapshot == null) return;
+
+        if (!(seconds > 0.0f))
+        {
+            ApplySnapshot(snapshot);
+            return;
+        }
+
+        EnsureBound();
+
+        var transition = new Transition { Duration = seconds };
+
+        MixerParameters.Walk(this, (path, current, apply) =>
+        {
+            float? recorded = snapshot.Find(path);
+
+            if (recorded.HasValue)
+                transition.Steps.Add(new Transition.Step { Apply = apply, From = current, To = recorded.Value });
+        });
+
+        ActiveSnapshot = snapshot;
+
+        if (transition.Steps.Count == 0)
+        {
+            _transition = null;
+            return;
+        }
+
+        _transition = transition;
+
+        if (!s_transitioning.Contains(this))
+            s_transitioning.Add(this);
+    }
+
+    /// <summary>Moves to the snapshot with this name, if there is one.</summary>
+    public void TransitionTo(string name, float seconds) => TransitionTo(FindSnapshot(name), seconds);
+
+    [SerializeIgnore]
+    private Transition _transition;
+
+    private sealed class Transition
+    {
+        public struct Step
+        {
+            public Action<float> Apply;
+            public float From;
+            public float To;
+        }
+
+        public float Duration;
+        public float Elapsed;
+        public readonly List<Step> Steps = [];
+    }
+
+    private static readonly List<AudioMixer> s_transitioning = [];
+    private static long s_lastTransitionTick;
+
+    /// <summary>
+    /// Advances every running snapshot transition. Driven by the audio update, and cheap to call when
+    /// nothing is transitioning, which is almost always.
+    /// </summary>
+    /// <remarks>
+    /// Measured against the wall clock rather than the game's, because a mix change belongs to what the
+    /// player is hearing: a pause menu that fades the music over a third of a second has to take a
+    /// third of a second even though the thing it is fading for has stopped time.
+    /// </remarks>
+    public static void TickTransitions()
+    {
+        if (s_transitioning.Count == 0)
+        {
+            s_lastTransitionTick = 0;
+            return;
+        }
+
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        // The first tick of a run has nothing to measure against, so it advances nothing.
+        float delta = s_lastTransitionTick == 0
+            ? 0.0f
+            : (float)((now - s_lastTransitionTick) / (double)System.Diagnostics.Stopwatch.Frequency);
+
+        s_lastTransitionTick = now;
+
+        for (int i = s_transitioning.Count - 1; i >= 0; i--)
+        {
+            AudioMixer mixer = s_transitioning[i];
+
+            if (mixer.IsNotValid() || !mixer.Advance(delta))
+                s_transitioning.RemoveAt(i);
+        }
+    }
+
+    /// <summary>Moves one transition along. False once it has arrived and has nothing left to do.</summary>
+    private bool Advance(float delta)
+    {
+        Transition transition = _transition;
+
+        if (transition == null) return false;
+
+        transition.Elapsed += delta;
+
+        float t = Maths.Clamp(transition.Elapsed / transition.Duration, 0.0f, 1.0f);
+
+        foreach (Transition.Step step in transition.Steps)
+            step.Apply(step.From + (step.To - step.From) * t);
+
+        if (t < 1.0f) return true;
+
+        _transition = null;
+        return false;
+    }
+
+    #endregion
 
     public void OnBeforeSerialize() { }
 

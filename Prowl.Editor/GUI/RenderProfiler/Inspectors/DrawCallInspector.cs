@@ -44,14 +44,14 @@ public sealed class ProfilerDrawCallInspector
             _selectedBufferIndex = null;
         }
 
-        using (paper.Column("rdp_dc_viewer").Height(UnitValue.Auto).ColBetween(InspectorKit.SectionGap).Enter())
+        using (paper.Column("rdp_dc_viewer").Height(UnitValue.Auto).Gap(InspectorKit.SectionGap).Enter())
         {
             DrawHeader(paper, view, pass, commandBuffer, draw);
 
             float rowWidth = (width - 8f) / 2f;
-            using (paper.Row("rdp_dc_row").Height(UnitValue.Auto).ColBetween(8f).Enter())
+            using (paper.Row("rdp_dc_row").Height(UnitValue.Auto).Gap(8f).Enter())
             {
-                using (paper.Column("rdp_dc_info").Width(rowWidth).Height(UnitValue.Auto).ColBetween(2f).Enter())
+                using (paper.Column("rdp_dc_info").Width(rowWidth).Height(UnitValue.Auto).Gap(2f).Enter())
                 {
                     if (draw.Draw is { } d)
                         DrawDrawInfo(paper, "rdp_dc_draw", d);
@@ -80,7 +80,7 @@ public sealed class ProfilerDrawCallInspector
     private static void DrawHeader(Paper paper, ProfiledView? view, ProfiledPass? pass,
         ProfiledCommandBuffer? commandBuffer, ProfiledDrawCall draw)
     {
-        using (paper.Row("rdp_dc_header").Height(InspectorKit.SelectionViewerHeaderHeight).ColBetween(8f).Enter())
+        using (paper.Row("rdp_dc_header").Height(InspectorKit.SelectionViewerHeaderHeight).Gap(8f).Enter())
         {
             Origami.Label(paper, "rdp_dc_title", draw.Draw != null ? draw.Draw.Value.Kind.ToString() : "Dispatch")
                 .Heading()

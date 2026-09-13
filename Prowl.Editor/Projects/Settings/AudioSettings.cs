@@ -1,16 +1,17 @@
+using Prowl.Editor.GUI;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Audio;
-using Prowl.Editor.Theming;
-
-using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
+/// <summary> Project settings for audio output, including master volume, sample rate, channel count, and buffer size. </summary>
 [ProjectSettings("Audio", EditorIcons.VolumeHigh, order: 25)]
 public class AudioSettings : ProjectSettingsBase
 {
+    /// <summary> Master volume applied to all audio output, in the range [0, 1]. </summary>
     public float GlobalVolume = 1.0f;
 
     /// <summary>Rate the device is opened at. Clips at other rates are resampled to it.</summary>
@@ -28,6 +29,7 @@ public class AudioSettings : ProjectSettingsBase
     private static readonly int[] s_sampleRates = [22050, 44100, 48000, 96000];
     private static readonly int[] s_bufferSizes = [256, 512, 1024, 2048, 4096];
 
+    /// <summary> Applies the current settings to the audio context, updating the master volume and reopening the device if parameters changed. </summary>
     public override void Apply()
     {
         AudioContext.MasterVolume = GlobalVolume;
@@ -36,6 +38,7 @@ public class AudioSettings : ProjectSettingsBase
         AudioContext.Restart((uint)SampleRate, (uint)Channels, (uint)BufferSize);
     }
 
+    /// <summary> Resets all audio settings to their default values. </summary>
     public override void ResetToDefaults()
     {
         GlobalVolume = 1.0f;
@@ -44,6 +47,7 @@ public class AudioSettings : ProjectSettingsBase
         BufferSize = 2048;
     }
 
+    /// <summary> Draws the audio settings panel in the project settings window. </summary>
     public override void OnGUI(Paper paper, float width)
     {
         Origami.Header(paper, "audio_hdr", $"{EditorIcons.VolumeHigh}  Audio").Underline().Show();
@@ -65,7 +69,7 @@ public class AudioSettings : ProjectSettingsBase
         Origami.Label(paper, "audio_latency",
             $"About {BufferSize * 1000.0f / System.Math.Max(1, SampleRate):F1} ms of output latency.").Show();
 
-        using (paper.Row("audio_out_row").Height(26).RowBetween(4).Enter())
+        using (paper.Row("audio_out_row").Height(26).Gap(4).Enter())
         {
             Origami.Header(paper, "audio_out_hdr", "Outputs").Underline().Show();
             Origami.Button(paper, "audio_out_refresh", "Refresh", () => s_devices = null).Show();
@@ -111,7 +115,7 @@ public class AudioSettings : ProjectSettingsBase
     /// <summary>A row of buttons for a small fixed set of values, with the current one highlighted.</summary>
     private static void DrawChoice(Paper paper, string id, string label, int[] options, int current, string suffix, System.Action<int> onChange)
     {
-        using (paper.Row($"{id}_row").Height(26).RowBetween(4).Enter())
+        using (paper.Row($"{id}_row").Height(26).Gap(4).Enter())
         {
             Origami.Label(paper, $"{id}_lbl", label).Show();
 

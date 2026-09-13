@@ -52,7 +52,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
         if (font == null) return;
         Prowl.Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
         Prowl.Scribe.FontFile mono = EditorTheme.FontMono ?? font;
-        
+
         List<ProwlCall> calls = action.Calls;
         string title = string.IsNullOrEmpty(label) ? "Actions" : label;
 
@@ -70,7 +70,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
             }
             paper.Box($"{id}_hd").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
-            using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(6, 6, 6, 6).ColBetween(6).Enter())
+            using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(6, 6, 6, 6).Gap(6).Enter())
             {
                 if (calls.Count == 0)
                     paper.Box($"{id}_empty").Height(24).IsNotInteractable()
@@ -97,7 +97,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
     private static void DrawCallCard(Paper paper, string id, int index, ProwlCall call,
         Prowl.Scribe.FontFile mono, Prowl.Scribe.FontFile font, Action changed, Action remove)
     {
-        
+
         // The stored Target is the exact object the call runs on (a GameObject or one of its
         // Components); the picker edits the owning GameObject, which we recover from either.
         GameObject? ownerGo = call.Target as GameObject;
@@ -109,7 +109,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
             .BackgroundColor(Color.FromArgb(8, 255, 255, 255)).Clip().Enter())
         {
             // Card header: index label + delete button.
-            using (paper.Row($"{id}_ch").Height(26).Padding(8, 6, 0, 0).RowBetween(6).Enter())
+            using (paper.Row($"{id}_ch").Height(26).Padding(8, 6, 0, 0).Gap(6).Enter())
             {
                 paper.Box($"{id}_ct").Height(26).IsNotInteractable()
                     .Text($"Call {index}", mono).TextColor(EditorTheme.InkDim)

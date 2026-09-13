@@ -1,11 +1,11 @@
+using Prowl.Editor.GUI;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
-using Prowl.Editor.Theming;
-
-using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
+/// <summary> Project settings for general project information such as company name, product name, version, and the last opened scene. </summary>
 [ProjectSettings("General", EditorIcons.Gear, order: 0)]
 public class GeneralSettings : ProjectSettingsBase
 {
@@ -16,6 +16,7 @@ public class GeneralSettings : ProjectSettingsBase
     /// <summary>Relative path to the last loaded scene. Restored on project open.</summary>
     public string? LastScenePath;
 
+    /// <summary> Draws the General settings panel in the Project Settings window. </summary>
     public override void OnGUI(Paper paper, float width)
     {
         Origami.Header(paper, "gen_header", $"{EditorIcons.Gear}  General").Underline().Show();

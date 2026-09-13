@@ -1,18 +1,19 @@
-using Prowl.Editor.Core;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Projects.Scripting;
-using Prowl.Editor.Theming;
-
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
+using Prowl.Editor.Core;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Theming;
+
 
 namespace Prowl.Editor;
 
 
+/// <summary> Entry point for the Prowl Editor application. Parses command-line arguments and either runs a headless build or launches the editor UI. </summary>
 public static class Program
 {
     /// <summary>If set via --project arg, the editor opens this project directly (skips launcher).</summary>
@@ -87,8 +88,13 @@ public static class Program
     }
 
 
+    /// <summary> Application entry point. Installs a crash reporter, parses arguments, then either starts a headless build (if --buildmode was passed) or launches the editor window. </summary>
     public static void Main(string[] args)
     {
+        // First, so that anything failing after this point is written down rather than closing the
+        // window with nothing to show for it.
+        CrashReporter.Install();
+
         RegisterMiniAudioExResolver();
 
         ReadArguments(args);

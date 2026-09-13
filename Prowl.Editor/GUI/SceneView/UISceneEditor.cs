@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -16,6 +16,7 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor;
 
+/// <summary> Scene tool for editing UIBehaviour elements in the scene view. Provides rect outline, resize handles, anchor handles, pivot handle, and move support for RectTransform-based UI elements. </summary>
 [ComponentSceneTool(typeof(UIBehaviour))]
 public sealed class UISceneEditor : SceneTool
 {
@@ -68,10 +69,10 @@ public sealed class UISceneEditor : SceneTool
     // ================================================================
 
     private static readonly Color ResizeColor = new(0.80f, 0.75f, 0.80f, 1.00f);  // green
-    private static readonly Color PivotColor  = new(0.20f, 0.80f, 1.00f, 1.00f);  // cyan
+    private static readonly Color PivotColor = new(0.20f, 0.80f, 1.00f, 1.00f);  // cyan
     private static readonly Color AnchorColor = new(1.00f, 0.85f, 0.20f, 1.00f);  // amber
-    private static readonly Color MoveColor   = new(0.40f, 1.00f, 0.60f, 1.00f);  // bright green
-    private static readonly Color HotColor    = new(1.00f, 1.00f, 1.00f, 1.00f);  // hovered / active
+    private static readonly Color MoveColor = new(0.40f, 1.00f, 0.60f, 1.00f);  // bright green
+    private static readonly Color HotColor = new(1.00f, 1.00f, 1.00f, 1.00f);  // hovered / active
 
     private const float MinRectSize = 1f;
 
@@ -104,12 +105,14 @@ public sealed class UISceneEditor : SceneTool
     private Float3 _dragPlaneNormal;
     private Float3 _dragPlaneOrigin;
 
+    /// <summary> Sets the target UIBehaviour from the active object in the scene context. </summary>
     public override void OnActivated(SceneToolContext ctx)
     {
         GameObject? target = ctx.ActiveObject;
         _target = target.IsValid() ? target.GetComponent<UIBehaviour>() : null;
     }
 
+    /// <summary> Clears the target and resets hover and active handle state. </summary>
     public override void OnDeactivated()
     {
         _target = null;
@@ -124,8 +127,10 @@ public sealed class UISceneEditor : SceneTool
 
     // Transform.Position does not drive a RectTransform's layout, so the object gizmo would be an
     // inert decoy sitting on top of the rect handles.
+    /// <summary> Always true because RectTransform layout is driven by anchors, pivot and size-delta, not Transform.Position. </summary>
     public override bool SuppressTransformGizmo => true;
 
+    /// <summary> Processes scene input for the selected UI element: draws handles, hit-tests against the canvas plane, registers controls, and applies drag edits to the RectTransform. </summary>
     public override void OnSceneInput(SceneToolContext toolCtx)
     {
         HandleContext ctx = toolCtx.Handles;
@@ -406,15 +411,15 @@ public sealed class UISceneEditor : SceneTool
             case Handle.ResizeTL: minX += delta.X; maxY += delta.Y; break;
 
             case Handle.Pivot:
-            {
-                Float2 newPivot = new(
-                    Maths.Clamp((designHit.X - s.Min.X) / Maths.Max(s.Size.X, 1e-4f), 0f, 1f),
-                    Maths.Clamp((designHit.Y - s.Min.Y) / Maths.Max(s.Size.Y, 1e-4f), 0f, 1f));
-                rt.Pivot = newPivot;
-                // Re-pivoting keeps the element where it is on screen.
-                ApplyDesiredRect(rt, parentRect, s.Min.X, s.Min.Y, s.Size.X, s.Size.Y);
-                return;
-            }
+                {
+                    Float2 newPivot = new(
+                        Maths.Clamp((designHit.X - s.Min.X) / Maths.Max(s.Size.X, 1e-4f), 0f, 1f),
+                        Maths.Clamp((designHit.Y - s.Min.Y) / Maths.Max(s.Size.Y, 1e-4f), 0f, 1f));
+                    rt.Pivot = newPivot;
+                    // Re-pivoting keeps the element where it is on screen.
+                    ApplyDesiredRect(rt, parentRect, s.Min.X, s.Min.Y, s.Size.X, s.Size.Y);
+                    return;
+                }
 
             case Handle.AnchorBL:
             case Handle.AnchorBR:

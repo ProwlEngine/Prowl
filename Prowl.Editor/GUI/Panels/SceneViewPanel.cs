@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Graphite;
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
-using Gizmo = Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
@@ -14,10 +17,7 @@ using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
+using Gizmo = Prowl.OrigamiUI.Gizmo;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -129,7 +129,7 @@ public class SceneViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
             .Width(34).Height(UnitValue.Auto)
-            .Rounded(9).Padding(5, 5, 5, 5).ColBetween(3)
+            .Rounded(9).Padding(5, 5, 5, 5).Gap(3)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
@@ -216,7 +216,7 @@ public class SceneViewPanel : DockPanel
                     .Alignment(TextAlignment.MiddleCenter);
 
                 using (paper.Row("sv_no_scene_btn_row")
-                    .Height(30).RowBetween(8)
+                    .Height(30).Gap(8)
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
@@ -938,10 +938,11 @@ public class SceneViewPanel : DockPanel
 
         _viewManipulator ??= new Gizmo.ViewManipulatorGizmo();
 
-        float cubeSize = 80;
+        float cubeSize = 100;
 
         _viewManipulator.SetCamera(_editorCamera.Camera.GameObject.Transform.Forward,
             _editorCamera.Camera.GameObject.Transform.Up);
+        _viewManipulator.SetFont(font);
 
         // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
@@ -966,7 +967,14 @@ public class SceneViewPanel : DockPanel
                 bool clicked = Input.GetMouseButtonDown(0);
                 Float2 mousePos = paper.PointerPos;
 
-                if (_viewManipulator.Update(canvas, mousePos, clicked && mayClick, !mayClick, out var newForward))
+                bool axisPicked = _viewManipulator.Update(canvas, mousePos, clicked && mayClick, !mayClick, out var newForward);
+
+                // Clicking the widget itself rather than one of its axes swaps the projection, which
+                // is the other thing an orientation gizmo is conventionally good for.
+                if (_viewManipulator.BackgroundClicked)
+                    _editorCamera.ToggleProjection();
+
+                if (axisPicked)
                 {
                     // Snap camera to face direction
                     // Calculate yaw/pitch from the new forward vector

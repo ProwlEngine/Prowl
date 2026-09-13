@@ -444,6 +444,10 @@ public static class AudioContext
     /// </summary>
     public static void Update()
     {
+        // Before the device check: a snapshot transition is a change to the mix that game code asked
+        // for, and it has to run to completion whether or not there is anything to hear it on.
+        AudioMixer.TickTransitions();
+
         if (audioContext == IntPtr.Zero)
             return;
 

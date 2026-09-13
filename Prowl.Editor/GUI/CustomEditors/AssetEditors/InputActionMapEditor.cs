@@ -81,7 +81,7 @@ public class InputActionMapEditor : AssetImporterEditor
         }
 
         // Header
-        using (paper.Row($"{id}_hdr").Height(EditorTheme.RowHeight + 4).RowBetween(8).Enter())
+        using (paper.Row($"{id}_hdr").Height(EditorTheme.RowHeight + 4).Gap(8).Enter())
         {
             Origami.Header(paper, $"{id}_title", $"{EditorIcons.Gamepad}  Input Actions: {map.Name}").Show();
 
@@ -96,7 +96,7 @@ public class InputActionMapEditor : AssetImporterEditor
         Origami.Separator(paper, $"{id}_sep").Show();
 
         // Two-column layout
-        using (paper.Row($"{id}_body").Height(UnitValue.Auto).RowBetween(4).Enter())
+        using (paper.Row($"{id}_body").Height(UnitValue.Auto).Gap(4).Enter())
         {
             DrawActionList(paper, $"{id}_al", map, font);
             DrawBindingsPanel(paper, $"{id}_bp", map, font);
@@ -119,7 +119,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Enter())
         {
             // Header
-            using (paper.Row($"{id}_hdr").Height(20).RowBetween(4).Enter())
+            using (paper.Row($"{id}_hdr").Height(20).Gap(4).Enter())
             {
                 paper.Box($"{id}_lbl")
                     .Width(UnitValue.Stretch()).Height(20)
@@ -216,7 +216,7 @@ public class InputActionMapEditor : AssetImporterEditor
             Origami.Separator(paper, $"{id}_bsep").Show();
 
             // -- Bindings List --
-            using (paper.Row($"{id}_bhdr").Height(20).RowBetween(4).Enter())
+            using (paper.Row($"{id}_bhdr").Height(20).Gap(4).Enter())
             {
                 paper.Box($"{id}_blbl")
                     .Width(UnitValue.Stretch()).Height(20)
@@ -274,7 +274,7 @@ public class InputActionMapEditor : AssetImporterEditor
             paper.Box($"{id}_sp2").Height(6);
 
             // -- Add Buttons --
-            using (paper.Row($"{id}_add1").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+            using (paper.Row($"{id}_add1").Height(EditorTheme.RowHeight).Gap(4).Enter())
             {
                 Origami.Button(paper, $"{id}_abind", $"{EditorIcons.Plus} Add Binding", () =>
                 {
@@ -327,7 +327,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .BackgroundColor(selected ? Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
             .Hovered.BackgroundColor(selected ? Color.FromArgb(80, EditorTheme.Purple400) : EditorTheme.Ink200).End()
             .Rounded(3).Margin(0, 0, 0, 1)
-            .ChildLeft(8).RowBetween(4)
+            .PaddingLeft(8).Gap(4)
             .OnClick(0, (_, _) => onSelect())
             .Enter())
         {
@@ -365,7 +365,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Hovered.BackgroundColor(selected ? Color.FromArgb(80, EditorTheme.Purple400) : Color.FromArgb(50, EditorTheme.Purple400)).End()
             .BorderColor(EditorTheme.Purple300).BorderWidth(selected ? 1 : 0)
             .Rounded(3).Margin(0, 0, 0, 1)
-            .ChildLeft(8).RowBetween(4)
+            .PaddingLeft(8).Gap(4)
             .OnClick(0, (_, _) => onSelect())
             .Enter())
         {
@@ -643,7 +643,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 .Enter())
             {
                 // Header with name and remove button
-                using (paper.Row($"{id}_ph{i}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+                using (paper.Row($"{id}_ph{i}").Height(EditorTheme.RowHeight).Gap(4).Enter())
                 {
                     string name = proc switch
                     {

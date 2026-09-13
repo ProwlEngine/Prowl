@@ -131,7 +131,7 @@ Pass "FogMarch"
         {
             if (_CascadeCount == 0) return 0.0;
 
-            float worldDistance = distance(worldPos, _WorldSpaceCameraPos.xyz) * 2.0;
+            float worldDistance = distance(worldPos, _ShadowFocusPos) * 2.0;
             mat4 cascadeMatrix;
             vec4 cascadeParams;
 

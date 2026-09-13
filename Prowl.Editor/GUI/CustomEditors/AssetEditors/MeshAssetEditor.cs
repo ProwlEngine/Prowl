@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -10,6 +9,8 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.MeshFeatures;
 using Prowl.Runtime.Resources;
+
+using static Prowl.Editor.GUI.EditorGUI;
 
 namespace Prowl.Editor.Inspector;
 
@@ -26,10 +27,16 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Mesh))]
 public class MeshAssetEditor : AssetImporterEditor
 {
-    private sealed class State
+    private sealed class State : IDisposable
     {
         public PreviewRenderer? Preview;
         public EngineObject? LastPreviewSubject;
+
+        public void Dispose()
+        {
+            Preview?.Dispose();
+            Preview = null;
+        }
     }
 
     private readonly State _ownState = new();
@@ -94,7 +101,7 @@ public class MeshAssetEditor : AssetImporterEditor
             .Rounded(8).Clip()
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .ChildLeft().ChildRight().ChildTop().ChildBottom().Enter())
+            .JustifyContent(LayoutJustification.Center).AlignItems(LayoutAlignment.Center).Enter())
         {
             state.Preview.DrawPreview(paper, $"{id}_preview_rt", 184, 184);
         }
@@ -107,7 +114,7 @@ public class MeshAssetEditor : AssetImporterEditor
         var size = mesh.bounds.Max - mesh.bounds.Min;
 
         using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
-            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
+            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
         {
             EditorGUI.StatChip(paper, $"{id}_st_verts", $"{verts:N0} Verts", font);
             EditorGUI.StatChip(paper, $"{id}_st_tris", $"{tris:N0} Tris", font);

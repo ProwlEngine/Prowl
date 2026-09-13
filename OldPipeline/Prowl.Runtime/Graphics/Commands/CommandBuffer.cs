@@ -781,6 +781,16 @@ public sealed class CommandBuffer : IDisposable
         Write((long)destination);
     }
 
+    /// <summary>Captures the default framebuffer into <paramref name="texture"/>.
+    /// Executed on the render thread; the caller must use SubmitAndWait.</summary>
+    internal void EncodeScreenshot(GraphicsTexture texture, int width, int height)
+    {
+        WriteHeader(CommandOpcode.Screenshot);
+        Write(PushObject(texture));
+        Write(width);
+        Write(height);
+    }
+
     /// <summary>Defers GL setup to the executor, which calls the wrapper's
     /// <c>CreateGLObject()</c>. Same pattern for VAO / Framebuffer / Program.</summary>
     internal void EncodeCreateVertexArray(GraphicsVertexArray vao)

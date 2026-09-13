@@ -58,7 +58,7 @@ public sealed class BufferViewerBuilder
             .BorderWidth(1f)
             .Rounded(EditorTheme.Roundness)
             .Padding(8f)
-            .ColBetween(6f)
+            .Gap(6f)
             .Enter())
         {
             Origami.Label(_paper, $"{_id}_title", _bufferName)
@@ -86,12 +86,12 @@ public sealed class BufferViewerBuilder
 
     private void DrawFields(System.Collections.Generic.IReadOnlyList<Prowl.Editor.Profiling.BufferField> layout)
     {
-        using (_paper.Column($"{_id}_fields").Height(UnitValue.Auto).ColBetween(2f).Enter())
+        using (_paper.Column($"{_id}_fields").Height(UnitValue.Auto).Gap(2f).Enter())
         {
             for (int i = 0; i < layout.Count; i++)
             {
                 Prowl.Editor.Profiling.BufferField field = layout[i];
-                using (_paper.Row($"{_id}_field_{i}").Height(18f).ColBetween(8f).Enter())
+                using (_paper.Row($"{_id}_field_{i}").Height(18f).Gap(8f).Enter())
                 {
                     Origami.Label(_paper, $"{_id}_field_{i}_name", field.Name)
                         .SM()
@@ -119,7 +119,7 @@ public sealed class BufferViewerBuilder
         if (count == 0)
             return;
 
-        using (_paper.Column($"{_id}_hex").Height(UnitValue.Auto).ColBetween(1f).Enter())
+        using (_paper.Column($"{_id}_hex").Height(UnitValue.Auto).Gap(1f).Enter())
         {
             var sb = new StringBuilder();
             int rowIndex = 0;

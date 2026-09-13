@@ -32,10 +32,14 @@ public class GameViewInputHandler : IInputHandler
     /// </summary>
     public static GameViewport? Viewport { get; set; }
 
+    /// <summary> Describes the mapping from window coordinates to the game render-target pixel space, published each frame by GameViewPanel. </summary>
     public readonly struct GameViewport
     {
+        /// <summary> Top-left corner of the letterboxed display rectangle, in window coordinates. </summary>
         public readonly Float2 DisplayOrigin; // top-left of the letterboxed display rect, window coords
+        /// <summary> Size of the display rectangle, in window coordinates. </summary>
         public readonly Float2 DisplaySize;   // size of the display rect, window coords
+        /// <summary> Render-target pixel size, matching Camera.PixelWidth and Camera.PixelHeight. </summary>
         public readonly Int2 RenderSize;      // render-target pixel size (== Camera.PixelWidth/PixelHeight)
 
         public GameViewport(Float2 displayOrigin, Float2 displaySize, Int2 renderSize)

@@ -19,16 +19,19 @@ public class AssetSettings : ProjectSettingsBase
     /// </summary>
     public bool AsyncAssetLoading = true;
 
+    /// <summary> Applies the current asset settings to the asset loading configuration. </summary>
     public override void Apply()
     {
         AssetLoadingConfig.AsyncEnabled = AsyncAssetLoading;
     }
 
+    /// <summary> Resets all asset settings to their default values. </summary>
     public override void ResetToDefaults()
     {
         AsyncAssetLoading = true;
     }
 
+    /// <summary> Draws the asset settings UI in the project settings panel. </summary>
     public override void OnGUI(Paper paper, float width)
     {
         Origami.Header(paper, "assets_h_load", $"{EditorIcons.Cubes}  Loading").Underline().Show();

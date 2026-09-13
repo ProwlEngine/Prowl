@@ -30,8 +30,10 @@ public interface IAssetVariantProcessor
     /// <summary>The texture or data format id this produces, matched against the target's preferences.</summary>
     string Format { get; }
 
+    /// <summary> Whether this processor can handle the given asset. </summary>
     bool AppliesTo(AssetEntry asset);
 
+    /// <summary> Processes the asset from source into destination for the given target. </summary>
     Task ProcessAsync(AssetEntry asset, Stream source, Stream destination, PlatformTarget target, CancellationToken ct);
 }
 
@@ -48,6 +50,7 @@ public enum VariantOrigin
     Processed,
 }
 
+/// <summary> Describes how an asset was resolved for a target, including where its bytes came from and how to open them. </summary>
 public sealed record ResolvedVariant(VariantOrigin Origin, string Format, string SourcePath, VariantKey? Key);
 
 /// <summary>Picks a processor, consults the cache, and processes only on a miss.</summary>
@@ -56,6 +59,7 @@ public sealed class AssetVariantResolver
     private readonly IReadOnlyList<IAssetVariantProcessor> _processors;
     private readonly IVariantCache _cache;
 
+    /// <summary> Initialises the resolver with the available processors and the cache to use. Throws ArgumentNullException when either argument is null. </summary>
     public AssetVariantResolver(IEnumerable<IAssetVariantProcessor> processors, IVariantCache cache)
     {
         _processors = processors?.ToList() ?? throw new ArgumentNullException(nameof(processors));

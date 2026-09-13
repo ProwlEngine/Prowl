@@ -494,6 +494,9 @@
   "pref.anti_aliasing": "Anti-Aliasing",
   "pref.theme_filter": "Prowl Theme",
 
+  "pref.performance": "Performance",
+  "pref.vsync": "VSync",
+  "pref.frame_rate_limit": "Frame Rate Limit",
   "pref.maintenance": "Maintenance",
   "pref.clear_cache": "Editor Cache",
   "pref.clear_cache_btn": "Clear Cache & Reset Layout",
