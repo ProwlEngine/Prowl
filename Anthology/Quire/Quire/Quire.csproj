@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <PackageId>Prowl.Quire</PackageId>
+    <RootNamespace>Prowl.Quire</RootNamespace>
+    <Title>Prowl.Quire</Title>
+    <Description>A fast Markdown parser. Produces a flat block/inline tree of spans over the source text, with no rendering or font dependencies.</Description>
+    <PackageTags>markdown;parser;commonmark;text</PackageTags>
+  </PropertyGroup>
+</Project>
