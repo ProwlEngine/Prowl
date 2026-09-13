@@ -201,19 +201,7 @@ public class NavMeshAreaMaskAttributeHandler : OrigamiUI.AttributeHandler
                     .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
             }
 
-            OrigamiUI.Origami.MultiDropdown<int>(paper, $"{id}_md", selected, picked =>
-                {
-                    // Everything selected stores as AllAreas (-1) so future areas are included
-                    // automatically — matching how "Everything" behaves on layer masks.
-                    if (picked.Count == areas.Count)
-                    {
-                        onChange(NavMeshAreas.AllAreas);
-                        return;
-                    }
-                    int updated = 0;
-                    foreach (int i in picked) updated |= 1 << i;
-                    onChange(updated);
-                }, areas)
+            OrigamiUI.Origami.MultiDropdown<int>(paper, $"{id}_md", selected, picked => onChange(ApplyPicked(mask, areas, picked)), areas)
                 .Display(NavMeshAreaAttributeHandler.DisplayName)
                 .Height(rh)
                 .SummaryFormat("{0} areas")
@@ -221,5 +209,20 @@ public class NavMeshAreaMaskAttributeHandler : OrigamiUI.AttributeHandler
                 .Show();
         }
         return true;
+    }
+
+    /// <summary>
+    /// The mask after a pick. Only the bits of the areas the dropdown showed are rewritten: an area
+    /// defined later keeps whatever the mask already said about it, so unticking one area never
+    /// quietly excludes every area added afterwards. Everything ticked stores as AllAreas, the way
+    /// "Everything" behaves on layer masks.
+    /// </summary>
+    internal static int ApplyPicked(int mask, IReadOnlyList<int> shown, IReadOnlyCollection<int> picked)
+    {
+        if (picked.Count == shown.Count) return NavMeshAreas.AllAreas;
+
+        foreach (int area in shown) mask &= ~(1 << area);
+        foreach (int area in picked) mask |= 1 << area;
+        return mask;
     }
 }

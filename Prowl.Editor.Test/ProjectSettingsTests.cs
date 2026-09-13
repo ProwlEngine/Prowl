@@ -35,6 +35,41 @@ public class ProjectSettingsTests : EditorTestHarness
         Assert.Equal("Jump", settings.AreaNames[Prowl.Runtime.NavMeshAreas.Jump]);
     }
 
+    // A project seeded from the settings page used to put Jump at cost 1 while headless code and
+    // tests kept the runtime's 2, so link costs differed between the editor and everything else.
+    [Fact]
+    public void NavigationSettings_Defaults_MatchTheRuntimeAreaCosts()
+    {
+        var settings = EditorRegistries.GetSettings<NavigationSettings>();
+        settings.ResetToDefaults();
+
+        for (int area = 0; area < Prowl.Runtime.NavMeshAreas.MaxAreas; area++)
+            Assert.Equal(Prowl.Runtime.NavMeshAreas.GetDefaultAreaCost(area), settings.AreaCosts[area]);
+        Assert.Equal(2f, settings.AreaCosts[Prowl.Runtime.NavMeshAreas.Jump]);
+    }
+
+    // The mask field only lists defined areas. Unticking one must rewrite only those bits, or every
+    // area defined afterwards starts out excluded for an agent that only ever excluded Jump.
+    [Fact]
+    public void NavMeshAreaMaskField_Pick_LeavesUndefinedAreasAlone()
+    {
+        const int Jump = Prowl.Runtime.NavMeshAreas.Jump;
+        int[] shown = [0, 1, Jump];
+
+        int withoutJump = Prowl.Editor.GUI.NavMeshAreaMaskAttributeHandler.ApplyPicked(Prowl.Runtime.NavMeshAreas.AllAreas, shown, [0, 1]);
+        Assert.Equal(~(1 << Jump), withoutJump);
+
+        int everything = Prowl.Editor.GUI.NavMeshAreaMaskAttributeHandler.ApplyPicked(withoutJump, shown, [0, 1, Jump]);
+        Assert.Equal(Prowl.Runtime.NavMeshAreas.AllAreas, everything);
+
+        const int LaterArea = 7;
+        int excludedLater = ~(1 << LaterArea);
+        int kept = Prowl.Editor.GUI.NavMeshAreaMaskAttributeHandler.ApplyPicked(excludedLater, shown, [0]);
+        Assert.Equal(0, kept & (1 << LaterArea));
+        Assert.Equal(0, kept & (1 << Jump));
+        Assert.NotEqual(0, kept & (1 << 0));
+    }
+
     // Settings persist as Echo YAML: a saved value must survive a save/load round-trip.
     [Fact]
     public void SettingsSaveLoad_RoundTripsYaml()

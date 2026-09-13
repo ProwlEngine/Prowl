@@ -58,10 +58,13 @@ public static class NavMeshAreas
     private static float[] CreateDefaultCosts()
     {
         float[] costs = new float[MaxAreas];
-        for (int i = 0; i < costs.Length; i++) costs[i] = 1f;
-        costs[Jump] = 2f;
+        for (int i = 0; i < costs.Length; i++) costs[i] = GetDefaultAreaCost(i);
         return costs;
     }
+
+    /// <summary>The cost an area starts with before any project settings apply. The navigation
+    /// settings page seeds a new project from this too, so the two cannot disagree.</summary>
+    public static float GetDefaultAreaCost(int areaIndex) => areaIndex == Jump ? 2f : 1f;
 
     /// <summary>Get the name of an area, or an empty string for unnamed user areas.</summary>
     public static string GetAreaName(int areaIndex)

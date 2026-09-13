@@ -54,14 +54,14 @@ public class NavigationSettings : ProjectSettingsBase
     {
         var costs = new List<float>(NavMeshAreas.MaxAreas);
         for (int i = 0; i < NavMeshAreas.MaxAreas; i++)
-            costs.Add(1f);
+            costs.Add(NavMeshAreas.GetDefaultAreaCost(i));
         return costs;
     }
 
     private void EnsureSize()
     {
         while (AreaNames.Count < NavMeshAreas.MaxAreas) AreaNames.Add(string.Empty);
-        while (AreaCosts.Count < NavMeshAreas.MaxAreas) AreaCosts.Add(1f);
+        while (AreaCosts.Count < NavMeshAreas.MaxAreas) AreaCosts.Add(NavMeshAreas.GetDefaultAreaCost(AreaCosts.Count));
     }
 
     public override void Apply()
