@@ -20,7 +20,7 @@ public sealed class BloomEffect : ImageEffect
     public float Intensity = 0.5f;
 
     /// <summary>Luminance threshold for bright pixel extraction.</summary>
-    public float Threshold = 1.5f;
+    public float Threshold = 0.8f;
 
     /// <summary>Number of downsample iterations. More = wider bloom but more GPU cost. 4-8 is typical.</summary>
     public int Iterations = 6;

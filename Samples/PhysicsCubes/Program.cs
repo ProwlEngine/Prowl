@@ -55,7 +55,6 @@ public sealed class PhysicsDemo : Game
         [
             new FXAAEffect(),
             new BokehDepthOfFieldEffect(),
-            new BloomEffect(),
             new TonemapperEffect(),
         ];
 
