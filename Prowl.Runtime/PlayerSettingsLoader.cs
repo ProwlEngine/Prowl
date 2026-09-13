@@ -3,12 +3,13 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio;
+using Prowl.Runtime.Navigation;
 
 namespace Prowl.Runtime;
 
 /// <summary>
 /// Loads and applies project settings from Echo YAML files in the built player.
-/// Reads from Content/Settings/ folder and applies physics, audio, time, and tags/layers.
+/// Reads from Content/Settings/ folder and applies physics, audio, time, tags/layers, and navigation.
 /// </summary>
 public static class PlayerSettingsLoader
 {
@@ -29,6 +30,7 @@ public static class PlayerSettingsLoader
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
+        ApplyNavigation(settingsDir);
 
         // Physics needs to apply to each new scene's PhysicsWorld
         ApplyPhysics(settingsDir);
@@ -196,6 +198,104 @@ public static class PlayerSettingsLoader
             Debug.Log("[PlayerSettings] Tags & Layers applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
+    }
+
+    /// <summary>Loads the agent-type and area tables into <see cref="NavMeshAgentTypes"/> and
+    /// <see cref="NavMeshAreas"/>. Manual field-by-field parsing, matching <see cref="ApplyTagsAndLayers"/>:
+    /// the exported compound has no type tags to hand to a generic deserializer.</summary>
+    private static void ApplyNavigation(string dir)
+    {
+        ApplyAgentTypes(dir);
+        ApplyAreas(dir);
+    }
+
+    /// <summary>Loads the agent-type table into <see cref="NavMeshAgentTypes"/>.</summary>
+    private static void ApplyAgentTypes(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.NavMeshAgentTypes);
+        if (settings == null) return;
+
+        try
+        {
+            // AgentTypes is a List<NavMeshAgentTypeInfo>. Since the element type is a class, Echo
+            // wraps the list in a reference-tracking compound ({ $id, $values: [...] }) rather than
+            // emitting it as a bare list the way List<string> (a value type element) does.
+            if (!settings.TryGet("AgentTypes", out var typesProp) || !TryGetListEntries(typesProp!, out var entries))
+                return;
+
+            var types = new System.Collections.Generic.List<NavMeshAgentTypeInfo>();
+            foreach (var entry in entries)
+            {
+                types.Add(new NavMeshAgentTypeInfo
+                {
+                    Id = entry.TryGet("Id", out var id) ? id!.IntValue : 0,
+                    Name = entry.TryGet("Name", out var name) ? name!.StringValue : "Agent Type",
+                    AgentRadius = entry.TryGet("AgentRadius", out var r) ? r!.FloatValue : 0.5f,
+                    AgentHeight = entry.TryGet("AgentHeight", out var h) ? h!.FloatValue : 2.0f,
+                    MaxSlopeAngle = entry.TryGet("MaxSlopeAngle", out var s) ? s!.FloatValue : 45.0f,
+                    MaxStepHeight = entry.TryGet("MaxStepHeight", out var st) ? st!.FloatValue : 0.4f,
+                });
+            }
+
+            NavMeshAgentTypes.ReplaceAll(types);
+            Debug.Log($"[PlayerSettings] Navigation agent types applied ({types.Count}).");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply navigation agent types: {ex.Message}"); }
+    }
+
+    /// <summary>Loads the area table into <see cref="NavMeshAreas"/>.</summary>
+    private static void ApplyAreas(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.NavMeshAreas);
+        if (settings == null) return;
+
+        try
+        {
+            // Areas is a NavMeshAreaInfo[] (serializes as a compound holding an "array" tag, itself
+            // possibly reference-wrapped the same way a List<T> of a reference type is).
+            if (!settings.TryGet("Areas", out var areasProp) || !areasProp!.TryGet("array", out var arr)
+                || !TryGetListEntries(arr!, out var entries))
+                return;
+
+            int i = 0;
+            foreach (var entry in entries)
+            {
+                if (i >= NavMeshAreas.MaxAreas) break;
+                string name = entry.TryGet("Name", out var n) ? n!.StringValue : "";
+                float cost = entry.TryGet("Cost", out var c) ? c!.FloatValue : 1f;
+                if (i != NavMeshAreas.Walkable && i != NavMeshAreas.NotWalkable && i != NavMeshAreas.Jump)
+                    NavMeshAreas.SetAreaName(i, name);
+                NavMeshAreas.SetAreaCost(i, cost);
+                i++;
+            }
+
+            Debug.Log("[PlayerSettings] Navigation areas applied.");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply navigation areas: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Reads the elements out of a list-shaped tag, whether Echo emitted it as a bare list (a
+    /// value-typed element, e.g. <c>List&lt;string&gt;</c>) or wrapped in a reference-tracking
+    /// compound (a reference-typed element, e.g. <c>List&lt;NavMeshAgentTypeInfo&gt;</c>):
+    /// <c>{ $id, $values: [...] }</c>.
+    /// </summary>
+    private static bool TryGetListEntries(EchoObject tag, out System.Collections.Generic.IEnumerable<EchoObject> entries)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            entries = tag.List;
+            return true;
+        }
+
+        if (tag.TryGet("$values", out var values) && values!.TagType == EchoType.List)
+        {
+            entries = values.List;
+            return true;
+        }
+
+        entries = [];
+        return false;
     }
 
     /// <summary>

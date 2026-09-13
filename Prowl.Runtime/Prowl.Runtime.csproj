@@ -29,6 +29,10 @@
   <ItemGroup>
     <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
     <PackageReference Include="Jitter2" Version="2.8.11" />
+    <!-- Anthology-maintained fork of DotRecast: bundles Recast/Detour/Crowd/TileCache in one package
+         with upstream bugs patched (an off-by-one in Detour's tile-link allocation, a dead span pool
+         in rasterization) rather than worked around here. -->
+    <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
 
     <!-- <ProjectReference Include="..\..\Anthology\Aperture\Aperture\Aperture.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Clay\Clay\Clay.csproj" /> -->

@@ -412,7 +412,7 @@ public abstract class Game
     /// <summary>Called during render. Override to control scene rendering.</summary>
     public virtual void OnRender(Scene? scene)
     {
-        if (scene.IsValid()) scene.Render();
+        if (scene.IsValid()) scene.Render(displayGizmos: DrawGizmos);
     }
 
     /// <summary>Called during GUI phase. Override to control scene GUI rendering.</summary>

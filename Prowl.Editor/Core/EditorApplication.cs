@@ -9,6 +9,7 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
@@ -484,6 +485,11 @@ public class EditorApplication : Game
         // memory eviction shouldn't depend on file-reimport gating, and this is cheap to call every
         // frame since the sweep itself is internally rate-limited (see MaybeSweepIdle's own gate).
         EditorAssetBackend.Instance?.TickIdleSweep();
+
+        // Picks up finished background navmesh bakes (see NavMeshBakePump's own doc comment for why
+        // this can't just be MainThreadContext). Not gated behind window focus - a bake started before
+        // the user alt-tabbed away must still land.
+        NavMeshBakePump.ProcessCompleted();
 
         // Layout auto-save is handled by SaveManager's auto-save timer.
 

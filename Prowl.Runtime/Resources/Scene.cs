@@ -7,6 +7,7 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
+using Prowl.Runtime.Navigation;
 using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
@@ -914,6 +915,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // A solver that blows up does so every frame, so report it once rather than per frame.
         catch (Exception ex) { Debug.LogErrorOnce("Physics.StepThrew", $"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
 
+        // Only ticks scenes that actually have a navmesh system (TryGet, not GetOrCreate) - a scene with
+        // no navigation in it should never pay for one.
+        if (NavMeshSystem.TryGet(this, out NavMeshSystem? navMeshSystem))
+        {
+            try { navMeshSystem!.TickCrowds(Time.FixedDeltaTime); }
+            catch (Exception ex) { Debug.LogErrorOnce("NavMeshCrowd.UpdateThrew", $"[NavMesh] Crowd update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
+        }
+
         Flush();
     }
 
@@ -979,8 +988,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Renders all cameras in this scene, sorted by depth.
     /// </summary>
     /// <param name="target">Optional render target to render into</param>
+    /// <param name="displayGizmos">Whether to draw whatever <see cref="Debug"/>'s gizmo calls (and each
+    /// component's own <see cref="MonoBehaviour.DrawGizmos"/>) have accumulated this frame - see
+    /// <see cref="Game.DrawGizmos"/>, the flag a standalone game sets to opt into this.</param>
     /// <returns>True if any cameras were rendered, false otherwise</returns>
-    public bool Render(RenderTexture? target = null)
+    public bool Render(RenderTexture? target = null, bool displayGizmos = false)
     {
         if (IsDisposed) return false;
         // Renderables are now collected per-camera inside pipeline.Render()
@@ -1002,7 +1014,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 // A camera with its own Target asset draws there; everything else draws into `target`
                 // (null for the backbuffer). Nothing on the camera is touched, so there is nothing to
                 // restore and nothing a scene save could catch mid-render.
-                pipeline.Render(cam, new RenderingData { FallbackTarget = target });
+                pipeline.Render(cam, new RenderingData { FallbackTarget = target, DisplayGizmos = displayGizmos });
             }
             catch (Exception ex)
             {
