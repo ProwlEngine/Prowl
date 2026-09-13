@@ -80,6 +80,7 @@ namespace Prowl.Scribe
             public float U0, V0, U1, V1; // atlas UVs
             public int CharIndex;        // so a GlyphModifier can map a quad back to the source text
             public float PixelSize;
+            public bool Decoration;      // an underline or strike bar; CharIndex is its run's first character
         }
 
         public TextLayout()
@@ -349,7 +350,10 @@ namespace Prowl.Scribe
             var gm = fontSystem.GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, pixelSize, Settings.Font) ?? default;
             NoteLineGlyph(glyph.Font, pixelSize);
             line.Glyphs.Add(new GlyphInstance(glyph, new Float2(currentX + gm.OffsetX, gm.OffsetY),
-                                              '-', gm.AdvanceWidth, pixelSize, charIndex, 1));
+                                              '-', gm.AdvanceWidth, pixelSize, charIndex, 1)
+            {
+                Decoration = DecorationAt(charIndex)
+            });
             currentX += gm.AdvanceWidth;
         }
 
@@ -378,7 +382,11 @@ namespace Prowl.Scribe
             line.Glyphs.Add(new GlyphInstance(
                 atlas,
                 new Float2(penX + gm.OffsetX, gm.OffsetY),
-                ch <= 0xFFFF ? (char)ch : '\0', advance, pixelSize, sg.Cluster, sg.CharCount));
+                ch <= 0xFFFF ? (char)ch : '\0', advance, pixelSize, sg.Cluster, sg.CharCount)
+            {
+                // Looked up after shaping rather than splitting runs on it, so a<u>b</u> still kerns.
+                Decoration = DecorationAt(sg.Cluster)
+            });
 
             if (!nonSpacing)
             {
@@ -415,6 +423,24 @@ namespace Prowl.Scribe
         private int CodepointAt(int index) => _customized ? _charStyles[index].Codepoint : Text[index];
 
         private float SizeAt(int index, float fallback) => _customized ? _charStyles[index].PixelSize : fallback;
+
+        private TextDecoration DecorationAt(int index)
+        {
+            bool underline, strike;
+            if (_customized && index >= 0 && index < _charStyles.Count)
+            {
+                underline = _charStyles[index].Underline;
+                strike = _charStyles[index].Strikethrough;
+            }
+            else
+            {
+                underline = Settings.Underline;
+                strike = Settings.Strikethrough;
+            }
+
+            return (underline ? TextDecoration.Underline : TextDecoration.None)
+                 | (strike ? TextDecoration.Strikethrough : TextDecoration.None);
+        }
 
         // Resolves every character up front, so the customizer is asked once each and the rest of
         // layout simply reads what it decided.

@@ -45,6 +45,21 @@ namespace Prowl.Scribe
         }
     }
 
+    public struct RectangleF
+    {
+        public float X, Y, Width, Height;
+        public RectangleF(float x, float y, float w, float h) { X = x; Y = y; Width = w; Height = h; }
+    }
+
+    /// <summary>Lines drawn along a glyph. Resolved per character, so a run can be underlined on its own.</summary>
+    [Flags]
+    public enum TextDecoration : byte
+    {
+        None = 0,
+        Underline = 1 << 0,
+        Strikethrough = 1 << 1
+    }
+
     public enum TextWrapMode
     {
         NoWrap,
@@ -113,7 +128,11 @@ namespace Prowl.Scribe
         /// <summary>How one character is laid out, after the customizer has had its say.</summary>
         internal GlyphStyle StyleFor(int index, int codepoint)
         {
-            var style = new GlyphStyle(index, codepoint, Font, PixelSize, LetterSpacing, WordSpacing, Quality);
+            var style = new GlyphStyle(index, codepoint, Font, PixelSize, LetterSpacing, WordSpacing, Quality)
+            {
+                Underline = Underline,
+                Strikethrough = Strikethrough
+            };
             Customizer?.Invoke(ref style);
 
             if (style.PixelSize <= 0f) style.PixelSize = PixelSize;
@@ -130,6 +149,9 @@ namespace Prowl.Scribe
         public float AdvanceWidth;
         public float PixelSize;
         public int CharIndex;
+
+        /// <summary>Underline and strikethrough for this glyph. Neighbours that share it are drawn as one bar.</summary>
+        public TextDecoration Decoration;
 
         // Number of source characters this glyph's cluster covers. Normally 1, but a ligature (e.g.
         // "fi") collapses several characters into one glyph - hit-testing interpolates within it.

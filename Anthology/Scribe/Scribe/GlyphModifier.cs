@@ -1,10 +1,10 @@
-using Prowl.Vector;
+﻿using Prowl.Vector;
 
 namespace Prowl.Scribe;
 
 /// <summary>
-/// One glyph on its way to the renderer. The corners arrive holding the plain axis-aligned quad
-/// Scribe laid out; a modifier may move each of them independently, which is what lets a caller
+/// One glyph on its way to the renderer. The corners arrive holding the plain upright quad
+/// Scribe laid out, and a modifier may move each of them independently, which is what lets a caller
 /// rotate, shear or scale a glyph without Scribe knowing anything about the effect.
 ///
 /// Positions are relative to the draw origin, so a modifier never needs to know where the text
@@ -12,8 +12,12 @@ namespace Prowl.Scribe;
 /// </summary>
 public struct GlyphDraw
 {
-    /// <summary>Index of this glyph's first character in the laid-out string.</summary>
+    /// <summary>Index of this glyph's first character in the string that was laid out. For a decoration bar,
+    /// the first character of the run it underlines or strikes through.</summary>
     public int CharIndex;
+
+    /// <summary>True for an underline or strikethrough bar rather than a glyph.</summary>
+    public bool IsDecoration;
     /// <summary>Running index of the glyph within the layout, for effects that march along the text.</summary>
     public int GlyphIndex;
     public float PixelSize;

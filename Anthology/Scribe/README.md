@@ -22,7 +22,7 @@
 3. [Getting Started](#-getting-started-)
    * [Installation](#installation)
    * [Basic Usage](#basic-usage)
-   * [Markdown Rendering](#markdown-rendering)
+   * [Customizing Glyphs](#customizing-glyphs)
 4. [Contributing](#-contributing-)
 5. [License](#-license-)
 
@@ -36,7 +36,8 @@ Scribe is an open-source, **[MIT-licensed](LICENSE)** TrueType font parser and r
 - Font Families
 - Dynamic atlas packing with optional expansion
 - Flexible text layout engine with cursor hit testing
-- Lightweight Markdown parser and layout engine
+- Fonts, sizes, spacing, decoration and even substitution for each character, with kerning and wrapping intact
+- Draw hooks on every glyph for animated text
 - Pluggable rendering backend through `IFontRenderer`
 - Optional layout caching with LRU eviction
 - TTF Loader and Rasterizer Based Upon STBTrueType
@@ -71,35 +72,41 @@ var preferredFont = scribe.GetFont(fontFamily, FontStyle.Bold);
 scribe.DrawText("Hello World!", position, FontColor.Blue, pixelSize, preferredFont)
 ```
 
-## Markdown Rendering
+## Customizing Glyphs
+
+A `GlyphCustomizer` runs once per character while text is laid out. Whatever it
+sets is what Scribe shapes, kerns, measures and wraps with, so a bold or larger
+run is part of the layout rather than stretched afterwards.
 
 ```csharp
-var imageProvider = new MyImageProvider(); // implements IMarkdownImageProvider
+var settings = TextLayoutSettings.Default;
+settings.Font = font;
+settings.Customizer = (ref GlyphStyle g) =>
+{
+    if (g.CharIndex < 5) g.Font = bold;
+    g.Underline = g.CharIndex >= 6;
+    // g.PixelSize, g.LetterSpacing, g.WordSpacing and g.Codepoint can all change too.
+};
 
-// Get the fonts you would like the Markdown rendering to use
-var font = fs.GetFont("Arial", FontStyle.Regular);
-var mono = fs.GetFont("Consolas", FontStyle.Regular);
-var bold = fs.GetFont("Arial", FontStyle.Bold);
-var italic = fs.GetFont("Arial", FontStyle.Italic);
-var boldItalic = fs.GetFont("Arial", FontStyle.BoldItalic);
-
-// Create the markdown Settings
-var settings = MarkdownLayoutSettings.Default(font, mono, bold, italic, boldItalic, width: 400);
-
-// Parse your Markdown
-var document = Markdown.Parse(YourMarkdown);
-
-// Layout the markdown (relative to 0,0)
-var markdownLayout = MarkdownLayoutEngine.Layout(document, scribe, settings, imageProvider);
-
-// Render your Markdown at the specified position
-MarkdownLayoutEngine.Render(markdownLayout, scribe, renderer, position, settings);
-
-// You can also check if the mouse cursor is hovering over a Clickable Link!
-bool isMouseOverLink = MarkdownLayoutEngine.TryGetLinkAt(markdownLayout, mouse, position, out var href);
+var layout = new TextLayout();
+scribe.UpdateLayout(layout, "Hello world", settings);
 ```
 
-![MarkdownShowcase](https://github.com/user-attachments/assets/c4ef6229-ef1c-41a2-bbf9-51a806ff4252)
+A `GlyphModifier` runs once per glyph while a layout is drawn, and can move each
+of its four corners, recolour it or hide it. The layout itself is untouched, so
+animating text costs nothing but the modifier.
+
+```csharp
+scribe.DrawLayout(layout, position, FontColor.White, (ref GlyphDraw g) =>
+{
+    if (g.IsDecoration) return;
+    float lift = MathF.Sin(time + g.CharIndex) * 2f;
+    g.SetCorners(g.TopLeft + new Float2(0, lift), g.TopRight + new Float2(0, lift),
+                 g.BottomLeft + new Float2(0, lift), g.BottomRight + new Float2(0, lift));
+});
+```
+
+Markdown and rich text markup live in [Prowl.Quire](../Quire) and [Prowl.Paper](../Paper).
 
 # <span align="center">🤝 Contributing 🤝</span>
 

@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
@@ -139,18 +139,21 @@ public class GlyphModifierTests
     }
 
     [Fact]
-    public void DecorationBarsArriveWithoutACharacterIndex()
+    public void DecorationBarsAreMarkedAndPointAtTheirRun()
     {
         var (fonts, _, settings) = Setup(underline: true);
         var layout = fonts.CreateLayout("Hello", settings);
 
-        int bars = 0;
+        int bars = 0, first = -1;
         fonts.DrawLayout(layout, Float2.Zero, new FontColor(255, 255, 255), (ref GlyphDraw g) =>
         {
-            if (g.CharIndex < 0) bars++;
+            if (!g.IsDecoration) return;
+            bars++;
+            first = g.CharIndex;
         });
 
         Assert.Equal(1, bars);
+        Assert.Equal(0, first);
     }
 
     [Fact]

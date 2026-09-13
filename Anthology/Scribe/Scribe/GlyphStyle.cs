@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 namespace Prowl.Scribe;
@@ -7,9 +7,9 @@ namespace Prowl.Scribe;
 /// How one character is to be laid out. It arrives filled in from the layout settings, and a
 /// <see cref="GlyphCustomizer"/> may change any of it. Whatever comes back is what Scribe shapes,
 /// kerns, measures, wraps and places with, so a character given a different font or size is a
-/// first-class part of the layout rather than something stretched afterwards.
+/// real part of the layout rather than something stretched afterwards.
 ///
-/// This is the layout-time hook. Its draw-time counterpart is <see cref="GlyphModifier"/>, which
+/// This is the hook for layout. Its counterpart at draw time is <see cref="GlyphModifier"/>, which
 /// moves and recolours the finished quad without disturbing where anything sits.
 /// </summary>
 public struct GlyphStyle
@@ -36,6 +36,12 @@ public struct GlyphStyle
     public float WordSpacing;
 
     public FontQuality Quality;
+
+    /// <summary>Draw a line under this character. Neighbours that are also underlined share one bar.</summary>
+    public bool Underline;
+
+    /// <summary>Draw a line through this character.</summary>
+    public bool Strikethrough;
 
     public GlyphStyle(int charIndex, int codepoint, FontFile font, float pixelSize,
                       float letterSpacing, float wordSpacing, FontQuality quality)

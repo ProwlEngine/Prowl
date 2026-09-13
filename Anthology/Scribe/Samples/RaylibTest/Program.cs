@@ -4,91 +4,6 @@ using System.Diagnostics;
 using Prowl.Vector;
 using System.Runtime.InteropServices;
 
-public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDisposable
-{
-    public readonly struct MarkdownImage(object texture, float width, float height)
-    {
-        public readonly object Texture = texture;
-        public readonly float Width = width;
-        public readonly float Height = height;
-    }
-
-    private static readonly HttpClient _httpClient = new();
-    private readonly Dictionary<string, MarkdownImage> _cache = new();
-
-    public bool TryGetImage(string src, out object texture, out Float2 size)
-    {
-        texture = default;
-        size = default;
-
-        if (_cache.TryGetValue(src, out var image))
-        {
-            texture = image.Texture;
-            size = new Float2(image.Width, image.Height);
-            return true;
-        }
-
-        if (Uri.TryCreate(src, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-        {
-            try
-            {
-                var bytes = _httpClient.GetByteArrayAsync(uri).GetAwaiter().GetResult();
-                string ext = Path.GetExtension(uri.AbsolutePath);
-                if (string.IsNullOrEmpty(ext))
-                    return false;
-
-                var img = Raylib.LoadImageFromMemory(ext, bytes);
-                var tex = Raylib.LoadTextureFromImage(img);
-                Raylib.SetTextureFilter(tex, TextureFilter.Bilinear);
-                Raylib.UnloadImage(img);
-                image = new MarkdownImage(tex, tex.Width, tex.Height);
-                _cache[src] = image;
-
-                texture = image.Texture;
-                size = new Float2(image.Width, image.Height);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        else
-        {
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string path = Path.Combine(baseDir, src);
-            if (!File.Exists(path))
-                return false;
-
-            try
-            {
-                var tex = Raylib.LoadTexture(path);
-                Raylib.SetTextureFilter(tex, TextureFilter.Bilinear);
-                image = new MarkdownImage(tex, tex.Width, tex.Height);
-                _cache[src] = image;
-
-                texture = image.Texture;
-                size = new Float2(image.Width, image.Height);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-    }
-
-    public void Dispose()
-    {
-        foreach (var kv in _cache)
-        {
-            if (kv.Value.Texture is Texture2D tex)
-                Raylib.UnloadTexture(tex);
-        }
-        _cache.Clear();
-    }
-}
-
 public class RaylibFontRenderer : IFontRenderer
 {
     private const string SdfFragmentShader = @"#version 330
@@ -190,7 +105,7 @@ internal class Program
         Wrapping,
         Alignment,
         Typography,
-        Markdown
+        Customizer
     }
 
     static FontFile font;
@@ -216,10 +131,8 @@ internal class Program
         fonti = new FontFile(new FileInfo("Fonts/ariali.ttf"));
         fontbi = new FontFile(new FileInfo("Fonts/arialbi.ttf"));
 
-        var imageProvider = new RaylibMarkdownImageProvider();
-
         // Demo state
-        var demoMode = DemoMode.Markdown; // start in Markdown mode
+        var demoMode = DemoMode.Customizer;
         var settings = TextLayoutSettings.Default;
         settings.PixelSize = 18;
         settings.Font = font;
@@ -229,56 +142,13 @@ internal class Program
         bool showAtlas = false;
         bool showMetrics = false;
 
-        // Sample texts (including Markdown)
+        // Sample texts
         var sampleTexts = new Dictionary<DemoMode, string> {
             [DemoMode.BasicText] = "Hello World! This is a basic text rendering demonstration.\n\nUnicode: €£¥₹ ←↑→↓ ♠♣♥♦\nGreek: αβγδε Hebrew: אבגדה Arabic: ابجده Japanese: こんにちは Chinese: 你好",
             [DemoMode.Wrapping] = "This paragraph demonstrates wrapping capabilities across variable widths. Adjust with ← →.",
             [DemoMode.Alignment] = "This is a sample text showing alignment.",
             [DemoMode.Typography] = "Letter/word spacing and line height",
-            [DemoMode.Markdown] = @"#[top]
-# Markdown Layout Engine
-Welcome to the *Markdown* **layout** ***showcase***. We support ~underline~, ~~strike~~, and ~~~overline~~~ decorations; also inline `code()`.
-Links: a labeled [blue link](https://example.com ""title"") and an autolink http://example.org
-Images are also supported, You can use file paths or URL's! 
-![Prowl logo](ProwlLogo.png).
-
-## Header2
-
-> A blockquote with enough text to wrap across multiple lines at regular font sizes, demonstrating wrapping.
-> But you can also expand blockquotes manually with > characters
-
-We've got *Italic* **Bold** and ***Bold Italic*** as well as escaped characters, lets go again \*Italic\* *\*\Bold\*\* and \*\*\*Bold Italic\*\*\*
-
-### Header3
-
-- **Features**
-  continuation lines wrap correctly to the available width inside the list content area.
-  - Nested list item with more text to prove wrapping works at deeper levels.
-  - Another nested item that includes `inline code`.
-- A veryveryverylongwordthatcannotpossiblyfitonasingleline will be split as needed.
-- Final item before switching lists.
-
-1. Ordered item one with a [link](https://example.com).
- 1. Nested Ordered item.
-2. Ordered item two wraps properly and keeps its numeric prefix aligned with the text.
-3. Ordered item three.
-
-#### Header4
-
-| Head Left | Head Center | Head Right |
-|:----------|:-----------:|-----------:|
-| left cell |  centered   |      right |
-| wrap wrap wrap wrap wrap wrap wrap | bla bla more stuff | imgonnawriteanotherverylongwordonasinglelinesoithastosplitsowecanseeifthatworksinatable |
-
----
-### Code Fence (C#)
-```csharp
-// no syntax highlighting... for now
-for (int i = 0; i < 3; i++) {
-    Console.WriteLine($""hello {i}"");
-}
-```
-"
+            [DemoMode.Customizer] = "Every glyph can be restyled while it is laid out, and moved while it is drawn. This line has a bold run, a bigger word, an underlined phrase and a struck one, and every letter sways on its own."
         };
 
         while (!Raylib.WindowShouldClose())
@@ -288,7 +158,7 @@ for (int i = 0; i < 3; i++) {
             Raylib.BeginDrawing();
             Raylib.ClearBackground(new Raylib_cs.Color(245, 246, 250, 255));
 
-            DrawDemo(demoMode, sampleTexts[demoMode], settings, fontAtlas, renderer, imageProvider, showMetrics);
+            DrawDemo(demoMode, sampleTexts[demoMode], settings, fontAtlas, showMetrics);
             DrawUI(demoMode, settings, fontAtlas, showAtlas, showMetrics);
 
             if (showAtlas && fontAtlas.Texture is Texture2D atlasTexture)
@@ -298,7 +168,6 @@ for (int i = 0; i < 3; i++) {
             Raylib.EndDrawing();
         }
 
-        imageProvider.Dispose();
         Raylib.CloseWindow();
     }
 
@@ -308,7 +177,7 @@ for (int i = 0; i < 3; i++) {
         if (Raylib.IsKeyPressed(KeyboardKey.Two)) demoMode = DemoMode.Wrapping;
         if (Raylib.IsKeyPressed(KeyboardKey.Three)) demoMode = DemoMode.Alignment;
         if (Raylib.IsKeyPressed(KeyboardKey.Four)) demoMode = DemoMode.Typography;
-        if (Raylib.IsKeyPressed(KeyboardKey.Five)) demoMode = DemoMode.Markdown; // NEW
+        if (Raylib.IsKeyPressed(KeyboardKey.Five)) demoMode = DemoMode.Customizer;
 
         if (Raylib.IsKeyPressed(KeyboardKey.Up)) settings.PixelSize = Math.Min(settings.PixelSize + 2, 72);
         if (Raylib.IsKeyPressed(KeyboardKey.Down)) settings.PixelSize = Math.Max(settings.PixelSize - 2, 8);
@@ -343,10 +212,8 @@ for (int i = 0; i < 3; i++) {
         if (Raylib.IsKeyPressed(KeyboardKey.M)) showMetrics = !showMetrics;
     }
 
-    static void DrawDemo(DemoMode mode, string text, TextLayoutSettings settings, FontSystem fontAtlas,
-        IFontRenderer renderer, IMarkdownImageProvider imageProvider, bool showMetrics)
+    static void DrawDemo(DemoMode mode, string text, TextLayoutSettings settings, FontSystem fontAtlas, bool showMetrics)
     {
-        Raylib.SetMouseCursor(MouseCursor.Default);
         var contentArea = new Rectangle(50, 100, (int)settings.MaxWidth + 40, Raylib.GetScreenHeight() - 160);
         Raylib.DrawRectangleRec(contentArea, new Raylib_cs.Color(240, 240, 240, 100));
         Raylib.DrawRectangleLinesEx(contentArea, 2, Raylib_cs.Color.Gray);
@@ -366,8 +233,8 @@ for (int i = 0; i < 3; i++) {
             case DemoMode.Typography:
                 DrawTypography(position, settings, fontAtlas);
                 break;
-            case DemoMode.Markdown:
-                DrawMarkdown(text, position, settings, fontAtlas, renderer, imageProvider);
+            case DemoMode.Customizer:
+                DrawCustomizer(text, position, settings, fontAtlas);
                 break;
         }
     }
@@ -419,57 +286,42 @@ for (int i = 0; i < 3; i++) {
         fs.DrawLayout(fs.CreateLayout("Line\nheight\nsample", lh), new Float2(pos.X + 120, y), FontColor.Black);
     }
 
-    // === Markdown demo ===
-    static bool isMouseOverLink = false;
-    static void DrawMarkdown(string md, Float2 pos, TextLayoutSettings baseText, FontSystem fs,
-        IFontRenderer renderer, IMarkdownImageProvider imageProvider)
+    // === Customizer demo ===
+    // Layout-time: a GlyphCustomizer picks each character's font, size and decoration, and Scribe
+    // shapes, kerns and wraps with the result. Draw-time: a GlyphModifier moves each finished quad.
+    static readonly TextLayout customLayout = new();
+
+    static void DrawCustomizer(string text, Float2 pos, TextLayoutSettings baseText, FontSystem fs)
     {
+        int bold = text.IndexOf("a bold run");
+        int big = text.IndexOf("bigger");
+        int under = text.IndexOf("an underlined phrase");
+        int struck = text.IndexOf("a struck one");
 
-        string fontFamily = "";
-        string monoFontFamily = "";
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        var settings = baseText;
+        settings.WrapMode = TextWrapMode.Wrap;
+        settings.Customizer = (ref GlyphStyle g) =>
         {
-            fontFamily = "Segoe UI";
-            monoFontFamily = "Consolas";
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            int i = g.CharIndex;
+            if (i >= bold && i < bold + 10) g.Font = fontb;
+            if (i >= big && i < big + 6) g.PixelSize = baseText.PixelSize * 1.8f;
+            g.Underline = i >= under && i < under + 20;
+            g.Strikethrough = i >= struck && i < struck + 12;
+        };
+
+        fs.UpdateLayout(customLayout, text, settings);
+
+        float time = (float)Raylib.GetTime();
+        fs.DrawLayout(customLayout, pos, new FontColor(30, 30, 36, 255), (ref GlyphDraw g) =>
         {
-            fontFamily = "Arial";
-            monoFontFamily = "Menlo";
-        }
-        else
-        {
-            fontFamily = "Liberation Sans";
-            monoFontFamily = "Liberation Mono";
-        }
-
-        var ms = MarkdownLayoutSettings.Default(font, baseText.MaxWidth, fontm, fontb, fonti, fontbi);
-        ms.BaseSize = baseText.PixelSize;
-        ms.LineHeight = baseText.LineHeight;
-        ms.ParagraphSpacing = 10f;
-        ms.ColorText = new FontColor(30, 30, 36, 255);
-        ms.ColorMutedText = new FontColor(90, 90, 98, 255);
-        ms.ColorRule = new FontColor(160, 160, 168, 255);
-        ms.ColorQuoteBar = new FontColor(180, 180, 190, 255);
-        ms.ColorCodeBg = new FontColor(235, 235, 240, 255);
-
-        var doc = Markdown.Parse(md);
-        var dl = MarkdownLayoutEngine.Layout(doc, fs, ms, imageProvider);
-        MarkdownLayoutEngine.Render(dl, fs, renderer, pos, ms);
-
-        var mouse = Raylib.GetMousePosition();
-        bool isMouseOverLink = MarkdownLayoutEngine.TryGetLinkAt(dl, mouse, pos, out var href);
-
-        //if (isMouseOverLink)
-        //    Raylib.SetMouseCursor(MouseCursor.PointingHand);
-        //else
-        //    Raylib.SetMouseCursor(MouseCursor.Default);
-
-        if (isMouseOverLink && Raylib.IsMouseButtonPressed(MouseButton.Left))
-        {
-            try { Process.Start(new ProcessStartInfo(href) { UseShellExecute = true }); }
-            catch { }
-        }
+            if (g.IsDecoration) return;
+            float lift = MathF.Sin(time * 3f + g.CharIndex * 0.35f) * g.PixelSize * 0.08f;
+            g.SetCorners(
+                new Float2(g.TopLeft.X, g.TopLeft.Y + lift),
+                new Float2(g.TopRight.X, g.TopRight.Y + lift),
+                new Float2(g.BottomLeft.X, g.BottomLeft.Y + lift),
+                new Float2(g.BottomRight.X, g.BottomRight.Y + lift));
+        });
     }
 
     static void DrawUI(object mode, TextLayoutSettings settings, FontSystem fs, bool showAtlas, bool showMetrics)
@@ -486,7 +338,7 @@ for (int i = 0; i < 3; i++) {
 
         var cy = Raylib.GetScreenHeight() - 124;
         fs.DrawText("Controls:", new Float2(50, cy), FontColor.Blue, 16, font); cy += 22;
-        fs.DrawText("1-4 Modes, 5 Markdown | ↑↓ size | ←→ width | W wrap | A align", new Float2(50, cy), FontColor.Gray, 12, font); cy += 18;
+        fs.DrawText("1-4 Modes, 5 Customizer | ↑↓ size | ←→ width | W wrap | A align", new Float2(50, cy), FontColor.Gray, 12, font); cy += 18;
         fs.DrawText("TAB ± letter spacing | [ ] word spacing | -/= line height | T tabs", new Float2(50, cy), FontColor.Gray, 12, font); cy += 18;
         fs.DrawText("SPACE atlas | M metrics | R reset", new Float2(50, cy), FontColor.Gray, 12, font);
     }

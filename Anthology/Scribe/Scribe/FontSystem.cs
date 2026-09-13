@@ -743,7 +743,8 @@ namespace Prowl.Scribe
         ///
         /// A modifier receives each glyph's four corners and may move them independently, so
         /// rotation, shear and per-glyph scaling are all expressible without Scribe knowing what
-        /// effect is being applied. Decoration bars arrive with a <c>CharIndex</c> of -1.
+        /// effect is being applied. Decoration bars arrive with <c>IsDecoration</c> set and the
+        /// <c>CharIndex</c> of the first character in their run.
         /// </summary>
         public void DrawLayout(TextLayout layout, Float2 position, FontColor color, GlyphModifier modifier)
         {
@@ -780,6 +781,7 @@ namespace Prowl.Scribe
                     var glyph = new GlyphDraw
                     {
                         CharIndex = q.CharIndex,
+                        IsDecoration = q.Decoration,
                         GlyphIndex = i,
                         PixelSize = q.PixelSize,
                         TopLeft = new Float2(x0, y0),
@@ -845,30 +847,41 @@ namespace Prowl.Scribe
             var quads = layout._drawQuads;
             quads.Clear();
 
-            bool wantsDecoration = layout.Settings.Underline || layout.Settings.Strikethrough;
-
             foreach (var line in layout.Lines)
             {
-                // Where the line's decoration would run, gathered as the glyphs go past.
-                float decoBaseline = 0f, decoX0 = 0f, decoX1 = 0f;
-                bool decoStarted = false;
+                // The run of like-decorated glyphs currently being gathered, drawn as one bar when
+                // the decoration changes or the line ends.
+                var run = TextDecoration.None;
+                float runBaseline = 0f, runX0 = 0f, runX1 = 0f, runSize = 0f;
+                int runFirst = 0;
 
                 foreach (var glyphInstance in line.Glyphs)
                 {
                     var glyph = glyphInstance.Glyph;
 
-                    if (wantsDecoration)
+                    if (glyphInstance.Decoration != run)
+                    {
+                        if (run != TextDecoration.None)
+                            AddDecorationQuads(layout, quads, run, runFirst, runX0, runX1, runBaseline, runSize);
+                        run = glyphInstance.Decoration;
+                        runSize = 0f;
+                        runX1 = float.MinValue;
+                    }
+
+                    if (run != TextDecoration.None)
                     {
                         var dgm = GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, glyphInstance.PixelSize,
                                                          layout.Settings.Font) ?? default;
                         float pen = line.Position.X + glyphInstance.Position.X - dgm.OffsetX;
-                        if (!decoStarted)
+                        if (runSize == 0f)
                         {
-                            decoStarted = true;
-                            decoX0 = pen;
-                            decoBaseline = line.Position.Y + glyphInstance.Position.Y - dgm.OffsetY;
+                            runFirst = glyphInstance.CharIndex;
+                            runX0 = pen;
+                            runBaseline = line.Position.Y + glyphInstance.Position.Y - dgm.OffsetY;
                         }
-                        decoX1 = MathF.Max(decoX1, pen + glyphInstance.AdvanceWidth);
+                        runX1 = MathF.Max(runX1, pen + glyphInstance.AdvanceWidth);
+                        // The biggest text in the run decides how thick and how low the bar is.
+                        runSize = MathF.Max(runSize, glyphInstance.PixelSize);
                     }
 
                     // Only render if glyph is in atlas
@@ -898,31 +911,31 @@ namespace Prowl.Scribe
                     });
                 }
 
-                if (wantsDecoration && decoStarted)
-                    AddDecorationQuads(layout, quads, decoX0, decoX1, decoBaseline);
+                if (run != TextDecoration.None)
+                    AddDecorationQuads(layout, quads, run, runFirst, runX0, runX1, runBaseline, runSize);
             }
 
             layout._drawQuadsBuilt = true;
         }
 
 
-        // Underline and strikethrough for one line. Both come from the font's own tables, so they sit
+        // Underline and strikethrough for one run. Both come from the font's own tables, so they sit
         // where the designer drew them rather than at a fraction of the size that happens to look
         // right for one font.
-        private void AddDecorationQuads(TextLayout layout, List<TextLayout.DrawQuad> quads,
-                                        float x0, float x1, float baselineY)
+        private void AddDecorationQuads(TextLayout layout, List<TextLayout.DrawQuad> quads, TextDecoration decoration,
+                                        int firstChar, float x0, float x1, float baselineY, float pixelSize)
         {
             FontFile font = layout.Settings.Font;
             if (font == null || x1 <= x0) return;
             if (!TryGetDecorationBand(out float u0, out float v0, out float u1, out float v1, out float marginRatio))
                 return;
 
-            float scale = font.ScaleForPixelHeight(layout.Settings.PixelSize);
+            float scale = font.ScaleForPixelHeight(pixelSize > 0f ? pixelSize : layout.Settings.PixelSize);
 
-            if (layout.Settings.Underline)
+            if ((decoration & TextDecoration.Underline) != 0)
                 Add(-font.UnderlinePosition * scale, font.UnderlineThickness * scale);
 
-            if (layout.Settings.Strikethrough)
+            if ((decoration & TextDecoration.Strikethrough) != 0)
                 Add(-font.StrikeoutPosition * scale, font.StrikeoutThickness * scale);
 
             void Add(float below, float thickness)
@@ -939,8 +952,10 @@ namespace Prowl.Scribe
                     X0 = x0, Y0 = top - margin,
                     X1 = x1, Y1 = top + thickness + margin,
                     U0 = u0, V0 = v0, U1 = u1, V1 = v1,
-                    // A decoration bar belongs to no single character.
-                    CharIndex = -1,
+                    // The run's first character, so a modifier can colour the bar to match its text.
+                    CharIndex = firstChar,
+                    PixelSize = pixelSize,
+                    Decoration = true,
                 });
             }
         }
