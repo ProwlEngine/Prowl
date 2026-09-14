@@ -8,8 +8,8 @@
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
 
     <Title>Prowl.Scribe</Title>
-    <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer.</Description>
-    <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
+    <Description>TrueType font parser, glyph layout engine and dynamic atlas packing.</Description>
+    <PackageTags>prowl;font;truetype;rasterizer;layout;rendering</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

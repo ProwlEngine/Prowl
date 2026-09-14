@@ -7,7 +7,7 @@
   "targets": {
     ".NETStandard,Version=v2.1": {},
     ".NETStandard,Version=v2.1/": {
-      "Vector/2.1.0": {
+      "Vector/3.4.0": {
         "runtime": {
           "Vector.dll": {}
         }
@@ -15,7 +15,7 @@
     }
   },
   "libraries": {
-    "Vector/2.1.0": {
+    "Vector/3.4.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

@@ -7,36 +7,48 @@
   "targets": {
     ".NETStandard,Version=v2.1": {},
     ".NETStandard,Version=v2.1/": {
-      "Scribe/0.8.1": {
+      "Scribe/3.4.0": {
         "dependencies": {
-          "Prowl.Vector": "2.1.0"
+          "Prowl.Vector": "3.4.0",
+          "Vector": "3.4.0.0"
         },
         "runtime": {
           "Scribe.dll": {}
         }
       },
-      "Prowl.Vector/2.1.0": {
+      "Prowl.Vector/3.4.0": {
         "runtime": {
-          "lib/netstandard2.1/Vector.dll": {
-            "assemblyVersion": "2.1.0.0",
-            "fileVersion": "2.1.0.0"
+          "Vector.dll": {
+            "assemblyVersion": "3.4.0.0",
+            "fileVersion": "3.4.0.0"
+          }
+        }
+      },
+      "Vector/3.4.0.0": {
+        "runtime": {
+          "Vector.dll": {
+            "assemblyVersion": "3.4.0.0",
+            "fileVersion": "3.4.0.0"
           }
         }
       }
     }
   },
   "libraries": {
-    "Scribe/0.8.1": {
+    "Scribe/3.4.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "Prowl.Vector/2.1.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-ACzEiQJWuaApj5TIQaOrCb2rkGnMTPEomvgltPHvbQw2J0d6B5xdxqcXc+tOVJ11VmKDOTK9hyorDDsZ80WKIQ==",
-      "path": "prowl.vector/2.1.0",
-      "hashPath": "prowl.vector.2.1.0.nupkg.sha512"
+    "Prowl.Vector/3.4.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Vector/3.4.0.0": {
+      "type": "reference",
+      "serviceable": false,
+      "sha512": ""
     }
   }
 }

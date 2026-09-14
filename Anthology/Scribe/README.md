@@ -106,8 +106,6 @@ scribe.DrawLayout(layout, position, FontColor.White, (ref GlyphDraw g) =>
 });
 ```
 
-Markdown and rich text markup live in [Prowl.Quire](../Quire) and [Prowl.Paper](../Paper).
-
 # <span align="center">🤝 Contributing 🤝</span>
 
 Contributions, issues and feature requests are welcome! Feel free to fork this repository and submit a pull request.
