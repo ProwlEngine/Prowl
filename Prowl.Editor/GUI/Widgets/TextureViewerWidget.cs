@@ -2,12 +2,14 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 namespace Prowl.Editor.GUI.Widgets;
@@ -23,11 +25,59 @@ namespace Prowl.Editor.GUI.Widgets;
 /// </summary>
 public sealed class TextureViewerBuilder
 {
+    /// <summary>Pan/zoom state for a texture preview, keyed by widget id so it survives across frames
+    /// and re-fits whenever the previewed texture (or its dimensions) changes.</summary>
+    private sealed class ViewState
+    {
+        public const float MinZoom = 0.05f;
+        public const float MaxZoom = 40f;
+        public const float ZoomStep = 1.10f;
+
+        public Float2 Pan;
+        private float _zoom = 1f;
+
+        public float Zoom
+        {
+            get => _zoom;
+            set => _zoom = Math.Clamp(value, MinZoom, MaxZoom);
+        }
+
+        private Texture2D? _fittedTexture;
+        private uint _fittedWidth;
+        private uint _fittedHeight;
+
+        public bool NeedsFit(Texture2D texture, uint width, uint height)
+            => !ReferenceEquals(_fittedTexture, texture) || _fittedWidth != width || _fittedHeight != height;
+
+        public void Fit(Texture2D texture, uint width, uint height, Float2 boxSize)
+        {
+            _fittedTexture = texture;
+            _fittedWidth = width;
+            _fittedHeight = height;
+
+            float contentW = MathF.Max(1f, width);
+            float contentH = MathF.Max(1f, height);
+            Zoom = MathF.Min(boxSize.X / contentW, boxSize.Y / contentH);
+            Pan = (boxSize - new Float2(contentW, contentH) * Zoom) * 0.5f;
+        }
+
+        public void ZoomBy(float factor, Float2 anchorInBox)
+        {
+            Float2 contentAnchor = (anchorInBox - Pan) / _zoom;
+            Zoom = _zoom * factor;
+            Pan = anchorInBox - contentAnchor * Zoom;
+        }
+
+        public void PanBy(Float2 delta) => Pan += delta;
+    }
+
+    private static readonly Dictionary<string, ViewState> s_viewStates = new();
+
     private readonly Paper _paper;
     private readonly string _id;
     private readonly string _textureName;
 
-    private float _previewHeight = 140f;
+    private float _previewHeight = 320f;
     private Texture2D? _texture;
     private uint _width;
     private uint _height;
@@ -40,7 +90,7 @@ public sealed class TextureViewerBuilder
         _textureName = textureName;
     }
 
-    /// <summary>Override the preview area's height (default 140).</summary>
+    /// <summary>Override the preview area's height (default 320).</summary>
     public TextureViewerBuilder PreviewHeight(float height) { _previewHeight = height; return this; }
 
     /// <summary>Supplies a GPU-uploaded texture (e.g. from a snapshot's captured pixel bytes) to draw
@@ -87,15 +137,33 @@ public sealed class TextureViewerBuilder
 
             if (_texture != null)
             {
+                Texture2D texture = _texture;
+                uint width = _width, height = _height;
+
+                if (!s_viewStates.TryGetValue(_id, out ViewState? state))
+                    s_viewStates[_id] = state = new ViewState();
+
                 _paper.Box($"{_id}_preview")
+                    .Width(UnitValue.Stretch())
                     .Height(_previewHeight)
                     .Rounded(EditorTheme.Roundness)
                     .Clip()
                     .BackgroundColor(EditorTheme.Neutral300)
                     .BorderColor(EditorTheme.BorderSoft)
                     .BorderWidth(1f)
+                    .Cursor(PaperCursor.Grab)
+                    .OnScroll(e =>
+                    {
+                        float factor = e.Delta > 0 ? ViewState.ZoomStep : 1f / ViewState.ZoomStep;
+                        state.ZoomBy(factor, e.RelativePosition);
+                    })
+                    .OnDragging(e => state.PanBy(e.Delta))
                     .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
                     {
+                        Float2 boxSize = new((float)r.Size.X, (float)r.Size.Y);
+                        if (state.NeedsFit(texture, width, height))
+                            state.Fit(texture, width, height, boxSize);
+
                         // Checkerboard so texture alpha reads clearly.
                         const float cell = 10f;
                         var ca = Prowl.Vector.Color32.FromArgb(255, 44, 40, 54);
@@ -110,15 +178,12 @@ public sealed class TextureViewerBuilder
                                 canvas.RectFilled(px, py, cw, ch, ((cx + cy) & 1) == 0 ? ca : cb);
                             }
 
-                        float maxW = (float)r.Size.X, maxH = (float)r.Size.Y;
-                        float aspect = _width / MathF.Max(1f, _height);
-                        float drawW = maxW, drawH = drawW / aspect;
-                        if (drawH > maxH) { drawH = maxH; drawW = drawH * aspect; }
-                        float drawX = (float)r.Min.X + ((float)r.Size.X - drawW) / 2f;
-                        float drawY = (float)r.Min.Y + ((float)r.Size.Y - drawH) / 2f;
+                        float drawW = width * state.Zoom, drawH = height * state.Zoom;
+                        float drawX = (float)r.Min.X + state.Pan.X;
+                        float drawY = (float)r.Min.Y + state.Pan.Y;
 
                         // Flip V (textures are stored Y-up), same idiom the asset inspector uses.
-                        canvas.SetBrushTexture(_texture);
+                        canvas.SetBrushTexture(texture);
                         canvas.SetBrushTextureTransform(
                             Transform2D.CreateTranslation(drawX, drawY + drawH) *
                             Transform2D.CreateScale(drawW, -drawH));
