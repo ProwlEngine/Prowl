@@ -17,6 +17,7 @@ internal readonly struct TestView : IRenderView
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public int ViewId => 0;
 }
 
 /// <summary>Test pass for the solver. Declares given input names and output textures.</summary>
