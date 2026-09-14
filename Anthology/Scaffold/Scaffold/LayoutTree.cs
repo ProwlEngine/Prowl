@@ -81,6 +81,7 @@ public sealed partial class LayoutTree
         public Size ArrangedParentSize;
         public MeasureCache Measurements;
         public Rect Rect;
+        public Edges Padding;
         public float BaseMain, FlexMain;
         public float Before, After;
         public bool Frozen;
@@ -176,6 +177,14 @@ public sealed partial class LayoutTree
     public NodeId GetFirstChild(NodeId node) => Handle(_nodes[Index(node)].First);
     public NodeId GetNextSibling(NodeId node) => Handle(_nodes[Index(node)].Next);
     public Rect GetRect(NodeId node) => _nodes[Index(node)].Rect;
+
+    /// <summary>The area inside a node's padding, relative to the node's own top left. This is where
+    /// measured content such as text belongs, since it was measured to fit exactly this size.</summary>
+    public Rect GetContentRect(NodeId node)
+    {
+        ref Node n = ref _nodes[Index(node)];
+        return n.Style.Hidden ? default : new Rect(n.Padding.Left, n.Padding.Top, n.ContentSize.Width, n.ContentSize.Height);
+    }
     public Rect GetWorldRect(NodeId node)
     {
         int nodeIndex = Index(node);

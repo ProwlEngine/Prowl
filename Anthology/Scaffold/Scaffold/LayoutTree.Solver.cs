@@ -291,6 +291,7 @@ public sealed partial class LayoutTree
 
         Size inner = new(Positive(rect.Width - style.Padding.Horizontal), Positive(rect.Height - style.Padding.Vertical));
         node.ContentSize = inner;
+        node.Padding = style.Padding;
         node.ArrangedParentSize = parentSize;
         if (style.Layout == LayoutMode.Grid)
         {

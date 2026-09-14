@@ -1,4 +1,4 @@
-using Prowl.Scaffold;
+﻿using Prowl.Scaffold;
 
 namespace Scaffold.Tests;
 public class SpacingTests
@@ -39,6 +39,38 @@ public class SpacingTests
         Assert.Equal(30, t.GetWorldRect(child).X, 3);
         Assert.Equal(70, t.GetRect(child).Width, 3);
         Assert.Equal(150, t.GetRect(bounded).Width);
+    }
+
+    [Fact]
+    public void ContentRectIsTheAreaInsideThePadding()
+    {
+        var t = new LayoutTree();
+        var r = t.Create(Style.Default);
+        var a = t.Create(Style.Default with { Width = 200, Height = 100, Padding = new LengthEdges(10, 20, 30, 40) }, r);
+        t.Layout(r, new(400, 300));
+        Assert.Equal(new Rect(10, 20, 160, 40), t.GetContentRect(a));
+    }
+
+    [Fact]
+    public void ContentRectFollowsPercentagePaddingAcrossResizes()
+    {
+        var t = new LayoutTree();
+        var r = t.Create(Style.Default);
+        var a = t.Create(Style.Default with { Width = Length.Stretch(), Height = 50, Padding = new LengthEdges(Length.Percentage(10), 0, 0, 0) }, r);
+        t.Layout(r, new(200, 100));
+        Assert.Equal(new Rect(20, 0, 180, 50), t.GetContentRect(a));
+        t.Layout(r, new(300, 100));
+        Assert.Equal(new Rect(30, 0, 270, 50), t.GetContentRect(a));
+    }
+
+    [Fact]
+    public void AHiddenNodeHasNoContentRect()
+    {
+        var t = new LayoutTree();
+        var r = t.Create(Style.Default);
+        var a = t.Create(Style.Default with { Width = 100, Height = 100, Padding = new LengthEdges(5), Hidden = true }, r);
+        t.Layout(r, new(200, 200));
+        Assert.Equal(default, t.GetContentRect(a));
     }
 
     [Fact]

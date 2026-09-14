@@ -81,8 +81,9 @@ sure. Either way the cost is bounded to that node's ancestor path, not the tree.
 
 ### Reading results back
 
-`GetRect` returns a parent-local rectangle. `GetWorldRect` composes origins up to the root, at a
-cost of O(depth). To hand a whole subtree to a renderer in one pass, use `CopyWorldRects` with a
+`GetRect` returns a parent-local rectangle. `GetContentRect` returns the area inside a node's
+padding, relative to the node itself, which is where measured content such as text belongs.
+`GetWorldRect` composes origins up to the root, at a cost of O(depth). To hand a whole subtree to a renderer in one pass, use `CopyWorldRects` with a
 buffer you own and reuse.
 
 ```csharp
