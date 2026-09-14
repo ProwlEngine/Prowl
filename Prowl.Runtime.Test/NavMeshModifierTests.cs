@@ -39,7 +39,7 @@ public class NavMeshModifierTests : RuntimeTestBase
 
     private static uint SampleAreaMask(Scene scene, Float3 position, int agentTypeId = 0)
     {
-        var filter = NavMeshQueryFilter.Default.ForAgentType(agentTypeId);
+        var filter = new NavMeshQueryFilter(NavMeshAreaMask.Everything, agentTypeId);
         return scene.Navigation.SamplePosition(position, out NavMeshHit hit, 0.5f, filter) ? hit.Mask.Mask : 0u;
     }
 

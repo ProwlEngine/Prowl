@@ -4,10 +4,8 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI.PropertyEditors;
@@ -48,7 +46,7 @@ public class NavMeshAreaMaskPropertyEditor : PropertyEditor
         foreach (int area in areas)
             if (mask.HasArea(area)) selected.Add(area);
 
-        NavigationPropertyEditors.MultiSelectRow(paper, id, label, () =>
+        EditorGUI.MultiSelectRow(paper, id, label, () =>
             Origami.MultiDropdown<int>(paper, $"{id}_md", selected, picked => onChange(ApplyPicked(mask, areas, picked)), areas)
                 .Display(NavMeshAreaPropertyEditor.AreaName)
                 .Height(Origami.Current.Metrics.RowHeight)
@@ -80,9 +78,7 @@ public class NavMeshAgentTypeIdPropertyEditor : PropertyEditor
         NavMeshAgentTypeId current = value is NavMeshAgentTypeId agentType ? agentType : default;
         List<int> ids = NavigationPropertyEditors.AgentTypeIds(current.Value);
 
-        // The nicified field name reads "Agent Type Id"; the id is an implementation detail.
-        string shown = label == "Agent Type Id" ? "Agent Type" : label;
-        EditorGUI.Row(paper, id, shown, () =>
+        EditorGUI.Row(paper, id, label, () =>
             Origami.Dropdown(paper, $"{id}_dd", current.Value, v => onChange(new NavMeshAgentTypeId(v)), ids)
                 .Display(NavMeshAgentTypes.GetName)
                 .Show());
@@ -112,7 +108,7 @@ public class NavMeshAgentTypeSetPropertyEditor : PropertyEditor
         foreach (NavMeshAgentTypeId agentType in set.Ids ?? []) selected.Add(agentType.Value);
         List<int> ids = NavigationPropertyEditors.AgentTypeIds(selected);
 
-        NavigationPropertyEditors.MultiSelectRow(paper, $"{id}_ids", "Agent Types", () =>
+        EditorGUI.MultiSelectRow(paper, $"{id}_ids", "Agent Types", () =>
             Origami.MultiDropdown<int>(paper, $"{id}_md", selected, picked =>
                 {
                     NavMeshAgentTypeSet updated = set.Clone();
@@ -139,30 +135,5 @@ internal static class NavigationPropertyEditors
         foreach (int id in keep)
             if (!ids.Contains(id)) ids.Add(id);
         return ids;
-    }
-
-    public static List<int> AgentTypeIds(int keep) => AgentTypeIds([keep]);
-
-    /// <summary>A labelled row that grows with its control, so a multi-select's wrapped chips reflow
-    /// the column instead of overlapping the next field. The same layout the layer mask editor uses.</summary>
-    public static void MultiSelectRow(Paper paper, string id, string label, Action drawControl)
-    {
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-        var font = EditorTheme.DefaultFont;
-
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
-        {
-            if (font != null && !string.IsNullOrEmpty(label))
-            {
-                paper.Box($"{id}_lbl")
-                    .Width(m.LabelWidth).Height(m.RowHeight).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                    .IsNotInteractable()
-                    .Text(label, font).TextColor(theme.Ink.C300)
-                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
-            }
-
-            drawControl();
-        }
     }
 }

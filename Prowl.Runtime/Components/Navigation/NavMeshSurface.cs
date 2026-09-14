@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -29,6 +30,7 @@ public class NavMeshSurface : MonoBehaviour
 {
     [Header("Bake")]
     [Tooltip("The agent type this navmesh is built for (radius, height, slope, climb come from the project's agent table). Agents only use navmeshes of their own type. One surface per agent type per scene.")]
+    [InspectorName("Agent Type")]
     [SerializeField] private NavMeshAgentTypeId agentTypeId = NavMeshAgentTypes.Humanoid;
 
     [Tooltip("Surface-level rasterization settings (voxel/tile sizes and Recast detail). Most bakes never need to change these.")]
@@ -98,7 +100,7 @@ public class NavMeshSurface : MonoBehaviour
     {
         get
         {
-            var scene = GameObject.IsValid() ? GameObject.Scene : null;
+            Scene? scene = Scene;
             return scene.IsValid() ? scene.Navigation : null;
         }
     }
@@ -180,11 +182,7 @@ public class NavMeshSurface : MonoBehaviour
     /// </summary>
     public Runtime.NavMeshData? BuildNavMeshData()
     {
-        NavMeshBuildSettings settings = ResolveBuildSettings(); // one resolve per bake: collection and build must agree
-        List<NavMeshGeometrySource> sources = CollectSources(null, settings.EffectiveVoxelSize);
-        Runtime.NavMeshData? data = NavMeshBuilder.Build(settings, sources, DefaultArea,
-            threads: Math.Max(1, Environment.ProcessorCount - 1), worldBounds: ExplicitWorldBounds(),
-            volumes: CollectVolumes(null), links: CollectLinks(null));
+        Runtime.NavMeshData? data = PrepareBake()(default);
         if (data == null)
             Debug.LogWarning($"[Navigation] Bake of '{GameObject.Name}' produced no walkable geometry.");
 
@@ -207,14 +205,22 @@ public class NavMeshSurface : MonoBehaviour
     /// </summary>
     public Task<NavMeshData?> BuildNavMeshAsync(CancellationToken cancellation = default)
     {
-        NavMeshBuildSettings settings = ResolveBuildSettings(); // resolved on the main thread, once per bake
+        Func<CancellationToken, NavMeshData?> bake = PrepareBake();
+        return Task.Run(() => bake(cancellation), cancellation);
+    }
+
+    /// <summary>Collect everything a bake needs on the calling (main) thread, since collection touches
+    /// Transforms, and return the self-contained build.</summary>
+    private Func<CancellationToken, NavMeshData?> PrepareBake()
+    {
+        NavMeshBuildSettings settings = ResolveBuildSettings(); // one resolve per bake: collection and build must agree
         List<NavMeshGeometrySource> sources = CollectSources(null, settings.EffectiveVoxelSize);
-        List<NavMeshAreaVolume> volumes = CollectVolumes(null); // main thread: touches Transforms
-        List<NavMeshLinkSource> links = CollectLinks(null);
+        List<NavMeshAreaVolume> volumes = CollectVolumes();
+        List<NavMeshLinkSource> links = CollectLinks();
         int defaultArea = DefaultArea;
         AABB? worldBounds = ExplicitWorldBounds();
-        return Task.Run(() => NavMeshBuilder.Build(settings, sources, defaultArea,
-            threads: Math.Max(1, Environment.ProcessorCount - 1), cancellation, worldBounds, volumes, links), cancellation);
+        int threads = Math.Max(1, Environment.ProcessorCount - 1);
+        return cancellation => NavMeshBuilder.Build(settings, sources, defaultArea, threads, cancellation, worldBounds, volumes, links);
     }
 
     /// <summary>
@@ -256,9 +262,7 @@ public class NavMeshSurface : MonoBehaviour
         // Collection (terrain decimation) uses the BAKED voxel size, same as the tiles being
         // rebuilt — the current agent table may disagree with the bake this grid came from.
         AABB? collectionBounds = RebuildCollectionBounds(worldBounds);
-        return RebuildTiles(worldBounds,
-            CollectSources(collectionBounds, data!.Settings.EffectiveVoxelSize),
-            CollectVolumes(collectionBounds));
+        return RebuildTiles(worldBounds, CollectSources(collectionBounds, data!.Settings.EffectiveVoxelSize));
     }
 
     /// <summary>
@@ -266,14 +270,7 @@ public class NavMeshSurface : MonoBehaviour
     /// No re-voxelization: the compressed layers are untouched, which is what makes this cheap next
     /// to <see cref="RebuildTiles(AABB)"/>. False when this surface has no live navmesh.
     /// </summary>
-    /// <param name="worldBounds">Region whose tiles pick up the change, normally the link's endpoints.</param>
-    /// <param name="links">The surface's complete link set. Null collects the scene's
-    /// <see cref="NavMeshLink"/>s; pass a list to skip the scene scan.</param>
-    public bool RebuildLinkTiles(AABB worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
-        => RebuildLinkTiles([worldBounds], links);
-
-    /// <inheritdoc cref="RebuildLinkTiles(AABB, IReadOnlyList{NavMeshLinkSource})"/>
-    /// <param name="worldBounds">Regions whose tiles pick up the change. A tile several of them cover
+    /// <param name="worldBounds">Regions whose tiles pick up the change, normally around link endpoints. A tile several of them cover
     /// re-contours once, which is the point of handing a frame's link edits over together.</param>
     /// <param name="links">The surface's complete link set. Null collects the scene's
     /// <see cref="NavMeshLink"/>s.</param>
@@ -284,7 +281,7 @@ public class NavMeshSurface : MonoBehaviour
         if (instance == null || data.IsNotValid()) return false;
         if (data!.TileWorldSize <= 0) return false;
 
-        links ??= CollectLinks(null);
+        links ??= CollectLinks();
         NavMeshWorld? world = World;
         if (world == null) return false;
 
@@ -314,9 +311,7 @@ public class NavMeshSurface : MonoBehaviour
         // Mirror onto the runtime copy, so a rebuild that re-instantiates it starts from the
         // link set the live mesh is using. The .navmesh asset is left alone: a link moving is a
         // scene edit, and the baked artifact answers for it at the next bake.
-        data.Links.Clear();
-        foreach (NavMeshLinkSource link in links)
-            data.Links.Add(Runtime.NavMeshData.NavMeshLinkEntry.From(link));
+        data.Links = [.. links];
         return true;
     }
 
@@ -333,9 +328,9 @@ public class NavMeshSurface : MonoBehaviour
         Runtime.NavMeshData? data = _runtimeData;
         if (world == null || _instance == null || data.IsNotValid()) return;
 
-        List<NavMeshLinkSource> live = CollectLinks(null);
+        List<NavMeshLinkSource> live = CollectLinks();
 
-        foreach (Runtime.NavMeshData.NavMeshLinkEntry baked in data!.Links)
+        foreach (NavMeshLinkSource baked in data!.Links)
             if (!live.Exists(link => SameLink(link, baked)))
                 world.MarkLinkEndpointsDirty(this, baked.Start, baked.End, baked.Width);
 
@@ -344,7 +339,7 @@ public class NavMeshSurface : MonoBehaviour
                 world.MarkLinkEndpointsDirty(this, link.Start, link.End, link.Width);
     }
 
-    private static bool SameLink(NavMeshLinkSource live, Runtime.NavMeshData.NavMeshLinkEntry baked)
+    private static bool SameLink(NavMeshLinkSource live, NavMeshLinkSource baked)
     {
         const float Tolerance = 1e-4f;
         return live.UserId == baked.UserId
@@ -401,14 +396,8 @@ public class NavMeshSurface : MonoBehaviour
     public bool RebuildTiles(AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources,
         IReadOnlyList<NavMeshAreaVolume>? volumes = null)
     {
-        Runtime.NavMeshData? data = _runtimeData;
-        if (World == null || _instance == null || data.IsNotValid())
-            return false;
-
-        volumes ??= CollectVolumes(RebuildCollectionBounds(worldBounds));
-        List<NavMeshTileRebuild> rebuilt = NavMeshBuilder.BuildTilesInBounds(
-            data!, sources, worldBounds.Min, worldBounds.Max, DefaultArea, volumes: volumes);
-        return ApplyRebuiltTilesImmediately(rebuilt);
+        if (_instance == null) return false;
+        return ApplyRebuiltTilesImmediately(PrepareRebuild(worldBounds, sources, volumes)!(default));
     }
 
     /// <summary>
@@ -422,20 +411,23 @@ public class NavMeshSurface : MonoBehaviour
         AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources, CancellationToken cancellation = default,
         IReadOnlyList<NavMeshAreaVolume>? volumes = null)
     {
-        // The surface's own copy, not the asset: the background build reads the tile grid off
-        // it, and it must be the grid the live mesh is on.
-        Runtime.NavMeshData? data = _runtimeData;
-        if (data.IsNotValid())
-            return Task.FromResult(new List<NavMeshTileRebuild>());
+        Func<CancellationToken, List<NavMeshTileRebuild>>? rebuild = PrepareRebuild(worldBounds, sources, volumes);
+        if (rebuild == null) return Task.FromResult(new List<NavMeshTileRebuild>());
+        return Task.Run(() => rebuild(cancellation), cancellation);
+    }
 
-        // Volumes are collected on the calling (main) thread — they touch Transforms; the
-        // resulting payload is self-contained for the background build. The null default scans
-        // the scene's active objects — explicit-sources callers who avoid scene scans on
-        // purpose should pass [] (or their own list) instead.
+    /// <summary>Resolve a partial rebuild on the calling (main) thread, since volume collection touches
+    /// Transforms, and return the self-contained build. Null while unregistered. It reads the surface's
+    /// own copy rather than the asset, because that is the grid the live mesh is on.</summary>
+    private Func<CancellationToken, List<NavMeshTileRebuild>>? PrepareRebuild(AABB worldBounds,
+        IReadOnlyList<NavMeshGeometrySource> sources, IReadOnlyList<NavMeshAreaVolume>? volumes)
+    {
+        Runtime.NavMeshData? data = _runtimeData;
+        if (data.IsNotValid()) return null;
+
         volumes ??= CollectVolumes(RebuildCollectionBounds(worldBounds));
         int defaultArea = DefaultArea;
-        return Task.Run(() => NavMeshBuilder.BuildTilesInBounds(
-            data!, sources, worldBounds.Min, worldBounds.Max, defaultArea, cancellation, volumes), cancellation);
+        return cancellation => NavMeshBuilder.BuildTilesInBounds(data!, sources, worldBounds.Min, worldBounds.Max, defaultArea, cancellation, volumes);
     }
 
     /// <summary>
@@ -569,27 +561,24 @@ public class NavMeshSurface : MonoBehaviour
     internal List<NavMeshGeometrySource> CollectSources(AABB? filterBounds, float terrainVoxelSize)
     {
         List<NavMeshGeometrySource> sources = [];
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
-        if (scene.IsNotValid()) return sources;
-        if (!TryResolveCollectionBounds(filterBounds, out AABB? bounds))
-            return sources; // filter rect entirely outside the volume
-
-        IEnumerable<GameObject> objects = CollectObjects == NavMeshCollectObjects.Children
-            ? EnumerateSelfAndChildren(GameObject)
-            : scene!.ActiveObjects;
-
-        NavMeshGeometryCollector.Collect(objects, UseGeometry, Layers, terrainVoxelSize, DefaultArea, sources, bounds, AgentTypeId);
+        if (TryGetCollectionScope(filterBounds, out Scene? scene, out AABB? bounds))
+            NavMeshGeometryCollector.Collect(CollectionObjects(scene!), UseGeometry, Layers, terrainVoxelSize, DefaultArea, sources, bounds, AgentTypeId);
         return sources;
     }
 
+    private IEnumerable<GameObject> CollectionObjects(Scene scene)
+        => CollectObjects == NavMeshCollectObjects.Children ? EnumerateSelfAndChildren(GameObject) : scene.ActiveObjects;
+
     /// <summary>
-    /// Compose an optional world-space filter with the Volume-mode extent (the one bounds
-    /// rule shared by geometry and volume collection). False when the intersection is empty —
-    /// nothing can be collected.
+    /// The scene to collect from and the world-space filter, composed with the Volume-mode extent
+    /// (the one bounds rule every collector shares). False when not in a scene or when the
+    /// intersection is empty, so nothing can be collected.
     /// </summary>
-    private bool TryResolveCollectionBounds(AABB? filterBounds, out AABB? bounds)
+    private bool TryGetCollectionScope(AABB? filterBounds, out Scene? scene, out AABB? bounds)
     {
+        scene = Scene;
         bounds = filterBounds;
+        if (scene.IsNotValid()) return false;
         if (CollectObjects != NavMeshCollectObjects.Volume) return true;
 
         AABB volume = VolumeBounds;
@@ -614,16 +603,8 @@ public class NavMeshSurface : MonoBehaviour
     public List<NavMeshAreaVolume> CollectVolumes(AABB? filterBounds = null)
     {
         List<NavMeshAreaVolume> volumes = [];
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
-        if (scene.IsNotValid()) return volumes;
-        if (!TryResolveCollectionBounds(filterBounds, out AABB? bounds))
-            return volumes;
-
-        IEnumerable<GameObject> objects = CollectObjects == NavMeshCollectObjects.Children
-            ? EnumerateSelfAndChildren(GameObject)
-            : scene!.ActiveObjects;
-
-        NavMeshGeometryCollector.CollectModifierVolumes(objects, Layers, AgentTypeId, volumes, bounds);
+        if (TryGetCollectionScope(filterBounds, out Scene? scene, out AABB? bounds))
+            NavMeshGeometryCollector.CollectModifierVolumes(CollectionObjects(scene!), Layers, AgentTypeId, volumes, bounds);
         return volumes;
     }
 
@@ -636,9 +617,7 @@ public class NavMeshSurface : MonoBehaviour
     public List<NavMeshLinkSource> CollectLinks(AABB? filterBounds = null)
     {
         List<NavMeshLinkSource> links = [];
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
-        if (scene.IsNotValid()) return links;
-        if (!TryResolveCollectionBounds(filterBounds, out AABB? bounds))
+        if (!TryGetCollectionScope(filterBounds, out Scene? scene, out AABB? bounds))
             return links;
 
         // Scene-wide collection reads the world's registry rather than every GameObject: a link

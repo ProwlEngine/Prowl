@@ -83,24 +83,6 @@ public struct NavMeshTriangulation
                     isCorner.Add(true);
                 }
 
-                if (tile.data.detailMeshes == null)
-                {
-                    // No detail to read: the polygon is its own flat fan (as Detour also assumes),
-                    // and its outlines are the corner-to-corner chords.
-                    for (int v = 0; v < poly.vertCount; v++)
-                        if (TryClassifyEdge(poly, v, p, out NavMeshEdgeKind flatKind))
-                            edges.Add(new NavMeshEdge(vertices[baseVert + v], vertices[baseVert + (v + 1) % poly.vertCount], flatKind));
-
-                    for (int v = 2; v < poly.vertCount; v++)
-                    {
-                        indices.Add(baseVert);
-                        indices.Add(baseVert + v - 1);
-                        indices.Add(baseVert + v);
-                        areas.Add(area);
-                    }
-                    continue;
-                }
-
                 // A detail sub-mesh reuses the polygon's corners as its first vertices and stores
                 // only the ones it added, so appending those keeps every detail index — corner or
                 // added — at baseVert + index.

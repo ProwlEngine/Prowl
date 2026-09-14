@@ -4,8 +4,8 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Recast.Core.Numerics;
 using Prowl.Recast;
+using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Geom;
 
 using Prowl.Vector;
@@ -19,60 +19,34 @@ namespace Prowl.Runtime;
 /// area (sources with <see cref="NavMeshGeometrySource.UnspecifiedArea"/> resolve to the
 /// bake's default area).
 /// </summary>
-internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
+internal sealed class ProwlInputGeomProvider
 {
-    /// <summary>One area's triangle soup, with the area pre-converted to Detour form and its
-    /// world-XZ extent for cheap tile rejection (most tiles of a bounded bake overlap nothing;
-    /// an AABB test here beats even the chunky-index walk and allocates nothing).</summary>
-    internal readonly struct AreaMesh
+    /// <summary>A world-space XZ rect. No Y bound: a rebuild's vertical range comes from the bake.</summary>
+    internal readonly record struct RectXZ(float MinX, float MinZ, float MaxX, float MaxZ)
     {
-        public readonly RcTriMesh Mesh;
-        public readonly int DetourArea;
-        public readonly float MinX, MinZ, MaxX, MaxZ;
-
-        public AreaMesh(RcTriMesh mesh, int detourArea, float minX, float minZ, float maxX, float maxZ)
-        {
-            Mesh = mesh;
-            DetourArea = detourArea;
-            MinX = minX;
-            MinZ = minZ;
-            MaxX = maxX;
-            MaxZ = maxZ;
-        }
-
-        /// <summary>Does this area's geometry overlap the XZ rect at all?</summary>
-        public bool OverlapsXZ(float minX, float minZ, float maxX, float maxZ)
+        public bool Overlaps(float minX, float minZ, float maxX, float maxZ)
             => MinX <= maxX && MaxX >= minX && MinZ <= maxZ && MaxZ >= minZ;
     }
 
-    /// <summary>World-space XZ rect a flatten can be limited to. No Y bound: a rebuild's vertical
-    /// range comes from the bake, not from the region being rebuilt.</summary>
-    internal readonly struct ClipRect
-    {
-        public readonly float MinX, MinZ, MaxX, MaxZ;
-
-        public ClipRect(float minX, float minZ, float maxX, float maxZ)
-        {
-            MinX = minX;
-            MinZ = minZ;
-            MaxX = maxX;
-            MaxZ = maxZ;
-        }
-
-        public bool OverlapsXZ(float minX, float minZ, float maxX, float maxZ)
-            => MinX <= maxX && MaxX >= minX && MinZ <= maxZ && MaxZ >= minZ;
-    }
+    /// <summary>One area's triangle soup, with the area pre-converted to Detour form and its XZ extent
+    /// for cheap tile rejection (most tiles of a bounded bake overlap nothing).</summary>
+    internal readonly record struct AreaMesh(RcTriMesh Mesh, int DetourArea, RectXZ Bounds);
 
     private readonly List<AreaMesh> _areaMeshes = [];
-    private readonly RcVec3f _boundsMin;
-    private readonly RcVec3f _boundsMax;
-    private readonly List<RcConvexVolume> _convexVolumes = [];
 
     /// <summary>Total triangle count across all areas.</summary>
     public int TriangleCount { get; }
 
     /// <summary>The per-area triangle soups, for the area-aware voxelizer.</summary>
     internal IReadOnlyList<AreaMesh> AreaMeshes => _areaMeshes;
+
+    /// <summary>Area volumes applied to the compact heightfield of every tile.</summary>
+    internal List<RcConvexVolume> ConvexVolumes { get; } = [];
+
+    /// <summary>World-space bounds of every source vertex. Only meaningful when <see cref="TriangleCount"/> is above zero.</summary>
+    public RcVec3f BoundsMin { get; }
+
+    public RcVec3f BoundsMax { get; }
 
     /// <summary>
     /// Flatten sources into per-area world-space soups. Vertices are transformed by each
@@ -84,12 +58,9 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
     /// everything. Vertices are still transformed either way, so the reported mesh bounds cover
     /// every source regardless.
     /// </summary>
-    public ProwlInputGeomProvider(IReadOnlyList<NavMeshGeometrySource> sources, int defaultArea, ClipRect? clip)
+    public ProwlInputGeomProvider(IReadOnlyList<NavMeshGeometrySource> sources, int defaultArea, RectXZ? clip)
     {
         ArgumentNullException.ThrowIfNull(sources);
-
-        bool hasClip = clip.HasValue;
-        ClipRect rect = clip ?? default;
 
         // Group source indices by resolved area. Order within a group is preserved, and
         // groups are keyed in first-seen order, so identical input yields identical output.
@@ -113,7 +84,6 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
         var min = new Float3(float.MaxValue, float.MaxValue, float.MaxValue);
         var max = new Float3(float.MinValue, float.MinValue, float.MinValue);
         int totalTris = 0;
-        bool anyVerts = false;
 
         foreach (int area in groupOrder)
         {
@@ -155,7 +125,6 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
                     gMinZ = Math.Min(gMinZ, verts[o + 2]);
                     gMaxX = Math.Max(gMaxX, verts[o + 0]);
                     gMaxZ = Math.Max(gMaxZ, verts[o + 2]);
-                    anyVerts = true;
                 }
 
                 // t + 2 < Length guards indices whose count isn't a multiple of 3 (same guard
@@ -166,12 +135,12 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
                     if ((uint)i0 >= source.Vertices.Length || (uint)i1 >= source.Vertices.Length || (uint)i2 >= source.Vertices.Length)
                         continue;
 
-                    if (hasClip)
+                    if (clip is RectXZ rect)
                     {
                         // AABB overlap, not corner containment: a triangle wider than the rect has
                         // all three corners outside it and still covers every tile in it.
                         int o0 = (vBase + i0) * 3, o1 = (vBase + i1) * 3, o2 = (vBase + i2) * 3;
-                        if (!rect.OverlapsXZ(
+                        if (!rect.Overlaps(
                                 MathF.Min(verts[o0], MathF.Min(verts[o1], verts[o2])),
                                 MathF.Min(verts[o0 + 2], MathF.Min(verts[o1 + 2], verts[o2 + 2])),
                                 MathF.Max(verts[o0], MathF.Max(verts[o1], verts[o2])),
@@ -194,19 +163,12 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
                 Array.Resize(ref tris, tWrite);
 
             totalTris += tWrite / 3;
-            _areaMeshes.Add(new AreaMesh(new RcTriMesh(verts, tris), RasterAreaFor(area), gMinX, gMinZ, gMaxX, gMaxZ));
+            _areaMeshes.Add(new AreaMesh(new RcTriMesh(verts, tris), RasterAreaFor(area), new RectXZ(gMinX, gMinZ, gMaxX, gMaxZ)));
         }
 
         TriangleCount = totalTris;
-
-        if (!anyVerts)
-        {
-            min = Float3.Zero;
-            max = Float3.Zero;
-        }
-
-        _boundsMin = new RcVec3f((float)min.X, (float)min.Y, (float)min.Z);
-        _boundsMax = new RcVec3f((float)max.X, (float)max.Y, (float)max.Z);
+        BoundsMin = new RcVec3f((float)min.X, (float)min.Y, (float)min.Z);
+        BoundsMax = new RcVec3f((float)max.X, (float)max.Y, (float)max.Z);
     }
 
     /// <summary>Area conversion for values written straight onto the compact heightfield (convex
@@ -225,33 +187,4 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
     /// <inheritdoc cref="DetourAreaFor"/>
     internal static int RasterAreaFor(int area)
         => area == NavMeshAreas.NotWalkable ? NotWalkableRasterArea : DetourAreaFor(area);
-
-    /// <summary>The first area's soup (interface requirement; the area-aware voxelizer uses
-    /// <see cref="AreaMeshes"/> instead, which carries all of them).</summary>
-    public RcTriMesh GetMesh() => _areaMeshes.Count > 0 ? _areaMeshes[0].Mesh : new RcTriMesh([], []);
-
-    public RcVec3f GetMeshBoundsMin() => _boundsMin;
-
-    public RcVec3f GetMeshBoundsMax() => _boundsMax;
-
-    public IEnumerable<RcTriMesh> Meshes()
-    {
-        foreach (AreaMesh areaMesh in _areaMeshes)
-            yield return areaMesh.Mesh;
-    }
-
-    public void AddConvexVolume(RcConvexVolume convexVolume) => _convexVolumes.Add(convexVolume);
-
-    public IList<RcConvexVolume> ConvexVolumes() => _convexVolumes;
-
-    // Off-mesh connections never travel through the geometry provider: tiles are contoured by
-    // the TileCache at runtime, which injects the link set itself
-    // (NavMeshTileBuilder.ProwlTileCacheMeshProcess). Nothing reads these back, so there is
-    // nothing to store — they exist only because IRcInputGeomProvider declares them.
-
-    public List<RcOffMeshConnection> GetOffMeshConnections() => [];
-
-    public void AddOffMeshConnection(RcVec3f start, RcVec3f end, float radius, bool bidir, int area, int flags) { }
-
-    public void RemoveOffMeshConnections(Predicate<RcOffMeshConnection> filter) { }
 }

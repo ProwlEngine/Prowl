@@ -1239,7 +1239,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         }
 
         Float3 expected = cart.Transform.Position;
-        Prowl.Recast.Detour.Crowd.DtCrowd crowd = scene.Navigation.NativeCrowd!;
+        Prowl.Recast.Detour.Crowd.DtCrowd crowd = scene.Navigation.GetNativeCrowd()!;
         foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
         {
             if (!ReferenceEquals(a.option.userData, obstacle)) continue;
@@ -1279,7 +1279,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         }
 
         Tick(scene, 300);
-        Prowl.Recast.Detour.Crowd.DtCrowd crowd = scene.Navigation.NativeCrowd!;
+        Prowl.Recast.Detour.Crowd.DtCrowd crowd = scene.Navigation.GetNativeCrowd()!;
         foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
         {
             if (!ReferenceEquals(a.option.userData, obstacle)) continue;
@@ -1327,7 +1327,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     /// a count so a failure reports which side of the switch broke.</summary>
     private static int BlockerCount(Scene scene, NavMeshObstacle obstacle)
     {
-        Prowl.Recast.Detour.Crowd.DtCrowd? crowd = scene.Navigation.NativeCrowd;
+        Prowl.Recast.Detour.Crowd.DtCrowd? crowd = scene.Navigation.GetNativeCrowd();
         if (crowd == null) return 0;
         int count = 1;
         foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())

@@ -57,14 +57,8 @@ public sealed class NavMeshBakeService
 
         Task<NavMeshData?> task = _task;
         NavMeshSurface? surface = _surface;
-        bool cancelled = _cancellation!.IsCancellationRequested;
         Cleanup();
 
-        if (cancelled || task.IsCanceled)
-        {
-            Status = "Cancelled";
-            return;
-        }
         if (task.IsFaulted)
         {
             Status = "Failed";

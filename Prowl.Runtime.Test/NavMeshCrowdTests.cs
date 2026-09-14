@@ -298,8 +298,6 @@ public class NavMeshCrowdTests : RuntimeTestBase
             Assert.NotNull(scene.Navigation.GetNativeCrowd(0));
             Assert.NotNull(scene.Navigation.GetNativeCrowd(3));
             Assert.NotSame(scene.Navigation.GetNativeCrowd(0), scene.Navigation.GetNativeCrowd(3));
-            // NativeCrowd stays sugar for type 0.
-            Assert.Same(scene.Navigation.NativeCrowd, scene.Navigation.GetNativeCrowd(0));
 
             humanoid.SetDestination(new Float3(8, 0, -8));
             scout.SetDestination(new Float3(8, 0, 8));

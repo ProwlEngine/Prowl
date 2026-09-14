@@ -5,8 +5,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
-using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.TileCache;
 
 using Prowl.Vector;
 
@@ -21,8 +21,6 @@ namespace Prowl.Runtime;
 /// </summary>
 public sealed class NavMeshInstance
 {
-    internal NavMeshData Data;
-    internal DtNavMesh Mesh;
     internal readonly ReaderWriterLockSlim Lock = new(LockRecursionPolicy.NoRecursion);
     internal readonly ConcurrentBag<DtNavMeshQuery> QueryPool = new();
 
@@ -32,11 +30,10 @@ public sealed class NavMeshInstance
     // nothing per frame. Main-thread only, like registration itself.
     internal bool CachePending;
 
-    internal NavMeshInstance(NavMeshData data, Prowl.Recast.Detour.TileCache.DtTileCache tileCache,
-        NavMeshTileBuilder.ProwlTileCacheMeshProcess tileCacheLinks)
+    internal NavMeshInstance(NavMeshData data, DtTileCache tileCache, NavMeshTileBuilder.ProwlTileCacheMeshProcess tileCacheLinks)
     {
-        Data = data;
-        Mesh = tileCache.GetNavMesh();
+        NavMeshData = data;
+        NativeNavMesh = tileCache.GetNavMesh();
         TileCache = tileCache;
         TileCacheLinks = tileCacheLinks;
     }
@@ -46,16 +43,10 @@ public sealed class NavMeshInstance
     /// <see cref="NavMeshSurface.RebuildLinkTiles"/>.</summary>
     internal NavMeshTileBuilder.ProwlTileCacheMeshProcess TileCacheLinks { get; }
 
-    /// <summary>The TileCache backing this instance, for advanced use. <see cref="NavMeshWorld.Update"/>
-    /// pumps its incremental tile rebuilds, but only for instances known to have pending work, and
-    /// DtTileCache cannot be asked whether it has any. Carve through <see cref="AddBoxObstacle"/> and
-    /// friends, or mutate through <see cref="NavMeshWorld.MutateTileCache"/>. Code that queues on this
-    /// handle directly must call <see cref="MarkCachePending"/> or the request waits forever.</summary>
-    public Prowl.Recast.Detour.TileCache.DtTileCache TileCache { get; }
-
-    /// <summary>Tell the pump this cache has work waiting. Only needed after queuing on
-    /// <see cref="TileCache"/> directly. Main thread only.</summary>
-    public void MarkCachePending() => CachePending = true;
+    /// <summary>The TileCache backing this instance. The pump only drains instances flagged
+    /// <see cref="CachePending"/>, so anything that queues work on it must set that flag. Carve
+    /// through <see cref="AddBoxObstacle"/> and friends, or mutate through <see cref="NavMeshWorld.MutateTileCache"/>.</summary>
+    internal DtTileCache TileCache { get; }
 
     /// <summary>How many obstacles this navmesh may carve at once.</summary>
     public int MaxObstacles => TileCache.GetParams().maxObstacles;
@@ -64,7 +55,7 @@ public sealed class NavMeshInstance
     /// rebuild over the following frames. Zero when the obstacle pool is full. Main thread only.</summary>
     public long AddCylinderObstacle(Float3 basePosition, float radius, float height)
     {
-        long obstacleRef = TileCache.AddObstacle(ToRc(basePosition), radius, height);
+        long obstacleRef = TileCache.AddObstacle(basePosition.ToRc(), radius, height);
         if (obstacleRef != 0) CachePending = true;
         return obstacleRef;
     }
@@ -73,7 +64,7 @@ public sealed class NavMeshInstance
     /// Zero when the obstacle pool is full. Main thread only.</summary>
     public long AddBoxObstacle(Float3 center, Float3 halfExtents, float yawRadians)
     {
-        long obstacleRef = TileCache.AddBoxObstacle(ToRc(center), ToRc(halfExtents), yawRadians);
+        long obstacleRef = TileCache.AddBoxObstacle(center.ToRc(), halfExtents.ToRc(), yawRadians);
         if (obstacleRef != 0) CachePending = true;
         return obstacleRef;
     }
@@ -86,18 +77,16 @@ public sealed class NavMeshInstance
         CachePending = true;
     }
 
-    private static RcVec3f ToRc(Float3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
-
     /// <summary>The agent type this navmesh was built for.</summary>
-    public NavMeshAgentTypeId AgentTypeId => Data.Settings.AgentTypeId;
+    public NavMeshAgentTypeId AgentTypeId => NavMeshData.Settings.AgentTypeId;
 
     /// <summary>The asset this instance was created from.</summary>
-    public NavMeshData NavMeshData => Data;
+    public NavMeshData NavMeshData { get; }
 
-    /// <summary>The underlying Detour navmesh, owned by <see cref="TileCache"/>. Advanced use;
-    /// mutating it directly bypasses the query locking and desyncs it from the cache that built
-    /// it — prefer <see cref="NavMeshWorld.MutateTileCache"/> for tile changes.</summary>
-    public DtNavMesh NativeNavMesh => Mesh;
+    /// <summary>The underlying Detour navmesh, owned by the tile cache. Advanced use; mutating it
+    /// directly bypasses the query locking and desyncs it from the cache that built it. Prefer
+    /// <see cref="NavMeshWorld.MutateTileCache"/> for tile changes.</summary>
+    public DtNavMesh NativeNavMesh { get; }
 
     // The mesh's traversable off-mesh connections by link id, built lazily and invalidated on
     // mutation — turns per-link lookups (every NavMeshLink at scene load, and again per frame
@@ -168,9 +157,9 @@ public sealed class NavMeshInstance
             if (_connections != null) return _connections;
 
             _connections = [];
-            for (int t = 0; t < Mesh.GetMaxTiles(); t++)
+            for (int t = 0; t < NativeNavMesh.GetMaxTiles(); t++)
             {
-                DtMeshTile? tile = Mesh.GetTile(t);
+                DtMeshTile? tile = NativeNavMesh.GetTile(t);
                 if (tile?.data?.offMeshCons == null) continue;
                 foreach (DtOffMeshConnection con in tile.data.offMeshCons)
                     if (con.userId != 0 && NavMeshConnection.TryFrom(tile, con, out NavMeshConnection connection))

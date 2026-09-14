@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Recast.Core.Numerics;
-using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.TileCache;
 using Prowl.Recast;
 
@@ -48,12 +47,6 @@ public static class NavMeshBuilder
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(sources);
 
-        int inputTriangles = 0;
-        for (int i = 0; i < sources.Count; i++)
-            inputTriangles += sources[i].TriangleCount;
-        if (inputTriangles == 0)
-            return null;
-
         var geom = new ProwlInputGeomProvider(sources, defaultArea, clip: null); // a full bake wants every triangle
         if (geom.TriangleCount == 0)
             return null;
@@ -64,10 +57,10 @@ public static class NavMeshBuilder
 
         float cs = settings.EffectiveVoxelSize;
         int tileVoxels = settings.EffectiveTileSize;
-        RcConfig cfg = CreateConfig(settings, defaultArea);
+        RcConfig cfg = CreateConfig(settings);
 
-        RcVec3f bmin = geom.GetMeshBoundsMin();
-        RcVec3f bmax = geom.GetMeshBoundsMax();
+        RcVec3f bmin = geom.BoundsMin;
+        RcVec3f bmax = geom.BoundsMax;
         if (worldBounds is AABB wb)
         {
             // XZ extent from the caller; Y is the union of both so no geometry falls outside
@@ -85,10 +78,8 @@ public static class NavMeshBuilder
             Settings = settings,
             BoundsMin = new Float3(bmin.X, bmin.Y, bmin.Z),
             BoundsMax = new Float3(bmax.X, bmax.Y, bmax.Z),
-            Origin = new Float3(bmin.X, bmin.Y, bmin.Z),
             TileWorldSize = tileVoxels * cs,
-            MaxTiles = GetMaxTiles(bmin, bmax, cs, tileVoxels),
-            MaxPolys = GetMaxPolysPerTile(bmin, bmax, cs, tileVoxels),
+            MaxTiles = 1 << NavMeshData.TileBitsFor(tilesX * tilesZ * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE),
         };
 
         // Detour packs tile + poly ids into shared reference bits (tile bits cap at 14), so a
@@ -150,7 +141,7 @@ public static class NavMeshBuilder
 
         if (links != null)
             foreach (NavMeshLinkSource link in links)
-                data.Links.Add(NavMeshData.NavMeshLinkEntry.From(link));
+                data.Links.Add(link);
 
         Debug.Log($"[Navigation] Baked {data.CacheLayers.Count} cache layers ({tilesX}x{tilesZ} grid, {geom.TriangleCount} input triangles, {data.Links.Count} links).");
         return data;
@@ -159,10 +150,14 @@ public static class NavMeshBuilder
     /// <summary>
     /// Rebuild the compressed layers of the tiles intersecting
     /// <paramref name="worldMin"/>..<paramref name="worldMax"/> against fresh geometry, keeping
-    /// the original bake's tile grid. A region entirely outside the baked bounds is a no-op —
+    /// the original bake's tile grid. A region entirely outside the baked bounds is a no-op, since
     /// growing the bounds needs a full rebuild. Returns one entry per affected tile; an empty
     /// layer list means the tile is now empty. Apply with <see cref="NavMeshSurface.ApplyRebuiltTiles"/>,
     /// which refreshes obstacle state so existing carves re-apply to the regenerated tiles.
+    /// <para/>
+    /// XZ anchors to the ORIGINAL bake bounds, never the current geometry, or tile (0,0) shifts and
+    /// every tile misaligns against the live navmesh. Y follows the current geometry because Recast
+    /// clips spans to the heightfield's vertical range.
     /// </summary>
     public static List<NavMeshTileRebuild> BuildTilesInBounds(NavMeshData data,
         IReadOnlyList<NavMeshGeometrySource> sources, Float3 worldMin, Float3 worldMax,
@@ -173,12 +168,59 @@ public static class NavMeshBuilder
         ArgumentNullException.ThrowIfNull(sources);
 
         var results = new List<NavMeshTileRebuild>();
-        RcConfig cfg = CreateConfig(data.Settings, defaultArea);
+        float ts = data.TileWorldSize;
+        if (ts <= 0) return results;
 
-        if (!TryPrepareRebuild(data, sources, defaultArea, volumes, worldMin, worldMax, cfg,
-            out ProwlInputGeomProvider? geom, out RcVec3f bmin, out RcVec3f bmax,
-            out int minTx, out int maxTx, out int minTz, out int maxTz))
+        RcConfig cfg = CreateConfig(data.Settings);
+        float cs = data.Settings.EffectiveVoxelSize;
+        RcVec3f bmin = data.BoundsMin.ToRc();
+        RcVec3f bmax = data.BoundsMax.ToRc();
+
+        // The tile range first, geometry second: nothing is flattened for a region that turns out to
+        // be off the navmesh, and the range is what the flatten gets clipped to.
+        RcRecast.CalcGridSize(bmin, bmax, cs, out int gridX, out int gridZ);
+        int tilesX = (gridX + cfg.TileSizeX - 1) / cfg.TileSizeX;
+        int tilesZ = (gridZ + cfg.TileSizeZ - 1) / cfg.TileSizeZ;
+
+        float border = cfg.BorderSize * cs;
+        if ((float)worldMax.X + border < bmin.X || (float)worldMin.X - border > bmax.X
+            || (float)worldMax.Z + border < bmin.Z || (float)worldMin.Z - border > bmax.Z)
             return results;
+
+        int minTx = Math.Clamp((int)MathF.Floor(((float)worldMin.X - border - bmin.X) / ts), 0, tilesX - 1);
+        int maxTx = Math.Clamp((int)MathF.Floor(((float)worldMax.X + border - bmin.X) / ts), 0, tilesX - 1);
+        int minTz = Math.Clamp((int)MathF.Floor(((float)worldMin.Z - border - bmin.Z) / ts), 0, tilesZ - 1);
+        int maxTz = Math.Clamp((int)MathF.Floor(((float)worldMax.Z + border - bmin.Z) / ts), 0, tilesZ - 1);
+
+        // Each tile rasterizes its own square widened by the erosion border, so the union over
+        // the range is everything that can contribute a span. Written in RcBuilderConfig's own
+        // association (+ ts, then + border, never (maxTx + 1) * ts) so the edges come out bit
+        // identical to the bounds it derives.
+        var clip = new ProwlInputGeomProvider.RectXZ(
+            bmin.X + minTx * ts - border, bmin.Z + minTz * ts - border,
+            bmin.X + maxTx * ts + ts + border, bmin.Z + maxTz * ts + ts + border);
+
+        // No triangles still empties the affected tiles.
+        ProwlInputGeomProvider? geom = new ProwlInputGeomProvider(sources, defaultArea, clip);
+        if (geom.TriangleCount == 0)
+        {
+            geom = null;
+        }
+        else
+        {
+            AddVolumes(geom, volumes);
+
+            // Layer heights are stored relative to the heightfield's own bmin.Y, and the tile
+            // cache rebases a neighbour's layer by a WHOLE number of voxel heights, so step down
+            // in whole ch rather than dropping to the geometry directly.
+            float geomMinY = geom.BoundsMin.Y;
+            if (geomMinY < bmin.Y)
+            {
+                float ch = data.Settings.EffectiveVoxelHeight;
+                bmin.Y -= MathF.Ceiling((bmin.Y - geomMinY) / ch) * ch;
+            }
+            bmax.Y = Math.Max(bmax.Y, geom.BoundsMax.Y);
+        }
 
         for (int tz = minTz; tz <= maxTz; tz++)
         {
@@ -191,86 +233,6 @@ public static class NavMeshBuilder
         }
 
         return results;
-    }
-
-    /// <summary>
-    /// Prologue of the partial-rebuild path: derives the affected tile range, builds the geometry
-    /// provider clipped to it, and applies volumes.
-    /// <para/>
-    /// XZ anchors to the ORIGINAL bake bounds, never the current geometry, or tile (0,0) shifts and
-    /// every tile misaligns against the live navmesh. Y follows the current geometry because Recast
-    /// clips spans to the heightfield's vertical range — except when there is no geometry, since an
-    /// empty provider reports (0,0,0) and would drag the bake down to Y=0. Empty sources still empty
-    /// the affected tiles, and a region wholly outside the baked bounds returns false rather than
-    /// clamping onto the nearest tile column.
-    /// </summary>
-    private static bool TryPrepareRebuild(NavMeshData data, IReadOnlyList<NavMeshGeometrySource> sources,
-        int defaultArea, IReadOnlyList<NavMeshAreaVolume>? volumes, Float3 worldMin, Float3 worldMax,
-        RcConfig cfg, out ProwlInputGeomProvider? geom, out RcVec3f bmin, out RcVec3f bmax,
-        out int minTx, out int maxTx, out int minTz, out int maxTz)
-    {
-        minTx = maxTx = minTz = maxTz = 0;
-        geom = null;
-        float cs = data.Settings.EffectiveVoxelSize;
-
-        bmin = new RcVec3f((float)data.BoundsMin.X, (float)data.BoundsMin.Y, (float)data.BoundsMin.Z);
-        bmax = new RcVec3f((float)data.BoundsMax.X, (float)data.BoundsMax.Y, (float)data.BoundsMax.Z);
-
-        // The tile range first, geometry second: it depends only on the bake's XZ bounds, so
-        // nothing is flattened for a region that turns out to be off the navmesh, and the range
-        // is what the flatten gets clipped to.
-        float ts = data.TileWorldSize;
-        if (ts <= 0) return false;
-        RcRecast.CalcGridSize(bmin, bmax, cs, out int gridX, out int gridZ);
-        int tilesX = (gridX + cfg.TileSizeX - 1) / cfg.TileSizeX;
-        int tilesZ = (gridZ + cfg.TileSizeZ - 1) / cfg.TileSizeZ;
-
-        float border = cfg.BorderSize * cs;
-        if ((float)worldMax.X + border < bmin.X || (float)worldMin.X - border > bmax.X
-            || (float)worldMax.Z + border < bmin.Z || (float)worldMin.Z - border > bmax.Z)
-            return false;
-
-        minTx = Math.Clamp((int)MathF.Floor(((float)worldMin.X - border - bmin.X) / ts), 0, tilesX - 1);
-        maxTx = Math.Clamp((int)MathF.Floor(((float)worldMax.X + border - bmin.X) / ts), 0, tilesX - 1);
-        minTz = Math.Clamp((int)MathF.Floor(((float)worldMin.Z - border - bmin.Z) / ts), 0, tilesZ - 1);
-        maxTz = Math.Clamp((int)MathF.Floor(((float)worldMax.Z + border - bmin.Z) / ts), 0, tilesZ - 1);
-
-        int inputTriangles = 0;
-        for (int i = 0; i < sources.Count; i++)
-            inputTriangles += sources[i].TriangleCount;
-
-        // Each tile rasterizes its own square widened by the erosion border, so the union over
-        // the range is everything that can contribute a span. Written in RcBuilderConfig's own
-        // association (+ ts, then + border, never (maxTx + 1) * ts) so the edges come out bit
-        // identical to the bounds it derives; folding them rounds the rect a fraction of a voxel
-        // inside the tile it is meant to cover.
-        var clip = new ProwlInputGeomProvider.ClipRect(
-            bmin.X + minTx * ts - border, bmin.Z + minTz * ts - border,
-            bmin.X + maxTx * ts + ts + border, bmin.Z + maxTz * ts + ts + border);
-
-        geom = inputTriangles > 0 ? new ProwlInputGeomProvider(sources, defaultArea, clip) : null;
-        if (geom != null && geom.TriangleCount == 0) geom = null; // all triangles were degenerate/dropped/clipped
-        if (geom != null) AddVolumes(geom, volumes); // volumes only re-mark rasterized geometry
-
-        if (geom != null)
-        {
-            // Layer heights are stored relative to the heightfield's own bmin.Y, and the tile
-            // cache rebases a neighbour's layer by a WHOLE number of voxel heights. Dropping to
-            // the geometry directly would put a rebuilt tile's floor a fraction of a voxel off
-            // its neighbours', which the seam cannot express: step down in whole ch instead.
-            // With clipped sources this is the REGION's Y range, not the scene's, which is still a
-            // whole multiple of ch from the bake's floor.
-            float geomMinY = geom.GetMeshBoundsMin().Y;
-            if (geomMinY < bmin.Y)
-            {
-                float ch = data.Settings.EffectiveVoxelHeight;
-                bmin.Y -= MathF.Ceiling((bmin.Y - geomMinY) / ch) * ch;
-            }
-
-            bmax.Y = Math.Max(bmax.Y, geom.GetMeshBoundsMax().Y);
-        }
-
-        return true;
     }
 
     /// <summary>Hand area volumes to the provider as Recast convex volumes; the stock pipeline
@@ -290,7 +252,7 @@ public static class NavMeshBuilder
                 verts[i * 3 + 1] = volume.MinY;
                 verts[i * 3 + 2] = (float)volume.Footprint[i].Z;
             }
-            geom.AddConvexVolume(new RcConvexVolume
+            geom.ConvexVolumes.Add(new RcConvexVolume
             {
                 verts = verts,
                 hmin = volume.MinY,
@@ -300,7 +262,7 @@ public static class NavMeshBuilder
         }
     }
 
-    private static RcConfig CreateConfig(NavMeshBuildSettings settings, int defaultArea)
+    private static RcConfig CreateConfig(NavMeshBuildSettings settings)
     {
         float cs = settings.EffectiveVoxelSize;
         int tileVoxels = settings.EffectiveTileSize;
@@ -330,7 +292,7 @@ public static class NavMeshBuilder
             filterLowHangingObstacles: settings.Overrides.FilterLowHangingObstacles,
             filterLedgeSpans: settings.Overrides.FilterLedgeSpans,
             filterWalkableLowHeightSpans: settings.Overrides.FilterWalkableLowHeightSpans,
-            walkableAreaMod: new RcAreaModification(ProwlInputGeomProvider.DetourAreaFor(defaultArea)),
+            walkableAreaMod: new RcAreaModification(RcRecast.RC_WALKABLE_AREA),
             buildMeshDetail: false);
     }
 
@@ -352,30 +314,5 @@ public static class NavMeshBuilder
 
         settings.Overrides.OverrideTileSize = true;
         settings.Overrides.TileSize = resolved;
-    }
-
-    // Tile/poly capacity split: Detour packs tile id + poly id into one reference, so bits
-    // given to tiles are taken from polys. 22 total id bits, tile bits capped at 14
-    // (the Recast demos' arithmetic).
-    //
-    // A navmesh tile slot holds ONE vertical layer, not one grid tile, so the budget is the grid
-    // scaled by the layers a tile is expected to stack, which is how the Recast tile cache samples
-    // size theirs. Without that factor a flat bake budgets exactly its own layer count and the
-    // first runtime rebuild that stacks a second layer anywhere overflows. DtNavMesh.AddTile
-    // reports that only through a status the tile cache discards, so the tiles simply go missing.
-
-    private static int GetMaxTiles(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
-        => 1 << GetTileBits(bmin, bmax, cellSize, tileSize);
-
-    private static int GetMaxPolysPerTile(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
-        => 1 << (NavMeshData.TileAndPolyIdBits - GetTileBits(bmin, bmax, cellSize, tileSize));
-
-    private static int GetTileBits(RcVec3f bmin, RcVec3f bmax, float cellSize, int tileSize)
-    {
-        RcRecast.CalcGridSize(bmin, bmax, cellSize, out int sizeX, out int sizeZ);
-        int tilesX = (sizeX + tileSize - 1) / tileSize;
-        int tilesZ = (sizeZ + tileSize - 1) / tileSize;
-        int slots = tilesX * tilesZ * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE;
-        return Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(slots)), NavMeshData.MaxTileBits);
     }
 }

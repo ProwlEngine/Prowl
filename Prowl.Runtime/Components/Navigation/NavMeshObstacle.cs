@@ -6,7 +6,9 @@ using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour.Crowd;
 
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -64,34 +66,17 @@ public class NavMeshObstacle : MonoBehaviour
     // Writing any of the five geometry members re-carves at once, so a spawn-then-configure write
     // lands without waiting for a frame. Each one no-ops on an unchanged value: a re-carve is a
     // tile rebuild, not a field assignment.
-    public NavMeshObstacleShape Shape
-    {
-        get => shape;
-        set { if (shape == value) return; shape = value; ReapplyCarve(); }
-    }
+    public NavMeshObstacleShape Shape { get => shape; set => SetGeometry(ref shape, value); }
+    public Float3 Center { get => center; set => SetGeometry(ref center, value); }
+    public Float3 Size { get => size; set => SetGeometry(ref size, value); }
+    public float Radius { get => radius; set => SetGeometry(ref radius, value); }
+    public float Height { get => height; set => SetGeometry(ref height, value); }
 
-    public Float3 Center
+    private void SetGeometry<T>(ref T field, T value)
     {
-        get => center;
-        set { if (center.Equals(value)) return; center = value; ReapplyCarve(); }
-    }
-
-    public Float3 Size
-    {
-        get => size;
-        set { if (size.Equals(value)) return; size = value; ReapplyCarve(); }
-    }
-
-    public float Radius
-    {
-        get => radius;
-        set { if (radius == value) return; radius = value; ReapplyCarve(); }
-    }
-
-    public float Height
-    {
-        get => height;
-        set { if (height == value) return; height = value; ReapplyCarve(); }
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        ReapplyCarve();
     }
 
     // LateUpdate reads these every frame, so there is nothing for a setter to apply.
@@ -113,7 +98,7 @@ public class NavMeshObstacle : MonoBehaviour
     private bool _carveApplied;
 
     // Velocity-obstacle mode: one immovable agent per live crowd, re-pinned every frame.
-    private readonly Dictionary<Prowl.Recast.Detour.Crowd.DtCrowd, Prowl.Recast.Detour.Crowd.DtCrowdAgent> _blockers = [];
+    private readonly Dictionary<DtCrowd, DtCrowdAgent> _blockers = [];
     private int _blockerCrowdCount = -1;
     private float _blockerRadius, _blockerHeight;
     private bool _warnedBlockerUnplaced;
@@ -144,10 +129,10 @@ public class NavMeshObstacle : MonoBehaviour
 
     public override void OnEnable()
     {
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        Scene? scene = Scene;
         if (scene.IsValid())
         {
-            _world = scene!.Navigation;
+            _world = scene.Navigation;
             _world.InstanceRegistered += OnInstancesChanged;
             _world.InstanceUnregistered += OnInstancesChanged;
         }
@@ -242,9 +227,7 @@ public class NavMeshObstacle : MonoBehaviour
 
         // LossyScale walks the parent chain, so the shape is measured once per frame and passed
         // down rather than re-derived by each helper.
-        Float3 scale = Transform.LossyScale;
-        float radius = BlockerRadius(scale);
-        float height = BlockerHeight(scale);
+        (float radius, float height) = BlockerShape(Transform.LossyScale);
         bool resized = Math.Abs(radius - _blockerRadius) > 1e-4f || Math.Abs(height - _blockerHeight) > 1e-4f;
         if (_blockerCrowdCount != _world.CrowdCount || resized || _refsPruneNeeded)
         {
@@ -258,9 +241,8 @@ public class NavMeshObstacle : MonoBehaviour
         // normally moved by its own steering, which a blocker has none of, so this is what makes
         // it follow the Transform. It also absorbs the crowd's collision-resolution displacement
         // (measured under a centimetre even under pressure, but costs nothing to be exact).
-        Float3 position = BlockerPosition(height);
-        var pinned = new RcVec3f((float)position.X, (float)position.Y, (float)position.Z);
-        foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker in _blockers.Values)
+        RcVec3f pinned = BlockerPosition(height).ToRc();
+        foreach (DtCrowdAgent blocker in _blockers.Values)
             blocker.npos = pinned;
     }
 
@@ -268,44 +250,35 @@ public class NavMeshObstacle : MonoBehaviour
     /// died with its navmesh.</summary>
     private void RefreshBlockers(float radius, float height)
     {
-        if (_world == null) return;
-
-        Float3 position = BlockerPosition(height);
-        var rcPosition = new RcVec3f((float)position.X, (float)position.Y, (float)position.Z);
+        RcVec3f rcPosition = BlockerPosition(height).ToRc();
+        var live = new HashSet<DtCrowd>();
         foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
         {
-            Prowl.Recast.Detour.Crowd.DtCrowd? crowd = _world.GetNativeCrowd(type.Id);
+            DtCrowd? crowd = _world!.GetNativeCrowd(type.Id);
             if (crowd == null) continue;
-            if (_blockers.TryGetValue(crowd, out Prowl.Recast.Detour.Crowd.DtCrowdAgent? existing))
+            live.Add(crowd);
+            if (_blockers.TryGetValue(crowd, out DtCrowdAgent? existing))
             {
                 crowd.UpdateAgentParameters(existing, BlockerParams(radius, height));
                 continue;
             }
 
-            Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker = crowd.AddAgent(rcPosition, BlockerParams(radius, height));
+            DtCrowdAgent blocker = crowd.AddAgent(rcPosition, BlockerParams(radius, height));
             _blockers[crowd] = blocker;
             WarnIfUnplaced(blocker);
         }
 
         // A crowd the world no longer owns died with its navmesh; its agents went with it.
-        List<Prowl.Recast.Detour.Crowd.DtCrowd>? dead = null;
-        foreach (Prowl.Recast.Detour.Crowd.DtCrowd crowd in _blockers.Keys)
-        {
-            bool live = false;
-            foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
-                if (ReferenceEquals(_world.GetNativeCrowd(type.Id), crowd)) { live = true; break; }
-            if (!live) (dead ??= []).Add(crowd);
-        }
-        if (dead != null)
-            foreach (Prowl.Recast.Detour.Crowd.DtCrowd crowd in dead)
+        foreach (DtCrowd crowd in new List<DtCrowd>(_blockers.Keys))
+            if (!live.Contains(crowd))
                 _blockers.Remove(crowd);
 
-        _blockerCrowdCount = _world.CrowdCount;
+        _blockerCrowdCount = _world!.CrowdCount;
     }
 
     private void RemoveBlockers()
     {
-        foreach ((Prowl.Recast.Detour.Crowd.DtCrowd crowd, Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker) in _blockers)
+        foreach ((DtCrowd crowd, DtCrowdAgent blocker) in _blockers)
             crowd.RemoveAgent(blocker);
         _blockers.Clear();
         _blockerCrowdCount = -1;
@@ -317,9 +290,9 @@ public class NavMeshObstacle : MonoBehaviour
     /// (sized from <see cref="NavMeshWorld.CrowdMaxAgentRadius"/>), so an obstacle floating well
     /// above the walkable surface — a tall Center offset, spawned mid-air — lands invalid.
     /// </summary>
-    private void WarnIfUnplaced(Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker)
+    private void WarnIfUnplaced(DtCrowdAgent blocker)
     {
-        if (blocker.state != Prowl.Recast.Detour.Crowd.DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID) return;
+        if (blocker.state != DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID) return;
         if (_warnedBlockerUnplaced) return;
         _warnedBlockerUnplaced = true;
         Debug.LogWarning($"[Navigation] NavMeshObstacle '{GameObject.Name}' could not place its avoidance blocker: no navmesh near its base. Agents will not steer around it. Move the obstacle onto the navmesh (check Center and the object's height), or raise Crowd Max Agent Radius in Project Settings > Navigation to widen the placement search.");
@@ -351,22 +324,20 @@ public class NavMeshObstacle : MonoBehaviour
         Size.Z * 0.5f * Math.Abs(scale.Z));
 
     /// <summary>Avoidance is circle-based, so a box is approximated by the circle enclosing its
-    /// footprint — agents give a rotated crate a slightly wider berth than its corners need.</summary>
-    private float BlockerRadius(Float3 scale)
+    /// footprint: agents give a rotated crate a slightly wider berth than its corners need.</summary>
+    private (float Radius, float Height) BlockerShape(Float3 scale)
     {
         if (Shape == NavMeshObstacleShape.Cylinder)
-            return MathF.Max(0.01f, ScaledCylinder(scale).Radius);
+        {
+            (float radius, float height) = ScaledCylinder(scale);
+            return (MathF.Max(0.01f, radius), MathF.Max(0.01f, height));
+        }
 
         Float3 half = ScaledBoxHalfExtents(scale);
-        return MathF.Max(0.01f, MathF.Sqrt(half.X * half.X + half.Z * half.Z));
+        return (MathF.Max(0.01f, MathF.Sqrt(half.X * half.X + half.Z * half.Z)), MathF.Max(0.01f, half.Y * 2f));
     }
 
-    private float BlockerHeight(Float3 scale)
-        => MathF.Max(0.01f, Shape == NavMeshObstacleShape.Cylinder
-            ? ScaledCylinder(scale).Height
-            : ScaledBoxHalfExtents(scale).Y * 2f);
-
-    private Prowl.Recast.Detour.Crowd.DtCrowdAgentParams BlockerParams(float radius, float height) => new()
+    private DtCrowdAgentParams BlockerParams(float radius, float height) => new()
     {
         radius = radius,
         height = height,

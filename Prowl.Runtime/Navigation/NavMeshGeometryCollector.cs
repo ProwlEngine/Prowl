@@ -256,19 +256,7 @@ public static class NavMeshGeometryCollector
     public static void CollectMeshRenderer(MeshRenderer renderer, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
     {
         if (renderer.IsNotValid() || !renderer.EnabledInHierarchy) return;
-
-        Mesh? mesh = renderer.Mesh.Res;
-        if (mesh.IsNotValid()) return;
-
-        if (bounds is AABB filter
-            && !TransformedBoundsIntersect(mesh!.bounds.Min, mesh.bounds.Max, renderer.Transform.LocalToWorldMatrix, filter))
-            return;
-
-        Float3[] vertices = mesh!.Vertices;
-        uint[] indices = mesh.Indices;
-        if (vertices == null || indices == null || indices.Length < 3) return;
-
-        results.Add(new NavMeshGeometrySource(vertices, ToIntIndices(indices), renderer.Transform.LocalToWorldMatrix, area));
+        AddMesh(renderer.Mesh.Res, renderer.Transform.LocalToWorldMatrix, area, results, bounds);
     }
 
     /// <summary>
@@ -279,52 +267,29 @@ public static class NavMeshGeometryCollector
     public static void CollectCollider(Collider collider, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
     {
         if (collider.IsNotValid() || !collider.EnabledInHierarchy) return;
-
-        if (bounds is AABB filter)
-        {
-            // Conservative local bounds per collider type, tested O(1) before any tessellation
-            // or vertex extraction. Mesh colliders use the mesh's own (possibly off-center)
-            // bounds; primitives are origin-centered by construction.
-            Float3 localMin, localMax;
-            if (collider is MeshCollider mc)
-            {
-                Mesh? mcMesh = mc.Mesh.Res;
-                if (mcMesh.IsNotValid()) return;
-                localMin = mcMesh!.bounds.Min;
-                localMax = mcMesh.bounds.Max;
-            }
-            else
-            {
-                Float3 halfExtents = collider switch
-                {
-                    BoxCollider box => box.Size * 0.5f,
-                    SphereCollider sphere => new Float3(sphere.Radius, sphere.Radius, sphere.Radius),
-                    CapsuleCollider capsule => new Float3(capsule.Radius, capsule.Height * 0.5f + capsule.Radius, capsule.Radius),
-                    CylinderCollider cylinder => new Float3(cylinder.Radius, cylinder.Height * 0.5f, cylinder.Radius),
-                    ConeCollider cone => new Float3(cone.Radius, cone.Height * 0.5f, cone.Radius),
-                    _ => new Float3(float.MaxValue, float.MaxValue, float.MaxValue), // unknown: never reject
-                };
-                localMin = -halfExtents;
-                localMax = halfExtents;
-            }
-            if (!TransformedBoundsIntersect(localMin, localMax, ColliderWorldMatrix(collider), filter))
-                return;
-        }
+        Float4x4 world = ColliderWorldMatrix(collider);
 
         if (collider is MeshCollider meshCollider)
         {
-            Mesh? sharedMesh = meshCollider.Mesh.Res;
-            if (sharedMesh.IsNotValid()) return;
-            Float3[] vertices = sharedMesh.Vertices;
-            uint[] indices = sharedMesh.Indices;
-            if (vertices == null || indices == null || indices.Length < 3) return;
-            results.Add(new NavMeshGeometrySource(vertices, ToIntIndices(indices), ColliderWorldMatrix(collider), area));
+            AddMesh(meshCollider.Mesh.Res, world, area, results, bounds);
             return;
         }
 
-        // Primitive tessellation: same sizing conventions as each collider's Jitter shape and
-        // gizmo (origin-centered, GizmoMatrix places it).
-        Mesh? primitive = collider switch
+        // Primitives are origin-centered by construction, so their bounds are tested before any tessellation.
+        Float3? halfExtents = collider switch
+        {
+            BoxCollider box => box.Size * 0.5f,
+            SphereCollider sphere => new Float3(sphere.Radius, sphere.Radius, sphere.Radius),
+            CapsuleCollider capsule => new Float3(capsule.Radius, capsule.Height * 0.5f + capsule.Radius, capsule.Radius),
+            CylinderCollider cylinder => new Float3(cylinder.Radius, cylinder.Height * 0.5f, cylinder.Radius),
+            ConeCollider cone => new Float3(cone.Radius, cone.Height * 0.5f, cone.Radius),
+            _ => null,
+        };
+        if (halfExtents is not Float3 half) return;
+        if (bounds is AABB filter && !TransformedBoundsIntersect(-half, half, world, filter)) return;
+
+        // Same sizing conventions as each collider's Jitter shape and gizmo (origin-centered, GizmoMatrix places it).
+        Mesh primitive = collider switch
         {
             BoxCollider box => Mesh.CreateCube(box.Size),
             SphereCollider sphere => Mesh.CreateSphere(Math.Max(sphere.Radius, 0.01f), 12, 12),
@@ -332,18 +297,30 @@ public static class NavMeshGeometryCollector
             CapsuleCollider capsule => Mesh.CreateCapsule(Math.Max(capsule.Radius, 0.01f), capsule.Height + 2f * capsule.Radius, 12, 4),
             CylinderCollider cylinder => Mesh.CreateCylinder(Math.Max(cylinder.Radius, 0.01f), cylinder.Height, 12),
             ConeCollider cone => Mesh.CreateCone(Math.Max(cone.Radius, 0.01f), cone.Height, 12),
-            _ => null,
+            _ => throw new InvalidOperationException("Every collider with half extents has a primitive."),
         };
-        if (primitive == null) return;
 
         try
         {
-            results.Add(new NavMeshGeometrySource(primitive.Vertices, ToIntIndices(primitive.Indices), ColliderWorldMatrix(collider), area));
+            results.Add(new NavMeshGeometrySource(primitive.Vertices, ToIntIndices(primitive.Indices), world, area));
         }
         finally
         {
             primitive.Dispose();
         }
+    }
+
+    /// <summary>A mesh's triangles, after testing its transformed bounds against the filter.</summary>
+    private static void AddMesh(Mesh? mesh, Float4x4 world, int area, List<NavMeshGeometrySource> results, AABB? bounds)
+    {
+        if (mesh.IsNotValid()) return;
+        if (bounds is AABB filter && !TransformedBoundsIntersect(mesh.bounds.Min, mesh.bounds.Max, world, filter)) return;
+
+        Float3[] vertices = mesh.Vertices;
+        uint[] indices = mesh.Indices;
+        if (vertices == null || indices == null || indices.Length < 3) return;
+
+        results.Add(new NavMeshGeometrySource(vertices, ToIntIndices(indices), world, area));
     }
 
     /// <summary>

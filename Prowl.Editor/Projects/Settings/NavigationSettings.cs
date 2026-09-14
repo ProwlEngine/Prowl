@@ -22,43 +22,18 @@ namespace Prowl.Editor.Projects.Settings;
 [ProjectSettings("Navigation", EditorIcons.Compass, order: 21)]
 public class NavigationSettings : ProjectSettingsBase
 {
-    public List<string> AreaNames = CreateDefaultNames();
-    public List<float> AreaCosts = CreateDefaultCosts();
-    public List<NavMeshAgentType> AgentTypes = [new NavMeshAgentType { Id = NavMeshAgentTypes.Humanoid, Name = "Humanoid" }];
+    public List<string> AreaNames = [.. NavMeshAreas.CreateDefaultNames()];
+    public List<float> AreaCosts = [.. NavMeshAreas.CreateDefaultCosts()];
+    public List<NavMeshAgentType> AgentTypes = [NavMeshAgentTypes.CreateHumanoid()];
 
     /// <summary>Monotonic id counter for Add Agent Type. Persisted so deleting the
-    /// highest-id type can never hand its id to a later, unrelated type — surfaces and
+    /// highest-id type can never hand its id to a later, unrelated type: surfaces and
     /// agents still referencing the deleted id would silently rebind to the new one.</summary>
     public int NextAgentTypeId = 1;
 
     public NavMeshWorldSettings World = new();
 
     private int _activeTab;
-
-    // Literal defaults, not reads of NavMeshAreas: these feed ResetToDefaults, which runs as a
-    // project opens, before that project's settings load — the statics still hold the previous
-    // project's table at that point.
-    private static List<string> CreateDefaultNames()
-    {
-        var names = new List<string>(NavMeshAreas.MaxAreas);
-        for (int i = 0; i < NavMeshAreas.MaxAreas; i++)
-            names.Add(i switch
-            {
-                NavMeshAreas.Walkable => "Walkable",
-                NavMeshAreas.NotWalkable => "Not Walkable",
-                NavMeshAreas.Jump => "Jump",
-                _ => string.Empty,
-            });
-        return names;
-    }
-
-    private static List<float> CreateDefaultCosts()
-    {
-        var costs = new List<float>(NavMeshAreas.MaxAreas);
-        for (int i = 0; i < NavMeshAreas.MaxAreas; i++)
-            costs.Add(NavMeshAreas.GetDefaultAreaCost(i));
-        return costs;
-    }
 
     private void EnsureSize()
     {
@@ -73,18 +48,14 @@ public class NavigationSettings : ProjectSettingsBase
         AreaCosts[NavMeshAreas.NotWalkable] = 1f;
         NavMeshAreas.ApplyTable(AreaNames, AreaCosts);
         NavMeshAgentTypes.ApplyTable(AgentTypes);
-
-        NavMeshWorld.DefaultSettings = World;
-        var scene = Runtime.Resources.Scene.Current;
-        if (scene.IsValid())
-            scene!.Navigation.ApplySettings(World);
+        NavMeshWorld.ApplyProjectSettings(World);
     }
 
     public override void ResetToDefaults()
     {
-        AreaNames = CreateDefaultNames();
-        AreaCosts = CreateDefaultCosts();
-        AgentTypes = [new NavMeshAgentType { Id = NavMeshAgentTypes.Humanoid, Name = "Humanoid" }];
+        AreaNames = [.. NavMeshAreas.CreateDefaultNames()];
+        AreaCosts = [.. NavMeshAreas.CreateDefaultCosts()];
+        AgentTypes = [NavMeshAgentTypes.CreateHumanoid()];
         NextAgentTypeId = 1;
         World = new NavMeshWorldSettings();
         Apply();
@@ -153,14 +124,11 @@ public class NavigationSettings : ProjectSettingsBase
         // Column headers, aligned with the rows below.
         using (paper.Row("nav_agent_cols").Height(20).RowBetween(6).ChildLeft(8).ChildRight(4).Enter())
         {
-            paper.Box("nav_agent_cols_name")
-                .Width(UnitValue.Stretch()).Height(18).ChildLeft(4)
-                .Text("Name", font).TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-            DrawAgentColHeader(paper, "nav_agent_cols_r", "Radius", NumW, font);
-            DrawAgentColHeader(paper, "nav_agent_cols_h", "Height", NumW, font);
-            DrawAgentColHeader(paper, "nav_agent_cols_s", "Slope°", NumW, font);
-            DrawAgentColHeader(paper, "nav_agent_cols_c", "Climb", NumW, font);
+            DrawColumnHeader(paper, "nav_agent_cols_name", "Name", UnitValue.Stretch(), font);
+            DrawColumnHeader(paper, "nav_agent_cols_r", "Radius", NumW, font);
+            DrawColumnHeader(paper, "nav_agent_cols_h", "Height", NumW, font);
+            DrawColumnHeader(paper, "nav_agent_cols_s", "Slope°", NumW, font);
+            DrawColumnHeader(paper, "nav_agent_cols_c", "Climb", NumW, font);
             paper.Box("nav_agent_cols_del").Width(DelW).Height(18);
         }
 
@@ -175,8 +143,7 @@ public class NavigationSettings : ProjectSettingsBase
                 // Name: same control for every row; the built-in Humanoid's name is locked.
                 using (paper.Box($"nav_agent_name_{type.Id}").Width(UnitValue.Stretch()).Height(22).Enter())
                 {
-                    IDisposable? dim = isBuiltin ? EnableIfAttributeHandler.PushDisabledScope() : null;
-                    try
+                    using (isBuiltin ? EnableIfAttributeHandler.PushDisabledScope() : null)
                     {
                         Origami.TextField(paper, $"nav_agent_name_tf_{type.Id}", type.Name, v =>
                             {
@@ -190,7 +157,6 @@ public class NavigationSettings : ProjectSettingsBase
                                 Changed();
                             }).Show();
                     }
-                    finally { dim?.Dispose(); }
                 }
 
                 DrawAgentNumField(paper, $"nav_agent_r_{type.Id}", NumW, type.Radius, v => { AgentTypes[idx].Radius = MathF.Max(0.01f, v); Changed(); });
@@ -198,24 +164,12 @@ public class NavigationSettings : ProjectSettingsBase
                 DrawAgentNumField(paper, $"nav_agent_s_{type.Id}", NumW, type.MaxSlope, v => { AgentTypes[idx].MaxSlope = Math.Clamp(v, 0f, 89f); Changed(); });
                 DrawAgentNumField(paper, $"nav_agent_c_{type.Id}", NumW, type.MaxClimb, v => { AgentTypes[idx].MaxClimb = MathF.Max(0f, v); Changed(); });
 
-                if (!isBuiltin)
+                DrawDeleteButton(paper, $"nav_agent_del_{type.Id}", font, DelW, idx, isBuiltin ? null : id =>
                 {
-                    paper.Box($"nav_agent_del_{type.Id}")
-                        .Width(DelW).Height(22).Rounded(3)
-                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                        .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(idx, (id, _) =>
-                        {
-                            // Ids are persistent - removing an entry never renumbers others.
-                            AgentTypes.RemoveAt(id);
-                            Changed();
-                        });
-                }
-                else
-                {
-                    paper.Box($"nav_agent_del_{type.Id}").Width(DelW).Height(22); // column alignment spacer
-                }
+                    // Ids are persistent: removing an entry never renumbers others.
+                    AgentTypes.RemoveAt(id);
+                    Changed();
+                });
             }
         }
 
@@ -238,12 +192,29 @@ public class NavigationSettings : ProjectSettingsBase
         }).Show();
     }
 
-    private static void DrawAgentColHeader(Paper paper, string id, string label, float width, Prowl.Scribe.FontFile font)
+    private static void DrawColumnHeader(Paper paper, string id, string label, UnitValue width, Prowl.Scribe.FontFile font)
     {
         paper.Box(id)
             .Width(width).Height(18).ChildLeft(4)
             .Text(label, font).TextColor(EditorTheme.Ink300)
             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+    }
+
+    /// <summary>A row's delete button, or an empty spacer when <paramref name="onDelete"/> is null so the columns stay aligned.</summary>
+    private static void DrawDeleteButton(Paper paper, string id, Prowl.Scribe.FontFile font, float width, int index, Action<int>? onDelete)
+    {
+        if (onDelete == null)
+        {
+            paper.Box(id).Width(width).Height(22);
+            return;
+        }
+
+        paper.Box(id)
+            .Width(width).Height(22).Rounded(3)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
+            .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(index, (i, _) => onDelete(i));
     }
 
     private static void DrawAgentNumField(Paper paper, string id, float width, float value, Action<float> setter)
@@ -268,14 +239,8 @@ public class NavigationSettings : ProjectSettingsBase
         {
             paper.Box("nav_area_cols_swatch").Width(SwatchW).Height(18);
             paper.Box("nav_area_cols_slot").Width(SlotW).Height(18);
-            paper.Box("nav_area_cols_name")
-                .Width(UnitValue.Stretch()).Height(18).ChildLeft(4)
-                .Text("Name", font).TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-            paper.Box("nav_area_cols_cost")
-                .Width(CostW).Height(18).ChildLeft(4)
-                .Text("Cost", font).TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            DrawColumnHeader(paper, "nav_area_cols_name", "Name", UnitValue.Stretch(), font);
+            DrawColumnHeader(paper, "nav_area_cols_cost", "Cost", CostW, font);
             paper.Box("nav_area_cols_del").Width(DelW).Height(18);
         }
 
@@ -301,21 +266,19 @@ public class NavigationSettings : ProjectSettingsBase
                 // rendered disabled instead of as bare labels.
                 using (paper.Box($"nav_area_name_{i}").Width(UnitValue.Stretch()).Height(22).Enter())
                 {
-                    IDisposable? dim = isBuiltin ? EnableIfAttributeHandler.PushDisabledScope() : null;
-                    try
+                    using (isBuiltin ? EnableIfAttributeHandler.PushDisabledScope() : null)
                     {
                         Origami.TextField(paper, $"nav_area_name_tf_{i}", AreaNames[i], v =>
                             {
                                 if (isBuiltin || string.IsNullOrWhiteSpace(v)) return;
                                 string trimmed = v.Trim();
-                                // Duplicate names would make GetAreaFromName ambiguous.
+                                // Duplicate names would make the area dropdowns ambiguous.
                                 int existing = AreaNames.IndexOf(trimmed);
                                 if (existing >= 0 && existing != idx) return;
                                 AreaNames[idx] = trimmed;
                                 Changed();
                             }).Show();
                     }
-                    finally { dim?.Dispose(); }
                 }
 
                 // Cost: plain float field, clamped to >= 1 on apply (Detour's A* heuristic
@@ -324,8 +287,7 @@ public class NavigationSettings : ProjectSettingsBase
                 using (paper.Box($"nav_area_cost_{i}").Width(CostW).Height(22).Enter())
                 {
                     bool costLocked = i == NavMeshAreas.NotWalkable;
-                    IDisposable? dim = costLocked ? EnableIfAttributeHandler.PushDisabledScope() : null;
-                    try
+                    using (costLocked ? EnableIfAttributeHandler.PushDisabledScope() : null)
                     {
                         Origami.NumericField<float>(paper, $"nav_area_cost_nf_{i}", AreaCosts[i], v =>
                             {
@@ -334,29 +296,16 @@ public class NavigationSettings : ProjectSettingsBase
                                 Changed();
                             }).Show();
                     }
-                    finally { dim?.Dispose(); }
                 }
 
-                if (!isBuiltin)
+                DrawDeleteButton(paper, $"nav_area_del_{i}", font, DelW, idx, isBuiltin ? null : id =>
                 {
-                    paper.Box($"nav_area_del_{i}")
-                        .Width(DelW).Height(22).Rounded(3)
-                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                        .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(idx, (id, _) =>
-                        {
-                            // Clear the slot in place; shifting would re-index later areas
-                            // under existing masks and baked navmeshes.
-                            AreaNames[id] = string.Empty;
-                            AreaCosts[id] = 1f;
-                            Changed();
-                        });
-                }
-                else
-                {
-                    paper.Box($"nav_area_del_{i}").Width(DelW).Height(22); // spacer keeps columns aligned
-                }
+                    // Clear the slot in place; shifting would re-index later areas
+                    // under existing masks and baked navmeshes.
+                    AreaNames[id] = string.Empty;
+                    AreaCosts[id] = 1f;
+                    Changed();
+                });
             }
         }
 

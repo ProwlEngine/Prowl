@@ -3,12 +3,14 @@
 
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.Crowd;
 
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -27,6 +29,7 @@ public class NavMeshAgent : MonoBehaviour
 {
     [Header("Agent")]
     [Tooltip("The agent type whose navmesh this agent walks on.")]
+    [InspectorName("Agent Type")]
     [SerializeField] private NavMeshAgentTypeId agentTypeId = NavMeshAgentTypes.Humanoid;
 
     [Tooltip("Agent radius for avoidance and crowd separation.")]
@@ -99,69 +102,27 @@ public class NavMeshAgent : MonoBehaviour
         }
     }
 
-    // The nine members below feed the crowd agent's parameters, so writing one pushes it straight
-    // into the live agent; AreaMask additionally re-derives the steering filter slot, which
-    // RefreshParams does anyway. Unchanged values are skipped: a refresh releases and retakes a
-    // filter slot.
-    public float Radius
-    {
-        get => radius;
-        set { if (radius == value) return; radius = value; RefreshParams(); }
-    }
+    // These feed the crowd agent's parameters, so writing one pushes it straight into the live agent.
+    // Unchanged values are skipped: a refresh releases and retakes a filter slot.
+    public float Radius { get => radius; set => SetParam(ref radius, value); }
 
-    public float Height
-    {
-        get => height;
-        set { if (height == value) return; height = value; RefreshParams(); }
-    }
+    public float Height { get => height; set => SetParam(ref height, value); }
 
-    public float Speed
-    {
-        get => speed;
-        set { if (speed == value) return; speed = value; RefreshParams(); }
-    }
+    public float Speed { get => speed; set => SetParam(ref speed, value); }
 
-    public float Acceleration
-    {
-        get => acceleration;
-        set { if (acceleration == value) return; acceleration = value; RefreshParams(); }
-    }
+    public float Acceleration { get => acceleration; set => SetParam(ref acceleration, value); }
 
-    public ObstacleAvoidanceType ObstacleAvoidanceQuality
-    {
-        get => obstacleAvoidanceQuality;
-        set { if (obstacleAvoidanceQuality == value) return; obstacleAvoidanceQuality = value; RefreshParams(); }
-    }
+    public ObstacleAvoidanceType ObstacleAvoidanceQuality { get => obstacleAvoidanceQuality; set => SetParam(ref obstacleAvoidanceQuality, value); }
 
-    public int AvoidancePriority
-    {
-        get => avoidancePriority;
-        set { if (avoidancePriority == value) return; avoidancePriority = value; RefreshParams(); }
-    }
+    public int AvoidancePriority { get => avoidancePriority; set => SetParam(ref avoidancePriority, value); }
 
-    public bool Separation
-    {
-        get => separation;
-        set { if (separation == value) return; separation = value; RefreshParams(); }
-    }
+    public bool Separation { get => separation; set => SetParam(ref separation, value); }
 
-    public float CollisionQueryRange
-    {
-        get => collisionQueryRange;
-        set { if (collisionQueryRange == value) return; collisionQueryRange = value; RefreshParams(); }
-    }
+    public float CollisionQueryRange { get => collisionQueryRange; set => SetParam(ref collisionQueryRange, value); }
 
-    public float PathOptimizationRange
-    {
-        get => pathOptimizationRange;
-        set { if (pathOptimizationRange == value) return; pathOptimizationRange = value; RefreshParams(); }
-    }
+    public float PathOptimizationRange { get => pathOptimizationRange; set => SetParam(ref pathOptimizationRange, value); }
 
-    public NavMeshAreaMask AreaMask
-    {
-        get => areaMask;
-        set { if (areaMask == value) return; areaMask = value; RefreshParams(); }
-    }
+    public NavMeshAreaMask AreaMask { get => areaMask; set => SetParam(ref areaMask, value); }
 
     // Read where they are used, every frame or on the event that needs them, so there is nothing
     // for a setter to apply.
@@ -173,20 +134,20 @@ public class NavMeshAgent : MonoBehaviour
     public bool UpdatePosition { get => updatePosition; set => updatePosition = value; }
     public bool UpdateRotation { get => updateRotation; set => updateRotation = value; }
 
+    private void SetParam<T>(ref T field, T value)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        RefreshParams();
+    }
+
     private NavMeshWorld? _world;
+    // Set together while registered. The entry is captured rather than looked up because the world's
+    // crowd is replaced when the navmesh is, and the agent must be detached from the one it is in.
     private DtCrowdAgent? _agent;
-    // The crowd _agent belongs to. Captured at registration because the world's crowd can be
-    // replaced when the navmesh is swapped (rebake/regenerate) — a stale _agent must be
-    // detached against ITS crowd, never the current one.
-    private DtCrowd? _crowd;
-    // The crowd entry _agent registered with, for filter-slot bookkeeping (same capture
-    // rationale as _crowd).
     private NavMeshCrowdEntry? _crowdEntry;
     // The crowd filter slot this agent steers with.
     private int _filterSlot;
-    // The agent type this agent registered under: what a stale agent must be detached against,
-    // which is not necessarily the AgentTypeId gameplay has since written.
-    private int _registeredAgentTypeId;
     private NavMeshAreaCosts? _areaCosts;
     private Float3 _destination;
     private bool _hasDestination;
@@ -216,7 +177,7 @@ public class NavMeshAgent : MonoBehaviour
     /// <c>agentTypeId</c> straight to the backing field, which no setter sees, until OnValidate
     /// moves the agent between crowds.
     /// </summary>
-    private int QueryAgentTypeId => _agent != null ? _registeredAgentTypeId : AgentTypeId;
+    private NavMeshAgentTypeId QueryAgentTypeId => _crowdEntry != null ? _crowdEntry.Instance.AgentTypeId : AgentTypeId;
 
     #region Destination / movement state
 
@@ -266,7 +227,7 @@ public class NavMeshAgent : MonoBehaviour
             if (!IsOnOffMeshLink || _agent!.animation == null || !_agent.animation.active)
                 return default;
             DtCrowdAgentAnimation anim = _agent.animation;
-            return new OffMeshLinkData(true, ToFloat3(anim.startPos), ToFloat3(anim.endPos), ResolveLink(anim.polyRef));
+            return new OffMeshLinkData(true, anim.startPos.ToFloat3(), anim.endPos.ToFloat3(), ResolveLink(anim.polyRef));
         }
     }
 
@@ -274,9 +235,8 @@ public class NavMeshAgent : MonoBehaviour
     /// stamped at bake time.</summary>
     private NavMeshLink? ResolveLink(long polyRef)
     {
-        NavMeshInstance? instance = _world?.GetInstance(_registeredAgentTypeId);
-        if (instance == null) return null;
-        if (instance.NativeNavMesh.GetTileAndPolyByRef(polyRef, out DtMeshTile tile, out DtPoly poly).Failed())
+        if (_crowdEntry == null) return null;
+        if (_crowdEntry.Instance.NativeNavMesh.GetTileAndPolyByRef(polyRef, out DtMeshTile tile, out DtPoly poly).Failed())
             return null;
         var cons = tile?.data?.offMeshCons;
         if (cons == null) return null;
@@ -287,17 +247,17 @@ public class NavMeshAgent : MonoBehaviour
     }
 
     /// <summary>Current velocity of the agent in the crowd simulation.</summary>
-    public Float3 Velocity => _agent != null ? ToFloat3(_agent.vel) : Float3.Zero;
+    public Float3 Velocity => _agent != null ? _agent.vel.ToFloat3() : Float3.Zero;
 
     /// <summary>The velocity the agent wants (path steering before avoidance/acceleration limits).
     /// Drive a Rigidbody or CharacterController from this when <see cref="UpdatePosition"/> is off.</summary>
-    public Float3 DesiredVelocity => _agent != null ? ToFloat3(_agent.dvel) : Float3.Zero;
+    public Float3 DesiredVelocity => _agent != null ? _agent.dvel.ToFloat3() : Float3.Zero;
 
     /// <summary>The agent's position in the crowd simulation (before <see cref="BaseOffset"/>).</summary>
-    public Float3 NextPosition => _agent != null ? ToFloat3(_agent.npos) : Transform.Position;
+    public Float3 NextPosition => _agent != null ? _agent.npos.ToFloat3() : Transform.Position;
 
     /// <summary>The next corner the agent is steering toward.</summary>
-    public Float3 SteeringTarget => _agent != null && _agent.ncorners > 0 ? ToFloat3(_agent.corners[0].pos) : NextPosition;
+    public Float3 SteeringTarget => _agent != null && _agent.ncorners > 0 ? _agent.corners[0].pos.ToFloat3() : NextPosition;
 
     /// <summary>
     /// Distance to the end of the current path along its corners. Infinity while no path is
@@ -318,22 +278,21 @@ public class NavMeshAgent : MonoBehaviour
             // would make waypoint scripts issue their next destination mid-hop and ping-pong.
             if (IsOnOffMeshLink && _agent.animation is { active: true } anim)
             {
-                Float3 landing = ToFloat3(anim.endPos);
-                return (float)(Float3.Distance(ToFloat3(_agent.npos), landing)
-                    + Float3.Distance(landing, ToFloat3(_agent.targetPos)));
+                Float3 landing = anim.endPos.ToFloat3();
+                return (float)(Float3.Distance(_agent.npos.ToFloat3(), landing)
+                    + Float3.Distance(landing, _agent.targetPos.ToFloat3()));
             }
-            // An empty corner window is also transient right after a hop lands (corners not
-            // recomputed until the next crowd update) — measure straight to the target rather
-            // than trusting 0.
-            if (_agent.ncorners == 0)
-                return (float)Float3.Distance(ToFloat3(_agent.npos), ToFloat3(_agent.targetPos));
-            return CornerWindowDistance();
+            return PathWindowDistance();
         }
     }
 
-    private float CornerWindowDistance()
+    /// <summary>Distance along the visible corner window. An empty window is transient (right after a
+    /// hop lands, corners are not recomputed until the next crowd update), so that measures straight
+    /// to the target rather than reading 0. Registered agents only.</summary>
+    private float PathWindowDistance()
     {
-        if (_agent == null || _agent.ncorners == 0) return 0f;
+        if (_agent!.ncorners == 0)
+            return (float)Float3.Distance(_agent.npos.ToFloat3(), _agent.targetPos.ToFloat3());
 
         float total = 0f;
         RcVec3f prev = _agent.npos;
@@ -382,10 +341,10 @@ public class NavMeshAgent : MonoBehaviour
 
     public override void OnEnable()
     {
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        Scene? scene = Scene;
         if (scene.IsNotValid()) return;
 
-        _world = scene!.Navigation;
+        _world = scene.Navigation;
         _world.InstanceRegistered += OnInstanceRegistered;
         _world.InstanceUnregistered += OnInstanceUnregistered;
         _world.NavMeshSettled += OnNavMeshSettled;
@@ -411,9 +370,13 @@ public class NavMeshAgent : MonoBehaviour
     /// steered against, so forget them. The next registration of the type brings the agent back.</summary>
     private void OnInstanceUnregistered(NavMeshInstance instance)
     {
-        if (_crowdEntry == null || !ReferenceEquals(_crowdEntry.Instance, instance)) return;
+        if (_crowdEntry != null && ReferenceEquals(_crowdEntry.Instance, instance))
+            ForgetCrowd();
+    }
+
+    private void ForgetCrowd()
+    {
         _agent = null;
-        _crowd = null;
         _crowdEntry = null;
         _filterSlot = 0;
     }
@@ -436,12 +399,9 @@ public class NavMeshAgent : MonoBehaviour
         if (Radius > _world.CrowdMaxAgentRadius)
             Debug.LogWarning($"[Navigation] Agent '{GameObject.Name}' radius {Radius:0.##} exceeds the crowd max agent radius ({_world.CrowdMaxAgentRadius:0.##}); crowd proximity queries assume the smaller value. Raise Crowd Max Agent Radius in Project Settings > Navigation.");
 
-        NavMeshCrowdEntry entry = _world.EnsureCrowd(instance);
-        _crowdEntry = entry;
-        _registeredAgentTypeId = AgentTypeId;
-        _filterSlot = entry.AcquireFilterSlot(AreaMask, _areaCosts?.Overrides, GameObject.Name);
-        _agent = entry.Crowd.AddAgent(ToRc(Transform.Position - new Float3(0, BaseOffset, 0)), BuildAgentParams());
-        _crowd = entry.Crowd;
+        _crowdEntry = _world.EnsureCrowd(instance);
+        _filterSlot = _crowdEntry.AcquireFilterSlot(AreaMask, _areaCosts?.Overrides, GameObject.Name);
+        _agent = _crowdEntry.Crowd.AddAgent((Transform.Position - new Float3(0, BaseOffset, 0)).ToRc(), BuildAgentParams());
         if (_hasDestination && !_arrived)
             RequestPathTo(_destination);
     }
@@ -449,13 +409,9 @@ public class NavMeshAgent : MonoBehaviour
     private void Unregister()
     {
         if (_agent == null) return;
-        _crowd?.RemoveAgent(_agent);
-        // Releasing into an entry the world already dropped is a harmless no-op.
-        _crowdEntry?.ReleaseFilterSlot(_filterSlot);
-        _agent = null;
-        _crowd = null;
-        _crowdEntry = null;
-        _filterSlot = 0;
+        _crowdEntry!.Crowd.RemoveAgent(_agent);
+        _crowdEntry.ReleaseFilterSlot(_filterSlot);
+        ForgetCrowd();
     }
 
     private DtCrowdAgentParams BuildAgentParams()
@@ -497,25 +453,21 @@ public class NavMeshAgent : MonoBehaviour
     /// reached through <see cref="Filter"/>.</summary>
     public void RefreshParams()
     {
-        if (_agent == null || _crowd == null) return;
+        if (_agent == null) return;
 
-        // Re-derive the steering filter slot: release-then-acquire, so a config only this
-        // agent used frees its slot before (typically) being retaken with the new values.
-        if (_crowdEntry != null)
-        {
-            _crowdEntry.ReleaseFilterSlot(_filterSlot);
-            _filterSlot = _crowdEntry.AcquireFilterSlot(AreaMask, _areaCosts?.Overrides, GameObject.Name);
-        }
-
-        _crowd.UpdateAgentParameters(_agent, BuildAgentParams());
+        // Release then acquire, so a config only this agent used frees its slot before (typically)
+        // being retaken with the new values.
+        _crowdEntry!.ReleaseFilterSlot(_filterSlot);
+        _filterSlot = _crowdEntry.AcquireFilterSlot(AreaMask, _areaCosts?.Overrides, GameObject.Name);
+        _crowdEntry.Crowd.UpdateAgentParameters(_agent, BuildAgentParams());
     }
 
     // The inspector writes the backing field, so a setter never sees an authored edit — and a type
     // change is a move between crowds rather than a parameter, which RefreshParams cannot do.
     public override void OnValidate()
     {
-        if (_agent != null && agentTypeId != _registeredAgentTypeId) Unregister();
-        if (_agent == null) TryRegister();
+        if (_crowdEntry != null && agentTypeId != _crowdEntry.Instance.AgentTypeId) Unregister();
+        TryRegister();
         RefreshParams();
     }
 
@@ -535,7 +487,7 @@ public class NavMeshAgent : MonoBehaviour
     }
 
     /// <summary>The path cost this agent pays in an area: its own override, or the project default.</summary>
-    public float GetAreaCost(int areaIndex) => _areaCosts?.GetAreaCost(areaIndex) ?? NavMeshAreas.GetAreaCost(areaIndex);
+    public float GetAreaCost(int areaIndex) => NavMeshAreaCosts.Resolve(_areaCosts?.Overrides, areaIndex);
 
     /// <summary>Remove this agent's cost overrides, falling back to the project costs.</summary>
     public void ClearAreaCosts()
@@ -559,14 +511,13 @@ public class NavMeshAgent : MonoBehaviour
 
     private bool RequestPathTo(Float3 target)
     {
-        if (_agent == null || _world == null) return false;
-        DtCrowd? crowd = _crowd;
-        if (crowd == null) return false;
+        if (_agent == null) return false;
+        DtCrowd crowd = _crowdEntry!.Crowd;
 
-        if (!_world.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return false;
+        if (!_world!.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return false;
         using (lease)
         {
-            lease.Query.FindNearestPoly(ToRc(target), crowd.GetQueryExtents(), NavMeshWorld.DetourFilter(Filter), out long polyRef, out RcVec3f nearest, out _);
+            lease.Query.FindNearestPoly(target.ToRc(), crowd.GetQueryExtents(), NavMeshWorld.DetourFilter(Filter), out long polyRef, out RcVec3f nearest, out _);
             if (polyRef == 0) return false;
             return crowd.RequestMoveTarget(_agent, polyRef, nearest);
         }
@@ -575,7 +526,7 @@ public class NavMeshAgent : MonoBehaviour
     /// <summary>
     /// Follow a pre-calculated path, steering along the route it describes rather than re-planning
     /// one to its endpoint. The path must come from <see cref="CalculatePath"/> (or
-    /// <see cref="NavMeshWorld.CalculatePath(Float3, Float3, int, NavMeshPath)"/>) and start where
+    /// <see cref="NavMeshWorld.CalculatePath"/>) and start where
     /// the agent is standing; the crowd still re-plans later if the navmesh invalidates it.
     /// </summary>
     /// <returns>False if the path is unusable, or does not begin at the agent's current polygon.</returns>
@@ -583,7 +534,7 @@ public class NavMeshAgent : MonoBehaviour
     {
         ArgumentNullException.ThrowIfNull(path);
         if (path.Status == NavMeshPathStatus.PathInvalid || path.CornerCount == 0) return false;
-        if (_agent == null || _crowd == null) return false;
+        if (_agent == null) return false;
 
         Span<long> polys = path.Polys;
         if (polys.Length == 0) return false;
@@ -594,7 +545,7 @@ public class NavMeshAgent : MonoBehaviour
 
         Float3 destination = path.LastCorner;
         bool partial = path.Status == NavMeshPathStatus.PathPartial;
-        if (!_crowd.SetAgentPath(_agent, polys[^1], ToRc(destination), polys, polys.Length, partial))
+        if (!_crowdEntry!.Crowd.SetAgentPath(_agent, polys[^1], destination.ToRc(), polys, polys.Length, partial))
             return false;
 
         _destination = destination;
@@ -609,15 +560,14 @@ public class NavMeshAgent : MonoBehaviour
         _hasDestination = false;
         _arrived = false;
         if (_agent != null)
-            _crowd?.ResetMoveTarget(_agent);
+            _crowdEntry!.Crowd.ResetMoveTarget(_agent);
     }
 
     /// <summary>Teleport the agent (and Transform) to a position on the navmesh. Keeps the
     /// current destination.</summary>
     public bool Warp(Float3 newPosition)
     {
-        DtCrowd? crowd = _crowd;
-        if (_world == null || _agent == null || crowd == null)
+        if (_agent == null)
         {
             // The Transform moves, but with no crowd agent nothing snapped it to the mesh and
             // there is no one to ask whether it landed on any.
@@ -628,10 +578,11 @@ public class NavMeshAgent : MonoBehaviour
         // Warping keeps the DtCrowdAgent, so anything holding NativeAgent stays valid. The
         // fallback covers the warp refusing for a reason re-adding can fix — a stale agent the
         // crowd no longer owns — not a target off the navmesh, which defeats both equally.
-        if (!crowd.WarpAgent(_agent, ToRc(newPosition)))
+        DtCrowd crowd = _crowdEntry!.Crowd;
+        if (!crowd.WarpAgent(_agent, newPosition.ToRc()))
         {
             crowd.RemoveAgent(_agent);
-            _agent = crowd.AddAgent(ToRc(newPosition), BuildAgentParams());
+            _agent = crowd.AddAgent(newPosition.ToRc(), BuildAgentParams());
             if (_agent.state == DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID)
                 return false; // nothing to snap to; the agent sits where it was put, off the mesh
         }
@@ -643,7 +594,7 @@ public class NavMeshAgent : MonoBehaviour
             RequestPathTo(_destination);
 
         // Use the position the crowd snapped to: the requested one can be off the mesh.
-        Transform.Position = ToFloat3(_agent.npos) + new Float3(0, BaseOffset, 0);
+        WriteTransformPosition();
         return true;
     }
 
@@ -655,19 +606,21 @@ public class NavMeshAgent : MonoBehaviour
     /// </summary>
     public void Move(Float3 offset)
     {
-        if (_agent == null || _world == null) return;
-        if (!_world.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return;
+        if (_agent == null) return;
+        if (!_world!.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return;
 
         using (lease)
         {
-            RcVec3f target = ToRc(NextPosition + offset);
+            RcVec3f target = (NextPosition + offset).ToRc();
             _agent.corridor.MovePosition(target, lease.Query, NavMeshWorld.DetourFilter(Filter));
             _agent.npos = _agent.corridor.GetPos();
         }
 
         if (UpdatePosition)
-            Transform.Position = ToFloat3(_agent.npos) + new Float3(0, BaseOffset, 0);
+            WriteTransformPosition();
     }
+
+    private void WriteTransformPosition() => Transform.Position = _agent!.npos.ToFloat3() + new Float3(0, BaseOffset, 0);
 
     /// <summary>Calculate a path from the agent's position with the agent's filter, without
     /// moving the agent.</summary>
@@ -722,13 +675,13 @@ public class NavMeshAgent : MonoBehaviour
         hit.Normal = Float3.UnitY; // a position sample, so up — as SamplePosition reports
         hit.Position = NextPosition;
 
-        if (_agent == null || _world == null) return true;
+        if (_agent == null) return true;
 
         Span<long> corridor = _agent.corridor.GetPath();
         int polyCount = _agent.corridor.GetPathCount();
         if (polyCount <= 0 || corridor.Length < polyCount) return true;
 
-        if (!_world.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return true;
+        if (!_world!.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return true;
         using (lease)
         {
             DtNavMesh mesh = lease.Query.GetAttachedNavMesh();
@@ -780,7 +733,7 @@ public class NavMeshAgent : MonoBehaviour
                     bool known = mask != NavMeshAreaMask.Nothing;
                     if (known && !mask.Overlaps(areaMask))
                     {
-                        hit.Position = ToFloat3(points[i].pos);
+                        hit.Position = points[i].pos.ToFloat3();
                         hit.Distance = walked;
                         hit.Mask = mask;
                         hit.Hit = true;
@@ -789,7 +742,7 @@ public class NavMeshAgent : MonoBehaviour
 
                     if (known) hit.Mask = mask;
 
-                    Float3 a = ToFloat3(points[i].pos), b = ToFloat3(points[i + 1].pos);
+                    Float3 a = points[i].pos.ToFloat3(), b = points[i + 1].pos.ToFloat3();
                     float leg = (float)Float3.Distance(a, b);
                     if (walked + leg >= maxDistance)
                     {
@@ -842,12 +795,12 @@ public class NavMeshAgent : MonoBehaviour
             if (engage != AvoidanceEngaged)
             {
                 AvoidanceEngaged = engage;
-                _crowd?.UpdateAgentParameters(_agent, BuildAgentParams());
+                _crowdEntry!.Crowd.UpdateAgentParameters(_agent, BuildAgentParams());
             }
         }
 
         if (UpdatePosition)
-            Transform.Position = ToFloat3(_agent.npos) + new Float3(0, BaseOffset, 0);
+            WriteTransformPosition();
 
         if (UpdateRotation)
         {
@@ -856,14 +809,14 @@ public class NavMeshAgent : MonoBehaviour
             // the heading and the agent shivers. The gates below drop a vector too slow to have a
             // direction, or pointing at a target already underfoot.
             const double MinFacingSpeedSq = 0.01; // 0.1 m/s
-            Float3 face = ToFloat3(_agent.dvel);
+            Float3 face = _agent.dvel.ToFloat3();
             double speedSq = face.X * face.X + face.Z * face.Z;
             if (speedSq < MinFacingSpeedSq)
             {
                 // Off-mesh hops: the crowd empties the steering vector and animates the agent
                 // across, so the actual velocity is the only heading available — and during a
                 // hop it is a clean straight line, with no avoidance running.
-                face = ToFloat3(_agent.vel);
+                face = _agent.vel.ToFloat3();
                 speedSq = face.X * face.X + face.Z * face.Z;
             }
             // RemainingDistance walks the corner window, so only ask once the cheap gate passed.
@@ -895,24 +848,14 @@ public class NavMeshAgent : MonoBehaviour
         if (_agent == null || _arrived || _isStopped || !HasPath || PathPending || IsOnOffMeshLink) return;
 
         // The corner window is a LOWER bound (at most the crowd's few visible corners), so its
-        // distance only means "arrived" once the window reaches the path end — otherwise a tight
+        // distance only means "arrived" once the window reaches the path end. Otherwise a tight
         // switchback under StoppingDistance, or a congestion-jammed agent, could falsely latch.
-        // An EMPTY window is also untrustworthy: it happens both standing on the target and
-        // transiently right after a hop lands, so measure straight to the target instead.
-        float remaining;
-        if (_agent.ncorners == 0)
-        {
-            remaining = (float)Float3.Distance(ToFloat3(_agent.npos), ToFloat3(_agent.targetPos));
-        }
-        else
-        {
-            if ((_agent.corners[_agent.ncorners - 1].flags & DtStraightPathFlags.DT_STRAIGHTPATH_END) == 0)
-                return;
-            remaining = CornerWindowDistance();
-        }
+        if (_agent.ncorners > 0 && (_agent.corners[_agent.ncorners - 1].flags & DtStraightPathFlags.DT_STRAIGHTPATH_END) == 0)
+            return;
+        float remaining = PathWindowDistance();
         float threshold = MathF.Max(ArrivalEpsilon, StoppingDistance);
 
-        Float3 vel = ToFloat3(_agent.vel);
+        Float3 vel = _agent.vel.ToFloat3();
         float horizontalSpeed = MathF.Sqrt((float)(vel.X * vel.X + vel.Z * vel.Z));
         // Auto-braking converges asymptotically, so also latch when the agent has effectively
         // stopped within its own radius of the (visible) goal.
@@ -923,7 +866,7 @@ public class NavMeshAgent : MonoBehaviour
             // _hasDestination stays true: Unity keeps agent.destination readable after
             // arrival, and migrated code does read it. _arrived gates every re-path site.
             _arrived = true;
-            _crowd?.ResetMoveTarget(_agent);
+            _crowdEntry!.Crowd.ResetMoveTarget(_agent);
         }
     }
 
@@ -992,12 +935,9 @@ public class NavMeshAgent : MonoBehaviour
         Float3 previous = NextPosition + lift;
         for (int i = 0; i < _agent.ncorners; i++)
         {
-            Float3 corner = ToFloat3(_agent.corners[i].pos) + lift;
+            Float3 corner = _agent.corners[i].pos.ToFloat3() + lift;
             Debug.DrawLine(previous, corner, pathColor);
             previous = corner;
         }
     }
-
-    private static RcVec3f ToRc(Float3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
-    private static Float3 ToFloat3(RcVec3f v) => new(v.X, v.Y, v.Z);
 }

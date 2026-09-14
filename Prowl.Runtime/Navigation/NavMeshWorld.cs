@@ -10,6 +10,7 @@ using System.Threading;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.Crowd;
+using Prowl.Recast.Detour.TileCache;
 
 using Prowl.Vector;
 
@@ -37,6 +38,15 @@ public sealed class NavMeshWorld
     }
 
     public NavMeshWorld() => ApplySettings(s_defaultSettings);
+
+    /// <summary>Make <paramref name="settings"/> the defaults for new worlds and apply them to the current scene's world.</summary>
+    public static void ApplyProjectSettings(NavMeshWorldSettings settings)
+    {
+        DefaultSettings = settings;
+        Resources.Scene? scene = Resources.Scene.Current;
+        if (scene.IsValid())
+            scene.Navigation.ApplySettings(settings);
+    }
 
     /// <summary>Copy every tunable from <paramref name="settings"/>. Crowd radius and obstacle capacity
     /// only reach crowds and navmeshes created afterwards.</summary>
@@ -96,12 +106,8 @@ public sealed class NavMeshWorld
 
     // One crowd per agent type, created when the first agent of that type registers and
     // dropped when the navmesh instance it steers against is removed (its agents rejoin the
-    // replacement crowd via NavMeshChanged). Main-thread only, like registration.
+    // replacement crowd when one registers). Main-thread only, like registration.
     private readonly Dictionary<int, NavMeshCrowdEntry> _crowds = [];
-
-    /// <summary>The crowd simulation for the default agent type (0). Sugar for
-    /// <see cref="GetNativeCrowd"/>. Null until the first such agent registers.</summary>
-    public DtCrowd? NativeCrowd => GetNativeCrowd(0);
 
     /// <summary>How many agent types currently have a crowd. Lets components notice cheaply
     /// that a crowd appeared (the first agent of a type registering) without walking the
@@ -229,8 +235,7 @@ public sealed class NavMeshWorld
         NavMeshInstance instance;
         try
         {
-            Prowl.Recast.Detour.TileCache.DtTileCache cache = data.CreateTileCache(TileCacheMaxObstacles,
-                out NavMeshTileBuilder.ProwlTileCacheMeshProcess links);
+            DtTileCache cache = data.CreateTileCache(TileCacheMaxObstacles, out NavMeshTileBuilder.ProwlTileCacheMeshProcess links);
             instance = new NavMeshInstance(data, cache, links);
         }
         catch (Exception e)
@@ -238,7 +243,7 @@ public sealed class NavMeshWorld
             // Type and stack included deliberately: the throw comes from inside Detour, several
             // frames below anything the message alone would name, and without them an
             // instantiation failure is undiagnosable from the console.
-            Debug.LogError($"[Navigation] Failed to instantiate NavMeshData '{data.Name}' ({data.CacheLayers.Count} layers, MaxTiles={data.MaxTiles}, MaxPolys={data.MaxPolys}, tile={data.Settings.EffectiveTileSize} voxels, voxel={data.Settings.EffectiveVoxelSize:0.####}): {e}");
+            Debug.LogError($"[Navigation] Failed to instantiate NavMeshData '{data.Name}' ({data.CacheLayers.Count} layers, MaxTiles={data.MaxTiles}, tile={data.Settings.EffectiveTileSize} voxels, voxel={data.Settings.EffectiveVoxelSize:0.####}): {e}");
             return null;
         }
 
@@ -256,7 +261,7 @@ public sealed class NavMeshWorld
         for (int i = 0; i < _surfaces.Count; i++)
             if (ReferenceEquals(_surfaces[i].Instance, instance))
                 return $" (on '{_surfaces[i].GameObject.Name}')";
-        return $" ('{instance.Data.Name}')";
+        return $" ('{instance.NavMeshData.Name}')";
     }
 
     /// <summary>Unregister a navmesh. Blocks until in-flight queries on it finish.</summary>
@@ -313,7 +318,6 @@ public sealed class NavMeshWorld
         foreach (NavMeshInstance instance in toRemove)
             instance.Retire();
         _pendingLinkTiles.Clear();
-        _drainingLinkTiles.Clear();
         _pendingLinkReconcile.Clear();
         _deferredTileSwaps.Clear();
         _crowds.Clear();
@@ -341,9 +345,6 @@ public sealed class NavMeshWorld
         return null;
     }
 
-    /// <summary>True when a navmesh is registered for the agent type.</summary>
-    public bool HasNavMesh(NavMeshAgentTypeId agentTypeId = default) => GetInstance(agentTypeId) != null;
-
     /// <summary>
     /// Run a mutation against an instance's TileCache under the write lock (layer
     /// regeneration, bulk obstacle edits). In-flight queries finish first, and pooled queries survive
@@ -353,7 +354,7 @@ public sealed class NavMeshWorld
     /// <see cref="AddNavMeshData"/> — same main-thread contract).
     /// </summary>
     /// <returns>False when the instance is no longer registered, so the mutation did not run.</returns>
-    public bool MutateTileCache(NavMeshInstance instance, Action<Prowl.Recast.Detour.TileCache.DtTileCache> mutation)
+    public bool MutateTileCache(NavMeshInstance instance, Action<DtTileCache> mutation)
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(mutation);
@@ -430,8 +431,6 @@ public sealed class NavMeshWorld
 
     private void ReconcileBakedLinks()
     {
-        if (_pendingLinkReconcile.Count == 0) return;
-
         foreach (NavMeshSurface surface in _pendingLinkReconcile)
             if (surface.IsValid()) surface.MarkStaleBakedLinks();
         _pendingLinkReconcile.Clear();
@@ -521,7 +520,7 @@ public sealed class NavMeshWorld
 
         instance.Lock.EnterReadLock();
         if (!instance.QueryPool.TryTake(out DtNavMeshQuery? query))
-            query = new DtNavMeshQuery(instance.Mesh);
+            query = new DtNavMeshQuery(instance.NativeNavMesh);
         lease = new NavMeshQueryLease(instance, query);
         return true;
     }
@@ -538,16 +537,9 @@ public sealed class NavMeshWorld
         return detour;
     }
 
-    private static RcVec3f ToRc(Float3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
-    private static Float3 ToFloat3(RcVec3f v) => new(v.X, v.Y, v.Z);
-
     /// <summary>Calculate a path between two points. Returns true when the resulting path is
     /// complete or partial; <paramref name="path"/> carries the corners and exact status.</summary>
-    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshPath path)
-        => CalculatePath(sourcePosition, targetPosition, path, NavMeshQueryFilter.Default);
-
-    /// <inheritdoc cref="CalculatePath(Float3, Float3, NavMeshPath)"/>
-    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshPath path, NavMeshQueryFilter filter)
+    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshPath path, NavMeshQueryFilter filter = default)
     {
         ArgumentNullException.ThrowIfNull(path);
         path.ClearCorners();
@@ -559,10 +551,10 @@ public sealed class NavMeshWorld
         {
             DtNavMeshQuery query = lease.Query;
             NavMeshDetourFilter detour = DetourFilter(filter);
-            RcVec3f ext = ToRc(DefaultQueryExtents);
+            RcVec3f ext = DefaultQueryExtents.ToRc();
 
-            query.FindNearestPoly(ToRc(sourcePosition), ext, detour, out long startRef, out RcVec3f startPt, out _);
-            query.FindNearestPoly(ToRc(targetPosition), ext, detour, out long endRef, out RcVec3f endPt, out _);
+            query.FindNearestPoly(sourcePosition.ToRc(), ext, detour, out long startRef, out RcVec3f startPt, out _);
+            query.FindNearestPoly(targetPosition.ToRc(), ext, detour, out long endRef, out RcVec3f endPt, out _);
             if (startRef == 0 || endRef == 0)
                 return false;
 
@@ -572,7 +564,6 @@ public sealed class NavMeshWorld
 
             long[] polys = ArrayPool<long>.Shared.Rent(maxPolys);
             DtStraightPath[] straight = ArrayPool<DtStraightPath>.Shared.Rent(maxCorners);
-            Float3[] corners = ArrayPool<Float3>.Shared.Rent(maxCorners);
             try
             {
                 DtStatus status = query.FindPath(startRef, endRef, startPt, endPt, detour, polys.AsSpan(0, maxPolys), out int polyCount, maxPolys);
@@ -596,29 +587,21 @@ public sealed class NavMeshWorld
                 if (cornerCount >= maxCorners)
                     partial = true;
 
-                for (int i = 0; i < cornerCount; i++)
-                    corners[i] = ToFloat3(straight[i].pos);
-
-                path.SetCorners(corners.AsSpan(0, cornerCount), partial ? NavMeshPathStatus.PathPartial : NavMeshPathStatus.PathComplete);
-                path.SetPolys(polys.AsSpan(0, polyCount));
+                path.Set(straight.AsSpan(0, cornerCount), polys.AsSpan(0, polyCount),
+                    partial ? NavMeshPathStatus.PathPartial : NavMeshPathStatus.PathComplete);
                 return true;
             }
             finally
             {
                 ArrayPool<long>.Shared.Return(polys);
                 ArrayPool<DtStraightPath>.Shared.Return(straight);
-                ArrayPool<Float3>.Shared.Return(corners);
             }
         }
     }
 
     /// <summary>Find the closest point on the navmesh within <paramref name="maxDistance"/> of
     /// <paramref name="sourcePosition"/>.</summary>
-    public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance)
-        => SamplePosition(sourcePosition, out hit, maxDistance, NavMeshQueryFilter.Default);
-
-    /// <inheritdoc cref="SamplePosition(Float3, out NavMeshHit, float)"/>
-    public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter)
+    public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter = default)
     {
         hit = default;
 
@@ -628,11 +611,11 @@ public sealed class NavMeshWorld
         using (lease)
         {
             var ext = new RcVec3f(maxDistance, maxDistance, maxDistance);
-            lease.Query.FindNearestPoly(ToRc(sourcePosition), ext, DetourFilter(filter), out long nearestRef, out RcVec3f nearestPt, out _);
+            lease.Query.FindNearestPoly(sourcePosition.ToRc(), ext, DetourFilter(filter), out long nearestRef, out RcVec3f nearestPt, out _);
             if (nearestRef == 0)
                 return false;
 
-            Float3 position = ToFloat3(nearestPt);
+            Float3 position = nearestPt.ToFloat3();
             float distance = (float)Float3.Distance(sourcePosition, position);
             if (distance > maxDistance)
                 return false;
@@ -648,11 +631,7 @@ public sealed class NavMeshWorld
 
     /// <summary>Trace a walkability ray along the navmesh surface. Returns true when the ray is
     /// blocked before the target; <paramref name="hit"/> holds the blocking edge either way.</summary>
-    public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit)
-        => Raycast(sourcePosition, targetPosition, out hit, NavMeshQueryFilter.Default);
-
-    /// <inheritdoc cref="Raycast(Float3, Float3, out NavMeshHit)"/>
-    public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, NavMeshQueryFilter filter)
+    public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, NavMeshQueryFilter filter = default)
     {
         hit = default;
 
@@ -663,10 +642,9 @@ public sealed class NavMeshWorld
         {
             DtNavMeshQuery query = lease.Query;
             NavMeshDetourFilter detour = DetourFilter(filter);
-            RcVec3f start = ToRc(sourcePosition);
-            RcVec3f end = ToRc(targetPosition);
+            RcVec3f end = targetPosition.ToRc();
 
-            query.FindNearestPoly(start, ToRc(DefaultQueryExtents), detour, out long startRef, out RcVec3f startPt, out _);
+            query.FindNearestPoly(sourcePosition.ToRc(), DefaultQueryExtents.ToRc(), detour, out long startRef, out RcVec3f startPt, out _);
             if (startRef == 0)
                 return false;
 
@@ -681,11 +659,11 @@ public sealed class NavMeshWorld
 
                 bool blocked = t < float.MaxValue;
                 Float3 position = blocked
-                    ? ToFloat3(RcVec3f.Lerp(startPt, end, Math.Clamp(t, 0f, 1f)))
-                    : ToFloat3(end);
+                    ? RcVec3f.Lerp(startPt, end, Math.Clamp(t, 0f, 1f)).ToFloat3()
+                    : end.ToFloat3();
 
                 hit.Position = position;
-                hit.Normal = blocked ? ToFloat3(normal) : Float3.UnitY;
+                hit.Normal = blocked ? normal.ToFloat3() : Float3.UnitY;
                 hit.Distance = (float)Float3.Distance(sourcePosition, position);
                 // The area walked out of, which is the one the wall belongs to.
                 hit.Mask = GetPolyAreaMask(query.GetAttachedNavMesh(), startRef);
@@ -704,44 +682,34 @@ public sealed class NavMeshWorld
     public const float EdgeSearchDistanceFromBounds = 0f;
 
     /// <summary>Locate the closest navmesh border edge from a point, searching the whole mesh.</summary>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit)
-        => FindClosestEdge(sourcePosition, out hit, EdgeSearchDistanceFromBounds, NavMeshQueryFilter.Default);
-
-    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit)"/>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter)
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter = default)
         => FindClosestEdge(sourcePosition, out hit, EdgeSearchDistanceFromBounds, filter);
 
     /// <summary>Locate the closest navmesh border edge from a point.</summary>
     /// <param name="maxDistance">How far to search. Cost grows with it and an edge beyond it is
     /// not found, so pass the widest gap that matters, or <see cref="EdgeSearchDistanceFromBounds"/>.</param>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, float maxDistance)
-        => FindClosestEdge(sourcePosition, out hit, maxDistance, NavMeshQueryFilter.Default);
-
-    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, float)"/>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter)
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter = default)
     {
         hit = default;
-
-        // Negated compares so NaN takes the same path as a non-positive distance.
-        if (!(maxDistance > 0f))
-        {
-            NavMeshInstance? bounded = GetInstance(filter.AgentTypeId);
-            if (bounded == null) return false;
-
-            maxDistance = (float)Float3.Distance(bounded.Data.BoundsMin, bounded.Data.BoundsMax);
-            // Degenerate bounds would ask Detour for a zero-radius search, which reports a wall
-            // at zero distance rather than no wall.
-            if (!(maxDistance > 0f)) return false;
-        }
 
         if (!TryRentQuery(out NavMeshQueryLease lease, filter.AgentTypeId))
             return false;
 
         using (lease)
         {
+            // Negated compares so NaN takes the same path as a non-positive distance.
+            if (!(maxDistance > 0f))
+            {
+                NavMeshData data = lease.Instance.NavMeshData;
+                maxDistance = (float)Float3.Distance(data.BoundsMin, data.BoundsMax);
+                // Degenerate bounds would ask Detour for a zero-radius search, which reports a wall
+                // at zero distance rather than no wall.
+                if (!(maxDistance > 0f)) return false;
+            }
+
             DtNavMeshQuery query = lease.Query;
             NavMeshDetourFilter detour = DetourFilter(filter);
-            query.FindNearestPoly(ToRc(sourcePosition), ToRc(DefaultQueryExtents), detour, out long startRef, out RcVec3f startPt, out _);
+            query.FindNearestPoly(sourcePosition.ToRc(), DefaultQueryExtents.ToRc(), detour, out long startRef, out RcVec3f startPt, out _);
             if (startRef == 0)
                 return false;
 
@@ -750,8 +718,8 @@ public sealed class NavMeshWorld
             if (status.Failed())
                 return false;
 
-            hit.Position = ToFloat3(hitPos);
-            hit.Normal = ToFloat3(hitNormal);
+            hit.Position = hitPos.ToFloat3();
+            hit.Normal = hitNormal.ToFloat3();
             hit.Distance = distance;
             hit.Mask = GetPolyAreaMask(query.GetAttachedNavMesh(), startRef);
             hit.Hit = true;
@@ -771,7 +739,7 @@ public sealed class NavMeshWorld
         instance.Lock.EnterReadLock();
         try
         {
-            return NavMeshTriangulation.FromNavMesh(instance.Mesh);
+            return NavMeshTriangulation.FromNavMesh(instance.NativeNavMesh);
         }
         finally
         {
@@ -887,12 +855,7 @@ public sealed class NavMeshWorld
     /// cache is settled, or after <see cref="MaxTileSwapWaits"/> passes regardless. FIFO, and at
     /// most one per instance per frame since an apply queues carve work of its own. Main thread
     /// only.</summary>
-    internal void DeferTileSwap(NavMeshInstance instance, Action apply)
-    {
-        ArgumentNullException.ThrowIfNull(instance);
-        ArgumentNullException.ThrowIfNull(apply);
-        _deferredTileSwaps.Enqueue((instance, apply, 0));
-    }
+    internal void DeferTileSwap(NavMeshInstance instance, Action apply) => _deferredTileSwaps.Enqueue((instance, apply, 0));
 
     /// <summary>
     /// Apply everything held for this instance, in issue order. A swap applied directly has to come

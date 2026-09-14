@@ -87,40 +87,28 @@ internal static class NavMeshTileBuilder
     [ThreadStatic] private static TileBuildScratch? t_scratch;
 
     /// <summary>Chunk lists per area mesh overlapping this tile (parallel to
-    /// <see cref="ProwlInputGeomProvider.AreaMeshes"/>), or null when nothing overlaps —
-    /// collected once and shared by the empty-tile check and the rasterization pass.</summary>
-    private static List<RcChunkyTriMeshNode>[]? CollectOverlappingChunks(ProwlInputGeomProvider geom, RcBuilderConfig builderCfg)
+    /// <see cref="ProwlInputGeomProvider.AreaMeshes"/>, null for areas that miss it), or null when
+    /// nothing overlaps. The XZ extent test comes first because on bounded bakes most tiles miss
+    /// every area, and GetChunksOverlappingRect allocates its list even when empty.</summary>
+    private static List<RcChunkyTriMeshNode>?[]? CollectOverlappingChunks(ProwlInputGeomProvider geom, RcBuilderConfig builderCfg)
     {
         var tileMin = new RcVec2f(builderCfg.bmin.X, builderCfg.bmin.Z);
         var tileMax = new RcVec2f(builderCfg.bmax.X, builderCfg.bmax.Z);
 
-        // Cheap pre-pass: on bounded bakes most tiles miss every area's XZ extent entirely,
-        // and this rejects them with zero allocations (GetChunksOverlappingRect allocates its
-        // return list even when empty).
-        bool anyPossible = false;
-        for (int i = 0; i < geom.AreaMeshes.Count; i++)
-        {
-            if (geom.AreaMeshes[i].OverlapsXZ(tileMin.X, tileMin.Y, tileMax.X, tileMax.Y))
-            {
-                anyPossible = true;
-                break;
-            }
-        }
-        if (!anyPossible)
-            return null;
-
-        var chunks = new List<RcChunkyTriMeshNode>[geom.AreaMeshes.Count];
+        List<RcChunkyTriMeshNode>?[]? chunks = null;
         bool any = false;
         for (int i = 0; i < geom.AreaMeshes.Count; i++)
         {
+            if (!geom.AreaMeshes[i].Bounds.Overlaps(tileMin.X, tileMin.Y, tileMax.X, tileMax.Y)) continue;
+            chunks ??= new List<RcChunkyTriMeshNode>?[geom.AreaMeshes.Count];
             chunks[i] = geom.AreaMeshes[i].Mesh.GetChunksOverlappingRect(tileMin, tileMax);
-            any |= chunks[i].Count > 0;
+            any |= chunks[i]!.Count > 0;
         }
         return any ? chunks : null;
     }
 
     private static RcHeightfield BuildHeightfieldPooled(ProwlInputGeomProvider geom, RcBuilderConfig builderCfg,
-        List<RcChunkyTriMeshNode>[]? overlappingChunks, TileBuildScratch scratch)
+        List<RcChunkyTriMeshNode>?[] overlappingChunks, TileBuildScratch scratch)
     {
         RcConfig cfg = builderCfg.cfg;
         var solid = new RcHeightfield(builderCfg.width, builderCfg.height, builderCfg.bmin, builderCfg.bmax, cfg.Cs, cfg.Ch, cfg.BorderSize);
@@ -130,16 +118,15 @@ internal static class NavMeshTileBuilder
         if (scratch.SpanPools != null)
             RcRasterizations.AdoptSpanPools(solid, scratch.SpanPools);
 
-        if (overlappingChunks == null)
-            return solid;
-
         float walkableSlopeCos = MathF.Cos(cfg.WalkableSlopeAngle / 180.0f * MathF.PI);
         for (int i = 0; i < geom.AreaMeshes.Count; i++)
         {
+            List<RcChunkyTriMeshNode>? nodes = overlappingChunks[i];
+            if (nodes == null) continue;
             ProwlInputGeomProvider.AreaMesh areaMesh = geom.AreaMeshes[i];
             float[] verts = areaMesh.Mesh.GetVerts();
             // Chunky-mesh culling: only triangles overlapping this tile (plus border) rasterize.
-            foreach (RcChunkyTriMeshNode node in overlappingChunks[i])
+            foreach (RcChunkyTriMeshNode node in nodes)
             {
                 RcRasterizations.RasterizeTriangles(scratch.Context, verts, node.tris, node.tris.Length / 3,
                     walkableSlopeCos, areaMesh.DetourArea, solid, cfg.WalkableClimb);
@@ -162,7 +149,7 @@ internal static class NavMeshTileBuilder
     {
         var builderCfg = new RcBuilderConfig(cfg, bmin, bmax, tileX, tileZ);
 
-        List<RcChunkyTriMeshNode>[]? overlappingChunks = CollectOverlappingChunks(geom, builderCfg);
+        List<RcChunkyTriMeshNode>?[]? overlappingChunks = CollectOverlappingChunks(geom, builderCfg);
         if (overlappingChunks == null)
             return [];
 
@@ -189,13 +176,13 @@ internal static class NavMeshTileBuilder
 
         // Not Walkable volumes erase before erosion for the same reason. The rest only restamp
         // surviving spans, and marking skips null spans, so they can safely follow it.
-        foreach (RcConvexVolume vol in geom.ConvexVolumes())
+        foreach (RcConvexVolume vol in geom.ConvexVolumes)
             if (vol.areaMod.Value == RcRecast.RC_NULL_AREA)
                 RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
 
         RcAreas.ErodeWalkableArea(ctx, cfg.WalkableRadius, chf);
 
-        foreach (RcConvexVolume vol in geom.ConvexVolumes())
+        foreach (RcConvexVolume vol in geom.ConvexVolumes)
             if (vol.areaMod.Value != RcRecast.RC_NULL_AREA)
                 RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
 
@@ -265,7 +252,8 @@ internal static class NavMeshTileBuilder
     /// </summary>
     public sealed class ProwlTileCacheMeshProcess : IDtTileCacheMeshProcess
     {
-        private readonly List<(Float3 Start, Float3 End, float Radius, bool Bidirectional, int Area, int UserId)> _connections = [];
+        private readonly List<(Float3 Start, Float3 End, bool Bidirectional, int Area, int UserId)> _connections = [];
+        private float _radius;
 
         /// <summary>
         /// Replace the link set future tile builds inject. Call under the instance's write lock,
@@ -277,7 +265,7 @@ internal static class NavMeshTileBuilder
 
             if (links == null || links.Count == 0) return;
 
-            float radius = Math.Max(0.01f, agentRadius);
+            _radius = Math.Max(0.01f, agentRadius);
             List<(Float3 Start, Float3 End)> crossings = [];
 
             foreach (NavMeshLinkSource link in links)
@@ -286,9 +274,9 @@ internal static class NavMeshTileBuilder
                 if (link.Area == NavMeshAreas.NotWalkable) continue;
 
                 crossings.Clear();
-                link.ExpandCrossings(radius, crossings);
+                link.ExpandCrossings(_radius, crossings);
                 foreach ((Float3 start, Float3 end) in crossings)
-                    _connections.Add((start, end, radius, link.Bidirectional,
+                    _connections.Add((start, end, link.Bidirectional,
                         ProwlInputGeomProvider.DetourAreaFor(link.Area), link.UserId));
             }
         }
@@ -301,12 +289,12 @@ internal static class NavMeshTileBuilder
             if (_connections.Count == 0) return;
 
             // Detour keeps only connections whose start point lies in the tile (an XZ test,
-            // widened by each connection's radius). Counted first so the six output arrays can
+            // widened by the connection radius). Counted first so the six output arrays can
             // be sized exactly, then filled in a second pass — cheaper than collecting matches
             // into a list first.
             int count = 0;
             for (int i = 0; i < _connections.Count; i++)
-                if (StartsInTile(_connections[i], option)) count++;
+                if (StartsInTile(_connections[i].Start, option)) count++;
             if (count == 0) return;
 
             option.offMeshConCount = count;
@@ -319,15 +307,15 @@ internal static class NavMeshTileBuilder
             int w = 0;
             for (int i = 0; i < _connections.Count; i++)
             {
-                if (!StartsInTile(_connections[i], option)) continue;
-                (Float3 start, Float3 end, float radius, bool bidir, int area, int userId) = _connections[i];
+                if (!StartsInTile(_connections[i].Start, option)) continue;
+                (Float3 start, Float3 end, bool bidir, int area, int userId) = _connections[i];
                 option.offMeshConVerts[6 * w + 0] = (float)start.X;
                 option.offMeshConVerts[6 * w + 1] = (float)start.Y;
                 option.offMeshConVerts[6 * w + 2] = (float)start.Z;
                 option.offMeshConVerts[6 * w + 3] = (float)end.X;
                 option.offMeshConVerts[6 * w + 4] = (float)end.Y;
                 option.offMeshConVerts[6 * w + 5] = (float)end.Z;
-                option.offMeshConRad[w] = radius;
+                option.offMeshConRad[w] = _radius;
                 option.offMeshConDir[w] = bidir ? 1 : 0;
                 option.offMeshConAreas[w] = area;
                 option.offMeshConFlags[w] = PolyFlagWalkable;
@@ -336,69 +324,8 @@ internal static class NavMeshTileBuilder
             }
         }
 
-        private static bool StartsInTile(
-            (Float3 Start, Float3 End, float Radius, bool Bidirectional, int Area, int UserId) connection,
-            DtNavMeshCreateParams option)
-        {
-            float margin = connection.Radius;
-            return connection.Start.X >= option.bmin.X - margin && connection.Start.X <= option.bmax.X + margin
-                && connection.Start.Z >= option.bmin.Z - margin && connection.Start.Z <= option.bmax.Z + margin;
-        }
-    }
-
-    /// <summary>Create the DtTileCache wrapping a navmesh (unseeded — the caller adds the layer
-    /// blobs), with the asset's links loaded into the mesh process so every tile it builds
-    /// carries them.</summary>
-    public static DtTileCache CreateTileCache(NavMeshData data, DtNavMesh navMesh, int maxObstacles)
-        => CreateTileCache(data, navMesh, maxObstacles, out _);
-
-    /// <inheritdoc cref="CreateTileCache(NavMeshData, DtNavMesh, int)"/>
-    /// <param name="meshProcess">The cache's link registry, for keeping the navmesh in step
-    /// with live <see cref="NavMeshLink"/>s after instantiation.</param>
-    public static DtTileCache CreateTileCache(NavMeshData data, DtNavMesh navMesh, int maxObstacles,
-        out ProwlTileCacheMeshProcess meshProcess)
-    {
-        NavMeshBuildSettings settings = data.Settings;
-        var option = new DtTileCacheParams
-        {
-            orig = new RcVec3f((float)data.Origin.X, (float)data.Origin.Y, (float)data.Origin.Z),
-            cs = settings.EffectiveVoxelSize,
-            ch = settings.EffectiveVoxelHeight,
-            width = settings.EffectiveTileSize,
-            height = settings.EffectiveTileSize,
-            walkableHeight = settings.Agent.Height,
-            walkableRadius = settings.Agent.Radius,
-            walkableClimb = settings.Agent.MaxClimb,
-            maxSimplificationError = settings.Overrides.EdgeMaxError,
-            // Height detail, so polygons follow the surface instead of spanning flat between their
-            // corners. Recast recommends sampling every six voxels, given here in world units as
-            // the cache expects; zero is how it is told to skip detail, which is what the setting
-            // turns off.
-            detailSampleDist = settings.Overrides.BuildHeightDetail ? settings.EffectiveVoxelSize * 6 : 0,
-            detailSampleMaxError = settings.EffectiveVoxelHeight,
-            // Standard watershed contouring instead of the cache's monotone sweep: avoids slivers on
-            // slopes. Thresholds are cell counts converted from world units, so voxel size does not
-            // change the mesh between rebakes; the edge cap is loose on purpose, since over-splitting
-            // floods flat floors with polygons and the crowd with portal corners.
-            watershedPartition = true,
-            minRegionArea = (int)(settings.Overrides.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
-            mergeRegionArea = (int)(20f / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
-            maxEdgeLen = 24,
-            // Exactly the navmesh's own layer capacity. A cache sized above it would accept blobs
-            // the navmesh then drops on commit, reported only through a status the cache discards.
-            // Matched, an overflow surfaces as a failed AddTile the caller can report.
-            maxTiles = data.ResolveCapacity().MaxTiles,
-            maxObstacles = Math.Max(1, maxObstacles),
-        };
-
-        meshProcess = new ProwlTileCacheMeshProcess();
-        var links = new List<NavMeshLinkSource>(data.Links.Count);
-        foreach (NavMeshData.NavMeshLinkEntry entry in data.Links)
-            links.Add(entry.ToSource());
-        meshProcess.SetLinks(links, data.Settings.Agent.Radius);
-
-        // FastLZ + cCompatibility layout, matching how BuildTileLayers compressed the blobs.
-        return new DtTileCache(option, new DtTileCacheStorageParams(RcByteOrder.LITTLE_ENDIAN, true),
-            navMesh, DtTileCacheCompressorFactory.Shared.Create(0), meshProcess);
+        private bool StartsInTile(Float3 start, DtNavMeshCreateParams option)
+            => start.X >= option.bmin.X - _radius && start.X <= option.bmax.X + _radius
+                && start.Z >= option.bmin.Z - _radius && start.Z <= option.bmax.Z + _radius;
     }
 }

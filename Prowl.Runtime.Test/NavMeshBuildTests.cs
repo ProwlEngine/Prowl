@@ -306,7 +306,6 @@ public class NavMeshBuildTests
         Assert.Equal(data.Settings.Agent.Radius, loaded.Settings.Agent.Radius);
         Assert.Equal(data.TileWorldSize, loaded.TileWorldSize);
         Assert.Equal(data.MaxTiles, loaded.MaxTiles);
-        Assert.Equal(data.MaxPolys, loaded.MaxPolys);
         Assert.Equal(data.Origin, loaded.Origin);
 
         // The reloaded asset must instantiate a working navmesh.
@@ -648,9 +647,9 @@ public class NavMeshBuildTests
                 // it (or inside the eroded margin) has no polygon to attach to — which would
                 // test the geometry rather than the link pool.
                 for (int k = 0; k < perNeighbour; k++)
-                    data.Links.Add(NavMeshData.NavMeshLinkEntry.From(new NavMeshLinkSource(
+                    data.Links.Add(new NavMeshLinkSource(
                         new Float3(source.X + (k - (perNeighbour - 1) * 0.5f) * 0.4f, 0, source.Z), destination,
-                        width: 0f, bidirectional: true, NavMeshAreas.Jump, userId: id++)));
+                        width: 0f, bidirectional: true, NavMeshAreas.Jump, userId: id++));
             }
 
         var world = new NavMeshWorld();

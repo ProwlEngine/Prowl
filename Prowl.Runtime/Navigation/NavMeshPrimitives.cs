@@ -223,9 +223,6 @@ public struct NavMeshAreaMask : ISerializable
 
     private static bool IsValid(int area) => (uint)area < NavMeshAreas.MaxAreas;
 
-    public static NavMeshAreaMask operator |(NavMeshAreaMask a, NavMeshAreaMask b) => FromMask(a.Mask | b.Mask);
-    public static NavMeshAreaMask operator &(NavMeshAreaMask a, NavMeshAreaMask b) => FromMask(a.Mask & b.Mask);
-
     public override readonly bool Equals(object? obj) => obj is NavMeshAreaMask other && excluded == other.excluded;
     public override readonly int GetHashCode() => excluded.GetHashCode();
 
@@ -250,12 +247,13 @@ public sealed class NavMeshAreaCosts
     private float[]? _overrides;
 
     /// <summary>The cost for an area: this override, or the project default.</summary>
-    public float GetAreaCost(int areaIndex)
-    {
-        if (_overrides != null && (uint)areaIndex < _overrides.Length && _overrides[areaIndex] > 0f)
-            return _overrides[areaIndex];
-        return NavMeshAreas.GetAreaCost(areaIndex);
-    }
+    public float GetAreaCost(int areaIndex) => Resolve(_overrides, areaIndex);
+
+    /// <summary>An override table's cost for an area, 0 entries falling back to the project cost.</summary>
+    internal static float Resolve(float[]? overrides, int areaIndex)
+        => overrides != null && (uint)areaIndex < NavMeshAreas.MaxAreas && overrides[areaIndex] > 0f
+            ? overrides[areaIndex]
+            : NavMeshAreas.GetAreaCost(areaIndex);
 
     /// <summary>Override an area's cost. Clamped to at least 1: Detour's heuristic is only admissible
     /// when nothing costs less than distance, so a lower cost silently produces worse paths. To prefer
@@ -266,9 +264,6 @@ public sealed class NavMeshAreaCosts
         _overrides ??= new float[NavMeshAreas.MaxAreas];
         _overrides[areaIndex] = Math.Max(1f, cost);
     }
-
-    /// <summary>Remove every override, falling back to the project costs.</summary>
-    public void Clear() => _overrides = null;
 
     /// <summary>The raw table, 0 meaning no override, or null when none were set. Read-only.</summary>
     internal float[]? Overrides => _overrides;
@@ -300,14 +295,6 @@ public struct NavMeshQueryFilter
         AgentTypeId = agentTypeId;
     }
 
-    /// <summary>This filter, querying another agent type's navmesh.</summary>
-    public readonly NavMeshQueryFilter ForAgentType(NavMeshAgentTypeId agentTypeId)
-    {
-        NavMeshQueryFilter filter = this;
-        filter.AgentTypeId = agentTypeId;
-        return filter;
-    }
-
     /// <summary>This filter, with per-area cost overrides.</summary>
     public readonly NavMeshQueryFilter WithAreaCosts(NavMeshAreaCosts? areaCosts)
     {
@@ -330,6 +317,8 @@ public ref struct NavMeshQueryLease
 
     /// <summary>The Detour query, valid until this lease is disposed.</summary>
     public DtNavMeshQuery Query { get; }
+
+    internal readonly NavMeshInstance Instance => _instance!;
 
     internal NavMeshQueryLease(NavMeshInstance instance, DtNavMeshQuery query)
     {
@@ -366,13 +355,6 @@ internal sealed class NavMeshDetourFilter : IDtQueryFilter
         CostOverrides = filter.AreaCosts?.Overrides;
     }
 
-    public float GetAreaCost(int areaIndex)
-    {
-        if (CostOverrides != null && (uint)areaIndex < CostOverrides.Length && CostOverrides[areaIndex] > 0f)
-            return CostOverrides[areaIndex];
-        return NavMeshAreas.GetAreaCost(areaIndex);
-    }
-
     public bool PassFilter(long refs, DtMeshTile tile, DtPoly poly)
     {
         if (poly.flags == 0) return false;
@@ -384,14 +366,114 @@ internal sealed class NavMeshDetourFilter : IDtQueryFilter
         long curRef, DtMeshTile curTile, DtPoly curPoly, long nextRef, DtMeshTile nextTile, DtPoly nextPoly)
     {
         int area = NavMeshAreas.FromDetourArea(curPoly.GetArea());
-        return RcVec3f.Distance(pa, pb) * GetAreaCost(area);
+        return RcVec3f.Distance(pa, pb) * NavMeshAreaCosts.Resolve(CostOverrides, area);
     }
 }
 
 /// <summary>
-/// Result of a navmesh query such as <see cref="NavMeshWorld.SamplePosition(Float3, out NavMeshHit, float)"/>,
-/// <see cref="NavMeshWorld.Raycast(Float3, Float3, out NavMeshHit)"/> or
-/// <see cref="NavMeshWorld.FindClosestEdge(Float3, out NavMeshHit)"/>.
+/// One agent type's crowd: the Detour crowd, the navmesh instance it steers against, and the
+/// 16 query-filter slots it was constructed over. Slot 0 is the shared default (all areas, no
+/// cost overrides); slots 1..15 are refcounted and allocated per distinct (AreaMask,
+/// cost-overrides) configuration, so agents with identical filters share a slot. Slot numbers
+/// are NOT stable across release/re-acquire — nothing outside this entry may key state on
+/// them. Main-thread only, like all crowd state.
+/// </summary>
+internal sealed class NavMeshCrowdEntry
+{
+    public readonly DtCrowd Crowd;
+    public readonly NavMeshInstance Instance;
+
+    // The filter objects the crowd reads live each update — mutating one changes the steering
+    // of every agent on that slot immediately.
+    private readonly NavMeshDetourFilter[] _filters;
+    private readonly int[] _refCounts = new int[DtCrowdConst.DT_CROWD_MAX_QUERY_FILTER_TYPE];
+
+    // Once per entry: a crowd rebind makes every agent re-acquire, and a persistent overflow
+    // population would otherwise warn per agent per rebake — log spam at destructible-world
+    // frequency. The entry is recreated on rebind, so each new crowd re-warns exactly once.
+    private bool _exhaustionWarned;
+
+    public NavMeshCrowdEntry(DtCrowd crowd, NavMeshInstance instance, NavMeshDetourFilter[] filters)
+    {
+        Crowd = crowd;
+        Instance = instance;
+        _filters = filters;
+    }
+
+    /// <summary>
+    /// Slot whose filter matches the configuration exactly, sharing where possible: the
+    /// default config maps to slot 0, a config already in use bumps that slot's refcount, and
+    /// a new config takes a free slot. On exhaustion (16 distinct steering configurations for
+    /// one agent type) warns and falls back to slot 0.
+    /// </summary>
+    public int AcquireFilterSlot(NavMeshAreaMask areaMask, float[]? costOverrides, string? agentName = null)
+    {
+        if (areaMask == NavMeshAreaMask.Everything && OverridesEqual(costOverrides, null))
+            return 0;
+
+        // Exact-match scan beats hashing here: at most 15 candidates, and comparing the full
+        // config can never merge two different configurations the way a hash collision would.
+        int free = -1;
+        for (int slot = 1; slot < _filters.Length; slot++)
+        {
+            if (_refCounts[slot] == 0)
+            {
+                if (free < 0) free = slot;
+            }
+            else if (_filters[slot].AreaMask == areaMask.Mask && OverridesEqual(_filters[slot].CostOverrides, costOverrides))
+            {
+                _refCounts[slot]++;
+                return slot;
+            }
+        }
+
+        if (free > 0)
+        {
+            // A copy, so the agent editing its own costs later cannot skew a shared slot.
+            _filters[free].AreaMask = areaMask.Mask;
+            _filters[free].CostOverrides = (float[]?)costOverrides?.Clone();
+            _refCounts[free] = 1;
+            return free;
+        }
+
+        if (!_exhaustionWarned)
+        {
+            _exhaustionWarned = true;
+            string who = string.IsNullOrEmpty(agentName) ? "an agent" : $"agent '{agentName}'";
+            Debug.LogWarning($"[Navigation] All {_filters.Length} crowd filter slots for agent type {Instance.AgentTypeId} are in use ({_filters.Length - 1} distinct AreaMask/cost configurations); {who} steers with the default filter instead. Explicit queries (CalculatePath etc.) are unaffected. Further overflows on this crowd will not be logged.");
+        }
+        return 0;
+    }
+
+    /// <summary>Release a slot returned by <see cref="AcquireFilterSlot"/>. Slot 0 is shared
+    /// and never released. A slot's filter resets to defaults when its last user leaves.</summary>
+    public void ReleaseFilterSlot(int slot)
+    {
+        if (slot <= 0 || slot >= _refCounts.Length || _refCounts[slot] == 0) return;
+        if (--_refCounts[slot] == 0)
+        {
+            _filters[slot].AreaMask = uint.MaxValue;
+            _filters[slot].CostOverrides = null;
+        }
+    }
+
+    private static bool OverridesEqual(float[]? a, float[]? b)
+    {
+        if (ReferenceEquals(a, b)) return true; // both null: the common mask-only case
+        // 0 means "no override", so a null array equals an all-zero one.
+        for (int i = 0; i < NavMeshAreas.MaxAreas; i++)
+        {
+            float av = a != null && i < a.Length ? a[i] : 0f;
+            float bv = b != null && i < b.Length ? b[i] : 0f;
+            if (av != bv) return false;
+        }
+        return true;
+    }
+}
+
+/// <summary>
+/// Result of a navmesh query such as <see cref="NavMeshWorld.SamplePosition"/>,
+/// <see cref="NavMeshWorld.Raycast"/> or <see cref="NavMeshWorld.FindClosestEdge(Float3, out NavMeshHit, NavMeshQueryFilter)"/>.
 /// </summary>
 public struct NavMeshHit
 {
@@ -523,7 +605,7 @@ public readonly record struct NavMeshTileRebuild(int X, int Z, IReadOnlyList<byt
 
 /// <summary>
 /// A calculated navigation path: world-space corner points plus a status. Reusable — pass the
-/// same instance to repeated <see cref="NavMeshWorld.CalculatePath(Float3, Float3, NavMeshPath)"/>
+/// same instance to repeated <see cref="NavMeshWorld.CalculatePath"/>
 /// calls to avoid reallocating.
 /// </summary>
 public sealed class NavMeshPath
@@ -539,10 +621,9 @@ public sealed class NavMeshPath
     internal Span<long> Polys => _polys.AsSpan(0, _polyCount);
 
     /// <summary>The state of the path.</summary>
-    public NavMeshPathStatus Status { get; internal set; } = NavMeshPathStatus.PathInvalid;
+    public NavMeshPathStatus Status { get; private set; } = NavMeshPathStatus.PathInvalid;
 
-    /// <summary>The corner points of the path. Allocates a fresh array; use
-    /// <see cref="GetCornersNonAlloc"/> on hot paths.</summary>
+    /// <summary>The corner points of the path. Allocates a fresh array.</summary>
     public Float3[] Corners
     {
         get
@@ -560,16 +641,6 @@ public sealed class NavMeshPath
     /// destination. Callers must check <see cref="CornerCount"/> first.</summary>
     internal Float3 LastCorner => _corners[_cornerCount - 1];
 
-    /// <summary>Copy up to <paramref name="results"/>.Length corners into the given array,
-    /// returning the number written.</summary>
-    public int GetCornersNonAlloc(Float3[] results)
-    {
-        ArgumentNullException.ThrowIfNull(results);
-        int n = Math.Min(results.Length, _cornerCount);
-        Array.Copy(_corners, results, n);
-        return n;
-    }
-
     /// <summary>Erase all corner points and reset the status to invalid.</summary>
     public void ClearCorners()
     {
@@ -578,20 +649,19 @@ public sealed class NavMeshPath
         Status = NavMeshPathStatus.PathInvalid;
     }
 
-    internal void SetPolys(ReadOnlySpan<long> polys)
+    internal void Set(ReadOnlySpan<DtStraightPath> corners, ReadOnlySpan<long> polys, NavMeshPathStatus status)
     {
+        if (_corners.Length < corners.Length)
+            _corners = new Float3[Math.Max(corners.Length, 16)];
+        for (int i = 0; i < corners.Length; i++)
+            _corners[i] = corners[i].pos.ToFloat3();
+        _cornerCount = corners.Length;
+
         if (_polys.Length < polys.Length)
             _polys = new long[polys.Length];
         polys.CopyTo(_polys);
         _polyCount = polys.Length;
-    }
 
-    internal void SetCorners(ReadOnlySpan<Float3> corners, NavMeshPathStatus status)
-    {
-        if (_corners.Length < corners.Length)
-            _corners = new Float3[Math.Max(corners.Length, 16)];
-        corners.CopyTo(_corners);
-        _cornerCount = corners.Length;
         Status = status;
     }
 }
@@ -641,26 +711,26 @@ public struct NavMeshGeometrySource
 /// background build. A link with <see cref="Width"/> &gt; 0 is expanded into parallel
 /// connections across the span, so an agent enters at the nearest point along it.
 /// </summary>
-public readonly struct NavMeshLinkSource
+public struct NavMeshLinkSource
 {
     /// <summary>World-space endpoints. Each must land within the agent radius of walkable
     /// surface for the connection to attach.</summary>
-    public readonly Float3 Start, End;
+    public Float3 Start, End;
 
     /// <summary>World-space width of the link: how wide a span of the edge it covers. 0 leaves
     /// the connection at the agent's own radius.</summary>
-    public readonly float Width;
+    public float Width;
 
     /// <summary>Whether the link can be traversed end-to-start as well.</summary>
-    public readonly bool Bidirectional;
+    public bool Bidirectional;
 
     /// <summary>The link's area (see <see cref="NavMeshAreas"/>); traversal cost comes from
     /// the area's cost.</summary>
-    public readonly int Area;
+    public int Area;
 
     /// <summary>Stable user id stamped on the baked connection, used to resolve a traversing
     /// agent back to its <see cref="NavMeshLink"/> component. 0 = none.</summary>
-    public readonly int UserId;
+    public int UserId;
 
     public NavMeshLinkSource(Float3 start, Float3 end, float width, bool bidirectional, int area, int userId)
     {
@@ -674,7 +744,7 @@ public readonly struct NavMeshLinkSource
 
     /// <summary>Conservative world AABB covering both endpoints plus the width, for bounds
     /// filtering and for sizing rebuild regions.</summary>
-    public AABB Bounds => new AABB(Start, Start).Encapsulating(End).Expanded(Width * 0.5f + 0.5f);
+    public readonly AABB Bounds => new AABB(Start, Start).Encapsulating(End).Expanded(Width * 0.5f + 0.5f);
 
     /// <summary>
     /// The crossing points this link becomes: one per parallel connection, spread across
@@ -686,7 +756,7 @@ public readonly struct NavMeshLinkSource
     /// <param name="agentRadius">Bake agent radius: the connection radius, the spacing between
     /// parallel connections, and the inset that keeps the outermost ones on the span.</param>
     /// <param name="results">Receives the crossings; not cleared.</param>
-    public void ExpandCrossings(float agentRadius, System.Collections.Generic.List<(Float3 Start, Float3 End)> results)
+    public readonly void ExpandCrossings(float agentRadius, List<(Float3 Start, Float3 End)> results)
     {
         ArgumentNullException.ThrowIfNull(results);
         float radius = Math.Max(0.01f, agentRadius);
@@ -989,18 +1059,6 @@ public sealed class NavMeshWorldSettings
         _ => throw new ArgumentOutOfRangeException(nameof(quality), "NoObstacleAvoidance has no avoidance settings."),
     };
 
-    public void SetAvoidance(ObstacleAvoidanceType quality, ObstacleAvoidanceSettings value)
-    {
-        switch (quality)
-        {
-            case ObstacleAvoidanceType.LowQualityObstacleAvoidance: LowQualityAvoidance = value; break;
-            case ObstacleAvoidanceType.MedQualityObstacleAvoidance: MediumQualityAvoidance = value; break;
-            case ObstacleAvoidanceType.GoodQualityObstacleAvoidance: GoodQualityAvoidance = value; break;
-            case ObstacleAvoidanceType.HighQualityObstacleAvoidance: HighQualityAvoidance = value; break;
-            default: throw new ArgumentOutOfRangeException(nameof(quality), "NoObstacleAvoidance has no avoidance settings.");
-        }
-    }
-
     public NavMeshWorldSettings Clone() => (NavMeshWorldSettings)MemberwiseClone();
 }
 
@@ -1136,4 +1194,11 @@ public static class NavMeshDebugDisplay
         Debug.DrawLine(end, back + barb, color);
         Debug.DrawLine(end, back - barb, color);
     }
+}
+
+internal static class NavMeshVectorExtensions
+{
+    public static RcVec3f ToRc(this Float3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
+
+    public static Float3 ToFloat3(this RcVec3f v) => new(v.X, v.Y, v.Z);
 }

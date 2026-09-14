@@ -60,8 +60,7 @@ public class NavMeshSurfaceEditor : CustomEditor
 
         // Only one surface per agent type registers; name the winner before play mode makes it obvious.
         NavMeshSurface? rival = FindRival(surface);
-        bool shadowed = rival != null && surface.Instance == null && rival.Instance != null;
-        string? notice = RegistrationNotice(surface, rival, shadowed);
+        string? notice = RegistrationNotice(surface, rival);
         if (notice != null)
             Origami.Label(paper, $"{id}_rival", notice).Warning().Show();
 
@@ -117,10 +116,10 @@ public class NavMeshSurfaceEditor : CustomEditor
     }
 
     /// <summary>Null when there is nothing to warn about.</summary>
-    private static string? RegistrationNotice(NavMeshSurface surface, NavMeshSurface? rival, bool shadowed)
+    private static string? RegistrationNotice(NavMeshSurface surface, NavMeshSurface? rival)
     {
         string agentType = NavMeshAgentTypes.GetName(RegistrationKey(surface));
-        if (shadowed)
+        if (rival != null && surface.Instance == null && rival.Instance != null)
             return $"'{rival!.GameObject.Name}' provides the {agentType} navmesh; this surface is ignored. Bake as a single surface, or give them separate agent types.";
         if (rival != null && surface.Instance != null)
             return $"'{rival.GameObject.Name}' also targets the {agentType} navmesh and is ignored; one surface per agent type per scene.";

@@ -22,15 +22,7 @@ public static class NavMeshAgentTypes
     // reader walking one mid-rebuild could index past its own end.
     private static volatile NavMeshAgentType[] s_types = [CreateHumanoid()];
 
-    private static NavMeshAgentType CreateHumanoid() => new()
-    {
-        Id = Humanoid,
-        Name = "Humanoid",
-        Radius = 0.5f,
-        Height = 2.0f,
-        MaxSlope = 45f,
-        MaxClimb = 0.4f,
-    };
+    internal static NavMeshAgentType CreateHumanoid() => new() { Id = Humanoid, Name = "Humanoid" };
 
     /// <summary>All defined agent types, in table order. Do not mutate the entries — use
     /// <see cref="ApplyTable"/> (settings) to change the table.</summary>
@@ -51,17 +43,6 @@ public static class NavMeshAgentTypes
     /// references stay visible rather than blank).</summary>
     public static string GetName(int agentTypeId)
         => Get(agentTypeId)?.Name ?? $"Agent Type {agentTypeId}";
-
-    /// <summary>Find an agent type id by name, or -1. Null/empty never matches.</summary>
-    public static int GetIdFromName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return -1;
-        NavMeshAgentType[] types = s_types;
-        for (int i = 0; i < types.Length; i++)
-            if (string.Equals(types[i].Name, name, StringComparison.Ordinal))
-                return types[i].Id;
-        return -1;
-    }
 
     /// <summary>
     /// Replace the table (called by settings loading). The built-in Humanoid entry is
@@ -109,7 +90,7 @@ public static class NavMeshAgentTypes
         if (type == null)
         {
             Debug.LogWarning($"[Navigation] Agent type {agentTypeId} is not defined in the navigation settings; baking with the Humanoid envelope. Define it in Project Settings > Navigation > Agents.");
-            type = Get(Humanoid) ?? CreateHumanoid();
+            type = Get(Humanoid)!;
         }
 
         return new NavMeshBuildSettings

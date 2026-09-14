@@ -34,9 +34,6 @@ public static class NavMeshAreas
     /// <summary>The built-in area index used for jump/off-mesh connections.</summary>
     public const int Jump = 2;
 
-    /// <summary>Area mask that includes every area.</summary>
-    public const int AllAreas = -1;
-
     // Replaced wholesale rather than edited in place: query filters read the cost table from
     // worker threads while the settings UI rewrites it on every keystroke, and publishing a new
     // array is one atomic store, so a reader gets a whole revision of the table rather than one
@@ -45,7 +42,7 @@ public static class NavMeshAreas
     private static volatile float[] s_costs = CreateDefaultCosts();
     private static readonly Lock s_writeLock = new();
 
-    private static string[] CreateDefaultNames()
+    internal static string[] CreateDefaultNames()
     {
         string[] names = new string[MaxAreas];
         for (int i = 0; i < names.Length; i++) names[i] = string.Empty;
@@ -55,7 +52,7 @@ public static class NavMeshAreas
         return names;
     }
 
-    private static float[] CreateDefaultCosts()
+    internal static float[] CreateDefaultCosts()
     {
         float[] costs = new float[MaxAreas];
         for (int i = 0; i < costs.Length; i++) costs[i] = GetDefaultAreaCost(i);
@@ -83,18 +80,6 @@ public static class NavMeshAreas
             names[areaIndex] = name ?? string.Empty;
             s_names = names;
         }
-    }
-
-    /// <summary>Find an area index by name, or -1 when no area has that name. Null/empty never
-    /// matches (unnamed slots store empty strings).</summary>
-    public static int GetAreaFromName(string areaName)
-    {
-        if (string.IsNullOrEmpty(areaName)) return -1;
-        string[] names = s_names;
-        for (int i = 0; i < MaxAreas; i++)
-            if (string.Equals(names[i], areaName, StringComparison.Ordinal))
-                return i;
-        return -1;
     }
 
     /// <summary>The default path cost multiplier for an area (used when a query filter does not override it).</summary>
@@ -128,8 +113,8 @@ public static class NavMeshAreas
             float[] newCosts = [.. s_costs];
             for (int i = 0; i < MaxAreas; i++)
             {
-                if (names != null && i < names.Count && i > Jump) newNames[i] = names[i] ?? string.Empty;
-                if (costs != null && i < costs.Count) newCosts[i] = Math.Max(1f, costs[i]);
+                if (i < names.Count && i > Jump) newNames[i] = names[i] ?? string.Empty;
+                if (i < costs.Count) newCosts[i] = Math.Max(1f, costs[i]);
             }
             s_names = newNames;
             s_costs = newCosts;

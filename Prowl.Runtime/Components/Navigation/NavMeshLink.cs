@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -54,42 +55,29 @@ public class NavMeshLink : MonoBehaviour
     // Writing any part of the definition re-offers the link and rebuilds around both its old and
     // new endpoints, so a spawn-then-configure write lands without waiting for a frame. Each one
     // no-ops on an unchanged value: an edit costs partial rebuilds, not a field assignment.
-    public Float3 StartPoint
-    {
-        get => startPoint;
-        set { if (startPoint.Equals(value)) return; startPoint = value; ApplyChange(edited: true, moved: false); }
-    }
+    public Float3 StartPoint { get => startPoint; set => SetDefinition(ref startPoint, value); }
+    public Float3 EndPoint { get => endPoint; set => SetDefinition(ref endPoint, value); }
+    public float Width { get => width; set => SetDefinition(ref width, value); }
+    public bool Bidirectional { get => bidirectional; set => SetDefinition(ref bidirectional, value); }
+    public NavMeshArea Area { get => area; set => SetDefinition(ref area, value); }
 
-    public Float3 EndPoint
-    {
-        get => endPoint;
-        set { if (endPoint.Equals(value)) return; endPoint = value; ApplyChange(edited: true, moved: false); }
-    }
-
-    public float Width
-    {
-        get => width;
-        set { if (width == value) return; width = value; ApplyChange(edited: true, moved: false); }
-    }
-
-    public bool Bidirectional
-    {
-        get => bidirectional;
-        set { if (bidirectional == value) return; bidirectional = value; ApplyChange(edited: true, moved: false); }
-    }
-
-    public NavMeshArea Area
-    {
-        get => area;
-        set { if (area == value) return; area = value; ApplyChange(edited: true, moved: false); }
-    }
-
-    /// <summary>Toggling this rebuilds the affected tiles in place; the endpoints have not moved,
-    /// so there is only the one region to revisit.</summary>
+    /// <summary>Toggling this rebuilds the affected tiles in place.</summary>
     public bool Activated
     {
         get => activated;
-        set { if (activated == value) return; activated = value; ApplyChange(edited: false, moved: false); }
+        set
+        {
+            if (activated == value) return;
+            activated = value;
+            ApplyChange(edited: false);
+        }
+    }
+
+    private void SetDefinition<T>(ref T field, T value)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        ApplyChange(edited: true);
     }
 
     /// <summary>Which surfaces the link resolves against is part of its definition: narrowing the
@@ -102,7 +90,7 @@ public class NavMeshLink : MonoBehaviour
         {
             if (ReferenceEquals(agentTypes, value)) return;
             agentTypes = value ?? new();
-            ApplyChange(edited: true, moved: false);
+            ApplyChange(edited: true);
         }
     }
 
@@ -141,12 +129,6 @@ public class NavMeshLink : MonoBehaviour
     // definition too. A copy rather than the live set, or an in-place edit would never compare as a change.
     private NavMeshAgentTypeSet _appliedAgentTypes = new();
 
-    private void CaptureAppliedDefinition()
-    {
-        CaptureAppliedState();
-        CaptureAppliedScope();
-    }
-
     /// <summary>Everything except the scope (see <see cref="CaptureAppliedScope"/>).</summary>
     private void CaptureAppliedState()
     {
@@ -160,18 +142,12 @@ public class NavMeshLink : MonoBehaviour
     /// identifiable from the previous snapshot.</summary>
     private void CaptureAppliedScope() => _appliedAgentTypes = agentTypes.Clone();
 
-    /// <summary>Surfaces to revisit on a change: those this link applies to now, plus those it
-    /// applied to before. Collection filters by the current scope, so a surface in the second
-    /// group rebuilds without the link, which is how it gets removed.</summary>
-    private bool AffectsOrDidAffect(NavMeshAgentTypeId agentTypeId)
-        => AffectsAgentType(agentTypeId) || _appliedAgentTypes.Contains(agentTypeId);
-
     /// The setters, an inspector edit and AutoUpdatePosition all land here: rebuild around the OLD
     /// endpoints so those tiles drop the stale connection, then around the new ones so they gain it.
-    private void ApplyChange(bool edited, bool moved)
+    /// Tiles are deduplicated when the world drains them, so unchanged endpoints cost nothing extra.
+    private void ApplyChange(bool edited)
     {
         Float3 oldStart = _appliedStart, oldEnd = _appliedEnd;
-        bool relocated = moved || edited;
         CaptureAppliedState();
 
         // An edited link has to be re-offered to every instance: catch-up only attempts each
@@ -179,7 +155,7 @@ public class NavMeshLink : MonoBehaviour
         if (edited) _catchUpDone.Clear();
 
         RequestRebuild(oldStart, oldEnd);
-        if (relocated) RequestRebuild(_appliedStart, _appliedEnd);
+        RequestRebuild(_appliedStart, _appliedEnd);
         CaptureAppliedScope(); // both rebuilds have seen the outgoing scope
     }
 
@@ -187,7 +163,7 @@ public class NavMeshLink : MonoBehaviour
     public override void OnValidate()
     {
         if (GameObject.IsNotValid()) return; // WorldStart needs a Transform
-        ApplyChange(edited: true, moved: false);
+        ApplyChange(edited: true);
     }
 
     private NavMeshWorld? _world;
@@ -213,16 +189,16 @@ public class NavMeshLink : MonoBehaviour
 
     public override void OnEnable()
     {
-        CaptureAppliedDefinition();
+        CaptureAppliedState();
+        CaptureAppliedScope();
 
         // Catch-up must survive any enable order between links and surfaces: a navmesh may
         // already be live (runtime-spawned link), or may only register later (scene load
-        // order) — the NavMeshChanged subscription covers the latter, mirroring how agents
-        // handle late registration.
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        // order), which the registration event covers.
+        Scene? scene = Scene;
         if (scene.IsValid())
         {
-            _world = scene!.Navigation;
+            _world = scene.Navigation;
             _world.InstanceRegistered += OnInstanceRegistered;
             _world.InstanceUnregistered += OnInstanceUnregistered;
             _world.RegisterLink(this);
@@ -277,7 +253,7 @@ public class NavMeshLink : MonoBehaviour
             if (instance == null || !AffectsAgentType(surface.AgentTypeId)) continue;
             if (!_catchUpDone.Add(instance)) continue;      // one attempt per instance
             if (instance.ContainsLinkId(LinkId)) continue;  // already in the live mesh
-            MarkEndpointRegions(surface, _appliedStart, _appliedEnd);
+            _world.MarkLinkEndpointsDirty(surface, _appliedStart, _appliedEnd, Width);
         }
     }
 
@@ -292,12 +268,14 @@ public class NavMeshLink : MonoBehaviour
         bool edited = !agentTypes.SameAs(_appliedAgentTypes);
         bool moved = AutoUpdatePosition
             && (Float3.Distance(WorldStart, _appliedStart) > 0.01 || Float3.Distance(WorldEnd, _appliedEnd) > 0.01);
-        if (edited || moved) ApplyChange(edited, moved);
+        if (edited || moved) ApplyChange(edited);
     }
 
-    /// <summary>Rebuild the tiles around both endpoints on every registered surface this link
-    /// affects. No-op when <see cref="AutoRebuild"/> is off or no matching navmesh is live
-    /// (which includes scene teardown — see the note in <see cref="OnDisable"/>).</summary>
+    /// <summary>Dirty the tiles around both endpoints on every registered surface this link applies
+    /// to now or applied to before. Collection filters by the current scope, so a surface in the
+    /// second group rebuilds without the link, which is how it gets removed. The world applies the
+    /// regions, so a frame that moves many links re-contours each tile once. No-op when
+    /// <see cref="AutoRebuild"/> is off or no matching navmesh is live.</summary>
     private void RequestRebuild(Float3 start, Float3 end)
     {
         if (!AutoRebuild || _world == null) return;
@@ -306,15 +284,11 @@ public class NavMeshLink : MonoBehaviour
         for (int i = 0; i < surfaces.Count; i++)
         {
             NavMeshSurface surface = surfaces[i];
-            if (surface.Instance == null || !AffectsOrDidAffect(surface.AgentTypeId)) continue;
-            MarkEndpointRegions(surface, start, end);
+            if (surface.Instance == null) continue;
+            if (!AffectsAgentType(surface.AgentTypeId) && !_appliedAgentTypes.Contains(surface.AgentTypeId)) continue;
+            _world.MarkLinkEndpointsDirty(surface, start, end, Width);
         }
     }
-
-    /// <summary>Dirty the tiles around both endpoints. The world applies them, so a frame that moves
-    /// many links re-contours each affected tile once however many of them touched it.</summary>
-    private void MarkEndpointRegions(NavMeshSurface surface, Float3 start, Float3 end)
-        => _world?.MarkLinkEndpointsDirty(surface, start, end, Width);
 
     /// <summary>
     /// Draws whatever the navmesh made of this link — the same connection the surface's overlay

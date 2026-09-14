@@ -19,18 +19,16 @@ internal sealed class NavMeshSurfaceOverlay
 
     private NavMeshTriangulation? _triangulation;
     private NavMeshWorld? _world;
-    // What the cached triangulation was built from, so it rebuilds when the asset is swapped
-    // or the surface gains or loses a live registration (entering or leaving play mode).
+    // What the cached triangulation was built from, so it rebuilds when the asset is swapped or the
+    // surface's live registration changes (a rebake, or registering and unregistering).
     private NavMeshData? _source;
-    private bool _fromLive;
+    private NavMeshInstance? _builtFrom;
     private bool _stale;
     private int _drawsSinceTriangulation;
     private List<(Float3 Position, bool Corner)>? _vertexMarkers;
     private List<(Float3 A, Float3 B)>? _detailEdges;
 
     private void Invalidate() => _triangulation = null;
-
-    private void Invalidate(NavMeshInstance instance) => _triangulation = null;
 
     private void MarkStale() => _stale = true;
 
@@ -41,8 +39,6 @@ internal sealed class NavMeshSurfaceOverlay
         {
             _world.NavMeshSettled -= Invalidate;
             _world.NavMeshChanged -= MarkStale;
-            _world.InstanceRegistered -= Invalidate;
-            _world.InstanceUnregistered -= Invalidate;
             _world = null;
         }
         _triangulation = null;
@@ -59,8 +55,6 @@ internal sealed class NavMeshSurfaceOverlay
             Release();
             world.NavMeshSettled += Invalidate;
             world.NavMeshChanged += MarkStale;
-            world.InstanceRegistered += Invalidate;
-            world.InstanceUnregistered += Invalidate;
             _world = world;
         }
 
@@ -74,13 +68,13 @@ internal sealed class NavMeshSurfaceOverlay
 
         // Prefer the surface's own live navmesh: it is the one carving and rebuilds change.
         // Asking the world for the agent type instead would draw a rival surface's mesh here.
-        bool live = surface.Instance != null && world != null;
-        if (_triangulation == null || _fromLive != live || !ReferenceEquals(_source, data))
+        NavMeshInstance? live = world != null ? surface.Instance : null;
+        if (_triangulation == null || !ReferenceEquals(_builtFrom, live) || !ReferenceEquals(_source, data))
         {
             _stale = false;
             _drawsSinceTriangulation = 0;
-            _triangulation = live ? world!.CalculateTriangulation(surface.AgentTypeId) : data.CalculateTriangulation();
-            _fromLive = live;
+            _triangulation = live != null ? world!.CalculateTriangulation(surface.AgentTypeId) : data.CalculateTriangulation();
+            _builtFrom = live;
             _source = data;
             _vertexMarkers = null;
             _detailEdges = null;

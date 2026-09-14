@@ -186,7 +186,7 @@ public class NavMeshComponentTests : RuntimeTestBase
 
             // Small type walks the corridor; large type has no mesh there (either its bake was
             // empty or its instance has nothing at the sample point).
-            Assert.True(scene.Navigation.HasNavMesh(0));
+            Assert.True(scene.Navigation.GetInstance(0) != null);
             Assert.True(scene.Navigation.SamplePosition(new Float3(15, 0.2f, 1.5f), out _, 0.5f,
                 new NavMeshQueryFilter { AgentTypeId = 0 }));
 
@@ -237,7 +237,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     {
         (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene();
 
-        Assert.True(scene.Navigation.HasNavMesh());
+        Assert.True(scene.Navigation.GetInstance() != null);
         Assert.NotNull(surface.Instance);
 
         // The static facade reaches it when the scene is current.
@@ -250,13 +250,13 @@ public class NavMeshComponentTests : RuntimeTestBase
     public void Surface_DisableUnregisters()
     {
         (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene();
-        Assert.True(scene.Navigation.HasNavMesh());
+        Assert.True(scene.Navigation.GetInstance() != null);
 
         surface.GameObject.Enabled = false;
-        Assert.False(scene.Navigation.HasNavMesh());
+        Assert.False(scene.Navigation.GetInstance() != null);
 
         surface.GameObject.Enabled = true;
-        Assert.True(scene.Navigation.HasNavMesh());
+        Assert.True(scene.Navigation.GetInstance() != null);
     }
 
     [Fact]
@@ -1023,7 +1023,7 @@ public class NavMeshComponentTests : RuntimeTestBase
         Tick(scene, 2);
 
         Assert.True(agent.IsOnNavMesh, "Agent must rejoin the replacement crowd after the navmesh swap.");
-        Assert.NotNull(scene.Navigation.NativeCrowd);
+        Assert.NotNull(scene.Navigation.GetNativeCrowd());
 
         // Destination survived the swap and the agent still gets there on the new mesh.
         Tick(scene, 240);

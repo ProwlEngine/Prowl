@@ -6,9 +6,10 @@ using System.Collections.Generic;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 
-using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Core;
 using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.TileCache;
+using Prowl.Recast.Detour.TileCache.Io.Compress;
 
 using Prowl.Vector;
 
@@ -28,30 +29,6 @@ public sealed class NavMeshData : EngineObject
         public int X;
         public int Z;
         public byte[] Data = [];
-    }
-
-    /// <summary>One off-mesh link the cache re-injects when it rebuilds a tile.
-    /// The serializable mirror of <see cref="NavMeshLinkSource"/>.</summary>
-    public sealed class NavMeshLinkEntry
-    {
-        public Float3 Start;
-        public Float3 End;
-        public float Width;
-        public bool Bidirectional;
-        public int Area = NavMeshAreas.Jump;
-        public int UserId;
-
-        public NavMeshLinkSource ToSource() => new(Start, End, Width, Bidirectional, Area, UserId);
-
-        public static NavMeshLinkEntry From(NavMeshLinkSource source) => new()
-        {
-            Start = source.Start,
-            End = source.End,
-            Width = source.Width,
-            Bidirectional = source.Bidirectional,
-            Area = source.Area,
-            UserId = source.UserId,
-        };
     }
 
     /// <summary>Current asset format version. Bump when the tile byte format or the shape of the
@@ -77,7 +54,7 @@ public sealed class NavMeshData : EngineObject
 
     /// <summary>Origin of the tile grid (world space). Tile (x, z) starts at
     /// Origin + (x * TileWorldSize, 0, z * TileWorldSize).</summary>
-    public Float3 Origin;
+    public Float3 Origin => BoundsMin;
 
     /// <summary>Side length of one tile in world units.</summary>
     public float TileWorldSize;
@@ -86,10 +63,6 @@ public sealed class NavMeshData : EngineObject
     /// not one grid tile, so this is the grid scaled by the layers a tile is expected to stack.
     /// <see cref="ResolveCapacity"/> is what instantiation actually uses.</summary>
     public int MaxTiles;
-
-    /// <summary>Per-tile polygon capacity the Detour navmesh is initialized with. Shares
-    /// Detour's reference bits with <see cref="MaxTiles"/>, so the two move together.</summary>
-    public int MaxPolys;
 
     /// <summary>Total id bits a Detour polygon reference splits between tile and polygon.</summary>
     internal const int TileAndPolyIdBits = 22;
@@ -118,10 +91,8 @@ public sealed class NavMeshData : EngineObject
         Settings = Settings.Clone(),
         BoundsMin = BoundsMin,
         BoundsMax = BoundsMax,
-        Origin = Origin,
         TileWorldSize = TileWorldSize,
         MaxTiles = MaxTiles,
-        MaxPolys = MaxPolys,
         CacheLayers = [.. CacheLayers],
         Links = [.. Links],
     };
@@ -169,7 +140,7 @@ public sealed class NavMeshData : EngineObject
     /// here and are re-injected on every tile build. Kept in step with the live
     /// <see cref="NavMeshLink"/>s by <see cref="NavMeshSurface.RebuildLinkTiles"/>.
     /// </summary>
-    public List<NavMeshLinkEntry> Links = [];
+    public List<NavMeshLinkSource> Links = [];
 
     /// <summary>True when there is at least one layer to instantiate.</summary>
     public bool HasTiles => CacheLayers != null && CacheLayers.Count > 0;
@@ -199,9 +170,12 @@ public sealed class NavMeshData : EngineObject
         if (CacheLayers.Count >= slots)
             slots = CacheLayers.Count * DtTileCacheLayer.EXPECTED_LAYERS_PER_TILE;
 
-        int tileBits = Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(slots)), MaxTileBits);
+        int tileBits = TileBitsFor(slots);
         return (1 << tileBits, 1 << (TileAndPolyIdBits - tileBits));
     }
+
+    /// <summary>How many of the shared reference bits a navmesh with this many tile slots gives to tiles.</summary>
+    internal static int TileBitsFor(int slots) => Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(slots)), MaxTileBits);
 
     private DtNavMesh CreateEmptyNavMesh()
     {
@@ -210,7 +184,7 @@ public sealed class NavMeshData : EngineObject
         var navMesh = new DtNavMesh();
         var navParams = new DtNavMeshParams
         {
-            orig = new RcVec3f((float)Origin.X, (float)Origin.Y, (float)Origin.Z),
+            orig = Origin.ToRc(),
             tileWidth = TileWorldSize,
             tileHeight = TileWorldSize,
             maxTiles = maxTiles,
@@ -250,19 +224,52 @@ public sealed class NavMeshData : EngineObject
     /// affected tiles incrementally via <c>DtTileCache.Update</c>.
     /// </summary>
     /// <param name="maxObstacles">Obstacle capacity the cache is created with.</param>
-    public Prowl.Recast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles)
-        => CreateTileCache(maxObstacles, out _);
+    public DtTileCache CreateTileCache(int maxObstacles) => CreateTileCache(maxObstacles, out _);
 
     /// <inheritdoc cref="CreateTileCache(int)"/>
     /// <param name="maxObstacles">Obstacle capacity the cache is created with.</param>
     /// <param name="meshProcess">The cache's link registry, so live <see cref="NavMeshLink"/>s
     /// can update the connections that later tile builds inject.</param>
-    internal Prowl.Recast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles,
-        out NavMeshTileBuilder.ProwlTileCacheMeshProcess meshProcess)
+    internal DtTileCache CreateTileCache(int maxObstacles, out NavMeshTileBuilder.ProwlTileCacheMeshProcess meshProcess)
     {
         ValidateVersion();
-        DtNavMesh navMesh = CreateEmptyNavMesh();
-        Prowl.Recast.Detour.TileCache.DtTileCache cache = NavMeshTileBuilder.CreateTileCache(this, navMesh, maxObstacles, out meshProcess);
+        (int maxTiles, _) = ResolveCapacity();
+        var option = new DtTileCacheParams
+        {
+            orig = Origin.ToRc(),
+            cs = Settings.EffectiveVoxelSize,
+            ch = Settings.EffectiveVoxelHeight,
+            width = Settings.EffectiveTileSize,
+            height = Settings.EffectiveTileSize,
+            walkableHeight = Settings.Agent.Height,
+            walkableRadius = Settings.Agent.Radius,
+            walkableClimb = Settings.Agent.MaxClimb,
+            maxSimplificationError = Settings.Overrides.EdgeMaxError,
+            // Height detail, so polygons follow the surface instead of spanning flat between their
+            // corners. Recast recommends sampling every six voxels, given here in world units as
+            // the cache expects; zero is how it is told to skip detail.
+            detailSampleDist = Settings.Overrides.BuildHeightDetail ? Settings.EffectiveVoxelSize * 6 : 0,
+            detailSampleMaxError = Settings.EffectiveVoxelHeight,
+            // Standard watershed contouring instead of the cache's monotone sweep: avoids slivers on
+            // slopes. Thresholds are cell counts converted from world units, so voxel size does not
+            // change the mesh between rebakes; the edge cap is loose on purpose, since over-splitting
+            // floods flat floors with polygons and the crowd with portal corners.
+            watershedPartition = true,
+            minRegionArea = (int)(Settings.Overrides.MinRegionArea / (Settings.EffectiveVoxelSize * Settings.EffectiveVoxelSize)),
+            mergeRegionArea = (int)(20f / (Settings.EffectiveVoxelSize * Settings.EffectiveVoxelSize)),
+            maxEdgeLen = 24,
+            // Exactly the navmesh's own layer capacity. A cache sized above it would accept blobs
+            // the navmesh then drops on commit, reported only through a status the cache discards.
+            maxTiles = maxTiles,
+            maxObstacles = Math.Max(1, maxObstacles),
+        };
+
+        meshProcess = new NavMeshTileBuilder.ProwlTileCacheMeshProcess();
+        meshProcess.SetLinks(Links, Settings.Agent.Radius);
+
+        // FastLZ + cCompatibility layout, matching how NavMeshTileBuilder.BuildTileLayers compressed the blobs.
+        var cache = new DtTileCache(option, new DtTileCacheStorageParams(RcByteOrder.LITTLE_ENDIAN, true),
+            CreateEmptyNavMesh(), DtTileCacheCompressorFactory.Shared.Create(0), meshProcess);
 
         // Add every layer before meshing any: a seam is built from both sides' cells, so a tile
         // meshed while its neighbours are missing describes that seam differently than they will,
@@ -294,15 +301,8 @@ public sealed class NavMeshData : EngineObject
     /// bake: tile linking follows the order tiles are added. Measured on a 256-tile bake: 85 ms
     /// against 500 ms, for 9% more allocation (a neighbour-layer cache per worker instead of one).
     /// </summary>
-    private static void MeshTiles(Prowl.Recast.Detour.TileCache.DtTileCache cache, List<long> tileRefs)
+    private static void MeshTiles(DtTileCache cache, List<long> tileRefs)
     {
-        if (tileRefs.Count < 2)
-        {
-            foreach (long tileRef in tileRefs)
-                cache.BuildNavMeshTile(tileRef);
-            return;
-        }
-
         var built = new DtMeshData?[tileRefs.Count];
         try
         {
@@ -312,8 +312,8 @@ public sealed class NavMeshData : EngineObject
             // the whole pool rather than leaving a core free — the thread that would use it is the
             // one blocked here.
             Parallel.For(0, tileRefs.Count,
-                () => new Prowl.Recast.Detour.TileCache.DtTileCacheBuildScratch(),
-                (int i, ParallelLoopState _, Prowl.Recast.Detour.TileCache.DtTileCacheBuildScratch scratch) =>
+                () => new DtTileCacheBuildScratch(),
+                (int i, ParallelLoopState _, DtTileCacheBuildScratch scratch) =>
                 {
                     built[i] = cache.BuildTileMeshData(tileRefs[i], scratch);
                     return scratch;
@@ -322,8 +322,7 @@ public sealed class NavMeshData : EngineObject
         }
         catch (AggregateException e) when (e.InnerException != null)
         {
-            // A one-tile navmesh takes the serial path above and throws whatever the build threw;
-            // callers should not have to unwrap only when the bake happened to have more tiles.
+            // Callers see the exception the tile build threw, not the parallel wrapper.
             ExceptionDispatchInfo.Capture(e.InnerException).Throw();
         }
 
