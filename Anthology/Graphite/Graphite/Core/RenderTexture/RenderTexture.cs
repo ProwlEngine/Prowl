@@ -5,8 +5,6 @@ namespace Prowl.Graphite;
 /// <summary>Color/depth attachments and framebuffer from RenderTextureDescription. Use Framebuffer to render or ColorTextures/DepthTexture to sample.</summary>
 public sealed class RenderTexture : IDisposable
 {
-    private const PixelFormat DepthFormat = PixelFormat.D24_UNorm_S8_UInt;
-
     /// <summary>Description this was built from.</summary>
     public RenderTextureDescription Desc { get; }
 
@@ -42,12 +40,28 @@ public sealed class RenderTexture : IDisposable
         {
             DepthTexture = factory.CreateTexture(TextureDescription.Texture2D(
                 desc.Width, desc.Height, 1, 1,
-                DepthFormat,
-                TextureUsage.DepthStencil,
+                ResolveDepthFormat(device),
+                TextureUsage.DepthStencil | TextureUsage.Sampled,
                 desc.SampleCount));
         }
 
         Framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures));
+    }
+
+    private static PixelFormat? s_depthFormat;
+
+    /// <summary>Depth-stencil format render textures use: D24_UNorm_S8_UInt, or D32_Float_S8_UInt when the device lacks it.</summary>
+    public static PixelFormat ResolveDepthFormat(GraphicsDevice device)
+    {
+        if (s_depthFormat is { } cached)
+            return cached;
+
+        const TextureUsage usage = TextureUsage.DepthStencil | TextureUsage.Sampled;
+        PixelFormat format = device.GetPixelFormatSupport(PixelFormat.D24_UNorm_S8_UInt, TextureType.Texture2D, usage)
+            ? PixelFormat.D24_UNorm_S8_UInt
+            : PixelFormat.D32_Float_S8_UInt;
+        s_depthFormat = format;
+        return format;
     }
 
     /// <summary>Sets debug name on framebuffer and textures.</summary>
