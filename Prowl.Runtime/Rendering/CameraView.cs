@@ -1,9 +1,11 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using Prowl.Graphite.RenderGraph;
 
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 
@@ -45,6 +47,14 @@ public sealed class CameraView : IRenderView
     /// </summary>
     public Texture2D? SceneDepthCopy;
 
+    /// <summary>
+    /// The shader-side <c>Frame</c> parameter block (see ShaderVariables.slang) for this camera: view/projection
+    /// matrices and their inverses, camera position and projection/screen params, merged with the frame-global
+    /// <see cref="GlobalUniforms"/>. Built once in <see cref="From"/>; every pass that records camera-relative
+    /// draws binds it with <c>cmd.SetProperties</c>.
+    /// </summary>
+    public PropertySet FrameProperties = new();
+
     public uint PixelWidth { get; set; }
     public uint PixelHeight { get; set; }
 
@@ -57,7 +67,7 @@ public sealed class CameraView : IRenderView
     {
         RenderTexture? target = camera.UpdateRenderData();
 
-        return new CameraView
+        var view = new CameraView
         {
             Camera = camera,
             Data = data,
@@ -66,5 +76,34 @@ public sealed class CameraView : IRenderView
             PixelHeight = camera.PixelHeight,
             Name = camera.GameObject.Name,
         };
+        view.BuildFrameProperties();
+        return view;
+    }
+
+    private void BuildFrameProperties()
+    {
+        PropertySet props = FrameProperties;
+        Float4x4 v = Camera.ViewMatrix;
+        Float4x4 p = Camera.ProjectionMatrix;
+        Float4x4 vp = p * v;
+        Float4x4 nonJitteredVP = Camera.NonJitteredProjectionMatrix * v;
+
+        props.SetMatrix("prowl_MatV", v);
+        props.SetMatrix("prowl_MatIV", v.Invert());
+        props.SetMatrix("prowl_MatP", p);
+        props.SetMatrix("prowl_MatVP", vp);
+        props.SetMatrix("prowl_MatIP", p.Invert());
+        props.SetMatrix("prowl_MatIVP", vp.Invert());
+        props.SetMatrix("prowl_MatVP_NonJittered", nonJitteredVP);
+        props.SetMatrix("prowl_PrevViewProj", Camera.HasPreviousViewProjectionMatrix ? Camera.PreviousViewProjectionMatrix : nonJitteredVP);
+
+        props.SetFloat3("_WorldSpaceCameraPos", Camera.Transform.Position);
+        props.SetFloat4("_ProjectionParams", new Float4(1.0f, Camera.NearClipPlane, Camera.FarClipPlane, 1.0f / Camera.FarClipPlane));
+        props.SetFloat4("_ScreenParams", new Float4(PixelWidth, PixelHeight, 1.0f + 1.0f / PixelWidth, 1.0f + 1.0f / PixelHeight));
+        props.SetFloat2("_CameraJitter", Float2.Zero);
+        props.SetFloat2("_CameraPreviousJitter", Float2.Zero);
+
+        GlobalUniforms.Update();
+        props.ApplyOther(GlobalUniforms.Properties);
     }
 }

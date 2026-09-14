@@ -73,6 +73,7 @@ public abstract class CopyChainPass : IPass<CameraView>
         }
 
         cmd.SetFramebuffer(output.Framebuffer);
+        cmd.SetProperties(context.View.FrameProperties);
 
         if (!_hasInput)
             cmd.ClearColorTarget(0, new Color(0f, 0f, 0f, 1f));
