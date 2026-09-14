@@ -15,6 +15,7 @@ public abstract class RenderPipeline<TView> : IDisposable
     private IPresentPass<TView>? _presentPass;
     private RenderGraph<TView>? _graph;
     private bool _initialized;
+    private bool _executingView;
 
     /// <summary>
     /// Runs once lazily before first execution. Override to add passes and set the present pass.
@@ -76,6 +77,19 @@ public abstract class RenderPipeline<TView> : IDisposable
         _initialized = true;
     }
 
+    /// <summary>Disposes the current graph and re-runs InitializePasses lazily on next access. Not callable mid-dispatch.</summary>
+    protected void InvalidateGraph()
+    {
+        if (_executingView)
+            throw new InvalidOperationException("InvalidateGraph cannot be called while a view is executing.");
+
+        _graph?.Dispose();
+        _graph = null;
+        _passes.Clear();
+        _centralResources.Clear();
+        _initialized = false;
+    }
+
     /// <summary>
     /// Runs the solved graph for one view: ordered passes with profiler scopes and capture, then present.
     /// Once per view per dispatch.
@@ -88,43 +102,51 @@ public abstract class RenderPipeline<TView> : IDisposable
         RenderGraph<TView> graph = Graph;
         IProfiler? profiler = context.Profiler;
 
-        int index = 0;
-        foreach (RenderGraph<TView>.PassNode node in graph.OrderedPasses)
+        _executingView = true;
+        try
         {
-            var passInfo = new PassInfo(node.Pass.Name, index++, node.Inputs, node.Outputs);
-
-            profiler?.BeginPass(passInfo);
-            if (profiler != null)
+            int index = 0;
+            foreach (RenderGraph<TView>.PassNode node in graph.OrderedPasses)
             {
-                foreach (RenderResourceID input in node.Inputs)
+                var passInfo = new PassInfo(node.Pass.Name, index++, node.Inputs, node.Outputs);
+
+                profiler?.BeginPass(passInfo);
+                if (profiler != null)
                 {
-                    context.ResolveForProfiler(input, out RenderTexture? texture, out DeviceBuffer? buffer);
-                    profiler.RecordPassRead(passInfo, input, texture, buffer);
+                    foreach (RenderResourceID input in node.Inputs)
+                    {
+                        context.ResolveForProfiler(input, out RenderTexture? texture, out DeviceBuffer? buffer);
+                        profiler.RecordPassRead(passInfo, input, texture, buffer);
+                    }
                 }
+
+                context.SetCurrentPass(passInfo);
+                node.Pass.Render(context);
+                context.SetCurrentPass(null);
+
+                profiler?.EndPass(passInfo);
+                if (profiler != null)
+                {
+                    foreach (RenderResourceID output in node.Outputs)
+                    {
+                        context.ResolveForProfiler(output, out RenderTexture? texture, out DeviceBuffer? buffer);
+                        profiler.RecordPassRead(passInfo, output, texture, buffer);
+                    }
+                }
+
+                context.ReclaimUnsubmittedCommandBuffers(node.Pass.Name);
+
+                if (profiler != null && profiler.RequestCapture)
+                    CapturePassOutputs(context, profiler, passInfo, node);
             }
 
-            context.SetCurrentPass(passInfo);
-            node.Pass.Render(context);
-            context.SetCurrentPass(null);
-
-            profiler?.EndPass(passInfo);
-            if (profiler != null)
-            {
-                foreach (RenderResourceID output in node.Outputs)
-                {
-                    context.ResolveForProfiler(output, out RenderTexture? texture, out DeviceBuffer? buffer);
-                    profiler.RecordPassRead(passInfo, output, texture, buffer);
-                }
-            }
-
-            context.ReclaimUnsubmittedCommandBuffers(node.Pass.Name);
-
-            if (profiler != null && profiler.RequestCapture)
-                CapturePassOutputs(context, profiler, passInfo, node);
+            PresentPass.Present(context);
+            context.ReclaimUnsubmittedCommandBuffers(PresentPass.Name);
         }
-
-        PresentPass.Present(context);
-        context.ReclaimUnsubmittedCommandBuffers(PresentPass.Name);
+        finally
+        {
+            _executingView = false;
+        }
     }
 
     private static void CapturePassOutputs(RenderContext<TView> context, IProfiler profiler, in PassInfo passInfo, RenderGraph<TView>.PassNode node)
