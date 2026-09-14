@@ -10,16 +10,6 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>Which scene representation a navmesh bake voxelizes.</summary>
-public enum NavMeshCollectGeometry
-{
-    /// <summary>Use the visible render meshes (MeshRenderer). What you see is what you walk on.</summary>
-    RenderMeshes,
-    /// <summary>Use the physics colliders. Cheaper and usually simpler geometry; what physics
-    /// collides with is what agents walk on.</summary>
-    PhysicsColliders,
-}
-
 /// <summary>
 /// Gathers bake geometry from scene objects into <see cref="NavMeshGeometrySource"/> chunks.
 /// Runs on the main thread (it touches Transforms, meshes, and terrain data); the resulting

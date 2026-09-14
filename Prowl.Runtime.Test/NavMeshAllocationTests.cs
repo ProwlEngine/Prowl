@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
@@ -17,10 +17,13 @@ public class NavMeshAllocationTests
 {
     private static NavMeshBuildSettings TestSettings() => new()
     {
-        OverrideVoxelSize = true,
-        VoxelSize = 0.5f,
-        OverrideTileSize = true,
-        TileSize = 64,
+        Overrides =
+        {
+            OverrideVoxelSize = true,
+            VoxelSize = 0.5f,
+            OverrideTileSize = true,
+            TileSize = 64,
+        },
     };
 
     private static NavMeshGeometrySource CornerQuad()
@@ -45,7 +48,7 @@ public class NavMeshAllocationTests
         Assert.NotNull(data);
 
         // Rebuild an empty region twice: warm-up, then measure.
-        List<(int X, int Z, List<byte[]> Layers)> warm = NavMeshBuilder.BuildTilesInBounds(
+        List<NavMeshTileRebuild> warm = NavMeshBuilder.BuildTilesInBounds(
             data!, [CornerQuad()], new Float3(70, -1, 70), new Float3(80, 1, 80));
         Assert.All(warm, t => Assert.Empty(t.Layers));
 
@@ -70,12 +73,12 @@ public class NavMeshAllocationTests
         Assert.NotNull(data);
 
         var bounds = (Min: new Float3(2, -1, 2), Max: new Float3(30, 1, 30));
-        List<(int X, int Z, List<byte[]> Layers)> first = NavMeshBuilder.BuildTilesInBounds(data!, [CornerQuad()], bounds.Min, bounds.Max);
+        List<NavMeshTileRebuild> first = NavMeshBuilder.BuildTilesInBounds(data!, [CornerQuad()], bounds.Min, bounds.Max);
         Assert.Contains(first, t => t.Layers.Count > 0);
 
         for (int i = 0; i < 4; i++)
         {
-            List<(int X, int Z, List<byte[]> Layers)> again = NavMeshBuilder.BuildTilesInBounds(data!, [CornerQuad()], bounds.Min, bounds.Max);
+            List<NavMeshTileRebuild> again = NavMeshBuilder.BuildTilesInBounds(data!, [CornerQuad()], bounds.Min, bounds.Max);
             Assert.Equal(first.Count, again.Count);
             for (int t = 0; t < first.Count; t++)
             {
@@ -102,7 +105,7 @@ public class NavMeshAllocationTests
         Assert.NotNull(data);
 
         // The middle tile: every corner of the quad is a tile away in both axes.
-        List<(int X, int Z, List<byte[]> Layers)> tiles = NavMeshBuilder.BuildTilesInBounds(
+        List<NavMeshTileRebuild> tiles = NavMeshBuilder.BuildTilesInBounds(
             data!, [worldQuad], new Float3(40, -1, 40), new Float3(56, 1, 56));
         Assert.Contains(tiles, t => t.Layers.Count > 0);
     }

@@ -225,8 +225,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore]
     private readonly NavMeshWorld _navigation = new();
 
-    /// <summary>This scene's navigation state (registered navmeshes, queries, crowd). The static
-    /// <see cref="NavMesh"/> facade forwards to the current scene's world.</summary>
+    /// <summary>This scene's navigation state (registered navmeshes, queries, crowd).</summary>
     public NavMeshWorld Navigation { get { EnsureNotDisposed(); return _navigation; } }
 
     [SerializeIgnore]

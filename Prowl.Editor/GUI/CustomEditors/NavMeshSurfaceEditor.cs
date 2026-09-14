@@ -1,14 +1,11 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-using System.IO;
-
-using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.Projects;
+using Prowl.Editor.Navigation;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -40,7 +37,7 @@ public class NavMeshSurfaceEditor : CustomEditor
         paper.Box($"{id}_adv_sp").Height(4);
         Origami.Foldout(paper, $"{id}_adv", "Advanced").Body(() =>
         {
-            NavMeshAreaAttributeHandler.DrawAreaField(paper, $"{id}_adv_area", "Default Area", surface.DefaultArea, v =>
+            NavMeshAreaPropertyEditor.DrawAreaField(paper, $"{id}_adv_area", "Default Area", surface.DefaultArea, v =>
             {
                 surface.DefaultArea = v;
                 EditorSceneManager.MarkDirty();
@@ -68,25 +65,31 @@ public class NavMeshSurfaceEditor : CustomEditor
         if (notice != null)
             Origami.Label(paper, $"{id}_rival", notice).Warning().Show();
 
-        // One Bake button (Unity-style). In edit mode it bakes to a .navmesh asset so the
-        // result persists; during play it does an in-memory bake (baking to disk mid-play is
-        // rarely intended). The code-only runtime API remains NavMeshSurface.BuildNavMesh().
-        // Enabled even on an ignored surface: the bake produces its asset, which is worth having
-        // before the agent type that makes it live is assigned.
+        // In edit mode the bake runs in the background and saves a .navmesh asset so the result
+        // persists; during play it bakes in memory. Enabled even on an ignored surface: the asset is
+        // worth having before the agent type that makes it live is assigned.
+        NavMeshBakeService bake = NavMeshBakeService.Instance;
+        if (bake.IsBaking && ReferenceEquals(bake.TargetSurface, surface))
+        {
+            Origami.Label(paper, $"{id}_bake_status", $"{bake.Status} ({bake.Elapsed.TotalSeconds:0.0}s)").Show();
+            Origami.Button(paper, $"{id}_bake_cancel", $"{EditorIcons.Xmark}  Cancel", bake.Cancel).Show();
+            return;
+        }
+
         Origami.Button(paper, $"{id}_bake", "Bake NavMesh", () =>
         {
             if (Application.IsPlaying) surface.BuildNavMesh();
-            else BakeToAsset(surface);
+            else if (!bake.Start(surface)) Runtime.Debug.LogWarning("[Navigation] Another navmesh is already baking.");
         }).Show();
 
         var data = surface.NavMeshData.Res;
         if (data.IsValid() && data!.HasTiles)
         {
-            Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear", () => Clear(surface)).Show();
+            Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear", () => NavMeshBakeService.Clear(surface)).Show();
 
             paper.Box($"{id}_sp2").Height(4);
             Origami.Label(paper, $"{id}_stats",
-                $"{data.CacheLayers.Count} cache layers · agent r={data.Settings.AgentRadius:0.##} h={data.Settings.AgentHeight:0.##} · voxel {data.Settings.EffectiveVoxelSize:0.###} · tile {data.Settings.EffectiveTileSize}")
+                $"{data.CacheLayers.Count} cache layers · agent r={data.Settings.Agent.Radius:0.##} h={data.Settings.Agent.Height:0.##} · voxel {data.Settings.EffectiveVoxelSize:0.###} · tile {data.Settings.EffectiveTileSize}")
                 .Show();
         }
     }
@@ -130,78 +133,5 @@ public class NavMeshSurfaceEditor : CustomEditor
         if (surface.EnabledInHierarchy && surface.Instance == null && data.IsValid() && data!.HasTiles)
             return $"This bake targets {agentType}, which already has a navmesh; this surface is ignored.";
         return null;
-    }
-
-    /// <summary>Unregister and drop the surface's baked data reference. The .navmesh file (if
-    /// any) is left on disk; delete it from the Assets panel to remove it fully.</summary>
-    private static void Clear(NavMeshSurface surface)
-    {
-        surface.NavMeshData = default;
-        surface.RefreshRegistration();
-        EditorSceneManager.MarkDirty();
-    }
-
-    private static void BakeToAsset(NavMeshSurface surface)
-    {
-        try
-        {
-            // Bake without registering: the asset is imported and registered below, and
-            // registering the in-memory copy too would mesh every tile a second time.
-            Runtime.NavMeshData? data = surface.BuildNavMeshData();
-            if (data.IsNotValid()) return;
-
-            var db = EditorAssetBackend.Instance;
-            string fileRel = BakePath(surface);
-            string fileAbs = Path.Combine(Project.Current!.AssetsPath, fileRel);
-            string? dirAbs = Path.GetDirectoryName(fileAbs);
-            if (!string.IsNullOrEmpty(dirAbs))
-                Directory.CreateDirectory(dirAbs);
-            data!.Name = Path.GetFileNameWithoutExtension(fileRel);
-            Serializer.Serialize(typeof(object), data).WriteToBinary(new FileInfo(fileAbs));
-
-            Guid guid = db.ImportFile(fileRel);
-            if (guid == Guid.Empty)
-            {
-                Runtime.Debug.LogError($"[Navigation] Failed to import baked navmesh at {fileRel}.");
-                return;
-            }
-
-            surface.NavMeshData = new AssetRef<Runtime.NavMeshData>(guid);
-            surface.RefreshRegistration();
-            EditorSceneManager.MarkDirty();
-            Runtime.Debug.Log($"[Navigation] Baked navmesh saved to {fileRel} ({data.CacheLayers.Count} cache layers).");
-        }
-        catch (Exception e)
-        {
-            Runtime.Debug.LogError($"[Navigation] Bake failed: {e.Message}\n{e.StackTrace}");
-        }
-    }
-
-    // Reuses the assigned asset's path, found by guid, so a file the user renamed is rebaked in
-    // place rather than orphaned beside a freshly named one.
-    internal static string BakePath(NavMeshSurface surface)
-    {
-        string? assigned = EditorAssetBackend.Instance.GuidToPath(surface.NavMeshData.AssetID);
-        return string.IsNullOrEmpty(assigned) ? DefaultBakePath(surface) : assigned;
-    }
-
-    // The agent type id is in the name because names alone can collide: they are deduplicated
-    // case-sensitively and Sanitize folds path separators.
-    private static string DefaultBakePath(NavMeshSurface surface)
-    {
-        var scene = surface.GameObject.Scene;
-        string sceneRel = scene.IsValid() && !string.IsNullOrEmpty(scene!.AssetPath) ? scene.AssetPath : "";
-        string sceneDir = string.IsNullOrEmpty(sceneRel) ? "" : (Path.GetDirectoryName(sceneRel) ?? "").Replace('\\', '/');
-        string sceneName = string.IsNullOrEmpty(sceneRel) ? "Scene" : Path.GetFileNameWithoutExtension(sceneRel);
-        string folderRel = (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName;
-        string agentType = NavMeshAgentTypes.GetName(surface.AgentTypeId);
-        return folderRel + "/" + Sanitize($"{sceneName} NavMesh ({agentType} {surface.AgentTypeId})") + ".navmesh";
-    }
-
-    private static string Sanitize(string name)
-    {
-        foreach (char c in Path.GetInvalidFileNameChars())
-            name = name.Replace(c, '_');
-        return string.IsNullOrEmpty(name) ? "NavMesh" : name;
     }
 }

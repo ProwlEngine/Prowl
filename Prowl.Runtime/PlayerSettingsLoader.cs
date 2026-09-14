@@ -247,6 +247,15 @@ public static class PlayerSettingsLoader
                     Debug.Log($"[PlayerSettings] Navigation agent types applied ({types.Count}).");
                 }
             }
+
+            if (settings.TryGet("World", out var worldProp)
+                && Serializer.Deserialize<NavMeshWorldSettings>(worldProp) is { } world)
+            {
+                NavMeshWorld.DefaultSettings = world;
+                var scene = Resources.Scene.Current;
+                if (scene.IsValid())
+                    scene!.Navigation.ApplySettings(world);
+            }
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply navigation settings: {ex.Message}"); }
     }

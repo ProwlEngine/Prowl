@@ -31,7 +31,9 @@ public class NavigationSettings : ProjectSettingsBase
     /// agents still referencing the deleted id would silently rebind to the new one.</summary>
     public int NextAgentTypeId = 1;
 
-    private int _activeTab; // 0 = Agents, 1 = Areas
+    public NavMeshWorldSettings World = new();
+
+    private int _activeTab;
 
     // Literal defaults, not reads of NavMeshAreas: these feed ResetToDefaults, which runs as a
     // project opens, before that project's settings load — the statics still hold the previous
@@ -71,6 +73,11 @@ public class NavigationSettings : ProjectSettingsBase
         AreaCosts[NavMeshAreas.NotWalkable] = 1f;
         NavMeshAreas.ApplyTable(AreaNames, AreaCosts);
         NavMeshAgentTypes.ApplyTable(AgentTypes);
+
+        NavMeshWorld.DefaultSettings = World;
+        var scene = Runtime.Resources.Scene.Current;
+        if (scene.IsValid())
+            scene!.Navigation.ApplySettings(World);
     }
 
     public override void ResetToDefaults()
@@ -79,6 +86,7 @@ public class NavigationSettings : ProjectSettingsBase
         AreaCosts = CreateDefaultCosts();
         AgentTypes = [new NavMeshAgentType { Id = NavMeshAgentTypes.Humanoid, Name = "Humanoid" }];
         NextAgentTypeId = 1;
+        World = new NavMeshWorldSettings();
         Apply();
     }
 
@@ -92,7 +100,7 @@ public class NavigationSettings : ProjectSettingsBase
     /// with (opaque for the UI).</summary>
     private static System.Drawing.Color AreaSwatchColor(int areaIndex)
     {
-        Prowl.Vector.Color c = NavMeshSurface.AreaColor(areaIndex);
+        Prowl.Vector.Color c = NavMeshDebugDisplay.AreaColor(areaIndex);
         return System.Drawing.Color.FromArgb(255,
             (int)(Math.Clamp(c.R, 0f, 1f) * 255),
             (int)(Math.Clamp(c.G, 0f, 1f) * 255),
@@ -105,15 +113,33 @@ public class NavigationSettings : ProjectSettingsBase
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Unity-style tab toolbar: Agents | Areas.
         Origami.ButtonGroup(paper, "nav_tabs", _activeTab, t => _activeTab = t)
             .Item("Agents")
             .Item("Areas")
+            .Item("Advanced")
             .Show();
         paper.Box("nav_tabs_sp").Height(8);
 
-        if (_activeTab == 0) DrawAgentsTab(paper, font);
-        else DrawAreasTab(paper, font);
+        switch (_activeTab)
+        {
+            case 0: DrawAgentsTab(paper, font); break;
+            case 1: DrawAreasTab(paper, font); break;
+            default: DrawAdvancedTab(paper); break;
+        }
+    }
+
+    private void DrawAdvancedTab(Paper paper)
+    {
+        Origami.Header(paper, "nav_world_hdr", $"{EditorIcons.Compass}  Queries, Crowds and Carving").Underline().Show();
+        PropertyGridUtils.Draw(paper, "nav_world", World, _ =>
+        {
+            World.MaxPolyPath = Math.Max(2, World.MaxPolyPath);
+            World.MaxStraightPath = Math.Max(2, World.MaxStraightPath);
+            World.TileCacheMaxObstacles = Math.Max(1, World.TileCacheMaxObstacles);
+            World.MaxTileUpdatesPerFrame = Math.Max(1, World.MaxTileUpdatesPerFrame);
+            World.CrowdMaxAgentRadius = MathF.Max(0.01f, World.CrowdMaxAgentRadius);
+            Changed();
+        });
     }
 
     // ── Agents tab ──────────────────────────────────────────────────────

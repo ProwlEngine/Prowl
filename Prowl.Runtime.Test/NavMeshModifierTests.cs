@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
@@ -37,10 +37,10 @@ public class NavMeshModifierTests : RuntimeTestBase
         return surface;
     }
 
-    private static int SampleAreaMask(Scene scene, Float3 position, int agentTypeId = 0)
+    private static uint SampleAreaMask(Scene scene, Float3 position, int agentTypeId = 0)
     {
-        var filter = new NavMeshQueryFilter { AgentTypeId = agentTypeId };
-        return scene.Navigation.SamplePosition(position, out NavMeshHit hit, 0.5f, filter) ? hit.Mask : 0;
+        var filter = NavMeshQueryFilter.Default.ForAgentType(agentTypeId);
+        return scene.Navigation.SamplePosition(position, out NavMeshHit hit, 0.5f, filter) ? hit.Mask.Mask : 0u;
     }
 
     // ── NavMeshModifier ─────────────────────────────────────────────────
@@ -58,8 +58,8 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         Assert.True(AddSurface(scene).BuildNavMesh());
 
-        Assert.Equal(1 << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
-        Assert.Equal(1 << Mud, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
+        Assert.Equal(1u << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
+        Assert.Equal(1u << Mud, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
     }
 
     /// <summary>IgnoreFromBuild removes the object's geometry from the bake.</summary>
@@ -73,8 +73,8 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         Assert.True(AddSurface(scene).BuildNavMesh());
 
-        Assert.NotEqual(0, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
-        Assert.Equal(0, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
+        Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
+        Assert.Equal(0u, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
     }
 
     /// <summary>A parent's modifier applies to children, but a child's own modifier wins.</summary>
@@ -100,8 +100,8 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         Assert.True(AddSurface(scene).BuildNavMesh());
 
-        Assert.Equal(1 << Mud, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
-        Assert.Equal(1 << NavMeshAreas.Jump, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
+        Assert.Equal(1u << Mud, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
+        Assert.Equal(1u << NavMeshAreas.Jump, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
     }
 
     /// <summary>A modifier scoped to another agent type is transparent to this bake.</summary>
@@ -120,12 +120,11 @@ public class NavMeshModifierTests : RuntimeTestBase
             GameObject floor = AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
             var modifier = floor.AddComponent<NavMeshModifier>();
             modifier.IgnoreFromBuild = true;
-            modifier.AffectAllAgentTypes = false;
-            modifier.AffectedAgentTypeIds = [3];
+            modifier.AgentTypes = NavMeshAgentTypeSet.Of(3);
 
             // Type 0: modifier is transparent, the floor bakes.
             Assert.True(AddSurface(scene, agentTypeId: 0).BuildNavMesh());
-            Assert.NotEqual(0, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+            Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
 
             // Type 3: the floor is excluded and the bake has nothing.
             Assert.False(AddSurface(scene, agentTypeId: 3).BuildNavMesh());
@@ -158,14 +157,13 @@ public class NavMeshModifierTests : RuntimeTestBase
         parentModifier.OverrideArea = true;
         parentModifier.Area = NavMeshAreas.Jump;
         parentModifier.ApplyToChildren = true;
-        parentModifier.AffectAllAgentTypes = false;
-        parentModifier.AffectedAgentTypeIds = [7]; // not this bake's type
+        parentModifier.AgentTypes = NavMeshAgentTypeSet.Of(7); // not this bake's type
 
         GameObject child = AddFloorBox(scene, "Child", new Float3(0, -0.5f, 0), new Float3(10, 1, 10));
         child.SetParent(parent);
 
         Assert.True(AddSurface(scene).BuildNavMesh());
-        Assert.Equal(1 << Mud, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.Equal(1u << Mud, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
     }
 
     /// <summary>An object's own modifier shields inherited overrides even when it overrides
@@ -191,8 +189,8 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         Assert.True(AddSurface(scene).BuildNavMesh());
 
-        Assert.Equal(1 << Mud, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
-        Assert.Equal(1 << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
+        Assert.Equal(1u << Mud, SampleAreaMask(scene, new Float3(-5, 0.2f, 0)));
+        Assert.Equal(1u << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(5, 0.2f, 0)));
     }
 
     // ── NavMeshModifierVolume ───────────────────────────────────────────
@@ -213,8 +211,8 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         Assert.True(AddSurface(scene).BuildNavMesh());
 
-        Assert.Equal(1 << Mud, SampleAreaMask(scene, new Float3(5, 0.2f, 5)));
-        Assert.Equal(1 << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(-5, 0.2f, -5)));
+        Assert.Equal(1u << Mud, SampleAreaMask(scene, new Float3(5, 0.2f, 5)));
+        Assert.Equal(1u << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(-5, 0.2f, -5)));
     }
 
     /// <summary>A Not Walkable volume erases walkability inside the footprint — the hole is
@@ -234,12 +232,12 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         Assert.True(AddSurface(scene).BuildNavMesh());
 
-        Assert.Equal(0, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
-        Assert.NotEqual(0, SampleAreaMask(scene, new Float3(7, 0.2f, 7)));
+        Assert.Equal(0u, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(7, 0.2f, 7)));
 
         // A path across the hole routes around it: some corner deviates from the straight line.
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
         double maxDeviation = 0;
         foreach (Float3 corner in path.Corners)
@@ -263,9 +261,9 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         NavMeshSurface surface = AddSurface(scene);
         Assert.True(surface.BuildNavMesh());
-        float radius = surface.RuntimeData!.Settings.AgentRadius;
+        float radius = surface.RuntimeData!.Settings.Agent.Radius;
 
-        Assert.True(scene.Navigation.FindClosestEdge(new Float3(0, 0, 4.5f), out NavMeshHit hit, NavMesh.AllAreas, 5f));
+        Assert.True(scene.Navigation.FindClosestEdge(new Float3(0, 0, 4.5f), out NavMeshHit hit, 5f, NavMeshAreaMask.Everything));
         Assert.True(hit.Position.Z >= 2f + radius * 0.8f, $"The hole's edge sits at z={hit.Position.Z:0.00}, inside the agent radius of the volume face at z=2.");
     }
 
@@ -288,10 +286,10 @@ public class NavMeshModifierTests : RuntimeTestBase
         Assert.True(AddSurface(scene).BuildNavMesh());
 
         // Center: inside the diamond.
-        Assert.Equal(1 << Mud, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.Equal(1u << Mud, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
         // The axis-aligned corner (4.5, 4.5) is OUTSIDE the diamond (|x|+|z| = 9 > 5.66) but
         // inside the unrotated box's AABB — marked only if rotation were ignored.
-        Assert.Equal(1 << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(4.5f, 0.2f, 4.5f)));
+        Assert.Equal(1u << NavMeshAreas.Walkable, SampleAreaMask(scene, new Float3(4.5f, 0.2f, 4.5f)));
     }
 
     // ── Partial rebuilds ────────────────────────────────────────────────
@@ -305,7 +303,7 @@ public class NavMeshModifierTests : RuntimeTestBase
         AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
         NavMeshSurface surface = AddSurface(scene);
         Assert.True(surface.BuildNavMesh());
-        Assert.NotEqual(0, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
 
         // Spawn a hole mid-game.
         GameObject volumeGo = CreateGameObject("Hole");
@@ -317,13 +315,13 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         var region = new AABB(new Float3(-3, -1, -3), new Float3(3, 2, 3));
         Assert.True(surface.RebuildTiles(region));
-        Assert.Equal(0, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
-        Assert.NotEqual(0, SampleAreaMask(scene, new Float3(7, 0.2f, 7)));
+        Assert.Equal(0u, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(7, 0.2f, 7)));
 
         // Remove it and rebuild the same region: walkability returns.
         volumeGo.Enabled = false;
         Assert.True(surface.RebuildTiles(region));
-        Assert.NotEqual(0, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
     }
 
     /// <summary>Modifiers resolve during rebuild collection too: toggling IgnoreFromBuild on
@@ -341,14 +339,14 @@ public class NavMeshModifierTests : RuntimeTestBase
         NavMeshSurface surface = AddSurface(scene);
         Assert.True(surface.BuildNavMesh());
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
 
         // The wall becomes real: stop ignoring it and rebuild its region.
         modifier.IgnoreFromBuild = false;
         Assert.True(surface.RebuildTiles(new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11))));
 
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathPartial, path.Status);
     }
 
@@ -374,8 +372,8 @@ public class NavMeshModifierTests : RuntimeTestBase
 
         Assert.True(AddSurface(scene).BuildNavMesh());
 
-        Assert.Equal(0, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
-        Assert.NotEqual(0, SampleAreaMask(scene, new Float3(8, 0.2f, 8)));
+        Assert.Equal(0u, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(8, 0.2f, 8)));
     }
 
     /// <summary>A source marked Not Walkable produces no navmesh at all (Unity parity): its
@@ -387,7 +385,7 @@ public class NavMeshModifierTests : RuntimeTestBase
         int[] indices = [0, 1, 2, 0, 2, 3];
         var source = new NavMeshGeometrySource(verts, indices, Float4x4.Identity, NavMeshAreas.NotWalkable);
 
-        var settings = new NavMeshBuildSettings { OverrideVoxelSize = true, VoxelSize = 0.25f };
+        var settings = new NavMeshBuildSettings { Overrides = { OverrideVoxelSize = true, VoxelSize = 0.25f } };
         Assert.Null(NavMeshBuilder.Build(settings, [source]));
     }
 }

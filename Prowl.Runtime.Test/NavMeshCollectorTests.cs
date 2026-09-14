@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Recast.Detour;
@@ -15,10 +15,13 @@ public class NavMeshCollectorTests : RuntimeTestBase
 {
     private static NavMeshBuildSettings TestSettings() => new()
     {
-        OverrideVoxelSize = true,
-        VoxelSize = 0.25f,
-        OverrideTileSize = true,
-        TileSize = 64,
+        Overrides =
+        {
+            OverrideVoxelSize = true,
+            VoxelSize = 0.25f,
+            OverrideTileSize = true,
+            TileSize = 64,
+        },
     };
 
     [Fact]
@@ -45,7 +48,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         var world = new NavMeshWorld();
         world.AddNavMeshData(data);
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -108,9 +111,9 @@ public class NavMeshCollectorTests : RuntimeTestBase
         // The navmesh must be where the object is, not at the origin.
         var world = new NavMeshWorld();
         world.AddNavMeshData(data);
-        Assert.True(world.SamplePosition(new Float3(100, 0.5f, 100), out NavMeshHit hit, 2f, NavMesh.AllAreas));
+        Assert.True(world.SamplePosition(new Float3(100, 0.5f, 100), out NavMeshHit hit, 2f, NavMeshAreaMask.Everything));
         Assert.True(System.Math.Abs(hit.Position.X - 100) < 3f);
-        Assert.False(world.SamplePosition(new Float3(0, 0, 0), out _, 2f, NavMesh.AllAreas));
+        Assert.False(world.SamplePosition(new Float3(0, 0, 0), out _, 2f, NavMeshAreaMask.Everything));
     }
 
     [Fact]
@@ -134,12 +137,12 @@ public class NavMeshCollectorTests : RuntimeTestBase
         world.AddNavMeshData(data!);
 
         // Center is always on the strip.
-        Assert.True(world.SamplePosition(new Float3(0, 1f, 0), out _, 2f, NavMesh.AllAreas));
+        Assert.True(world.SamplePosition(new Float3(0, 1f, 0), out _, 2f, NavMeshAreaMask.Everything));
         // The unrotated +X end is ~6.4 units off the rotated strip's center line: not walkable.
-        Assert.False(world.SamplePosition(new Float3(9f, 1f, 0), out _, 2f, NavMesh.AllAreas));
+        Assert.False(world.SamplePosition(new Float3(9f, 1f, 0), out _, 2f, NavMeshAreaMask.Everything));
         // Exactly one diagonal lies along the rotated strip (which one depends on yaw handedness).
-        bool posDiagonal = world.SamplePosition(new Float3(5f, 1f, 5f), out _, 2f, NavMesh.AllAreas);
-        bool negDiagonal = world.SamplePosition(new Float3(5f, 1f, -5f), out _, 2f, NavMesh.AllAreas);
+        bool posDiagonal = world.SamplePosition(new Float3(5f, 1f, 5f), out _, 2f, NavMeshAreaMask.Everything);
+        bool negDiagonal = world.SamplePosition(new Float3(5f, 1f, -5f), out _, 2f, NavMeshAreaMask.Everything);
         Assert.True(posDiagonal ^ negDiagonal, $"Expected exactly one diagonal walkable (got +Z:{posDiagonal}, -Z:{negDiagonal}).");
     }
 
@@ -202,11 +205,11 @@ public class NavMeshCollectorTests : RuntimeTestBase
         world.AddNavMeshData(data!);
 
         // The floor under the agent is walkable, and a path runs straight through it.
-        Assert.True(world.SamplePosition(standing, out NavMeshHit hit, 0.5f, NavMesh.AllAreas));
+        Assert.True(world.SamplePosition(standing, out NavMeshHit hit, 0.5f, NavMeshAreaMask.Everything));
         Assert.True(Float3.Distance(hit.Position, standing) < 0.5f);
 
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -246,7 +249,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
     private NavMeshWorld BakeTerrain(Scene scene, bool heightDetail = true)
     {
         NavMeshBuildSettings settings = TestSettings();
-        settings.BuildHeightDetail = heightDetail;
+        settings.Overrides.BuildHeightDetail = heightDetail;
 
         List<NavMeshGeometrySource> sources = [];
         NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
@@ -275,7 +278,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
             AddTerrain(scene);
 
             NavMeshWorld world = BakeTerrain(scene);
-            Assert.True(world.SamplePosition(new Float3(32, 0, 32), out NavMeshHit hit, 2f, NavMesh.AllAreas));
+            Assert.True(world.SamplePosition(new Float3(32, 0, 32), out NavMeshHit hit, 2f, NavMeshAreaMask.Everything));
             Assert.True(Math.Abs(hit.Position.Y) < 1f);
         }
     }
@@ -292,9 +295,9 @@ public class NavMeshCollectorTests : RuntimeTestBase
         NavMeshWorld world = BakeTerrain(scene);
 
         // Scaled to 128 a side from a corner at -32, so the far edge reaches +96.
-        Assert.True(world.SamplePosition(new Float3(90, 25, 90), out NavMeshHit hit, 2f, NavMesh.AllAreas));
+        Assert.True(world.SamplePosition(new Float3(90, 25, 90), out NavMeshHit hit, 2f, NavMeshAreaMask.Everything));
         Assert.True(Math.Abs(hit.Position.Y - 25) < 1f, $"terrain baked at y={hit.Position.Y}, expected 25");
-        Assert.False(world.SamplePosition(new Float3(110, 25, 110), out _, 2f, NavMesh.AllAreas));
+        Assert.False(world.SamplePosition(new Float3(110, 25, 110), out _, 2f, NavMeshAreaMask.Everything));
     }
 
     /// <summary>
@@ -318,7 +321,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
             for (float x = 4; x < TerrainSize - 4; x += 0.5f)
             {
                 float expected = RollingHills(x, z) * TerrainHeight;
-                Assert.True(world.SamplePosition(new Float3(x, expected, z), out NavMeshHit hit, 4f, NavMesh.AllAreas),
+                Assert.True(world.SamplePosition(new Float3(x, expected, z), out NavMeshHit hit, 4f, NavMeshAreaMask.Everything),
                     $"no navmesh over ({x}, {z})");
                 samples++;
 
@@ -473,7 +476,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
             List<NavMeshGeometrySource> sources = [];
             NavMeshGeometryCollector.Collect(scene.ActiveObjects, NavMeshCollectGeometry.PhysicsColliders,
                 LayerMask.Everything, settings.EffectiveVoxelSize, NavMeshAreas.Walkable, sources, region);
-            List<(int X, int Z, List<byte[]> Layers)> tiles =
+            List<NavMeshTileRebuild> tiles =
                 NavMeshBuilder.BuildTilesInBounds(data!, sources, region.Min, region.Max);
             Assert.Contains(tiles, t => t.Layers.Count > 0);
             return sources[0].TriangleCount;
@@ -546,7 +549,7 @@ public class NavMeshCollectorTests : RuntimeTestBase
         var heights = new List<float>(probes.Count);
         foreach (Float3 p in probes)
         {
-            if (scene.Navigation.SamplePosition(p, out NavMeshHit hit, 13f, NavMesh.AllAreas)
+            if (scene.Navigation.SamplePosition(p, out NavMeshHit hit, 13f, NavMeshAreaMask.Everything)
                 && MathF.Abs((float)(hit.Position.X - p.X)) < 0.5f
                 && MathF.Abs((float)(hit.Position.Z - p.Z)) < 0.5f)
                 heights.Add((float)hit.Position.Y);

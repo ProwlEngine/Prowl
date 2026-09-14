@@ -1,7 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Runtime;
 
 using Xunit;
 
@@ -56,18 +58,18 @@ public class ProjectSettingsTests : EditorTestHarness
         const int Jump = Prowl.Runtime.NavMeshAreas.Jump;
         int[] shown = [0, 1, Jump];
 
-        int withoutJump = Prowl.Editor.GUI.NavMeshAreaMaskAttributeHandler.ApplyPicked(Prowl.Runtime.NavMeshAreas.AllAreas, shown, [0, 1]);
-        Assert.Equal(~(1 << Jump), withoutJump);
+        NavMeshAreaMask withoutJump = NavMeshAreaMaskPropertyEditor.ApplyPicked(NavMeshAreaMask.Everything, shown, [0, 1]);
+        Assert.Equal(NavMeshAreaMask.FromMask(~(1u << Jump)), withoutJump);
 
-        int everything = Prowl.Editor.GUI.NavMeshAreaMaskAttributeHandler.ApplyPicked(withoutJump, shown, [0, 1, Jump]);
-        Assert.Equal(Prowl.Runtime.NavMeshAreas.AllAreas, everything);
+        NavMeshAreaMask everything = NavMeshAreaMaskPropertyEditor.ApplyPicked(withoutJump, shown, [0, 1, Jump]);
+        Assert.Equal(NavMeshAreaMask.Everything, everything);
 
         const int LaterArea = 7;
-        int excludedLater = ~(1 << LaterArea);
-        int kept = Prowl.Editor.GUI.NavMeshAreaMaskAttributeHandler.ApplyPicked(excludedLater, shown, [0]);
-        Assert.Equal(0, kept & (1 << LaterArea));
-        Assert.Equal(0, kept & (1 << Jump));
-        Assert.NotEqual(0, kept & (1 << 0));
+        NavMeshAreaMask excludedLater = NavMeshAreaMask.FromMask(~(1u << LaterArea));
+        NavMeshAreaMask kept = NavMeshAreaMaskPropertyEditor.ApplyPicked(excludedLater, shown, [0]);
+        Assert.False(kept.HasArea(LaterArea));
+        Assert.False(kept.HasArea(Jump));
+        Assert.True(kept.HasArea(0));
     }
 
     // Settings persist as Echo YAML: a saved value must survive a save/load round-trip.

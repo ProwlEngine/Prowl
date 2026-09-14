@@ -13,47 +13,6 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>Obstacle avoidance quality for a <see cref="NavMeshAgent"/>. Member names match
-/// Unity's for migration; the inspector shows the friendly display names.</summary>
-public enum ObstacleAvoidanceType
-{
-    [InspectorName("None")]
-    NoObstacleAvoidance = 0,
-    [InspectorName("Low")]
-    LowQualityObstacleAvoidance = 1,
-    [InspectorName("Medium")]
-    MedQualityObstacleAvoidance = 2,
-    [InspectorName("Good")]
-    GoodQualityObstacleAvoidance = 3,
-    [InspectorName("High")]
-    HighQualityObstacleAvoidance = 4,
-}
-
-/// <summary>State of the off-mesh link a <see cref="NavMeshAgent"/> is traversing.</summary>
-public readonly struct OffMeshLinkData
-{
-    /// <summary>True while the agent is on an off-mesh connection.</summary>
-    public readonly bool Valid;
-
-    /// <summary>World-space start of the traversal.</summary>
-    public readonly Float3 StartPos;
-
-    /// <summary>World-space end of the traversal.</summary>
-    public readonly Float3 EndPos;
-
-    /// <summary>The <see cref="NavMeshLink"/> component the connection came from, or null
-    /// (connection baked without a link id, or the component is gone).</summary>
-    public readonly NavMeshLink? Link;
-
-    internal OffMeshLinkData(bool valid, Float3 startPos, Float3 endPos, NavMeshLink? link)
-    {
-        Valid = valid;
-        StartPos = startPos;
-        EndPos = endPos;
-        Link = link;
-    }
-}
-
 /// <summary>
 /// Moves a character along the navmesh using crowd simulation: give it a
 /// <see cref="Destination"/> (or call <see cref="SetDestination"/>) and it steers there,
@@ -63,13 +22,12 @@ public readonly struct OffMeshLinkData
 /// Rigidbody or CharacterController from <see cref="DesiredVelocity"/> yourself).
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Agent")]
-[ComponentIcon("")] // Person Walking
+[ComponentIcon("\uf554")] // Person Walking
 public class NavMeshAgent : MonoBehaviour
 {
     [Header("Agent")]
     [Tooltip("The agent type whose navmesh this agent walks on.")]
-    [NavMeshAgentType]
-    [SerializeField] private int agentTypeId = NavMeshAgentTypes.Humanoid;
+    [SerializeField] private NavMeshAgentTypeId agentTypeId = NavMeshAgentTypes.Humanoid;
 
     [Tooltip("Agent radius for avoidance and crowd separation.")]
     [SerializeField] private float radius = 0.5f;
@@ -116,8 +74,7 @@ public class NavMeshAgent : MonoBehaviour
 
     [Header("Pathfinding")]
     [Tooltip("Areas this agent may traverse.")]
-    [NavMeshAreaMask]
-    [SerializeField] private int areaMask = NavMeshAreas.AllAreas;
+    [SerializeField] private NavMeshAreaMask areaMask = NavMeshAreaMask.Everything;
 
     [Tooltip("Automatically re-path when the navmesh changes under the current path.")]
     [SerializeField] private bool autoRepath = true;
@@ -130,7 +87,7 @@ public class NavMeshAgent : MonoBehaviour
 
     /// <summary>Writing this re-places the agent on its new type's crowd, keeping its destination.
     /// One agent type per navmesh, so this is a move between crowds rather than a parameter.</summary>
-    public int AgentTypeId
+    public NavMeshAgentTypeId AgentTypeId
     {
         get => agentTypeId;
         set
@@ -200,7 +157,7 @@ public class NavMeshAgent : MonoBehaviour
         set { if (pathOptimizationRange == value) return; pathOptimizationRange = value; RefreshParams(); }
     }
 
-    public int AreaMask
+    public NavMeshAreaMask AreaMask
     {
         get => areaMask;
         set { if (areaMask == value) return; areaMask = value; RefreshParams(); }
@@ -230,7 +187,7 @@ public class NavMeshAgent : MonoBehaviour
     // The agent type this agent registered under: what a stale agent must be detached against,
     // which is not necessarily the AgentTypeId gameplay has since written.
     private int _registeredAgentTypeId;
-    private NavMeshQueryFilter? _filter;
+    private NavMeshAreaCosts? _areaCosts;
     private Float3 _destination;
     private bool _hasDestination;
     private bool _isStopped;
@@ -249,21 +206,8 @@ public class NavMeshAgent : MonoBehaviour
     /// <summary>True while the agent is registered on a navmesh crowd.</summary>
     public bool IsOnNavMesh => _agent != null;
 
-    /// <summary>The query filter this agent paths with (area mask + agent type). Mutating its
-    /// costs directly (<c>agent.Filter.SetAreaCost(...)</c>) affects explicit queries only —
-    /// crowd STEERING keeps the old cost table until the next refresh. Use
-    /// <see cref="SetAreaCost"/> (or call <see cref="RefreshParams"/> after) to apply costs to
-    /// both.</summary>
-    public NavMeshQueryFilter Filter
-    {
-        get
-        {
-            _filter ??= new NavMeshQueryFilter();
-            _filter.AreaMask = AreaMask;
-            _filter.AgentTypeId = QueryAgentTypeId;
-            return _filter;
-        }
-    }
+    /// <summary>The query filter this agent paths with: its area mask, agent type and area costs.</summary>
+    public NavMeshQueryFilter Filter => new NavMeshQueryFilter(AreaMask, QueryAgentTypeId).WithAreaCosts(_areaCosts);
 
     /// <summary>
     /// The navmesh this agent's queries must run against: while registered, the one its crowd agent
@@ -442,7 +386,8 @@ public class NavMeshAgent : MonoBehaviour
         if (scene.IsNotValid()) return;
 
         _world = scene!.Navigation;
-        _world.NavMeshChanged += OnNavMeshChanged;
+        _world.InstanceRegistered += OnInstanceRegistered;
+        _world.InstanceUnregistered += OnInstanceUnregistered;
         _world.NavMeshSettled += OnNavMeshSettled;
         TryRegister();
     }
@@ -451,36 +396,26 @@ public class NavMeshAgent : MonoBehaviour
     {
         if (_world != null)
         {
-            _world.NavMeshChanged -= OnNavMeshChanged;
+            _world.InstanceRegistered -= OnInstanceRegistered;
+            _world.InstanceUnregistered -= OnInstanceUnregistered;
             _world.NavMeshSettled -= OnNavMeshSettled;
             Unregister();
             _world = null;
         }
     }
 
-    private void OnNavMeshChanged()
-    {
-        // Our crowd may have been dropped with its navmesh (rebake/regenerate); our crowd agent
-        // and filter slot died with it, so forget both and fall through to re-registration
-        // (which re-requests the remembered destination). MUST compare against
-        // _registeredAgentTypeId, not AgentTypeId: the inspector writes the backing field, so the
-        // two diverge until OnValidate runs, and the registered type's crowd is still alive and
-        // still holds our agent — forgetting it here would strand a ghost agent and leak its
-        // filter-slot refcount. Moving between types is the AgentTypeId setter's job.
-        if (_agent != null && _world != null && !ReferenceEquals(_world.GetNativeCrowd(_registeredAgentTypeId), _crowd))
-        {
-            _agent = null;
-            _crowd = null;
-            _crowdEntry = null;
-            _filterSlot = 0;
-        }
+    // Re-registering re-requests the remembered destination, so there is no replan to do here.
+    private void OnInstanceRegistered(NavMeshInstance instance) => TryRegister();
 
-        if (_agent == null)
-        {
-            // A navmesh may have just become available. Re-registering re-requests the
-            // destination, so there is no replan to do here.
-            TryRegister();
-        }
+    /// <summary>The crowd, our crowd agent and our filter slot all died with the navmesh they
+    /// steered against, so forget them. The next registration of the type brings the agent back.</summary>
+    private void OnInstanceUnregistered(NavMeshInstance instance)
+    {
+        if (_crowdEntry == null || !ReferenceEquals(_crowdEntry.Instance, instance)) return;
+        _agent = null;
+        _crowd = null;
+        _crowdEntry = null;
+        _filterSlot = 0;
     }
 
     /// <summary>The ground stopped moving: replan once. Carves span several frames and report a
@@ -499,12 +434,12 @@ public class NavMeshAgent : MonoBehaviour
         if (instance == null) return;
 
         if (Radius > _world.CrowdMaxAgentRadius)
-            Debug.LogWarning($"[Navigation] Agent '{GameObject.Name}' radius {Radius:0.##} exceeds NavMeshWorld.CrowdMaxAgentRadius ({_world.CrowdMaxAgentRadius:0.##}); crowd proximity queries assume the smaller value. Raise CrowdMaxAgentRadius before the first agent registers.");
+            Debug.LogWarning($"[Navigation] Agent '{GameObject.Name}' radius {Radius:0.##} exceeds the crowd max agent radius ({_world.CrowdMaxAgentRadius:0.##}); crowd proximity queries assume the smaller value. Raise Crowd Max Agent Radius in Project Settings > Navigation.");
 
         NavMeshCrowdEntry entry = _world.EnsureCrowd(instance);
         _crowdEntry = entry;
         _registeredAgentTypeId = AgentTypeId;
-        _filterSlot = entry.AcquireFilterSlot(AreaMask, _filter?.CostOverrides, GameObject.Name);
+        _filterSlot = entry.AcquireFilterSlot(AreaMask, _areaCosts?.Overrides, GameObject.Name);
         _agent = entry.Crowd.AddAgent(ToRc(Transform.Position - new Float3(0, BaseOffset, 0)), BuildAgentParams());
         _crowd = entry.Crowd;
         if (_hasDestination && !_arrived)
@@ -559,7 +494,7 @@ public class NavMeshAgent : MonoBehaviour
     /// <summary>Push the steering properties (speed, radius, avoidance, area mask and costs) into
     /// the live crowd agent. Every setter that feeds them calls this, as do an inspector edit and
     /// <see cref="SetAreaCost"/>, so it is only needed by hand after mutating the cost table
-    /// through <see cref="Filter"/> directly.</summary>
+    /// reached through <see cref="Filter"/>.</summary>
     public void RefreshParams()
     {
         if (_agent == null || _crowd == null) return;
@@ -569,7 +504,7 @@ public class NavMeshAgent : MonoBehaviour
         if (_crowdEntry != null)
         {
             _crowdEntry.ReleaseFilterSlot(_filterSlot);
-            _filterSlot = _crowdEntry.AcquireFilterSlot(AreaMask, _filter?.CostOverrides, GameObject.Name);
+            _filterSlot = _crowdEntry.AcquireFilterSlot(AreaMask, _areaCosts?.Overrides, GameObject.Name);
         }
 
         _crowd.UpdateAgentParameters(_agent, BuildAgentParams());
@@ -589,19 +524,25 @@ public class NavMeshAgent : MonoBehaviour
     #region Commands
 
     /// <summary>
-    /// Override the path cost of an area for THIS agent (explicit queries and crowd steering
-    /// both). Clamped to >= 1 — see <see cref="NavMeshQueryFilter.SetAreaCost"/>; to prefer an
-    /// area, raise the other areas' costs instead. Unity API parity.
+    /// Override the path cost of an area for this agent, for explicit queries and crowd steering
+    /// both. Clamped to at least 1 (see <see cref="NavMeshAreaCosts.SetAreaCost"/>); to prefer an
+    /// area, raise the other areas' costs instead.
     /// </summary>
     public void SetAreaCost(int areaIndex, float cost)
     {
-        Filter.SetAreaCost(areaIndex, cost);
+        (_areaCosts ??= new NavMeshAreaCosts()).SetAreaCost(areaIndex, cost);
         RefreshParams(); // re-derive the crowd filter slot with the new cost table
     }
 
-    /// <summary>The path cost this agent pays in an area: its own override, or the project
-    /// default.</summary>
-    public float GetAreaCost(int areaIndex) => Filter.GetAreaCost(areaIndex);
+    /// <summary>The path cost this agent pays in an area: its own override, or the project default.</summary>
+    public float GetAreaCost(int areaIndex) => _areaCosts?.GetAreaCost(areaIndex) ?? NavMeshAreas.GetAreaCost(areaIndex);
+
+    /// <summary>Remove this agent's cost overrides, falling back to the project costs.</summary>
+    public void ClearAreaCosts()
+    {
+        _areaCosts = null;
+        RefreshParams();
+    }
 
     /// <summary>Request a path to <paramref name="target"/>. Returns false when the agent is
     /// not on a navmesh or the target cannot be mapped onto it. A stopped agent
@@ -625,7 +566,7 @@ public class NavMeshAgent : MonoBehaviour
         if (!_world.TryRentQuery(out NavMeshQueryLease lease, QueryAgentTypeId)) return false;
         using (lease)
         {
-            lease.Query.FindNearestPoly(ToRc(target), crowd.GetQueryExtents(), Filter, out long polyRef, out RcVec3f nearest, out _);
+            lease.Query.FindNearestPoly(ToRc(target), crowd.GetQueryExtents(), NavMeshWorld.DetourFilter(Filter), out long polyRef, out RcVec3f nearest, out _);
             if (polyRef == 0) return false;
             return crowd.RequestMoveTarget(_agent, polyRef, nearest);
         }
@@ -720,7 +661,7 @@ public class NavMeshAgent : MonoBehaviour
         using (lease)
         {
             RcVec3f target = ToRc(NextPosition + offset);
-            _agent.corridor.MovePosition(target, lease.Query, Filter);
+            _agent.corridor.MovePosition(target, lease.Query, NavMeshWorld.DetourFilter(Filter));
             _agent.npos = _agent.corridor.GetPos();
         }
 
@@ -731,7 +672,7 @@ public class NavMeshAgent : MonoBehaviour
     /// <summary>Calculate a path from the agent's position with the agent's filter, without
     /// moving the agent.</summary>
     public bool CalculatePath(Float3 targetPosition, NavMeshPath path)
-        => _world?.CalculatePath(NextPosition, targetPosition, Filter, path) ?? false;
+        => _world?.CalculatePath(NextPosition, targetPosition, path, Filter) ?? false;
 
     /// <summary>Navmesh raycast from the agent's position with the agent's filter.</summary>
     public bool Raycast(Float3 targetPosition, out NavMeshHit hit)
@@ -764,7 +705,7 @@ public class NavMeshAgent : MonoBehaviour
     /// or where the path first enters a polygon <paramref name="areaMask"/> excludes.
     /// <para/>
     /// True when the walk stopped short of <paramref name="maxDistance"/>. Two different things
-    /// cause that, and the mask tells them apart: <c>(hit.Mask &amp; areaMask) == 0</c> means an
+    /// cause that, and the mask tells them apart: <c>!hit.Mask.Overlaps(areaMask)</c> means an
     /// excluded polygon blocked it, anything else means the path simply ran out. <c>hit.Hit</c>
     /// separately says the position is a real point on the path rather than one interpolated where
     /// the budget ran out, and <c>hit.Distance</c> is measured ALONG the path rather than to it.
@@ -775,7 +716,7 @@ public class NavMeshAgent : MonoBehaviour
     /// Areas are tested per POLYGON rather than per corner, as Unity does, so a path that only clips
     /// the corner of an excluded polygon still stops at it.
     /// </summary>
-    public bool SamplePathPosition(int areaMask, float maxDistance, out NavMeshHit hit)
+    public bool SamplePathPosition(NavMeshAreaMask areaMask, float maxDistance, out NavMeshHit hit)
     {
         hit = default;
         hit.Normal = Float3.UnitY; // a position sample, so up — as SamplePosition reports
@@ -791,8 +732,8 @@ public class NavMeshAgent : MonoBehaviour
         using (lease)
         {
             DtNavMesh mesh = lease.Query.GetAttachedNavMesh();
-            hit.Mask = NavMeshWorld.GetPolyAreaMaskBit(mesh, corridor[0]);
-            if ((hit.Mask & areaMask) == 0)
+            hit.Mask = NavMeshWorld.GetPolyAreaMask(mesh, corridor[0]);
+            if (!hit.Mask.Overlaps(areaMask))
             {
                 // Already standing in an excluded area: blocked at zero distance, and the
                 // agent position is as real a terminus as one found part way along.
@@ -823,7 +764,7 @@ public class NavMeshAgent : MonoBehaviour
                 {
                     // Unanswerable, and the mask is what the caller reads: leaving the current
                     // polygon in it would report the agent as standing on its destination.
-                    hit.Mask = 0;
+                    hit.Mask = NavMeshAreaMask.Nothing;
                     return true;
                 }
 
@@ -835,8 +776,9 @@ public class NavMeshAgent : MonoBehaviour
                     // are those entered at a turn — so a strip of excluded area straight ahead would
                     // never be looked at. With it there is a point wherever the area changes, and
                     // the polygon entered there governs the segment that follows.
-                    int mask = NavMeshWorld.GetPolyAreaMaskBit(mesh, points[i].refs);
-                    if (mask != 0 && (mask & areaMask) == 0)
+                    NavMeshAreaMask mask = NavMeshWorld.GetPolyAreaMask(mesh, points[i].refs);
+                    bool known = mask != NavMeshAreaMask.Nothing;
+                    if (known && !mask.Overlaps(areaMask))
                     {
                         hit.Position = ToFloat3(points[i].pos);
                         hit.Distance = walked;
@@ -845,7 +787,7 @@ public class NavMeshAgent : MonoBehaviour
                         return true;
                     }
 
-                    if (mask != 0) hit.Mask = mask;
+                    if (known) hit.Mask = mask;
 
                     Float3 a = ToFloat3(points[i].pos), b = ToFloat3(points[i + 1].pos);
                     float leg = (float)Float3.Distance(a, b);
@@ -881,14 +823,7 @@ public class NavMeshAgent : MonoBehaviour
 
     public override void LateUpdate()
     {
-        if (_agent == null)
-        {
-            // Deliberate belt-and-braces: NavMeshChanged already covers late registration, but
-            // a subscription can be lost across domain edge cases (component re-enable racing a
-            // world swap), and this retry is nearly free while unregistered.
-            TryRegister();
-            return;
-        }
+        if (_agent == null) return;
 
         // Avoidance samples a DISCRETE set of candidate velocities, so running it with nothing in
         // range rounds the result and walks the agent sideways off a straight line. Engaged only when

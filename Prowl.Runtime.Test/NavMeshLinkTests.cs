@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Recast.Detour;
@@ -224,10 +224,10 @@ public class NavMeshLinkTests : RuntimeTestBase
         Assert.Null(other.Navigation.FindLink(link.LinkId));
     }
 
-    private static NavMeshPathStatus PathStatus(Scene scene, Float3 from, Float3 to, int areaMask = NavMesh.AllAreas)
+    private static NavMeshPathStatus PathStatus(Scene scene, Float3 from, Float3 to, NavMeshAreaMask areaMask = default)
     {
         var path = new NavMeshPath();
-        return scene.Navigation.CalculatePath(from, to, areaMask, path) ? path.Status : NavMeshPathStatus.PathInvalid;
+        return scene.Navigation.CalculatePath(from, to, path, areaMask) ? path.Status : NavMeshPathStatus.PathInvalid;
     }
 
     /// <summary>A link across the gap makes the far island reachable; without one (or with
@@ -274,7 +274,7 @@ public class NavMeshLinkTests : RuntimeTestBase
         for (int i = 0; i < 240 && !carved; i++)
         {
             Tick(scene, 1);
-            carved = !scene.Navigation.SamplePosition(new Float3(-7, 0.2f, 2.5f), out _, 0.4f, NavMesh.AllAreas);
+            carved = !scene.Navigation.SamplePosition(new Float3(-7, 0.2f, 2.5f), out _, 0.4f, NavMeshAreaMask.Everything);
         }
         Assert.True(carved, "The obstacle should carve.");
         Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
@@ -407,13 +407,12 @@ public class NavMeshLinkTests : RuntimeTestBase
             Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
 
             // Spawn-then-configure, but for scoping: hand the link to another agent type only.
-            link.AffectAllAgentTypes = false;
-            link.AffectedAgentTypeIds = [3];
+            link.AgentTypes = NavMeshAgentTypeSet.Of(3);
             Tick(scene, 3);
             Assert.Equal(NavMeshPathStatus.PathPartial, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
 
-            // And back: widening re-attaches it.
-            link.AffectAllAgentTypes = true;
+            // And back, edited in place the way the inspector does: widening re-attaches it.
+            link.AgentTypes.AffectsAll = true;
             Tick(scene, 3);
             Assert.Equal(NavMeshPathStatus.PathComplete, PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
         }
@@ -443,7 +442,7 @@ public class NavMeshLinkTests : RuntimeTestBase
         var world = new NavMeshWorld();
         Assert.NotNull(world.AddNavMeshData(loaded));
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -471,7 +470,7 @@ public class NavMeshLinkTests : RuntimeTestBase
         Assert.Equal(NavMeshPathStatus.PathComplete,
             PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0)));
         Assert.Equal(NavMeshPathStatus.PathPartial,
-            PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas & ~(1 << NavMeshAreas.Jump)));
+            PathStatus(scene, new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMeshAreaMask.FromMask(~(1u << NavMeshAreas.Jump))));
     }
 
     private static int CountOffMeshPolys(NavMeshSurface surface)

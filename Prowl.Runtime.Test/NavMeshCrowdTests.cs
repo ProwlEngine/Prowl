@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Recast.Detour.Crowd;
@@ -527,7 +527,9 @@ public class NavMeshCrowdTests : RuntimeTestBase
         direct.GameObject.Enabled = false;
 
         NavMeshAgent masked = AddAgent(scene, new Float3(2, 0, 1.5f));
-        masked.AreaMask = NavMeshAreas.AllAreas & ~(1 << MudArea);
+        NavMeshAreaMask noMud = NavMeshAreaMask.Everything;
+        noMud.RemoveArea(MudArea);
+        masked.AreaMask = noMud;
         (double maskedMaxZ, double maskedEnd) = WalkBottomCorridor(scene, masked);
         Assert.True(maskedEnd < 2.0, $"Masked agent should still arrive via the detour (ended {maskedEnd:0.0} away).");
         Assert.True(maskedMaxZ > 6.0,
@@ -583,8 +585,10 @@ public class NavMeshCrowdTests : RuntimeTestBase
         NavMeshAgent maskedA = AddAgent(scene, new Float3(2, 0, 0));
         NavMeshAgent maskedB = AddAgent(scene, new Float3(4, 0, 0));
         NavMeshAgent costly = AddAgent(scene, new Float3(6, 0, 0));
-        maskedA.AreaMask = ~(1 << 2);
-        maskedB.AreaMask = ~(1 << 2);
+        NavMeshAreaMask noJump = NavMeshAreaMask.Everything;
+        noJump.RemoveArea(2);
+        maskedA.AreaMask = noJump;
+        maskedB.AreaMask = noJump;
         costly.SetAreaCost(2, 5f);
 
         Tick(scene, 2);
@@ -637,5 +641,26 @@ public class NavMeshCrowdTests : RuntimeTestBase
         late.SetAreaCost(1, 99f);
         Tick(scene, 2);
         Assert.NotEqual(0, late.NativeAgent!.option.queryFilterType);
+    }
+
+    [Fact]
+    public void ApplySettings_ReachesQueriesAndTheLiveCrowd()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+        AddAgent(scene, new Float3(0, 0, 0));
+        Tick(scene, 2);
+        DtCrowd crowd = scene.Navigation.GetNativeCrowd()!;
+
+        var settings = new NavMeshWorldSettings { MaxPolyPath = 77, DefaultQueryExtents = new Float3(3, 4, 5) };
+        ObstacleAvoidanceSettings high = settings.HighQualityAvoidance;
+        high.HorizonTime = 0.5f;
+        settings.HighQualityAvoidance = high;
+        scene.Navigation.ApplySettings(settings);
+
+        Assert.Equal(77, scene.Navigation.MaxPolyPath);
+        Assert.Equal(new Float3(3, 4, 5), scene.Navigation.DefaultQueryExtents);
+        Assert.Equal(0.5f, scene.Navigation.GetObstacleAvoidance(ObstacleAvoidanceType.HighQualityObstacleAvoidance).HorizonTime);
+        Assert.Equal(0.5f, crowd.GetObstacleAvoidanceParams((int)ObstacleAvoidanceType.HighQualityObstacleAvoidance - 1).horizTime);
+        Assert.Equal(2.5f, crowd.GetObstacleAvoidanceParams(0).horizTime);
     }
 }

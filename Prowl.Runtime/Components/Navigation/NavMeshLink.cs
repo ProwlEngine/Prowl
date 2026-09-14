@@ -21,7 +21,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [ExecuteAlways]
 [AddComponentMenu("Navigation/NavMesh Link")]
-[ComponentIcon("")] // link icon
+[ComponentIcon("\uf0c1")] // link icon
 public class NavMeshLink : MonoBehaviour
 {
     [Tooltip("Link start position, local to this GameObject.")]
@@ -37,8 +37,7 @@ public class NavMeshLink : MonoBehaviour
     [SerializeField] private bool bidirectional = true;
 
     [Tooltip("The link's area. Traversal cost comes from this area's cost, and agents whose mask excludes it won't use the link.")]
-    [NavMeshArea]
-    [SerializeField] private int area = NavMeshAreas.Jump;
+    [SerializeField] private NavMeshArea area = NavMeshAreas.Jump;
 
     [Tooltip("Whether the link is traversable. Toggling at runtime rebuilds the affected tiles (with Auto Rebuild on).")]
     [SerializeField] private bool activated = true;
@@ -49,13 +48,8 @@ public class NavMeshLink : MonoBehaviour
     [Tooltip("Automatically rebuild the affected tiles of matching surfaces when this link changes (enable/disable, Activated, moves with Auto Update Position). Turn off in games that manage rebuilds themselves with explicit sources.")]
     [SerializeField] private bool autoRebuild = true;
 
-    [Tooltip("Apply to bakes of every agent type. Turn off to pick specific types.")]
-    [SerializeField] private bool affectAllAgentTypes = true;
-
-    [Tooltip("Agent types whose bakes include this link, when not affecting all.")]
-    [NavMeshAgentType]
-    [EnableIf(nameof(UsesExplicitAgentTypes))]
-    [SerializeField] private List<int> affectedAgentTypeIds = [];
+    [Tooltip("Agent types whose bakes include this link.")]
+    [SerializeField] private NavMeshAgentTypeSet agentTypes = new();
 
     // Writing any part of the definition re-offers the link and rebuilds around both its old and
     // new endpoints, so a spawn-then-configure write lands without waiting for a frame. Each one
@@ -84,7 +78,7 @@ public class NavMeshLink : MonoBehaviour
         set { if (bidirectional == value) return; bidirectional = value; ApplyChange(edited: true, moved: false); }
     }
 
-    public int Area
+    public NavMeshArea Area
     {
         get => area;
         set { if (area == value) return; area = value; ApplyChange(edited: true, moved: false); }
@@ -99,20 +93,15 @@ public class NavMeshLink : MonoBehaviour
     }
 
     /// <summary>Which surfaces the link resolves against is part of its definition: narrowing the
-    /// scope has to rebuild the surfaces it is coming off, which is why this applies like an edit.</summary>
-    public bool AffectAllAgentTypes
+    /// scope has to rebuild the surfaces it is coming off, which is why this applies like an edit.
+    /// Edits made to the set in place are picked up on the next frame.</summary>
+    public NavMeshAgentTypeSet AgentTypes
     {
-        get => affectAllAgentTypes;
-        set { if (affectAllAgentTypes == value) return; affectAllAgentTypes = value; ApplyChange(edited: true, moved: false); }
-    }
-
-    public List<int> AffectedAgentTypeIds
-    {
-        get => affectedAgentTypeIds;
+        get => agentTypes;
         set
         {
-            if (ReferenceEquals(affectedAgentTypeIds, value)) return;
-            affectedAgentTypeIds = value;
+            if (ReferenceEquals(agentTypes, value)) return;
+            agentTypes = value ?? new();
             ApplyChange(edited: true, moved: false);
         }
     }
@@ -143,18 +132,14 @@ public class NavMeshLink : MonoBehaviour
         return id == 0 ? 1 : id;
     }
 
-    private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
-
     // The state the navmesh last saw. World endpoints size the rebuild regions and follow the
     // Transform, which no setter sees; the applied Activated flag is what tells OnDisable whether
     // this link was contributing anything worth rebuilding away.
     private Float3 _appliedStart, _appliedEnd;
     private bool _appliedActive;
     // Agent-type scoping decides which surfaces the link resolves against, so it is part of the
-    // definition too; the id list is copied rather than aliased, or the comparison would be
-    // against the caller's own live list and never report a change.
-    private bool _appliedAffectAllAgentTypes;
-    private readonly List<int> _appliedAgentTypeIds = [];
+    // definition too. A copy rather than the live set, or an in-place edit would never compare as a change.
+    private NavMeshAgentTypeSet _appliedAgentTypes = new();
 
     private void CaptureAppliedDefinition()
     {
@@ -173,31 +158,13 @@ public class NavMeshLink : MonoBehaviour
     /// <summary>Committed separately from the rest, and only after a rebuild has run: narrowing
     /// the scope has to rebuild the surfaces the link is being taken OFF, and those are only
     /// identifiable from the previous snapshot.</summary>
-    private void CaptureAppliedScope()
-    {
-        _appliedAffectAllAgentTypes = AffectAllAgentTypes;
-        _appliedAgentTypeIds.Clear();
-        if (AffectedAgentTypeIds != null) _appliedAgentTypeIds.AddRange(AffectedAgentTypeIds);
-    }
+    private void CaptureAppliedScope() => _appliedAgentTypes = agentTypes.Clone();
 
     /// <summary>Surfaces to revisit on a change: those this link applies to now, plus those it
     /// applied to before. Collection filters by the current scope, so a surface in the second
-    /// group rebuilds without the link — which is how it gets removed.</summary>
-    private bool AffectsOrDidAffect(int agentTypeId)
-        => AffectsAgentType(agentTypeId)
-            || _appliedAffectAllAgentTypes
-            || _appliedAgentTypeIds.Contains(agentTypeId);
-
-    /// <summary>The one authored value a setter cannot see: the id list can be edited in place, so
-    /// it is still compared per frame.</summary>
-    private bool AgentTypeIdsChanged()
-    {
-        int count = AffectedAgentTypeIds?.Count ?? 0;
-        if (count != _appliedAgentTypeIds.Count) return true;
-        for (int i = 0; i < count; i++)
-            if (AffectedAgentTypeIds![i] != _appliedAgentTypeIds[i]) return true;
-        return false;
-    }
+    /// group rebuilds without the link, which is how it gets removed.</summary>
+    private bool AffectsOrDidAffect(NavMeshAgentTypeId agentTypeId)
+        => AffectsAgentType(agentTypeId) || _appliedAgentTypes.Contains(agentTypeId);
 
     /// The setters, an inspector edit and AutoUpdatePosition all land here: rebuild around the OLD
     /// endpoints so those tiles drop the stale connection, then around the new ones so they gain it.
@@ -231,8 +198,8 @@ public class NavMeshLink : MonoBehaviour
     private readonly HashSet<NavMeshInstance> _catchUpDone = [];
 
     /// <summary>Does this link apply to bakes for the given agent type?</summary>
-    public bool AffectsAgentType(int agentTypeId)
-        => AffectAllAgentTypes || AffectedAgentTypeIds?.Contains(agentTypeId) == true;
+    public bool AffectsAgentType(NavMeshAgentTypeId agentTypeId)
+        => agentTypes.Contains(agentTypeId);
 
     /// <summary>World-space start position.</summary>
     public Float3 WorldStart => Transform.TransformPoint(StartPoint);
@@ -256,7 +223,8 @@ public class NavMeshLink : MonoBehaviour
         if (scene.IsValid())
         {
             _world = scene!.Navigation;
-            _world.NavMeshChanged += OnNavMeshChanged;
+            _world.InstanceRegistered += OnInstanceRegistered;
+            _world.InstanceUnregistered += OnInstanceUnregistered;
             _world.RegisterLink(this);
         }
         if (Activated) CatchUp();
@@ -267,7 +235,8 @@ public class NavMeshLink : MonoBehaviour
         _catchUpDone.Clear();
         if (_world != null)
         {
-            _world.NavMeshChanged -= OnNavMeshChanged;
+            _world.InstanceRegistered -= OnInstanceRegistered;
+            _world.InstanceUnregistered -= OnInstanceUnregistered;
             _world.UnregisterLink(this);
 
             // Unregistered first, so the rebuild collects the links WITHOUT this one — but
@@ -283,22 +252,12 @@ public class NavMeshLink : MonoBehaviour
 
     private bool _catchUpPending;
 
-    /// <summary>A navmesh registered or changed: schedule the catch-up check so links baked
-    /// out of date (added/moved since the surface's last bake) insert themselves regardless
-    /// of component enable order. Deferred to LateUpdate because NavMeshChanged fires INSIDE
-    /// AddNavMeshData — before the registering surface has assigned its Instance — so an
-    /// immediate check would see no surface to rebuild through.</summary>
-    private void OnNavMeshChanged()
-    {
-        // Only a change to the SET of navmeshes can give this link somewhere new to attach, and
-        // the event also fires per frame while a surface converges a carve. Gate on the
-        // structural counter, or every carving frame wakes a check per link to discover nothing.
-        if (_world == null || _world.StructureGeneration == _seenStructureGeneration) return;
-        _seenStructureGeneration = _world.StructureGeneration;
-        _catchUpPending = true;
-    }
+    /// <summary>A navmesh registered: schedule the catch-up check so links baked out of date
+    /// insert themselves regardless of component enable order. Deferred to LateUpdate because the
+    /// event fires inside AddNavMeshData, before the registering surface has assigned its Instance.</summary>
+    private void OnInstanceRegistered(NavMeshInstance instance) => _catchUpPending = true;
 
-    private int _seenStructureGeneration = -1;
+    private void OnInstanceUnregistered(NavMeshInstance instance) => _catchUpDone.Remove(instance);
 
     /// <summary>
     /// For each matching surface with a live navmesh this link hasn't checked yet: if the
@@ -309,9 +268,6 @@ public class NavMeshLink : MonoBehaviour
     {
         // A Not Walkable link is never in the mesh, so looking for it would rebuild on every registration.
         if (!AutoRebuild || _world == null || Area == NavMeshAreas.NotWalkable) return;
-
-        // Replaced instances (full rebakes) would otherwise be pinned by the checked set.
-        _catchUpDone.RemoveWhere(i => _world.GetInstance(i.AgentTypeId) != i);
 
         IReadOnlyList<NavMeshSurface> surfaces = _world.Surfaces;
         for (int i = 0; i < surfaces.Count; i++)
@@ -333,7 +289,7 @@ public class NavMeshLink : MonoBehaviour
             if (Activated) CatchUp();
         }
 
-        bool edited = AgentTypeIdsChanged();
+        bool edited = !agentTypes.SameAs(_appliedAgentTypes);
         bool moved = AutoUpdatePosition
             && (Float3.Distance(WorldStart, _appliedStart) > 0.01 || Float3.Distance(WorldEnd, _appliedEnd) > 0.01);
         if (edited || moved) ApplyChange(edited, moved);
@@ -374,13 +330,13 @@ public class NavMeshLink : MonoBehaviour
             NavMeshInstance? instance = surfaces[i].Instance;
             if (instance == null || !AffectsAgentType(surfaces[i].AgentTypeId)) continue;
             if (!instance.TryGetConnection(LinkId, out NavMeshConnection connection)) continue;
-            NavMeshSurface.DrawConnection(connection, Float3.Zero);
+            NavMeshDebugDisplay.DrawConnection(connection, Float3.Zero);
             return;
         }
 
         var color = new Color(0.6f, 0.6f, 0.6f, 1f);
         Debug.DrawLine(WorldStart, WorldEnd, color);
-        Debug.DrawWireSphere(WorldStart, NavMeshSurface.EndpointGizmoRadius, color);
-        Debug.DrawWireSphere(WorldEnd, NavMeshSurface.EndpointGizmoRadius, color);
+        Debug.DrawWireSphere(WorldStart, NavMeshDebugDisplay.EndpointGizmoRadius, color);
+        Debug.DrawWireSphere(WorldEnd, NavMeshDebugDisplay.EndpointGizmoRadius, color);
     }
 }

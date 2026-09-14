@@ -824,12 +824,53 @@ public class AssetDatabaseTests : EditorTestHarness
         var surface = go.AddComponent<NavMeshSurface>();
 
         // No asset yet: the first bake picks a name from the scene and agent type.
-        Assert.EndsWith(".navmesh", Inspector.NavMeshSurfaceEditor.BakePath(surface));
-        Assert.DoesNotContain("Renamed By User", Inspector.NavMeshSurfaceEditor.BakePath(surface));
+        Assert.EndsWith(".navmesh", Navigation.NavMeshBakeService.BakePath(surface));
+        Assert.DoesNotContain("Renamed By User", Navigation.NavMeshBakeService.BakePath(surface));
 
         surface.NavMeshData = new AssetRef<NavMeshData>(guid);
 
-        Assert.Equal("Renamed By User.navmesh", Inspector.NavMeshSurfaceEditor.BakePath(surface));
+        Assert.Equal("Renamed By User.navmesh", Navigation.NavMeshBakeService.BakePath(surface));
+    }
+
+    [Fact]
+    public void NavMeshBake_RunsInTheBackground_ThenSavesAndAssignsTheAsset()
+    {
+        var scene = new Scene();
+        scene.Enable();
+        try
+        {
+            var floor = new GameObject("Floor");
+            scene.Add(floor);
+            floor.AddComponent<BoxCollider>().Size = new Prowl.Vector.Float3(20, 1, 20);
+            floor.Transform.Position = new Prowl.Vector.Float3(0, -0.5f, 0);
+
+            var go = new GameObject("Surface");
+            scene.Add(go);
+            var surface = go.AddComponent<NavMeshSurface>();
+            surface.UseGeometry = NavMeshCollectGeometry.PhysicsColliders;
+            surface.BuildOverrides.OverrideVoxelSize = true;
+            surface.BuildOverrides.VoxelSize = 0.25f;
+
+            var bake = Navigation.NavMeshBakeService.Instance;
+            Assert.True(bake.Start(surface));
+            Assert.Same(surface, bake.TargetSurface);
+
+            var timeout = System.Diagnostics.Stopwatch.StartNew();
+            while (bake.IsBaking && timeout.Elapsed < TimeSpan.FromSeconds(60))
+            {
+                bake.Poll();
+                System.Threading.Thread.Sleep(10);
+            }
+
+            Assert.Equal("Done", bake.Status);
+            Assert.NotEqual(Guid.Empty, surface.NavMeshData.AssetID);
+            Assert.StartsWith("Scene_navmesh/", Navigation.NavMeshBakeService.BakePath(surface));
+            Assert.NotNull(surface.Instance);
+        }
+        finally
+        {
+            scene.Dispose();
+        }
     }
 
     private static NavMeshGeometrySource FlatQuad(float size)

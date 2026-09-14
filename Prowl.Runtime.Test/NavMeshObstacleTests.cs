@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -23,7 +23,7 @@ namespace Prowl.Runtime.Test;
 public class NavMeshObstacleTests : RuntimeTestBase
 {
     private static bool Walkable(Scene scene, Float3 position)
-        => scene.Navigation.SamplePosition(position, out _, 0.5f, NavMesh.AllAreas);
+        => scene.Navigation.SamplePosition(position, out _, 0.5f, NavMeshAreaMask.Everything);
 
     /// <summary>Echo stores an enum as its number, so reordering these members would repoint every
     /// saved obstacle at a different shape. The values are asserted, not just the round-trip.</summary>
@@ -50,7 +50,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)));
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, -8), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
 
         // Layers round-trip through the asset serializer and instantiate again.
@@ -89,7 +89,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)), "A default bake must be queryable.");
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-15, 0, -15), new Float3(15, 0, 15), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-15, 0, -15), new Float3(15, 0, 15), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
         // The editor overlay reads this: empty layers drew nothing, which is how it looked unbaked.
         Assert.NotEmpty(surface.NavMeshData.Res!.CalculateTriangulation().Vertices);
@@ -197,7 +197,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Tick(scene, 2);
 
         // Wherever the navmesh actually is on the slope, which is not the collider's surface.
-        Assert.True(scene.Navigation.SamplePosition(new Float3(0, 6, 0), out NavMeshHit on, 8f, NavMesh.AllAreas),
+        Assert.True(scene.Navigation.SamplePosition(new Float3(0, 6, 0), out NavMeshHit on, 8f, NavMeshAreaMask.Everything),
             "the ramp has to bake walkable for this test to mean anything");
 
         GameObject obstacleGo = CreateGameObject("Crate");
@@ -209,7 +209,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         // Resting on the sampled point, which is how a caller places a crate on the ground.
         obstacleGo.Transform.Position = on.Position + new Float3(0, 1.5f, 0);
 
-        Assert.True(TickUntil(scene, () => !scene.Navigation.SamplePosition(on.Position, out _, 0.3f, NavMesh.AllAreas)) >= 0,
+        Assert.True(TickUntil(scene, () => !scene.Navigation.SamplePosition(on.Position, out _, 0.3f, NavMeshAreaMask.Everything)) >= 0,
             "a box resting on the sampled point must carve it");
     }
 
@@ -274,7 +274,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         // A path across detours around the hole.
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
         double maxDeviation = 0;
         foreach (Float3 corner in path.Corners)
@@ -396,7 +396,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.True(surface.BuildNavMesh());
 
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
 
         GameObject wall = CreateGameObject("Wall");
@@ -406,12 +406,12 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
         Assert.True(surface.RebuildTiles(region));
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathPartial, path.Status);
 
         wall.Enabled = false;
         Assert.True(surface.RebuildTiles(region));
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -443,7 +443,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         // The new geometry is in...
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathPartial, path.Status);
         // ...AND the carve survived the regeneration of its tile.
         Assert.False(Walkable(scene, new Float3(4, 0.2f, 4)),
@@ -594,11 +594,10 @@ public class NavMeshObstacleTests : RuntimeTestBase
         var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
         var rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
         Assert.NotEmpty(rebuilt);
-        Assert.True(surface.ApplyRebuiltTiles(rebuilt, out int rebuiltTiles));
-        Assert.True(rebuiltTiles > 0);
+        Assert.True(surface.ApplyRebuiltTiles(rebuilt));
 
         var path = new NavMeshPath();
-        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), NavMesh.AllAreas, path));
+        Assert.True(scene.Navigation.CalculatePath(new Float3(-8, 0, 0), new Float3(8, 0, 0), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathPartial, path.Status);
     }
 
@@ -644,15 +643,14 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.False(Walkable(scene, s_wallTop));
 
         var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
-        List<(int X, int Z, List<byte[]> Layers)> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        List<NavMeshTileRebuild> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
         Assert.NotEmpty(rebuilt);
 
         // A carve well off the wall, queued but not yet pumped.
         Carver(scene, out _);
         Assert.True(surface.Instance!.CachePending);
 
-        Assert.True(surface.ApplyRebuiltTiles(rebuilt, out int rebuiltTiles));
-        Assert.Equal(rebuilt.Count, rebuiltTiles);
+        Assert.True(surface.ApplyRebuiltTiles(rebuilt));
 
         // Held, not applied: the wall is not in the mesh yet.
         Assert.False(Walkable(scene, s_wallTop));
@@ -676,7 +674,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         WalledFloor(scene, surface, out _);
         var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
-        List<(int X, int Z, List<byte[]> Layers)> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        List<NavMeshTileRebuild> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
         Assert.NotEmpty(rebuilt);
 
         // One rebuild per frame against an obstacle that straddles four tiles and re-queues a
@@ -716,7 +714,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
             Churn(1);
         }
 
-        Assert.True(surface.ApplyRebuiltTiles(rebuilt, out _));
+        Assert.True(surface.ApplyRebuiltTiles(rebuilt));
 
         // And while the backlog lasts the swap cannot land the ordinary way.
         Churn(1);
@@ -741,12 +739,12 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         WalledFloor(scene, surface, out _);
         var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
-        List<(int X, int Z, List<byte[]> Layers)> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        List<NavMeshTileRebuild> rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
         Assert.NotEmpty(rebuilt);
 
         Carver(scene, out _);
         Assert.True(surface.Instance!.CachePending);
-        Assert.True(surface.ApplyRebuiltTiles(rebuilt, out _));
+        Assert.True(surface.ApplyRebuiltTiles(rebuilt));
 
         surface.Enabled = false;
         Tick(scene, 5);
@@ -773,18 +771,17 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
         WalledFloor(scene, surface, out GameObject wall);
         var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
-        List<(int X, int Z, List<byte[]> Layers)> walled = await surface.RebuildTilesAsync(region, surface.CollectSources());
+        List<NavMeshTileRebuild> walled = await surface.RebuildTilesAsync(region, surface.CollectSources());
         Assert.NotEmpty(walled);
 
         Carver(scene, out _);
         Assert.True(surface.Instance!.CachePending);
-        Assert.True(surface.ApplyRebuiltTiles(walled, out _));
+        Assert.True(surface.ApplyRebuiltTiles(walled));
 
         // The wall is gone again, and a synchronous rebuild says so — issued after the held batch
         // that still describes it, so the held batch must not be what the tiles end up holding.
         wall.Enabled = false;
-        Assert.True(surface.RebuildTiles(region, surface.CollectSources(region), out int rebuiltTiles));
-        Assert.True(rebuiltTiles > 0);
+        Assert.True(surface.RebuildTiles(region, surface.CollectSources(region)));
 
         Tick(scene, 20);
         Assert.False(Walkable(scene, s_wallTop), "an older held batch landed on top of a newer rebuild");
@@ -1091,7 +1088,6 @@ public class NavMeshObstacleTests : RuntimeTestBase
     public void Carve_FinishingInOneUpdate_StillReportsTheChange()
     {
         (Scene scene, NavMeshSurface surface) = CreateFloorScene();
-        surface.AlwaysShowNavMesh = true;
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 4); // settle, so nothing else is pending
 

@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -44,11 +44,14 @@ public class NavMeshBuildTests
 
     private static NavMeshBuildSettings TestSettings() => new()
     {
-        // Coarse voxels + small tiles keep the test fast.
-        OverrideVoxelSize = true,
-        VoxelSize = 0.25f,
-        OverrideTileSize = true,
-        TileSize = 64,
+        Overrides =
+        {
+            // Coarse voxels + small tiles keep the test fast.
+            OverrideVoxelSize = true,
+            VoxelSize = 0.25f,
+            OverrideTileSize = true,
+            TileSize = 64,
+        },
     };
 
     /// <summary>
@@ -113,7 +116,7 @@ public class NavMeshBuildTests
         Assert.NotNull(data);
         var world = new NavMeshWorld();
         Assert.NotNull(world.AddNavMeshData(data!));
-        Assert.True(world.SamplePosition(new Float3(-10, 0.2f, 10), out _, 1f, NavMesh.AllAreas),
+        Assert.True(world.SamplePosition(new Float3(-10, 0.2f, 10), out _, 1f, NavMeshAreaMask.Everything),
             "A mirrored floor must bake walkable, not vanish as a ceiling.");
     }
 
@@ -224,12 +227,12 @@ public class NavMeshBuildTests
         Assert.NotNull(instance);
 
         // A platform is built over the floor: every tile it covers now needs a second layer.
-        List<(int X, int Z, List<byte[]> Layers)> rebuilt = NavMeshBuilder.BuildTilesInBounds(
+        List<NavMeshTileRebuild> rebuilt = NavMeshBuilder.BuildTilesInBounds(
             data, [FlatQuad(), Raised(2, 2, 18, 18, 5)], new Float3(0, -1, 0), new Float3(20, 10, 20));
         Assert.NotEmpty(rebuilt);
 
         int expected = 0;
-        foreach ((int _, int _, List<byte[]> blobs) in rebuilt) expected += blobs.Count;
+        foreach ((int _, int _, IReadOnlyList<byte[]> blobs) in rebuilt) expected += blobs.Count;
         Assert.True(expected > data.CacheLayers.Count, "the platform must actually stack a layer.");
 
         SwapRebuiltTiles(world, instance!, rebuilt);
@@ -300,7 +303,7 @@ public class NavMeshBuildTests
             Assert.Equal(data.CacheLayers[i].Data, loaded.CacheLayers[i].Data);
         }
 
-        Assert.Equal(data.Settings.AgentRadius, loaded.Settings.AgentRadius);
+        Assert.Equal(data.Settings.Agent.Radius, loaded.Settings.Agent.Radius);
         Assert.Equal(data.TileWorldSize, loaded.TileWorldSize);
         Assert.Equal(data.MaxTiles, loaded.MaxTiles);
         Assert.Equal(data.MaxPolys, loaded.MaxPolys);
@@ -333,20 +336,21 @@ public class NavMeshBuildTests
     private static void AssertTwoAreaSemantics(NavMeshWorld world)
     {
         // Each side samples as its own area (Mask is the area's bit).
-        Assert.True(world.SamplePosition(new Float3(4, 0.2f, 10), out NavMeshHit leftHit, 0.5f, NavMesh.AllAreas));
-        Assert.Equal(1 << NavMeshAreas.Walkable, leftHit.Mask);
-        Assert.True(world.SamplePosition(new Float3(16, 0.2f, 10), out NavMeshHit rightHit, 0.5f, NavMesh.AllAreas));
-        Assert.Equal(1 << 3, rightHit.Mask);
+        Assert.True(world.SamplePosition(new Float3(4, 0.2f, 10), out NavMeshHit leftHit, 0.5f, NavMeshAreaMask.Everything));
+        Assert.Equal(NavMeshAreaMask.Only(NavMeshAreas.Walkable), leftHit.Mask);
+        Assert.True(world.SamplePosition(new Float3(16, 0.2f, 10), out NavMeshHit rightHit, 0.5f, NavMeshAreaMask.Everything));
+        Assert.Equal(NavMeshAreaMask.Only(3), rightHit.Mask);
 
         // The area boundary must remain traversable — different areas are neighbours,
         // not walls. A rubble border must never become invisible geometry.
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(4, 0, 10), new Float3(16, 0, 10), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(4, 0, 10), new Float3(16, 0, 10), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
 
         // Excluding area 3 makes the right side unreachable (partial path at best).
-        int maskWithout3 = ~(1 << 3);
-        world.CalculatePath(new Float3(4, 0, 10), new Float3(16, 0, 10), maskWithout3, path);
+        NavMeshAreaMask maskWithout3 = NavMeshAreaMask.Everything;
+        maskWithout3.RemoveArea(3);
+        world.CalculatePath(new Float3(4, 0, 10), new Float3(16, 0, 10), path, maskWithout3);
         Assert.NotEqual(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -388,7 +392,7 @@ public class NavMeshBuildTests
         Assert.NotNull(instance);
 
         // ...then rebuild with the right half as area 3 (rubble appearing after a drill).
-        List<(int X, int Z, List<byte[]> Layers)> rebuilt = NavMeshBuilder.BuildTilesInBounds(
+        List<NavMeshTileRebuild> rebuilt = NavMeshBuilder.BuildTilesInBounds(
             data!, [left, right], new Float3(0, -1, 0), new Float3(20, 1, 20));
         Assert.NotEmpty(rebuilt);
 
@@ -400,13 +404,13 @@ public class NavMeshBuildTests
     /// each affected tile's layers (and the navmesh tiles the cache built from them), add the
     /// regenerated blobs, then re-contour.</summary>
     private static void SwapRebuiltTiles(NavMeshWorld world, NavMeshInstance instance,
-        List<(int X, int Z, List<byte[]> Layers)> rebuilt)
+        List<NavMeshTileRebuild> rebuilt)
     {
         world.MutateTileCache(instance, cache =>
         {
             DtNavMesh navMesh = cache.GetNavMesh();
             var added = new List<long>();
-            foreach ((int x, int z, List<byte[]> blobs) in rebuilt)
+            foreach ((int x, int z, IReadOnlyList<byte[]> blobs) in rebuilt)
             {
                 foreach (long tileRef in cache.GetTilesAt(x, z))
                 {
@@ -451,10 +455,11 @@ public class NavMeshBuildTests
 
         // The strip spans the full floor, so it cannot be avoided — but a filter that prices
         // area 4 highly must still cross it (cost biases, never blocks).
-        var expensive = new NavMeshQueryFilter();
-        expensive.SetAreaCost(4, 10f);
+        var costs = new NavMeshAreaCosts();
+        costs.SetAreaCost(4, 10f);
+        NavMeshQueryFilter expensive = NavMeshQueryFilter.Default.WithAreaCosts(costs);
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(5, 0, 15), new Float3(25, 0, 15), expensive, path));
+        Assert.True(world.CalculatePath(new Float3(5, 0, 15), new Float3(25, 0, 15), path, expensive));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -479,9 +484,9 @@ public class NavMeshBuildTests
 
         // Queries work; heights come from the polygon planes (exact on a flat floor).
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(18, 0, 18), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(18, 0, 18), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
-        Assert.True(world.SamplePosition(new Float3(10, 0.5f, 10), out NavMeshHit hit, 1f, NavMesh.AllAreas));
+        Assert.True(world.SamplePosition(new Float3(10, 0.5f, 10), out NavMeshHit hit, 1f, NavMeshAreaMask.Everything));
         Assert.True(System.Math.Abs(hit.Position.Y) < 0.3f, $"Height should come from the poly plane, got y={hit.Position.Y:0.00}.");
     }
 
@@ -608,7 +613,7 @@ public class NavMeshBuildTests
         Assert.True(instance!.ContainsLinkId(1), "The first link must reach the live navmesh.");
 
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(0, 0, -3), new Float3(0, 0, 14), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(0, 0, -3), new Float3(0, 0, 14), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -717,7 +722,7 @@ public class NavMeshBuildTests
     public void Build_MinRegionArea_CullsSmallIslands(float minRegionArea, bool islandSurvives)
     {
         NavMeshBuildSettings settings = TestSettings();
-        settings.MinRegionArea = minRegionArea;
+        settings.Overrides.MinRegionArea = minRegionArea;
 
         // A 4x4 platform floating well above the floor, far enough inside one tile that it is
         // not exempted as a border region. Erosion leaves ~6 units² of it — under the 20 above.

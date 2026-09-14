@@ -3,7 +3,6 @@
 
 using System;
 using System.Buffers;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -17,275 +16,9 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// A registered navmesh inside a <see cref="NavMeshWorld"/>: the instantiated Detour navmesh,
-/// its query pool, and the lock that lets queries run from any thread while tile mutations
-/// (rebakes, partial rebuilds) exclude them. Obtained from
-/// <see cref="NavMeshWorld.AddNavMeshData"/>; advanced users can reach the raw Detour objects
-/// through <see cref="NativeNavMesh"/>.
-/// </summary>
-public sealed class NavMeshInstance
-{
-    internal NavMeshData Data;
-    internal DtNavMesh Mesh;
-    internal readonly ReaderWriterLockSlim Lock = new(LockRecursionPolicy.NoRecursion);
-    internal readonly ConcurrentBag<DtNavMeshQuery> QueryPool = new();
-
-    // Set when work is queued into the cache (an obstacle request, a tile swap), cleared once
-    // the pump drains it. Only flagged instances are pumped, so a freshly registered instance
-    // (every tile seeded synchronously) starts clean, and a surface nothing ever carves costs
-    // nothing per frame. Main-thread only, like registration itself.
-    internal bool CachePending;
-
-    internal NavMeshInstance(NavMeshData data, Prowl.Recast.Detour.TileCache.DtTileCache tileCache,
-        NavMeshTileBuilder.ProwlTileCacheMeshProcess tileCacheLinks)
-    {
-        Data = data;
-        Mesh = tileCache.GetNavMesh();
-        TileCache = tileCache;
-        TileCacheLinks = tileCacheLinks;
-    }
-
-    /// <summary>The link set this instance's cache re-injects whenever it rebuilds a tile.
-    /// Mutate under the instance write lock and rebuild the affected tiles afterwards — see
-    /// <see cref="NavMeshSurface.RebuildLinkTiles"/>.</summary>
-    internal NavMeshTileBuilder.ProwlTileCacheMeshProcess TileCacheLinks { get; }
-
-    /// <summary>The TileCache backing this instance. Obstacles queue through it and
-    /// <see cref="NavMeshWorld.Update"/> pumps its incremental tile rebuilds. Queue work through
-    /// <see cref="NavMeshWorld.MutateTileCache"/>, which flags the instance for you — the pump
-    /// only runs for instances known to have pending work, and DtTileCache cannot be asked
-    /// whether it has any, so a request enqueued behind its back waits forever. Code that
-    /// queues on this handle directly must call <see cref="MarkCachePending"/>.</summary>
-    public Prowl.Recast.Detour.TileCache.DtTileCache TileCache { get; }
-
-    /// <summary>Tell the pump this cache has work waiting. Needed after queuing on
-    /// <see cref="TileCache"/> directly, which is what <see cref="NavMeshObstacle"/> does;
-    /// <see cref="NavMeshWorld.MutateTileCache"/> calls it for you. Main thread only.</summary>
-    public void MarkCachePending() => CachePending = true;
-
-    /// <summary>The agent type this navmesh was built for.</summary>
-    public int AgentTypeId => Data.Settings.AgentTypeId;
-
-    /// <summary>The asset this instance was created from.</summary>
-    public NavMeshData NavMeshData => Data;
-
-    /// <summary>The underlying Detour navmesh, owned by <see cref="TileCache"/>. Advanced use;
-    /// mutating it directly bypasses the query locking and desyncs it from the cache that built
-    /// it — prefer <see cref="NavMeshWorld.MutateTileCache"/> for tile changes.</summary>
-    public DtNavMesh NativeNavMesh => Mesh;
-
-    // The mesh's traversable off-mesh connections by link id, built lazily and invalidated on
-    // mutation — turns per-link lookups (every NavMeshLink at scene load, and again per frame
-    // while one is selected) into O(1) after a single O(tiles) pass. A link Detour could not
-    // attach is absent, so "contains" means usable rather than merely present, and a catch-up
-    // retries one that failed instead of taking the stub for success. Main thread only.
-    private Dictionary<int, NavMeshConnection>? _connections;
-
-    internal void InvalidateLinkIds() => _connections = null;
-
-    // ReaderWriterLockSlim owns kernel wait handles that only Dispose releases, and disposing one
-    // while a thread is inside it throws on that thread. Users: one for the registration plus one
-    // per lease or mutation; the last out disposes, and a count that reached zero cannot be revived,
-    // so a worker can never enter a disposed lock.
-    private int _users = 1;
-
-    private volatile bool _retired;
-
-    /// <summary>Unregistered: nothing queued against this instance can still land.</summary>
-    internal bool Retired => _retired;
-
-    internal bool TryAcquire()
-    {
-        if (_retired) return false;
-        int users = Volatile.Read(ref _users);
-        while (users > 0)
-        {
-            int seen = Interlocked.CompareExchange(ref _users, users + 1, users);
-            if (seen == users) return true;
-            users = seen;
-        }
-        return false;
-    }
-
-    internal void Release()
-    {
-        if (Interlocked.Decrement(ref _users) == 0)
-            Lock.Dispose();
-    }
-
-    /// <summary>Unregistration, from the lock's point of view: stop admitting queries, wait out
-    /// the ones already inside, poison the pool, and drop the registration's own hold.</summary>
-    internal void Retire()
-    {
-        _retired = true;
-
-        Lock.EnterWriteLock();
-        QueryPool.Clear();
-        Lock.ExitWriteLock();
-
-        Release();
-    }
-
-    /// <summary>Whether the mesh holds a traversable connection stamped with the given link id
-    /// (see <see cref="NavMeshLink.LinkId"/>). Main thread.</summary>
-    public bool ContainsLinkId(int linkId) => Connections.ContainsKey(linkId);
-
-    /// <summary>The connection the mesh holds for a link id — where its endpoints actually
-    /// snapped to, which is not necessarily where the component put them. False when the link
-    /// never attached. Main thread.</summary>
-    public bool TryGetConnection(int linkId, out NavMeshConnection connection)
-        => Connections.TryGetValue(linkId, out connection);
-
-    private Dictionary<int, NavMeshConnection> Connections
-    {
-        get
-        {
-            if (_connections != null) return _connections;
-
-            _connections = [];
-            for (int t = 0; t < Mesh.GetMaxTiles(); t++)
-            {
-                DtMeshTile? tile = Mesh.GetTile(t);
-                if (tile?.data?.offMeshCons == null) continue;
-                foreach (DtOffMeshConnection con in tile.data.offMeshCons)
-                    if (con.userId != 0 && NavMeshConnection.TryFrom(tile, con, out NavMeshConnection connection))
-                        _connections[con.userId] = connection;
-            }
-            return _connections;
-        }
-    }
-}
-
-/// <summary>
-/// One agent type's crowd: the Detour crowd, the navmesh instance it steers against, and the
-/// 16 query-filter slots it was constructed over. Slot 0 is the shared default (all areas, no
-/// cost overrides); slots 1..15 are refcounted and allocated per distinct (AreaMask,
-/// cost-overrides) configuration, so agents with identical filters share a slot. Slot numbers
-/// are NOT stable across release/re-acquire — nothing outside this entry may key state on
-/// them. Main-thread only, like all crowd state.
-/// </summary>
-internal sealed class NavMeshCrowdEntry
-{
-    public readonly DtCrowd Crowd;
-    public readonly NavMeshInstance Instance;
-
-    // The filter objects the crowd reads live each update — mutating one changes the steering
-    // of every agent on that slot immediately.
-    private readonly NavMeshQueryFilter[] _filters;
-    private readonly int[] _refCounts = new int[DtCrowdConst.DT_CROWD_MAX_QUERY_FILTER_TYPE];
-
-    // Once per entry: a crowd rebind makes every agent re-acquire, and a persistent overflow
-    // population would otherwise warn per agent per rebake — log spam at destructible-world
-    // frequency. The entry is recreated on rebind, so each new crowd re-warns exactly once.
-    private bool _exhaustionWarned;
-
-    public NavMeshCrowdEntry(DtCrowd crowd, NavMeshInstance instance, NavMeshQueryFilter[] filters)
-    {
-        Crowd = crowd;
-        Instance = instance;
-        _filters = filters;
-    }
-
-    /// <summary>
-    /// Slot whose filter matches the configuration exactly, sharing where possible: the
-    /// default config maps to slot 0, a config already in use bumps that slot's refcount, and
-    /// a new config takes a free slot. On exhaustion (16 distinct steering configurations for
-    /// one agent type) warns and falls back to slot 0.
-    /// </summary>
-    public int AcquireFilterSlot(int areaMask, float[]? costOverrides, string? agentName = null)
-    {
-        if (areaMask == NavMeshAreas.AllAreas && OverridesEqual(costOverrides, null))
-            return 0;
-
-        // Exact-match scan beats hashing here: at most 15 candidates, and comparing the full
-        // config can never merge two different configurations the way a hash collision would.
-        for (int slot = 1; slot < _filters.Length; slot++)
-        {
-            if (_refCounts[slot] > 0 && _filters[slot].AreaMask == areaMask
-                && OverridesEqual(_filters[slot].CostOverrides, costOverrides))
-            {
-                _refCounts[slot]++;
-                return slot;
-            }
-        }
-
-        for (int slot = 1; slot < _filters.Length; slot++)
-        {
-            if (_refCounts[slot] == 0)
-            {
-                _filters[slot].AreaMask = areaMask;
-                _filters[slot].CopyCostOverridesFrom(costOverrides);
-                _refCounts[slot] = 1;
-                return slot;
-            }
-        }
-
-        if (!_exhaustionWarned)
-        {
-            _exhaustionWarned = true;
-            string who = string.IsNullOrEmpty(agentName) ? "an agent" : $"agent '{agentName}'";
-            Debug.LogWarning($"[Navigation] All {_filters.Length} crowd filter slots for agent type {Instance.AgentTypeId} are in use ({_filters.Length - 1} distinct AreaMask/cost configurations); {who} steers with the default filter instead. Explicit queries (CalculatePath etc.) are unaffected. Further overflows on this crowd will not be logged.");
-        }
-        return 0;
-    }
-
-    /// <summary>Release a slot returned by <see cref="AcquireFilterSlot"/>. Slot 0 is shared
-    /// and never released. A slot's filter resets to defaults when its last user leaves.</summary>
-    public void ReleaseFilterSlot(int slot)
-    {
-        if (slot <= 0 || slot >= _refCounts.Length || _refCounts[slot] == 0) return;
-        if (--_refCounts[slot] == 0)
-        {
-            _filters[slot].AreaMask = NavMeshAreas.AllAreas;
-            _filters[slot].ClearAreaCosts();
-        }
-    }
-
-    private static bool OverridesEqual(float[]? a, float[]? b)
-    {
-        if (ReferenceEquals(a, b)) return true; // both null: the common mask-only case
-        // 0 means "no override", so a null array equals an all-zero one.
-        for (int i = 0; i < NavMeshAreas.MaxAreas; i++)
-        {
-            float av = a != null && i < a.Length ? a[i] : 0f;
-            float bv = b != null && i < b.Length ? b[i] : 0f;
-            if (av != bv) return false;
-        }
-        return true;
-    }
-}
-
-/// <summary>
-/// A rented thread-safe navmesh query. Dispose to return it to the pool. Leases hold a read
-/// lock on the navmesh, so keep them short-lived — a lease held across frames blocks rebuilds.
-/// </summary>
-public readonly struct NavMeshQueryLease : IDisposable
-{
-    private readonly NavMeshInstance _instance;
-
-    /// <summary>The Detour query, valid until this lease is disposed.</summary>
-    public DtNavMeshQuery Query { get; }
-
-    internal NavMeshQueryLease(NavMeshInstance instance, DtNavMeshQuery query)
-    {
-        _instance = instance;
-        Query = query;
-    }
-
-    public void Dispose()
-    {
-        if (_instance == null) return;
-        _instance.QueryPool.Add(Query);
-        _instance.Lock.ExitReadLock();
-        _instance.Release();
-    }
-}
-
-/// <summary>
 /// Per-scene navigation state: the registered navmeshes, the query API over them, and (once
 /// agents register) the crowd simulation. Owned by <see cref="Resources.Scene.Navigation"/> the
-/// same way physics state is owned by <see cref="Resources.Scene.Physics"/>; the static
-/// <see cref="NavMesh"/> facade forwards to the current scene's world.
+/// same way physics state is owned by <see cref="Resources.Scene.Physics"/>.
 /// <para/>
 /// Queries are thread-safe: each takes a pooled Detour query under a read lock, so gameplay
 /// code may path-find from worker threads. Tile mutations take the write lock and invalidate
@@ -293,27 +26,44 @@ public readonly struct NavMeshQueryLease : IDisposable
 /// </summary>
 public sealed class NavMeshWorld
 {
-    private int _maxPolyPath = 1024;
-    private int _maxStraightPath = 256;
+    private static volatile NavMeshWorldSettings s_defaultSettings = new();
 
-    /// <summary>
-    /// How many navmesh polygons one path may cross. Detour needs an explicit ceiling; the
-    /// default matches what the Recast demos use for long paths. A route that would exceed it
-    /// comes back <see cref="NavMeshPathStatus.PathPartial"/> rather than failing, so the symptom
-    /// of setting it too low is agents that stop short on long journeys for no visible reason.
-    /// Buffers are rented per query, so the cost is per query in flight, not per world.
-    /// </summary>
+    /// <summary>The settings every new world starts from. Assigning also affects nothing already
+    /// constructed; use <see cref="ApplySettings"/> for a live world.</summary>
+    public static NavMeshWorldSettings DefaultSettings
+    {
+        get => s_defaultSettings;
+        set => s_defaultSettings = (value ?? throw new ArgumentNullException(nameof(value))).Clone();
+    }
+
+    public NavMeshWorld() => ApplySettings(s_defaultSettings);
+
+    /// <summary>Copy every tunable from <paramref name="settings"/>. Crowd radius and obstacle capacity
+    /// only reach crowds and navmeshes created afterwards.</summary>
+    public void ApplySettings(NavMeshWorldSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        MaxPolyPath = settings.MaxPolyPath;
+        MaxStraightPath = settings.MaxStraightPath;
+        DefaultQueryExtents = settings.DefaultQueryExtents;
+        CrowdMaxAgentRadius = settings.CrowdMaxAgentRadius;
+        TileCacheMaxObstacles = settings.TileCacheMaxObstacles;
+        MaxTileUpdatesPerFrame = settings.MaxTileUpdatesPerFrame;
+        for (var quality = ObstacleAvoidanceType.LowQualityObstacleAvoidance; quality <= ObstacleAvoidanceType.HighQualityObstacleAvoidance; quality++)
+            SetObstacleAvoidance(quality, settings.GetAvoidance(quality));
+    }
+
+    private int _maxPolyPath;
+    private int _maxStraightPath;
+
+    /// <summary>How many navmesh polygons one path may cross. See <see cref="NavMeshWorldSettings.MaxPolyPath"/>.</summary>
     public int MaxPolyPath
     {
         get => _maxPolyPath;
         set => _maxPolyPath = Math.Max(2, value);
     }
 
-    /// <summary>
-    /// How many corners one path may have. The same trade as <see cref="MaxPolyPath"/>: a path
-    /// that fills the buffer is reported partial. Corners are the turns of the string-pulled
-    /// route, so this can be far smaller than the polygon count.
-    /// </summary>
+    /// <summary>How many corners one path may have. See <see cref="NavMeshWorldSettings.MaxStraightPath"/>.</summary>
     public int MaxStraightPath
     {
         get => _maxStraightPath;
@@ -323,13 +73,13 @@ public sealed class NavMeshWorld
     private readonly List<NavMeshInstance> _instances = [];
     private readonly Lock _instancesLock = new();
 
-    [ThreadStatic] private static NavMeshQueryFilter? t_scratchFilter;
+    [ThreadStatic] private static NavMeshDetourFilter? t_scratchFilter;
 
     // Boxed because queries read the extents from worker threads and a Float3 is three separate
     // floats: a plain field could be read mid-assignment and snap against a mix of the old and
     // new value. Storing it behind a reference makes publication a single atomic write, so a
     // reader sees one whole value or the other. Only the setter allocates.
-    private volatile object _defaultQueryExtents = new Float3(1f, 2f, 1f);
+    private volatile object _defaultQueryExtents = Float3.Zero;
 
     /// <summary>Default half-extents used to snap query positions onto the navmesh, in world
     /// units. Larger values tolerate more vertical mismatch but can snap to the wrong floor.</summary>
@@ -341,9 +91,8 @@ public sealed class NavMeshWorld
 
     /// <summary>Maximum agent radius the crowds' proximity grids are sized for. Agents with a
     /// larger <c>Radius</c> degrade neighbour queries silently, so registration warns when one
-    /// exceeds this. Set BEFORE the first agent of a type registers — each crowd is configured
-    /// with it at creation (a later change applies after that crowd's next rebind).</summary>
-    public float CrowdMaxAgentRadius = 2f;
+    /// exceeds this. Each crowd reads it at creation.</summary>
+    public float CrowdMaxAgentRadius;
 
     // One crowd per agent type, created when the first agent of that type registers and
     // dropped when the navmesh instance it steers against is removed (its agents rejoin the
@@ -359,19 +108,9 @@ public sealed class NavMeshWorld
     /// agent-type table every frame.</summary>
     internal int CrowdCount => _crowds.Count;
 
-    /// <summary>
-    /// Bumped whenever the SET of registered navmeshes changes — a surface registering,
-    /// unregistering, or being replaced by a rebake. <see cref="NavMeshChanged"/> can't stand in
-    /// for this: it also fires for tile-content changes, i.e. every frame a carve is converging.
-    /// Components that only care about instances appearing or dying (link catch-up, obstacle
-    /// re-attachment) should compare this instead, so gameplay-rate carving doesn't wake work
-    /// that has nothing to do.
-    /// </summary>
-    public int StructureGeneration { get; private set; }
-
     /// <summary>The crowd steering agents of the given type, or null while none have
     /// registered. Advanced use — Prowl agents manage their crowd membership themselves.</summary>
-    public DtCrowd? GetNativeCrowd(int agentTypeId = 0)
+    public DtCrowd? GetNativeCrowd(NavMeshAgentTypeId agentTypeId = default)
         => _crowds.TryGetValue(agentTypeId, out NavMeshCrowdEntry? entry) ? entry.Crowd : null;
 
     /// <summary>
@@ -384,83 +123,54 @@ public sealed class NavMeshWorld
         if (_crowds.TryGetValue(agentTypeId, out NavMeshCrowdEntry? existing)) return existing;
 
         // The factory runs for all 16 slots inside the DtCrowd constructor; every slot gets a
-        // mutable NavMeshQueryFilter we keep, so slot configs can change without touching the crowd.
-        var filters = new NavMeshQueryFilter[DtCrowdConst.DT_CROWD_MAX_QUERY_FILTER_TYPE];
+        // mutable filter we keep, so slot configs can change without touching the crowd.
+        var filters = new NavMeshDetourFilter[DtCrowdConst.DT_CROWD_MAX_QUERY_FILTER_TYPE];
         var crowd = new DtCrowd(new DtCrowdConfig(CrowdMaxAgentRadius), instance.NativeNavMesh,
-            i => filters[i] = new NavMeshQueryFilter { AgentTypeId = agentTypeId });
+            i => filters[i] = new NavMeshDetourFilter());
 
-        // Presets + any user overrides live on the world (survive crowd rebinds); slots 0..3
-        // map to Low/Medium/Good/High quality.
-        ApplyAvoidanceParams(crowd);
+        ApplyAvoidance(crowd);
 
         var entry = new NavMeshCrowdEntry(crowd, instance, filters);
         _crowds[agentTypeId] = entry;
         return entry;
     }
 
-    // Per-quality obstacle-avoidance overrides (slot = ObstacleAvoidanceType - 1). Null slots
-    // use the built-in presets. Survive crowd rebinds: a replacement crowd re-applies them.
-    private readonly DtObstacleAvoidanceParams?[] _avoidanceOverrides = new DtObstacleAvoidanceParams?[4];
+    // Indexed by ObstacleAvoidanceType - 1. Kept on the world so a replacement crowd re-applies them.
+    private readonly ObstacleAvoidanceSettings[] _avoidance = new ObstacleAvoidanceSettings[4];
 
-    /// <summary>
-    /// The obstacle-avoidance parameters agents of the given quality steer with — the
-    /// override set via <see cref="SetObstacleAvoidanceParams"/>, or the built-in preset.
-    /// </summary>
-    public DtObstacleAvoidanceParams GetObstacleAvoidanceParams(ObstacleAvoidanceType quality)
+    /// <summary>The obstacle avoidance tuning agents of the given quality steer with.</summary>
+    public ObstacleAvoidanceSettings GetObstacleAvoidance(ObstacleAvoidanceType quality)
+        => _avoidance[AvoidanceSlot(quality)];
+
+    /// <summary>Replace the obstacle avoidance tuning for a quality level. Applies to live crowds
+    /// immediately and to any crowd created later.</summary>
+    public void SetObstacleAvoidance(ObstacleAvoidanceType quality, ObstacleAvoidanceSettings settings)
     {
         int slot = AvoidanceSlot(quality);
-        return _avoidanceOverrides[slot] ?? CreateDefaultAvoidanceParams(slot);
-    }
-
-    /// <summary>
-    /// Replace the obstacle-avoidance tuning for a quality level. The built-in presets are
-    /// Recast-demo values tuned for open levels; tight-corridor maps typically want a shorter
-    /// horizon and more current-velocity damping (raise <c>weightCurVel</c>) to stop
-    /// oscillation. Applies to the live crowd immediately and to any crowd created later.
-    /// </summary>
-    public void SetObstacleAvoidanceParams(ObstacleAvoidanceType quality, DtObstacleAvoidanceParams option)
-    {
-        ArgumentNullException.ThrowIfNull(option);
-        int slot = AvoidanceSlot(quality);
-        _avoidanceOverrides[slot] = option;
+        _avoidance[slot] = settings;
         foreach (NavMeshCrowdEntry entry in _crowds.Values)
-            entry.Crowd.SetObstacleAvoidanceParams(slot, option);
+            entry.Crowd.SetObstacleAvoidanceParams(slot, settings.ToDetour());
     }
 
-    /// <summary>Push presets + overrides into a crowd (called on crowd creation/rebind).</summary>
-    internal void ApplyAvoidanceParams(DtCrowd crowd)
+    private void ApplyAvoidance(DtCrowd crowd)
     {
-        for (int slot = 0; slot < _avoidanceOverrides.Length; slot++)
-            crowd.SetObstacleAvoidanceParams(slot, _avoidanceOverrides[slot] ?? CreateDefaultAvoidanceParams(slot));
+        for (int slot = 0; slot < _avoidance.Length; slot++)
+            crowd.SetObstacleAvoidanceParams(slot, _avoidance[slot].ToDetour());
     }
 
     private static int AvoidanceSlot(ObstacleAvoidanceType quality)
     {
-        if (quality == ObstacleAvoidanceType.NoObstacleAvoidance)
-            throw new ArgumentOutOfRangeException(nameof(quality), "NoObstacleAvoidance has no avoidance parameters.");
+        if (quality is < ObstacleAvoidanceType.LowQualityObstacleAvoidance or > ObstacleAvoidanceType.HighQualityObstacleAvoidance)
+            throw new ArgumentOutOfRangeException(nameof(quality), "NoObstacleAvoidance has no avoidance settings.");
         return (int)quality - 1;
     }
 
-    /// <summary>Built-in presets: slots 0..3 map to Low/Medium/Good/High quality. Values match
-    /// the Recast demo's, differing per slot in adaptive sampling density.</summary>
-    private static DtObstacleAvoidanceParams CreateDefaultAvoidanceParams(int slot)
-    {
-        (int divs, int rings, int depth)[] presets = [(5, 2, 1), (5, 2, 2), (7, 2, 3), (7, 3, 3)];
-        (int divs, int rings, int depth) preset = presets[Math.Clamp(slot, 0, presets.Length - 1)];
-        return new DtObstacleAvoidanceParams
-        {
-            velBias = 0.4f,
-            weightDesVel = 2.0f,
-            weightCurVel = 0.75f,
-            weightSide = 0.75f,
-            weightToi = 2.5f,
-            horizTime = 2.5f,
-            gridSize = 33,
-            adaptiveDivs = preset.divs,
-            adaptiveRings = preset.rings,
-            adaptiveDepth = preset.depth,
-        };
-    }
+    /// <summary>Raised when a navmesh registers, before <see cref="NavMeshChanged"/>. Main thread.</summary>
+    public event Action<NavMeshInstance>? InstanceRegistered;
+
+    /// <summary>Raised when a navmesh unregisters, including a rebake replacing it and scene
+    /// teardown, before <see cref="NavMeshChanged"/>. Main thread.</summary>
+    public event Action<NavMeshInstance>? InstanceUnregistered;
 
     /// <summary>Raised at the start of each navigation update, before the crowd steps.</summary>
     public event Action<float>? PreUpdate;
@@ -482,17 +192,13 @@ public sealed class NavMeshWorld
 
     #region Registration
 
-    /// <summary>
-    /// How many obstacles one navmesh may carve at once. Set BEFORE the surface registers, since it
-    /// is applied at instantiation. Enforced: a <see cref="NavMeshObstacle"/> that enables once the
-    /// pool is full cuts no hole and warns. Disabling one frees its slot for the next.
-    /// </summary>
-    public int TileCacheMaxObstacles = 256;
+    /// <summary>How many obstacles one navmesh may carve at once, read when a surface registers. A
+    /// <see cref="NavMeshObstacle"/> that enables once the pool is full cuts no hole and warns.</summary>
+    public int TileCacheMaxObstacles;
 
-    /// <summary>Tiles each instance may rebuild per frame while draining queued carves. Higher
-    /// spends more frame time to put a carve on the navmesh sooner: a batch takes
-    /// <c>tiles / MaxTileUpdatesPerFrame</c> frames to land. Values below 1 are treated as 1.</summary>
-    public int MaxTileUpdatesPerFrame = 4;
+    /// <summary>Tiles each instance may rebuild per frame while draining queued carves. Values
+    /// below 1 are treated as 1.</summary>
+    public int MaxTileUpdatesPerFrame;
 
     /// <summary>
     /// Instantiate and register a baked navmesh. Returns the instance handle, or null when the
@@ -538,7 +244,7 @@ public sealed class NavMeshWorld
 
         lock (_instancesLock)
             _instances.Add(instance);
-        StructureGeneration++;
+        InstanceRegistered?.Invoke(instance);
         NavMeshChanged?.Invoke();
         return instance;
     }
@@ -579,7 +285,7 @@ public sealed class NavMeshWorld
             _crowds.Remove(instance.AgentTypeId);
         }
 
-        StructureGeneration++;
+        InstanceUnregistered?.Invoke(instance);
         NavMeshChanged?.Invoke();
 
         if (handOver) RegisterSpareSurface(instance.AgentTypeId);
@@ -616,16 +322,15 @@ public sealed class NavMeshWorld
         // leaving its entry keeps the scene's whole object graph alive behind this world.
         _links.Clear();
         _surfaces.Clear();
+        foreach (NavMeshInstance instance in toRemove)
+            InstanceUnregistered?.Invoke(instance);
         if (toRemove.Count > 0)
-        {
-            StructureGeneration++;
             NavMeshChanged?.Invoke();
-        }
     }
 
     /// <summary>The registered navmesh for an agent type, or null. At most one exists:
     /// <see cref="AddNavMeshData"/> refuses a second.</summary>
-    public NavMeshInstance? GetInstance(int agentTypeId = 0)
+    public NavMeshInstance? GetInstance(NavMeshAgentTypeId agentTypeId = default)
     {
         lock (_instancesLock)
         {
@@ -637,7 +342,7 @@ public sealed class NavMeshWorld
     }
 
     /// <summary>True when a navmesh is registered for the agent type.</summary>
-    public bool HasNavMesh(int agentTypeId = 0) => GetInstance(agentTypeId) != null;
+    public bool HasNavMesh(NavMeshAgentTypeId agentTypeId = default) => GetInstance(agentTypeId) != null;
 
     /// <summary>
     /// Run a mutation against an instance's TileCache under the write lock (layer
@@ -802,7 +507,7 @@ public sealed class NavMeshWorld
     /// it holds a read lock that blocks navmesh mutations. Returns false when no navmesh is
     /// registered for the agent type.
     /// </summary>
-    public bool TryRentQuery(out NavMeshQueryLease lease, int agentTypeId = 0)
+    public bool TryRentQuery(out NavMeshQueryLease lease, NavMeshAgentTypeId agentTypeId = default)
     {
         NavMeshInstance? instance = GetInstance(agentTypeId);
         // Acquiring is what keeps the instance's lock alive for the life of the lease — it may
@@ -825,12 +530,12 @@ public sealed class NavMeshWorld
 
     #region Queries
 
-    private static NavMeshQueryFilter GetScratchFilter(int areaMask, int agentTypeId)
+    // The query's Detour filter, one per thread: a query runs synchronously on the caller's thread.
+    internal static NavMeshDetourFilter DetourFilter(in NavMeshQueryFilter filter)
     {
-        NavMeshQueryFilter filter = t_scratchFilter ??= new NavMeshQueryFilter();
-        filter.AreaMask = areaMask;
-        filter.AgentTypeId = agentTypeId;
-        return filter;
+        NavMeshDetourFilter detour = t_scratchFilter ??= new NavMeshDetourFilter();
+        detour.Set(filter);
+        return detour;
     }
 
     private static RcVec3f ToRc(Float3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
@@ -838,16 +543,12 @@ public sealed class NavMeshWorld
 
     /// <summary>Calculate a path between two points. Returns true when the resulting path is
     /// complete or partial; <paramref name="path"/> carries the corners and exact status.</summary>
-    /// <param name="agentTypeId">Whose navmesh to path over. Agent types each have their own, so a
-    /// query left on the default answers for the default type however many others are registered.</param>
-    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, int areaMask, NavMeshPath path,
-        int agentTypeId = NavMeshAgentTypes.Humanoid)
-        => CalculatePath(sourcePosition, targetPosition, GetScratchFilter(areaMask, agentTypeId), path);
+    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshPath path)
+        => CalculatePath(sourcePosition, targetPosition, path, NavMeshQueryFilter.Default);
 
-    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)"/>
-    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshQueryFilter filter, NavMeshPath path)
+    /// <inheritdoc cref="CalculatePath(Float3, Float3, NavMeshPath)"/>
+    public bool CalculatePath(Float3 sourcePosition, Float3 targetPosition, NavMeshPath path, NavMeshQueryFilter filter)
     {
-        ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(path);
         path.ClearCorners();
 
@@ -857,10 +558,11 @@ public sealed class NavMeshWorld
         using (lease)
         {
             DtNavMeshQuery query = lease.Query;
+            NavMeshDetourFilter detour = DetourFilter(filter);
             RcVec3f ext = ToRc(DefaultQueryExtents);
 
-            query.FindNearestPoly(ToRc(sourcePosition), ext, filter, out long startRef, out RcVec3f startPt, out _);
-            query.FindNearestPoly(ToRc(targetPosition), ext, filter, out long endRef, out RcVec3f endPt, out _);
+            query.FindNearestPoly(ToRc(sourcePosition), ext, detour, out long startRef, out RcVec3f startPt, out _);
+            query.FindNearestPoly(ToRc(targetPosition), ext, detour, out long endRef, out RcVec3f endPt, out _);
             if (startRef == 0 || endRef == 0)
                 return false;
 
@@ -873,7 +575,7 @@ public sealed class NavMeshWorld
             Float3[] corners = ArrayPool<Float3>.Shared.Rent(maxCorners);
             try
             {
-                DtStatus status = query.FindPath(startRef, endRef, startPt, endPt, filter, polys.AsSpan(0, maxPolys), out int polyCount, maxPolys);
+                DtStatus status = query.FindPath(startRef, endRef, startPt, endPt, detour, polys.AsSpan(0, maxPolys), out int polyCount, maxPolys);
                 if (status.Failed() || polyCount == 0)
                     return false;
 
@@ -912,15 +614,12 @@ public sealed class NavMeshWorld
 
     /// <summary>Find the closest point on the navmesh within <paramref name="maxDistance"/> of
     /// <paramref name="sourcePosition"/>.</summary>
-    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
-    public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, int areaMask,
-        int agentTypeId = NavMeshAgentTypes.Humanoid)
-        => SamplePosition(sourcePosition, out hit, maxDistance, GetScratchFilter(areaMask, agentTypeId));
+    public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance)
+        => SamplePosition(sourcePosition, out hit, maxDistance, NavMeshQueryFilter.Default);
 
-    /// <inheritdoc cref="SamplePosition(Float3, out NavMeshHit, float, int, int)"/>
+    /// <inheritdoc cref="SamplePosition(Float3, out NavMeshHit, float)"/>
     public bool SamplePosition(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter)
     {
-        ArgumentNullException.ThrowIfNull(filter);
         hit = default;
 
         if (!TryRentQuery(out NavMeshQueryLease lease, filter.AgentTypeId))
@@ -929,7 +628,7 @@ public sealed class NavMeshWorld
         using (lease)
         {
             var ext = new RcVec3f(maxDistance, maxDistance, maxDistance);
-            lease.Query.FindNearestPoly(ToRc(sourcePosition), ext, filter, out long nearestRef, out RcVec3f nearestPt, out _);
+            lease.Query.FindNearestPoly(ToRc(sourcePosition), ext, DetourFilter(filter), out long nearestRef, out RcVec3f nearestPt, out _);
             if (nearestRef == 0)
                 return false;
 
@@ -941,7 +640,7 @@ public sealed class NavMeshWorld
             hit.Position = position;
             hit.Normal = Float3.UnitY;
             hit.Distance = distance;
-            hit.Mask = GetPolyAreaMaskBit(lease.Query.GetAttachedNavMesh(), nearestRef);
+            hit.Mask = GetPolyAreaMask(lease.Query.GetAttachedNavMesh(), nearestRef);
             hit.Hit = true;
             return true;
         }
@@ -949,15 +648,12 @@ public sealed class NavMeshWorld
 
     /// <summary>Trace a walkability ray along the navmesh surface. Returns true when the ray is
     /// blocked before the target; <paramref name="hit"/> holds the blocking edge either way.</summary>
-    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
-    public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, int areaMask,
-        int agentTypeId = NavMeshAgentTypes.Humanoid)
-        => Raycast(sourcePosition, targetPosition, out hit, GetScratchFilter(areaMask, agentTypeId));
+    public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit)
+        => Raycast(sourcePosition, targetPosition, out hit, NavMeshQueryFilter.Default);
 
-    /// <inheritdoc cref="Raycast(Float3, Float3, out NavMeshHit, int, int)"/>
+    /// <inheritdoc cref="Raycast(Float3, Float3, out NavMeshHit)"/>
     public bool Raycast(Float3 sourcePosition, Float3 targetPosition, out NavMeshHit hit, NavMeshQueryFilter filter)
     {
-        ArgumentNullException.ThrowIfNull(filter);
         hit = default;
 
         if (!TryRentQuery(out NavMeshQueryLease lease, filter.AgentTypeId))
@@ -966,10 +662,11 @@ public sealed class NavMeshWorld
         using (lease)
         {
             DtNavMeshQuery query = lease.Query;
+            NavMeshDetourFilter detour = DetourFilter(filter);
             RcVec3f start = ToRc(sourcePosition);
             RcVec3f end = ToRc(targetPosition);
 
-            query.FindNearestPoly(start, ToRc(DefaultQueryExtents), filter, out long startRef, out RcVec3f startPt, out _);
+            query.FindNearestPoly(start, ToRc(DefaultQueryExtents), detour, out long startRef, out RcVec3f startPt, out _);
             if (startRef == 0)
                 return false;
 
@@ -977,7 +674,7 @@ public sealed class NavMeshWorld
             long[] polys = ArrayPool<long>.Shared.Rent(maxPolys);
             try
             {
-                DtStatus status = query.Raycast(startRef, startPt, end, filter, out float t, out RcVec3f normal,
+                DtStatus status = query.Raycast(startRef, startPt, end, detour, out float t, out RcVec3f normal,
                     polys.AsSpan(0, maxPolys), out int _, maxPolys);
                 if (status.Failed())
                     return false;
@@ -991,7 +688,7 @@ public sealed class NavMeshWorld
                 hit.Normal = blocked ? ToFloat3(normal) : Float3.UnitY;
                 hit.Distance = (float)Float3.Distance(sourcePosition, position);
                 // The area walked out of, which is the one the wall belongs to.
-                hit.Mask = GetPolyAreaMaskBit(query.GetAttachedNavMesh(), startRef);
+                hit.Mask = GetPolyAreaMask(query.GetAttachedNavMesh(), startRef);
                 hit.Hit = blocked;
                 return blocked;
             }
@@ -1006,19 +703,23 @@ public sealed class NavMeshWorld
     /// navmesh's own bounds diagonal, which is by definition the widest gap it can contain.</summary>
     public const float EdgeSearchDistanceFromBounds = 0f;
 
+    /// <summary>Locate the closest navmesh border edge from a point, searching the whole mesh.</summary>
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit)
+        => FindClosestEdge(sourcePosition, out hit, EdgeSearchDistanceFromBounds, NavMeshQueryFilter.Default);
+
+    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit)"/>
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter)
+        => FindClosestEdge(sourcePosition, out hit, EdgeSearchDistanceFromBounds, filter);
+
     /// <summary>Locate the closest navmesh border edge from a point.</summary>
     /// <param name="maxDistance">How far to search. Cost grows with it and an edge beyond it is
-    /// not found, so pass the widest gap that matters; the default searches the whole mesh.</param>
-    /// <inheritdoc cref="CalculatePath(Float3, Float3, int, NavMeshPath, int)" path="/param[@name='agentTypeId']"/>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, int areaMask,
-        float maxDistance = EdgeSearchDistanceFromBounds, int agentTypeId = NavMeshAgentTypes.Humanoid)
-        => FindClosestEdge(sourcePosition, out hit, GetScratchFilter(areaMask, agentTypeId), maxDistance);
+    /// not found, so pass the widest gap that matters, or <see cref="EdgeSearchDistanceFromBounds"/>.</param>
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, float maxDistance)
+        => FindClosestEdge(sourcePosition, out hit, maxDistance, NavMeshQueryFilter.Default);
 
-    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, int, float, int)"/>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter,
-        float maxDistance = EdgeSearchDistanceFromBounds)
+    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, float)"/>
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, float maxDistance, NavMeshQueryFilter filter)
     {
-        ArgumentNullException.ThrowIfNull(filter);
         hit = default;
 
         // Negated compares so NaN takes the same path as a non-positive distance.
@@ -1039,11 +740,12 @@ public sealed class NavMeshWorld
         using (lease)
         {
             DtNavMeshQuery query = lease.Query;
-            query.FindNearestPoly(ToRc(sourcePosition), ToRc(DefaultQueryExtents), filter, out long startRef, out RcVec3f startPt, out _);
+            NavMeshDetourFilter detour = DetourFilter(filter);
+            query.FindNearestPoly(ToRc(sourcePosition), ToRc(DefaultQueryExtents), detour, out long startRef, out RcVec3f startPt, out _);
             if (startRef == 0)
                 return false;
 
-            DtStatus status = query.FindDistanceToWall(startRef, startPt, maxDistance, filter,
+            DtStatus status = query.FindDistanceToWall(startRef, startPt, maxDistance, detour,
                 out float distance, out RcVec3f hitPos, out RcVec3f hitNormal);
             if (status.Failed())
                 return false;
@@ -1051,7 +753,7 @@ public sealed class NavMeshWorld
             hit.Position = ToFloat3(hitPos);
             hit.Normal = ToFloat3(hitNormal);
             hit.Distance = distance;
-            hit.Mask = GetPolyAreaMaskBit(query.GetAttachedNavMesh(), startRef);
+            hit.Mask = GetPolyAreaMask(query.GetAttachedNavMesh(), startRef);
             hit.Hit = true;
             return true;
         }
@@ -1060,7 +762,7 @@ public sealed class NavMeshWorld
     /// <summary>Triangulate the current navmesh for debug drawing or user tooling. Returns an
     /// empty triangulation when no navmesh is registered for the agent type — to visualize a
     /// baked asset that isn't registered, use <see cref="NavMeshData.CalculateTriangulation"/>.</summary>
-    public NavMeshTriangulation CalculateTriangulation(int agentTypeId = 0)
+    public NavMeshTriangulation CalculateTriangulation(NavMeshAgentTypeId agentTypeId = default)
     {
         NavMeshInstance? instance = GetInstance(agentTypeId);
         if (instance == null || !instance.TryAcquire())
@@ -1078,11 +780,13 @@ public sealed class NavMeshWorld
         }
     }
 
-    internal static int GetPolyAreaMaskBit(DtNavMesh mesh, long polyRef)
+    /// <summary>The area of a polygon as a single-area mask, or <see cref="NavMeshAreaMask.Nothing"/>
+    /// for a reference that no longer resolves.</summary>
+    internal static NavMeshAreaMask GetPolyAreaMask(DtNavMesh mesh, long polyRef)
     {
         if (mesh.GetTileAndPolyByRef(polyRef, out _, out DtPoly poly).Failed())
-            return 0;
-        return 1 << NavMeshAreas.FromDetourArea(poly.GetArea());
+            return NavMeshAreaMask.Nothing;
+        return NavMeshAreaMask.Only(NavMeshAreas.FromDetourArea(poly.GetArea()));
     }
 
     #endregion
@@ -1175,7 +879,7 @@ public sealed class NavMeshWorld
     // which settles in a few frames at MaxTileUpdatesPerFrame.
     internal const int MaxTileSwapWaits = 8;
 
-    // A deferred apply calls back into ApplyRebuiltTilesNow, which flushes this queue: without the
+    // A deferred apply calls back into ApplyRebuiltTilesImmediately, which flushes this queue: without the
     // flag that would re-enter the drain and dequeue behind its own back.
     private bool _applyingDeferredSwap;
 

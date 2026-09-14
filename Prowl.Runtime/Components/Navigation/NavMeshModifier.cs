@@ -1,8 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Collections.Generic;
-
 using Prowl.Echo;
 
 namespace Prowl.Runtime;
@@ -18,7 +16,7 @@ namespace Prowl.Runtime;
 /// ignored (matches Unity).
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Modifier")]
-[ComponentIcon("")] // pen ruler
+[ComponentIcon("\uf5ae")] // pen ruler
 public class NavMeshModifier : MonoBehaviour
 {
     [Tooltip("Exclude this object's geometry from navmesh bakes entirely.")]
@@ -28,31 +26,21 @@ public class NavMeshModifier : MonoBehaviour
     [SerializeField] private bool overrideArea;
 
     [Tooltip("The area applied when Override Area is on.")]
-    [NavMeshArea]
     [EnableIf(nameof(OverrideArea))]
-    [SerializeField] private int area = NavMeshAreas.Walkable;
+    [SerializeField] private NavMeshArea area = NavMeshAreas.Walkable;
 
     [Tooltip("Also apply to child objects. A child's own modifier always takes precedence.")]
     [SerializeField] private bool applyToChildren = true;
 
-    [Tooltip("Apply to bakes of every agent type. Turn off to pick specific types.")]
-    [SerializeField] private bool affectAllAgentTypes = true;
-
-    [Tooltip("Agent types whose bakes this modifier affects, when not affecting all.")]
-    [NavMeshAgentType]
-    [EnableIf(nameof(UsesExplicitAgentTypes))]
-    [SerializeField] private List<int> affectedAgentTypeIds = [];
+    [Tooltip("Agent types whose bakes this modifier affects.")]
+    [SerializeField] private NavMeshAgentTypeSet agentTypes = new();
 
     public bool IgnoreFromBuild { get => ignoreFromBuild; set => ignoreFromBuild = value; }
     public bool OverrideArea { get => overrideArea; set => overrideArea = value; }
-    public int Area { get => area; set => area = value; }
+    public NavMeshArea Area { get => area; set => area = value; }
     public bool ApplyToChildren { get => applyToChildren; set => applyToChildren = value; }
-    public bool AffectAllAgentTypes { get => affectAllAgentTypes; set => affectAllAgentTypes = value; }
-    public List<int> AffectedAgentTypeIds { get => affectedAgentTypeIds; set => affectedAgentTypeIds = value; }
-
-    private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
+    public NavMeshAgentTypeSet AgentTypes { get => agentTypes; set => agentTypes = value ?? new(); }
 
     /// <summary>Does this modifier apply to bakes for the given agent type?</summary>
-    public bool AffectsAgentType(int agentTypeId)
-        => AffectAllAgentTypes || AffectedAgentTypeIds?.Contains(agentTypeId) == true;
+    public bool AffectsAgentType(NavMeshAgentTypeId agentTypeId) => agentTypes.Contains(agentTypeId);
 }

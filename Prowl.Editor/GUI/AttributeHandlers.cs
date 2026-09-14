@@ -290,8 +290,5 @@ public static class BuiltInAttributeHandlers
         registry.Register<RangeAttribute>(new RangeAttributeHandler());
         registry.Register<TextAreaAttribute>(new TextAreaAttributeHandler());
         registry.Register<TooltipAttribute>(new TooltipAttributeHandler());
-        registry.Register<NavMeshAreaAttribute>(new NavMeshAreaAttributeHandler());
-        registry.Register<NavMeshAreaMaskAttribute>(new NavMeshAreaMaskAttributeHandler());
-        registry.Register<NavMeshAgentTypeAttribute>(new NavMeshAgentTypeAttributeHandler());
     }
 }

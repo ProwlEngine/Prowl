@@ -7,45 +7,6 @@ using System.Collections.Generic;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// One project-level agent type: the physical envelope navmeshes are voxelized for. Surfaces
-/// and agents reference an entry by <see cref="Id"/>; the inspector shows the name
-/// (via <see cref="NavMeshAgentTypeAttribute"/>).
-/// </summary>
-public sealed class NavMeshAgentType
-{
-    /// <summary>Persistent identifier. Stable across renames and removals of other types —
-    /// never an index into the table.</summary>
-    public int Id;
-
-    public string Name = string.Empty;
-
-    /// <summary>Agent radius in world units. Walkable surfaces are eroded by this distance from walls.</summary>
-    public float Radius = 0.5f;
-
-    /// <summary>Agent height in world units. Spaces lower than this are not walkable.</summary>
-    public float Height = 2.0f;
-
-    /// <summary>Maximum walkable slope angle in degrees.</summary>
-    public float MaxSlope = 45f;
-
-    /// <summary>Maximum ledge height the agent can step up, in world units.</summary>
-    public float MaxClimb = 0.4f;
-
-    /// <summary>Copy, so the table holds entries of its own rather than the caller's objects.
-    /// Field by field: a reference field added later would be shared, and settings loading would
-    /// hand every table entry the same one.</summary>
-    public NavMeshAgentType Clone() => new()
-    {
-        Id = Id,
-        Name = Name,
-        Radius = Radius,
-        Height = Height,
-        MaxSlope = MaxSlope,
-        MaxClimb = MaxClimb,
-    };
-}
-
-/// <summary>
 /// The project-wide agent type table (mirrors <see cref="NavMeshAreas"/>): defined in the
 /// editor's navigation settings, restored in players from Navigation.yaml, with a code-side
 /// default (the built-in Humanoid, id 0) so headless and procedural use needs no settings
@@ -151,34 +112,11 @@ public static class NavMeshAgentTypes
             type = Get(Humanoid) ?? CreateHumanoid();
         }
 
-        overrides ??= s_defaultOverrides;
         return new NavMeshBuildSettings
         {
             AgentTypeId = agentTypeId,
-            AgentRadius = type.Radius,
-            AgentHeight = type.Height,
-            AgentMaxSlope = type.MaxSlope,
-            AgentMaxClimb = type.MaxClimb,
-
-            OverrideVoxelSize = overrides.OverrideVoxelSize,
-            VoxelSize = overrides.VoxelSize,
-            OverrideTileSize = overrides.OverrideTileSize,
-            TileSize = overrides.TileSize,
-            MinRegionArea = overrides.MinRegionArea,
-            EdgeMaxError = overrides.EdgeMaxError,
-            FilterLowHangingObstacles = overrides.FilterLowHangingObstacles,
-            FilterLedgeSpans = overrides.FilterLedgeSpans,
-            FilterWalkableLowHeightSpans = overrides.FilterWalkableLowHeightSpans,
-            BuildHeightDetail = overrides.BuildHeightDetail,
+            Agent = type.Clone(),
+            Overrides = overrides?.Clone() ?? new NavMeshBuildOverrides(),
         };
     }
-
-    private static readonly NavMeshBuildOverrides s_defaultOverrides = new();
 }
-
-/// <summary>
-/// Draws an int field as a dropdown of the agent types defined in project settings, instead
-/// of a raw id (the agent-type analogue of <see cref="NavMeshAreaAttribute"/>).
-/// </summary>
-[AttributeUsage(AttributeTargets.Field)]
-public class NavMeshAgentTypeAttribute : Attribute { }

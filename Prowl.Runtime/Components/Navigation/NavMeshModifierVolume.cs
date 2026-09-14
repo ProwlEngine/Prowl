@@ -1,8 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Collections.Generic;
-
 using Prowl.Echo;
 using Prowl.Vector;
 
@@ -19,7 +17,7 @@ namespace Prowl.Runtime;
 /// half-applied in the untouched tiles.
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Modifier Volume")]
-[ComponentIcon("")] // cube icon
+[ComponentIcon("\uf1b2")] // cube icon
 public class NavMeshModifierVolume : MonoBehaviour
 {
     [Tooltip("Volume center, local to this GameObject.")]
@@ -29,28 +27,18 @@ public class NavMeshModifierVolume : MonoBehaviour
     [SerializeField] private Float3 size = new(4, 3, 4);
 
     [Tooltip("The area stamped inside the volume. Not Walkable erases walkability (punches a hole).")]
-    [NavMeshArea]
-    [SerializeField] private int area = NavMeshAreas.Walkable;
+    [SerializeField] private NavMeshArea area = NavMeshAreas.Walkable;
 
-    [Tooltip("Apply to bakes of every agent type. Turn off to pick specific types.")]
-    [SerializeField] private bool affectAllAgentTypes = true;
-
-    [Tooltip("Agent types whose bakes this volume affects, when not affecting all.")]
-    [NavMeshAgentType]
-    [EnableIf(nameof(UsesExplicitAgentTypes))]
-    [SerializeField] private List<int> affectedAgentTypeIds = [];
+    [Tooltip("Agent types whose bakes this volume affects.")]
+    [SerializeField] private NavMeshAgentTypeSet agentTypes = new();
 
     public Float3 Center { get => center; set => center = value; }
     public Float3 Size { get => size; set => size = value; }
-    public int Area { get => area; set => area = value; }
-    public bool AffectAllAgentTypes { get => affectAllAgentTypes; set => affectAllAgentTypes = value; }
-    public List<int> AffectedAgentTypeIds { get => affectedAgentTypeIds; set => affectedAgentTypeIds = value; }
-
-    private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
+    public NavMeshArea Area { get => area; set => area = value; }
+    public NavMeshAgentTypeSet AgentTypes { get => agentTypes; set => agentTypes = value ?? new(); }
 
     /// <summary>Does this volume apply to bakes for the given agent type?</summary>
-    public bool AffectsAgentType(int agentTypeId)
-        => AffectAllAgentTypes || AffectedAgentTypeIds?.Contains(agentTypeId) == true;
+    public bool AffectsAgentType(NavMeshAgentTypeId agentTypeId) => agentTypes.Contains(agentTypeId);
 
     /// <summary>The world-space convex prism this volume marks (rotation and scale applied).</summary>
     public NavMeshAreaVolume ComputeAreaVolume()
@@ -61,7 +49,7 @@ public class NavMeshModifierVolume : MonoBehaviour
         // Wire box in the same per-area colour the scene-view navmesh overlay uses, drawn
         // under the full transform so the gizmo shows the same rotated/scaled region the bake
         // marks (same idiom as BoxCollider.DrawGizmos).
-        Color c = NavMeshSurface.AreaColor(Area);
+        Color c = NavMeshDebugDisplay.AreaColor(Area);
         Debug.PushMatrix(Transform.LocalToWorldMatrix);
         Debug.DrawWireCube(Center, Size * 0.5f, new Color(c.R, c.G, c.B, 1f));
         Debug.PopMatrix();

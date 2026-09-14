@@ -6,20 +6,10 @@ using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Recast.Core.Numerics;
-using Prowl.Recast.Detour.TileCache;
 
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
-
-/// <summary>Shape of a <see cref="NavMeshObstacle"/>.</summary>
-public enum NavMeshObstacleShape
-{
-    /// <summary>Upright cylinder of the given radius and height.</summary>
-    Cylinder,
-    /// <summary>Oriented box (yaw only — Detour box obstacles rotate around Y).</summary>
-    Box,
-}
 
 /// <summary>
 /// Blocks agents while enabled — a parked vehicle, a dropped crate, a placed building.
@@ -37,7 +27,7 @@ public enum NavMeshObstacleShape
 /// it happened to be standing.
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Obstacle")]
-[ComponentIcon("")] // road barrier
+[ComponentIcon("\ue562")] // road barrier
 [ExecuteAlways]
 public class NavMeshObstacle : MonoBehaviour
 {
@@ -158,7 +148,8 @@ public class NavMeshObstacle : MonoBehaviour
         if (scene.IsValid())
         {
             _world = scene!.Navigation;
-            _world.NavMeshChanged += OnNavMeshChanged;
+            _world.InstanceRegistered += OnInstancesChanged;
+            _world.InstanceUnregistered += OnInstancesChanged;
         }
 
         _appliedPosition = Transform.Position;
@@ -172,24 +163,16 @@ public class NavMeshObstacle : MonoBehaviour
         RemoveBlockers();
         if (_world != null)
         {
-            _world.NavMeshChanged -= OnNavMeshChanged;
+            _world.InstanceRegistered -= OnInstancesChanged;
+            _world.InstanceUnregistered -= OnInstancesChanged;
             _world = null;
         }
     }
 
-    private void OnNavMeshChanged()
-    {
-        // An instance may have been replaced (rebake) or registered late; dead entries are
-        // dropped and the carve re-applies to any new instance on the next LateUpdate. Gated on
-        // the structural counter because the event also fires every frame a carve is converging
-        // — including this obstacle's own — which would make each carve pay for itself repeatedly.
-        if (_world == null || _world.StructureGeneration == _seenStructureGeneration) return;
-        _seenStructureGeneration = _world.StructureGeneration;
-        _refsPruneNeeded = true;
-    }
+    // Dead entries are dropped and the carve re-applies to any new instance on the next LateUpdate.
+    private void OnInstancesChanged(NavMeshInstance instance) => _refsPruneNeeded = true;
 
     private bool _refsPruneNeeded;
-    private int _seenStructureGeneration = -1;
 
     public override void LateUpdate()
     {
@@ -339,7 +322,7 @@ public class NavMeshObstacle : MonoBehaviour
         if (blocker.state != Prowl.Recast.Detour.Crowd.DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID) return;
         if (_warnedBlockerUnplaced) return;
         _warnedBlockerUnplaced = true;
-        Debug.LogWarning($"[Navigation] NavMeshObstacle '{GameObject.Name}' could not place its avoidance blocker: no navmesh near its base. Agents will not steer around it. Move the obstacle onto the navmesh (check Center and the object's height), or raise NavMeshWorld.CrowdMaxAgentRadius to widen the placement search.");
+        Debug.LogWarning($"[Navigation] NavMeshObstacle '{GameObject.Name}' could not place its avoidance blocker: no navmesh near its base. Agents will not steer around it. Move the obstacle onto the navmesh (check Center and the object's height), or raise Crowd Max Agent Radius in Project Settings > Navigation to widen the placement search.");
     }
 
     /// <summary>Where the blocker stands: the obstacle's footprint centre at its base, matching
@@ -402,10 +385,8 @@ public class NavMeshObstacle : MonoBehaviour
         userData = this,
     };
 
-    /// <summary>Queue the carve on every registered navmesh not already carrying it. Queued onto
-    /// the cache directly rather than through <see cref="NavMeshWorld.MutateTileCache"/>, because
-    /// nothing here touches the mesh but the request queue: the tiles rebuild in the pump, which
-    /// is where the write lock and the change notification belong.</summary>
+    /// <summary>Queue the carve on every registered navmesh not already carrying it. The tiles
+    /// rebuild in the pump, which is where the write lock and the change notification belong.</summary>
     private void TryApplyCarve()
     {
         if (_world == null || !Carve) return;
@@ -415,18 +396,16 @@ public class NavMeshObstacle : MonoBehaviour
             NavMeshInstance? instance = _world.GetInstance(type.Id);
             if (instance == null || _refs.ContainsKey(instance)) continue;
             NavMeshBuildSettings settings = instance.NavMeshData.Settings;
-            long obstacleRef = AddToCache(instance.TileCache, settings.AgentRadius, CarveDrop(settings));
+            long obstacleRef = AddCarve(instance, settings.Agent.Radius, CarveDrop(settings));
             if (obstacleRef == 0)
             {
-                // The cache is carrying its full obstacle pool. The component looks configured and
-                // cuts nothing, so say so: once per agent type, since every obstacle that spawns
-                // after the pool fills hits this and a per-object message would be a wall of them.
+                // The pool is full. The component looks configured and cuts nothing, so say so, once
+                // per agent type, since every obstacle spawned after the pool fills lands here.
                 Debug.LogWarningOnce($"Navigation.ObstaclePoolFull.{type.Id}",
-                    $"[Navigation] The {NavMeshAgentTypes.GetName(type.Id)} navmesh is already carving {instance.TileCache.GetParams().maxObstacles} obstacles; '{GameObject.Name}' and any further ones cut no hole. Raise NavMeshWorld.TileCacheMaxObstacles before the surface registers.");
+                    $"[Navigation] The {NavMeshAgentTypes.GetName(type.Id)} navmesh is already carving {instance.MaxObstacles} obstacles; '{GameObject.Name}' and any further ones cut no hole. Raise Max Carving Obstacles in Project Settings > Navigation.");
                 continue;
             }
             _refs[instance] = obstacleRef;
-            instance.MarkCachePending();
         }
         _carveApplied = true;
         _appliedRotation = Transform.Rotation;
@@ -440,15 +419,15 @@ public class NavMeshObstacle : MonoBehaviour
     /// surfaces are at least that far apart, so a deeper reach could carve the floor below.
     /// </summary>
     private static float CarveDrop(NavMeshBuildSettings settings)
-        => Math.Min(Math.Max(0f, settings.AgentMaxClimb) + settings.EffectiveVoxelHeight,
-                    Math.Max(0f, settings.AgentHeight));
+        => Math.Min(Math.Max(0f, settings.Agent.MaxClimb) + settings.EffectiveVoxelHeight,
+                    Math.Max(0f, settings.Agent.Height));
 
     /// <param name="agentRadius">The hole is widened by it because a navmesh stores where an agent's
     /// CENTRE may be, not where its body fits: a carve that did not would let agents stand half inside
     /// the obstacle.</param>
     /// <param name="drop">From <see cref="CarveDrop"/>. Without it an obstacle resting on a point
     /// <c>SamplePosition</c> returned begins above every cell it means to mark.</param>
-    private long AddToCache(DtTileCache cache, float agentRadius, float drop)
+    private long AddCarve(NavMeshInstance instance, float agentRadius, float drop)
     {
         Float3 scale = Transform.LossyScale;
         Float3 worldCenter = Transform.TransformPoint(Center);
@@ -457,27 +436,23 @@ public class NavMeshObstacle : MonoBehaviour
         if (Shape == NavMeshObstacleShape.Cylinder)
         {
             (float radius, float height) = ScaledCylinder(scale);
-            // Cylinder obstacles anchor at the base center.
-            var basePos = new RcVec3f((float)worldCenter.X, (float)(worldCenter.Y - height * 0.5f - drop), (float)worldCenter.Z);
-            return cache.AddObstacle(basePos, radius + clearance, height + drop);
+            var basePosition = new Float3(worldCenter.X, worldCenter.Y - height * 0.5f - drop, worldCenter.Z);
+            return instance.AddCylinderObstacle(basePosition, radius + clearance, height + drop);
         }
 
         // Grown on XZ and downward only: upward would carve under whatever the obstacle passes beneath.
         Float3 half = ScaledBoxHalfExtents(scale);
-        var halfExtents = new RcVec3f(half.X + clearance, half.Y + drop * 0.5f, half.Z + clearance);
+        var halfExtents = new Float3(half.X + clearance, half.Y + drop * 0.5f, half.Z + clearance);
         float yawRadians = (float)(Transform.Rotation.EulerAngles.Y * Maths.Deg2Rad);
-        var centre = new RcVec3f((float)worldCenter.X, (float)(worldCenter.Y - drop * 0.5f), (float)worldCenter.Z);
-        return cache.AddBoxObstacle(centre, halfExtents, yawRadians);
+        var centre = new Float3(worldCenter.X, worldCenter.Y - drop * 0.5f, worldCenter.Z);
+        return instance.AddBoxObstacle(centre, halfExtents, yawRadians);
     }
 
     /// <summary>Queue removal of the carve everywhere it is registered.</summary>
     private void RemoveCarve()
     {
         foreach ((NavMeshInstance instance, long obstacleRef) in _refs)
-        {
-            instance.TileCache.RemoveObstacle(obstacleRef);
-            instance.MarkCachePending();
-        }
+            instance.RemoveObstacle(obstacleRef);
         _refs.Clear();
         _carveApplied = false;
     }

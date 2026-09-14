@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -14,10 +14,13 @@ public class NavMeshQueryTests
 {
     private static NavMeshBuildSettings TestSettings() => new()
     {
-        OverrideVoxelSize = true,
-        VoxelSize = 0.25f,
-        OverrideTileSize = true,
-        TileSize = 64,
+        Overrides =
+        {
+            OverrideVoxelSize = true,
+            VoxelSize = 0.25f,
+            OverrideTileSize = true,
+            TileSize = 64,
+        },
     };
 
     private static NavMeshGeometrySource Quad(float sizeX, float sizeZ, Float3 offset)
@@ -74,7 +77,7 @@ public class NavMeshQueryTests
         var path = new NavMeshPath();
 
         // Straight across the wall at z=8: must detour via the z>16 passage.
-        bool found = world.CalculatePath(new Float3(5, 0, 8), new Float3(15, 0, 8), NavMesh.AllAreas, path);
+        bool found = world.CalculatePath(new Float3(5, 0, 8), new Float3(15, 0, 8), path, NavMeshAreaMask.Everything);
 
         Assert.True(found);
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
@@ -107,7 +110,7 @@ public class NavMeshQueryTests
         world.AddNavMeshData(data!);
 
         var path = new NavMeshPath();
-        bool found = world.CalculatePath(new Float3(5, 0, 5), new Float3(35, 0, 5), NavMesh.AllAreas, path);
+        bool found = world.CalculatePath(new Float3(5, 0, 5), new Float3(35, 0, 5), path, NavMeshAreaMask.Everything);
 
         Assert.True(found, "A partial path to the closest reachable point should still be returned.");
         Assert.Equal(NavMeshPathStatus.PathPartial, path.Status);
@@ -125,12 +128,12 @@ public class NavMeshQueryTests
         world.AddNavMeshData(data!);
 
         // 1.5 units above the floor: inside a 2-unit radius, outside a 0.5-unit radius.
-        Assert.True(world.SamplePosition(new Float3(5, 1.5f, 5), out NavMeshHit hit, 2f, NavMesh.AllAreas));
+        Assert.True(world.SamplePosition(new Float3(5, 1.5f, 5), out NavMeshHit hit, 2f, NavMeshAreaMask.Everything));
         Assert.True(hit.Hit);
         Assert.True(System.Math.Abs(hit.Position.Y) < 0.3f, $"Sample should land on the floor, got y={hit.Position.Y:0.00}.");
         Assert.True(System.Math.Abs(hit.Position.X - 5) < 0.3f);
 
-        Assert.False(world.SamplePosition(new Float3(5, 1.5f, 5), out _, 0.5f, NavMesh.AllAreas));
+        Assert.False(world.SamplePosition(new Float3(5, 1.5f, 5), out _, 0.5f, NavMeshAreaMask.Everything));
     }
 
     [Fact]
@@ -141,11 +144,11 @@ public class NavMeshQueryTests
         world.AddNavMeshData(data!);
 
         // Within the floor: unobstructed.
-        Assert.False(world.Raycast(new Float3(2, 0, 5), new Float3(8, 0, 5), out NavMeshHit clear, NavMesh.AllAreas));
+        Assert.False(world.Raycast(new Float3(2, 0, 5), new Float3(8, 0, 5), out NavMeshHit clear, NavMeshAreaMask.Everything));
         Assert.False(clear.Hit);
 
         // Off the edge: blocked at the border.
-        Assert.True(world.Raycast(new Float3(5, 0, 5), new Float3(25, 0, 5), out NavMeshHit blocked, NavMesh.AllAreas));
+        Assert.True(world.Raycast(new Float3(5, 0, 5), new Float3(25, 0, 5), out NavMeshHit blocked, NavMeshAreaMask.Everything));
         Assert.True(blocked.Hit);
         Assert.True(blocked.Position.X < 10.5f, $"Blocked ray should stop at the mesh border, got x={blocked.Position.X:0.0}.");
     }
@@ -157,7 +160,7 @@ public class NavMeshQueryTests
         NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(10, 10, Float3.Zero)]);
         world.AddNavMeshData(data!);
 
-        Assert.True(world.FindClosestEdge(new Float3(5, 0, 5), out NavMeshHit hit, NavMesh.AllAreas));
+        Assert.True(world.FindClosestEdge(new Float3(5, 0, 5), out NavMeshHit hit, NavMeshAreaMask.Everything));
         Assert.True(hit.Hit);
         // From the center of a 10x10 eroded floor, the nearest border is a few units away.
         Assert.InRange(hit.Distance, 1f, 6f);
@@ -174,7 +177,7 @@ public class NavMeshQueryTests
         Assert.NotNull(data);
         world.AddNavMeshData(data!);
 
-        Assert.True(world.FindClosestEdge(new Float3(200, 0, 200), out NavMeshHit hit, NavMesh.AllAreas));
+        Assert.True(world.FindClosestEdge(new Float3(200, 0, 200), out NavMeshHit hit, NavMeshAreaMask.Everything));
         Assert.True(hit.Hit);
         Assert.InRange(hit.Distance, 150f, 250f);
     }
@@ -185,7 +188,7 @@ public class NavMeshQueryTests
     public void FindClosestEdge_WithNoNavMesh_ReturnsFalse()
     {
         var world = new NavMeshWorld();
-        Assert.False(world.FindClosestEdge(new Float3(5, 0, 5), out NavMeshHit hit, NavMesh.AllAreas));
+        Assert.False(world.FindClosestEdge(new Float3(5, 0, 5), out NavMeshHit hit, NavMeshAreaMask.Everything));
         Assert.False(hit.Hit);
     }
 
@@ -239,12 +242,13 @@ public class NavMeshQueryTests
 
         var path = new NavMeshPath();
         // Mask that excludes area 3: nothing is traversable.
-        int maskWithout3 = ~(1 << 3);
-        Assert.False(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), maskWithout3, path));
+        NavMeshAreaMask maskWithout3 = NavMeshAreaMask.Everything;
+        maskWithout3.RemoveArea(3);
+        Assert.False(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), path, maskWithout3));
         Assert.Equal(NavMeshPathStatus.PathInvalid, path.Status);
 
         // Including it works.
-        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 
@@ -254,10 +258,10 @@ public class NavMeshQueryTests
         var world = new NavMeshWorld();
         var path = new NavMeshPath();
 
-        Assert.False(world.CalculatePath(Float3.Zero, new Float3(1, 0, 1), NavMesh.AllAreas, path));
+        Assert.False(world.CalculatePath(Float3.Zero, new Float3(1, 0, 1), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathInvalid, path.Status);
-        Assert.False(world.SamplePosition(Float3.Zero, out _, 1f, NavMesh.AllAreas));
-        Assert.False(world.Raycast(Float3.Zero, new Float3(1, 0, 1), out _, NavMesh.AllAreas));
+        Assert.False(world.SamplePosition(Float3.Zero, out _, 1f, NavMeshAreaMask.Everything));
+        Assert.False(world.Raycast(Float3.Zero, new Float3(1, 0, 1), out _, NavMeshAreaMask.Everything));
         Assert.False(world.TryRentQuery(out _));
     }
 
@@ -271,9 +275,9 @@ public class NavMeshQueryTests
             var path = new NavMeshPath();
             var from = new Float3(2 + (i % 7), 0, 2 + (i % 11));
             var to = new Float3(18 - (i % 5), 0, 3 + (i % 13));
-            bool found = world.CalculatePath(from, to, NavMesh.AllAreas, path);
+            bool found = world.CalculatePath(from, to, path, NavMeshAreaMask.Everything);
             Assert.True(found, $"Query {i} from {from} to {to} failed.");
-            Assert.True(world.SamplePosition(from, out _, 2f, NavMesh.AllAreas));
+            Assert.True(world.SamplePosition(from, out _, 2f, NavMeshAreaMask.Everything));
         });
     }
 
@@ -286,14 +290,14 @@ public class NavMeshQueryTests
         Assert.NotNull(instance);
 
         var path = new NavMeshPath();
-        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
 
         bool mutated = false;
         world.MutateTileCache(instance!, _ => mutated = true);
         Assert.True(mutated);
 
         // Queries still work after the pool was invalidated.
-        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), NavMesh.AllAreas, path));
+        Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
     }
 

@@ -366,22 +366,22 @@ internal static class NavMeshTileBuilder
             ch = settings.EffectiveVoxelHeight,
             width = settings.EffectiveTileSize,
             height = settings.EffectiveTileSize,
-            walkableHeight = settings.AgentHeight,
-            walkableRadius = settings.AgentRadius,
-            walkableClimb = settings.AgentMaxClimb,
-            maxSimplificationError = settings.EdgeMaxError,
+            walkableHeight = settings.Agent.Height,
+            walkableRadius = settings.Agent.Radius,
+            walkableClimb = settings.Agent.MaxClimb,
+            maxSimplificationError = settings.Overrides.EdgeMaxError,
             // Height detail, so polygons follow the surface instead of spanning flat between their
             // corners. Recast recommends sampling every six voxels, given here in world units as
             // the cache expects; zero is how it is told to skip detail, which is what the setting
             // turns off.
-            detailSampleDist = settings.BuildHeightDetail ? settings.EffectiveVoxelSize * 6 : 0,
+            detailSampleDist = settings.Overrides.BuildHeightDetail ? settings.EffectiveVoxelSize * 6 : 0,
             detailSampleMaxError = settings.EffectiveVoxelHeight,
             // Standard watershed contouring instead of the cache's monotone sweep: avoids slivers on
             // slopes. Thresholds are cell counts converted from world units, so voxel size does not
             // change the mesh between rebakes; the edge cap is loose on purpose, since over-splitting
             // floods flat floors with polygons and the crowd with portal corners.
             watershedPartition = true,
-            minRegionArea = (int)(settings.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
+            minRegionArea = (int)(settings.Overrides.MinRegionArea / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
             mergeRegionArea = (int)(20f / (settings.EffectiveVoxelSize * settings.EffectiveVoxelSize)),
             maxEdgeLen = 24,
             // Exactly the navmesh's own layer capacity. A cache sized above it would accept blobs
@@ -395,7 +395,7 @@ internal static class NavMeshTileBuilder
         var links = new List<NavMeshLinkSource>(data.Links.Count);
         foreach (NavMeshData.NavMeshLinkEntry entry in data.Links)
             links.Add(entry.ToSource());
-        meshProcess.SetLinks(links, data.Settings.AgentRadius);
+        meshProcess.SetLinks(links, data.Settings.Agent.Radius);
 
         // FastLZ + cCompatibility layout, matching how BuildTileLayers compressed the blobs.
         return new DtTileCache(option, new DtTileCacheStorageParams(RcByteOrder.LITTLE_ENDIAN, true),

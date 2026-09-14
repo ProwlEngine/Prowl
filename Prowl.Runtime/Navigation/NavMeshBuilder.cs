@@ -161,10 +161,10 @@ public static class NavMeshBuilder
     /// <paramref name="worldMin"/>..<paramref name="worldMax"/> against fresh geometry, keeping
     /// the original bake's tile grid. A region entirely outside the baked bounds is a no-op —
     /// growing the bounds needs a full rebuild. Returns one entry per affected tile; an empty
-    /// layer list means the tile is now empty. Apply with <c>NavMeshSurface.ApplyRebuiltTiles</c>,
+    /// layer list means the tile is now empty. Apply with <see cref="NavMeshSurface.ApplyRebuiltTiles"/>,
     /// which refreshes obstacle state so existing carves re-apply to the regenerated tiles.
     /// </summary>
-    public static List<(int X, int Z, List<byte[]> Layers)> BuildTilesInBounds(NavMeshData data,
+    public static List<NavMeshTileRebuild> BuildTilesInBounds(NavMeshData data,
         IReadOnlyList<NavMeshGeometrySource> sources, Float3 worldMin, Float3 worldMax,
         int defaultArea = NavMeshAreas.Walkable, CancellationToken cancellation = default,
         IReadOnlyList<NavMeshAreaVolume>? volumes = null)
@@ -172,7 +172,7 @@ public static class NavMeshBuilder
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(sources);
 
-        var results = new List<(int, int, List<byte[]>)>();
+        var results = new List<NavMeshTileRebuild>();
         RcConfig cfg = CreateConfig(data.Settings, defaultArea);
 
         if (!TryPrepareRebuild(data, sources, defaultArea, volumes, worldMin, worldMax, cfg,
@@ -186,7 +186,7 @@ public static class NavMeshBuilder
             {
                 if (cancellation.IsCancellationRequested) return results;
                 List<byte[]> layers = geom == null ? [] : NavMeshTileBuilder.BuildTileLayers(geom, cfg, bmin, bmax, tx, tz);
-                results.Add((tx, tz, layers));
+                results.Add(new NavMeshTileRebuild(tx, tz, layers));
             }
         }
 
@@ -312,24 +312,24 @@ public static class NavMeshBuilder
             useTiles: true,
             tileSizeX: tileVoxels,
             tileSizeZ: tileVoxels,
-            borderSize: RcConfig.CalcBorder(settings.AgentRadius, cs),
+            borderSize: RcConfig.CalcBorder(settings.Agent.Radius, cs),
             partition: RcPartition.WATERSHED,
             cellSize: cs,
             cellHeight: settings.EffectiveVoxelHeight,
-            agentMaxSlope: settings.AgentMaxSlope,
-            agentHeight: settings.AgentHeight,
-            agentRadius: settings.AgentRadius,
-            agentMaxClimb: settings.AgentMaxClimb,
-            minRegionArea: settings.MinRegionArea,
+            agentMaxSlope: settings.Agent.MaxSlope,
+            agentHeight: settings.Agent.Height,
+            agentRadius: settings.Agent.Radius,
+            agentMaxClimb: settings.Agent.MaxClimb,
+            minRegionArea: settings.Overrides.MinRegionArea,
             mergeRegionArea: 0,
             edgeMaxLen: 0,
-            edgeMaxError: settings.EdgeMaxError,
+            edgeMaxError: settings.Overrides.EdgeMaxError,
             vertsPerPoly: NavMeshTileBuilder.VertsPerPoly,
             detailSampleDist: 0,
             detailSampleMaxError: 0,
-            filterLowHangingObstacles: settings.FilterLowHangingObstacles,
-            filterLedgeSpans: settings.FilterLedgeSpans,
-            filterWalkableLowHeightSpans: settings.FilterWalkableLowHeightSpans,
+            filterLowHangingObstacles: settings.Overrides.FilterLowHangingObstacles,
+            filterLedgeSpans: settings.Overrides.FilterLedgeSpans,
+            filterWalkableLowHeightSpans: settings.Overrides.FilterWalkableLowHeightSpans,
             walkableAreaMod: new RcAreaModification(ProwlInputGeomProvider.DetourAreaFor(defaultArea)),
             buildMeshDetail: false);
     }
@@ -347,11 +347,11 @@ public static class NavMeshBuilder
     {
         int resolved = settings.EffectiveTileSize;
 
-        if (settings.OverrideTileSize && settings.TileSize != resolved)
-            Debug.LogWarning($"[Navigation] Tile size must be 16..{NavMeshBuildSettings.MaxTileSize} voxels (a layer header stores tile dimensions in a byte, and tiles below 16 are all border); {settings.TileSize} was clamped to {resolved}. Carving cost scales with tile size, so smaller is usually better within that range.");
+        if (settings.Overrides.OverrideTileSize && settings.Overrides.TileSize != resolved)
+            Debug.LogWarning($"[Navigation] Tile size must be 16..{NavMeshBuildSettings.MaxTileSize} voxels (a layer header stores tile dimensions in a byte, and tiles below 16 are all border); {settings.Overrides.TileSize} was clamped to {resolved}. Carving cost scales with tile size, so smaller is usually better within that range.");
 
-        settings.OverrideTileSize = true;
-        settings.TileSize = resolved;
+        settings.Overrides.OverrideTileSize = true;
+        settings.Overrides.TileSize = resolved;
     }
 
     // Tile/poly capacity split: Detour packs tile id + poly id into one reference, so bits

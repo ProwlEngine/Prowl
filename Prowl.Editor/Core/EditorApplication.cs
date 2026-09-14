@@ -1820,6 +1820,8 @@ public class EditorApplication : Game
 
         Application.IsGameplayExecuting = false;
 
+        Navigation.NavMeshBakeService.Instance.Poll();
+
         // Editor gizmos are a scene-view concept, and the scene view edits UI in world space, so queue
         // them with the world-space canvas override active - otherwise the canvas wireframe would be
         // laid out at the screen/RT size and disagree with the world-space UI it's drawn around.
