@@ -93,6 +93,8 @@ public class NavMeshObstacle : MonoBehaviour
     // per-agent-type; the obstacle applies to every one of them (Unity has no agent filter on
     // obstacles).
     private readonly Dictionary<NavMeshInstance, long> _refs = [];
+    // Main thread only, and cleared after each use so it pins no instance.
+    private static readonly List<NavMeshInstance> s_instances = [];
     private Float3 _appliedPosition;
     private float _stillTime;
     private bool _carveApplied;
@@ -213,6 +215,11 @@ public class NavMeshObstacle : MonoBehaviour
             _appliedPosition = Transform.Position;
             TryApplyCarve();
         }
+        else if (!_carveApplied)
+        {
+            // Carve was just switched on, or the carve was lifted while in the other mode.
+            TryApplyCarve();
+        }
     }
 
     /// <summary>
@@ -252,10 +259,11 @@ public class NavMeshObstacle : MonoBehaviour
     {
         RcVec3f rcPosition = BlockerPosition(height).ToRc();
         var live = new HashSet<DtCrowd>();
-        foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
+        // The world's crowds rather than the agent type table: a type deleted from the table mid-play
+        // still has a crowd holding this blocker.
+        foreach (NavMeshCrowdEntry entry in _world!.Crowds)
         {
-            DtCrowd? crowd = _world!.GetNativeCrowd(type.Id);
-            if (crowd == null) continue;
+            DtCrowd crowd = entry.Crowd;
             live.Add(crowd);
             if (_blockers.TryGetValue(crowd, out DtCrowdAgent? existing))
             {
@@ -362,22 +370,23 @@ public class NavMeshObstacle : MonoBehaviour
     {
         if (_world == null || !Carve) return;
 
-        foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
+        _world.CopyInstances(s_instances);
+        foreach (NavMeshInstance instance in s_instances)
         {
-            NavMeshInstance? instance = _world.GetInstance(type.Id);
-            if (instance == null || _refs.ContainsKey(instance)) continue;
+            if (_refs.ContainsKey(instance)) continue;
             NavMeshBuildSettings settings = instance.NavMeshData.Settings;
             long obstacleRef = AddCarve(instance, settings.Agent.Radius, CarveDrop(settings));
             if (obstacleRef == 0)
             {
                 // The pool is full. The component looks configured and cuts nothing, so say so, once
                 // per agent type, since every obstacle spawned after the pool fills lands here.
-                Debug.LogWarningOnce($"Navigation.ObstaclePoolFull.{type.Id}",
-                    $"[Navigation] The {NavMeshAgentTypes.GetName(type.Id)} navmesh is already carving {instance.MaxObstacles} obstacles; '{GameObject.Name}' and any further ones cut no hole. Raise Max Carving Obstacles in Project Settings > Navigation.");
+                Debug.LogWarningOnce($"Navigation.ObstaclePoolFull.{instance.AgentTypeId.Value}",
+                    $"[Navigation] The {NavMeshAgentTypes.GetName(instance.AgentTypeId)} navmesh is already carving {instance.MaxObstacles} obstacles; '{GameObject.Name}' and any further ones cut no hole. Raise Max Carving Obstacles in Project Settings > Navigation.");
                 continue;
             }
             _refs[instance] = obstacleRef;
         }
+        s_instances.Clear();
         _carveApplied = true;
         _appliedRotation = Transform.Rotation;
         _appliedScale = Transform.LossyScale;

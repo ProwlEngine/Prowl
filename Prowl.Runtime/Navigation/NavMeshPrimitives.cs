@@ -330,8 +330,7 @@ public ref struct NavMeshQueryLease
     {
         if (_instance == null) return;
         _instance.QueryPool.Add(Query);
-        _instance.Lock.ExitReadLock();
-        _instance.Release();
+        _instance.ExitRead();
         _instance = null;
     }
 }
@@ -744,7 +743,7 @@ public struct NavMeshLinkSource
 
     /// <summary>Conservative world AABB covering both endpoints plus the width, for bounds
     /// filtering and for sizing rebuild regions.</summary>
-    public readonly AABB Bounds => new AABB(Start, Start).Encapsulating(End).Expanded(Width * 0.5f + 0.5f);
+    public readonly AABB Bounds => new AABB(Start, Start).Encapsulating(End).Expanded(Math.Max(0f, Width) * 0.5f + 0.5f);
 
     /// <summary>
     /// The crossing points this link becomes: one per parallel connection, spread across

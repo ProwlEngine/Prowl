@@ -182,6 +182,33 @@ public class NavMeshQueryTests
         Assert.InRange(hit.Distance, 150f, 250f);
     }
 
+    /// <summary>Detour reports success with a zeroed hit when no wall lies within the search radius,
+    /// which must not come back as an edge at the world origin.</summary>
+    [Fact]
+    public void FindClosestEdge_NoWallWithinMaxDistance_ReturnsFalse()
+    {
+        var world = new NavMeshWorld();
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(40, 40, Float3.Zero)]);
+        Assert.NotNull(data);
+        world.AddNavMeshData(data!);
+
+        Assert.False(world.FindClosestEdge(new Float3(20, 0, 20), out NavMeshHit hit, 2f, NavMeshAreaMask.Everything));
+        Assert.False(hit.Hit);
+    }
+
+    [Fact]
+    public void Query_WhileHoldingALeaseOnTheSameThread_DoesNotThrow()
+    {
+        var world = new NavMeshWorld();
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(10, 10, Float3.Zero)]);
+        Assert.NotNull(data);
+        world.AddNavMeshData(data!);
+
+        Assert.True(world.TryRentQuery(out NavMeshQueryLease lease));
+        using (lease)
+            Assert.True(world.SamplePosition(new Float3(5, 0, 5), out _, 1f));
+    }
+
     /// <summary>With no navmesh for the agent type there is no mesh to derive a search distance
     /// from, so the query reports no edge rather than searching a made-up radius.</summary>
     [Fact]

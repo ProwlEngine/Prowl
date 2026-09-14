@@ -515,6 +515,47 @@ public class NavMeshComponentTests : RuntimeTestBase
         Assert.True(agent.IsOnNavMesh);
     }
 
+    /// <summary>A warp with no navmesh near the target changes nothing, as Unity's does, instead of
+    /// re-adding the crowd agent where it can never become valid.</summary>
+    [Fact]
+    public void Agent_WarpOffTheNavMesh_LeavesTheAgentWorking()
+    {
+        (Scene scene, _) = CreateBakedFloorScene();
+
+        GameObject agentGo = CreateGameObject("Agent");
+        scene.Add(agentGo);
+        agentGo.Transform.Position = new Float3(-8, 0, -8);
+        var agent = agentGo.AddComponent<NavMeshAgent>();
+        agent.Speed = 6f;
+        Tick(scene, 2);
+        object? native = agent.NativeAgent;
+
+        Assert.False(agent.Warp(new Float3(100, 50, 100)));
+        Assert.Same(native, agent.NativeAgent);
+
+        Assert.True(agent.SetDestination(new Float3(5, 0, 5)));
+        Assert.True(TickUntil(scene, () => Float3.Distance(agentGo.Transform.Position, new Float3(5, 0, 5)) < 1.0) >= 0,
+            "the agent should still walk after the refused warp");
+    }
+
+    /// <summary>A rebuild collects geometry at any height, so a platform added well above the original
+    /// flat bake becomes walkable rather than being filtered out by the bake's vertical bounds.</summary>
+    [Fact]
+    public void RebuildTiles_PicksUpGeometryAboveTheOriginalBake()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateBakedFloorScene();
+        Assert.False(scene.Navigation.SamplePosition(new Float3(0, 5.5f, 0), out _, 0.5f, NavMeshAreaMask.Everything));
+
+        GameObject platform = CreateGameObject("Platform");
+        scene.Add(platform);
+        platform.AddComponent<BoxCollider>().Size = new Float3(6, 1, 6);
+        platform.Transform.Position = new Float3(0, 5, 0);
+
+        Assert.True(surface.RebuildTiles(new AABB(new Float3(-3, 4.5f, -3), new Float3(3, 5.5f, 3))));
+        Assert.True(scene.Navigation.SamplePosition(new Float3(0, 5.5f, 0), out _, 0.5f, NavMeshAreaMask.Everything),
+            "the platform top should be on the navmesh after the rebuild");
+    }
+
     /// <summary>
     /// The destructible-map flow: block a corridor at runtime, rebuild only the affected
     /// tiles, and the path reroutes. This is the RubbleRangers acceptance scenario.

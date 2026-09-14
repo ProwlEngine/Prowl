@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -141,16 +142,43 @@ public sealed class NavMeshBakeService
     }
 
     /// <summary>Reuses the assigned asset's path, found by guid, so a file the user renamed is rebaked in
-    /// place rather than orphaned beside a freshly named one.</summary>
+    /// place rather than orphaned beside a freshly named one. An asset another surface in the scene
+    /// also references (a duplicated surface) is never overwritten: the bake gets a file of its own.</summary>
     internal static string BakePath(NavMeshSurface surface)
     {
-        string? assigned = EditorAssetBackend.Instance.GuidToPath(surface.NavMeshData.AssetID);
-        return string.IsNullOrEmpty(assigned) ? DefaultBakePath(surface) : assigned;
+        var db = EditorAssetBackend.Instance;
+        HashSet<Guid> othersAssets = OtherSurfaceAssets(surface);
+
+        Guid assignedGuid = surface.NavMeshData.AssetID;
+        string? assigned = db.GuidToPath(assignedGuid);
+        if (!string.IsNullOrEmpty(assigned) && !othersAssets.Contains(assignedGuid))
+            return assigned;
+
+        (string folder, string name) = DefaultBakeName(surface);
+        for (int n = 1; ; n++)
+        {
+            string path = $"{folder}/{name}{(n == 1 ? "" : $" {n}")}.navmesh";
+            if (!othersAssets.Contains(db.PathToGuid(path)))
+                return path;
+        }
+    }
+
+    private static HashSet<Guid> OtherSurfaceAssets(NavMeshSurface surface)
+    {
+        HashSet<Guid> assets = [];
+        var scene = surface.GameObject.Scene;
+        if (scene.IsNotValid()) return assets;
+
+        foreach (GameObject go in scene.AllObjects)
+            foreach (NavMeshSurface other in go.GetComponents<NavMeshSurface>())
+                if (!ReferenceEquals(other, surface) && other.NavMeshData.AssetID != Guid.Empty)
+                    assets.Add(other.NavMeshData.AssetID);
+        return assets;
     }
 
     // The agent type id is in the name because names alone can collide: they are deduplicated
     // case sensitively and Sanitize folds path separators.
-    private static string DefaultBakePath(NavMeshSurface surface)
+    private static (string Folder, string Name) DefaultBakeName(NavMeshSurface surface)
     {
         var scene = surface.GameObject.Scene;
         string sceneRel = scene.IsValid() && !string.IsNullOrEmpty(scene!.AssetPath) ? scene.AssetPath : "";
@@ -158,7 +186,7 @@ public sealed class NavMeshBakeService
         string sceneName = string.IsNullOrEmpty(sceneRel) ? "Scene" : Path.GetFileNameWithoutExtension(sceneRel);
         string folderRel = (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_navmesh";
         string agentType = NavMeshAgentTypes.GetName(surface.AgentTypeId);
-        return folderRel + "/" + Sanitize($"{sceneName} NavMesh ({agentType} {surface.AgentTypeId.Value})") + ".navmesh";
+        return (folderRel, Sanitize($"{sceneName} NavMesh ({agentType} {surface.AgentTypeId.Value})"));
     }
 
     private static string Sanitize(string name)

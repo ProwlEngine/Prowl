@@ -30,7 +30,6 @@ public static class PlayerSettingsLoader
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
-        ApplyNavigation(settingsDir);
 
         // Physics needs to apply to each new scene's PhysicsWorld
         ApplyPhysics(settingsDir);
@@ -200,7 +199,12 @@ public static class PlayerSettingsLoader
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
     }
 
-    private static void ApplyNavigation(string dir)
+    /// <summary>
+    /// Apply the navigation tables and world settings. Exposed separately so the player can run it
+    /// BEFORE the default scene loads: a navmesh world reads its obstacle capacity and crowd radius
+    /// when its surfaces and agents register, which happens during the load.
+    /// </summary>
+    public static void ApplyNavigation(string dir)
     {
         var settings = Read(dir, PlayerSettingsFiles.Navigation);
         if (settings == null) return;

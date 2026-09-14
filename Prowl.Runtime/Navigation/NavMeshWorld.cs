@@ -119,6 +119,9 @@ public sealed class NavMeshWorld
     public DtCrowd? GetNativeCrowd(NavMeshAgentTypeId agentTypeId = default)
         => _crowds.TryGetValue(agentTypeId, out NavMeshCrowdEntry? entry) ? entry.Crowd : null;
 
+    /// <summary>Every live crowd, including those of agent types since removed from the project table.</summary>
+    internal IEnumerable<NavMeshCrowdEntry> Crowds => _crowds.Values;
+
     /// <summary>
     /// Get or create the crowd for the instance's agent type. Called by agents on
     /// registration; the crowd binds to the instance's Detour navmesh and is dropped with it.
@@ -332,6 +335,14 @@ public sealed class NavMeshWorld
             NavMeshChanged?.Invoke();
     }
 
+    /// <summary>Copy every registered navmesh into <paramref name="results"/>, cleared first.</summary>
+    internal void CopyInstances(List<NavMeshInstance> results)
+    {
+        results.Clear();
+        lock (_instancesLock)
+            results.AddRange(_instances);
+    }
+
     /// <summary>The registered navmesh for an agent type, or null. At most one exists:
     /// <see cref="AddNavMeshData"/> refuses a second.</summary>
     public NavMeshInstance? GetInstance(NavMeshAgentTypeId agentTypeId = default)
@@ -360,17 +371,14 @@ public sealed class NavMeshWorld
         ArgumentNullException.ThrowIfNull(mutation);
         // Unregistered: its cache is no longer anyone's navmesh, and its lock may already be
         // gone. An async rebuild finishing after its surface was torn down lands here.
-        if (!instance.TryAcquire()) return false;
-
-        instance.Lock.EnterWriteLock();
+        if (!instance.TryEnterWrite()) return false;
         try
         {
             mutation(instance.TileCache);
         }
         finally
         {
-            instance.Lock.ExitWriteLock();
-            instance.Release();
+            instance.ExitWrite();
         }
         // A mutation can leave tiles queued (added tiles rebuild lazily, obstacle edits queue
         // requests), so hand the instance to the pump regardless of what the caller did.
@@ -486,8 +494,16 @@ public sealed class NavMeshWorld
 
         foreach ((NavMeshSurface surface, List<AABB> regions) in _drainingLinkTiles)
         {
-            if (surface.IsValid())
-                surface.RebuildLinkTiles(CollectionsMarshal.AsSpan(regions));
+            // One surface failing must not strand the rest, or leave its region list both pooled and queued.
+            try
+            {
+                if (surface.IsValid())
+                    surface.RebuildLinkTiles(CollectionsMarshal.AsSpan(regions));
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Navigation] Rebuilding the link tiles of '{surface.GameObject.Name}' threw and was skipped: {ex}");
+            }
             regions.Clear();
             _regionPool.Push(regions);
         }
@@ -509,16 +525,15 @@ public sealed class NavMeshWorld
     public bool TryRentQuery(out NavMeshQueryLease lease, NavMeshAgentTypeId agentTypeId = default)
     {
         NavMeshInstance? instance = GetInstance(agentTypeId);
-        // Acquiring is what keeps the instance's lock alive for the life of the lease — it may
-        // be unregistered a moment from now, and the last user out is what disposes. A retired
-        // one refuses, so a query never begins against a navmesh the world has already dropped.
-        if (instance == null || !instance.TryAcquire())
+        // Acquiring is what keeps the instance's lock alive for the life of the lease: it may be
+        // unregistered a moment from now, and the last user out is what disposes. A retired one
+        // refuses, so a query never begins against a navmesh the world has already dropped.
+        if (instance == null || !instance.TryEnterRead())
         {
             lease = default;
             return false;
         }
 
-        instance.Lock.EnterReadLock();
         if (!instance.QueryPool.TryTake(out DtNavMeshQuery? query))
             query = new DtNavMeshQuery(instance.NativeNavMesh);
         lease = new NavMeshQueryLease(instance, query);
@@ -715,7 +730,8 @@ public sealed class NavMeshWorld
 
             DtStatus status = query.FindDistanceToWall(startRef, startPt, maxDistance, detour,
                 out float distance, out RcVec3f hitPos, out RcVec3f hitNormal);
-            if (status.Failed())
+            // No wall in range still succeeds, with the normal left at zero.
+            if (status.Failed() || (hitNormal.X == 0f && hitNormal.Z == 0f))
                 return false;
 
             hit.Position = hitPos.ToFloat3();
@@ -733,18 +749,23 @@ public sealed class NavMeshWorld
     public NavMeshTriangulation CalculateTriangulation(NavMeshAgentTypeId agentTypeId = default)
     {
         NavMeshInstance? instance = GetInstance(agentTypeId);
-        if (instance == null || !instance.TryAcquire())
+        return instance != null ? CalculateTriangulation(instance) : NavMeshTriangulation.Empty;
+    }
+
+    /// <summary>Triangulate one registered navmesh. Empty once it has been unregistered.</summary>
+    public NavMeshTriangulation CalculateTriangulation(NavMeshInstance instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        if (!instance.TryEnterRead())
             return NavMeshTriangulation.Empty;
 
-        instance.Lock.EnterReadLock();
         try
         {
             return NavMeshTriangulation.FromNavMesh(instance.NativeNavMesh);
         }
         finally
         {
-            instance.Lock.ExitReadLock();
-            instance.Release();
+            instance.ExitRead();
         }
     }
 
@@ -802,18 +823,16 @@ public sealed class NavMeshWorld
 
         foreach (NavMeshInstance instance in _cachePumpScratch)
         {
-            if (!instance.TryAcquire()) continue;
+            if (!instance.TryEnterWrite()) continue;
 
             bool upToDate;
-            instance.Lock.EnterWriteLock();
             try
             {
                 upToDate = instance.TileCache.Update(MaxTileUpdatesPerFrame);
             }
             finally
             {
-                instance.Lock.ExitWriteLock();
-                instance.Release();
+                instance.ExitWrite();
             }
 
             // Reaching here means work was queued, so report unconditionally — idle instances
@@ -847,9 +866,11 @@ public sealed class NavMeshWorld
     // which settles in a few frames at MaxTileUpdatesPerFrame.
     internal const int MaxTileSwapWaits = 8;
 
-    // A deferred apply calls back into ApplyRebuiltTilesImmediately, which flushes this queue: without the
-    // flag that would re-enter the drain and dequeue behind its own back.
+    // Set while a deferred swap runs. A swap requested from inside one (a NavMeshChanged handler) is
+    // queued behind it rather than applied, since the older swaps still queued would revert it.
     private bool _applyingDeferredSwap;
+
+    internal bool IsApplyingDeferredSwap => _applyingDeferredSwap;
 
     /// <summary>Run <paramref name="apply"/> on the first frame <paramref name="instance"/>'s tile
     /// cache is settled, or after <see cref="MaxTileSwapWaits"/> passes regardless. FIFO, and at

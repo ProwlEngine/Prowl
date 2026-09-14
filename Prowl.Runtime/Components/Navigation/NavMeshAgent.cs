@@ -529,7 +529,8 @@ public class NavMeshAgent : MonoBehaviour
     /// <see cref="NavMeshWorld.CalculatePath"/>) and start where
     /// the agent is standing; the crowd still re-plans later if the navmesh invalidates it.
     /// </summary>
-    /// <returns>False if the path is unusable, or does not begin at the agent's current polygon.</returns>
+    /// <returns>False if the path is unusable, does not begin at the agent's current polygon, or crosses
+    /// more polygons than a crowd agent's corridor holds.</returns>
     public bool SetPath(NavMeshPath path)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -537,7 +538,7 @@ public class NavMeshAgent : MonoBehaviour
         if (_agent == null) return false;
 
         Span<long> polys = path.Polys;
-        if (polys.Length == 0) return false;
+        if (polys.Length == 0 || polys.Length > DtCrowdConst.MAX_PATH_RESULT) return false;
 
         // The corridor must continue from where the agent stands, not teleport to wherever the
         // path was computed from.
@@ -575,17 +576,10 @@ public class NavMeshAgent : MonoBehaviour
             return false;
         }
 
-        // Warping keeps the DtCrowdAgent, so anything holding NativeAgent stays valid. The
-        // fallback covers the warp refusing for a reason re-adding can fix — a stale agent the
-        // crowd no longer owns — not a target off the navmesh, which defeats both equally.
-        DtCrowd crowd = _crowdEntry!.Crowd;
-        if (!crowd.WarpAgent(_agent, newPosition.ToRc()))
-        {
-            crowd.RemoveAgent(_agent);
-            _agent = crowd.AddAgent(newPosition.ToRc(), BuildAgentParams());
-            if (_agent.state == DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID)
-                return false; // nothing to snap to; the agent sits where it was put, off the mesh
-        }
+        // Warping keeps the DtCrowdAgent, so anything holding NativeAgent stays valid. A target with no
+        // navmesh near it changes nothing, as re-adding the agent there would leave it permanently invalid.
+        if (!_crowdEntry!.Crowd.WarpAgent(_agent, newPosition.ToRc()))
+            return false;
 
         // A teleport is a fresh approach, so a previous arrival would otherwise park the agent
         // wherever it landed.

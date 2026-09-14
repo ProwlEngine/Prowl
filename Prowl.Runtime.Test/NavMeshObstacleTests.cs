@@ -170,6 +170,30 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)), "and leave the hole it came from");
     }
 
+    /// <summary>Switching Carve on for an obstacle that re-carves on every move (not only when
+    /// stationary) carves straight away rather than waiting for the obstacle to move.</summary>
+    [Fact]
+    public void Obstacle_CarveSwitchedOnWithoutStationaryMode_CarvesWithoutMoving()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        GameObject obstacleGo = CreateGameObject("Crate");
+        scene.Add(obstacleGo);
+        obstacleGo.Transform.Position = new Float3(0, 1, 0);
+        var obstacle = obstacleGo.AddComponent<NavMeshObstacle>();
+        obstacle.Carve = false;
+        obstacle.CarveOnlyStationary = false;
+        obstacle.Size = new Float3(4, 3, 4);
+        Tick(scene, 4);
+        Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)));
+
+        obstacle.Carve = true;
+        Assert.True(TickUntil(scene, () => !Walkable(scene, new Float3(0, 0.2f, 0))) >= 0,
+            "switching Carve on should carve without the obstacle moving");
+    }
+
     /// <summary>
     /// A box obstacle placed on a point from SamplePosition has to carve there: the navmesh surface
     /// sits above the column it was built from, so a box resting exactly on the sampled point starts

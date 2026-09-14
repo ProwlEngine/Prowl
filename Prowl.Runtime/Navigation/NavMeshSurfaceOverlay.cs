@@ -42,6 +42,8 @@ internal sealed class NavMeshSurfaceOverlay
             _world = null;
         }
         _triangulation = null;
+        _builtFrom = null;
+        _source = null;
     }
 
     public void Draw(NavMeshSurface surface, NavMeshWorld? world)
@@ -73,7 +75,7 @@ internal sealed class NavMeshSurfaceOverlay
         {
             _stale = false;
             _drawsSinceTriangulation = 0;
-            _triangulation = live != null ? world!.CalculateTriangulation(surface.AgentTypeId) : data.CalculateTriangulation();
+            _triangulation = live != null ? world!.CalculateTriangulation(live) : data.CalculateTriangulation();
             _builtFrom = live;
             _source = data;
             _vertexMarkers = null;

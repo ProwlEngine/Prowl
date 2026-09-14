@@ -365,6 +365,10 @@ public class NavMeshSurface : MonoBehaviour
         if (data.IsNotValid() || data!.TileWorldSize <= 0) return null; // no grid: collect everything
 
         float ts = data.TileWorldSize;
+        // No vertical limit: geometry added above or below the original bake still has to be collected,
+        // and the rebuild grows the heightfield to fit it. Finite, because terrain clipping transforms this box.
+        const float UnboundedHeight = 100_000f;
+
         // Conservative world-space erosion border (CalcBorder cells = ceil(radius/cs) + 3).
         // Derived from the live copy's snapshot settings — the grid being rebuilt is the one the
         // navmesh was baked with, not whatever the surface's current configuration says.
@@ -376,8 +380,8 @@ public class NavMeshSurface : MonoBehaviour
         double maxTz = Math.Floor((worldBounds.Max.Z + border - data.Origin.Z) / ts);
 
         return new AABB(
-            new Float3((float)(data.Origin.X + minTx * ts - border), (float)data.BoundsMin.Y - 1, (float)(data.Origin.Z + minTz * ts - border)),
-            new Float3((float)(data.Origin.X + (maxTx + 1) * ts + border), (float)data.BoundsMax.Y + 1, (float)(data.Origin.Z + (maxTz + 1) * ts + border)));
+            new Float3((float)(data.Origin.X + minTx * ts - border), -UnboundedHeight, (float)(data.Origin.Z + minTz * ts - border)),
+            new Float3((float)(data.Origin.X + (maxTx + 1) * ts + border), UnboundedHeight, (float)(data.Origin.Z + (maxTz + 1) * ts + border)));
     }
 
     /// <summary>
@@ -396,8 +400,8 @@ public class NavMeshSurface : MonoBehaviour
     public bool RebuildTiles(AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources,
         IReadOnlyList<NavMeshAreaVolume>? volumes = null)
     {
-        if (_instance == null) return false;
-        return ApplyRebuiltTilesImmediately(PrepareRebuild(worldBounds, sources, volumes)!(default));
+        Func<CancellationToken, List<NavMeshTileRebuild>>? rebuild = _instance != null ? PrepareRebuild(worldBounds, sources, volumes) : null;
+        return rebuild != null && ApplyRebuiltTilesImmediately(rebuild(default));
     }
 
     /// <summary>
@@ -456,18 +460,22 @@ public class NavMeshSurface : MonoBehaviour
         if (!instance.CachePending)
             return ApplyRebuiltTilesImmediately(rebuilt);
 
+        DeferSwap(world, instance, rebuilt);
+        return true;
+    }
+
+    private void DeferSwap(NavMeshWorld world, NavMeshInstance instance, IReadOnlyList<NavMeshTileRebuild> rebuilt)
+    {
         // The caller's list outlives the call now, and a destructible world is exactly the sort of
         // caller that reuses one. Copying the entries is enough; the blobs inside are read-only.
         List<NavMeshTileRebuild> held = [.. rebuilt];
         world.DeferTileSwap(instance, () =>
         {
             // Re-registered since (a rebake, a disable/enable): these layers were voxelized
-            // against the grid of a navmesh that is no longer the live one, so they cannot be
-            // applied to the one that replaced it.
+            // against the grid of a navmesh that is no longer the live one.
             if (ReferenceEquals(_instance, instance))
-                ApplyRebuiltTilesImmediately(held);
+                SwapTiles(held);
         });
-        return true;
     }
 
     /// <inheritdoc cref="ApplyRebuiltTiles"/>
@@ -475,18 +483,33 @@ public class NavMeshSurface : MonoBehaviour
     /// pending obstacle work, replaces each tile's layers, refreshes every obstacle's touched-tile
     /// list (stale after a tile replacement bumps its salt), then rebuilds the new tiles with
     /// carves re-applied. Returns false, leaving the tiles as they were, when the cache cannot be
-    /// quiesced.</remarks>
+    /// quiesced. Called from a handler while a deferred swap is applying, it queues behind the swaps
+    /// still waiting instead, since applying first would let them revert it.</remarks>
     public bool ApplyRebuiltTilesImmediately(IReadOnlyList<NavMeshTileRebuild> rebuilt)
     {
         ArgumentNullException.ThrowIfNull(rebuilt);
         NavMeshWorld? world = World;
-        Runtime.NavMeshData? data = _runtimeData;
-        if (world == null || _instance == null || data.IsNotValid() || rebuilt.Count == 0)
+        if (world == null || _instance == null || _runtimeData.IsNotValid() || rebuilt.Count == 0)
             return false;
+
+        if (world.IsApplyingDeferredSwap)
+        {
+            DeferSwap(world, _instance, rebuilt);
+            return true;
+        }
 
         // Anything already held for this navmesh has to land first: it was issued earlier, and
         // applying it afterwards would revert the tiles this call is about to write.
         world.FlushDeferredTileSwaps(_instance);
+        return SwapTiles(rebuilt);
+    }
+
+    private bool SwapTiles(IReadOnlyList<NavMeshTileRebuild> rebuilt)
+    {
+        NavMeshWorld? world = World;
+        Runtime.NavMeshData? data = _runtimeData;
+        if (world == null || _instance == null || data.IsNotValid())
+            return false;
 
         bool applied = false;
         world.MutateTileCache(_instance, cache =>

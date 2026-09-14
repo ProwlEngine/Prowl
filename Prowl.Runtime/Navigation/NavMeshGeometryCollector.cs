@@ -256,6 +256,8 @@ public static class NavMeshGeometryCollector
     public static void CollectMeshRenderer(MeshRenderer renderer, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
     {
         if (renderer.IsNotValid() || !renderer.EnabledInHierarchy) return;
+        // Block-loaded: a mesh still streaming in would silently drop out of the bake.
+        renderer.Mesh.EnsureLoaded();
         AddMesh(renderer.Mesh.Res, renderer.Transform.LocalToWorldMatrix, area, results, bounds);
     }
 
@@ -271,7 +273,8 @@ public static class NavMeshGeometryCollector
 
         if (collider is MeshCollider meshCollider)
         {
-            AddMesh(meshCollider.Mesh.Res, world, area, results, bounds);
+            // The mesh physics collides with: loaded now, falling back to a sibling renderer's.
+            AddMesh(meshCollider.ResolveMesh(), world, area, results, bounds);
             return;
         }
 

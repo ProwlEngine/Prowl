@@ -21,7 +21,8 @@ namespace Prowl.Runtime;
 /// </summary>
 public sealed class NavMeshInstance
 {
-    internal readonly ReaderWriterLockSlim Lock = new(LockRecursionPolicy.NoRecursion);
+    // Recursive, so a query made while holding a lease on the same thread does not throw.
+    internal readonly ReaderWriterLockSlim Lock = new(LockRecursionPolicy.SupportsRecursion);
     internal readonly ConcurrentBag<DtNavMeshQuery> QueryPool = new();
 
     // Set when work is queued into the cache (an obstacle request, a tile swap), cleared once
@@ -127,17 +128,67 @@ public sealed class NavMeshInstance
             Lock.Dispose();
     }
 
+    /// <summary>Acquire and take the read lock, or false once retired. Pair with <see cref="ExitRead"/>.
+    /// A lock that throws on entry gives its hold back, so the instance can still dispose.</summary>
+    internal bool TryEnterRead()
+    {
+        if (!TryAcquire()) return false;
+        try
+        {
+            Lock.EnterReadLock();
+        }
+        catch
+        {
+            Release();
+            throw;
+        }
+        return true;
+    }
+
+    internal void ExitRead()
+    {
+        Lock.ExitReadLock();
+        Release();
+    }
+
+    /// <inheritdoc cref="TryEnterRead"/>
+    internal bool TryEnterWrite()
+    {
+        if (!TryAcquire()) return false;
+        try
+        {
+            Lock.EnterWriteLock();
+        }
+        catch
+        {
+            Release();
+            throw;
+        }
+        return true;
+    }
+
+    internal void ExitWrite()
+    {
+        Lock.ExitWriteLock();
+        Release();
+    }
+
     /// <summary>Unregistration, from the lock's point of view: stop admitting queries, wait out
     /// the ones already inside, poison the pool, and drop the registration's own hold.</summary>
     internal void Retire()
     {
         _retired = true;
 
-        Lock.EnterWriteLock();
-        QueryPool.Clear();
-        Lock.ExitWriteLock();
-
-        Release();
+        try
+        {
+            Lock.EnterWriteLock();
+            QueryPool.Clear();
+            Lock.ExitWriteLock();
+        }
+        finally
+        {
+            Release();
+        }
     }
 
     /// <summary>Whether the mesh holds a traversable connection stamped with the given link id

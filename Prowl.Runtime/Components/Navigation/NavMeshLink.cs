@@ -124,6 +124,8 @@ public class NavMeshLink : MonoBehaviour
     // Transform, which no setter sees; the applied Activated flag is what tells OnDisable whether
     // this link was contributing anything worth rebuilding away.
     private Float3 _appliedStart, _appliedEnd;
+    // The width sizes the rebuild regions too: a link that narrows still has crossings out at the old width.
+    private float _appliedWidth;
     private bool _appliedActive;
     // Agent-type scoping decides which surfaces the link resolves against, so it is part of the
     // definition too. A copy rather than the live set, or an in-place edit would never compare as a change.
@@ -134,6 +136,7 @@ public class NavMeshLink : MonoBehaviour
     {
         _appliedStart = WorldStart;
         _appliedEnd = WorldEnd;
+        _appliedWidth = Width;
         _appliedActive = Activated;
     }
 
@@ -148,14 +151,15 @@ public class NavMeshLink : MonoBehaviour
     private void ApplyChange(bool edited)
     {
         Float3 oldStart = _appliedStart, oldEnd = _appliedEnd;
+        float oldWidth = _appliedWidth;
         CaptureAppliedState();
 
         // An edited link has to be re-offered to every instance: catch-up only attempts each
         // one once, and the earlier attempt applied the old definition.
         if (edited) _catchUpDone.Clear();
 
-        RequestRebuild(oldStart, oldEnd);
-        RequestRebuild(_appliedStart, _appliedEnd);
+        RequestRebuild(oldStart, oldEnd, oldWidth);
+        RequestRebuild(_appliedStart, _appliedEnd, _appliedWidth);
         CaptureAppliedScope(); // both rebuilds have seen the outgoing scope
     }
 
@@ -220,7 +224,7 @@ public class NavMeshLink : MonoBehaviour
             // Scene teardown costs nothing here: Scene.OnDispose clears the navigation world
             // before GameObjects dispose, so every instance is already retired and the rebuild
             // finds nothing to do; a gameplay disable (pooling, a destroyed building) keeps it.
-            if (_appliedActive) RequestRebuild(_appliedStart, _appliedEnd);
+            if (_appliedActive) RequestRebuild(_appliedStart, _appliedEnd, _appliedWidth);
 
             _world = null;
         }
@@ -276,7 +280,7 @@ public class NavMeshLink : MonoBehaviour
     /// second group rebuilds without the link, which is how it gets removed. The world applies the
     /// regions, so a frame that moves many links re-contours each tile once. No-op when
     /// <see cref="AutoRebuild"/> is off or no matching navmesh is live.</summary>
-    private void RequestRebuild(Float3 start, Float3 end)
+    private void RequestRebuild(Float3 start, Float3 end, float width)
     {
         if (!AutoRebuild || _world == null) return;
 
@@ -286,7 +290,7 @@ public class NavMeshLink : MonoBehaviour
             NavMeshSurface surface = surfaces[i];
             if (surface.Instance == null) continue;
             if (!AffectsAgentType(surface.AgentTypeId) && !_appliedAgentTypes.Contains(surface.AgentTypeId)) continue;
-            _world.MarkLinkEndpointsDirty(surface, start, end, Width);
+            _world.MarkLinkEndpointsDirty(surface, start, end, width);
         }
     }
 

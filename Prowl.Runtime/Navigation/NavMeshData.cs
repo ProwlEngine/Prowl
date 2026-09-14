@@ -275,10 +275,15 @@ public sealed class NavMeshData : EngineObject
         // meshed while its neighbours are missing describes that seam differently than they will,
         // and the two surfaces end up a fraction of a voxel apart along an edge they share.
         var tileRefs = new List<long>(CacheLayers.Count);
+        int dropped = 0;
         foreach (NavMeshTile layer in CacheLayers)
         {
             if (layer?.Data == null || layer.Data.Length == 0) continue;
-            long tileRef = cache.AddTile(layer.Data, 0);
+            if (!cache.TryAddTile(layer.Data, 0, out long tileRef))
+            {
+                dropped++; // the cache is full; the layers that fit still load
+                continue;
+            }
             if (tileRef == 0)
             {
                 Debug.LogWarning($"[Navigation] NavMeshData '{Name}': failed to add cache layer for tile ({layer.X}, {layer.Z}).");
@@ -286,6 +291,8 @@ public sealed class NavMeshData : EngineObject
             }
             tileRefs.Add(tileRef);
         }
+        if (dropped > 0)
+            Debug.LogWarning($"[Navigation] NavMeshData '{Name}' has {CacheLayers.Count} cache layers but a navmesh can address {maxTiles}; {dropped} were dropped. Increase TileSize or shrink the bake bounds.");
 
         MeshTiles(cache, tileRefs);
         return cache;

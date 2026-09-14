@@ -832,6 +832,42 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Equal("Renamed By User.navmesh", Navigation.NavMeshBakeService.BakePath(surface));
     }
 
+    /// <summary>A duplicated surface shares its original's asset reference, and rebaking it must not
+    /// overwrite the file the original still uses.</summary>
+    [Fact]
+    public void NavMeshBake_DuplicatedSurface_GetsItsOwnFile()
+    {
+        NavMeshData? baked = NavMeshBuilder.Build(new NavMeshBuildSettings(), [FlatQuad(20f)]);
+        Assert.NotNull(baked);
+        Serializer.Serialize(typeof(object), baked!).WriteToBinary(new FileInfo(AssetAbsolutePath("Shared.navmesh")));
+        Guid guid = Assets.ImportFile("Shared.navmesh");
+        Assert.NotEqual(Guid.Empty, guid);
+
+        var scene = new Scene();
+        try
+        {
+            var original = new GameObject("Original");
+            scene.Add(original);
+            var originalSurface = original.AddComponent<NavMeshSurface>();
+            originalSurface.NavMeshData = new AssetRef<NavMeshData>(guid);
+
+            var duplicate = new GameObject("Duplicate");
+            scene.Add(duplicate);
+            var duplicateSurface = duplicate.AddComponent<NavMeshSurface>();
+            duplicateSurface.NavMeshData = new AssetRef<NavMeshData>(guid);
+
+            Assert.NotEqual("Shared.navmesh", Navigation.NavMeshBakeService.BakePath(duplicateSurface));
+
+            // Once nothing else references it, the surface bakes over its own file again.
+            duplicateSurface.NavMeshData = default;
+            Assert.Equal("Shared.navmesh", Navigation.NavMeshBakeService.BakePath(originalSurface));
+        }
+        finally
+        {
+            scene.Dispose();
+        }
+    }
+
     [Fact]
     public void NavMeshBake_RunsInTheBackground_ThenSavesAndAssignsTheAsset()
     {
