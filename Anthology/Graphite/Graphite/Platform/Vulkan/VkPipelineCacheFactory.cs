@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Prowl.Vector;
@@ -20,12 +21,15 @@ internal static unsafe class VkPipelineCacheFactory
         // Blend State
         PipelineColorBlendStateCreateInfo blendStateCI = new() { SType = StructureType.PipelineColorBlendStateCreateInfo };
         BlendStateDescription programBlendState = program.BlendState;
-        int attachmentsCount = programBlendState.AttachmentStates.Length;
+        int declaredCount = programBlendState.AttachmentStates.Length;
+        int attachmentsCount = Math.Max(declaredCount, outputDesc.ColorAttachments.Length);
         PipelineColorBlendAttachmentState* attachmentsPtr
             = stackalloc PipelineColorBlendAttachmentState[attachmentsCount];
         for (int i = 0; i < attachmentsCount; i++)
         {
-            BlendAttachmentDescription vdDesc = programBlendState.AttachmentStates[i];
+            BlendAttachmentDescription vdDesc = declaredCount == 0
+                ? BlendAttachmentDescription.Disabled
+                : programBlendState.AttachmentStates[Math.Min(i, declaredCount - 1)];
             PipelineColorBlendAttachmentState attachmentState = new();
             attachmentState.SrcColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceColorFactor);
             attachmentState.DstColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationColorFactor);
