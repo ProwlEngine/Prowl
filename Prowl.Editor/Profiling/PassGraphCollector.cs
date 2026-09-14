@@ -90,7 +90,7 @@ public sealed class PassGraphCollector
 
         if (texture != null)
         {
-            string name = texture.Framebuffer.Name;
+            string name = ResolveName(texture.Framebuffer.Name, id);
 
             if (referencedAsOutput)
             {
@@ -110,7 +110,7 @@ public sealed class PassGraphCollector
         }
         else if (buffer != null)
         {
-            string name = buffer.Name;
+            string name = ResolveName(buffer.Name, id);
             SnapshotResourceID bufId = _armed ? new SnapshotResourceID(hashId, buffer.ContentVersion, true) : SnapshotResourceID.Invalid;
 
             if (referencedAsOutput)
@@ -124,6 +124,13 @@ public sealed class PassGraphCollector
                 AddEdgeIfProduced(view, state, hashId, p.Index, updated);
             }
         }
+    }
+
+    private static string ResolveName(string? physicalName, RenderResourceID id)
+    {
+        if (!string.IsNullOrEmpty(physicalName))
+            return physicalName;
+        return RenderResourceID.ToString(id) ?? "";
     }
 
     private static void AddEdgeIfProduced(ProfiledView view, ViewState state, uint resourceId, int toPass, ResourceRef resource)
