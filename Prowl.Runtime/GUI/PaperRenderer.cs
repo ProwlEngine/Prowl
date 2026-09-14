@@ -37,8 +37,20 @@ public class PaperRenderer : ICanvasRenderer
     private const int BlurBaseShift = 2;
 
     private const int MaxBlurLevels = 6;
+    private static readonly TextureImageFormat[] BlurFormat = [TextureImageFormat.Color4b];
     private Resources.Material _blurMat;
-    private readonly List<RenderTexture> _tempBlurRTs = new();
+
+    // The blur targets live as long as the renderer and are only resized when the framebuffer is.
+    // The capture is half the framebuffer, and each pyramid level halves again from a quarter.
+    private RenderTexture? _blurCapture;
+    private readonly RenderTexture?[] _blurLevels = new RenderTexture?[MaxBlurLevels];
+    private int _blurTargetWidth;
+    private int _blurTargetHeight;
+
+    // Whether anything has been drawn since the pyramid was last built, and the radius it was built
+    // for. A frosted draw with neither changed can reuse the blur it already has.
+    private bool _backdropDirty = true;
+    private float _lastBlurRadius = -1f;
 
     public void Initialize(int width, int height)
     {
@@ -80,6 +92,44 @@ public class PaperRenderer : ICanvasRenderer
         _vertexArrayObject?.Dispose();
         _shaderProgram?.Dispose();
         if (_defaultTexture.IsValid()) _defaultTexture.Dispose();
+        ReleaseBlurTargets();
+    }
+
+    private void ReleaseBlurTargets()
+    {
+        if (_blurCapture.IsValid()) _blurCapture.Dispose();
+        _blurCapture = null;
+        for (int i = 0; i < MaxBlurLevels; i++)
+        {
+            if (_blurLevels[i].IsValid()) _blurLevels[i]!.Dispose();
+            _blurLevels[i] = null;
+        }
+
+        _blurTargetWidth = _blurTargetHeight = 0;
+        _lastBlurRadius = -1f;
+    }
+
+    private void EnsureBlurTargets()
+    {
+        if (_blurCapture.IsValid() && _blurTargetWidth == _fbWidth && _blurTargetHeight == _fbHeight)
+            return;
+
+        _blurCapture = Resize(_blurCapture, _fbWidth >> 1, _fbHeight >> 1);
+        for (int i = 0; i < MaxBlurLevels; i++)
+            _blurLevels[i] = Resize(_blurLevels[i], _fbWidth >> (i + BlurBaseShift), _fbHeight >> (i + BlurBaseShift));
+
+        _blurTargetWidth = _fbWidth;
+        _blurTargetHeight = _fbHeight;
+        _lastBlurRadius = -1f;
+
+        static RenderTexture Resize(RenderTexture? target, int width, int height)
+        {
+            width = Math.Max(1, width);
+            height = Math.Max(1, height);
+            if (target.IsNotValid()) return new RenderTexture(width, height, false, BlurFormat);
+            target!.Configure(width, height, false, BlurFormat);
+            return target;
+        }
     }
 
     private void InitializeShaders()
@@ -155,6 +205,9 @@ public class PaperRenderer : ICanvasRenderer
         if (canvas.IndexCount > 0)
             cmd.UpdateBuffer<uint>(_elementBuffer, canvas.Indices);
 
+        // A new frame means the framebuffer behind any frosted shape has changed.
+        _backdropDirty = true;
+
         int indexOffset = 0;
         foreach (DrawCall drawCall in drawCalls)
         {
@@ -216,17 +269,10 @@ public class PaperRenderer : ICanvasRenderer
 
             cmd.DrawIndexed(_vertexArrayObject, Topology.Triangles, (uint)drawCall.ElementCount, (uint)indexOffset, 0, true);
             indexOffset += drawCall.ElementCount;
+            if (drawCall.ElementCount > 0) _backdropDirty = true;
         }
 
         Graphics.Submit(cmd);
-
-        // Release pooled blur targets now that the command buffer has been submitted.
-        if (_tempBlurRTs.Count > 0)
-        {
-            foreach (RenderTexture rt in _tempBlurRTs)
-                RenderTexture.ReleaseTemporaryRT(rt);
-            _tempBlurRTs.Clear();
-        }
     }
 
     /// <summary>
@@ -244,42 +290,41 @@ public class PaperRenderer : ICanvasRenderer
     }
 
     /// <summary>
-    /// Captures the current backbuffer into a half-res target and dual-Kawase blurs it, returning
-    /// the blurred render texture (sampled by the UI shader's backdrop composite). Temporary
-    /// targets are tracked and released after the command buffer is submitted.
+    /// Captures the backbuffer and dual Kawase blurs it, returning the pyramid's base level for the
+    /// UI shader's backdrop composite. When nothing has been drawn since the last blur and the radius
+    /// is unchanged, the existing result is returned without redoing any of it.
     /// </summary>
     private RenderTexture RenderBackdropBlur(CommandBuffer cmd, float radius)
     {
+        EnsureBlurTargets();
+        RenderTexture baseLevel = _blurLevels[0]!;
+        if (!_backdropDirty && radius == _lastBlurRadius)
+            return baseLevel;
+
+        _backdropDirty = false;
+        _lastBlurRadius = radius;
         ComputeBlurParams(radius, out int iterations, out float offset);
 
-        int w = Math.Max(1, _fbWidth >> BlurBaseShift);
-        int h = Math.Max(1, _fbHeight >> BlurBaseShift);
-
-        // Capture the backbuffer (read) into a half-res render texture (draw) via a linear blit.
-        RenderTexture capture = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Color4b]);
-        _tempBlurRTs.Add(capture);
+        // A linear blit at exactly half size averages each two by two block, so the capture is a
+        // proper box filter. Blitting straight to quarter size would skip most pixels and shimmer
+        // as things move behind the glass.
+        RenderTexture capture = _blurCapture!;
         cmd.SetRenderTargets(capture.frameBuffer, null);
-        cmd.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, w, h, ClearFlags.Color, BlitFilter.Linear);
+        cmd.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, capture.Width, capture.Height, ClearFlags.Color, BlitFilter.Linear);
+
+        // The step down to the base level only filters, so it uses the tightest spread and leaves
+        // the radius to the passes below it.
+        _blurMat.SetFloat("_Offset", 1f);
+        cmd.Blit(capture, baseLevel, _blurMat, BlurDownPass);
 
         _blurMat.SetFloat("_Offset", offset);
-
-        var chain = new List<RenderTexture> { capture };
-        RenderTexture current = capture;
         for (int i = 0; i < iterations; i++)
-        {
-            w = Math.Max(1, w / 2);
-            h = Math.Max(1, h / 2);
-            RenderTexture down = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Color4b]);
-            _tempBlurRTs.Add(down);
-            cmd.Blit(current, down, _blurMat, BlurDownPass);
-            chain.Add(down);
-            current = down;
-        }
+            cmd.Blit(_blurLevels[i], _blurLevels[i + 1], _blurMat, BlurDownPass);
 
-        for (int i = chain.Count - 1; i > 0; i--)
-            cmd.Blit(chain[i], chain[i - 1], _blurMat, BlurUpPass);
+        for (int i = iterations; i > 0; i--)
+            cmd.Blit(_blurLevels[i], _blurLevels[i - 1], _blurMat, BlurUpPass);
 
-        return chain[0];
+        return baseLevel;
     }
 
     public void Dispose()

@@ -271,7 +271,7 @@ Pass "BlurUp"
 
         void main()
         {
-            vec2 halfpixel = (0.5 / vec2(textureSize(_MainTex, 0))) * _Offset;
+            vec2 halfpixel = (0.25 / vec2(textureSize(_MainTex, 0))) * _Offset;
 
             vec4 sum = texture(_MainTex, TexCoords + vec2(-halfpixel.x * 2.0, 0.0));
             sum += texture(_MainTex, TexCoords + vec2(-halfpixel.x, halfpixel.y)) * 2.0;
