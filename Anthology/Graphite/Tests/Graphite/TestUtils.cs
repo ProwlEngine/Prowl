@@ -16,6 +16,7 @@ public readonly struct TestRenderView : IRenderView
 {
     public uint PixelWidth => 256;
     public uint PixelHeight => 256;
+    public int ViewId => 0;
 }
 
 internal sealed class NoOpTestPresentPass : IPresentPass<TestRenderView>
