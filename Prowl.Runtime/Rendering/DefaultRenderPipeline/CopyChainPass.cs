@@ -70,16 +70,19 @@ public abstract class CopyChainPass : IPass<CameraView>
         {
             RenderTexture input = context.GetRenderTexture(_inputHandle);
             cmd.CopyTexture(input.ColorTextures[0], output.ColorTextures[0]);
+
+            if (input.DepthTexture != null && output.DepthTexture != null)
+                cmd.CopyTexture(input.DepthTexture, output.DepthTexture);
         }
 
         cmd.SetFramebuffer(output.Framebuffer);
         cmd.SetProperties(context.View.FrameProperties);
 
         if (!_hasInput)
+        {
             cmd.ClearColorTarget(0, new Color(0f, 0f, 0f, 1f));
-
-        // Depth is left as-is here (undefined for a fresh transient target); OpaquePass explicitly
-        // clears it once opaque geometry is about to depth-test, matching the old pipeline's behavior.
+            cmd.ClearDepthStencil(1f, 0);
+        }
 
         OnRender(context, cmd, output);
 
