@@ -180,7 +180,7 @@ public sealed class RenderContext<TView>
                 return rented;
 
             case GraphTextureResource historyResource:
-                RenderTexture copy = historyResource.ResolveHistory(_device, _task.Id, framesAgo, ToTransientDesc(historyResource.Description));
+                RenderTexture copy = historyResource.ResolveHistory(_device, _view.ViewId, _task.Id, framesAgo, ToTransientDesc(historyResource.Description));
                 if (framesAgo == 0)
                     _resolved[handle.Id] = copy;
                 return copy;
@@ -188,6 +188,20 @@ public sealed class RenderContext<TView>
             default:
                 throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a texture. Resolve it with GetRenderBuffer.");
         }
+    }
+
+    /// <summary>True once this view's history ring holds an earlier execution. False on a view's first execution and after a resize reallocates its ring.</summary>
+    /// <param name="handle">Handle from the builder.</param>
+    public bool IsHistoryValid(TextureHandle handle)
+    {
+        if (!handle.IsValid)
+            throw new ArgumentException("Cannot resolve a default texture handle.", nameof(handle));
+
+        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
+            throw new InvalidOperationException($"Texture handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
+
+        return resource is GraphTextureResource texture
+            && texture.IsHistoryValid(_view.ViewId, _task.Id, ToTransientDesc(texture.Description));
     }
 
     /// <summary>Resolves a declared buffer handle to its allocated device buffer.</summary>
@@ -222,7 +236,7 @@ public sealed class RenderContext<TView>
             return rented;
         }
 
-        DeviceBuffer copy = bufferResource.ResolveHistory(_device, _task.Id, framesAgo, bufferResource.Description.ToBufferDescription());
+        DeviceBuffer copy = bufferResource.ResolveHistory(_device, _view.ViewId, _task.Id, framesAgo, bufferResource.Description.ToBufferDescription());
         if (framesAgo == 0)
             _resolvedBuffers[handle.Id] = copy;
         return copy;

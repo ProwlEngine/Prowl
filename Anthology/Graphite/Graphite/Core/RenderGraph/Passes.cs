@@ -11,6 +11,9 @@ public interface IRenderView
     /// <summary>Height in pixels.</summary>
     uint PixelHeight { get; }
 
+    /// <summary>Stable identity across frames. Temporal history rings are kept per view id.</summary>
+    int ViewId { get; }
+
     /// <summary>
     /// Display name for profiler/debug tooling. Defaults to the type name; override to tell instances apart (e.g. per camera).
     /// </summary>
