@@ -77,6 +77,7 @@ file readonly struct ProfilerView : IRenderView
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public int ViewId => 0;
 }
 
 file sealed class ClearingRasterPass : RasterPass<ProfilerView>

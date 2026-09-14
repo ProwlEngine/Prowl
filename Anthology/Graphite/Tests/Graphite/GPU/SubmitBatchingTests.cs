@@ -9,6 +9,7 @@ file readonly struct SubmitBatchingView : IRenderView
 {
     public uint PixelWidth => 32;
     public uint PixelHeight => 32;
+    public int ViewId => 0;
 }
 
 file sealed class BufferWritePass : IPass<SubmitBatchingView>

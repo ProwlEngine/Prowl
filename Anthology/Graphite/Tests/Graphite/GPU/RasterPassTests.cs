@@ -21,6 +21,7 @@ file readonly struct RasterView : IRenderView
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public int ViewId => 0;
 }
 
 file sealed class ClearingRasterPass : RasterPass<RasterView>
