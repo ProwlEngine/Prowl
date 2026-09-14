@@ -16,7 +16,7 @@ Shader "Default/Standard"
         Varyings Vertex(VertexInput input)
         {
             Varyings output;
-            output.position = mul(Frame.prowl_MatVP, float4(input.position, 1.0));
+            output.position = mul(Object.mvp, float4(input.position, 1.0));
             return output;
         }
 
