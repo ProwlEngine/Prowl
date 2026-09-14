@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Quill\Quill\Quill.csproj" />
     <ProjectReference Include="..\..\Scaffold\Scaffold\Scaffold.csproj" />
+    <ProjectReference Include="..\..\Quire\Quire\Quire.csproj" />
   </ItemGroup>
 
 </Project>

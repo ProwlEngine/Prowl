@@ -70,7 +70,8 @@ For a complete guide, tutorials, and API reference, please visit the **[Official
     - Cross-Platform! Windows, Linux & Mac!
     - Immediate Mode Architecture
     - 100% C#!
-    - Markdown Parsing & Rendering Support
+    - Markdown, built as real elements
+    - Animated Rich Text
     - Layer System
     - Keyboard Navigation
     - Highly Portable
@@ -355,6 +356,7 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 
 - [Prowl.Quill](../Quill)
 - [Prowl.Scaffold](../Scaffold)
+- [Prowl.Quire](../Quire)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

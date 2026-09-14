@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -110,7 +110,7 @@ namespace Prowl.PaperUI
         // measures). Order matters: the most expensive/identifying paint wins.
         private static string ComputeDrawKind(ref ElementData d)
         {
-            if (!string.IsNullOrEmpty(d.Paragraph)) return d.IsMarkdown ? "markdown" : d.IsRichText ? "richtext" : "text";
+            if (!string.IsNullOrEmpty(d.Paragraph)) return d.IsRichText ? "richtext" : "text";
             if (d._renderCommands != null || d._foregroundRenderCommands != null) return "custom";
 
             var st = d._elementStyle;
@@ -904,7 +904,6 @@ namespace Prowl.PaperUI
             if (st == null) { Row("(element not live)", "", TextDim); return; }
 
             if (!string.IsNullOrEmpty(h.Data.Paragraph)) Row("text", "\"" + (n?.Text ?? h.Data.Paragraph) + "\"", Col(70, 130, 235));
-            if (h.Data.IsMarkdown) Row("markdown", "yes", Col(70, 130, 235));
             if (h.Data.IsRichText) Row("rich text", "yes", Col(70, 130, 235));
             if (st.GetValue(GuiProp.BackgroundColor) is Color bg && bg.A > 0f) Row("background", FormatStyle(bg), Text);
             if (st.GetValue(GuiProp.BackgroundGradient) is Gradient g && g.Type != GradientType.None) Row("gradient", g.Type.ToString(), Col(90, 190, 200));

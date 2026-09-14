@@ -24,7 +24,7 @@ namespace Prowl.PaperUI
             // Per-frame memo: this runs several times per frame (stretch resolution) plus once at
             // render. Once we've computed the size this frame, reuse it while the width still applies
             // (width-independent plain text always applies; width-dependent text must match). The
-            // cached _textLayout/_quillRichText/_quillMarkdown set on the first compute stay valid on
+            // cached _textLayout/_richText set on the first compute stay valid on
             // the same per-frame ElementData, so the render pass still finds them.
             if (element._textMemoValid
                 && (element._textMemoWidthIndependent || element._textMemoWidth == availableWidth))
@@ -39,155 +39,135 @@ namespace Prowl.PaperUI
             // (scaled by FramebufferScale). The layout engine works in logical units.
             float invScale = 1.0f / canvas.FramebufferScale;
 
-            if (element.IsRichText)
+            if (element.DrawsRichText)
             {
-                var settings = new RichTextLayoutSettings {
-                    RegularFont = element.Font,
-                    BoldFont = element.FontBold,
-                    ItalicFont = element.FontItalic,
-                    BoldItalicFont = element.FontBoldItalic,
-                    MonoFont = element.FontMono,
-                    PixelSize = element._elementStyle.GetFontSize(),
+                // Everything the canvas lays out is in physical pixels, so scale in and back out.
+                float scale = canvas.FramebufferScale;
+                bool wraps = element.WrapMode == TextWrapMode.Wrap;
+                var alignment = ToScribeAlignment(element.TextAlignment);
+                // The width only matters to wrapping and to centred or right aligned text. Leaving it
+                // out otherwise keeps the block from laying out again every time the element resizes.
+                bool dependsOnWidth = wraps || alignment != Scribe.TextAlignment.Left;
+                bool usesWidth = dependsOnWidth && availableWidth > 0f && float.IsFinite(availableWidth);
+                var rich = new RichText.RichTextSettings {
+                    Regular = element.Font,
+                    Bold = element.FontBold,
+                    Italic = element.FontItalic,
+                    BoldItalic = element.FontBoldItalic,
+                    Mono = element.FontMono,
+                    PixelSize = element._elementStyle.GetFontSize() * scale,
                     Quality = element._elementStyle.GetTextQuality(),
                     LineHeight = element._elementStyle.GetLineHeight(),
-                    LetterSpacing = element._elementStyle.GetLetterSpacing(),
-                    WordSpacing = element._elementStyle.GetWordSpacing(),
+                    LetterSpacing = element._elementStyle.GetLetterSpacing() * scale,
+                    WordSpacing = element._elementStyle.GetWordSpacing() * scale,
                     TabSize = element._elementStyle.GetTabSize(),
+                    Color = element._elementStyle.GetTextColor(),
                     WrapMode = element.WrapMode,
-                    MaxWidth = element.WrapMode == TextWrapMode.Wrap ? availableWidth : 0f,
-                    Alignment = ToScribeAlignment(element.TextAlignment),
+                    MaxWidth = usesWidth ? availableWidth * scale : 0f,
+                    Alignment = alignment,
                 };
 
-                // Reuse the cached layout when source + width haven't changed so the layout's
-                // animation start time (set on first Draw) survives across frames.
-                var cached = gui.GetElementStorageById<Quill.Canvas.QuillRichText?>(element.ID, Paper.RichTextLayoutKey, null);
-                var cachedSrc = gui.GetElementStorageById<string>(element.ID, Paper.RichTextSourceKey, null);
-                float cachedWidth = gui.GetElementStorageById<float>(element.ID, Paper.RichTextWidthKey, -1f);
-
-                Quill.Canvas.QuillRichText richText;
-                if (cached.HasValue && cachedSrc == element.Paragraph && cachedWidth == settings.MaxWidth)
+                var block = gui.GetElementStorageById<RichText.RichTextBlock>(element.ID, Paper.RichTextBlockKey, null);
+                if (block == null)
                 {
-                    richText = cached.Value;
+                    block = new RichText.RichTextBlock();
+                    gui.SetElementStorageById(element.ID, Paper.RichTextBlockKey, block);
                 }
-                else
-                {
-                    richText = canvas.CreateRichText(element.Paragraph, settings);
-                    gui.SetElementStorageById<Quill.Canvas.QuillRichText?>(element.ID, Paper.RichTextLayoutKey, richText);
-                    gui.SetElementStorageById<string>(element.ID, Paper.RichTextSourceKey, element.Paragraph);
-                    gui.SetElementStorageById<float>(element.ID, Paper.RichTextWidthKey, settings.MaxWidth);
-                }
-                element._quillRichText = richText;
 
-                // QuillRichText.Size is already in logical units. Width matters only when wrapping.
-                return Memo(ref element, richText.Size, availableWidth, element.WrapMode != TextWrapMode.Wrap);
+                block.Update(element.Paragraph, rich, canvas.Text.FontEngine);
+                element._richText = block;
+
+                return Memo(ref element, block.Size * invScale, availableWidth, !dependsOnWidth);
             }
 
-            if (element.IsMarkdown == false)
+            var settings = TextLayoutSettings.Default;
+
+            settings.WordSpacing = element._elementStyle.GetWordSpacing();
+            settings.LetterSpacing = element._elementStyle.GetLetterSpacing();
+            settings.LineHeight = element._elementStyle.GetLineHeight();
+            settings.TabSize = element._elementStyle.GetTabSize();
+            settings.PixelSize = element._elementStyle.GetFontSize();
+            settings.Quality = element._elementStyle.GetTextQuality();
+
+            settings.Alignment = ToScribeAlignment(element.TextAlignment);
+
+            settings.Font = element.Font;
+            settings.WrapMode = element.WrapMode;
+            settings.MaxWidth = availableWidth;
+            settings.Customizer = TextMask.For(element.MaskChar);
+
+            // Per-element cache for width-independent text: left-aligned, no-wrap, non-truncated
+            // text lays out identically regardless of the element width (MaxWidth only affects
+            // wrapping and center/right alignment). Keying purely on content + font/metrics lets
+            // us reuse the same TextLayout across frames and across the measure/draw passes,
+            // surviving Scribe's global LRU cap (a long scrolling list of distinct labels would
+            // otherwise thrash it). Width-dependent text (wrap / truncate / center / right) keeps
+            // going straight through CreateLayout so its width changes are always honoured.
+            if (settings.Alignment == Scribe.TextAlignment.Left
+                && element.WrapMode == TextWrapMode.NoWrap && !element.Truncate)
             {
-                var settings = TextLayoutSettings.Default;
+                var ptKey = new PlainTextKey(element.Paragraph, settings, canvas.FramebufferScale);
+                var cachedLayout = gui.GetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, null);
+                var cachedKey = gui.GetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, default);
 
-                settings.WordSpacing = element._elementStyle.GetWordSpacing();
-                settings.LetterSpacing = element._elementStyle.GetLetterSpacing();
-                settings.LineHeight = element._elementStyle.GetLineHeight();
-                settings.TabSize = element._elementStyle.GetTabSize();
-                settings.PixelSize = element._elementStyle.GetFontSize();
-                settings.Quality = element._elementStyle.GetTextQuality();
-
-                settings.Alignment = ToScribeAlignment(element.TextAlignment);
-
-                settings.Font = element.Font;
-                settings.WrapMode = element.WrapMode;
-                settings.MaxWidth = availableWidth;
-                settings.Customizer = TextMask.For(element.MaskChar);
-
-                // Per-element cache for width-independent text: left-aligned, no-wrap, non-truncated
-                // text lays out identically regardless of the element width (MaxWidth only affects
-                // wrapping and center/right alignment). Keying purely on content + font/metrics lets
-                // us reuse the same TextLayout across frames and across the measure/draw passes,
-                // surviving Scribe's global LRU cap (a long scrolling list of distinct labels would
-                // otherwise thrash it). Width-dependent text (wrap / truncate / center / right) keeps
-                // going straight through CreateLayout so its width changes are always honoured.
-                if (settings.Alignment == Scribe.TextAlignment.Left
-                    && element.WrapMode == TextWrapMode.NoWrap && !element.Truncate)
+                if (cachedLayout != null && cachedKey.Equals(ptKey))
                 {
-                    var ptKey = new PlainTextKey(element.Paragraph, settings, canvas.FramebufferScale);
-                    var cachedLayout = gui.GetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, null);
-                    var cachedKey = gui.GetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, default);
-
-                    if (cachedLayout != null && cachedKey.Equals(ptKey))
-                    {
-                        element._textLayout = cachedLayout;
-                        return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, true);
-                    }
-
-                    element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
-                    gui.SetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, element._textLayout);
-                    gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, ptKey);
-                    return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, true);
+                    element._textLayout = cachedLayout;
+                    return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, true);
                 }
 
-                string text = element.Paragraph;
+                element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
+                gui.SetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, element._textLayout);
+                gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, ptKey);
+                return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, true);
+            }
 
-                // Single-line truncation: if the text overflows the element, drop trailing characters
-                // and append an ellipsis that is guaranteed to fit. The result depends on the element
-                // width, so it uses a width-keyed cache (the width-independent cache above skips
-                // truncated text) to avoid re-running the binary search + layout every frame.
-                if (element.Truncate && element.WrapMode != TextWrapMode.Wrap && availableWidth > 0f)
+            string text = element.Paragraph;
+
+            // Single-line truncation: if the text overflows the element, drop trailing characters
+            // and append an ellipsis that is guaranteed to fit. The result depends on the element
+            // width, so it uses a width-keyed cache (the width-independent cache above skips
+            // truncated text) to avoid re-running the binary search + layout every frame.
+            if (element.Truncate && element.WrapMode != TextWrapMode.Wrap && availableWidth > 0f)
+            {
+                var trKey = new PlainTextKey(element.Paragraph, settings, canvas.FramebufferScale, availableWidth);
+                var cachedLayout = gui.GetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, null);
+                var cachedKey = gui.GetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, default);
+                if (cachedLayout != null && cachedKey.Equals(trKey))
                 {
-                    var trKey = new PlainTextKey(element.Paragraph, settings, canvas.FramebufferScale, availableWidth);
-                    var cachedLayout = gui.GetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, null);
-                    var cachedKey = gui.GetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, default);
-                    if (cachedLayout != null && cachedKey.Equals(trKey))
+                    element._textLayout = cachedLayout;
+                    return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, false);
+                }
+
+                var measure = settings;
+                measure.WrapMode = TextWrapMode.NoWrap;
+                measure.MaxWidth = 0f;
+                float LogicalW(string s) => canvas.MeasureText(s, measure).X * invScale;
+
+                if (LogicalW(text) > availableWidth)
+                {
+                    const string ell = "...";
+                    float ellW = LogicalW(ell);
+                    // Binary-search the longest prefix whose width + ellipsis still fits.
+                    int lo = 0, hi = text.Length;
+                    while (lo < hi)
                     {
-                        element._textLayout = cachedLayout;
-                        return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, false);
+                        int mid = (lo + hi + 1) / 2;
+                        if (LogicalW(text[..mid]) + ellW <= availableWidth) lo = mid;
+                        else hi = mid - 1;
                     }
-
-                    var measure = settings;
-                    measure.WrapMode = TextWrapMode.NoWrap;
-                    measure.MaxWidth = 0f;
-                    float LogicalW(string s) => canvas.MeasureText(s, measure).X * invScale;
-
-                    if (LogicalW(text) > availableWidth)
-                    {
-                        const string ell = "...";
-                        float ellW = LogicalW(ell);
-                        // Binary-search the longest prefix whose width + ellipsis still fits.
-                        int lo = 0, hi = text.Length;
-                        while (lo < hi)
-                        {
-                            int mid = (lo + hi + 1) / 2;
-                            if (LogicalW(text[..mid]) + ellW <= availableWidth) lo = mid;
-                            else hi = mid - 1;
-                        }
-                        text = lo > 0 ? text[..lo] + ell : ell;
-                    }
-
-                    element._textLayout = canvas.CreateLayout(text, settings);
-                    gui.SetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, element._textLayout);
-                    gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, trKey);
-                    return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
+                    text = lo > 0 ? text[..lo] + ell : ell;
                 }
 
                 element._textLayout = canvas.CreateLayout(text, settings);
-
+                gui.SetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, element._textLayout);
+                gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, trKey);
                 return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
             }
-            else
-            {
-                var r = element.Font;
-                var m = element.FontMono;
-                var b = element.FontBold;
-                var i = element.FontItalic;
-                var bi = element.FontBoldItalic;
-                var settings = MarkdownLayoutSettings.Default(r, availableWidth, m, b, i, bi);
-                settings.Quality = element._elementStyle.GetTextQuality();
 
-                element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
+            element._textLayout = canvas.CreateLayout(text, settings);
 
-                var markdownResult = element._quillMarkdown;
-                return Memo(ref element, (markdownResult?.Size ?? Float2.Zero) * invScale, availableWidth, false);
-            }
+            return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
         }
 
         private static Scribe.TextAlignment ToScribeAlignment(TextAlignment a)

@@ -89,11 +89,13 @@ public struct ElementData
     internal bool _cacheContentSizer;
 
     // Text properties
-    public bool IsMarkdown;
     public bool IsRichText;
     public string Paragraph;
     /// <summary>Set to draw every character as this one, for password fields.</summary>
     public char? MaskChar;
+
+    /// <summary>Rich text is drawn only when nothing masks it, since a mask has to hide the characters.</summary>
+    internal bool DrawsRichText => IsRichText && !MaskChar.HasValue;
     public FontFile Font;
     public FontFile FontBold;
     public FontFile FontItalic;
@@ -110,9 +112,9 @@ public struct ElementData
     /// <summary>Flex-wrap: parent-directed children flow onto new lines when they overrun the main axis.</summary>
     public bool ContentWrap;
 
-    // Cached text layout objects (RichText is persisted across frames via element storage so animation start time survives -- see Paper.Core.cs ProcessText / DrawText paths.)
-    internal Quill.Canvas.QuillMarkdown? _quillMarkdown;
-    internal Quill.Canvas.QuillRichText? _quillRichText;
+    // A rich text block lives in element storage across frames, and this is this frame's reference
+    // to it, so the draw pass does not have to look it up again.
+    internal RichText.RichTextBlock _richText;
     internal TextLayout _textLayout;
 
     // Rendering
@@ -176,6 +178,8 @@ public struct ElementData
     public float RelativeX;
     /// <summary> The resolved Y position of the top-left corner of this element's layout rectangle, in the parent's coordinate space. </summary>
     public float RelativeY;
+    /// <summary> The area inside this element's padding, relative to its own top-left corner. Text is drawn here. </summary>
+    public Prowl.Vector.Rect ContentRect;
 
     /// <summary> Callback that measures the element's content size given optional width and height constraints. Returns the measured (width, height) or null if the measurement is unavailable. </summary>
     public Func<float?, float?, (float, float)?> ContentSizer;
@@ -200,7 +204,6 @@ public struct ElementData
             Visible = true,
             LayoutType = LayoutType.Column,
             PositionType = PositionType.ParentDirected,
-            IsMarkdown = false,
             IsRichText = false,
             Paragraph = null,
             MaskChar = null,
@@ -210,8 +213,7 @@ public struct ElementData
             Truncate = false,
             TextAlignment = TextAlignment.Left,
             ContentWrap = false,
-            _quillMarkdown = null,
-            _quillRichText = null,
+            _richText = null,
             _textLayout = null,
             _renderCommands = null,
             _foregroundRenderCommands = null,

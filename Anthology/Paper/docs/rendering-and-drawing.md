@@ -17,7 +17,7 @@ For each visible element, in this order:
 5. **Border** (if `BorderWidth > 0` and `BorderColor.A > 0`).
 6. **Scissor clip** applied here if `.Clip()` was called, so everything from
    this point on (text, custom draws, children) is clipped to the element rect.
-7. **Text** (if any `Paragraph` is set — plain/Markdown/rich text).
+7. **Text** (if any `Paragraph` is set — plain or rich text).
 8. **Background render commands** (`Paper.Draw(...)`, see below) — before children.
 9. **Children**, recursively, in child order (later children draw on top of
    earlier ones), each also respecting its own `Layer`.
@@ -99,4 +99,4 @@ void AddFallbackFont(FontFile font)
 
 Useful inside a `ContentSizer` callback (see [Layout Engine](layout-engine.md))
 when an element's auto size should depend on measured text rather than the
-built-in `Text`/`Markdown`/`RichText` content sizing.
+built-in `Text`/`RichText` content sizing.

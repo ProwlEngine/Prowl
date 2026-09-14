@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -542,7 +542,9 @@ namespace Prowl.PaperUI
             if (!string.IsNullOrEmpty(data.Paragraph))
             {
                 _canvas.SaveState();
-                DrawText(handle, rect.Min.X, rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y);
+                // Text was measured to fit inside the padding, so that is where it is drawn.
+                var content = data.ContentRect;
+                DrawText(handle, rect.Min.X + content.Min.X, rect.Min.Y + content.Min.Y, content.Size.X, content.Size.Y);
                 _canvas.RestoreState();
             }
 
@@ -750,23 +752,16 @@ namespace Prowl.PaperUI
             // FramebufferScale for crispness). Convert back to logical units for alignment math.
             float invScale = 1.0f / canvas.FramebufferScale;
 
-            if (handle.Data.IsRichText)
+            if (handle.Data.DrawsRichText)
             {
-                if (handle.Data._quillRichText == null) throw new InvalidOperationException("Rich text layout is not processed.");
-                textSize = handle.Data._quillRichText.Value.Size; // already in logical units
+                if (handle.Data._richText == null) throw new InvalidOperationException("Rich text layout is not processed.");
+                textSize = handle.Data._richText.Size * invScale;
             }
-            else if (handle.Data.IsMarkdown == false)
+            else
             {
                 if (handle.Data._textLayout == null) throw new InvalidOperationException("Text layout is not processed.");
 
                 textSize = (Float2)handle.Data._textLayout.Size * invScale;
-            }
-            else
-            {
-                if (handle.Data._quillMarkdown == null) throw new InvalidOperationException("Markdown layout is not processed.");
-
-                var markdownResult = handle.Data._quillMarkdown;
-                textSize = (markdownResult?.Size ?? Float2.Zero) * invScale;
             }
 
             // Apply vertical alignment based on TextAlignment
@@ -795,19 +790,15 @@ namespace Prowl.PaperUI
             // Apply the calculated offset to the y position
             float finalY = y + yOffset;
 
-            if (handle.Data.IsRichText)
+            if (handle.Data.DrawsRichText)
             {
-                var rt = handle.Data._quillRichText.Value;
-                canvas.DrawRichText(rt, new Float2(x, finalY), Time);
-            }
-            else if (handle.Data.IsMarkdown == false)
-            {
-                canvas.DrawLayout(handle.Data._textLayout, x, finalY, color);
+                // The block is laid out in physical pixels, like every other layout the canvas makes.
+                float scale = canvas.FramebufferScale;
+                handle.Data._richText.Draw(canvas.Text.FontEngine, new Float2(x * scale, finalY * scale), Time);
             }
             else
             {
-                var markdownResult = handle.Data._quillMarkdown;
-                canvas.DrawMarkdown(markdownResult ?? new Canvas.QuillMarkdown(), new Float2(x, finalY));
+                canvas.DrawLayout(handle.Data._textLayout, x, finalY, color);
             }
         }
 
@@ -1037,18 +1028,9 @@ namespace Prowl.PaperUI
         /// <summary>DevTools helper: the raw per-element storage table for an ID (null if none).</summary>
         internal Hashtable DebugGetStorage(int id) => _storage.TryGetValue(id, out var storage) ? storage : null;
 
-        /// <summary> Resets animation start time on a rich-text element - replays typewriter / shake / etc. from the next frame's draw. No-op if the element has no rich-text layout cached yet. </summary>
-        public void ResetRichText(ElementHandle el)
-        {
-            ClearElementStorageKey(el.Data.ID, RichTextLayoutKey);
-            ClearElementStorageKey(el.Data.ID, RichTextSourceKey);
-            ClearElementStorageKey(el.Data.ID, RichTextWidthKey);
-        }
-
-        // Storage keys for the per-element rich-text layout cache.
-        internal const string RichTextLayoutKey = "_pp_rt_layout";
-        internal const string RichTextSourceKey = "_pp_rt_source";
-        internal const string RichTextWidthKey = "_pp_rt_width";
+        // A rich text element keeps its block across frames; the block decides for itself when a
+        // re-parse or re-shape is actually needed.
+        internal const string RichTextBlockKey = "_pp_rt_block";
 
         // Storage keys for the per-element plain-text layout cache (width-independent text only).
         internal const string PlainTextLayoutKey = "_pp_pt_layout";

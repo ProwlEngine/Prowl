@@ -5,6 +5,7 @@
     <Project Path="Quill/Quill/Quill.csproj" />
     <Project Path="Paper/Paper/Paper.csproj" />
     <Project Path="Scaffold/Scaffold/Scaffold.csproj" />
+    <Project Path="Quire/Quire/Quire.csproj" />
     <Project Path="Origami/Origami/Origami.csproj" />
     <Project Path="Echo/Echo/Echo.csproj" />
     <Project Path="Clay/Clay/Clay.csproj" />
@@ -43,6 +44,7 @@
     <Project Path="Rosetta/Tests/Rosetta.Tests.csproj" />
     <Project Path="Paper/Tests/Paper.Tests.csproj" />
     <Project Path="Scaffold/Tests/Scaffold.Tests.csproj" />
+    <Project Path="Quire/Tests/Quire.Tests.csproj" />
     <Project Path="Slang/Tests/Prowl.Slang.Tests.csproj" />
     <Project Path="Graphite/Tests/Graphite/Prowl.Graphite.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />

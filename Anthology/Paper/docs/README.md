@@ -33,9 +33,9 @@ building.
    hover/active/focus state queries, event bubbling, `HookToParent`, cursors,
    and every event type (`ClickEvent`, `DragEvent`, `ScrollEvent`, `FocusEvent`,
    `KeyEvent`, `TextInputEvent`).
-7. [Text and Input Fields](text-and-input-fields.md) — plain text, Markdown,
-   tagged rich text (with built-in text animations), and the `TextField`/
-   `TextArea` controls.
+7. [Text and Input Fields](text-and-input-fields.md) — plain text, rich text
+   (with built-in text animations), Markdown built as elements, and the
+   `TextField`/`TextArea` controls.
 8. [State and Storage](state-and-storage.md) — per-element persistent storage
    (`GetElementStorage`/`SetElementStorage`), ID scoping (`PushID`/`PopID`), and
    the patterns used to build stateful custom widgets (worked example: a

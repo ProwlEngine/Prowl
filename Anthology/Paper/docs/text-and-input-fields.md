@@ -10,6 +10,7 @@
 .WordSpacing(...) .LetterSpacing(...) .LineHeight(...) .TabSize(int) .FontSize(float)
 .TextColor(Color)
 .TextQuality(FontQuality quality) // Low(16)/Normal(32, default)/High(64)/Ultra(128) — atlas rasterization resolution
+.IsPassword(char mask = '*')     // draw every character as the mask, even on a rich text element, while the element keeps the real text
 ```
 
 Text content-sizes an `Auto`-dimensioned element automatically (no
@@ -18,33 +19,62 @@ memoized per frame (and cached across frames keyed by a content+metrics
 fingerprint) so re-measuring unchanged text is cheap even though the layout
 solver may query it multiple times per frame during stretch resolution.
 
+## Rich text
+
+```csharp
+.Text("A <b>bold</> word and some <wave 2 8 #f80>waving text</>", font)
+.RichText(FontFile bold = null, FontFile italic = null, FontFile boldItalic = null, FontFile mono = null)
+```
+
+`RichText` is a toggle on an ordinary text element. The text is still laid out
+by Scribe, so kerning, wrapping, alignment and decorations behave exactly as
+they do for plain text. The tags only decide how each glyph is styled and how
+it moves.
+
+Tags are `<name args>text</>`, and `</>` closes the most recent one. A named
+close such as `</b>` also works.
+
+| Tag | Does |
+|-----|------|
+| `b` `i` `u` `s` `mono` | bold, italic, underline, strikethrough, monospace |
+| `size 1.5` | scales the run, and the line grows to fit it |
+| `#f80` `#ff8800cc` `red` | colour |
+| `link url` | a link run |
+
+Effects each take an optional strength, speed and `#colour`, in that order:
+`shake`, `wiggle`, `wave`, `sizewave`, `bounce`, `slide`, `dangle`,
+`pendulum`, `swing`, `rotate`, `pulse`, `rainbow`. They are pure functions of
+time, so nothing about them is stored and nothing needs resetting.
+
+A style whose face is not supplied falls back to the regular font. Write `\<`
+for a literal `<`.
+
 ## Markdown
 
 ```csharp
-.Markdown(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
+var markdown = new MarkdownBuilder(font)
+    .Fonts(bold, italic, boldItalic, mono)
+    .FontSize(16)
+    .OnLink(href => OpenUrl(href))
+    .Images(src => LoadTexture(src))
+    .Source(readme);
+
+// each frame, wherever it belongs
+markdown.Build(paper, "readme");
 ```
 
-Parses and renders standard Markdown inline styling using the four font
-variants provided.
+`MarkdownBuilder` turns Markdown into ordinary elements: headings and
+paragraphs are rich text elements, lists are rows and columns, tables are rows
+of cells, and code blocks are clipped boxes. Because they are real elements,
+they lay out, scroll and clip like anything else, and `Build` returns the
+containing column so it can be styled further.
 
-## Tagged rich text
-
-```csharp
-.RichText(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
-```
-
-Supports inline tags for styling — `<b>`, `<i>`, `<u>`, `<s>`, `<color=...>`,
-`<size=...>`, `<font=mono>`, `<link=...>` — and text animations — `<shake>`,
-`<wave>`, `<rainbow>`, `<pulse>`, `<fade>`, `<jitter>`, `<typewriter>`. The laid-
-out result is cached across frames so animation start time and the typewriter
-reveal survive between frames rather than restarting.
-
-```csharp
-void ResetRichText(ElementHandle el)
-```
-
-Clears the cached rich-text layout for an element, replaying its animations
-(typewriter, etc.) from the next frame's draw.
+Keep the builder and call `Build` every frame. `Source` only parses again when
+the text actually changes, and every string a block needs is made once per
+parse. Links are clickable where they are drawn and show the pointer cursor when
+hovered, and an image on a line of its
+own is drawn at its natural size, no wider than the document. Parsing is done
+by [Prowl.Quire](../../Quire).
 
 ## Text input controls
 

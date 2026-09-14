@@ -1075,10 +1075,9 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary> Sets the plain text content of the element with the specified font for rendering. Does not parse markdown or rich text. </summary>
+        /// <summary> Sets the text content of the element with the specified font. Add <see cref="RichText"/> to draw it as rich text. </summary>
         public ElementBuilder Text(string text, FontFile font)
         {
-            _handle.Data.IsMarkdown = false;
             _handle.Data.Paragraph = text;
             _handle.Data.Font = font;
             return this;
@@ -1087,7 +1086,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Draws this element's text as a mask character, for passwords and anything else that
         /// should not be readable over someone's shoulder. The element keeps the real text, so
-        /// measuring and hit testing still work on it.
+        /// measuring and hit testing still work on it. A mask also wins over <see cref="RichText"/>.
         /// </summary>
         public ElementBuilder IsPassword(char mask = '*')
         {
@@ -1095,38 +1094,21 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary> Sets the text content of the element, parsing it as Markdown with custom font faces for bold, italic, bold-italic, and monospace styles. </summary>
-        public ElementBuilder Markdown(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
-        {
-            _handle.Data.IsMarkdown = true;
-            _handle.Data.IsRichText = false;
-            _handle.Data.Paragraph = text;
-            _handle.Data.Font = font;
-            _handle.Data.FontBold = bold;
-            _handle.Data.FontItalic = italic;
-            _handle.Data.FontBoldItalic = boldItalic;
-            _handle.Data.FontMono = mono;
-            return this;
-        }
-
         /// <summary>
-        /// Sets the element's content to a tagged rich-text source. Supported tags include
-        /// styling (<c>&lt;b&gt;</c>, <c>&lt;i&gt;</c>, <c>&lt;u&gt;</c>, <c>&lt;s&gt;</c>,
-        /// <c>&lt;color=...&gt;</c>, <c>&lt;size=...&gt;</c>, <c>&lt;font=mono&gt;</c>,
-        /// <c>&lt;link=...&gt;</c>) and animations (<c>&lt;shake&gt;</c>, <c>&lt;wave&gt;</c>,
-        /// <c>&lt;rainbow&gt;</c>, <c>&lt;pulse&gt;</c>, <c>&lt;fade&gt;</c>, <c>&lt;jitter&gt;</c>,
-        /// <c>&lt;typewriter&gt;</c>).
+        /// Draws this element's <see cref="Text"/> as rich text.
         ///
-        /// <para>The laid-out text is cached across frames so that animation start time and the
-        /// typewriter reveal survive between frames. Use <see cref="Paper.ResetRichText"/> to
-        /// replay the animation.</para>
+        /// <para>A tag is a name and optional arguments between angle brackets, and an empty closing
+        /// tag ends the most recent one. Styling: <c>b</c>, <c>i</c>, <c>u</c>, <c>s</c>, <c>mono</c>,
+        /// <c>size 1.5</c>, <c>link url</c>, and a colour as <c>#f80</c> or a name like <c>red</c>.
+        /// Effects, each taking an optional strength, speed and <c>#colour</c>: <c>shake</c>,
+        /// <c>wiggle</c>, <c>wave</c>, <c>sizewave</c>, <c>bounce</c>, <c>slide</c>, <c>dangle</c>,
+        /// <c>pendulum</c>, <c>swing</c>, <c>rotate</c>, <c>pulse</c>, <c>rainbow</c>.</para>
+        ///
+        /// <para>The faces are optional. A style whose face is missing falls back to the regular font.</para>
         /// </summary>
-        public ElementBuilder RichText(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
+        public ElementBuilder RichText(FontFile bold = null, FontFile italic = null, FontFile boldItalic = null, FontFile mono = null)
         {
-            _handle.Data.IsMarkdown = false;
             _handle.Data.IsRichText = true;
-            _handle.Data.Paragraph = text;
-            _handle.Data.Font = font;
             _handle.Data.FontBold = bold;
             _handle.Data.FontItalic = italic;
             _handle.Data.FontBoldItalic = boldItalic;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI.LayoutEngine;
@@ -84,7 +84,7 @@ public partial class Paper
         FontFile? Mono,
         FontStyle FontStyle,
         bool Rich,
-        bool Markdown,
+        char? Mask,
         bool Truncate,
         TextWrapMode Wrap,
         TextAlignment Alignment,
@@ -112,7 +112,7 @@ public partial class Paper
             data.FontMono,
             data.FontStyle,
             data.IsRichText,
-            data.IsMarkdown,
+            data.MaskChar,
             data.Truncate,
             data.WrapMode,
             data.TextAlignment,
@@ -258,10 +258,6 @@ public partial class Paper
             || state.Revision != data._contentRevision)
         {
             _layoutTree.MarkDirty(state.Node);
-            if (textChanged && data.IsRichText)
-            {
-                SetElementStorageById<Quill.Canvas.QuillRichText?>(data.ID, RichTextLayoutKey, null);
-            }
         }
 
         state.Metrics = metrics;
@@ -390,7 +386,10 @@ public partial class Paper
     {
         ref var data = ref GetElementData(index);
         hidden |= !data.Visible;
-        var rect = hidden ? default : _layoutTree.GetRect(_layoutStates[data.ID].Node);
+        var node = _layoutStates[data.ID].Node;
+        var rect = hidden ? default : _layoutTree.GetRect(node);
+        var content = hidden ? default : _layoutTree.GetContentRect(node);
+        data.ContentRect = new Prowl.Vector.Rect(content.X, content.Y, content.X + content.Width, content.Y + content.Height);
         data.RelativeX = rect.X;
         data.RelativeY = rect.Y;
         data.LayoutWidth = rect.Width;

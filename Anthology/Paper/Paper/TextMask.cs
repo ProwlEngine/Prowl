@@ -11,12 +11,13 @@ namespace Prowl.PaperUI
     /// The mask is a Scribe <see cref="GlyphCustomizer"/> rather than a second, masked copy of the
     /// string: the layout still holds the real text, so cursor positions, selection and hit testing
     /// all keep working on what the user actually typed, and nothing is allocated per frame. Line
-    /// breaks are left alone so a multi-line field keeps its shape.
+    /// breaks are left alone so a field of several lines keeps its shape.
     /// </summary>
     internal static class TextMask
     {
         // One customizer per mask character, kept because Scribe's layout cache matches customizers
-        // by identity: a fresh delegate each frame would miss the cache every frame.
+        // by identity, so a fresh delegate each frame would miss the cache every frame. Shared by
+        // every Paper instance, which may live on different threads, hence the lock.
         private static readonly Dictionary<char, GlyphCustomizer> _masks = new Dictionary<char, GlyphCustomizer>();
 
         public static GlyphCustomizer For(char? mask)
@@ -24,16 +25,19 @@ namespace Prowl.PaperUI
             if (!mask.HasValue) return null;
 
             char c = mask.Value;
-            if (!_masks.TryGetValue(c, out var customizer))
+            lock (_masks)
             {
-                customizer = (ref GlyphStyle g) =>
+                if (!_masks.TryGetValue(c, out var customizer))
                 {
-                    if (g.Codepoint != '\n' && g.Codepoint != '\r') g.Codepoint = c;
-                };
-                _masks[c] = customizer;
-            }
+                    customizer = (ref GlyphStyle g) =>
+                    {
+                        if (g.Codepoint != '\n' && g.Codepoint != '\r') g.Codepoint = c;
+                    };
+                    _masks[c] = customizer;
+                }
 
-            return customizer;
+                return customizer;
+            }
         }
     }
 }
