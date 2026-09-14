@@ -49,7 +49,7 @@ public static class ProfilerFrameInspector
 
             InspectorKit.SectionCard(paper, "rdp_fv_renderops", "Render Operations", () => DrawRenderOperationsSection(paper, history));
             InspectorKit.SectionCard(paper, "rdp_fv_resmem", "Resident Memory", () => DrawResidentMemorySection(paper, frame, history));
-            InspectorKit.SectionCard(paper, "rdp_fv_liveobj", "Live Objects", () => DrawLiveObjectsSection(paper, frame));
+            InspectorKit.SectionCard(paper, "rdp_fv_liveobj", "Live Objects", () => DrawLiveObjectsSection(paper, frame, history));
             InspectorKit.SectionCard(paper, "rdp_fv_bufferops", "Buffer Operations", () => DrawBufferOperationsSection(paper, history));
             InspectorKit.SectionCard(paper, "rdp_fv_swapchain", "Swapchain", () => DrawSwapchainSection(paper, history));
             InspectorKit.SectionCard(paper, "rdp_fv_barriers", "Barriers", () => DrawBarriersSection(paper, history));
@@ -100,11 +100,26 @@ public static class ProfilerFrameInspector
     }
 
 
-    // One row per live-object category instead of a StatGroup per Live/Alloc/Free series - with
-    // AllocBin's full set of categories, three side-by-side StatGroups overflowed the card width and
-    // overlapped.
-    private static void DrawLiveObjectsSection(Paper paper, ProfiledFrame frame)
+    // A history of one frame (SingleFrameHistory, i.e. a snapshot) has nothing to plot a line
+    // against, so it falls back to a table instead - same gating InspectorKit.DrawChart does, but a
+    // table instead of a StatGroup since AllocBin's full set of categories overflows a StatGroup row.
+    private static void DrawLiveObjectsSection(Paper paper, ProfiledFrame frame, IProfilerHistory history)
     {
+        if (history.Frames.Count > 1)
+        {
+            using (paper.Column("rdp_fv_liveobj").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
+            {
+                DrawLiveObjectsCountChart(paper, "rdp_fv_liveobj_count_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
+
+                using (paper.Row("rdp_fv_liveobj_alloc_free_row").Height(UnitValue.Auto).Gap(InspectorKit.ChartRowGap).Enter())
+                {
+                    DrawLiveObjectsAllocChart(paper, "rdp_fv_liveobj_alloc_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
+                    DrawLiveObjectsFreeChart(paper, "rdp_fv_liveobj_free_chart", UnitValue.Stretch(), InspectorKit.ChartHeight, history);
+                }
+            }
+            return;
+        }
+
         AllocBin[] bins = Enum.GetValues<AllocBin>();
 
         TableBuilder table = Origami.Table(paper, "rdp_fv_liveobj_table", -1, _ => { })
@@ -130,6 +145,39 @@ public static class ProfilerFrameInspector
         }
 
         table.Show();
+    }
+
+
+    private static void DrawLiveObjectsCountChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
+    {
+        AllocBin[] bins = Enum.GetValues<AllocBin>();
+        var series = new (string, Color, IReadOnlyList<double>)[bins.Length];
+        for (int i = 0; i < bins.Length; i++)
+            series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], history.Counter($"Live/{bins[i]}"));
+
+        InspectorKit.DrawChart(paper, history, id, "Count", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
+    }
+
+
+    private static void DrawLiveObjectsAllocChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
+    {
+        AllocBin[] bins = Enum.GetValues<AllocBin>();
+        var series = new (string, Color, IReadOnlyList<double>)[bins.Length];
+        for (int i = 0; i < bins.Length; i++)
+            series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], history.Counter($"Alloc/{bins[i]}"));
+
+        InspectorKit.DrawChart(paper, history, id, "Allocations", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
+    }
+
+
+    private static void DrawLiveObjectsFreeChart(Paper paper, string id, UnitValue width, float height, IProfilerHistory history)
+    {
+        AllocBin[] bins = Enum.GetValues<AllocBin>();
+        var series = new (string, Color, IReadOnlyList<double>)[bins.Length];
+        for (int i = 0; i < bins.Length; i++)
+            series[i] = (bins[i].ToString(), InspectorKit.SeriesPalette[i % InspectorKit.SeriesPalette.Length], history.Counter($"Free/{bins[i]}"));
+
+        InspectorKit.DrawChart(paper, history, id, "Free", "Objects", InspectorKit.FormatCountCompact, width, height, false, series);
     }
 
 
