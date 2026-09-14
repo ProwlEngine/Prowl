@@ -72,8 +72,10 @@ public class ColorRamp
         }
     }
 
+    /// <summary> Converts a Color to a hex string in RRGGBB format. </summary>
     public static string ColorToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
+    /// <summary> Parses a hex color string (e.g. #FF00FF) to a Color. Returns Color.Magenta on parse failure. </summary>
     public static Color ParseHex(string hex)
     {
         try { return ColorTranslator.FromHtml(hex); }
@@ -86,56 +88,92 @@ public class ColorRamp
 /// </summary>
 public class EditorThemeData
 {
+    /// <summary> Display name of this theme. </summary>
     public string Name { get; set; } = "Indigo";
 
     // Color ramps (customization overlaid onto Origami's defaults). Primary = the bright ★ C500 stop.
+    /// <summary> Neutral color ramp for backgrounds and surfaces. </summary>
     public ColorRamp Neutral { get; set; } = new() { Primary = "#181830" };
+    /// <summary> Purple accent color ramp. </summary>
     public ColorRamp Purple { get; set; } = new() { Primary = "#6366F1" };
+    /// <summary> Blue accent color ramp. </summary>
     public ColorRamp Blue { get; set; } = new() { Primary = "#8B5CF6" };
+    /// <summary> Red accent color ramp. </summary>
     public ColorRamp Red { get; set; } = new() { Primary = "#FB7185" };
+    /// <summary> Green accent color ramp. </summary>
     public ColorRamp Green { get; set; } = new() { Primary = "#4ADE80" };
+    /// <summary> Amber accent color ramp. </summary>
     public ColorRamp Amber { get; set; } = new() { Primary = "#FBBF24" };
+    /// <summary> Ink color ramp for text and high-contrast elements. </summary>
     public ColorRamp Ink { get; set; } = new() { Primary = "#EAEAF7" };
 
     // Font
+    /// <summary> Name of the default UI font. </summary>
     public string DefaultFontName { get; set; } = "Geist";
 
+    /// <summary> Name of the default bold UI font. </summary>
     public string DefaultBoldFontName { get; set; } = "Geist";
 
+    /// <summary> User interface scale factor. </summary>
     public float UserScale { get; set; } = 1f;
 
     // Sizing
+    /// <summary> Height of the menu bar in pixels. </summary>
     public float MenuBarHeight { get; set; } = 40f;
+    /// <summary> Height of the status bar in pixels. </summary>
     public float StatusBarHeight { get; set; } = 26f;
+    /// <summary> Height of a single row in pixels. </summary>
     public float RowHeight { get; set; } = 24f;
+    /// <summary> Default font size in points. </summary>
     public float FontSize { get; set; } = 17f;
+    /// <summary> Width of property labels in pixels. </summary>
     public float LabelWidth { get; set; } = 150f;
+    /// <summary> Spacing between UI elements in pixels. </summary>
     public float Spacing { get; set; } = 4f;
+    /// <summary> Padding inside UI elements in pixels. </summary>
     public float Padding { get; set; } = 6f;
     // Single knob driving both the dock gutter padding and the splitter thickness.
+    /// <summary> Dock gutter padding and splitter thickness in pixels. </summary>
     public float DockSpacing { get; set; } = 6f;
+    /// <summary> Height of the tab bar in pixels. </summary>
     public float TabBarHeight { get; set; } = 32f;
+    /// <summary> Padding inside tabs in pixels. </summary>
     public float TabPadding { get; set; } = 12f;
+    /// <summary> Corner roundness radius in pixels. </summary>
     public float Roundness { get; set; } = 6f;
 
     // Effects
+    /// <summary> Whether glass surfaces use a blur effect. </summary>
     public bool GlassBlur { get; set; } = true;
+    /// <summary> Strength of the glass blur effect. </summary>
     public float BlurAmount { get; set; } = 22f;
+    /// <summary> Whether drop shadows are rendered. </summary>
     public bool DropShadows { get; set; } = true;
+    /// <summary> Whether accent elements have a glow effect. </summary>
     public bool AccentGlow { get; set; } = true;
+    /// <summary> Whether anti-aliasing is enabled. </summary>
     public bool AntiAliasing { get; set; } = true;
 
     // Background: animated nebula, or a static style (frozen nebula / gradient / solid colour).
+    /// <summary> Whether the animated nebula background is enabled. </summary>
     public bool AnimatedBackground { get; set; } = true;
+    /// <summary> Speed of the animated background. </summary>
     public float BackgroundSpeed { get; set; } = 1f;
+    /// <summary> Static background style used when the animated background is off. </summary>
     public EditorBackgroundStyle BackgroundStyle { get; set; } = EditorBackgroundStyle.Nebula;
+    /// <summary> First background gradient color as hex. </summary>
     public string BackgroundColorA { get; set; } = "#1B1130";
+    /// <summary> Second background gradient color as hex. </summary>
     public string BackgroundColorB { get; set; } = "#08060C";
 
     // Nebula layer toggles + the raw void colour behind everything.
+    /// <summary> Whether nebula gradient layers are shown. </summary>
     public bool BgShowGradients { get; set; } = true;
+    /// <summary> Whether nebula stars are shown. </summary>
     public bool BgShowStars { get; set; } = true;
+    /// <summary> Whether nebula comets are shown. </summary>
     public bool BgShowComets { get; set; } = true;
+    /// <summary> Solid color behind all background layers as hex. </summary>
     public string BackgroundVoidColor { get; set; } = "#060409";
 
     // Default ramp stops (RGB) = Origami's ramps. Customization is applied on top of Origami's
@@ -188,6 +226,7 @@ public class EditorThemeData
 
     private static Color KeepAlpha(Color dst, Color rgb) => Color.FromArgb(dst.A, rgb.R, rgb.G, rgb.B);
 
+    /// <summary> Creates a deep clone of this theme data. </summary>
     public EditorThemeData Clone()
     {
         var json = JsonSerializer.Serialize(this);
@@ -196,12 +235,14 @@ public class EditorThemeData
         return clone;
     }
 
+    /// <summary> Serializes this theme to a JSON file at the given path. </summary>
     public void ExportToFile(string path)
     {
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(path, json);
     }
 
+    /// <summary> Deserializes a theme from a JSON file. Returns null if the file cannot be read or parsed. </summary>
     public static EditorThemeData? ImportFromFile(string path)
     {
         try
@@ -214,6 +255,7 @@ public class EditorThemeData
         catch { return null; }
     }
 
+    /// <summary> Creates a default EditorThemeData with initialized ramps. </summary>
     public static EditorThemeData CreateDefault()
     {
         var d = new EditorThemeData();

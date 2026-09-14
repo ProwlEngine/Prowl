@@ -79,7 +79,6 @@ public sealed class AudioDemoGame : Game
         camera.Effects =
         [
             new FXAAEffect(),
-            new BloomEffect(),
             new TonemapperEffect(),
         ];
         cameraGO.AddComponent<AudioListener>();

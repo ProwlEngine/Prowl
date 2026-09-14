@@ -34,11 +34,13 @@ public readonly record struct VariantKey(string ContentHash, string TargetId, st
 /// </remarks>
 public interface IVariantCache
 {
+    /// <summary> Returns true if a variant for the given key is present in the cache. </summary>
     ValueTask<bool> ExistsAsync(VariantKey key, CancellationToken ct = default);
 
     /// <summary>The stored bytes, or null on a miss. The caller owns the stream.</summary>
     ValueTask<Stream?> OpenAsync(VariantKey key, CancellationToken ct = default);
 
+    /// <summary> Writes the given data into the cache under the specified key. </summary>
     ValueTask WriteAsync(VariantKey key, Stream data, CancellationToken ct = default);
 
     /// <summary>
@@ -61,8 +63,7 @@ public sealed class LocalVariantCache : IVariantCache
     private readonly long _maxBytes;
     private readonly TimeSpan _maxAge;
 
-    /// <param name="maxBytes">Generous on purpose: the cost of a miss is reprocessing the asset.</param>
-    /// <param name="maxAge">Entries untouched for this long go regardless of how much room is left.</param>
+    /// <summary> Creates a disk-backed cache rooted at the given directory, with a byte budget and age limit for pruning. maxBytes is generous on purpose: the cost of a miss is reprocessing the asset. maxAge: entries untouched for this long go regardless of how much room is left. </summary>
     public LocalVariantCache(string root, long maxBytes = 8L * 1024 * 1024 * 1024, TimeSpan? maxAge = null)
     {
         _root = root ?? throw new ArgumentNullException(nameof(root));
@@ -85,6 +86,7 @@ public sealed class LocalVariantCache : IVariantCache
             EditorUtils.SafeFileName(key.ToStorageKey(), "_"));
     }
 
+    /// <summary> Returns true if a variant for the given key is present, and touches the file to update its last-write time for LRU-aware pruning. </summary>
     public ValueTask<bool> ExistsAsync(VariantKey key, CancellationToken ct = default)
     {
         string path = PathFor(key);
@@ -98,6 +100,7 @@ public sealed class LocalVariantCache : IVariantCache
         return ValueTask.FromResult(true);
     }
 
+    /// <summary> Returns a read-only stream for the cached variant, or null if the key is not present. </summary>
     public ValueTask<Stream?> OpenAsync(VariantKey key, CancellationToken ct = default)
     {
         string path = PathFor(key);
@@ -147,6 +150,7 @@ public sealed class LocalVariantCache : IVariantCache
         return ValueTask.FromResult(removed);
     }
 
+    /// <summary> Writes the stream data into the cache under the given key using an atomic write pattern. </summary>
     public async ValueTask WriteAsync(VariantKey key, Stream data, CancellationToken ct = default)
     {
         string path = PathFor(key);

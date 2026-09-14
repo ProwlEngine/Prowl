@@ -173,7 +173,7 @@ public class BuildSettingsPanel : DockPanel
         const float rowH = 28f;
 
         var rowB = paper.Row($"bp_sc_{sk}").Height(rowH).Rounded(7).Margin(0, 0, 0, 3)
-            .Padding(8, 4, 0, 0).RowBetween(8)
+            .Padding(8, 4, 0, 0).Gap(8)
             .BackgroundColor(beingDragged || on ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Hover).End();
 
@@ -380,10 +380,10 @@ public class BuildSettingsPanel : DockPanel
             slots.Add((null, null, -1));
 
         using (paper.Column("bp_grid").Height(UnitValue.Auto)
-            .Padding(10, 10, 10, 10).ColBetween(CardGap).Enter())
+            .Padding(10, 10, 10, 10).Gap(CardGap).Enter())
         {
             for (int r = 0; r < slots.Count; r += 2)
-                using (paper.Row($"bp_grow_{r}").Height(UnitValue.Auto).RowBetween(CardGap).Enter())
+                using (paper.Row($"bp_grow_{r}").Height(UnitValue.Auto).Gap(CardGap).Enter())
                 {
                     DrawPlatformCard(paper, font, r, slots[r]);
                     DrawPlatformCard(paper, font, r + 1, slots[r + 1]);
@@ -398,7 +398,7 @@ public class BuildSettingsPanel : DockPanel
         bool sel = selectable && _selectedIndex == slot.realIndex;
 
         var card = paper.Column($"bp_card_{cell}").MinHeight(78)
-            .Rounded(9).Padding(6, 6, 11, 11).ColBetween(6)
+            .Rounded(9).Padding(6, 6, 11, 11).Gap(6)
             .BackgroundColor(sel ? EditorTheme.Selected : EditorTheme.Glass)
             .BorderColor(sel ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(1);
 
@@ -416,7 +416,7 @@ public class BuildSettingsPanel : DockPanel
             Color fg = selectable ? (sel ? EditorTheme.Ink500 : EditorTheme.Ink400) : EditorTheme.Ink200;
 
             using (paper.Column($"bp_card_{cell}_c").Height(UnitValue.Auto)
-                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).ColBetween(6).Enter())
+                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Gap(6).Enter())
             {
                 paper.Box($"bp_card_{cell}_ic").Height(20).IsNotInteractable()
                     .Text(slot.icon, font).TextColor(fg)
@@ -480,7 +480,7 @@ public class BuildSettingsPanel : DockPanel
     {
         var semi = EditorTheme.FontSemiBold ?? font;
 
-        using (paper.Row(id).Height(HeaderH).Padding(14, 14, 0, 0).RowBetween(8).Enter())
+        using (paper.Row(id).Height(HeaderH).Padding(14, 14, 0, 0).Gap(8).Enter())
         {
             paper.Box($"{id}_t").Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Text(title.ToUpperInvariant(), semi).TextColor(EditorTheme.AccentText)

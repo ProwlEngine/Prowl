@@ -58,6 +58,47 @@ public static class Application
     /// </summary>
     public static bool IsGameplayExecuting { get; set; }
 
+    private static readonly FrameLimiter s_limiter = new();
+    private static bool s_vsync;
+
+    /// <summary>
+    /// Frames per second the loop is paced to, whether that loop is the editor's, a standalone
+    /// game's or a headless server's. Zero or less runs unlimited, which is what a game starts at
+    /// until its own code says otherwise. This is a ceiling, so with <see cref="VSync"/> on the
+    /// lower of the two wins.
+    /// <para>
+    /// In the editor this belongs to the editor's own preferences until play mode starts, which
+    /// hands it back to this default so the game's code decides, exactly as in a build.
+    /// </para>
+    /// </summary>
+    public static int TargetFrameRate
+    {
+        get => s_limiter.TargetFrameRate;
+        set => s_limiter.TargetFrameRate = value;
+    }
+
+    /// <summary>
+    /// Whether a frame is held back until the display is ready for it, which caps the rate to the
+    /// refresh rate and removes tearing. Off in a game until its own code turns it on, and on in
+    /// the editor unless its preferences say otherwise. Has nothing to act on when
+    /// <see cref="IsHeadless"/>.
+    /// </summary>
+    public static bool VSync
+    {
+        get => s_vsync;
+        set
+        {
+            s_vsync = value;
+            // Silk.NET's own window property is only read by the automatic Run loop, which Prowl
+            // does not use. The swap interval is the whole setting, and the render thread applies
+            // it because it is the thread holding the context.
+            Graphics.SetSwapInterval(value ? 1 : 0);
+        }
+    }
+
+    /// <summary>Blocks until the next frame is due. The run loops call this, once per frame.</summary>
+    internal static void WaitForNextFrame() => s_limiter.Wait();
+
     /// <summary>
     /// Directory containing the running executable (standalone) or project root (editor).
     /// Used by PlayerAssetBackend to locate assets relative to the executable.

@@ -85,7 +85,7 @@ public class ModelAssetEditor : ImportSettingsEditor
                 .Rounded(8).Clip()
                 .BackgroundColor(EditorTheme.Neutral300)
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                .ChildLeft().ChildRight().ChildTop().ChildBottom().Enter())
+                .JustifyContent(LayoutJustification.Center).AlignItems(LayoutAlignment.Center).Enter())
             {
                 pr.DrawPreview(paper, $"{id}_preview", 184, 184);
             }
@@ -102,7 +102,7 @@ public class ModelAssetEditor : ImportSettingsEditor
             }
 
             using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
-                .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
+                .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
             {
                 EditorGUI.StatChip(paper, $"{id}_st_meshes", $"{meshCount} {(meshCount == 1 ? "Mesh" : "Meshes")}", font);
                 EditorGUI.StatChip(paper, $"{id}_st_mats", $"{matCount} {(matCount == 1 ? "Material" : "Materials")}", font);

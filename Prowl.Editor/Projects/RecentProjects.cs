@@ -6,6 +6,7 @@ using System.Text.Json;
 
 namespace Prowl.Editor.Projects;
 
+/// <summary> Represents a single entry in the recent projects list. </summary>
 public class RecentProjectEntry
 {
     public string Path { get; set; } = "";
@@ -36,6 +37,7 @@ public static class RecentProjects
         }
     }
 
+    /// <summary> Adds or moves a project to the top of the recent list. If the path already exists its favorite flag is preserved. Non-favorite entries beyond the maximum are evicted. </summary>
     public static void AddRecent(string path, string name)
     {
         _entries ??= Load();
@@ -72,6 +74,7 @@ public static class RecentProjects
         Save();
     }
 
+    /// <summary> Removes a project from the recent list by its path. </summary>
     public static void Remove(string path)
     {
         _entries ??= Load();

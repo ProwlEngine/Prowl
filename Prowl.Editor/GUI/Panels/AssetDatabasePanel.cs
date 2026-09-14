@@ -237,7 +237,7 @@ public class AssetDatabasePanel : DockPanel
     {
         using (paper.Column("adb_tb_col").Height(65).Enter())
         {
-            using (paper.Row("adb_tb1").Height(33).Padding(10, 8, 6, 0).RowBetween(6).Enter())
+            using (paper.Row("adb_tb1").Height(33).Padding(10, 8, 6, 0).Gap(6).Enter())
             {
                 using (paper.Row("adb_search_wrap").Width(160).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "adb_search", _searchText, v => _searchText = v, "Filter by name/path").Width(160).Height(24).Show();
@@ -260,7 +260,7 @@ public class AssetDatabasePanel : DockPanel
                 EditorGUI.CtaButton(paper, "adb_sweep", "Sweep Now", EditorTheme.Accent, () => db.ForceIdleSweep());
             }
 
-            using (paper.Row("adb_tb2").Height(28).Padding(10, 8, 0, 4).RowBetween(6).Enter())
+            using (paper.Row("adb_tb2").Height(28).Padding(10, 8, 0, 4).Gap(6).Enter())
             {
                 EditorGUI.StatChip(paper, "adb_chip_total", $"Loaded: {_totalCount}", font);
                 EditorGUI.StatChip(paper, "adb_chip_idle", $"Idle: {_idleCount}", font);
@@ -600,7 +600,7 @@ public class AssetDatabasePanel : DockPanel
 
             if (showStackTrace)
             {
-                using (paper.Row("adb_details_hdr").Height(24).RowBetween(8).Enter())
+                using (paper.Row("adb_details_hdr").Height(24).Gap(8).Enter())
                 {
                     paper.Box("adb_details_title").Width(UnitValue.Auto).Height(24).IsNotInteractable()
                         .Text("Last Touch Stack Trace", EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
@@ -641,7 +641,7 @@ public class AssetDatabasePanel : DockPanel
         var deps = db.Dependencies.GetDependencies(guid);
         var dependents = db.Dependencies.GetDependents(guid);
 
-        using (paper.Row("adb_dep_row").Height(60).ColBetween(16).Enter())
+        using (paper.Row("adb_dep_row").Height(60).Enter())
         {
             DrawGuidList(paper, font, mono, db, "adb_dep_out", $"Depends on ({deps.Count})", deps);
             DrawGuidList(paper, font, mono, db, "adb_dep_in", $"Used by ({dependents.Count})", dependents);

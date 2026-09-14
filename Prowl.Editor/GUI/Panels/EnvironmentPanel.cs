@@ -229,7 +229,7 @@ public class EnvironmentPanel : DockPanel
 
         using (paper.Column($"{id}_card").Height(UnitValue.Auto).Margin(m.PaddingLarge, m.PaddingLarge, 16, 0)
             .Padding(12, 12, 12, 12).Rounded(9).BackgroundColor(EditorTheme.Glass)
-            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).ColBetween(10).Enter())
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Gap(10).Enter())
         {
             if (baking)
             {
@@ -241,7 +241,7 @@ public class EnvironmentPanel : DockPanel
             }
             else
             {
-                using (paper.Row($"{id}_info").Height(UnitValue.Auto).MinHeight(18).RowBetween(8).Enter())
+                using (paper.Row($"{id}_info").Height(UnitValue.Auto).MinHeight(18).Gap(8).Enter())
                 {
                     paper.Box($"{id}_info_i").Width(14).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Text(hasBaked ? EditorIcons.Check : EditorIcons.Sun, font)
@@ -252,7 +252,7 @@ public class EnvironmentPanel : DockPanel
                         .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 }
 
-                using (paper.Row($"{id}_btns").Height(34).RowBetween(8).Enter())
+                using (paper.Row($"{id}_btns").Height(34).Gap(8).Enter())
                 {
                     EditorGUI.CtaButton(paper, $"{id}_bake", $"{EditorIcons.Sun}  {Loc.Get("env.generate_lighting")}", EditorTheme.Accent,
                         () =>

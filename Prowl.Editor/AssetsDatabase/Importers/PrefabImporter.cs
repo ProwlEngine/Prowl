@@ -19,6 +19,7 @@ public class PrefabImporter : AssetImporter
     // 2: PrefabAsset stores its tree in a backing field, so cached payloads from v1 no longer bind.
     public override int Version => 2;
 
+    /// <summary> Reads a .prefab file, parses its EchoObject tree, flattens any nested prefab links, collects asset dependencies, and sets a PrefabAsset as the main asset. Returns true on success, false on failure with a logged error. </summary>
     public override bool Import(ImportContext ctx)
     {
         try

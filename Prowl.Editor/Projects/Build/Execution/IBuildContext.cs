@@ -22,22 +22,27 @@ public interface IBuildContext
     /// <summary>The output published by an earlier stage. Throws when nothing published it.</summary>
     T GetOutput<T>() where T : class;
 
+    /// <summary> Attempts to retrieve the output published by an earlier stage, returning false when nothing published it. </summary>
     bool TryGetOutput<T>(out T? value) where T : class;
 
+    /// <summary> Publishes a typed output value that later stages can retrieve. </summary>
     void SetOutput<T>(T value) where T : class;
 
+    /// <summary> Reports a build issue, such as an error or warning. </summary>
     void Report(BuildIssue issue);
 
     /// <summary>Progress and log text for a human watching the build.</summary>
     void Log(string message, BuildSeverity severity = BuildSeverity.Info);
 }
 
+/// <summary> Default implementation of IBuildContext that stores typed outputs, collected issues, and an optional log callback. </summary>
 public sealed class BuildContext : IBuildContext
 {
     private readonly ConcurrentDictionary<Type, object> _outputs = new();
     private readonly ConcurrentBag<BuildIssue> _issues = new();
     private readonly Action<string, BuildSeverity>? _log;
 
+    /// <summary> Initialises a new BuildContext with the given build request and an optional log callback. </summary>
     public BuildContext(BuildRequest request, Action<string, BuildSeverity>? log = null)
     {
         Request = request ?? throw new ArgumentNullException(nameof(request));
@@ -58,12 +63,14 @@ public sealed class BuildContext : IBuildContext
         }
     }
 
+    /// <summary> The output published by an earlier stage. Throws when nothing published it. </summary>
     public T GetOutput<T>() where T : class
         => _outputs.TryGetValue(typeof(T), out var value)
             ? (T)value
             : throw new InvalidOperationException(
                 $"No stage published a {typeof(T).Name}. Declare a dependency on the stage that produces it.");
 
+    /// <summary> Attempts to retrieve the output published by an earlier stage, returning false when nothing published it. </summary>
     public bool TryGetOutput<T>(out T? value) where T : class
     {
         if (_outputs.TryGetValue(typeof(T), out var stored))
@@ -76,10 +83,13 @@ public sealed class BuildContext : IBuildContext
         return false;
     }
 
+    /// <summary> Publishes a typed output value that later stages can retrieve. </summary>
     public void SetOutput<T>(T value) where T : class
         => _outputs[typeof(T)] = value ?? throw new ArgumentNullException(nameof(value));
 
+    /// <summary> Reports a build issue, such as an error or warning. </summary>
     public void Report(BuildIssue issue) => _issues.Add(issue);
 
+    /// <summary> Progress and log text for a human watching the build. </summary>
     public void Log(string message, BuildSeverity severity = BuildSeverity.Info) => _log?.Invoke(message, severity);
 }

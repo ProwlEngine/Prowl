@@ -92,7 +92,7 @@ public class TextureAssetEditor : ImportSettingsEditor
 
             // Quick-facts chip strip.
             using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
-                .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
+                .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
             {
                 EditorGUI.StatChip(paper, $"{id}_st_size", $"{tex.Width} x {tex.Height}", font);
                 EditorGUI.StatChip(paper, $"{id}_st_fmt", tex.ImageFormat.ToString(), font);

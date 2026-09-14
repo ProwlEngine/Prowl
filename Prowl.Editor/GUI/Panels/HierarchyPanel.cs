@@ -96,7 +96,7 @@ public class HierarchyPanel : DockPanel
                     .Height(24)
                     .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                     .Rounded(3).Margin(4, 4, 4, 0)
-                    .ChildLeft(6).RowBetween(4)
+                    .PaddingLeft(6).Gap(4)
                     .Enter())
                 {
                     paper.Box("hier_prefab_back")
@@ -156,7 +156,7 @@ public class HierarchyPanel : DockPanel
             using (paper.Row("hier_scene_hdr")
                 .Height(EditorTheme.RowHeight)
                 .Margin(6, 6, 0, 2)
-                .Rounded(6).Padding(8, 8, 0, 0).RowBetween(6)
+                .Rounded(6).Padding(8, 8, 0, 0).Gap(6)
                 .BackgroundColor(EditorTheme.Glass)
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
@@ -383,7 +383,7 @@ public class HierarchyPanel : DockPanel
                         else
                         {
                             paper.Box($"hier_name_{goId}")
-                                .Height(EditorTheme.RowHeight).ChildLeft(4)
+                                .Height(EditorTheme.RowHeight).PaddingLeft(4)
                                 .Text(go.Name, font)
                                 .TextColor(node.LabelColor ?? EditorTheme.Ink500)
                                 .FontSize(EditorTheme.FontSizeSmall)

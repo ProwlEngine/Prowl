@@ -12,6 +12,7 @@ public class DependencyGraph
     private readonly Dictionary<Guid, HashSet<Guid>> _forward = new();
     private readonly Dictionary<Guid, HashSet<Guid>> _reverse = new();
 
+    /// <summary> Sets the dependencies for the specified asset, replacing any existing dependencies. </summary>
     public void SetDependencies(Guid asset, IEnumerable<Guid> dependencies)
     {
         // Remove old reverse links
@@ -42,6 +43,7 @@ public class DependencyGraph
     // otherwise. Erasing their edge here silently unlinked anything whose sub-asset went away and came
     // back with the same GUID - a re-sliced sprite, or a file an external tool rewrote as delete+create -
     // leaving the graph disagreeing with the dependencies persisted on the entry until the next restart.
+    /// <summary> Removes the asset and its forward dependencies from the graph. Reverse links pointing to this asset are preserved. </summary>
     public void RemoveAsset(Guid asset)
     {
         if (_forward.Remove(asset, out var deps))
@@ -57,11 +59,11 @@ public class DependencyGraph
             _reverse.Remove(asset);
     }
 
-    /// <summary>What does this asset depend on?</summary>
+    /// <summary> Returns the set of assets that the given asset directly depends on. </summary>
     public IReadOnlySet<Guid> GetDependencies(Guid asset)
         => _forward.GetValueOrDefault(asset) ?? (IReadOnlySet<Guid>)new HashSet<Guid>();
 
-    /// <summary>What assets depend on this one? (Find References)</summary>
+    /// <summary> Returns the set of assets that directly depend on the given asset. </summary>
     public IReadOnlySet<Guid> GetDependents(Guid asset)
         => _reverse.GetValueOrDefault(asset) ?? (IReadOnlySet<Guid>)new HashSet<Guid>();
 
@@ -95,6 +97,7 @@ public class DependencyGraph
         return visited;
     }
 
+    /// <summary> Removes all assets and dependencies from the graph. </summary>
     public void Clear()
     {
         _forward.Clear();

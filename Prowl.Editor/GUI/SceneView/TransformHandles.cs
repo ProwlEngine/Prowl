@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
@@ -39,14 +39,14 @@ public static class TransformHandles
         return DoTransform(ctx, id, Gizmo.TransformGizmoMode.Translate, ref position, ref rot, ref scale, out hot);
     }
 
-    /// <summary>A rotation handle pivoted at <paramref name="pivot"/>. Returns true if it rotated this frame.</summary>
+    /// A rotation handle pivoted at <paramref name="pivot"/>. Returns true if it rotated this frame; <paramref name="hot"/> is true while the handle is hovered or being dragged (callers should treat input as consumed and skip their own picking when hot).
     public static bool RotationHandle(HandleContext ctx, string id, Float3 pivot, ref Quaternion rotation, out bool hot)
     {
         Float3 scale = Float3.One;
         return DoTransform(ctx, id, Gizmo.TransformGizmoMode.Rotate, ref pivot, ref rotation, ref scale, out hot);
     }
 
-    /// <summary>A full translate/rotate/scale handle. <paramref name="mode"/> selects which axes/planes show.</summary>
+    /// A full translate/rotate/scale handle. <paramref name="mode"/> selects which axes/planes show. Returns true if it moved this frame; <paramref name="hot"/> is true while the handle is hovered or being dragged (callers should treat input as consumed and skip their own picking when hot).
     public static bool TransformHandle(HandleContext ctx, string id, Gizmo.TransformGizmoMode mode,
                                        ref Float3 position, ref Quaternion rotation, ref Float3 scale, out bool hot)
         => DoTransform(ctx, id, mode, ref position, ref rotation, ref scale, out hot);

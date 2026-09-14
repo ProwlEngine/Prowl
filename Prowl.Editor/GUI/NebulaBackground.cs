@@ -23,9 +23,13 @@ public sealed class NebulaBackground
     private static Color Col(int r, int g, int b, float a = 1f) => Color32.FromArgb((int)Math.Round(a * 255), r, g, b);
 
     // Per-layer visibility + the raw void colour behind everything (all settable from the theme).
+    /// <summary> Whether to draw the coloured nebula gradients. </summary>
     public bool ShowClouds = true;    // the coloured nebula gradients
+    /// <summary> Whether to draw the tileable starfield. </summary>
     public bool ShowStars = true;
+    /// <summary> Whether to draw the occasional comets. </summary>
     public bool ShowComets = true;
+    /// <summary> The solid colour drawn behind all other layers. </summary>
     public System.Drawing.Color VoidColor = System.Drawing.Color.FromArgb(6, 4, 9);
 
     // Theme tint (primary/secondary); the whole nebula is coloured from these.
@@ -49,6 +53,7 @@ public sealed class NebulaBackground
     private const float CloudSpeed = 0.045f;
     private const float CloudTurn = 2.5f;
 
+    /// <summary> Initialises the four nebula clouds with randomised positions, sizes and colours. </summary>
     public NebulaBackground(Paper paper)
     {
         _paper = paper;
@@ -61,6 +66,7 @@ public sealed class NebulaBackground
             _clouds[i] = new Cloud { cx = sx[i], cy = sy[i], ang = (float)(_rng.NextDouble() * MathF.Tau), rf = cr[i], color = cc[i], phase = (float)(_rng.NextDouble() * 6.28f), timer = 0f };
     }
 
+    /// <summary> Advances the nebula animation (clouds and comets) by the given time delta. </summary>
     public void Update(float dt)
     {
         _time += dt;
@@ -195,6 +201,7 @@ public sealed class NebulaBackground
         _paper.Renderer.SetTextureData(_starTex, new IntRect(0, 0, T, T), data);
     }
 
+    /// <summary> Draws the full nebula background (void fill, clouds, stars and comets) into the specified rectangle. </summary>
     public void Draw(Canvas vg, Rect rect)
     {
         if (_starTex == null) BuildStarTexture();

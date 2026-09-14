@@ -25,8 +25,10 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.Core;
 
+/// <summary> The editor application, the main entry point for the Prowl editor. Extends Game and manages the editor window, panels, play mode, asset pipeline, and UI lifecycle. </summary>
 public class EditorApplication : Game
 {
+    /// <summary> Gets the singleton EditorApplication instance. Set during Initialize(). </summary>
     public static EditorApplication? Instance { get; private set; }
 
     /// <summary>The editor's PropertyGrid configuration (drawers, handlers, callbacks).</summary>
@@ -53,6 +55,7 @@ public class EditorApplication : Game
     private TimeData? _savedEditorTime;
 
 
+    /// <summary> Initializes the editor window with the given title, width and height, restoring saved position and maximization state from EditorSettings. </summary>
     public override void InitializeWindow(string title, int width, int height)
     {
         var instance = EditorSettings.Instance;
@@ -63,6 +66,7 @@ public class EditorApplication : Game
             instance.WindowY > 0 ? instance.WindowY : Window.Position.Y);
     }
 
+    /// <summary> Initializes the editor: sets the singleton instance, loads fonts and settings, initializes the dock space, localization, registries, menus, and the PropertyGrid config. Opens a project if one was provided via --project, otherwise shows the project launcher. </summary>
     public override void Initialize()
     {
         Instance = this;
@@ -84,6 +88,8 @@ public class EditorApplication : Game
 
         // Load editor settings (global, persists across projects)
         _ = EditorSettings.Instance; // triggers load + ApplyTheme
+
+        ApplyFramePacing();
 
         _dockSpace = new DockSpace(CreateDefaultLayout());
 
@@ -281,6 +287,7 @@ public class EditorApplication : Game
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
 
+    /// <summary> Loads all editor fonts (Geist variants, JetBrains Mono, Space Grotesk, Audiowide) from embedded resources and syncs the Origami theme. Safe to call multiple times; fonts are only loaded once. </summary>
     public void InitializeFont()
     {
         if (EditorTheme.DefaultFont != null) return;
@@ -311,6 +318,7 @@ public class EditorApplication : Game
         return new Prowl.Scribe.FontFile(stream);
     }
 
+    /// <summary> Sets the Paper resolution and framebuffer scale, accounting for content scale and user scale. </summary>
     protected override void PreparePaperFrame()
     {
         var fbSize = Window.InternalWindow.FramebufferSize;
@@ -320,6 +328,7 @@ public class EditorApplication : Game
         PaperInstance.DisplayFramebufferScale = new Float2(cs * us, cs * us);
     }
 
+    /// <summary> Converts the raw mouse position into Paper-local coordinates, accounting for framebuffer size, window size, content scale, and user scale. </summary>
     protected override Float2 GetPaperMousePosition()
     {
         var p = Input.MousePosition;
@@ -344,6 +353,7 @@ public class EditorApplication : Game
         DwmSetWindowAttribute(hwnd, 20, ref darkMode, sizeof(int));
     }
 
+    /// <summary> Begins the editor GUI frame: flushes the undo system, handles global keyboard shortcuts, pushes the Origami theme, processes asset changes, and draws the project launcher or editor backdrop and header. </summary>
     public override void BeginGui(Paper paper)
     {
         // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
@@ -630,7 +640,7 @@ public class EditorApplication : Game
         // its text, so there's no width math or MeasureText.
         using (paper.Row("hdr_status").PositionType(PositionType.SelfDirected)
             .Width(UnitValue.Auto).Height(clH)
-            .Margin(UnitValue.StretchOne, UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne).RowBetween(6).Enter())
+            .Margin(UnitValue.StretchOne, UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne).Gap(6).Enter())
         {
             // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
             // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
@@ -678,6 +688,7 @@ public class EditorApplication : Game
         }
     }
 
+    /// <summary> Ends the editor GUI frame: draws the on-boarding guide overlay, renders Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips), plays the intro animation, and pops the Origami theme. </summary>
     public override void EndGui(Paper paper)
     {
         // On-boarding guide overlay (above panels/header, below Origami's popovers/toasts).
@@ -738,7 +749,7 @@ public class EditorApplication : Game
         // margins; auto width hugs the menus.
         using (paper.Row("menubar_host").PositionType(PositionType.SelfDirected)
             .Width(UnitValue.Auto).Height(barH)
-            .Margin(UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne, UnitValue.StretchOne).RowBetween(4).Enter())
+            .Margin(UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne, UnitValue.StretchOne).Gap(4).Enter())
         {
             var bar = Origami.MenuBar(paper, "menubar").Height(barH);
             foreach (var root in MenuRegistry.RootMenus)
@@ -959,6 +970,7 @@ public class EditorApplication : Game
 
     private static OrigamiUI.FileDialogConfig? s_fileDialogConfig;
 
+    /// <summary> Gets the file dialog configuration used by the editor, providing icons, quick-access directories, and drive enumeration. </summary>
     public static OrigamiUI.FileDialogConfig FileDialogConfig
     {
         get
@@ -987,6 +999,7 @@ public class EditorApplication : Game
 
     private const int BarCount = 10;
 
+    /// <summary> Reads an embedded resource file and returns its content as a string. </summary>
     public static string GetEmbeddedResourceText(string resource)
     {
         var stream = GetEmbeddedResource(resource);
@@ -1000,6 +1013,7 @@ public class EditorApplication : Game
         return data;
     }
 
+    /// <summary> Opens a stream to an embedded resource in the Prowl.Editor.Resources namespace. </summary>
     public static Stream? GetEmbeddedResource(string resource)
     {
         var assembly = Assembly.GetExecutingAssembly();
@@ -1010,6 +1024,7 @@ public class EditorApplication : Game
         return stream;
     }
 
+    /// <summary> Extracts an embedded resource to a temporary file on disk and returns a FileStream to it. </summary>
     public static FileStream? GetResource(string resource)
     {
         var assembly = Assembly.GetExecutingAssembly();
@@ -1583,6 +1598,18 @@ public class EditorApplication : Game
         return true;
     }
 
+    /// <summary>
+    /// Puts the editor's vsync and frame rate preferences back in charge. Does nothing while the
+    /// game is playing, which is what leaves play mode free to pace itself.
+    /// </summary>
+    internal static void ApplyFramePacing()
+    {
+        if (Application.IsPlaying) return;
+
+        Application.VSync = EditorSettings.Instance.VSync;
+        Application.TargetFrameRate = EditorSettings.Instance.TargetFrameRate;
+    }
+
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
@@ -1657,6 +1684,11 @@ public class EditorApplication : Game
         // Focus the Game View tab
         FocusPanel(typeof(GameViewPanel));
 
+        // The editor's vsync and frame limit are its preference, not the game's, so play starts
+        // unpaced and whatever the game's own code sets from here is what it runs at.
+        Application.VSync = false;
+        Application.TargetFrameRate = 0;
+
         Runtime.Debug.Log("Entered play mode.");
     }
 
@@ -1705,6 +1737,8 @@ public class EditorApplication : Game
 
         // Restore the previously active tab
         RestoreActiveTab();
+
+        ApplyFramePacing();
 
         Runtime.Debug.Log("Exited play mode.");
     }

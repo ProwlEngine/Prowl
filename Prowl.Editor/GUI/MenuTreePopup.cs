@@ -47,9 +47,12 @@ public readonly struct MenuTreeEntry
 /// <summary>Per-popup navigation state: the search box text and the folder the user has drilled into.</summary>
 public sealed class MenuTreeState
 {
+    /// <summary> Current search box text. Empty when no search is active. </summary>
     public string Search = "";
+    /// <summary> Breadcrumb path of folder names the user has drilled into. Empty at root. </summary>
     public List<string> Nav = [];
 
+    /// <summary> Clears the search text and navigation, returning to the root level. </summary>
     public void Reset()
     {
         Search = "";
@@ -119,7 +122,7 @@ public static class MenuTreePopup
             .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
             .Rounded(EditorTheme.Roundness + 2f)
             .Padding(padX, padX, padY, padY)
-            .ColBetween(searchGap)
+            .Gap(searchGap)
             .HookToParent()
             .Layer(Layer.Topmost)
             .ClampToScreen()
@@ -176,7 +179,7 @@ public static class MenuTreePopup
             using (paper.Row($"{id}_back")
                 .Height(EditorTheme.RowHeight)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
+                .Rounded(6).PaddingLeft(9).PaddingRight(9).Gap(9)
                 .OnClick(0, (_, _) => state.Nav.RemoveAt(state.Nav.Count - 1))
                 .Enter())
             {
@@ -197,7 +200,7 @@ public static class MenuTreePopup
             using (paper.Row($"{id}_folder_{folder}")
                 .Height(EditorTheme.RowHeight)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
+                .Rounded(6).PaddingLeft(9).PaddingRight(9).Gap(9)
                 .OnClick(0, (_, _) => state.Nav.Add(captured))
                 .Enter())
             {
@@ -271,7 +274,7 @@ public static class MenuTreePopup
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
+            .Rounded(6).PaddingLeft(9).PaddingRight(9).Gap(9)
             .OnClick(entry, (e, _) => onPick(e))
             .Enter())
         {

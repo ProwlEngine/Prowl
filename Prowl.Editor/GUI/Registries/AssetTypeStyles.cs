@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Drawing;
@@ -32,8 +32,11 @@ public static class AssetTypeStyles
         Purple = C(168, 85, 247), Pink = C(217, 107, 216), Cyan = C(52, 211, 238), Orange = C(251, 146, 60),
         Gray = C(148, 143, 171), Red = C(251, 113, 133);
 
+    /// <summary> Style for a folder in the asset browser. </summary>
     public static AssetTypeStyle Folder => new() { Icon = EditorIcons.Folder_I, Color = Amber, Bare = true };
+    /// <summary> Style for an empty folder in the asset browser. </summary>
     public static AssetTypeStyle EmptyFolder => new() { Icon = EditorIcons.FolderOpen_I, Color = Amber, Bare = true };
+    /// <summary> Style for a sub-asset (a child of a main asset file). </summary>
     public static AssetTypeStyle SubAsset => new() { Icon = EditorIcons.Cube_I, Color = Purple };
 
     private static readonly System.Collections.Generic.Dictionary<string, AssetTypeStyle> _map =

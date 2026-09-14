@@ -41,7 +41,7 @@ public class AssetRefPropertyEditor : PropertyEditor
         string icon = isAsset ? EditorIcons.Cube : isInstance ? EditorIcons.CircleDot : EditorIcons.Circle;
         var iconColor = isAsset ? EditorTheme.Purple400 : isInstance ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
         {
             // Label
             if (!string.IsNullOrEmpty(label))
@@ -57,7 +57,7 @@ public class AssetRefPropertyEditor : PropertyEditor
                 .Height(rh)
                 .BackgroundColor(isDragTarget ? Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Glass)
                 .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-                .Rounded(6).Padding(m.SpacingLarge, m.PaddingSmall, 0, 0).RowBetween(m.SpacingLarge)
+                .Rounded(6).Padding(m.SpacingLarge, m.PaddingSmall, 0, 0).Gap(m.SpacingLarge)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.BorderSoft).BorderWidth(1)
                 .OnClick((fieldType, assetRef, onChange, instance, isAsset, isInstance), (cap, e) =>
                 {

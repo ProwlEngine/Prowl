@@ -29,6 +29,7 @@ public static class AudioPreview
     /// <summary>The clip currently being auditioned, or Guid.Empty.</summary>
     public static Guid PlayingClip => IsPlaying ? s_playing : Guid.Empty;
 
+    /// <summary> Whether a clip is currently being auditioned. Checks the native audio source state. </summary>
     public static bool IsPlaying
         => s_source != IntPtr.Zero
            && s_deviceGeneration == AudioContext.DeviceGeneration
@@ -69,6 +70,7 @@ public static class AudioPreview
         s_clipHash = 0;
     }
 
+    /// <summary> Stops the audition, if one is playing. </summary>
     public static void Stop()
     {
         if (s_source == IntPtr.Zero || s_deviceGeneration != AudioContext.DeviceGeneration) return;

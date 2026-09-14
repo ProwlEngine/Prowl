@@ -18,6 +18,7 @@ public sealed record ExecutionLimits
     public int IoBound { get; init; } = 8;
     public int Network { get; init; } = 4;
 
+    /// <summary> Returns the concurrency limit for the given resource class, at least 1. </summary>
     public int For(StageResources resources) => resources switch
     {
         StageResources.CpuBound => Math.Max(1, CpuBound),
@@ -27,6 +28,7 @@ public sealed record ExecutionLimits
     };
 }
 
+/// <summary> The result of a build run: whether it succeeded, the issues collected, the duration, and how many operations were executed. </summary>
 public sealed record BuildOutcome
 {
     public required bool Succeeded { get; init; }
@@ -44,16 +46,14 @@ public sealed class BuildExecutor
     private readonly ExecutionLimits _limits;
     private readonly Action<BuildStage, int, int>? _onProgress;
 
-    /// <param name="onProgress">
-    /// Receives the stage that just finished, how many stages are done and how many there are. Stages
-    /// rather than operations, because that is the only count known before the work is planned.
-    /// </param>
+    /// <summary> Initializes a new instance of BuildExecutor. Limits default to <see cref="ExecutionLimits"/> with its default values. onProgress receives the stage that just finished, how many stages are done and how many there are. Stages rather than operations, because that is the only count known before the work is planned. </summary>
     public BuildExecutor(ExecutionLimits? limits = null, Action<BuildStage, int, int>? onProgress = null)
     {
         _limits = limits ?? new ExecutionLimits();
         _onProgress = onProgress;
     }
 
+    /// <summary> Walks the stage graph from the pipeline, running ready stages concurrently as their dependencies complete, and returns the build outcome. Throws <see cref="OperationCanceledException"/> if the cancellation token is triggered. </summary>
     public async Task<BuildOutcome> RunAsync(
         BuildPipeline pipeline, BuildContext context, CancellationToken ct = default)
     {

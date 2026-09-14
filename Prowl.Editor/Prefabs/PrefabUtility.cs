@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -210,11 +210,7 @@ public static partial class PrefabUtility
     //  Break
     // ================================================================
 
-    /// <summary>
-    /// Break a prefab instance removes the link to its prefab asset.
-    /// The GameObject becomes a plain non-prefab object, but nested prefab instances inside it keep
-    /// their own links (breaking the outermost instance only).
-    /// </summary>
+    /// <summary> Remove the link between a prefab instance and its prefab asset. The GameObject becomes a plain non-prefab object, but nested prefab instances inside it keep their own links (breaking the outermost instance only). </summary>
     public static void UnpackPrefabInstance(GameObject go)
     {
         if (!go.IsPrefabInstance) return;
@@ -580,9 +576,7 @@ public static partial class PrefabUtility
         EditorSceneManager.MarkDirty();
     }
 
-    /// <summary>
-    /// Revert a single override load the source value and write it back to the instance field.
-    /// </summary>
+    /// <summary> Revert a single override by loading the source value and writing it back to the instance field. </summary>
     public static void RevertSingleOverride(GameObject instanceGO, string overridePath)
     {
         if (!instanceGO.IsPrefabInstance) return;
@@ -1308,6 +1302,7 @@ public static partial class PrefabUtility
         };
     }
 
+    /// <summary> Whether the override path still addresses a valid member on the prefab instance. An unresolvable override can only be removed. </summary>
     public static bool IsOverrideResolvable(GameObject instanceGO, string overridePath)
     {
         if (!instanceGO.IsPrefabInstance) return false;

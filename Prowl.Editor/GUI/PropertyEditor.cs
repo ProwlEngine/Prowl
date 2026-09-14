@@ -10,7 +10,9 @@ namespace Prowl.Editor.GUI;
 [AttributeUsage(AttributeTargets.Class)]
 public class CustomPropertyEditorAttribute : Attribute
 {
+    /// <summary> Gets the type for which this custom property editor is registered. </summary>
     public Type TargetType { get; }
+    /// <summary> Initializes a new instance with the type that this editor handles. </summary>
     public CustomPropertyEditorAttribute(Type targetType) => TargetType = targetType;
 }
 

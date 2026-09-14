@@ -339,7 +339,7 @@ public class GameViewPanel : DockPanel
             .Position(x, y)
             .Width(panelW).Height(UnitValue.Auto)
             .BackgroundColor(EditorTheme.Neutral200)
-            .Rounded(5).Padding(pad, pad, pad, pad).ColBetween(1)
+            .Rounded(5).Padding(pad, pad, pad, pad).Gap(1)
             .Enter())
         {
             // FPS + frame time

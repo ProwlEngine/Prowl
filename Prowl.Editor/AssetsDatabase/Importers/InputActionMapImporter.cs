@@ -14,6 +14,7 @@ public class InputActionMapImporter : AssetImporter
 {
     public override int Version => 1;
 
+    /// <summary> Reads a .inputactions file, deserializes it to an InputActionMap, and sets it as the main asset via the import context. Returns false and logs an error on failure. </summary>
     public override bool Import(ImportContext ctx)
     {
         try

@@ -73,11 +73,6 @@ public class TextMeshComponent : MonoBehaviour
     [SerializeField] private TAlignment _anchor = TAlignment.CenterMiddle;
     public TAlignment Anchor { get => _anchor; set => SetField(ref _anchor, value); }
 
-    /// <summary>When true, <see cref="Text"/> is parsed for rich-text tags (color, size, bold/italic,
-    /// etc.). The assigned <see cref="Font"/> is used for every style variant.</summary>
-    [SerializeField] private bool _richText;
-    public bool RichTextEnabled { get => _richText; set => SetField(ref _richText, value); }
-
     [SerializeField] private AssetRef<Material> _material;
     public AssetRef<Material> Material { get => _material; set => SetField(ref _material, value); }
 
@@ -107,12 +102,6 @@ public class TextMeshComponent : MonoBehaviour
     [SerializeIgnore] private bool _hasGeometry;
     [SerializeIgnore] private int _lastAtlasVersion = -1;
 
-    // Cached rich-text layout, reused across frames so animated effects keep advancing (a fresh layout
-    // each rebuild would re-anchor its start-time to "now" and freeze). Rebuilt only when text/settings change.
-    [SerializeIgnore] private RichTextLayout? _richLayout;
-    [SerializeIgnore] private int _richSig;
-    [SerializeIgnore] private bool _richAnimated;
-
     private void SetField<T>(ref T field, T value)
     {
         if (EqualityComparer<T>.Default.Equals(field, value)) return;
@@ -136,8 +125,7 @@ public class TextMeshComponent : MonoBehaviour
         // The shared atlas can grow (new glyph / pixel-size), which shifts every glyph's UVs; rebuild
         // when that happens, when a property changed, or when the mesh hasn't been built yet.
         int atlasVersion = UIFontSystem.Default.System.AtlasVersion;
-        // Animated rich-text effects are time-driven, so rebuild every frame while any are active.
-        if (_dirty || _mesh == null || atlasVersion != _lastAtlasVersion || (_richText && _richAnimated))
+        if (_dirty || _mesh == null || atlasVersion != _lastAtlasVersion)
         {
             RebuildMesh();
             _lastAtlasVersion = atlasVersion;
@@ -184,62 +172,27 @@ public class TextMeshComponent : MonoBehaviour
         UIMeshBuilder builder = UIMeshBuilder.Rent();
         try
         {
-            float layoutWidth, layoutHeight;
-
-            if (_richText)
+            TextLayoutSettings settings = new TextLayoutSettings
             {
-                RichTextLayoutSettings settings = new RichTextLayoutSettings
-                {
-                    RegularFont = fontFile, BoldFont = fontFile, ItalicFont = fontFile,
-                    BoldItalicFont = fontFile, MonoFont = fontFile,
-                    PixelSize = pixelSize,
-                    Quality = _quality,
-                    MaxWidth = _maxWidth,
-                    WrapMode = wrap ? TextWrapMode.Wrap : TextWrapMode.NoWrap,
-                    Alignment = align,
-                    DefaultColor = color,
-                };
-                int sig = System.HashCode.Combine(_text, pixelSize, (int)_quality, _maxWidth, (int)_anchor, _textColor);
-                if (_richLayout == null || sig != _richSig)
-                {
-                    if (_richLayout == null) _richLayout = new RichTextLayout(_text, settings);
-                    else { _richLayout.SetSource(_text); _richLayout.SetSettings(settings); }
-                    _richLayout.Update(fs.System);
-                    _richAnimated = _richLayout.Effects.Count > 0;
-                    _richSig = sig;
-                }
-                layoutWidth = _richLayout.Size.X;
-                layoutHeight = _richLayout.Size.Y;
+                Font          = fontFile,
+                PixelSize     = pixelSize,
+                Quality       = _quality,
+                Alignment     = align,
+                MaxWidth      = _maxWidth,
+                WrapMode      = wrap ? TextWrapMode.Wrap : TextWrapMode.NoWrap,
+                LineHeight    = 1.0f,
+                TabSize       = 4,
+                LetterSpacing = 0f,
+                WordSpacing   = 0f,
+            };
+            TextLayout layout = fs.System.CreateLayout(_text, settings);
+            float layoutWidth = layout.Size.X;
+            float layoutHeight = layout.Size.Y;
 
-                (float ox, float oy) = AnchorOrigin(_anchor, wrap ? _maxWidth : layoutWidth, layoutHeight);
-                fs.BeginCapture(builder, ox, oy, scale);
-                try { _richLayout.Draw(fs.System, fs, Float2.Zero, (double)Time.TimeSinceStartup); }
-                finally { fs.EndCapture(); }
-            }
-            else
-            {
-                TextLayoutSettings settings = new TextLayoutSettings
-                {
-                    Font          = fontFile,
-                    PixelSize     = pixelSize,
-                    Quality       = _quality,
-                    Alignment     = align,
-                    MaxWidth      = _maxWidth,
-                    WrapMode      = wrap ? TextWrapMode.Wrap : TextWrapMode.NoWrap,
-                    LineHeight    = 1.0f,
-                    TabSize       = 4,
-                    LetterSpacing = 0f,
-                    WordSpacing   = 0f,
-                };
-                TextLayout layout = fs.System.CreateLayout(_text, settings);
-                layoutWidth = layout.Size.X;
-                layoutHeight = layout.Size.Y;
-
-                (float ox, float oy) = AnchorOrigin(_anchor, wrap ? _maxWidth : layoutWidth, layoutHeight);
-                fs.BeginCapture(builder, ox, oy, scale);
-                try { fs.System.DrawLayout(layout, Float2.Zero, color); }
-                finally { fs.EndCapture(); }
-            }
+            (float ox, float oy) = AnchorOrigin(_anchor, wrap ? _maxWidth : layoutWidth, layoutHeight);
+            fs.BeginCapture(builder, ox, oy, scale);
+            try { fs.System.DrawLayout(layout, Float2.Zero, color); }
+            finally { fs.EndCapture(); }
 
             if (builder.IsEmpty) return;
 

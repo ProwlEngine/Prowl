@@ -41,10 +41,14 @@ public sealed class GradientFieldBuilder
         _setter = setter;
     }
 
+    /// <summary> Sets the width of the gradient field. </summary>
     public GradientFieldBuilder Width(UnitValue width) { _width = width; return this; }
+    /// <summary> Sets the preview bar height, clamped to a minimum of 16. </summary>
     public GradientFieldBuilder PreviewHeight(float height) { _previewHeight = MathF.Max(16, height); return this; }
+    /// <summary> Sets the gradient field to read-only, preventing editing. </summary>
     public GradientFieldBuilder ReadOnly(bool readOnly = true) { _readOnly = readOnly; return this; }
 
+    /// <summary> Renders the gradient field with the configured properties. </summary>
     public void Show()
     {
         if (Origami.IsReadOnly) _readOnly = true;
@@ -85,6 +89,7 @@ public sealed class GradientFieldBuilder
 /// <summary>Static entry point for GradientField builder.</summary>
 public static class GradientField
 {
+    /// <summary> Creates a new GradientFieldBuilder for the given paper, id, gradient value, and setter callback. </summary>
     public static GradientFieldBuilder Create(Paper paper, string id, Gradient value, Action<Gradient> setter)
         => new GradientFieldBuilder(paper, id, value, setter);
 }
@@ -93,8 +98,10 @@ public static class GradientField
 //  Gradient Renderer
 // ================================================================
 
+/// <summary> Provides methods for rendering gradient previews. </summary>
 public static class GradientRenderer
 {
+    /// <summary> Draws a gradient preview with a checkerboard background for alpha visibility. </summary>
     public static void DrawPreview(Canvas canvas, Rect r, Gradient gradient, OrigamiTheme theme)
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
@@ -176,7 +183,7 @@ internal sealed class GradientEditorModal : IModal
             .Rounded(m.ContainerRounding)
             .DropShadow(0, 4, 24, 0, Color.FromArgb(100, 0, 0, 0))
             .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge)
-            .ColBetween(m.SpacingMedium)
+            .Gap(m.SpacingMedium)
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()

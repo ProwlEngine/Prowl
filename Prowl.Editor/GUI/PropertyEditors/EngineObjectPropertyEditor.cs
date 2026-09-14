@@ -37,7 +37,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         string displayName = PropertyGridUtils.DescribeObjectRef(eo, fieldType);
         string icon = eo != null ? EditorIcons.Cube : EditorIcons.Circle;
 
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
         {
             // Label
             if (!string.IsNullOrEmpty(label))
@@ -55,7 +55,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 .Height(rh)
                 .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Glass)
                 .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-                .Rounded(6).Padding(m.SpacingLarge, m.PaddingSmall, 0, 0).RowBetween(m.SpacingLarge)
+                .Rounded(6).Padding(m.SpacingLarge, m.PaddingSmall, 0, 0).Gap(m.SpacingLarge)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.BorderSoft).BorderWidth(1)
                 .OnClick((eo, isAsset), (cap, e) =>
                 {

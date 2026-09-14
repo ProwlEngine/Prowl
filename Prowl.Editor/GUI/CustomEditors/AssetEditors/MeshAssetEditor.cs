@@ -101,7 +101,7 @@ public class MeshAssetEditor : AssetImporterEditor
             .Rounded(8).Clip()
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .ChildLeft().ChildRight().ChildTop().ChildBottom().Enter())
+            .JustifyContent(LayoutJustification.Center).AlignItems(LayoutAlignment.Center).Enter())
         {
             state.Preview.DrawPreview(paper, $"{id}_preview_rt", 184, 184);
         }
@@ -114,7 +114,7 @@ public class MeshAssetEditor : AssetImporterEditor
         var size = mesh.bounds.Max - mesh.bounds.Min;
 
         using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
-            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
+            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Gap(m.SpacingMedium).Enter())
         {
             EditorGUI.StatChip(paper, $"{id}_st_verts", $"{verts:N0} Verts", font);
             EditorGUI.StatChip(paper, $"{id}_st_tris", $"{tris:N0} Tris", font);

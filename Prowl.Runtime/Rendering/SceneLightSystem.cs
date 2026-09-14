@@ -20,8 +20,10 @@ namespace Prowl.Runtime.Rendering;
 /// </para>
 ///
 /// <para>
-/// A bounded number of point + spot lights win shadow atlas slots each frame, picked by camera
-/// distance. Lights that miss the cut still light surfaces; they just sample as unshadowed.
+/// A bounded number of point + spot lights win shadow atlas slots each frame, picked by distance
+/// to the frame's shadow focus point (the camera position, or the camera's
+/// <see cref="Camera.ShadowFocus"/> position when one is set). Lights that miss the cut still light
+/// surfaces; they just sample as unshadowed.
 /// </para>
 /// </summary>
 public sealed class SceneLightSystem : IDisposable
@@ -63,7 +65,9 @@ public sealed class SceneLightSystem : IDisposable
     /// <summary>
     /// Walk this frame's lights, register / unregister with the appropriate BVH, refit dynamics,
     /// pick the directional + closest-N shadow casters, and upload only the dirty rows of each
-    /// texture. Cheap when nothing changed.
+    /// texture. Cheap when nothing changed. Shadow casters are picked by distance to
+    /// <paramref name="shadowFocusPos"/>, the frame's shadow focus point (the camera position, or
+    /// the camera's <see cref="Camera.ShadowFocus"/> position when one is set).
     ///
     /// <para>
     /// Note on <paramref name="cullingMask"/>: per-camera light filtering by layer is not
@@ -73,7 +77,7 @@ public sealed class SceneLightSystem : IDisposable
     /// affects every camera. The argument is kept for forward compatibility.
     /// </para>
     /// </summary>
-    public void Reconcile(IReadOnlyList<IRenderableLight> lights, Float3 cameraPos, LayerMask cullingMask)
+    public void Reconcile(IReadOnlyList<IRenderableLight> lights, Float3 shadowFocusPos, LayerMask cullingMask)
     {
         _ = cullingMask; // see remark above
         _seenThisFrame.Clear();
@@ -143,7 +147,7 @@ public sealed class SceneLightSystem : IDisposable
             // Track for shadow-caster selection.
             if (light.DoCastShadows())
             {
-                float dSq = (float)Float3.DistanceSquared(cameraPos, light.GetLightPosition());
+                float dSq = (float)Float3.DistanceSquared(shadowFocusPos, light.GetLightPosition());
                 localCandidates.Add((light, dSq, true));
             }
         }
@@ -211,19 +215,24 @@ public sealed class SceneLightSystem : IDisposable
     /// shadow casters into the shared shadow atlas. The pipeline calls this after binding the
     /// shadow framebuffer.
     /// </summary>
-    public void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, IReadOnlyList<IRenderable> renderables)
+    /// <param name="pipeline">The current render pipeline.</param>
+    /// <param name="shadowFocusPosition">World-space point the directional light centers its
+    /// cascades on: the rendering camera's position, or its <see cref="Camera.ShadowFocus"/>
+    /// position when one is set.</param>
+    /// <param name="renderables">Everything that could cast a shadow this frame.</param>
+    public void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, IReadOnlyList<IRenderable> renderables)
     {
         // Each light manages its own CommandBuffer(s) internally point lights submit
         // one per face, directional submits one per cascade, spot submits a single CB
         // so per-face matrix uploads via AssignCameraMatrices are ordered correctly
         // against that face's draws.
         if (_directional is Light dl)
-            dl.RenderShadows(pipeline, cameraPosition, renderables);
+            dl.RenderShadows(pipeline, shadowFocusPosition, renderables);
 
         for (int i = 0; i < _shadowCasters.Count; i++)
         {
             if (_shadowCasters[i] is Light sc)
-                sc.RenderShadows(pipeline, cameraPosition, renderables);
+                sc.RenderShadows(pipeline, shadowFocusPosition, renderables);
         }
     }
 
@@ -233,14 +242,17 @@ public sealed class SceneLightSystem : IDisposable
     /// arrays for the selected closest-N point + spot lights. Call after <see cref="Reconcile"/>
     /// and <see cref="RenderShadows"/>, before any forward draws.
     /// </summary>
-    public void UploadGlobalUniforms()
+    /// <param name="shadowFocusPosition">The point this frame's cascades were centered on. Uploaded
+    /// as <c>_ShadowFocusPos</c> so shader-side cascade selection measures distance from the same
+    /// point the cascades were built around.</param>
+    public void UploadGlobalUniforms(Float3 shadowFocusPosition)
     {
         // All of these are global-uniform writes. Routing each through its own one-op
         // CommandBuffer (the PropertyState.SetGlobalX helpers) meant ~80-100 rent/submit
         // cycles per camera per frame. Encode them all into a single buffer and submit once.
         using var cmd = Graphics.GetCommandBuffer("LightUniforms");
         UploadBVHTextures(cmd);
-        UploadDirectionalLight(cmd);
+        UploadDirectionalLight(cmd, shadowFocusPosition);
         UploadLocalShadowSlots(cmd);
         Graphics.Submit(cmd);
     }
@@ -281,8 +293,12 @@ public sealed class SceneLightSystem : IDisposable
         return n;
     }
 
-    private void UploadDirectionalLight(CommandBuffer cmd)
+    private void UploadDirectionalLight(CommandBuffer cmd, Float3 shadowFocusPosition)
     {
+        // Written before the early-out: cascade selection in the shader reads this every frame,
+        // so it has to stay fresh even on frames with no directional light at all.
+        cmd.SetGlobalVector("_ShadowFocusPos", shadowFocusPosition);
+
         if (_directional == null)
         {
             cmd.SetGlobalInt("_DirectionalLightEnabled", 0);

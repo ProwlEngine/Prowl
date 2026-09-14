@@ -18,6 +18,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor;
 
+/// <summary> Provides methods to create project assets (folders, shaders, assembly definitions, prefabs, and arbitrary typed assets) with automatic unique naming and folder index invalidation. </summary>
 public static class AssetCreateMenu
 {
     [MenuItem("Assets/Create/Folder", priority: 0, Icon = EditorIcons.Folder)]
@@ -75,6 +76,7 @@ public static class AssetCreateMenu
     [MenuItem("Assets/Create/Assembly Definition", priority: 1011, Icon = EditorIcons.FileLines)]
     static void CreateAsmDefItem() => CreateAssemblyDefinition(GetCurrentFolder());
 
+    /// <summary> Creates an asset file from an AssetMenuEntry by instantiating its type, serializing it, and writing to disk. Returns the relative path of the created asset, or null if the folder does not exist or creation fails. </summary>
     public static string? CreateAsset(AssetMenuEntry entry, string relativeFolder, string? filename = null)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
@@ -109,6 +111,7 @@ public static class AssetCreateMenu
         return ProjectPanel.Instance?.CurrentFolder ?? "";
     }
 
+    /// <summary> Converts a project-relative folder path to an absolute file-system path by combining it with the project's AssetsPath. Returns an empty string if no project is open. </summary>
     public static string GetAbsoluteFolder(string relativeFolder)
     {
         if (Project.Current == null) return "";
@@ -117,9 +120,11 @@ public static class AssetCreateMenu
             : Path.Combine(Project.Current.AssetsPath, relativeFolder);
     }
 
+    /// <summary> Returns a unique file name in the given folder by appending a number suffix if the base name already exists. </summary>
     public static string FindUniqueName(string folder, string baseName, string ext)
         => Utils.UniqueNames.ForFile(folder, baseName, ext);
 
+    /// <summary> Creates a new folder in the project at the given relative path, with a unique name and a DefaultImporter meta file. Returns the relative path of the created folder, or null if the parent folder does not exist. </summary>
     public static string? CreateFolder(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
@@ -135,6 +140,7 @@ public static class AssetCreateMenu
         return relPath;
     }
 
+    /// <summary> Creates a new assembly definition file in the project at the given relative path, with a unique name. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
     public static string? CreateAssemblyDefinition(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);
@@ -151,6 +157,7 @@ public static class AssetCreateMenu
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
+    /// <summary> Creates a new .shader file in the project at the given relative path, with a unique name and a default PBR shader template. Returns the relative path of the created file, or null if the parent folder does not exist. </summary>
     public static string? CreateShader(string relativeFolder)
     {
         string absFolder = GetAbsoluteFolder(relativeFolder);

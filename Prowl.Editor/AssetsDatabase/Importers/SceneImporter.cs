@@ -17,6 +17,7 @@ public class SceneImporter : AssetImporter
     public override int Version => 3; // Bumped: re-import to regenerate scenes cached by the pre-fix
                                       // GameObject deserializer (which could drop every object to null).
 
+    /// <summary> Deserializes a .scene file from Echo-serialized format into a Scene object, sets it as the main asset, and tracks any PrefabAssetId dependencies for cache invalidation. </summary>
     public override bool Import(ImportContext ctx)
     {
         try

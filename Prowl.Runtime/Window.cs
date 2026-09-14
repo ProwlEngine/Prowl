@@ -127,18 +127,6 @@ public static class Window
         set { InternalWindow.IsVisible = value; }
     }
 
-    public static bool VSync
-    {
-        get { return InternalWindow.VSync; }
-        set { InternalWindow.VSync = value; }
-    }
-
-    public static float FramesPerSecond
-    {
-        get { return (float)InternalWindow.FramesPerSecond; }
-        set { InternalWindow.FramesPerSecond = value; InternalWindow.UpdatesPerSecond = value; }
-    }
-
     public static nint Handle
     {
         get { return InternalWindow.Handle; }
@@ -152,13 +140,14 @@ public static class Window
         get { return isFocused; }
     }
 
-    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool VSync = true)
+    public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool vsync = false)
     {
         WindowOptions options = WindowOptions.Default;
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
-        options.VSync = VSync;
+        options.VSync = vsync;
+        Application.VSync = vsync;
         options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
         // Update / Render are driven manually from MainLoop SwapBuffers happens
         // on the render thread.
@@ -183,9 +172,10 @@ public static class Window
     public static void Start()
     {
         InternalWindow.Initialize();
-        // Silk.NET's automatic Render path (which would apply options.VSync) doesn't
-        // run under our manual loop, so apply the swap interval directly.
-        InternalWindow.GLContext!.SwapInterval(InternalWindow.VSync ? 1 : 0);
+        // Silk.NET's automatic Render path (which would apply options.VSync) doesn't run under our
+        // manual loop, so the swap interval is ours to set. The render thread owns the context from
+        // here on, so it applies this at the first frame end, which is the warmup frame below.
+        Graphics.SetSwapInterval(Application.VSync ? 1 : 0);
         Graphics.StartRenderThread();
 
         // Load runs as a warmup frame so SubmitAndWait (shader compiles, FBO checks)
@@ -224,6 +214,8 @@ public static class Window
             // SwapBuffers runs on the render thread as part of the frame-end
             // sentinel no context handoff per frame.
             Graphics.EndFrameAndWait();
+
+            Application.WaitForNextFrame();
         }
     }
 
@@ -276,6 +268,8 @@ public static class Window
         // Stop background asset loading first so no load runs during teardown (it would
         // otherwise race scene unload and try to submit GPU work after the render thread exits).
         AssetLoader.Stop();
+        Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
+
         Closing?.Invoke();
         WindowInputHandler.Dispose();
         Graphics.Dispose();

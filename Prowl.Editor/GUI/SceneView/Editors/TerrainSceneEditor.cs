@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -150,7 +150,7 @@ public class TerrainSceneEditor : SceneTool
             return;
         }
 
-        // Only handle brush input on height/paint tabs
+        // Skip brush input on the Settings tab
         if (TerrainEditor.ActiveTab == TerrainTab.Settings)
         {
             _terrain.BrushVisible = false;

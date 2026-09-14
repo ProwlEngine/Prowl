@@ -7,11 +7,15 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 namespace Prowl.Editor.Projects.Settings;
 
+/// <summary> Project settings for time configuration, including fixed timestep, max fixed iterations, and default time scale. </summary>
 [ProjectSettings("Time", EditorIcons.Clock, order: 22)]
 public class TimeSettings : ProjectSettingsBase
 {
+    /// <summary> The fixed timestep in seconds. Default is 1/60 (approximately 16.67 ms). Minimum value is 0.0001. </summary>
     public float FixedTimestep = 1f / 60f;
+    /// <summary> The maximum number of fixed update iterations per frame. Range 1 to 15. </summary>
     public int MaxFixedIterations = 3;
+    /// <summary> The default time scale applied on startup. Range 0 to 10. A value of 1 represents normal speed. </summary>
     public float DefaultTimeScale = 1f;
 
     public override void Apply()

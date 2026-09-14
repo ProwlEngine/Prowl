@@ -192,6 +192,7 @@ public sealed class LightmapBakeService
             FinalizeBake();
     }
 
+    /// <summary> Cancels the current bake, if any, and resets the service to idle. </summary>
     public void Cancel()
     {
         if (_job == null) return;

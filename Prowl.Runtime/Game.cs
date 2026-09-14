@@ -44,7 +44,8 @@ public abstract class Game
     /// </summary>
     public virtual void InitializeWindow(string title, int width, int height)
     {
-        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, false);
+        // A game runs unpaced until its own code says otherwise, so no vsync and no frame limit.
+        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, vsync: false);
     } 
 
     public void Run(string title, int width, int height)
@@ -289,7 +290,7 @@ public abstract class Game
         ConsoleCancelEventHandler cancelHandler = (_, e) => { e.Cancel = true; _headlessQuitRequested = true; };
         try { Console.CancelKeyPress += cancelHandler; } catch { /* no console in some hosts */ }
 
-        float targetFrameTime = options.TargetFps > 0 ? 1.0f / options.TargetFps : 0.0f;
+        Application.TargetFrameRate = options.TargetFrameRate;
         var runClock = System.Diagnostics.Stopwatch.StartNew();
         long frame = 0;
 
@@ -297,8 +298,6 @@ public abstract class Game
         {
             while (!_headlessQuitRequested)
             {
-                long frameStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-
                 time.Update();
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
@@ -321,12 +320,7 @@ public abstract class Game
                 if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
 
                 // Throttle to the target tick rate so a server doesn't spin a core at 100%.
-                if (targetFrameTime > 0.0f)
-                {
-                    float elapsed = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - frameStartTicks) / (double)System.Diagnostics.Stopwatch.Frequency);
-                    int sleepMs = (int)((targetFrameTime - elapsed) * 1000.0f);
-                    if (sleepMs > 0) System.Threading.Thread.Sleep(sleepMs);
-                }
+                Application.WaitForNextFrame();
             }
         }
         finally
@@ -334,6 +328,7 @@ public abstract class Game
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
             Scene.Shutdown();
+            Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
             Application.IsHeadless = false;
         }
     }
@@ -491,8 +486,11 @@ public sealed class HeadlessRunOptions
     /// <summary>Stop after this many seconds of wall-clock time. 0 = no time limit.</summary>
     public double MaxSeconds = 0;
 
-    /// <summary>Tick rate to throttle the loop to. 0 = run as fast as possible.</summary>
-    public int TargetFps = 60;
+    /// <summary>
+    /// Tick rate the loop starts throttled to. 0 = run as fast as possible. This seeds
+    /// <see cref="Application.TargetFrameRate"/>, which game code can change while running.
+    /// </summary>
+    public int TargetFrameRate = 60;
 }
 
 /// <summary>

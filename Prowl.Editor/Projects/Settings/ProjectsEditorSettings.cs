@@ -5,29 +5,31 @@ using Prowl.PaperUI;
 
 namespace Prowl.Editor.Projects.Settings;
 
-/// <summary>
-/// Stores color and curve palettes per-project.
-/// </summary>
+/// <summary> Stores the color palette per-project. </summary>
 [ProjectSettings("Editor", EditorIcons.Palette, order: 5, exportToBuild: false)]
 public class ProjectsEditorSettings : ProjectSettingsBase
 {
+    /// <summary> The list of hex color strings that make up the editor color palette. </summary>
     public List<string> ColorPalette = DefaultColorPalette();
 
     /// <summary>Last resolution preset selected in the Game View toolbar.</summary>
     public int SelectedResolutionIndex = 0;
 
+    /// <summary> Resets ColorPalette and SelectedResolutionIndex to their default values. </summary>
     public override void ResetToDefaults()
     {
         ColorPalette = DefaultColorPalette();
         SelectedResolutionIndex = 0;
     }
 
+    /// <summary> Draws the custom GUI for this project settings panel. </summary>
     public override void OnGUI(Paper paper, float width)
     {
     }
 
     // -- Default game/UI color palette --
 
+    /// <summary> Returns the default list of hex color strings used as the editor color palette. </summary>
     public static List<string> DefaultColorPalette() =>
     [
         // Grayscale

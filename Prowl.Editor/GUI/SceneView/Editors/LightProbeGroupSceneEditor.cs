@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -39,6 +39,7 @@ public class LightProbeGroupSceneEditor : SceneTool
     private readonly List<int> _selection = new();
     private Camera? _cam;
 
+    /// <summary> Called when the tool is activated. Resolves the LightProbeGroup from the active object, clears the selection, and resets the move handle state. </summary>
     public override void OnActivated(SceneToolContext ctx)
     {
         GameObject? target = ctx.ActiveObject;
@@ -47,6 +48,7 @@ public class LightProbeGroupSceneEditor : SceneTool
         TransformHandles.Forget(MoveHandleId);
     }
 
+    /// <summary> Called when the tool is deactivated. Clears the group reference, selection, and move handle state. </summary>
     public override void OnDeactivated()
     {
         _group = null;
@@ -54,6 +56,7 @@ public class LightProbeGroupSceneEditor : SceneTool
         TransformHandles.Forget(MoveHandleId);
     }
 
+    /// <summary> Processes scene input each frame: keyboard shortcuts (Delete, Ctrl+D, Ctrl+A), the position-handle drag for the current selection, and per-probe click selection with Shift-add and Ctrl-toggle modifiers. </summary>
     public override void OnSceneInput(SceneToolContext toolCtx)
     {
         if (_group == null) return;
@@ -122,6 +125,7 @@ public class LightProbeGroupSceneEditor : SceneTool
 
     public override bool OverridesToolStrip => true;
 
+    /// <summary> Draws the tool strip with Add, Duplicate, Delete, Select All, Select None buttons and a selection-count label. </summary>
     public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
         if (_group == null) return;

@@ -40,9 +40,10 @@ public static class ExternalAssetDrop
     /// </summary>
     public static bool IsResolvingDropTarget => _resolving != null;
 
+    /// <summary> Enqueues file paths from an external drop for deferred processing. </summary>
     public static void Enqueue(string[] paths) => _pending.Enqueue(paths);
 
-    /// <summary>Called once per frame from the editor update loop.</summary>
+    /// <summary> Processes one batch of dropped files per frame, resolving the hover target folder and copying files into the project. </summary>
     public static void ProcessPending()
     {
         SweepReveals();

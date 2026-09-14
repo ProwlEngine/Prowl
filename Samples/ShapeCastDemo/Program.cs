@@ -54,7 +54,6 @@ public sealed class ShapeCastDemoGame : Game
         [
             new ScreenSpaceReflectionEffect(),
             new FXAAEffect(),
-            new BloomEffect(),
             new TonemapperEffect(),
         ];
 

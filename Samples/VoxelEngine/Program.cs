@@ -55,7 +55,6 @@ public sealed class VoxelGame : Game
         camera.Effects =
         [
             new ScreenSpaceReflectionEffect(),
-            new BloomEffect(),
             new BokehDepthOfFieldEffect(),
             new TonemapperEffect(),
         ];

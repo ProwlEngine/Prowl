@@ -158,6 +158,11 @@ public abstract class RenderPipeline : EngineObject
         public Scene Scene = camera.Scene;
 
         public Float3 CameraPosition = camera.Transform.Position;
+
+        /// <summary>World-space center for directional shadow cascades this render: the camera's
+        /// <see cref="Camera.ShadowFocus"/> position when set, otherwise <see cref="CameraPosition"/>.</summary>
+        public Float3 ShadowFocusPosition = camera.GetShadowFocusPosition();
+
         public Float3 CameraRight = camera.Transform.Right;
         public Float3 CameraUp = camera.Transform.Up;
         public Float3 CameraForward = camera.Transform.Forward;

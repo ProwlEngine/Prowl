@@ -18,6 +18,7 @@ namespace Prowl.Editor.Thumbnails;
 /// </summary>
 public static class ThumbnailGenerator
 {
+    /// <summary> Size in pixels of the square thumbnails generated and stored by this system. </summary>
     public static int ThumbnailSize => EditorSettings.Instance.ThumbnailSize;
 
     private static readonly Queue<ThumbnailJob> _queue = new();
@@ -38,6 +39,7 @@ public static class ThumbnailGenerator
     // dependency can't keep a job cycling forever.
     private const double MaxDependencyWaitSeconds = 10.0;
 
+    /// <summary> Queues a thumbnail generation job for the given asset. No-op if the guid is empty, the asset is null, the guid is already queued, or a thumbnail file already exists on disk. </summary>
     public static void Enqueue(Guid guid, EngineObject asset, string? sourceFilePath = null)
     {
         if (guid == Guid.Empty || asset == null) return;
@@ -52,6 +54,7 @@ public static class ThumbnailGenerator
         _queue.Enqueue(new ThumbnailJob { Guid = guid, Asset = asset, SourceFilePath = sourceFilePath });
     }
 
+    /// <summary> Processes one queued thumbnail job. Waits for asset dependencies to load (up to a time budget), generates the thumbnail via the appropriate generator, and writes it to disk. Call once per frame. </summary>
     public static void ProcessOne()
     {
         if (_queue.Count == 0) return;
@@ -173,6 +176,7 @@ public static class ThumbnailGenerator
         catch { return null; }
     }
 
+    /// <summary> Deletes the thumbnail file for the given guid from disk and removes the guid from the queue. </summary>
     public static void DeleteThumbnail(Guid guid, string thumbnailsPath)
     {
         string path = GetThumbnailPath(guid, thumbnailsPath);
@@ -198,9 +202,11 @@ public static class ThumbnailGenerator
         _queued.Clear();
     }
 
+    /// <summary> Returns the full file path for a thumbnail with the given guid, using the .thumb extension. </summary>
     public static string GetThumbnailPath(Guid guid, string thumbnailsPath)
         => Path.Combine(thumbnailsPath, $"{guid}.thumb");
 
+    /// <summary> Gets the number of thumbnail generation jobs currently queued and awaiting processing. </summary>
     public static int QueuedCount => _queue.Count;
 
     // ================================================================

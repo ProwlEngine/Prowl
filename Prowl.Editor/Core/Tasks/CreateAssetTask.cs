@@ -14,9 +14,11 @@ namespace Prowl.Editor.Core.Tasks;
 
 // TODO: This uses hardcoded asset types? Maybe we should rewrite Creating assets to be a more embedded feature into the Project panel? Rather then an EditorTask
 
+/// <summary> Provides asset creation operations for the Project panel, supporting assets, folders, scripts, and shaders. </summary>
 public class CreateAssetTask : EditorTask
 {
 
+    /// <summary> Specifies the type of asset to create. </summary>
     public enum AssetType
     {
         Asset,
@@ -27,6 +29,7 @@ public class CreateAssetTask : EditorTask
 
     public AssetType TaskType = AssetType.Asset;
 
+    /// <summary> Starts a rename overlay for the specified content item, with optional callbacks for confirmation and cancellation. </summary>
     public void StartRename(ContentItem item, bool inTree = false, Action<string>? onConfirm = null, Action? onCancel = null)
     {
         string id = inTree ? $"proj_folder_{item.RelativePath}" : $"proj_asset_{item.RelativePath}";
@@ -40,6 +43,7 @@ public class CreateAssetTask : EditorTask
         }, onCancel);
     }
 
+    /// <summary> Begins the asset creation workflow: navigates to the target folder, shows a rename overlay, then creates the asset based on TaskType. </summary>
     public async void BeginCreateTask(AssetMenuEntry entry, string relativeFolder)
     {
         var panel = ProjectPanel.Instance;
@@ -88,6 +92,7 @@ public class CreateAssetTask : EditorTask
         }
     }
 
+    /// <summary> Creates a shader file from the embedded template and returns its relative path, or null on failure. </summary>
     public static string? CreateShader(string shaderName, string relativeFolder)
     {
         string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
@@ -121,6 +126,7 @@ public class CreateAssetTask : EditorTask
         }
     }
 
+    /// <summary> Creates a folder on disk with a meta file and returns its relative path, or null if the parent folder does not exist. </summary>
     public static string? CreateFolder(string folderName, string relativeFolder)
     {
         string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);

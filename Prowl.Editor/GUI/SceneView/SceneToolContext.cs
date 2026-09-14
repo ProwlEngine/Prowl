@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -31,8 +31,10 @@ public sealed class SceneToolContext
     /// <summary>Deferred 3D drawing onto the viewport overlay.</summary>
     public SceneDrawList Draw => Handles.Draw;
 
+    /// <summary> The scene being edited in this viewport. </summary>
     public Scene Scene { get; private set; } = null!;
 
+    /// <summary> The camera used to render the viewport. </summary>
     public Camera Camera => Handles.Camera;
 
     /// <summary>The viewport this context belongs to.</summary>
@@ -56,8 +58,10 @@ public sealed class SceneToolContext
 
     private SceneTool? _currentTool;
 
+    /// <summary> The first selected GameObject, or null if nothing is selected. </summary>
     public GameObject? ActiveObject => Selection.GetSelected<GameObject>().FirstOrDefault();
 
+    /// <summary> All currently selected GameObjects. </summary>
     public IReadOnlyList<GameObject> SelectedObjects => Selection.GetSelected<GameObject>().ToList();
 
     internal void Begin(Scene scene, object view)
@@ -123,6 +127,7 @@ public readonly struct ToolUndoScope : IDisposable
         if (_continuous) Undo.CancelContinuous();
     }
 
+    /// <summary> Commits the undo scope, ending the continuous undo recording. </summary>
     public void Dispose()
     {
         if (_continuous) Undo.EndContinuous();

@@ -105,6 +105,10 @@ public class PreferencesPanel : DockPanel
     //  General
     // ================================================================
 
+    // Only applies outside play mode; the game gets an unpaced loop and sets its own.
+    private static readonly int[] FrameRates = [0, 30, 60, 120, 144, 240];
+    private static readonly string[] FrameRateNames = ["Unlimited", "30", "60", "120", "144", "240"];
+
     private void DrawGeneral(Paper paper, EditorSettings s)
     {
         EditorGUI.SectionHeader(paper, "pref_gen_hdr", Loc.Get("pref.general"), first: true);
@@ -135,6 +139,21 @@ public class PreferencesPanel : DockPanel
                     ThumbnailGenerator.DeleteAll();
                     EditorAssetBackend.Instance?.ClearThumbnailTextureCache();
                 }, thumbOptions).Show());
+
+        EditorGUI.SectionHeader(paper, "pref_gen_perf", Loc.Get("pref.performance"));
+
+        EditorGUI.SettingsToggle(paper, "pref_vsync", Loc.Get("pref.vsync"), s.VSync,
+            v => { s.VSync = v; s.Save(); EditorApplication.ApplyFramePacing(); });
+
+        int fpsIndex = Array.IndexOf(FrameRates, s.TargetFrameRate);
+        EditorGUI.SettingsRow(paper, "pref_fps_limit", Loc.Get("pref.frame_rate_limit"), () =>
+            Origami.Dropdown(paper, "pref_fps_limit_v", fpsIndex < 0 ? 0 : fpsIndex,
+                v =>
+                {
+                    s.TargetFrameRate = FrameRates[v];
+                    s.Save();
+                    EditorApplication.ApplyFramePacing();
+                }, FrameRateNames).Show());
 
         EditorGUI.SectionHeader(paper, "pref_gen_maint", Loc.Get("pref.maintenance"));
         EditorGUI.SettingsRow(paper, "pref_clear_cache", Loc.Get("pref.clear_cache"), () =>
@@ -184,7 +203,7 @@ public class PreferencesPanel : DockPanel
                     Origami.ScrollView(paper, "pref_theme_ctrls", ctrlW, bodyH).Body(() =>
                     {
                         using (paper.Column("pref_theme_ctrl_col").Height(UnitValue.Auto)
-                            .Padding(PAD * 3, PAD * 3, PAD * 2, PAD * 3).ColBetween(SP).Enter())
+                            .Padding(PAD * 3, PAD * 3, PAD * 2, PAD * 3).Gap(SP).Enter())
                         {
                             switch (_themeCat)
                             {
@@ -232,7 +251,7 @@ public class PreferencesPanel : DockPanel
     private void DrawThemeFooter(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme, float h)
     {
         var semi = EditorTheme.FontSemiBold ?? font;
-        using (paper.Row("pref_theme_footer").Height(h).Padding(PAD * 2, PAD * 2, 0, 0).RowBetween(SP * 2).Enter())
+        using (paper.Row("pref_theme_footer").Height(h).Padding(PAD * 2, PAD * 2, 0, 0).Gap(SP * 2).Enter())
         {
             EditorGUI.Chip(paper, "pref_ft_reset", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_default")}", () => s.ResetTheme());
 
@@ -316,7 +335,7 @@ public class PreferencesPanel : DockPanel
         const int cols = 3;
         for (int r = 0; r * cols < _presets.Length; r++)
         {
-            using (paper.Row($"pref_pr_row{r}").Height(UnitValue.Auto).Margin(0, 0, 0, SP * 2).RowBetween(SP * 2).Enter())
+            using (paper.Row($"pref_pr_row{r}").Height(UnitValue.Auto).Margin(0, 0, 0, SP * 2).Gap(SP * 2).Enter())
             {
                 for (int c = 0; c < cols; c++)
                 {
@@ -326,7 +345,7 @@ public class PreferencesPanel : DockPanel
                     bool on = string.Equals(theme.Name, p.Name, StringComparison.OrdinalIgnoreCase);
 
                     var card = paper.Column($"pref_pr_c{i}").Height(UnitValue.Auto).Rounded(10)
-                        .Padding(PAD * 1.5f, PAD * 1.5f, PAD * 1.5f, PAD * 1.5f).ColBetween(SP * 2)
+                        .Padding(PAD * 1.5f, PAD * 1.5f, PAD * 1.5f, PAD * 1.5f).Gap(SP * 2)
                         .BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Glass)
                         .BorderColor(on ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(on ? 2 : 1)
                         .Hovered.BorderColor(on ? EditorTheme.Accent : EditorTheme.BorderStrong).End()
@@ -335,7 +354,7 @@ public class PreferencesPanel : DockPanel
 
                     using (card.Enter())
                     {
-                        using (paper.Row($"pref_pr_c{i}_sw").Height(38).Rounded(7).Padding(6, 6, 6, 6).RowBetween(4)
+                        using (paper.Row($"pref_pr_c{i}_sw").Height(38).Rounded(7).Padding(6, 6, 6, 6).Gap(4)
                             .BackgroundColor(Hx(p.Bg)).IsNotInteractable().Enter())
                         {
                             paper.Box($"pref_pr_c{i}_a").Rounded(4)
@@ -488,14 +507,14 @@ public class PreferencesPanel : DockPanel
 
         using (paper.Column("pref_pv").Width(w).Padding(PAD * 2, PAD * 2, PAD * 2, PAD * 2)
             .BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
-        using (paper.Column("pref_pv_center").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).ColBetween(SP * 2).Enter())
+        using (paper.Column("pref_pv_center").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Gap(SP * 2).Enter())
         {
             using (paper.Column("pref_pv_card").Height(cardH).Rounded(radius + 2).Clip()
                 .DropShadow(0, 10, 26, -6, Color.FromArgb(150, 0, 0, 0))
                 .BackgroundColor(EditorTheme.Neutral200).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
                 // Titlebar
-                using (paper.Row("pref_pv_title").Height(30).Padding(PAD, PAD, 0, 0).RowBetween(SP * 1.5f)
+                using (paper.Row("pref_pv_title").Height(30).Padding(PAD, PAD, 0, 0).Gap(SP * 1.5f)
                     .BackgroundColor(surface).Enter())
                 {
                     paper.Box("pref_pv_logo").Width(13).Height(13).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(4)
@@ -510,7 +529,7 @@ public class PreferencesPanel : DockPanel
                 paper.Box("pref_pv_td").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
                 // Toolbar
-                using (paper.Row("pref_pv_tool").Height(28).Padding(PAD, PAD, 0, 0).RowBetween(PAD * 2)
+                using (paper.Row("pref_pv_tool").Height(28).Padding(PAD, PAD, 0, 0).Gap(PAD * 2)
                     .BackgroundColor(EditorTheme.Neutral200).Enter())
                 {
                     paper.Box("pref_pv_file").Width(UnitValue.Auto).IsNotInteractable()
@@ -527,12 +546,12 @@ public class PreferencesPanel : DockPanel
                 }
 
                 // Body: mini Hierarchy + Inspector
-                using (paper.Row("pref_pv_body").Padding(EditorTheme.DockPadding, EditorTheme.DockPadding, EditorTheme.DockPadding, EditorTheme.DockPadding).RowBetween(EditorTheme.DockPadding).Enter())
+                using (paper.Row("pref_pv_body").Padding(EditorTheme.DockPadding, EditorTheme.DockPadding, EditorTheme.DockPadding, EditorTheme.DockPadding).Gap(EditorTheme.DockPadding).Enter())
                 {
                     // Hierarchy
                     using (paper.Column("pref_pv_hier").Rounded(radius).Clip()
                         .BackgroundColor(surface).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                        .Padding(PAD, PAD, PAD, PAD).ColBetween(SP).Enter())
+                        .Padding(PAD, PAD, PAD, PAD).Gap(SP).Enter())
                     {
                         paper.Box("pref_pv_hh").Height(16).IsNotInteractable()
                             .Text(Loc.Get("panel.hierarchy"), font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
@@ -542,7 +561,7 @@ public class PreferencesPanel : DockPanel
                         {
                             bool sel = i == 0;
                             using (paper.Row($"pref_pv_hi{i}").Height(18).Rounded(radius * 0.5f)
-                                .Padding(SP, SP, 0, 0).RowBetween(SP)
+                                .Padding(SP, SP, 0, 0).Gap(SP)
                                 .BackgroundColor(sel ? EditorTheme.Selected : Color.Transparent).Enter())
                             {
                                 paper.Box($"pref_pv_hd{i}").Width(7).Height(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(2)
@@ -557,7 +576,7 @@ public class PreferencesPanel : DockPanel
                     // Inspector
                     using (paper.Column("pref_pv_insp").Rounded(radius).Clip()
                         .BackgroundColor(surface).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                        .Padding(PAD, PAD, PAD, PAD).ColBetween(SP * 1.5f).Enter())
+                        .Padding(PAD, PAD, PAD, PAD).Gap(SP * 1.5f).Enter())
                     {
                         paper.Box("pref_pv_ih").Height(16).IsNotInteractable()
                             .Text(Loc.Get("panel.inspector"), font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
@@ -572,7 +591,7 @@ public class PreferencesPanel : DockPanel
                             paper.Box("pref_pv_sld_f").Width(UnitValue.Percentage(60f)).Rounded(3)
                                 .BackgroundColor(EditorTheme.Accent).IsNotInteractable();
 
-                        using (paper.Row("pref_pv_btns").Height(20).RowBetween(SP).Enter())
+                        using (paper.Row("pref_pv_btns").Height(20).Gap(SP).Enter())
                         {
                             paper.Box("pref_pv_apply").Rounded(radius * 0.5f)
                                 .Glow(0, 0, 12, 0, Color.FromArgb(150, EditorTheme.Accent))
@@ -657,7 +676,7 @@ public class PreferencesPanel : DockPanel
         paper.Box("pref_sc_sp1").Height(EditorTheme.Spacing * 2);
 
         // Reset All button
-        using (paper.Row("pref_sc_actions").Height(EditorTheme.RowHeight).ChildLeft(m.PaddingLarge).Enter())
+        using (paper.Row("pref_sc_actions").Height(EditorTheme.RowHeight).PaddingLeft(m.PaddingLarge).Enter())
         {
             Origami.Button(paper, "pref_sc_reset_all", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_all")}", () => ShortcutManager.ClearAllOverrides()).Width(200).Show();
         }
@@ -688,7 +707,7 @@ public class PreferencesPanel : DockPanel
 
             using (paper.Row($"pref_sc_{shortcut.Id}")
                 .Height(EditorTheme.RowHeight)
-                .ChildLeft(m.PaddingLarge).RowBetween(EditorTheme.Spacing * 2)
+                .PaddingLeft(m.PaddingLarge).Gap(EditorTheme.Spacing * 2)
                 .Enter())
             {
                 // Display name

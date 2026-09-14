@@ -30,9 +30,13 @@ public class DesktopBuildProfile : PlatformBuildProfile
     /// <summary>The registered target id, empty in a project saved before this field existed.</summary>
     public string SelectedTargetId = "";
 
+    /// <summary> Whether to produce a self-contained deployment that includes the .NET runtime. </summary>
     public bool SelfContained = false;
+    /// <summary> Whether to trim unused code from the published output. </summary>
     public bool PublishTrimmed = false;
+    /// <summary> Default width of the application window in pixels. </summary>
     public int WindowWidth = 1280;
+    /// <summary> Default height of the application window in pixels. </summary>
     public int WindowHeight = 720;
 
     /// <summary>
@@ -44,6 +48,7 @@ public class DesktopBuildProfile : PlatformBuildProfile
     /// </remarks>
     public PlatformTarget Target => TargetRegistry.Shared.Get(TargetId);
 
+    /// <summary> Gets the effective target identifier, falling back from SelectedTargetId to the legacy Platform value when no registered target is selected. </summary>
     public string TargetId
     {
         get
@@ -73,8 +78,10 @@ public class DesktopBuildProfile : PlatformBuildProfile
     /// <summary>The first identifier of the target. Publishing a multi architecture target needs them all.</summary>
     public string RuntimeIdentifier => Target.RuntimeIdentifiers[0];
 
+    /// <summary> Adds the target's custom preprocessor defines to the given list. </summary>
     public override void ModifyDefines(List<string> defines) => defines.AddRange(Target.Defines);
 
+    /// <summary> Resets all profile fields to their default values. </summary>
     public override void ToDefault()
     {
         Platform = BuildTarget.Windows;
@@ -90,6 +97,7 @@ public sealed class DesktopBuildProfileDrawer : IBuildProfileDrawer
 {
     public Type ProfileType => typeof(DesktopBuildProfile);
 
+    /// <summary> Renders the editor GUI for configuring a DesktopBuildProfile. </summary>
     public void OnGUI(Paper paper, PlatformBuildProfile profile)
     {
         if (profile is not DesktopBuildProfile desktop) return;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -24,6 +24,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor;
 
+/// <summary> Describes an entry in the asset creation menu, defining the type, display name, file extension, icon, sort order, and optional factory for creating a new instance. </summary>
 public struct AssetMenuEntry
 {
     public Type Type;
@@ -34,10 +35,12 @@ public struct AssetMenuEntry
     public Func<EngineObject>? Factory;
 }
 
+/// <summary> Central registry that discovers and provides access to all editor extensions: custom editors, importers, property editors, scene tools, drop handlers, project settings, file icons, script templates, and asset menu entries. Scans loaded assemblies on initialization. </summary>
 public static class EditorRegistries
 {
     #region Types
 
+    /// <summary> Describes a registered project settings page, including its type, display name, icon, sort order, whether it is exported to builds, and the singleton instance. </summary>
     public struct SettingsEntry
     {
         public Type Type;
@@ -48,6 +51,7 @@ public static class EditorRegistries
         public ProjectSettingsBase Instance;
     }
 
+    /// <summary> Handles a double-click on an asset in the project browser. Returns true if the event was handled. </summary>
     public delegate bool AssetDoubleClickHandler(string relativePath, Guid guid);
 
     private struct DropHandlerEntry
@@ -104,8 +108,10 @@ public static class EditorRegistries
 
     private static bool _initialized;
 
+    /// <summary> Resets all registries to their uninitialized state, rescans all assemblies, and triggers project-opened callbacks. </summary>
     public static void Reinitialize() { ClearAll(); Initialize(); OnProjectOpened(); }
 
+    /// <summary> Clears every registry, unsubscribes all editor callbacks, and resets the build target registry to built-in values. </summary>
     public static void ClearAll()
     {
         _initialized = false;
@@ -143,6 +149,7 @@ public static class EditorRegistries
         _initOnLoadMethods.Clear();
     }
 
+    /// <summary> Scans all loaded assemblies for editor extensions (custom editors, importers, scene tools, project settings, file icons, script templates, etc.) and populates the registries. Safe to call multiple times; subsequent calls are no-ops. </summary>
     public static void Initialize()
     {
         if (_initialized) return;
@@ -624,6 +631,7 @@ public static class EditorRegistries
 
     #region Settings
 
+    /// <summary> Returns the registered settings instance of the specified type. If the registry has not been initialized, triggers initialization. Falls back to a transient default with a warning if the type is not registered. </summary>
     public static T GetSettings<T>() where T : ProjectSettingsBase
     {
         foreach (var entry in _settingsEntries)
@@ -640,6 +648,7 @@ public static class EditorRegistries
         return (T)Activator.CreateInstance(typeof(T))!;
     }
 
+    /// <summary> Saves all registered project settings entries to YAML files in the project settings directory. </summary>
     public static void SaveSettings()
     {
         var project = Project.Current;
@@ -648,6 +657,7 @@ public static class EditorRegistries
         foreach (var entry in _settingsEntries) SaveSettings(entry);
     }
 
+    /// <summary> Saves a single settings entry to a YAML file named after the entry in the project settings directory. </summary>
     public static void SaveSettings(SettingsEntry entry)
     {
         var project = Project.Current;
@@ -661,6 +671,7 @@ public static class EditorRegistries
         catch (Exception ex) { Debug.LogError($"Failed to save settings '{entry.Name}': {ex.Message}"); }
     }
 
+    /// <summary> Resets all settings entries to their defaults and loads saved values from disk. Called when a project is opened. </summary>
     public static void OnProjectOpened()
     {
         foreach (var entry in _settingsEntries)

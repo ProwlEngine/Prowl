@@ -17,8 +17,10 @@ namespace Prowl.Editor.Build;
 /// </remarks>
 public sealed record PlatformTarget
 {
+    /// <summary> The unique identifier that keys the asset variant cache and appears in the build manifest. Must never change once shipped. </summary>
     public required string Id { get; init; }
 
+    /// <summary> The human-readable name shown in the editor UI. </summary>
     public required string DisplayName { get; init; }
 
     /// <summary>Grouping only, for example "desktop" or "mobile". A string so a new family needs no engine change.</summary>
@@ -33,6 +35,7 @@ public sealed record PlatformTarget
     /// </remarks>
     public required IReadOnlyList<string> RuntimeIdentifiers { get; init; }
 
+    /// <summary> The capabilities this target supports, such as texture formats, graphics APIs, and feature flags. </summary>
     public required TargetCapabilities Capabilities { get; init; }
 
     /// <summary>
@@ -43,6 +46,7 @@ public sealed record PlatformTarget
     /// <summary>Preprocessor symbols always defined for this target.</summary>
     public IReadOnlyList<string> Defines { get; init; } = [];
 
+    /// <summary> Returns the <see cref="Id"/> value. </summary>
     public override string ToString() => Id;
 }
 
@@ -52,5 +56,6 @@ public sealed record PlatformTarget
 /// </summary>
 public interface IBuildTargetProvider
 {
+    /// <summary> Returns all <see cref="PlatformTarget"/> instances this provider supplies. </summary>
     IEnumerable<PlatformTarget> GetTargets();
 }

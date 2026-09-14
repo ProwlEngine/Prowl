@@ -20,21 +20,32 @@ public delegate (float x, float y, float w, float h)? GuideTarget();
 /// <summary>One phase of a <see cref="Guide"/>. Title/body are localization keys.</summary>
 public sealed class GuideStep
 {
+    /// <summary> Localization key for the step title. </summary>
     public string TitleKey = "";
+    /// <summary> Localization key for the step body text. </summary>
     public string BodyKey = "";
+    /// <summary> Localization key for an optional migration hint (Unreal/Godot equivalent). </summary>
     public string TipKey = "";          // optional migration hint (Unreal/Godot equivalent)
+    /// <summary> EditorIcons glyph displayed in the callout bubble. </summary>
     public string Icon = "";            // an EditorIcons glyph shown in the callout bubble
+    /// <summary> Returns the screen-space rect to spotlight; null renders a centered welcome card. </summary>
     public GuideTarget? Target;         // null -> centered card; otherwise spotlight this rect
+    /// <summary> If set, the Next button is disabled until this predicate returns true. </summary>
     public Func<bool>? WaitUntil;       // gate "Next" until true (interactive/in-depth steps)
+    /// <summary> Action invoked when the step becomes active. </summary>
     public Action? OnEnter;             // set editor state when the step begins (future guides)
 }
 
 /// <summary>An ordered set of <see cref="GuideStep"/>s with a stable id (its "seen once" key).</summary>
 public sealed class Guide
 {
+    /// <summary> Stable identifier used to track whether this guide has been seen. </summary>
     public readonly string Id;
+    /// <summary> The ordered list of steps in this guide. </summary>
     public readonly List<GuideStep> Steps = new();
+    /// <summary> Initializes a new guide with the given stable id. </summary>
     public Guide(string id) { Id = id; }
+    /// <summary> Adds a step to the guide and returns this instance for chaining. </summary>
     public Guide Add(GuideStep step) { Steps.Add(step); return this; }
 }
 
@@ -55,7 +66,9 @@ public static class EditorGuide
     private static DockSpace? _dock;
     private static (float x, float y, float w, float h)? _themeButton;
 
+    /// <summary> Registers the DockSpace used to resolve panel targets. </summary>
     public static void SetDockSpace(DockSpace dock) => _dock = dock;
+    /// <summary> Registers the screen-space rect of the Theme quick-access button. </summary>
     public static void RegisterThemeButton(float x, float y, float w, float h) => _themeButton = (x, y, w, h);
 
     /// <summary>Target the docked panel of the given type (searches tabs; works after the layout shifts).</summary>
@@ -69,8 +82,10 @@ public static class EditorGuide
 
     // ---- lifecycle -----------------------------------------------------
 
+    /// <summary> Whether a guide is currently being shown. </summary>
     public static bool IsActive => _active != null;
 
+    /// <summary> Begins showing the given guide from its first step. </summary>
     public static void Start(Guide guide)
     {
         _active = guide;
@@ -131,6 +146,7 @@ public static class EditorGuide
 
     private static float Ease(float t) => 1f - MathF.Pow(1f - Math.Clamp(t, 0f, 1f), 3f); // easeOutCubic
 
+    /// <summary> Draws the active guide overlay, if any. </summary>
     public static void Draw(Paper paper, float dt)
     {
         if (_active == null) return;
@@ -222,7 +238,7 @@ public static class EditorGuide
         {
             // Accent gradient hero strip (top corners rounded to match the card).
             using (paper.Row("grd_hero").Width(UnitValue.StretchOne).Height(heroH)
-                .Padding(pad, pad, 0, 0).RowBetween(13).RoundedTop(13)
+                .Padding(pad, pad, 0, 0).Gap(13).RoundedTop(13)
                 .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright).Enter())
             {
                 if (!string.IsNullOrEmpty(step.Icon))
@@ -249,12 +265,12 @@ public static class EditorGuide
             // Optional migration tip (Unreal / Godot equivalent).
             if (!string.IsNullOrEmpty(step.TipKey))
                 using (paper.Row("grd_tip").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-                    .Margin(pad, pad, 0, 4).Rounded(8).Padding(10, 10, 8, 8).RowBetween(8)
+                    .Margin(pad, pad, 0, 4).Rounded(8).Padding(10, 10, 8, 8).Gap(8)
                     .BackgroundColor(EditorTheme.Selected).Enter())
                 {
                     // Own-text is only aligned horizontally, so center the bulb by centering its
                     // (auto-height) box in the row via top+bottom stretch margins; the right margin
-                    // is the gap to the text (RowBetween doesn't apply to explicit-margin children).
+                    // is the gap to the text (the container Gap does not apply to explicit-margin children).
                     paper.Box("grd_tip_i").Width(16).Height(UnitValue.Auto).Margin(0, 8, UnitValue.Stretch(), UnitValue.Stretch()).IsNotInteractable()
                         .Text(EditorIcons.Lightbulb, font).TextColor(EditorTheme.AccentText)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
@@ -264,10 +280,10 @@ public static class EditorGuide
                 }
 
             // Footer: progress dots + Back / Skip / Next (Origami buttons).
-            using (paper.Row("grd_foot").Width(UnitValue.StretchOne).Height(56).Padding(pad, pad, 10, 12).RowBetween(8).Enter())
+            using (paper.Row("grd_foot").Width(UnitValue.StretchOne).Height(56).Padding(pad, pad, 10, 12).Gap(8).Enter())
             {
                 int n = _active!.Steps.Count;
-                using (paper.Row("grd_dots").Width(UnitValue.Auto).Height(UnitValue.StretchOne).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).RowBetween(5).Enter())
+                using (paper.Row("grd_dots").Width(UnitValue.Auto).Height(UnitValue.StretchOne).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Gap(5).Enter())
                     for (int i = 0; i < n; i++)
                     {
                         bool on = i == _index;
@@ -279,7 +295,7 @@ public static class EditorGuide
                 paper.Box("grd_spc").Width(UnitValue.StretchOne).Height(1).IsNotInteractable();
 
                 using (paper.Row("grd_btns").Width(UnitValue.Auto).Height(UnitValue.Auto)
-                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).RowBetween(8).Enter())
+                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Gap(8).Enter())
                 {
                     if (!first)
                         Origami.Button(paper, "grd_back", Loc.Get("guide.back"), () => Back()).Subtle().Show();
@@ -293,6 +309,7 @@ public static class EditorGuide
 
     // ---- the built-in first-run UI tour --------------------------------
 
+    /// <summary> Returns the built-in first-run UI tour guide. </summary>
     public static Guide WelcomeTour() => new Guide("welcome")
         .Add(new GuideStep { TitleKey = "guide.welcome.title", BodyKey = "guide.welcome.body", Icon = EditorIcons.WandMagicSparkles })
         .Add(new GuideStep { TitleKey = "guide.hierarchy.title", BodyKey = "guide.hierarchy.body", TipKey = "guide.hierarchy.tip", Icon = EditorIcons.Sitemap, Target = Panel(typeof(Panels.HierarchyPanel)) })

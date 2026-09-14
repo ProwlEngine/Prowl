@@ -37,12 +37,12 @@ public class TransformPropertyEditor : PropertyEditor
         // Check if a compatible payload is being dragged over this field
         bool isDragTarget = DragDrop.IsDragging && DragDrop.Payload is GameObjectDragPayload;
 
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        using (paper.Row(id).Height(EditorTheme.RowHeight).Gap(4).Enter())
         {
             // Label
             if (!string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).PaddingLeft(4)
                     .Text(label, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
@@ -51,7 +51,7 @@ public class TransformPropertyEditor : PropertyEditor
                 .Height(EditorTheme.RowHeight)
                 .BackgroundColor(isDragTarget ? Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
+                .Rounded(3).PaddingLeft(4).PaddingRight(2).Gap(2)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
                 .OnClick(go, (g, e) =>
                 {

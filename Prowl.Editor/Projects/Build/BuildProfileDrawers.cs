@@ -14,7 +14,9 @@ namespace Prowl.Editor.Build;
 /// </summary>
 public interface IBuildProfileDrawer
 {
+    /// <summary> Gets the type of profile this drawer handles. </summary>
     Type ProfileType { get; }
+    /// <summary> Draws the settings for the given profile using the Paper UI. </summary>
     void OnGUI(Paper paper, PlatformBuildProfile profile);
 }
 
@@ -28,6 +30,7 @@ public static class BuildProfileDrawers
         Register(new DesktopBuildProfileDrawer());
     }
 
+    /// <summary> Registers a drawer so it is used for its profile type. </summary>
     public static void Register(IBuildProfileDrawer drawer)
         => s_drawers[drawer.ProfileType] = drawer;
 

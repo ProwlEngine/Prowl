@@ -22,6 +22,7 @@ namespace Prowl.Editor.Build;
 /// </summary>
 public abstract class BuildPipeline
 {
+    /// <summary> Human-readable name shown in the Build window for this pipeline. </summary>
     public abstract string DisplayName { get; }
 
     /// <summary>Glyph shown on the platform card in the Build window.</summary>
@@ -51,15 +52,7 @@ public abstract class BuildPipeline
     public abstract IAsyncEnumerable<BuildOperation> PlanStageAsync(
         BuildStage stage, IBuildContext context, CancellationToken ct);
 
-    /// <summary>
-    /// Executes a build with a Task for async status reporting back to the engine.
-    /// </summary>
-    /// <param name="projectPath">The path of the project to build</param>
-    /// <param name="settings">The settings to use for the build</param>
-    /// <param name="outputDirectory">The path for the build output. Can be null.</param>
-    /// <param name="progress">The <see cref="BuildProgress"/> object that stores the build progress for UI updates. Can be null.</param>
-    /// <param name="cancellation">The cancellation token to stop the build midway.</param>
-    /// <returns></returns>
+    /// <summary> Executes the full build for the given project and settings, returning the result. </summary>
     public abstract Task<BuildResult> BuildAsync(
         string projectPath,
         BuildSettings settings,
@@ -356,6 +349,7 @@ public abstract class BuildPipeline
         source.CopyTo(destination);
     }
 
+    /// <summary> Returns the path to the executable produced by the build. </summary>
     public abstract string GetExecutablePath(string outputPath, BuildSettings settings);
 
     /// <summary>

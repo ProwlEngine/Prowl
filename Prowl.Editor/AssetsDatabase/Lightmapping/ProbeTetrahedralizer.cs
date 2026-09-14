@@ -16,6 +16,7 @@ namespace Prowl.Editor.Lightmapping;
 /// </summary>
 public static class ProbeTetrahedralizer
 {
+    /// <summary> Result of ProbeTetrahedralizer.Build. Contains the tetrahedron vertex indices and per-face neighbour links that LightProbeVolume walks at runtime. </summary>
     public struct Result
     {
         /// <summary>4 probe indices per tetrahedron.</summary>

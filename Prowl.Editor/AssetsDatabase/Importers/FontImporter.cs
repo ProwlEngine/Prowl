@@ -19,6 +19,7 @@ public class FontImporter : AssetImporter
 {
     public override int Version => 1;
 
+    /// <summary> Reads the font file at ctx.AbsolutePath, creates a FontAsset from its raw bytes, and sets it as the main asset. Returns true on success, false on failure. </summary>
     public override bool Import(ImportContext ctx)
     {
         try
