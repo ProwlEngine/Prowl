@@ -10,7 +10,7 @@ namespace Prowl.Runtime;
 /// The project-wide agent type table (mirrors <see cref="NavMeshAreas"/>): defined in the
 /// editor's navigation settings, restored in players from Navigation.yaml, with a code-side
 /// default (the built-in Humanoid, id 0) so headless and procedural use needs no settings
-/// file. Unity's Agents tab equivalent.
+/// file.
 /// </summary>
 public static class NavMeshAgentTypes
 {
@@ -47,7 +47,7 @@ public static class NavMeshAgentTypes
     /// <summary>
     /// Replace the table (called by settings loading). The built-in Humanoid entry is
     /// enforced: id 0 always exists and keeps its name, though its envelope values are
-    /// editable like Unity's.
+    /// editable.
     /// </summary>
     public static void ApplyTable(IEnumerable<NavMeshAgentType> types)
     {

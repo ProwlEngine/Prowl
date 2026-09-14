@@ -376,7 +376,7 @@ public class NavMeshModifierTests : RuntimeTestBase
         Assert.NotEqual(0u, SampleAreaMask(scene, new Float3(8, 0.2f, 8)));
     }
 
-    /// <summary>A source marked Not Walkable produces no navmesh at all (Unity parity): its
+    /// <summary>A source marked Not Walkable produces no navmesh at all: its
     /// geometry is an obstacle, not traversable "area 1" polys.</summary>
     [Fact]
     public void Source_NotWalkableArea_ProducesNoPolys()

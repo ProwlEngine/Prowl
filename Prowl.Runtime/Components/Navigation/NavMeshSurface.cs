@@ -61,7 +61,7 @@ public class NavMeshSurface : MonoBehaviour
     [SerializeField] private NavMeshCollectGeometry useGeometry = NavMeshCollectGeometry.RenderMeshes;
 
     [Tooltip("Area applied to all walkable geometry in this bake.")]
-    [HideInInspector] // drawn inside the editor's Advanced foldout (Unity keeps it there too)
+    [HideInInspector] // drawn inside the editor's Advanced foldout
     [SerializeField] private NavMeshArea defaultArea = NavMeshAreas.Walkable;
 
     [Tooltip("The baked navmesh. Assigned by baking, or point it at an existing .navmesh asset.")]

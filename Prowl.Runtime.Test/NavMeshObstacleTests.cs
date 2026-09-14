@@ -1181,7 +1181,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     // ── Velocity obstacles (Carve off) ──────────────────────────────────
 
     /// <summary>
-    /// Carve off is Unity's velocity-obstacle mode, not a disabled component: the mesh is
+    /// Carve off is velocity-obstacle mode, not a disabled component: the mesh is
     /// untouched (the path still leads straight through) but agents steer around the obstacle
     /// locally. It joins the crowd as an immovable neighbour, so it works on Static surfaces
     /// too, where carving is impossible.

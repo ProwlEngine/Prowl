@@ -44,7 +44,7 @@ public class NavigationSettings : ProjectSettingsBase
     public override void Apply()
     {
         EnsureSize();
-        // Not Walkable is never traversed, so its cost is meaningless; pin it (matches Unity).
+        // Not Walkable is never traversed, so its cost is meaningless; pin it.
         AreaCosts[NavMeshAreas.NotWalkable] = 1f;
         NavMeshAreas.ApplyTable(AreaNames, AreaCosts);
         NavMeshAgentTypes.ApplyTable(AgentTypes);
@@ -231,7 +231,7 @@ public class NavigationSettings : ProjectSettingsBase
     {
         Origami.Header(paper, "nav_areas_hdr", $"{EditorIcons.Compass}  Navigation Areas").Underline().Show();
 
-        // Column layout shared by the header and every row (mirrors Unity's Areas tab):
+        // Column layout shared by the header and every row:
         // [swatch 6] [slot label 76] [Name stretch] [Cost 70] [delete 20]
         const float SwatchW = 6, SlotW = 76, CostW = 70, DelW = 20;
 

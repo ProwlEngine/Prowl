@@ -9,7 +9,7 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// The project-wide navigation area table: up to 32 named areas with per-area path costs, addressed
-/// by index and combined into 32-bit masks (Unity's model). Area 0 is Walkable, 1 is Not Walkable,
+/// by index and combined into 32-bit masks. Area 0 is Walkable, 1 is Not Walkable,
 /// 2 is Jump; 3..31 are user-defined.
 /// <para/>
 /// Detour stores area <c>i</c> as <c>i + 1</c>, because its 0 is the null area meaning "not part of

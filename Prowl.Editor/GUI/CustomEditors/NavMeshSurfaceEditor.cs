@@ -30,8 +30,7 @@ public class NavMeshSurfaceEditor : CustomEditor
         Undo.Snapshot(surface);
 
         // Basic fields (agent type, collection, layers, geometry, data ref) via the default
-        // grid; DefaultArea and the build overrides are [HideInInspector] and drawn below —
-        // the same basic/advanced split Unity's NavMeshSurface uses.
+        // grid; DefaultArea and the build overrides are [HideInInspector] and drawn below.
         DrawDefaultInspector(paper, $"{id}_def", target);
 
         paper.Box($"{id}_adv_sp").Height(4);

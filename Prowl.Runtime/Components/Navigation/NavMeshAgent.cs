@@ -18,7 +18,7 @@ namespace Prowl.Runtime;
 /// <summary>
 /// Moves a character along the navmesh using crowd simulation: give it a
 /// <see cref="Destination"/> (or call <see cref="SetDestination"/>) and it steers there,
-/// avoiding other agents. Mirrors Unity's NavMeshAgent API. The agent joins the scene's crowd
+/// avoiding other agents. The agent joins the scene's crowd
 /// when a navmesh for its <see cref="AgentTypeId"/> is available and writes its position back
 /// to the Transform each LateUpdate (disable <see cref="UpdatePosition"/> to drive a
 /// Rigidbody or CharacterController from <see cref="DesiredVelocity"/> yourself).
@@ -206,7 +206,7 @@ public class NavMeshAgent : MonoBehaviour
                 return NavMeshPathStatus.PathInvalid;
 
             // Nothing planned and nothing pending is not a path — except after arrival, where
-            // the latch clears the move target and Unity still reports the completed path.
+            // the latch clears the move target and the completed path is still reported.
             if (!HasPath && !PathPending)
                 return _arrived ? NavMeshPathStatus.PathComplete : NavMeshPathStatus.PathInvalid;
 
@@ -262,8 +262,7 @@ public class NavMeshAgent : MonoBehaviour
     /// <summary>
     /// Distance to the end of the current path along its corners. Infinity while no path is
     /// available. When the path's visible corner window doesn't yet reach the destination this
-    /// is a lower bound (matches Unity's remainingDistance semantics closely enough for
-    /// arrival checks against <see cref="StoppingDistance"/>).
+    /// is a lower bound, which is enough for arrival checks against <see cref="StoppingDistance"/>.
     /// </summary>
     public float RemainingDistance
     {
@@ -273,7 +272,7 @@ public class NavMeshAgent : MonoBehaviour
             if (_arrived) return 0f;
             if (!HasPath) return float.PositiveInfinity;
             // Mid-hop the corner window is empty and would read 0 — falsely "arrived" for the
-            // Unity idiom. The honest lower bound is remaining hop distance PLUS the path after
+            // usual arrival check. The honest lower bound is remaining hop distance PLUS the path after
             // landing: the hop distance alone collapses to ~0 as the animation lands, which
             // would make waypoint scripts issue their next destination mid-hop and ping-pong.
             if (IsOnOffMeshLink && _agent.animation is { active: true } anim)
@@ -305,7 +304,7 @@ public class NavMeshAgent : MonoBehaviour
     }
 
     /// <summary>Stop (true) or resume (false) movement. The path is kept while stopped, so
-    /// resuming carries on along it rather than replanning. Matches Unity:
+    /// resuming carries on along it rather than replanning.
     /// <see cref="SetDestination"/> while stopped plans the route but does NOT clear the stopped
     /// state — movement resumes only when this is set back to false.
     /// <para/>
@@ -440,7 +439,7 @@ public class NavMeshAgent : MonoBehaviour
             pathOptimizationRange = PathOptimizationRange > 0f ? PathOptimizationRange : radius * 30f,
             updateFlags = updateFlags,
             obstacleAvoidanceType = Math.Max(0, (int)ObstacleAvoidanceQuality - 1),
-            // Unity priority 0 (most important) pushes hardest; map to separation weight 0.5..3.
+            // Priority 0 (most important) pushes hardest; map to separation weight 0.5..3.
             separationWeight = 0.5f + 2.5f * (1f - AvoidancePriority / 99f),
             queryFilterType = _filterSlot,
             userData = this,
@@ -498,8 +497,8 @@ public class NavMeshAgent : MonoBehaviour
 
     /// <summary>Request a path to <paramref name="target"/>. Returns false when the agent is
     /// not on a navmesh or the target cannot be mapped onto it. A stopped agent
-    /// (<see cref="IsStopped"/>) plans the route but stays halted until resumed — Unity
-    /// semantics, where isStopped is a pause flag that survives new destinations.</summary>
+    /// (<see cref="IsStopped"/>) plans the route but stays halted until resumed: IsStopped is a
+    /// pause flag that survives new destinations.</summary>
     public bool SetDestination(Float3 target)
     {
         _destination = target;
@@ -660,7 +659,7 @@ public class NavMeshAgent : MonoBehaviour
     /// Mid-hop across an off-mesh link the corridor already begins at the landing point, so the
     /// walk is measured from there rather than from where the agent hangs.
     /// <para/>
-    /// Areas are tested per POLYGON rather than per corner, as Unity does, so a path that only clips
+    /// Areas are tested per POLYGON rather than per corner, so a path that only clips
     /// the corner of an excluded polygon still stops at it.
     /// </summary>
     public bool SamplePathPosition(NavMeshAreaMask areaMask, float maxDistance, out NavMeshHit hit)
@@ -831,7 +830,7 @@ public class NavMeshAgent : MonoBehaviour
     /// Arrival detection, independent of how the agent approaches (braking is HOW it arrives,
     /// this is WHETHER it has): once the corner window closes to within the stopping distance
     /// (or the agent has braked to a stop inside its own radius of the goal), the move target
-    /// is released and <see cref="RemainingDistance"/> reads exactly 0, so the Unity-style
+    /// is released and <see cref="RemainingDistance"/> reads exactly 0, so the
     /// "!PathPending &amp;&amp; RemainingDistance &lt;= StoppingDistance" idiom terminates.
     /// </summary>
     private void UpdateArrival()
@@ -857,8 +856,8 @@ public class NavMeshAgent : MonoBehaviour
 
         if (remaining <= threshold || braked)
         {
-            // _hasDestination stays true: Unity keeps agent.destination readable after
-            // arrival, and migrated code does read it. _arrived gates every re-path site.
+            // _hasDestination stays true, so Destination stays readable after arrival.
+            // _arrived gates every re-path site.
             _arrived = true;
             _crowdEntry!.Crowd.ResetMoveTarget(_agent);
         }
@@ -899,7 +898,7 @@ public class NavMeshAgent : MonoBehaviour
     /// The route the agent is currently steering along, plus its destination — drawn from the
     /// crowd's own corner list, so it shows what the simulation is actually following rather
     /// than a re-planned guess. Only meaningful while a crowd is running (in the editor an
-    /// unregistered agent has no path), which matches Unity.
+    /// unregistered agent has no path).
     /// </summary>
     public override void DrawGizmosSelected()
     {

@@ -9,7 +9,7 @@ namespace Prowl.Runtime;
 /// <summary>
 /// Stamps an area over a world region during navmesh bakes, independent of which objects the
 /// geometry came from — mark a danger zone, make a doorway expensive, or (with Not Walkable)
-/// erase walkability inside the box. Mirrors Unity's NavMeshModifierVolume. The volume only
+/// erase walkability inside the box. The volume only
 /// re-marks surface that geometry produced; it never creates walkable surface. Applied during
 /// full bakes AND partial rebuilds whose tiles intersect it; like modifiers, changing a
 /// volume does not rebake anything by itself. When toggling or moving a volume at runtime,

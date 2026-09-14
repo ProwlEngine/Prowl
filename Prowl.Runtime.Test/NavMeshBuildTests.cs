@@ -711,7 +711,7 @@ public class NavMeshBuildTests
     }
 
     /// <summary>
-    /// Min Region Area (Unity's) culls islands too small to be worth standing on. The layers a
+    /// Min Region Area culls islands too small to be worth standing on. The layers a
     /// carving bake stores are partitioned at runtime, so the cull has to happen at bake time
     /// or not at all — this pins that it happens, and that turning it off keeps the island.
     /// </summary>

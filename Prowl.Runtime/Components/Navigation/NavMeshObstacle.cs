@@ -21,7 +21,7 @@ namespace Prowl.Runtime;
 /// while moving and re-applies once still for <see cref="CarvingTimeToStationary"/>. Carving runs in
 /// the editor too, so placing a building shows the hole it will cut.
 /// <para/>
-/// <see cref="Carve"/> off is Unity's velocity-obstacle mode: the mesh is untouched and the obstacle
+/// <see cref="Carve"/> off is velocity-obstacle mode: the mesh is untouched and the obstacle
 /// joins each crowd as an immovable neighbour, so agents steer around it locally. Free to move, but
 /// paths are computed as if it weren't there, so an agent with no other route presses against it.
 /// <para/>
@@ -90,8 +90,7 @@ public class NavMeshObstacle : MonoBehaviour
 
     private NavMeshWorld? _world;
     // Obstacle handle per navmesh instance the carve is registered with. Instances are
-    // per-agent-type; the obstacle applies to every one of them (Unity has no agent filter on
-    // obstacles).
+    // per-agent-type; the obstacle applies to every one of them.
     private readonly Dictionary<NavMeshInstance, long> _refs = [];
     // Main thread only, and cleared after each use so it pins no instance.
     private static readonly List<NavMeshInstance> s_instances = [];

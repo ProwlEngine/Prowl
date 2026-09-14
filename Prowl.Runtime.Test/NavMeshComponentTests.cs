@@ -312,8 +312,8 @@ public class NavMeshComponentTests : RuntimeTestBase
     }
 
     /// <summary>Stopping used to drop the move target, which threw the corridor away: the agent
-    /// reported no path while halted and had to replan from scratch on resume. Unity keeps the
-    /// path across a pause.</summary>
+    /// reported no path while halted and had to replan from scratch on resume. The path has to
+    /// survive a pause.</summary>
     [Fact]
     public void Agent_IsStopped_KeepsThePathAndResumesWithoutReplanning()
     {
@@ -381,7 +381,7 @@ public class NavMeshComponentTests : RuntimeTestBase
     }
 
     /// <summary>Arrival clears the move target, so an arrived agent has nothing live or pending —
-    /// but Unity keeps reporting the completed path, and give-up logic reads this.</summary>
+    /// but the completed path is still reported, and give-up logic reads this.</summary>
     [Fact]
     public void Agent_StoppedBeforeANavMeshExists_PlansOnRegistration()
     {
@@ -515,7 +515,7 @@ public class NavMeshComponentTests : RuntimeTestBase
         Assert.True(agent.IsOnNavMesh);
     }
 
-    /// <summary>A warp with no navmesh near the target changes nothing, as Unity's does, instead of
+    /// <summary>A warp with no navmesh near the target changes nothing, instead of
     /// re-adding the crowd agent where it can never become valid.</summary>
     [Fact]
     public void Agent_WarpOffTheNavMesh_LeavesTheAgentWorking()
@@ -634,7 +634,7 @@ public class NavMeshComponentTests : RuntimeTestBase
 
     /// <summary>
     /// SamplePathPosition answers "how far can I get before the path enters somewhere I will not
-    /// go", which is the question Unity's version exists for — the agent still PATHS through the
+    /// go", which is the question it exists for — the agent still PATHS through the
     /// area, so this is a lookahead and not a filter. All three outcomes are checked: blocked by an
     /// excluded area, stopped by the distance budget, and the path simply ending.
     /// </summary>
@@ -1102,8 +1102,8 @@ public class NavMeshComponentTests : RuntimeTestBase
 
     /// <summary>
     /// Arrival regression: with AutoBraking on (the default) and StoppingDistance 0, the
-    /// agent must still report arrival — RemainingDistance reads exactly 0, so the Unity
-    /// idiom "!PathPending &amp;&amp; RemainingDistance &lt;= StoppingDistance" terminates.
+    /// agent must still report arrival — RemainingDistance reads exactly 0, so the arrival
+    /// check "!PathPending &amp;&amp; RemainingDistance &lt;= StoppingDistance" terminates.
     /// </summary>
     [Fact]
     public void Agent_DetectsArrival_WithAutoBraking()
@@ -1133,13 +1133,13 @@ public class NavMeshComponentTests : RuntimeTestBase
         double endDistance = Float3.Distance(agentGo.Transform.Position, new Float3(8, 0, 8));
         Assert.True(endDistance < 1.0, $"Arrival reported {endDistance:0.00} away from the destination.");
 
-        // Unity parity: the destination stays readable after arrival (migrated code reads it).
+        // The destination stays readable after arrival.
         Assert.True(Float3.Distance(agent.Destination, new Float3(8, 0, 8)) < 0.01,
             $"Destination should still return the last target after arrival, got {agent.Destination}.");
     }
 
     /// <summary>
-    /// Unity parity: SetDestination on a stopped agent remembers the target but does NOT
+    /// SetDestination on a stopped agent remembers the target but does NOT
     /// clear the stopped state — IsStopped is a pause flag that survives new destinations.
     /// </summary>
     [Fact]

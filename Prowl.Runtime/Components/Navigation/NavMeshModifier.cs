@@ -7,13 +7,13 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Changes how this GameObject (and, by default, its children) contributes to navmesh bakes:
-/// exclude it entirely, or override the area its geometry is stamped with. Mirrors Unity's
-/// NavMeshModifier. Resolved at geometry-collection time — the nearest modifier up the
+/// exclude it entirely, or override the area its geometry is stamped with. Resolved at
+/// geometry-collection time — the nearest modifier up the
 /// hierarchy wins, an object's own modifier always beats an inherited one, and a modifier
 /// with <see cref="ApplyToChildren"/> off covers only its own object. Changing a modifier
 /// does not rebake anything by itself; rebuild the surface (or the affected tiles) to apply.
 /// One modifier per GameObject: additional NavMeshModifier components on the same object are
-/// ignored (matches Unity).
+/// ignored.
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Modifier")]
 [ComponentIcon("\uf5ae")] // pen ruler

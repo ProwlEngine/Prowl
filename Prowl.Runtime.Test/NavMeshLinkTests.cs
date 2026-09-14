@@ -619,7 +619,7 @@ public class NavMeshLinkTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// The Unity arrival idiom "!PathPending &amp;&amp; RemainingDistance &lt;= StoppingDistance"
+    /// The arrival check "!PathPending &amp;&amp; RemainingDistance &lt;= StoppingDistance"
     /// must not false-fire mid-link, or a waypoint script issues its next destination during the
     /// hop and ping-pongs the agent across the link forever. Mid-hop the value stays bounded below
     /// by the path remaining AFTER landing.

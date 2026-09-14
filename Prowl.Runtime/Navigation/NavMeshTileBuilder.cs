@@ -186,7 +186,7 @@ internal static class NavMeshTileBuilder
             if (vol.areaMod.Value != RcRecast.RC_NULL_AREA)
                 RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
 
-        // Cull islands too small to stand on (Unity's Min Region Area). Regions are built here
+        // Cull islands too small to stand on (Min Region Area). Regions are built here
         // only to find the spans to erase — BuildRegions zeroes the region id of anything it
         // culled, and erasing those spans' areas keeps them out of the compressed layer for
         // good. Regions reaching a tile border are exempt, so an island spanning two tiles

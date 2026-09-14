@@ -12,7 +12,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>Status of a calculated path (matches Unity's NavMeshPathStatus).</summary>
+/// <summary>Status of a calculated path.</summary>
 public enum NavMeshPathStatus
 {
     /// <summary>The path reaches the destination.</summary>
@@ -54,8 +54,8 @@ public enum NavMeshObstacleShape
     Box,
 }
 
-/// <summary>Obstacle avoidance quality for a <see cref="NavMeshAgent"/>. Member names match
-/// Unity's for migration; the inspector shows the friendly display names.</summary>
+/// <summary>Obstacle avoidance quality for a <see cref="NavMeshAgent"/>. The inspector shows the
+/// short display names.</summary>
 public enum ObstacleAvoidanceType
 {
     [InspectorName("None")]
@@ -747,8 +747,8 @@ public struct NavMeshLinkSource
 
     /// <summary>
     /// The crossing points this link becomes: one per parallel connection, spread across
-    /// <see cref="Width"/> (capped at 8). Unity lets an agent enter a wide link at the nearest
-    /// point along its entry edge; a Detour off-mesh connection is a single point, so a span is
+    /// <see cref="Width"/> (capped at 8). A wide link should let an agent enter at the nearest point
+    /// along its entry edge, but a Detour off-mesh connection is a single point, so a span is
     /// approximated by several of them side by side and the agent takes the nearest.
     /// Re-expanded every time the cache re-contours a tile.
     /// </summary>
@@ -784,8 +784,7 @@ public struct NavMeshLinkSource
 /// volume marking). Self-contained — no Transform or component references — so it is safe to
 /// hand to a background build alongside <see cref="NavMeshGeometrySource"/>s. A volume only
 /// re-marks voxels that geometry produced; it never creates walkable surface on its own, and
-/// an <see cref="NavMeshAreas.NotWalkable"/> volume erases walkability inside its footprint
-/// (Unity's Modifier Volume behaviour).
+/// an <see cref="NavMeshAreas.NotWalkable"/> volume erases walkability inside its footprint.
 /// </summary>
 public readonly struct NavMeshAreaVolume
 {
@@ -962,8 +961,7 @@ public sealed class NavMeshBuildSettings
 
 /// <summary>
 /// The surface-level half of the bake parameters: rasterization detail that belongs to a
-/// particular bake rather than to an agent type. Defaults match Unity's; most bakes never need to
-/// touch these.
+/// particular bake rather than to an agent type. Most bakes never need to touch these.
 /// </summary>
 public sealed class NavMeshBuildOverrides
 {
