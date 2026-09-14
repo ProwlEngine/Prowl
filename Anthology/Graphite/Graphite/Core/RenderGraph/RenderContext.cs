@@ -19,6 +19,7 @@ public sealed class RenderContext<TView>
 
     private bool _presentRequested;
     private PassInfo? _currentPass;
+    private GraphResource[]? _currentPassOutputs;
 
     private static long s_nextCommandBufferRentalId;
 
@@ -47,7 +48,14 @@ public sealed class RenderContext<TView>
     public IProfiler? Profiler => _device.Profiler;
 
     /// <summary>Sets the currently rendering pass, stamped on command buffers rented after. Null outside a pass.</summary>
-    internal void SetCurrentPass(in PassInfo? pass) => _currentPass = pass;
+    internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null);
+
+    /// <summary>Sets the currently rendering pass plus the resources it declared as outputs, so its own load/store ops win.</summary>
+    internal void SetCurrentPass(in PassInfo? pass, GraphResource[]? declaredOutputs)
+    {
+        _currentPass = pass;
+        _currentPassOutputs = declaredOutputs;
+    }
 
     /// <summary>
     /// True if profiler wants metadata via RecordPassMetadata. Check before building one, it's wasted work otherwise.
@@ -248,6 +256,23 @@ public sealed class RenderContext<TView>
 
     internal TargetLoadStoreOps GetTargetOps(RenderResourceID id)
     {
+        if (_currentPassOutputs != null)
+        {
+            foreach (GraphResource declared in _currentPassOutputs)
+            {
+                if (declared.Id != id)
+                    continue;
+
+                switch (declared)
+                {
+                    case GraphTextureResource texture:
+                        return texture.Ops;
+                    case GraphImportedTextureResource imported:
+                        return imported.Ops;
+                }
+            }
+        }
+
         if (!_graph.Resources.TryGetValue(id, out GraphResource? resource))
             throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' was not declared by any pass in this graph.");
 

@@ -120,7 +120,7 @@ public abstract class RenderPipeline<TView> : IDisposable
                     }
                 }
 
-                context.SetCurrentPass(passInfo);
+                context.SetCurrentPass(passInfo, node.DeclaredOutputs);
                 node.Pass.Render(context);
                 context.SetCurrentPass(null);
 

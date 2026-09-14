@@ -19,11 +19,14 @@ public sealed class RenderGraph<TView> : IDisposable
         /// <summary>Declared outputs, for profiling/wiring.</summary>
         public readonly RenderResourceID[] Outputs;
 
-        internal PassNode(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs)
+        internal readonly GraphResource[] DeclaredOutputs;
+
+        internal PassNode(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, GraphResource[] declaredOutputs)
         {
             Pass = pass;
             Inputs = inputs;
             Outputs = outputs;
+            DeclaredOutputs = declaredOutputs;
         }
     }
 
@@ -58,11 +61,12 @@ public sealed class RenderGraph<TView> : IDisposable
             resource.DisposeOwned();
     }
 
-    private readonly struct Node(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs)
+    private readonly struct Node(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, GraphResource[] declaredOutputs)
     {
         public readonly IPass<TView> Pass = pass;
         public readonly RenderResourceID[] Inputs = inputs;
         public readonly RenderResourceID[] Outputs = outputs;
+        public readonly GraphResource[] DeclaredOutputs = declaredOutputs;
     }
 
     /// <summary>
@@ -96,14 +100,16 @@ public sealed class RenderGraph<TView> : IDisposable
                 inputs[r] = builder.Inputs[r];
 
             var outputs = new RenderResourceID[builder.Outputs.Count];
+            var declared = new GraphResource[builder.Outputs.Count];
             for (int w = 0; w < outputs.Length; w++)
             {
                 GraphResource output = builder.Outputs[w];
                 outputs[w] = output.Id;
+                declared[w] = output;
                 resources.TryAdd(output.Id, output);
             }
 
-            nodes[i] = new Node(pass, inputs, outputs);
+            nodes[i] = new Node(pass, inputs, outputs, declared);
         }
 
         var presentBuilder = new PresentContextBuilder();
@@ -121,7 +127,7 @@ public sealed class RenderGraph<TView> : IDisposable
         for (int i = 0; i < ordered.Length; i++)
         {
             Node n = nodes[ordered[i]];
-            orderedNodes[i] = new PassNode(n.Pass, n.Inputs, n.Outputs);
+            orderedNodes[i] = new PassNode(n.Pass, n.Inputs, n.Outputs, n.DeclaredOutputs);
         }
 
         return new RenderGraph<TView>(
