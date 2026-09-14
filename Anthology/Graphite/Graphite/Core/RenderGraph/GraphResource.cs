@@ -55,9 +55,14 @@ public sealed class GraphTextureResource : GraphResource
         if (_ring == null || !_ringDesc.Equals(desc))
         {
             DisposeOwned();
+            string? baseName = RenderResourceID.ToString(Id);
             _ring = new RenderTexture[slots];
             for (int i = 0; i < slots; i++)
+            {
                 _ring[i] = device.ResourceFactory.CreateRenderTexture(desc);
+                if (baseName != null)
+                    _ring[i].Name = slots > 1 ? $"{baseName}[{i}]" : baseName;
+            }
             _ringDesc = desc;
             _currentIndex = 0;
             _lastRotationExecutionId = executionId;
