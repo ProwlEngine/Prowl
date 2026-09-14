@@ -67,8 +67,21 @@ public sealed partial class MarkdownDocument
 
             if (c == '\n')
             {
-                FlushText(i);
-                AppendInline(AddInline(InlineKind.LineBreak), ref first, ref last);
+                // Trailing spaces never reach the text. Two or more of them, or a backslash, make
+                // the break a hard one.
+                int stop = i;
+                if (stop > textStart && _source[stop - 1] == '\r') stop--;
+                int spacesFrom = stop;
+                while (stop > textStart && _source[stop - 1] == ' ') stop--;
+                bool hard = spacesFrom - stop >= 2;
+                if (!hard && stop == spacesFrom && stop > textStart && _source[stop - 1] == '\\')
+                {
+                    hard = true;
+                    stop--;
+                }
+
+                FlushText(stop);
+                AppendInline(AddInline(hard ? InlineKind.LineBreak : InlineKind.SoftBreak), ref first, ref last);
                 i++;
                 // Fold the indentation of a wrapped line into the break.
                 i = SkipSpaces(i, end);
@@ -245,7 +258,7 @@ public sealed partial class MarkdownDocument
         return n;
     }
 
-    /// <summary>Matches &lt;https://host/path&gt; and &lt;mailto:someone&gt;.</summary>
+    /// <summary>Matches a URL or mailto address written between angle brackets.</summary>
     private bool TryParseAutolink(int start, int end, out int after, out TextSpan target)
     {
         after = start;

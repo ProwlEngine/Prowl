@@ -35,8 +35,11 @@ public enum InlineKind : byte
     Code,
     Link,
     Image,
-    /// <summary>An explicit line break within a paragraph.</summary>
-    LineBreak
+    /// <summary>A hard line break: two or more spaces, or a backslash, at the end of a line.</summary>
+    LineBreak,
+    /// <summary>An ordinary line ending inside a paragraph. Markdown reads it as a space, so text
+    /// wrapped in the source flows as one paragraph.</summary>
+    SoftBreak
 }
 
 [Flags]

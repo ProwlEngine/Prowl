@@ -49,7 +49,7 @@ public class ParserTests
         var blocks = TopLevel(d);
         Assert.Equal(2, blocks.Count);
         Assert.Equal(BlockKind.Paragraph, d.GetBlock(blocks[0]).Kind);
-        Assert.Equal("one\ntwo", Text(d, blocks[0]));
+        Assert.Equal("one two", Text(d, blocks[0]));
         Assert.Equal("three", Text(d, blocks[1]));
     }
 

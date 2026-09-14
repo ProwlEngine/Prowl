@@ -96,6 +96,10 @@ public sealed partial class MarkdownDocument
         {
             builder.Append('\n');
         }
+        else if (node.Kind == InlineKind.SoftBreak)
+        {
+            builder.Append(' ');
+        }
 
         for (int child = node.FirstChild; child >= 0; child = _inlines[child].NextSibling)
         {
