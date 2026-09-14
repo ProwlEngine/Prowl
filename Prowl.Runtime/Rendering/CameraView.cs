@@ -30,6 +30,8 @@ public sealed class CameraView : IRenderView
     /// <summary>The camera being rendered.</summary>
     public Camera Camera;
 
+    public int ViewId => Camera.InstanceID;
+
     /// <summary>Per-frame render flags (gizmos, grid, scene-view, etc.) for this camera.</summary>
     public RenderingData Data;
 

@@ -49,6 +49,50 @@ public class UndoTests : EditorTestHarness
 
     // ---- Property changes ----
 
+    /// <summary>A component that applies its fields to live state, as the physics and navigation
+    /// components do.</summary>
+    public sealed class AppliedComp : MonoBehaviour
+    {
+        public int Value;
+
+        // Not serialized, so a restore cannot write it: only OnValidate can.
+        [System.NonSerialized] public int Applied;
+
+        public override void OnValidate() => Applied = Value;
+    }
+
+    /// <summary>
+    /// Restoring writes fields directly, so a component that pushes its fields into live state has
+    /// to be notified the same way an inspector edit notifies it. Without this, an undo restores the
+    /// field and leaves the applied state on the value being undone — a collider keeps the shape, a
+    /// nav obstacle keeps the hole.
+    /// </summary>
+    [Fact]
+    public void PropertyChange_Undo_NotifiesTheRestoredObject()
+    {
+        var scene = new Scene();
+        var go = new GameObject("GO");
+        var comp = go.AddComponent<AppliedComp>();
+        scene.Add(go);
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+
+        comp.Value = 10;
+        comp.OnValidate();
+        Undo.Snapshot(comp);
+        comp.Value = 20;
+        comp.OnValidate();
+        Undo.IncrementGroup();
+
+        Undo.PerformUndo();
+        Assert.Equal(10, comp.Value);
+        Assert.Equal(10, comp.Applied);
+
+        Undo.PerformRedo();
+        Assert.Equal(20, comp.Value);
+        Assert.Equal(20, comp.Applied);
+    }
+
     [Fact]
     public void PropertyChange_Undo_Redo()
     {

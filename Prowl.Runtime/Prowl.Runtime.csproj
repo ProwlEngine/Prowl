@@ -33,6 +33,7 @@
     <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Quill" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Graphite" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlPackageVersion)" />

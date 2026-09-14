@@ -82,6 +82,29 @@ public static class EditorGUI
         }
     }
 
+    /// <summary>A labelled row that grows with its control, so a multi-select's wrapped chips reflow
+    /// the column instead of overlapping the next field.</summary>
+    public static void MultiSelectRow(Paper paper, string id, string label, Action drawControl)
+    {
+        var theme = Origami.Current;
+        var m = theme.Metrics;
+        var font = EditorTheme.DefaultFont;
+
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
+        {
+            if (font != null && !string.IsNullOrEmpty(label))
+            {
+                paper.Box($"{id}_lbl")
+                    .Width(m.LabelWidth).Height(m.RowHeight).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .IsNotInteractable()
+                    .Text(label, font).TextColor(theme.Ink.C300)
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
+            }
+
+            drawControl();
+        }
+    }
+
     /// <summary>A settings-window row (label + control with a bottom divider by default).</summary>
     public static void SettingsRow(Paper paper, string id, string label, Action drawControl,
         bool separator = true, float? labelWidth = null, bool compact = false, float minHeight = 0f)

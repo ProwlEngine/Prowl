@@ -44,6 +44,7 @@ public sealed class DesktopPlayer : Game, IDisposable
 
         // Before the scene loads, because a component's OnEnable may resolve an AssetRef.
         PlayerSettingsLoader.ApplyAssetConfig(settingsDir);
+        PlayerSettingsLoader.ApplyNavigation(settingsDir);
 
         var scene = backend.LoadScene(_manifest.DefaultSceneGuid);
         if (scene != null)

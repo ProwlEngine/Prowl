@@ -108,6 +108,17 @@ public class SceneViewPanel : DockPanel
                     () => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; },
                     () => _editorCamera?.ShowGizmos ?? true);
 
+                b.Header(Loc.Get("scene.navigation"));
+                b.Toggle(Loc.Get("scene.navmesh_always_show"),
+                    () => NavMeshDebugDisplay.AlwaysShow = !NavMeshDebugDisplay.AlwaysShow,
+                    () => NavMeshDebugDisplay.AlwaysShow);
+                b.Toggle(Loc.Get("scene.navmesh_show_detail"),
+                    () => NavMeshDebugDisplay.ShowDetail = !NavMeshDebugDisplay.ShowDetail,
+                    () => NavMeshDebugDisplay.ShowDetail);
+                b.Toggle(Loc.Get("scene.navmesh_show_vertices"),
+                    () => NavMeshDebugDisplay.ShowVertices = !NavMeshDebugDisplay.ShowVertices,
+                    () => NavMeshDebugDisplay.ShowVertices);
+
                 b.Header(Loc.Get("scene.tool_handles"));
                 b.Toggle(Loc.Get("scene.pivot_center"),
                     () => SceneTools.Pivot = SceneTools.Pivot == PivotMode.Center ? PivotMode.Pivot : PivotMode.Center,
@@ -629,6 +640,9 @@ public class SceneViewPanel : DockPanel
         state["pitch"] = _editorCamera.Pitch;
         state["grid"] = _editorCamera.ShowGrid;
         state["gizmos"] = _editorCamera.ShowGizmos;
+        state["navAlwaysShow"] = NavMeshDebugDisplay.AlwaysShow;
+        state["navShowDetail"] = NavMeshDebugDisplay.ShowDetail;
+        state["navShowVertices"] = NavMeshDebugDisplay.ShowVertices;
         return true;
     }
 
@@ -645,6 +659,10 @@ public class SceneViewPanel : DockPanel
         // Camera is created lazily in OnGUI; stash toggles and apply when it exists.
         _pendingGrid = state["grid"]?.GetValue<bool>();
         _pendingGizmos = state["gizmos"]?.GetValue<bool>();
+
+        NavMeshDebugDisplay.AlwaysShow = state["navAlwaysShow"]?.GetValue<bool>() ?? false;
+        NavMeshDebugDisplay.ShowDetail = state["navShowDetail"]?.GetValue<bool>() ?? false;
+        NavMeshDebugDisplay.ShowVertices = state["navShowVertices"]?.GetValue<bool>() ?? false;
     }
 
     private bool? _pendingGrid;

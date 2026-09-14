@@ -173,6 +173,9 @@ public abstract class Game
                 // independent of any scene camera's own render/present.
                 _uiPipeline.Execute();
 
+                // Give presentation hosts a point after all scene and Paper commands have been
+                // submitted but before the backbuffer is swapped. Development screenshot capture
+                // uses this hook to read the actual rendered client on the render thread.
                 AfterGui(currentScene);
 
                 // === End Graphics ===

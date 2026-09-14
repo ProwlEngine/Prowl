@@ -79,15 +79,6 @@ public class TextComponent : Graphic
         set => SetField(ref _quality, value, UIDirtyFlags.Vertices | UIDirtyFlags.Material);
     }
 
-    /// <summary>When true, <see cref="Text"/> is parsed for rich-text tags (color, size, bold/italic,
-    /// etc.). The assigned <see cref="Font"/> is used for every style variant.</summary>
-    [SerializeField] private bool _richText;
-    public bool RichTextEnabled
-    {
-        get => _richText;
-        set => SetField(ref _richText, value, UIDirtyFlags.Vertices);
-    }
-
     protected override Material DefaultMaterial => GameCanvas.SharedTextMaterial;
 
     /// <summary>
@@ -97,21 +88,6 @@ public class TextComponent : Graphic
     /// edit mode.
     /// </summary>
     public override int ContentVersion => UIFontSystem.Default.System.AtlasVersion;
-
-    // Cached rich-text layout. Reused across frames so its animation start-time survives (a fresh
-    // layout each rebuild would re-anchor to "now" and freeze animated effects). Rebuilt only when the
-    // text or layout-affecting settings change.
-    [SerializeIgnore] private RichTextLayout? _richLayout;
-    [SerializeIgnore] private int _richSig;
-    [SerializeIgnore] private bool _richAnimated;
-
-    public override void Update()
-    {
-        // Animated rich-text effects (wave, shake, rainbow, typewriter, ...) are time-driven, so the
-        // mesh has to be rebuilt every frame to advance them.
-        if (_richText && _richAnimated)
-            MarkDirty(UIDirtyFlags.Vertices);
-    }
 
     // ============================================================
     // Mesh generation
@@ -143,59 +119,28 @@ public class TextComponent : Graphic
         Color tinted = Color * new Color(1f, 1f, 1f, context.Alpha);
         FontColor color = new FontColor(tinted.R, tinted.G, tinted.B, tinted.A);
 
-        // Scribe generates the geometry (plain or rich-tag parsed) and drives DrawQuads; the capture
+        // Scribe generates the geometry and drives DrawQuads; the capture
         // maps it into element-local space and appends it to the mesh. Vertical alignment isn't done
         // by Scribe (its alignment is horizontal-only), so we offset the whole box by the layout height.
-        if (_richText)
+        TextLayoutSettings settings = new TextLayoutSettings
         {
-            RichTextLayoutSettings rich = new RichTextLayoutSettings
-            {
-                RegularFont = fontFile, BoldFont = fontFile, ItalicFont = fontFile,
-                BoldItalicFont = fontFile, MonoFont = fontFile,
-                PixelSize = pixelSize,
-                Quality = _quality,
-                MaxWidth = w,
-                WrapMode = TextWrapMode.Wrap,
-                Alignment = ToScribeAlignment(_alignment),
-                DefaultColor = color,
-            };
-            int sig = HashCode.Combine(_text, pixelSize, (int)_quality, w, (int)_alignment, tinted, context.Alpha);
-            if (_richLayout == null || sig != _richSig)
-            {
-                if (_richLayout == null) _richLayout = new RichTextLayout(_text, rich);
-                else { _richLayout.SetSource(_text); _richLayout.SetSettings(rich); }
-                _richLayout.Update(fs.System);
-                _richAnimated = _richLayout.Effects.Count > 0;
-                _richSig = sig;
-            }
+            Font          = fontFile,
+            PixelSize     = pixelSize,
+            Quality       = _quality,
+            Alignment     = ToScribeAlignment(_alignment),
+            MaxWidth      = w,
+            WrapMode      = TextWrapMode.Wrap,
+            LineHeight    = 1.0f,
+            TabSize       = 4,
+            LetterSpacing = 0f,
+            WordSpacing   = 0f,
+        };
+        TextLayout layout = fs.System.CreateLayout(_text, settings);
 
-            float verticalOffset = ComputeVerticalOffset(_alignment, h, _richLayout.Size.Y);
-            fs.BeginCapture(builder, originX, originY - verticalOffset);
-            try { _richLayout.Draw(fs.System, fs, Float2.Zero, (double)Time.TimeSinceStartup); }
-            finally { fs.EndCapture(); }
-        }
-        else
-        {
-            TextLayoutSettings settings = new TextLayoutSettings
-            {
-                Font          = fontFile,
-                PixelSize     = pixelSize,
-                Quality       = _quality,
-                Alignment     = ToScribeAlignment(_alignment),
-                MaxWidth      = w,
-                WrapMode      = TextWrapMode.Wrap,
-                LineHeight    = 1.0f,
-                TabSize       = 4,
-                LetterSpacing = 0f,
-                WordSpacing   = 0f,
-            };
-            TextLayout layout = fs.System.CreateLayout(_text, settings);
-
-            float verticalOffset = ComputeVerticalOffset(_alignment, h, layout.Size.Y);
-            fs.BeginCapture(builder, originX, originY - verticalOffset);
-            try { fs.System.DrawLayout(layout, Float2.Zero, color); }
-            finally { fs.EndCapture(); }
-        }
+        float verticalOffset = ComputeVerticalOffset(_alignment, h, layout.Size.Y);
+        fs.BeginCapture(builder, originX, originY - verticalOffset);
+        try { fs.System.DrawLayout(layout, Float2.Zero, color); }
+        finally { fs.EndCapture(); }
     }
 
     // ============================================================

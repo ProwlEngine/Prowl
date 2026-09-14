@@ -22,6 +22,7 @@ public sealed class PaperView : IRenderView
     public uint PixelWidth { get; set; }
     public uint PixelHeight { get; set; }
     public string Name => "UI";
+    public int ViewId => 0;
 }
 
 /// <summary>

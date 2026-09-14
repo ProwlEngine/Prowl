@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Show Grid",
   "scene.show_gizmos": "Show Gizmos",
+  "scene.navigation": "Navigation",
+  "scene.navmesh_always_show": "Always Show NavMesh",
+  "scene.navmesh_show_detail": "Show NavMesh Height Detail",
+  "scene.navmesh_show_vertices": "Show NavMesh Vertices",
   "scene.tool_handles": "Tool Handles",
   "scene.pivot_center": "Pivot: Center",
   "scene.orientation_local": "Orientation: Local",

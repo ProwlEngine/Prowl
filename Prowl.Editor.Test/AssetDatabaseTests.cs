@@ -784,5 +784,136 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Null(Assets.Get(g));
     }
 
+    /// <summary>
+    /// A .navmesh is written and read as binary Echo. Its payload is compressed voxelization
+    /// blobs, which as text become base64 — bigger, slower to parse, and no more readable. A
+    /// text one does not parse as binary, so it fails the import outright rather than loading
+    /// as something wrong; rebaking is the migration.
+    /// </summary>
+    [Fact]
+    public void NavMesh_RoundTripsAsBinary_AndRejectsText()
+    {
+        NavMeshData? baked = NavMeshBuilder.Build(new NavMeshBuildSettings(), [FlatQuad(20f)]);
+        Assert.NotNull(baked);
+        EchoObject echo = Serializer.Serialize(typeof(object), baked!);
+
+        echo.WriteToBinary(new FileInfo(AssetAbsolutePath("Baked.navmesh")));
+        Guid guid = Assets.ImportFile("Baked.navmesh");
+        Assert.NotEqual(Guid.Empty, guid);
+
+        var loaded = Assets.Get(guid) as NavMeshData;
+        Assert.NotNull(loaded);
+        Assert.Equal(baked!.CacheLayers.Count, loaded!.CacheLayers.Count);
+
+        File.WriteAllText(AssetAbsolutePath("Legacy.navmesh"), echo.WriteToString());
+        Assert.Null(Assets.Get(Assets.ImportFile("Legacy.navmesh")));
+    }
+
+    /// <summary>A rebake goes over the asset the surface references, so renaming the file does not
+    /// leave the next bake writing a second asset beside it.</summary>
+    [Fact]
+    public void NavMeshBake_TargetsTheAssignedAssetWhateverItIsNamed()
+    {
+        NavMeshData? baked = NavMeshBuilder.Build(new NavMeshBuildSettings(), [FlatQuad(20f)]);
+        Assert.NotNull(baked);
+        Serializer.Serialize(typeof(object), baked!).WriteToBinary(new FileInfo(AssetAbsolutePath("Renamed By User.navmesh")));
+        Guid guid = Assets.ImportFile("Renamed By User.navmesh");
+        Assert.NotEqual(Guid.Empty, guid);
+
+        var go = new GameObject("Surface");
+        var surface = go.AddComponent<NavMeshSurface>();
+
+        // No asset yet: the first bake picks a name from the scene and agent type.
+        Assert.EndsWith(".navmesh", Navigation.NavMeshBakeService.BakePath(surface));
+        Assert.DoesNotContain("Renamed By User", Navigation.NavMeshBakeService.BakePath(surface));
+
+        surface.NavMeshData = new AssetRef<NavMeshData>(guid);
+
+        Assert.Equal("Renamed By User.navmesh", Navigation.NavMeshBakeService.BakePath(surface));
+    }
+
+    /// <summary>A duplicated surface shares its original's asset reference, and rebaking it must not
+    /// overwrite the file the original still uses.</summary>
+    [Fact]
+    public void NavMeshBake_DuplicatedSurface_GetsItsOwnFile()
+    {
+        NavMeshData? baked = NavMeshBuilder.Build(new NavMeshBuildSettings(), [FlatQuad(20f)]);
+        Assert.NotNull(baked);
+        Serializer.Serialize(typeof(object), baked!).WriteToBinary(new FileInfo(AssetAbsolutePath("Shared.navmesh")));
+        Guid guid = Assets.ImportFile("Shared.navmesh");
+        Assert.NotEqual(Guid.Empty, guid);
+
+        var scene = new Scene();
+        try
+        {
+            var original = new GameObject("Original");
+            scene.Add(original);
+            var originalSurface = original.AddComponent<NavMeshSurface>();
+            originalSurface.NavMeshData = new AssetRef<NavMeshData>(guid);
+
+            var duplicate = new GameObject("Duplicate");
+            scene.Add(duplicate);
+            var duplicateSurface = duplicate.AddComponent<NavMeshSurface>();
+            duplicateSurface.NavMeshData = new AssetRef<NavMeshData>(guid);
+
+            Assert.NotEqual("Shared.navmesh", Navigation.NavMeshBakeService.BakePath(duplicateSurface));
+
+            // Once nothing else references it, the surface bakes over its own file again.
+            duplicateSurface.NavMeshData = default;
+            Assert.Equal("Shared.navmesh", Navigation.NavMeshBakeService.BakePath(originalSurface));
+        }
+        finally
+        {
+            scene.Dispose();
+        }
+    }
+
+    [Fact]
+    public void NavMeshBake_RunsInTheBackground_ThenSavesAndAssignsTheAsset()
+    {
+        var scene = new Scene();
+        scene.Enable();
+        try
+        {
+            var floor = new GameObject("Floor");
+            scene.Add(floor);
+            floor.AddComponent<BoxCollider>().Size = new Prowl.Vector.Float3(20, 1, 20);
+            floor.Transform.Position = new Prowl.Vector.Float3(0, -0.5f, 0);
+
+            var go = new GameObject("Surface");
+            scene.Add(go);
+            var surface = go.AddComponent<NavMeshSurface>();
+            surface.UseGeometry = NavMeshCollectGeometry.PhysicsColliders;
+            surface.BuildOverrides.OverrideVoxelSize = true;
+            surface.BuildOverrides.VoxelSize = 0.25f;
+
+            var bake = Navigation.NavMeshBakeService.Instance;
+            Assert.True(bake.Start(surface));
+            Assert.Same(surface, bake.TargetSurface);
+
+            var timeout = System.Diagnostics.Stopwatch.StartNew();
+            while (bake.IsBaking && timeout.Elapsed < TimeSpan.FromSeconds(60))
+            {
+                bake.Poll();
+                System.Threading.Thread.Sleep(10);
+            }
+
+            Assert.Equal("Done", bake.Status);
+            Assert.NotEqual(Guid.Empty, surface.NavMeshData.AssetID);
+            Assert.StartsWith("Scene_navmesh/", Navigation.NavMeshBakeService.BakePath(surface));
+            Assert.NotNull(surface.Instance);
+        }
+        finally
+        {
+            scene.Dispose();
+        }
+    }
+
+    private static NavMeshGeometrySource FlatQuad(float size)
+    {
+        Prowl.Vector.Float3[] verts = [new(0, 0, 0), new(0, 0, size), new(size, 0, size), new(size, 0, 0)];
+        return new NavMeshGeometrySource(verts, [0, 1, 2, 0, 2, 3], Prowl.Vector.Float4x4.Identity);
+    }
+
     #endregion
 }

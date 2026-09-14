@@ -1,0 +1,103 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+
+namespace Prowl.Runtime;
+
+/// <summary>
+/// The project-wide agent type table (mirrors <see cref="NavMeshAreas"/>): defined in the
+/// editor's navigation settings, restored in players from Navigation.yaml, with a code-side
+/// default (the built-in Humanoid, id 0) so headless and procedural use needs no settings
+/// file.
+/// </summary>
+public static class NavMeshAgentTypes
+{
+    /// <summary>The built-in default agent type id. Always present; cannot be removed.</summary>
+    public const int Humanoid = 0;
+
+    // Replaced wholesale rather than edited in place (see NavMeshAreas): bakes resolve their
+    // envelope from here off the main thread while the settings UI rewrites the table, and a
+    // reader walking one mid-rebuild could index past its own end.
+    private static volatile NavMeshAgentType[] s_types = [CreateHumanoid()];
+
+    internal static NavMeshAgentType CreateHumanoid() => new() { Id = Humanoid, Name = "Humanoid" };
+
+    /// <summary>All defined agent types, in table order. Do not mutate the entries — use
+    /// <see cref="ApplyTable"/> (settings) to change the table.</summary>
+    public static IReadOnlyList<NavMeshAgentType> All => s_types;
+
+    /// <summary>The agent type with the given id, or null when undefined.</summary>
+    public static NavMeshAgentType? Get(int agentTypeId) => Find(s_types, agentTypeId);
+
+    private static NavMeshAgentType? Find(IReadOnlyList<NavMeshAgentType> types, int agentTypeId)
+    {
+        for (int i = 0; i < types.Count; i++)
+            if (types[i].Id == agentTypeId)
+                return types[i];
+        return null;
+    }
+
+    /// <summary>Display name for an agent type id ("Agent Type N" for undefined ids, so stale
+    /// references stay visible rather than blank).</summary>
+    public static string GetName(int agentTypeId)
+        => Get(agentTypeId)?.Name ?? $"Agent Type {agentTypeId}";
+
+    /// <summary>
+    /// Replace the table (called by settings loading). The built-in Humanoid entry is
+    /// enforced: id 0 always exists and keeps its name, though its envelope values are
+    /// editable.
+    /// </summary>
+    public static void ApplyTable(IEnumerable<NavMeshAgentType> types)
+    {
+        ArgumentNullException.ThrowIfNull(types);
+
+        // Built aside and published in one store, so a reader never sees the table empty or
+        // half-filled.
+        List<NavMeshAgentType> built = [];
+        foreach (NavMeshAgentType type in types)
+        {
+            if (type == null) continue;
+            NavMeshAgentType? clash = Find(built, type.Id);
+            if (clash != null)
+            {
+                // Unreachable from the editor UI; a hand-edited Navigation.yaml can do it.
+                // Get returns the first match, so a silent duplicate would shadow the second.
+                Debug.LogWarning($"[Navigation] Duplicate agent type id {type.Id} ('{type.Name}') ignored; '{clash.Name}' keeps the id.");
+                continue;
+            }
+            NavMeshAgentType copy = type.Clone();
+            if (copy.Id == Humanoid) copy.Name = "Humanoid";
+            built.Add(copy);
+        }
+
+        if (Find(built, Humanoid) == null)
+            built.Insert(0, CreateHumanoid());
+        s_types = [.. built];
+    }
+
+    /// <summary>
+    /// Compose the resolved bake input for an agent type: envelope from the table, everything
+    /// else from <paramref name="overrides"/> (or defaults). This is what surfaces hand to
+    /// <see cref="NavMeshBuilder.Build"/>; the builder API itself only ever sees the resolved
+    /// <see cref="NavMeshBuildSettings"/>. An undefined id falls back to the Humanoid envelope
+    /// with a warning — a bake with wrong-but-sane dimensions beats no bake.
+    /// </summary>
+    public static NavMeshBuildSettings GetBuildSettings(int agentTypeId, NavMeshBuildOverrides? overrides = null)
+    {
+        NavMeshAgentType? type = Get(agentTypeId);
+        if (type == null)
+        {
+            Debug.LogWarning($"[Navigation] Agent type {agentTypeId} is not defined in the navigation settings; baking with the Humanoid envelope. Define it in Project Settings > Navigation > Agents.");
+            type = Get(Humanoid)!;
+        }
+
+        return new NavMeshBuildSettings
+        {
+            AgentTypeId = agentTypeId,
+            Agent = type.Clone(),
+            Overrides = overrides?.Clone() ?? new NavMeshBuildOverrides(),
+        };
+    }
+}
