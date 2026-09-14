@@ -1964,6 +1964,7 @@ public class BuildSystemTests : IDisposable
     [InlineData(PlayerSettingsFiles.Time)]
     [InlineData(PlayerSettingsFiles.Assets)]
     [InlineData(PlayerSettingsFiles.TagsAndLayers)]
+    [InlineData(PlayerSettingsFiles.Navigation)]
     public void EveryFileThePlayerReads_IsExportedByATypeOfThatName(string expected)
     {
         var entry = Assert.Single(EditorRegistries.SettingsEntries.Where(e => e.Type.Name == expected));

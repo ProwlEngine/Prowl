@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
@@ -196,6 +197,40 @@ public static class PlayerSettingsLoader
             Debug.Log("[PlayerSettings] Tags & Layers applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// Apply the navigation tables and world settings. Exposed separately so the player can run it
+    /// BEFORE the default scene loads: a navmesh world reads its obstacle capacity and crowd radius
+    /// when its surfaces and agents register, which happens during the load.
+    /// </summary>
+    public static void ApplyNavigation(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.Navigation);
+        if (settings == null) return;
+
+        try
+        {
+            List<string>? names = settings.TryGet("AreaNames", out var namesProp) ? Serializer.Deserialize<List<string>>(namesProp) : null;
+            List<float>? costs = settings.TryGet("AreaCosts", out var costsProp) ? Serializer.Deserialize<List<float>>(costsProp) : null;
+            if (names?.Count > 0 || costs?.Count > 0)
+            {
+                NavMeshAreas.ApplyTable(names ?? [], costs ?? []);
+                Debug.Log("[PlayerSettings] Navigation areas applied.");
+            }
+
+            if (settings.TryGet("AgentTypes", out var typesProp)
+                && Serializer.Deserialize<List<NavMeshAgentType>>(typesProp) is { Count: > 0 } types)
+            {
+                NavMeshAgentTypes.ApplyTable(types);
+                Debug.Log($"[PlayerSettings] Navigation agent types applied ({types.Count}).");
+            }
+
+            if (settings.TryGet("World", out var worldProp)
+                && Serializer.Deserialize<NavMeshWorldSettings>(worldProp) is { } world)
+                NavMeshWorld.ApplyProjectSettings(world);
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply navigation settings: {ex.Message}"); }
     }
 
     /// <summary>

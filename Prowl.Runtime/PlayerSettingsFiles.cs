@@ -22,10 +22,11 @@ public static class PlayerSettingsFiles
     public const string Time = "TimeSettings";
     public const string Assets = "AssetSettings";
     public const string TagsAndLayers = "TagsAndLayersSettings";
+    public const string Navigation = "NavigationSettings";
 
     /// <summary>
     /// Every file the player looks for. What the build validates against. General settings are absent
     /// on purpose: product name, company and version reach the player through its manifest.
     /// </summary>
-    public static IReadOnlyList<string> All => [Physics, Audio, Time, Assets, TagsAndLayers];
+    public static IReadOnlyList<string> All => [Physics, Audio, Time, Assets, TagsAndLayers, Navigation];
 }
