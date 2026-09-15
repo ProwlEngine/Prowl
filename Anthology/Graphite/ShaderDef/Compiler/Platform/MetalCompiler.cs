@@ -1,9 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Text;
 
 using Prowl.Slang;
 
@@ -16,10 +11,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 /// </summary>
 public class MetalCompiler : CompilerModule
 {
-    private TargetDescription _target;
-
-    /// <inheritdoc/>
-    public TargetDescription Target => _target;
+    public TargetDescription Target { get; }
 
     /// <inheritdoc/>
     public GraphicsBackend Backend => throw new NotImplementedException("Metal backend does not exist (yet)");
@@ -30,7 +22,7 @@ public class MetalCompiler : CompilerModule
     /// </summary>
     public MetalCompiler(string profileString = "metal_2_0")
     {
-        _target = new()
+        Target = new()
         {
             Profile = GlobalSession.FindProfile(profileString),
             Format = CompileTarget.Metal

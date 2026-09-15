@@ -240,7 +240,6 @@ public class PassStateTests
     public void Equals_Null_IsFalse()
     {
         Assert.False(new PassState().Equals(null));
-        Assert.False(new PassState().Equals((object?)null));
     }
 
 

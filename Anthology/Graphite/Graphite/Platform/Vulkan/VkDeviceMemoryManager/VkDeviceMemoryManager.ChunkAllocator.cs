@@ -98,7 +98,6 @@ internal unsafe partial class VkDeviceMemoryManager
                                 freeBlock.BaseMappedPointer,
                                 false);
                             _freeBlocks.Insert(i, splitBlock);
-                            block = freeBlock;
                             block.Size = size;
                         }
 

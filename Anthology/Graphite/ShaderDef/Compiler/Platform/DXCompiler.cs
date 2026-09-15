@@ -12,10 +12,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 /// </summary>
 public class DXCompiler : CompilerModule
 {
-    private TargetDescription _target;
-
-    /// <inheritdoc/>
-    public TargetDescription Target => _target;
+    public TargetDescription Target { get; }
 
     /// <inheritdoc/>
     public GraphicsBackend Backend => throw new NotImplementedException("D3D11 backend does not exist.");
@@ -26,7 +23,7 @@ public class DXCompiler : CompilerModule
     /// </summary>
     public DXCompiler(string profileString = "sm_5_0")
     {
-        _target = new()
+        Target = new()
         {
             Profile = GlobalSession.FindProfile(profileString),
             Format = CompileTarget.Hlsl

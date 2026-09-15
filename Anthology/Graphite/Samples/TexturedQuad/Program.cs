@@ -1,7 +1,6 @@
 using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
-using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
 

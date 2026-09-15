@@ -38,16 +38,6 @@ internal unsafe partial class VkGraphicsDevice
         return (IntPtr)Vk.GetInstanceProcAddr(Instance, utf8Ptr);
     }
 
-    internal T? GetInstanceProcAddr<T>(string name)
-    {
-        IntPtr funcPtr = GetInstanceProcAddr(name);
-        if (funcPtr != IntPtr.Zero)
-        {
-            return Marshal.GetDelegateForFunctionPointer<T>(funcPtr);
-        }
-        return default;
-    }
-
     private IntPtr GetDeviceProcAddr(string name)
     {
         byte* utf8Ptr = stackalloc byte[Utf8Stack.ByteCount(name)];
@@ -56,13 +46,12 @@ internal unsafe partial class VkGraphicsDevice
         return (IntPtr)Vk.GetDeviceProcAddr(Device, utf8Ptr);
     }
 
-    private T? GetDeviceProcAddr<T>(string name)
-    {
-        IntPtr funcPtr = GetDeviceProcAddr(name);
-        if (funcPtr != IntPtr.Zero)
-        {
-            return Marshal.GetDelegateForFunctionPointer<T>(funcPtr);
-        }
-        return default;
-    }
+    internal T? GetInstanceProcAddr<T>(string name) where T : Delegate => GetDelegate<T>(GetInstanceProcAddr(name));
+
+    private T? GetDeviceProcAddr<T>(string name) where T : Delegate => GetDelegate<T>(GetDeviceProcAddr(name));
+
+    private static T? GetDelegate<T>(IntPtr funcPtr) where T : Delegate
+        => funcPtr != IntPtr.Zero
+            ? Marshal.GetDelegateForFunctionPointer<T>(funcPtr)
+            : null;
 }
