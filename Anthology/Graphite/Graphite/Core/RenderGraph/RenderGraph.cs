@@ -61,14 +61,6 @@ public sealed class RenderGraph<TView> : IDisposable
             resource.DisposeOwned();
     }
 
-    private readonly struct Node(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, GraphResource[] declaredOutputs)
-    {
-        public readonly IPass<TView> Pass = pass;
-        public readonly RenderResourceID[] Inputs = inputs;
-        public readonly RenderResourceID[] Outputs = outputs;
-        public readonly GraphResource[] DeclaredOutputs = declaredOutputs;
-    }
-
     /// <summary>
     /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Present pass always runs last, so its inputs are recorded but not ordered. Throws if an input has no producer, or on a dependency cycle.
     /// </summary>
@@ -78,7 +70,7 @@ public sealed class RenderGraph<TView> : IDisposable
         IReadOnlyList<GraphResource>? centralResources = null)
     {
         int count = passes.Count;
-        var nodes = new Node[count];
+        var nodes = new PassNode[count];
         var resources = new Dictionary<RenderResourceID, GraphResource>();
 
         if (centralResources != null)
@@ -95,9 +87,7 @@ public sealed class RenderGraph<TView> : IDisposable
             builder.Reset();
             pass.Setup(builder);
 
-            var inputs = new RenderResourceID[builder.Inputs.Count];
-            for (int r = 0; r < inputs.Length; r++)
-                inputs[r] = builder.Inputs[r];
+            RenderResourceID[] inputs = builder.Inputs.ToArray();
 
             var outputs = new RenderResourceID[builder.Outputs.Count];
             var declared = new GraphResource[builder.Outputs.Count];
@@ -109,15 +99,13 @@ public sealed class RenderGraph<TView> : IDisposable
                 resources.TryAdd(output.Id, output);
             }
 
-            nodes[i] = new Node(pass, inputs, outputs, declared);
+            nodes[i] = new PassNode(pass, inputs, outputs, declared);
         }
 
         var presentBuilder = new PresentContextBuilder();
         presentPass.Setup(presentBuilder);
 
-        var presentInputs = new RenderResourceID[presentBuilder.Inputs.Count];
-        for (int r = 0; r < presentInputs.Length; r++)
-            presentInputs[r] = presentBuilder.Inputs[r];
+        RenderResourceID[] presentInputs = presentBuilder.Inputs.ToArray();
 
         ValidateInputsHaveProducers(nodes, presentPass.Name, presentInputs, resources);
 
@@ -125,22 +113,19 @@ public sealed class RenderGraph<TView> : IDisposable
 
         var orderedNodes = new PassNode[ordered.Length];
         for (int i = 0; i < ordered.Length; i++)
-        {
-            Node n = nodes[ordered[i]];
-            orderedNodes[i] = new PassNode(n.Pass, n.Inputs, n.Outputs, n.DeclaredOutputs);
-        }
+            orderedNodes[i] = nodes[ordered[i]];
 
         return new RenderGraph<TView>(
             orderedNodes, resources, presentInputs, presentBuilder.RequestsSwapchain);
     }
 
     private static void ValidateInputsHaveProducers(
-        Node[] nodes,
+        PassNode[] nodes,
         string presentPassName,
         RenderResourceID[] presentInputs,
         Dictionary<RenderResourceID, GraphResource> resources)
     {
-        foreach (Node node in nodes)
+        foreach (PassNode node in nodes)
         {
             foreach (RenderResourceID input in node.Inputs)
             {
@@ -160,7 +145,7 @@ public sealed class RenderGraph<TView> : IDisposable
         }
     }
 
-    private static int[] TopologicalSort(Node[] nodes)
+    private static int[] TopologicalSort(PassNode[] nodes)
     {
         int count = nodes.Length;
 
