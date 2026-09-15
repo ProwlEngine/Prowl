@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Threading;
 
@@ -55,19 +56,7 @@ internal sealed class SetBindingMetadata
                     sortedUbo[w++] = i;
             }
 
-            // Insertion sort by binding index; UBO counts per set are tiny.
-            for (int i = 1; i < sortedUbo.Length; i++)
-            {
-                int key = sortedUbo[i];
-                int keyBinding = elements[key].BindingIndex;
-                int j = i - 1;
-                while (j >= 0 && elements[sortedUbo[j]].BindingIndex > keyBinding)
-                {
-                    sortedUbo[j + 1] = sortedUbo[j];
-                    j--;
-                }
-                sortedUbo[j + 1] = key;
-            }
+            Array.Sort(sortedUbo, (a, b) => elements[a].BindingIndex.CompareTo(elements[b].BindingIndex));
 
             bool[] hasSameNamedTexture = new bool[elements.Length];
             for (int i = 0; i < elements.Length; i++)

@@ -319,6 +319,6 @@ internal static class VkApiExtensions
     public static void CheckResult(this Result result)
     {
         if (result != Result.Success)
-            throw new RenderException("Unsuccessful VkResult: " + result);
+            throw new RenderException($"Unsuccessful VkResult: {result}");
     }
 }

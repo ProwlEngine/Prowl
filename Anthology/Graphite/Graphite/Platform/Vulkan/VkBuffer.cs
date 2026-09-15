@@ -109,7 +109,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             }
         }
 
-        VkMemoryBlock memoryToken = _gd.MemoryManager.Allocate(
+        _memory = _gd.MemoryManager.Allocate(
             _gd.PhysicalDeviceMemProperties,
             bufferMemReqs.MemoryTypeBits,
             memoryPropertyFlags,
@@ -119,7 +119,6 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             prefersDedicatedAllocation,
             default,
             _deviceBuffer);
-        _memory = memoryToken;
         _gd.Vk.BindBufferMemory(_gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();
 
         _gd.RecordBufferAllocation(Usage, SizeInBytes);
