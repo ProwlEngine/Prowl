@@ -115,12 +115,44 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     public static bool PassHasTag(ShaderPass pass, string tag, string? tagValue = null)
         => ShaderDefinition.PassHasTag(pass, tag, tagValue);
 
+    [SerializeIgnore]
+    private Dictionary<(string, string?), int?>? _tagCache;
+
+    [SerializeIgnore]
+    private ShaderDefinition? _tagCacheDefinition;
+
     public int? GetPassWithTag(string tag, string? tagValue = null)
     {
         EnsureNotDisposed();
-        EnsureCreated();
-        return _definition.GetPassWithTag(tag, tagValue);
+
+        if (_tagCache == null || !ReferenceEquals(_tagCacheDefinition, _definition))
+        {
+            _tagCache = new();
+            _tagCacheDefinition = _definition;
+        }
+
+        (string, string?) key = (tag, tagValue);
+        if (!_tagCache.TryGetValue(key, out int? index))
+        {
+            index = _definition.GetPassWithTag(tag, tagValue);
+            _tagCache[key] = index;
+        }
+        return index;
     }
+
+    /// <summary>
+    /// The first pass carrying the tag (optionally with a specific value), or null if none.
+    /// </summary>
+    public ShaderPass? GetPassWithTagOrNull(string tag, string? tagValue = null)
+    {
+        int? index = GetPassWithTag(tag, tagValue);
+        if (!index.HasValue)
+            return null;
+        EnsureCreated();
+        return _definition.Passes![index.Value];
+    }
+
+    internal int TagCacheEntryCount => _tagCache?.Count ?? 0;
 
     public List<int> GetPassesWithTag(string tag, string? tagValue = null)
     {
