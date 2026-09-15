@@ -57,6 +57,8 @@ public class Camera : MonoBehaviour
 
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
 
+    [System.NonSerialized] internal CameraView? RenderView;
+
     private float _aspect;
     private bool _customAspect;
 
@@ -118,7 +120,7 @@ public class Camera : MonoBehaviour
         }
     }
 
-    public Float4x4 ViewMatrix { get; private set; }
+    public Float4x4 ViewMatrix { get; internal set; }
 
     /// <summary>
     /// The previous frame's unjittered view-projection matrix.
