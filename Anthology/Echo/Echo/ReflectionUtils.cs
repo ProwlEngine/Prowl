@@ -8,29 +8,55 @@ using System.Reflection;
 namespace Prowl.Echo;
 
 /// <summary>
-/// Cached field metadata that avoids per-call attribute reflection.
+/// Cached metadata for a serialized field, or a [DataMember] property, that avoids per-call attribute reflection.
 /// </summary>
 internal readonly struct CachedFieldInfo
 {
-    public readonly FieldInfo Field;
-    // Key this field is (de)serialized under. Equals Field.Name except for a field shadowed by a
+    private readonly FieldInfo? _field;
+    private readonly PropertyInfo? _property;
+    // Key this member is (de)serialized under. Equals its name except for a field shadowed by a
     // same-named field further down the hierarchy, which is qualified so the two don't collide.
     public readonly string SerializedName;
     public readonly string? SerializeIfCondition;
     public readonly bool HasIgnoreOnNull;
     public readonly string[]? FormerNames;
 
-    public CachedFieldInfo(FieldInfo field, string serializedName)
+    public MemberInfo Member => (MemberInfo?)_field ?? _property!;
+    public string Name => Member.Name;
+    public Type MemberType => _field?.FieldType ?? _property!.PropertyType;
+    public bool IsInitOnly => _field?.IsInitOnly ?? false;
+    public int MetadataToken => Member.MetadataToken;
+
+    public object? GetValue(object target) => _field != null ? _field.GetValue(target) : _property!.GetValue(target);
+
+    public void SetValue(object target, object? value)
     {
-        Field = field;
+        if (_field != null) _field.SetValue(target, value);
+        else _property!.SetValue(target, value);
+    }
+
+    public CachedFieldInfo(FieldInfo field, string serializedName) : this((MemberInfo)field, serializedName)
+    {
+        _field = field;
+    }
+
+    public CachedFieldInfo(PropertyInfo property, string serializedName) : this((MemberInfo)property, serializedName)
+    {
+        _property = property;
+    }
+
+    private CachedFieldInfo(MemberInfo member, string serializedName)
+    {
+        _field = null;
+        _property = null;
         SerializedName = serializedName;
 
-        var serializeIf = field.GetCustomAttribute<SerializeIfAttribute>();
+        var serializeIf = member.GetCustomAttribute<SerializeIfAttribute>();
         SerializeIfCondition = serializeIf?.ConditionMemberName;
 
-        HasIgnoreOnNull = field.IsDefined(typeof(IgnoreOnNullAttribute), false);
+        HasIgnoreOnNull = member.IsDefined(typeof(IgnoreOnNullAttribute), false);
 
-        var formerAttrs = field.GetCustomAttributes<FormerlySerializedAsAttribute>();
+        var formerAttrs = member.GetCustomAttributes<FormerlySerializedAsAttribute>();
         string[]? names = null;
         // Avoid LINQ allocation in the common case (no former names)
         foreach (var attr in formerAttrs)
@@ -208,11 +234,32 @@ public static class ReflectionUtils
                     fields.Add(new CachedFieldInfo(field, serializedName));
                 }
 
+                foreach (var property in currentType.GetProperties(flags))
+                {
+                    if (!IsPropertySerializable(property))
+                        continue;
+
+                    string serializedName = seenNames.Add(property.Name)
+                        ? property.Name
+                        : $"{property.Name}@{property.DeclaringType!.FullName}";
+                    fields.Add(new CachedFieldInfo(property, serializedName));
+                }
+
                 currentType = currentType.BaseType;
             }
 
             return fields.ToArray();
         });
+    }
+
+    // Properties only serialize when opted in with [DataMember], so a type can keep its storage private
+    // and still persist under the names it had when those members were plain fields.
+    private static bool IsPropertySerializable(PropertyInfo property)
+    {
+        return property.GetCustomAttribute<System.Runtime.Serialization.DataMemberAttribute>() != null
+            && property.CanRead
+            && property.CanWrite
+            && property.GetIndexParameters().Length == 0;
     }
 
     private static bool IsFieldSerializable(FieldInfo field)
