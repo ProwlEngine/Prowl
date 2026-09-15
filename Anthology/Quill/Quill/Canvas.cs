@@ -378,21 +378,28 @@ namespace Prowl.Quill
         /// Exact comparison of everything the shader binds, used to confirm a batch merge rather than
         /// trusting <see cref="ComputeHash"/> alone.
         /// </summary>
+        /// <remarks>Fields the shader ignores for this brush type are skipped.</remarks>
         internal bool Matches(in Brush other)
         {
-            return Type == other.Type
-                && ReferenceEquals(Texture, other.Texture)
-                && ReferenceEquals(Shader, other.Shader)
-                && Color1.Equals(other.Color1)
+            if (Type != other.Type
+                || !ReferenceEquals(Texture, other.Texture)
+                || !ReferenceEquals(Shader, other.Shader)
+                || BackdropBlur != other.BackdropBlur
+                || (Shader != null && !SameUniforms(Uniforms, other.Uniforms)))
+                return false;
+
+            if (Texture != null && !DrawCall.SameTransform(in TextureTransform, in other.TextureTransform))
+                return false;
+
+            if (Type == BrushType.None)
+                return true;
+
+            return Color1.Equals(other.Color1)
                 && Color2.Equals(other.Color2)
                 && Point1.X == other.Point1.X && Point1.Y == other.Point1.Y
                 && Point2.X == other.Point2.X && Point2.Y == other.Point2.Y
-                && CornerRadii == other.CornerRadii
-                && Feather == other.Feather
-                && BackdropBlur == other.BackdropBlur
-                && DrawCall.SameTransform(in Transform, in other.Transform)
-                && DrawCall.SameTransform(in TextureTransform, in other.TextureTransform)
-                && (Shader == null || SameUniforms(Uniforms, other.Uniforms));
+                && (Type != BrushType.Box || (CornerRadii == other.CornerRadii && Feather == other.Feather))
+                && DrawCall.SameTransform(in Transform, in other.Transform);
         }
 
         private static bool SameUniforms(ShaderUniforms? a, ShaderUniforms? b)
@@ -408,16 +415,23 @@ namespace Prowl.Quill
             {
                 int hash = 17;
                 hash = hash * 31 + (int)Type;
-                hash = hash * 31 + Color1.GetHashCode();
-                hash = hash * 31 + Color2.GetHashCode();
-                hash = hash * 31 + Point1.GetHashCode();
-                hash = hash * 31 + Point2.GetHashCode();
-                hash = hash * 31 + CornerRadii.GetHashCode();
-                hash = hash * 31 + Feather.GetHashCode();
                 hash = hash * 31 + BackdropBlur.GetHashCode();
-                hash = hash * 31 + Transform.GetHashCode();
                 hash = hash * 31 + (Texture?.GetHashCode() ?? 0);
-                hash = hash * 31 + TextureTransform.GetHashCode();
+                if (Texture != null)
+                    hash = hash * 31 + TextureTransform.GetHashCode();
+                if (Type != BrushType.None)
+                {
+                    hash = hash * 31 + Color1.GetHashCode();
+                    hash = hash * 31 + Color2.GetHashCode();
+                    hash = hash * 31 + Point1.GetHashCode();
+                    hash = hash * 31 + Point2.GetHashCode();
+                    hash = hash * 31 + Transform.GetHashCode();
+                    if (Type == BrushType.Box)
+                    {
+                        hash = hash * 31 + CornerRadii.GetHashCode();
+                        hash = hash * 31 + Feather.GetHashCode();
+                    }
+                }
                 if (Shader != null)
                 {
                     hash = hash * 31 + Shader.GetHashCode();
