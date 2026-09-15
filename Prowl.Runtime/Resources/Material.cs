@@ -110,6 +110,34 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore]
     internal Dictionary<int, Keyword> _localKeywords;
 
+    [SerializeIgnore]
+    private Keyword[]? _keywordArray;
+
+    /// <summary>
+    /// Fixed-function render state applied on top of the shader pass; unset fields defer to the pass.
+    /// </summary>
+    [SerializeField]
+    public PassState RenderStateOverride = new();
+
+    private static readonly PassState s_noOverride = new();
+
+    /// <summary>True if any field of <see cref="RenderStateOverride"/> is set.</summary>
+    public bool HasRenderStateOverride => RenderStateOverride != null && !RenderStateOverride.Equals(s_noOverride);
+
+    /// <summary>Every keyword currently set on this material, cached until the keyword set changes.</summary>
+    public Keyword[] KeywordArray
+    {
+        get
+        {
+            if (_keywordArray == null)
+            {
+                _keywordArray = new Keyword[_localKeywords.Count];
+                _localKeywords.Values.CopyTo(_keywordArray, 0);
+            }
+            return _keywordArray;
+        }
+    }
+
     // Serializable mirror of every property value set on this material
     [SerializeField]
     internal Dictionary<string, MaterialProperty> _properties;
@@ -161,6 +189,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
         _localKeywords = new(source._localKeywords ?? []);
         PropertyOverrides = new(source.PropertyOverrides ?? []);
+        RenderStateOverride = source.RenderStateOverride != null ? source.RenderStateOverride.Apply(s_noOverride) : new();
     }
 
 
@@ -171,6 +200,25 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetKeyword(Keyword keyword)
     {
         _localKeywords[keyword.NameId] = keyword;
+        _keywordArray = null;
+    }
+
+    /// <summary>Removes the keyword with the given name, if set.</summary>
+    public bool ClearKeyword(string name)
+    {
+        bool removed = _localKeywords.Remove(new Keyword(name, "").NameId);
+        if (removed)
+            _keywordArray = null;
+        return removed;
+    }
+
+    /// <summary>Removes every keyword set on this material.</summary>
+    public void ClearKeywords()
+    {
+        if (_localKeywords.Count == 0)
+            return;
+        _localKeywords.Clear();
+        _keywordArray = null;
     }
 
     /// <summary>
@@ -457,6 +505,8 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         if (PropertyOverrides == null) PropertyOverrides = new HashSet<string>();
         _properties ??= new();
         _localKeywords ??= new();
+        RenderStateOverride ??= new();
+        _keywordArray = null;
         if (PropertyOverrides.Count == 0)
         {
             foreach (string name in _properties.Keys)
