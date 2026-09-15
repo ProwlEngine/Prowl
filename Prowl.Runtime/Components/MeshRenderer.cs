@@ -43,6 +43,14 @@ public class MeshRenderer : MonoBehaviour
     // The command buffer snapshots these at encode time, so mutating them next frame is safe.
     [System.NonSerialized] private PropertySet[] _propCache;
 
+    [System.NonSerialized] private Float4x4 _prevWorld;
+    [System.NonSerialized] private Float4x4 _currentWorld;
+    [System.NonSerialized] private bool _hasPrevWorld;
+    [System.NonSerialized] private long _prevWorldFrame;
+
+    /// <summary>The world matrix collected on the previous frame, or the current one before any collect.</summary>
+    public Float4x4 PreviousWorldMatrix => _hasPrevWorld ? _prevWorld : Transform.LocalToWorldMatrix;
+
     public override void OnRenderCollect(SceneCuller culler)
     {
         var mesh = Mesh.Res;
@@ -58,6 +66,7 @@ public class MeshRenderer : MonoBehaviour
 
         // LocalToWorldMatrix is cached on Transform, so this is cheap for a static renderer.
         Float4x4 world = Transform.LocalToWorldMatrix;
+        Float4x4 prevWorld = TrackPreviousWorld(world);
 
         // AssetRef<T> caches its resolved instance as a side effect of .Res - List<T>'s indexer
         // returns value-type elements by copy, so Materials[s].Res would mutate a throwaway copy
@@ -85,7 +94,7 @@ public class MeshRenderer : MonoBehaviour
 
             culler.Add(new MeshRenderable(
                 mesh, mat, world,
-                GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
+                GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1, prevMatrix: prevWorld));
         }
     }
 
@@ -115,5 +124,27 @@ public class MeshRenderer : MonoBehaviour
             return true;
         }
         return false;
+    }
+
+    private Float4x4 TrackPreviousWorld(in Float4x4 world)
+    {
+        long frame = Time.FrameCount;
+        if (!_hasPrevWorld)
+        {
+            _prevWorld = world;
+            _currentWorld = world;
+            _hasPrevWorld = true;
+            _prevWorldFrame = frame;
+            return world;
+        }
+
+        if (frame != _prevWorldFrame)
+        {
+            _prevWorld = _currentWorld;
+            _currentWorld = world;
+            _prevWorldFrame = frame;
+        }
+
+        return _prevWorld;
     }
 }
