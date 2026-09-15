@@ -506,7 +506,7 @@ public sealed class UISceneEditor : SceneTool
         // Inverse of RectTransform.ComputeRect - one formula for fixed and stretched anchors:
         //   sizeDelta   = desiredSize - anchorSpan
         //   anchoredPos = desiredMin - anchorMin + pivot * sizeDelta
-        Float2 sizeDelta, anchored;
+        Float2 sizeDelta = default, anchored = default;
         sizeDelta.X = width - (aMaxX - aMinX);
         anchored.X = posX - aMinX + rt.Pivot.X * sizeDelta.X;
         sizeDelta.Y = height - (aMaxY - aMinY);

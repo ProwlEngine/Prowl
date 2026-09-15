@@ -90,7 +90,7 @@ public static class EditorGUI
         var m = theme.Metrics;
         var font = EditorTheme.DefaultFont;
 
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
         {
             if (font != null && !string.IsNullOrEmpty(label))
             {

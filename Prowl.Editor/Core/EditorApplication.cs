@@ -463,6 +463,8 @@ public class EditorApplication : Game
         bool focused = Window.IsFocused;
         if (focused && !_wasFocused)
             EditorAssetBackend.Instance?.Refresh();
+        if (focused != _wasFocused)
+            ApplyFramePacing();
         _wasFocused = focused;
 
         ExternalAssetDrop.ProcessPending();
@@ -585,12 +587,11 @@ public class EditorApplication : Game
         }
     }
 
-    // ── Smoothed perf readouts ──────────────────────────────────────────
-    // Raw per-frame FPS / frame-time flicker far too fast to read. The frame time is an exponential
-    // moving average (~0.5s time constant) so the FPS/ms readout glides continuously instead of
-    // snapping; memory samples once a second (GC total moves in coarse steps anyway).
+    // Smoothed perf readouts. FPS and frame time average the frames of the last few seconds, memory samples once a second.
+    private const float PerfAverageSeconds = 2.5f;
+    private static readonly Queue<float> _frameTimes = new();
+    private static double _frameTimeSum;
     private static double _perfWindow;
-    private static float _emaMs;
     private static int _dispFps;
     private static float _dispMs;
     private static long _dispMemMb;
@@ -599,12 +600,14 @@ public class EditorApplication : Game
     {
         if (dt <= 0f) return;
 
-        float ms = dt * 1000f;
-        if (_emaMs <= 0f) _emaMs = ms;                    // seed on the first frame
-        float alpha = 1f - MathF.Exp(-dt / 2f);           // ~2s time constant, dt-based -> frame-rate independent
-        _emaMs += (ms - _emaMs) * alpha;
-        _dispMs = _emaMs;
-        _dispFps = Math.Min(9999, (int)MathF.Round(1000f / _emaMs));
+        _frameTimes.Enqueue(dt);
+        _frameTimeSum += dt;
+        while (_frameTimes.Count > 1 && _frameTimeSum - _frameTimes.Peek() >= PerfAverageSeconds)
+            _frameTimeSum -= _frameTimes.Dequeue();
+
+        float averageMs = (float)(_frameTimeSum * 1000.0 / _frameTimes.Count);
+        _dispMs = averageMs;
+        _dispFps = Math.Min(9999, (int)MathF.Round(1000f / averageMs));
 
         _perfWindow += dt;
         if (_perfWindow >= 1.0 || _dispMemMb == 0)
@@ -1606,8 +1609,14 @@ public class EditorApplication : Game
     {
         if (Application.IsPlaying) return;
 
-        Application.VSync = EditorSettings.Instance.VSync;
-        Application.TargetFrameRate = EditorSettings.Instance.TargetFrameRate;
+        var settings = EditorSettings.Instance;
+        Application.VSync = settings.VSync;
+
+        int limit = settings.TargetFrameRate;
+        int unfocused = settings.UnfocusedFrameRate;
+        if (!Window.IsFocused && unfocused > 0 && (limit == 0 || unfocused < limit))
+            limit = unfocused;
+        Application.TargetFrameRate = limit;
     }
 
     private void EnterPlayMode()

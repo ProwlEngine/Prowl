@@ -824,12 +824,12 @@ public class Mesh : EngineObject, ISerializable
 
             float f = 1.0f / det;
 
-            Float3 tangent;
+            Float3 tangent = default;
             tangent.X = f * (deltaUV2.Y * edge1.X - deltaUV1.Y * edge2.X);
             tangent.Y = f * (deltaUV2.Y * edge1.Y - deltaUV1.Y * edge2.Y);
             tangent.Z = f * (deltaUV2.Y * edge1.Z - deltaUV1.Y * edge2.Z);
 
-            Float3 bitangent;
+            Float3 bitangent = default;
             bitangent.X = f * (-deltaUV2.X * edge1.X + deltaUV1.X * edge2.X);
             bitangent.Y = f * (-deltaUV2.X * edge1.Y + deltaUV1.X * edge2.Y);
             bitangent.Z = f * (-deltaUV2.X * edge1.Z + deltaUV1.X * edge2.Z);

@@ -108,6 +108,8 @@ public class PreferencesPanel : DockPanel
     // Only applies outside play mode; the game gets an unpaced loop and sets its own.
     private static readonly int[] FrameRates = [0, 30, 60, 120, 144, 240];
     private static readonly string[] FrameRateNames = ["Unlimited", "30", "60", "120", "144", "240"];
+    private static readonly int[] UnfocusedFrameRates = [0, 5, 10, 15, 30, 60];
+    private static readonly string[] UnfocusedFrameRateNames = ["Same as Focused", "5", "10", "15", "30", "60"];
 
     private void DrawGeneral(Paper paper, EditorSettings s)
     {
@@ -154,6 +156,16 @@ public class PreferencesPanel : DockPanel
                     s.Save();
                     EditorApplication.ApplyFramePacing();
                 }, FrameRateNames).Show());
+
+        int unfocusedIndex = Array.IndexOf(UnfocusedFrameRates, s.UnfocusedFrameRate);
+        EditorGUI.SettingsRow(paper, "pref_unfocused_fps", Loc.Get("pref.unfocused_frame_rate"), () =>
+            Origami.Dropdown(paper, "pref_unfocused_fps_v", unfocusedIndex < 0 ? 0 : unfocusedIndex,
+                v =>
+                {
+                    s.UnfocusedFrameRate = UnfocusedFrameRates[v];
+                    s.Save();
+                    EditorApplication.ApplyFramePacing();
+                }, UnfocusedFrameRateNames).Show());
 
         EditorGUI.SectionHeader(paper, "pref_gen_maint", Loc.Get("pref.maintenance"));
         EditorGUI.SettingsRow(paper, "pref_clear_cache", Loc.Get("pref.clear_cache"), () =>

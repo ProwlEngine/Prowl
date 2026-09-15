@@ -122,7 +122,7 @@ public class NavigationSettings : ProjectSettingsBase
         const float NumW = 64, DelW = 20;
 
         // Column headers, aligned with the rows below.
-        using (paper.Row("nav_agent_cols").Height(20).RowBetween(6).ChildLeft(8).ChildRight(4).Enter())
+        using (paper.Row("nav_agent_cols").Height(20).Gap(6).Padding(8, 4, 0, 0).Enter())
         {
             DrawColumnHeader(paper, "nav_agent_cols_name", "Name", UnitValue.Stretch(), font);
             DrawColumnHeader(paper, "nav_agent_cols_r", "Radius", NumW, font);
@@ -138,7 +138,7 @@ public class NavigationSettings : ProjectSettingsBase
             NavMeshAgentType type = AgentTypes[i];
             bool isBuiltin = type.Id == NavMeshAgentTypes.Humanoid;
 
-            using (paper.Row($"nav_agent_{type.Id}").Height(26).RowBetween(6).ChildLeft(8).ChildRight(4).Enter())
+            using (paper.Row($"nav_agent_{type.Id}").Height(26).Gap(6).Padding(8, 4, 0, 0).Enter())
             {
                 // Name: same control for every row; the built-in Humanoid's name is locked.
                 using (paper.Box($"nav_agent_name_{type.Id}").Width(UnitValue.Stretch()).Height(22).Enter())
@@ -195,7 +195,7 @@ public class NavigationSettings : ProjectSettingsBase
     private static void DrawColumnHeader(Paper paper, string id, string label, UnitValue width, Prowl.Scribe.FontFile font)
     {
         paper.Box(id)
-            .Width(width).Height(18).ChildLeft(4)
+            .Width(width).Height(18).Padding(4, 0, 0, 0)
             .Text(label, font).TextColor(EditorTheme.Ink300)
             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
     }
@@ -235,7 +235,7 @@ public class NavigationSettings : ProjectSettingsBase
         // [swatch 6] [slot label 76] [Name stretch] [Cost 70] [delete 20]
         const float SwatchW = 6, SlotW = 76, CostW = 70, DelW = 20;
 
-        using (paper.Row("nav_area_cols").Height(20).RowBetween(6).ChildLeft(8).ChildRight(4).Enter())
+        using (paper.Row("nav_area_cols").Height(20).Gap(6).Padding(8, 4, 0, 0).Enter())
         {
             paper.Box("nav_area_cols_swatch").Width(SwatchW).Height(18);
             paper.Box("nav_area_cols_slot").Width(SlotW).Height(18);
@@ -250,7 +250,7 @@ public class NavigationSettings : ProjectSettingsBase
             bool isBuiltin = i <= NavMeshAreas.Jump;
             if (!isBuiltin && string.IsNullOrEmpty(AreaNames[i])) continue; // empty slot: hidden
 
-            using (paper.Row($"nav_area_{i}").Height(26).RowBetween(6).ChildLeft(8).ChildRight(4).Enter())
+            using (paper.Row($"nav_area_{i}").Height(26).Gap(6).Padding(8, 4, 0, 0).Enter())
             {
                 // Swatch in the same color the scene-view overlay uses for this area.
                 paper.Box($"nav_area_swatch_{i}")

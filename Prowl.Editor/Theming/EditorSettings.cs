@@ -51,6 +51,9 @@ public class EditorSettings
     /// <summary> Gets or sets the frame rate the editor is paced to. 0 is unlimited. Play mode ignores this and lets the game decide. </summary>
     public int TargetFrameRate { get; set; } = 0;
 
+    /// <summary> Gets or sets the frame rate the editor is paced to while its window is not focused. 0 means no separate limit. Play mode ignores this and lets the game decide. </summary>
+    public int UnfocusedFrameRate { get; set; } = 5;
+
     // Shortcuts only user-overridden bindings are stored
     /// <summary> Gets or sets the dictionary of user-overridden shortcut bindings, keyed by action name. Only overridden bindings are stored. </summary>
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();
