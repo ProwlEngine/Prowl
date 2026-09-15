@@ -65,6 +65,8 @@ internal unsafe partial class VkCommandBuffer
     private protected override void SetComputeShaderCore(ComputeProgram program)
     {
         VkComputeProgram cp = Util.AssertSubtype<ComputeProgram, VkComputeProgram>(program);
+        if (_currentComputeProgram == cp) return;
+
         _currentComputeProgram = cp;
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, cp.DevicePipeline);
         AddStagingResource(cp.RefCount);
