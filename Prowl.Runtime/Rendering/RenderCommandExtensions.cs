@@ -1,7 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Graphite;
 using Prowl.Graphite.RenderGraph;
@@ -287,7 +287,7 @@ public static class RenderCommandExtensions
         ShaderPass? shaderPass = shader.GetPass(pass);
         if (shaderPass == null) return;
 
-        shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
+        shaderPass.SetKeywords(mat.KeywordArray);
 
         Framebuffer? destFb = destination.IsValid() ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
@@ -321,7 +321,7 @@ public static class RenderCommandExtensions
         ShaderPass? shaderPass = shader.GetPass(pass);
         if (shaderPass == null) return;
 
-        shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
+        shaderPass.SetKeywords(mat.KeywordArray);
 
         Framebuffer? destFb = destination.IsValid() ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
@@ -363,7 +363,7 @@ public static class RenderCommandExtensions
         ShaderPass? shaderPass = shader.GetPass(pass);
         if (shaderPass == null) return;
 
-        shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
+        shaderPass.SetKeywords(mat.KeywordArray);
 
         cmd.SetRenderTarget(destination);
 
@@ -380,6 +380,15 @@ public static class RenderCommandExtensions
 
     // ─────────────────────── Mesh draws ───────────────────────
 
+    private static readonly PropertyID s_objectToWorld = "prowl_ObjectToWorld";
+    private static readonly PropertyID s_worldToObject = "prowl_WorldToObject";
+    private static readonly PropertyID s_prevObjectToWorld = "prowl_PrevObjectToWorld";
+
+    private static readonly ConditionalWeakTable<CommandBuffer, PropertySet> s_objectSets = new();
+
+    private static PropertySet RentObjectSet(CommandBuffer cmd)
+        => s_objectSets.GetValue(cmd, static _ => new PropertySet(3));
+
     public static void DrawMesh(this CommandBuffer cmd, Mesh mesh, Material material)
         => DrawMesh(cmd, mesh, material, GetPassOrNull(material, 0), Float4x4.Identity, null);
 
@@ -391,6 +400,15 @@ public static class RenderCommandExtensions
 
     public static void DrawMesh(this CommandBuffer cmd, Mesh mesh, Material material, ShaderPass? pass, Float4x4 model, PropertySet? properties)
     {
+        if (pass == null)
+            return;
+
+        DrawParams p = new(model, model.Invert(), model, -1, properties);
+        DrawMesh(cmd, mesh, material, pass, in p);
+    }
+
+    public static void DrawMesh(this CommandBuffer cmd, Mesh mesh, Material material, ShaderPass pass, in DrawParams p)
+    {
         if (mesh == null || material == null || pass == null)
             return;
 
@@ -398,24 +416,79 @@ public static class RenderCommandExtensions
         if (mesh.VertexBuffer == null || mesh.IndexBuffer == null)
             return;
 
-        // Select the material's active variant (keywords) before recording the shader.
-        pass.SetKeywords(material._localKeywords.Values.ToArray());
+        pass.SetKeywords(material.KeywordArray);
 
         cmd.EmitShaderBind(pass, material.Name);
-        cmd.SetShader(pass);
-        cmd.SetMaterialProperties(material);
-        if (properties != null)
-            cmd.SetProperties(properties);
+        if (material.HasRenderStateOverride)
+            cmd.SetShader(pass, material.RenderStateOverride);
+        else
+            cmd.SetShader(pass);
 
-        // Per-draw transform matrices. Each DrawMesh call allocates a small PropertySet so
-        // that multiple calls into the same CB record distinct per-object matrices.
-        var transforms = new PropertySet();
-        transforms.SetMatrix("prowl_ObjectToWorld", model);
-        transforms.SetMatrix("prowl_WorldToObject", model.Invert());
-        transforms.SetMatrix("prowl_PrevObjectToWorld", model);
+        cmd.SetMaterialProperties(material);
+        if (p.Properties != null)
+            cmd.SetProperties(p.Properties);
+
+        PropertySet transforms = RentObjectSet(cmd);
+        transforms.SetMatrix(s_objectToWorld, p.Model);
+        transforms.SetMatrix(s_worldToObject, p.WorldToObject);
+        transforms.SetMatrix(s_prevObjectToWorld, p.PrevModel);
         cmd.SetProperties(transforms);
 
-        cmd.SetVertexSource(mesh);
-        cmd.DrawIndexed(1, 0, 0, 0);
+        bool instanced = p.InstanceBuffer != null && p.InstanceCount > 0;
+        uint instances = instanced ? p.InstanceCount : 1u;
+
+        if (p.SubMeshIndex >= 0 && p.SubMeshIndex < mesh.SubMeshCount)
+        {
+            SubMeshDescriptor sub = mesh.GetSubMesh(p.SubMeshIndex);
+            if (instanced)
+                cmd.SetVertexSource(new InstancedSubMeshVertexSource(mesh, p.InstanceBuffer!, sub.IndexStart, sub.IndexCount, sub.Topology));
+            else
+                cmd.SetVertexSource(new SubMeshVertexSource(mesh, sub.IndexStart, sub.IndexCount, sub.Topology));
+            cmd.DrawIndexed(instances, (uint)sub.IndexStart, 0, 0);
+        }
+        else
+        {
+            if (instanced)
+                cmd.SetVertexSource(new InstancedMeshVertexSource(mesh, p.InstanceBuffer!));
+            else
+                cmd.SetVertexSource(mesh);
+            cmd.DrawIndexed(instances, 0, 0, 0);
+        }
+    }
+}
+
+/// <summary>
+/// Everything a single mesh draw needs besides the mesh, material and pass.
+/// </summary>
+public struct DrawParams
+{
+    public Float4x4 Model;
+    public Float4x4 WorldToObject;
+    public Float4x4 PrevModel;
+    public int SubMeshIndex;
+    public PropertySet? Properties;
+    public DeviceBuffer? InstanceBuffer;
+    public uint InstanceCount;
+
+    public DrawParams()
+    {
+        Model = Float4x4.Identity;
+        WorldToObject = Float4x4.Identity;
+        PrevModel = Float4x4.Identity;
+        SubMeshIndex = -1;
+        Properties = null;
+        InstanceBuffer = null;
+        InstanceCount = 0;
+    }
+
+    public DrawParams(Float4x4 model, Float4x4 worldToObject, Float4x4 prevModel, int subMeshIndex = -1, PropertySet? properties = null)
+    {
+        Model = model;
+        WorldToObject = worldToObject;
+        PrevModel = prevModel;
+        SubMeshIndex = subMeshIndex;
+        Properties = properties;
+        InstanceBuffer = null;
+        InstanceCount = 0;
     }
 }
