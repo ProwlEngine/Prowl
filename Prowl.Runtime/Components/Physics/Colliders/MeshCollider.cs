@@ -141,7 +141,7 @@ public sealed class MeshCollider : Collider
     /// it present now (a collider is built once, so a transient streaming null would leave it
     /// permanently missing), so the load is blocking and prioritized.
     /// </summary>
-    private Mesh ResolveMesh()
+    internal Mesh ResolveMesh()
     {
         mesh.EnsureLoaded();
         if (mesh.Res != null) return mesh.Res;
