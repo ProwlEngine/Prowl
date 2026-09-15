@@ -32,6 +32,8 @@ public class MeshRenderable : IRenderable
     }
 
     public Material GetMaterial() => _material;
+    public Float4x4 Matrix => _transform;
+    public Float4x4 PreviousMatrix => _prevTransform;
     public int GetLayer() => _layerIndex;
 
     public Float3 GetPosition()
