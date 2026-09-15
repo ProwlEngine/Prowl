@@ -8,6 +8,8 @@ using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using GraphiteTexture = Prowl.Graphite.Texture;
+
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
@@ -20,21 +22,22 @@ public static class GridRenderer
     private static Mesh? s_gridMesh;
     private static Material? s_gridMaterial;
     private static bool s_loggedMissingShader;
+    private static readonly PropertySet s_depthProperties = new();
 
     /// <summary>Records the grid into <paramref name="cmd"/>, centered under <paramref name="cameraPosition"/>.</summary>
-    public static void Render(CommandBuffer cmd, Float3 cameraPosition, Texture2D depthCopy)
+    public static void Render(CommandBuffer cmd, Float3 cameraPosition, GraphiteTexture sceneDepth)
     {
         EnsureResources();
         if (s_gridMesh == null || s_gridMaterial == null)
             return;
 
-        s_gridMaterial.SetTexture("_CameraDepthTexture", depthCopy);
+        s_depthProperties.SetTexture("_CameraDepthTexture", sceneDepth, SceneTargets.PointClampSampler);
 
         float cx = MathF.Round((float)cameraPosition.X);
         float cz = MathF.Round((float)cameraPosition.Z);
         Float4x4 model = Float4x4.CreateTranslation(new Float3(cx, 0, cz));
 
-        cmd.DrawMesh(s_gridMesh, s_gridMaterial, 0, model, null);
+        cmd.DrawMesh(s_gridMesh, s_gridMaterial, 0, model, s_depthProperties);
     }
 
     private static void EnsureResources()
