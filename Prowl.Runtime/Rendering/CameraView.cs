@@ -41,13 +41,8 @@ public sealed class CameraView : IRenderView
     /// </summary>
     public RenderTexture? Target;
 
-    /// <summary>
-    /// A sampleable copy of the opaque pass's depth buffer, taken after opaque geometry is drawn and
-    /// before its source depth attachment is written to again. Debug overlays (gizmos, grid) that need
-    /// to depth-test against the scene sample this instead of the live depth attachment, since a texture
-    /// can't be bound as a framebuffer's depth target and a shader resource at the same time.
-    /// </summary>
-    public Texture2D? SceneDepthCopy;
+    /// <summary>The scene gbuffer attachments for this view, filled by the first pass that resolves them.</summary>
+    public SceneTargets Targets;
 
     /// <summary>
     /// The shader-side <c>Frame</c> parameter block (see ShaderVariables.slang) for this camera: view/projection
@@ -63,22 +58,51 @@ public sealed class CameraView : IRenderView
     /// <summary>Identifies this view to the profiler - the owning camera's GameObject name.</summary>
     public string Name { get; set; } = "";
 
+    /// <summary>Sub-pixel jitter applied to the projection matrix by TAA. Zero when TAA is off.</summary>
+    public Float2 Jitter;
+
+    private Float2 _previousJitter;
+
+    /// <summary>The camera's visible renderables and lights for this frame, rebuilt by <see cref="From"/>.</summary>
+    public ViewCullResults Cull = new();
+
+    private CameraView(Camera camera)
+    {
+        Camera = camera;
+    }
+
+    /// <summary>The persistent view owned by <paramref name="camera"/>, created on first use and reused every frame.</summary>
+    public static CameraView GetOrCreate(Camera camera)
+    {
+        CameraView? view = camera.RenderView;
+        if (view == null)
+        {
+            view = new CameraView(camera);
+            camera.RenderView = view;
+        }
+        return view;
+    }
+
     /// <summary>Builds the view for one camera's render: refreshes its per-frame pixel/projection data
-    /// (<see cref="Camera.UpdateRenderData"/>) and resolves its target.</summary>
+    /// (<see cref="Camera.UpdateRenderData"/>), resolves its target and culls the camera's scene.</summary>
     public static CameraView From(Camera camera, in RenderingData data)
     {
         RenderTexture? target = camera.UpdateRenderData();
 
-        var view = new CameraView
-        {
-            Camera = camera,
-            Data = data,
-            Target = target,
-            PixelWidth = camera.PixelWidth,
-            PixelHeight = camera.PixelHeight,
-            Name = camera.GameObject.Name,
-        };
+        CameraView view = GetOrCreate(camera);
+        view.Data = data;
+        view.Target = target;
+        view.Targets = default;
+        view.PixelWidth = camera.PixelWidth;
+        view.PixelHeight = camera.PixelHeight;
+        view.Name = camera.GameObject.Name;
         view.BuildFrameProperties();
+
+        Scene? scene = camera.Scene;
+        if (scene != null)
+            ViewCuller.Cull(scene.Culler, camera, view.Cull);
+        else
+            view.Cull.Reset(0);
         return view;
     }
 
@@ -102,8 +126,58 @@ public sealed class CameraView : IRenderView
         props.SetFloat3("_WorldSpaceCameraPos", Camera.Transform.Position);
         props.SetFloat4("_ProjectionParams", new Float4(1.0f, Camera.NearClipPlane, Camera.FarClipPlane, 1.0f / Camera.FarClipPlane));
         props.SetFloat4("_ScreenParams", new Float4(PixelWidth, PixelHeight, 1.0f + 1.0f / PixelWidth, 1.0f + 1.0f / PixelHeight));
-        props.SetFloat2("_CameraJitter", Float2.Zero);
-        props.SetFloat2("_CameraPreviousJitter", Float2.Zero);
+
+        props.SetFloat2("_CameraJitter", Jitter);
+        props.SetFloat2("_CameraPreviousJitter", _previousJitter);
+        _previousJitter = Jitter;
+
+        Scene? scene = Camera.Scene;
+        if (scene == null)
+        {
+            props.SetFloat4("_FogColor", Float4.Zero);
+            props.SetFloat4("_FogParams", Float4.Zero);
+            props.SetFloat4("_FogStates", Float4.Zero);
+            props.SetFloat4("_AmbientMode", Float4.Zero);
+            props.SetFloat4("_AmbientColor", Float4.Zero);
+            props.SetFloat4("_AmbientSkyColor", Float4.Zero);
+            props.SetFloat4("_AmbientGroundColor", Float4.Zero);
+            props.SetFloat4("_AmbientParams", Float4.Zero);
+            props.SetFloat4("_ShadowFocusPos", new Float4(Camera.GetShadowFocusPosition(), 0.0f));
+
+            GlobalUniforms.Update();
+            props.ApplyOther(GlobalUniforms.Properties);
+            return;
+        }
+
+        Scene.FogParams fog = scene.Fog;
+        float fogRange = fog.End - fog.Start;
+        if (Maths.Abs(fogRange) < 0.0001f)
+            fogRange = 0.0001f;
+        Float4 fogParams = new(
+            fog.Density / 1.2011224f,
+            fog.Density / 0.693147181f,
+            -1.0f / fogRange,
+            fog.End / fogRange);
+
+        props.SetColor("_FogColor", fog.Color);
+        props.SetFloat4("_FogParams", fogParams);
+        props.SetFloat4("_FogStates", new Float4(
+            fog.Mode == Scene.FogParams.FogMode.Linear ? 1.0f : 0.0f,
+            fog.Mode == Scene.FogParams.FogMode.Exponential ? 1.0f : 0.0f,
+            fog.Mode == Scene.FogParams.FogMode.ExponentialSquared ? 1.0f : 0.0f,
+            0.0f));
+
+        Scene.AmbientLightParams ambient = scene.Ambient;
+        props.SetFloat4("_AmbientMode", new Float4(
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform ? 1.0f : 0.0f,
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? 1.0f : 0.0f,
+            0.0f, 0.0f));
+        props.SetFloat4("_AmbientColor", ambient.Color);
+        props.SetFloat4("_AmbientSkyColor", ambient.SkyColor);
+        props.SetFloat4("_AmbientGroundColor", ambient.GroundColor);
+        props.SetFloat4("_AmbientParams", new Float4(ambient.Strength, 0.0f, 0.0f, 0.0f));
+
+        props.SetFloat4("_ShadowFocusPos", new Float4(Camera.GetShadowFocusPosition(), 0.0f));
 
         GlobalUniforms.Update();
         props.ApplyOther(GlobalUniforms.Properties);
