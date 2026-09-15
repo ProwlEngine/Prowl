@@ -86,9 +86,6 @@ public sealed class Variant
             }
         }
 
-        (GraphicsBackend, ShaderDescription)[] next = new (GraphicsBackend, ShaderDescription)[Compiled.Length + 1];
-        Array.Copy(Compiled, next, Compiled.Length);
-        next[Compiled.Length] = (backend, description);
-        Compiled = next;
+        Compiled = [.. Compiled, (backend, description)];
     }
 }

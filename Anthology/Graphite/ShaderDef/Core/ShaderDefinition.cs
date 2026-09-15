@@ -137,10 +137,8 @@ public sealed class ShaderDefinition
     /// <summary>True if pass carries tag, optionally matching a specific value.</summary>
     public static bool PassHasTag(ShaderPass pass, string tag, string? tagValue = null)
     {
-        if (pass.Tags != null && pass.Tags.TryGetValue(tag, out string value))
-            return tagValue == null || value == tagValue;
-
-        return false;
+        return pass.Tags is { } tags && tags.TryGetValue(tag, out string value)
+            && (tagValue == null || value == tagValue);
     }
 
     /// <summary>

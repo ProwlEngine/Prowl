@@ -120,9 +120,9 @@ public sealed class ShaderPass
         {
             EnsureCreated();
             int count = 0;
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] != null && _variants[i]!.IsCompiledFor(_backend))
+                if (variant is { } v && v.IsCompiledFor(_backend))
                     count++;
             }
             return count;
@@ -138,9 +138,9 @@ public sealed class ShaderPass
         {
             EnsureCreated();
             int count = 0;
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] != null)
+                if (variant is not null)
                     count++;
             }
             return count;
@@ -160,9 +160,9 @@ public sealed class ShaderPass
         get
         {
             EnsureCreated();
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] == null)
+                if (variant is null)
                     return false;
             }
             return true;
@@ -177,9 +177,9 @@ public sealed class ShaderPass
         get
         {
             EnsureCreated();
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] == null || !_variants[i]!.IsCompiledFor(_backend))
+                if (variant is not { } v || !v.IsCompiledFor(_backend))
                     return false;
             }
             return true;
