@@ -8,6 +8,8 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
+using Prowl.Graphite;
+using Prowl.Graphite.ShaderDef;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -117,6 +119,9 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         }
 
+        Origami.Header(paper, $"{id}_h_state", "Render State").Underline().Show();
+        DrawRenderStateOverrides(paper, id, material, entry);
+
         // Shown when the live material actually differs from its file, not merely because it was
         // touched at some point. Ctrl+S still commits it too, via SaveManager.
         DrawApplyRevertBar(paper, id, entry, asset);
@@ -125,6 +130,87 @@ public class MaterialAssetEditor : AssetImporterEditor
         Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
         PreviewWidget.For(entry.Guid).Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
+    }
+
+    // ============================================================
+    // Render state overrides
+    // ============================================================
+
+    private void DrawRenderStateOverrides(Paper paper, string id, Material material, AssetEntry entry)
+    {
+        PassState state = material.RenderStateOverride ??= new PassState();
+        Action changed = () => MarkDirty(material, entry);
+
+        OverrideRow(paper, $"{id}_rs_cull", "Cull", state.CullMode, FaceCullMode.Back,
+            v => { state.CullMode = v; changed(); },
+            v => Origami.EnumDropdown(paper, $"{id}_rs_cull_v", v, nv => { state.CullMode = nv; changed(); }).Show());
+
+        OverrideRow(paper, $"{id}_rs_zwrite", "ZWrite", state.DepthWriteMask, true,
+            v => { state.DepthWriteMask = v; changed(); },
+            v => Origami.Switch(paper, $"{id}_rs_zwrite_v", v, nv => { state.DepthWriteMask = nv; changed(); }).NoLabel().Show());
+
+        OverrideRow(paper, $"{id}_rs_ztest", "ZTest", state.DepthFunc, ComparisonKind.LessEqual,
+            v => { state.DepthFunc = v; changed(); },
+            v => Origami.EnumDropdown(paper, $"{id}_rs_ztest_v", v, nv => { state.DepthFunc = nv; changed(); }).Show());
+
+        OverrideRow(paper, $"{id}_rs_blend", "Blend", state.EnableBlend, false,
+            v =>
+            {
+                state.EnableBlend = v;
+                if (!v.HasValue)
+                {
+                    state.BlendSrcRgb = null;
+                    state.BlendDstRgb = null;
+                    state.BlendSrcAlpha = null;
+                    state.BlendDstAlpha = null;
+                }
+                changed();
+            },
+            v => Origami.Switch(paper, $"{id}_rs_blend_v", v, nv => { state.EnableBlend = nv; changed(); }).NoLabel().Show());
+
+        if (state.EnableBlend == true)
+        {
+            EditorGUI.Row(paper, $"{id}_rs_blend_src", "Source", () =>
+                Origami.EnumDropdown(paper, $"{id}_rs_blend_src_v", state.BlendSrcRgb ?? BlendFactor.SourceAlpha,
+                    nv => { state.BlendSrcRgb = nv; state.BlendSrcAlpha = nv; changed(); }).Show());
+            EditorGUI.Row(paper, $"{id}_rs_blend_dst", "Destination", () =>
+                Origami.EnumDropdown(paper, $"{id}_rs_blend_dst_v", state.BlendDstRgb ?? BlendFactor.InverseSourceAlpha,
+                    nv => { state.BlendDstRgb = nv; state.BlendDstAlpha = nv; changed(); }).Show());
+        }
+
+        OverrideRow(paper, $"{id}_rs_mask", "Color Mask", state.WriteMask, ColorWriteMask.All,
+            v => { state.WriteMask = v; changed(); },
+            v =>
+            {
+                DrawMaskBit(paper, $"{id}_rs_mask_r", "R", ColorWriteMask.Red, state, changed);
+                DrawMaskBit(paper, $"{id}_rs_mask_g", "G", ColorWriteMask.Green, state, changed);
+                DrawMaskBit(paper, $"{id}_rs_mask_b", "B", ColorWriteMask.Blue, state, changed);
+                DrawMaskBit(paper, $"{id}_rs_mask_a", "A", ColorWriteMask.Alpha, state, changed);
+            });
+    }
+
+    private static void DrawMaskBit(Paper paper, string id, string label, ColorWriteMask bit, PassState state, Action changed)
+    {
+        ColorWriteMask mask = state.WriteMask ?? ColorWriteMask.All;
+        Origami.Checkbox(paper, id, (mask & bit) != 0, on =>
+        {
+            state.WriteMask = on ? mask | bit : mask & ~bit;
+            changed();
+        }).LabelRight(label).Show();
+    }
+
+    /// <summary>A label row with an override checkbox; the value control only appears while overridden.</summary>
+    private static void OverrideRow<T>(Paper paper, string id, string label, T? value, T fallback, Action<T?> set, Action<T> drawValue) where T : struct
+    {
+        EditorGUI.Row(paper, id, label, () =>
+        {
+            using (paper.Row($"{id}_c").Height(UnitValue.Auto).Gap(8).Enter())
+            {
+                Origami.Checkbox(paper, $"{id}_on", value.HasValue, on => set(on ? fallback : null)).NoLabel().Show();
+                if (value.HasValue)
+                    drawValue(value.Value);
+            }
+        });
     }
 
     // ============================================================
