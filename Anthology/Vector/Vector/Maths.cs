@@ -533,22 +533,25 @@ public static partial class Maths
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float2 ModF(Float2 x, out Float2 integer)
     {
-        integer = new Float2();
-        return new Float2(ModF(x.X, out integer.X), ModF(x.Y, out integer.Y));
+        var result = new Float2(ModF(x.X, out float ix), ModF(x.Y, out float iy));
+        integer = new Float2(ix, iy);
+        return result;
     }
     /// <summary>Splits a vector into integer and fractional parts componentwise.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float3 ModF(Float3 x, out Float3 integer)
     {
-        integer = new Float3();
-        return new Float3(ModF(x.X, out integer.X), ModF(x.Y, out integer.Y), ModF(x.Z, out integer.Z));
+        var result = new Float3(ModF(x.X, out float ix), ModF(x.Y, out float iy), ModF(x.Z, out float iz));
+        integer = new Float3(ix, iy, iz);
+        return result;
     }
     /// <summary>Splits a vector into integer and fractional parts componentwise.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float4 ModF(Float4 x, out Float4 integer)
     {
-        integer = new Float4();
-        return new Float4(ModF(x.X, out integer.X), ModF(x.Y, out integer.Y), ModF(x.Z, out integer.Z), ModF(x.W, out integer.W));
+        var result = new Float4(ModF(x.X, out float ix), ModF(x.Y, out float iy), ModF(x.Z, out float iz), ModF(x.W, out float iw));
+        integer = new Float4(ix, iy, iz, iw);
+        return result;
     }
     /// <summary>Splits a vector into integer and fractional parts componentwise.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 
 namespace Prowl.Vector;
 
@@ -27,7 +28,12 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
     public static Float3 UnitZ => new Float3(0f, 0f, 1f);
 
 
-    public float X, Y, Z;
+    // Stored as a Vector3 so the JIT keeps the whole value in one SIMD register.
+    private Vector3 _v;
+
+    [DataMember] public float X { readonly get => _v.X; set => _v.X = value; }
+    [DataMember] public float Y { readonly get => _v.Y; set => _v.Y = value; }
+    [DataMember] public float Z { readonly get => _v.Z; set => _v.Z = value; }
 
 
     #region Properties
@@ -61,7 +67,8 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
     #region Constructors
 
     public Float3(float scalar) : this(scalar, scalar, scalar) { }
-    public Float3(float x, float y, float z) { X = x; Y = y; Z = z; }
+    public Float3(float x, float y, float z) => _v = new Vector3(x, y, z);
+    private Float3(Vector3 v) => _v = v;
     public Float3(Float3 v) : this(v.X, v.Y, v.Z) { }
 
     public Float3(float[] array)
@@ -301,24 +308,24 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
 
     #region Operators
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 v) => new Float3(-v.X, -v.Y, -v.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 v) => new Float3(-v._v);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(Float3 a, Float3 b) => new Float3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 a, Float3 b) => new Float3(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(Float3 a, Float3 b) => new Float3(a.X * b.X, a.Y * b.Y, a.Z * b.Z);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(Float3 a, Float3 b) => new Float3(a.X / b.X, a.Y / b.Y, a.Z / b.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(Float3 a, Float3 b) => new Float3(a._v + b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 a, Float3 b) => new Float3(a._v - b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(Float3 a, Float3 b) => new Float3(a._v * b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(Float3 a, Float3 b) => new Float3(a._v / b._v);
     public static Float3 operator %(Float3 a, Float3 b) => new Float3(a.X % b.X, a.Y % b.Y, a.Z % b.Z);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(Float3 v, float scalar) => new Float3(v.X + scalar, v.Y + scalar, v.Z + scalar);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 v, float scalar) => new Float3(v.X - scalar, v.Y - scalar, v.Z - scalar);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(Float3 v, float scalar) => new Float3(v.X * scalar, v.Y * scalar, v.Z * scalar);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(Float3 v, float scalar) => new Float3(v.X / scalar, v.Y / scalar, v.Z / scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(Float3 v, float scalar) => new Float3(v._v + new Vector3(scalar));
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 v, float scalar) => new Float3(v._v - new Vector3(scalar));
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(Float3 v, float scalar) => new Float3(v._v * scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(Float3 v, float scalar) => new Float3(v._v / scalar);
     public static Float3 operator %(Float3 v, float scalar) => new Float3(v.X % scalar, v.Y % scalar, v.Z % scalar);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(float scalar, Float3 v) => new Float3(scalar + v.X, scalar + v.Y, scalar + v.Z);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(float scalar, Float3 v) => new Float3(scalar - v.X, scalar - v.Y, scalar - v.Z);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(float scalar, Float3 v) => new Float3(scalar * v.X, scalar * v.Y, scalar * v.Z);
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(float scalar, Float3 v) => new Float3(scalar / v.X, scalar / v.Y, scalar / v.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(float scalar, Float3 v) => new Float3(new Vector3(scalar) + v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(float scalar, Float3 v) => new Float3(new Vector3(scalar) - v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(float scalar, Float3 v) => new Float3(scalar * v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(float scalar, Float3 v) => new Float3(new Vector3(scalar) / v._v);
     public static Float3 operator %(float scalar, Float3 v) => new Float3(scalar % v.X, scalar % v.Y, scalar % v.Z);
 
     #endregion
@@ -327,9 +334,9 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
     #region Casting
 
     // System.Numerics Cast
-    public static implicit operator Vector3(Float3 value) => new Vector3(value.X, value.Y, value.Z);
+    public static implicit operator Vector3(Float3 value) => value._v;
 
-    public static implicit operator Float3(Vector3 value) => new Float3(value.X, value.Y, value.Z);
+    public static implicit operator Float3(Vector3 value) => new Float3(value);
 
 
     public static explicit operator Float3(Float2 value) => new Float3(value.X, value.Y, 0f);
