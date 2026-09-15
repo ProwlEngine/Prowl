@@ -5,6 +5,7 @@ using Prowl.Graphite;
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
@@ -472,11 +473,113 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _morphWeightTexture!.SetData<Float4>(data.AsMemory(0, _morphWeightCapacity), 0, 0, (uint)_morphWeightCapacity, 1);
     }
 
-    // Previous frame's world matrix, for the prowl_PrevObjectToWorld motion-vector uniform.
     [System.NonSerialized] private Float4x4 _prevWorld;
+    [System.NonSerialized] private Float4x4 _currentWorld;
     [System.NonSerialized] private bool _hasPrevWorld;
+    [System.NonSerialized] private long _prevWorldFrame;
+    [System.NonSerialized] private PropertySet[]? _propCache;
+
+    /// <summary>The world matrix collected on the previous frame, or the current one before any collect.</summary>
+    public Float4x4 PreviousWorldMatrix => _hasPrevWorld ? _prevWorld : Transform.LocalToWorldMatrix;
 
     public override void OnRenderCollect(SceneCuller culler)
     {
+        var mesh = SharedMesh.Res;
+        if (mesh == null || Materials.Count == 0) return;
+
+        Resolve();
+
+        AABB worldBounds;
+        if (_bones != null && _bones.Length > 0 && mesh.BindPoses != null)
+        {
+            if (_skinMatrices == null || _skinMatrices.Length != _bones.Length)
+            {
+                _skinMatrices = new Float4x4[_bones.Length];
+                _lastSkeletonVersion = ulong.MaxValue;
+            }
+
+            ulong version = 0;
+            for (Transform? t = Transform; t != null; t = t.Parent)
+                version += t.Version;
+            for (int i = 0; i < _bones.Length; i++)
+                if (_bones[i] != null) version += _bones[i]!.Version;
+
+            if (version != _lastSkeletonVersion || _boneTexture == null)
+            {
+                _lastSkeletonVersion = version;
+                RecomputeSkinning(mesh);
+            }
+
+            worldBounds = _cachedBounds;
+        }
+        else
+        {
+            worldBounds = mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+        }
+
+        if (mesh.HasBlendShapes)
+            PrepareBlendShapes(mesh);
+
+        Float4x4 world = Transform.LocalToWorldMatrix;
+        Float4x4 prevWorld = TrackPreviousWorld(world);
+
+        int subCount = mesh.SubMeshCount;
+        if (_propCache == null || _propCache.Length != subCount)
+        {
+            _propCache = new PropertySet[subCount];
+            for (int i = 0; i < subCount; i++)
+                _propCache[i] = new PropertySet();
+        }
+
+        var materials = CollectionsMarshal.AsSpan(Materials);
+        for (int s = 0; s < subCount; s++)
+        {
+            Material? mat = null;
+            if (s < materials.Length)
+                mat = materials[s].Res;
+            else if (materials.Length > 0)
+                mat = materials[^1].Res;
+
+            if (mat == null) continue;
+
+            PropertySet props = _propCache[s];
+            props.Clear();
+            props.SetInt("_ObjectID", InstanceID);
+            props.SetColor("_MainColor", MainColor);
+            if (_boneTexture != null)
+            {
+                props.SetTexture("boneMatrixTexture", _boneTexture);
+                props.SetInt("boneCount", _skinMatrices != null ? _skinMatrices.Length : 0);
+            }
+
+            if (mesh.HasBlendShapes)
+                ApplyBlendShapeProps(mesh, props);
+
+            culler.Add(new SkinnedMeshRenderable(
+                mesh, mat, world,
+                GameObject.LayerIndex, worldBounds, props, subMeshIndex: subCount > 1 ? s : -1, prevMatrix: prevWorld));
+        }
+    }
+
+    private Float4x4 TrackPreviousWorld(in Float4x4 world)
+    {
+        long frame = Time.FrameCount;
+        if (!_hasPrevWorld)
+        {
+            _prevWorld = world;
+            _currentWorld = world;
+            _hasPrevWorld = true;
+            _prevWorldFrame = frame;
+            return world;
+        }
+
+        if (frame != _prevWorldFrame)
+        {
+            _prevWorld = _currentWorld;
+            _currentWorld = world;
+            _prevWorldFrame = frame;
+        }
+
+        return _prevWorld;
     }
 }
