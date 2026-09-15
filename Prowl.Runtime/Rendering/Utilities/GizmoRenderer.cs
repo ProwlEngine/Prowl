@@ -9,6 +9,8 @@ using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using GraphiteTexture = Prowl.Graphite.Texture;
+
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
@@ -22,15 +24,17 @@ public static class GizmoRenderer
     private static Material? s_iconMaterial;
     private static Mesh? s_iconQuad;
     private static bool s_loggedMissingGizmoShader;
+    private static readonly PropertySet s_depthProperties = new();
 
-    /// <summary>Records the current frame's gizmos into <paramref name="cmd"/>.</summary>
-    public static void Render(CommandBuffer cmd, Texture2D depthCopy)
+    /// <summary>Records the current frame's gizmos into <paramref name="cmd"/>, depth-testing against <paramref name="sceneDepth"/>.</summary>
+    public static void Render(CommandBuffer cmd, GraphiteTexture sceneDepth)
     {
+        s_depthProperties.SetTexture("_CameraDepthTexture", sceneDepth, SceneTargets.PointClampSampler);
+
         Shader? gizmoShader = Shader.LoadDefault(DefaultShader.Gizmos);
         if (gizmoShader.IsValid())
         {
             if (s_gizmoMaterial.IsNotValid()) s_gizmoMaterial = new Material(gizmoShader);
-            s_gizmoMaterial.SetTexture("_CameraDepthTexture", depthCopy);
             ShaderPass pass = gizmoShader.GetPass(0);
             if (pass != null)
             {
@@ -45,7 +49,7 @@ public static class GizmoRenderer
             Debug.LogError("GizmoRenderer: Shader.LoadDefault(DefaultShader.Gizmos) returned an invalid shader.");
         }
 
-        DrawIcons(cmd, depthCopy);
+        DrawIcons(cmd);
     }
 
     private static void DrawBatch(CommandBuffer cmd, ShaderPass pass, Material material, GizmoBuilder.Batch batch)
@@ -53,11 +57,12 @@ public static class GizmoRenderer
         cmd.EmitShaderBind(pass, material.Name);
         cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);
+        cmd.SetProperties(s_depthProperties);
         cmd.SetVertexSource(batch);
         cmd.DrawIndexed(1, 0, 0, 0);
     }
 
-    private static void DrawIcons(CommandBuffer cmd, Texture2D depthCopy)
+    private static void DrawIcons(CommandBuffer cmd)
     {
         List<GizmoBuilder.IconDrawCall> icons = Debug.GetGizmoIcons();
         if (icons.Count == 0)
@@ -68,7 +73,6 @@ public static class GizmoRenderer
             return;
 
         if (s_iconMaterial.IsNotValid()) s_iconMaterial = new Material(iconShader);
-        s_iconMaterial.SetTexture("_CameraDepthTexture", depthCopy);
         if (s_iconQuad.IsNotValid()) s_iconQuad = Mesh.GetFullscreenQuad();
 
         foreach (GizmoBuilder.IconDrawCall icon in icons)
@@ -79,7 +83,7 @@ public static class GizmoRenderer
             s_iconMaterial.SetVector("_IconCenter", icon.Center);
             s_iconMaterial.SetFloat("_IconScale", icon.Scale);
             s_iconMaterial.SetVector("_IconColor", new Float4(icon.Color.R, icon.Color.G, icon.Color.B, icon.Color.A));
-            cmd.DrawMesh(s_iconQuad, s_iconMaterial);
+            cmd.DrawMesh(s_iconQuad, s_iconMaterial, 0, Float4x4.Identity, s_depthProperties);
         }
     }
 }
