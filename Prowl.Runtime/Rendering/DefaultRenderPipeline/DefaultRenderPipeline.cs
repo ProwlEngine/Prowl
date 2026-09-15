@@ -49,20 +49,8 @@ public struct ViewerData
 
 
 /// <summary>
-/// Default graph-driven pipeline, built on Graphite's native <see cref="RenderPipeline{TView}"/>. Sets
-/// up the standard pass chain (shadows -> opaque -> transparents -> volumetrics -> post-processing);
-/// the passes are empty scaffolding that copy textures along the chain to prove the graph plumbing,
-/// draw the skybox in the opaque pass, and (in the editor) draw gizmos and the grid. There is exactly
-/// one instance in normal use (<see cref="RenderPipelineManager.Current"/>); callers that need an
-/// isolated instance (previews/thumbnails rendering to differently-sized surfaces) may still construct
-/// their own and dispatch it directly instead of going through the shared one.
-/// <para>
-/// Presentation is pluggable via <see cref="Presenter"/> so a single pipeline instance/type can be
-/// shared by every camera: the default (<see cref="DefaultPresentPass"/>) just blits the final content to
-/// the view's target (or the swapchain when it has none). A driver (Game/Editor) that wants to layer
-/// extra presentation behavior on top can set this before the pipeline's first dispatch - it is only
-/// read once, the first time <see cref="RenderPipeline{TView}.InitializePasses"/> runs.
-/// </para>
+/// Default graph-driven pipeline on Graphite's <see cref="RenderPipeline{TView}"/>. Passes share one scene gbuffer
+/// (see <see cref="SceneResources"/>); presentation is pluggable via <see cref="Presenter"/>, read once on first dispatch.
 /// </summary>
 public class DefaultRenderPipeline : RenderPipeline<CameraView>
 {
@@ -100,11 +88,16 @@ public class DefaultRenderPipeline : RenderPipeline<CameraView>
 
     protected override void InitializePasses()
     {
+        DeclareTexture(SceneResources.GBuffer, SceneResources.GBufferDesc());
+
         AddPass(new ShadowsPass());
         AddPass(new OpaquePass());
+        AddPass(new DepthCopyPass());
+        AddPass(new GizmoPass());
         AddPass(new TransparentsPass());
         AddPass(new VolumetricsPass());
         AddPass(new PostProcessingPass());
+        AddPass(new FinalBlitPass());
 
         if (UIRenderer != null)
             AddPass(UIRenderer);
