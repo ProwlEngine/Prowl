@@ -20,6 +20,7 @@ file readonly struct BufferView : IRenderView
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public int ViewId => 0;
 }
 
 file sealed class BufferWriterPass : IPass<BufferView>

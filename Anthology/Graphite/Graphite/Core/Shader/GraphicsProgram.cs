@@ -26,7 +26,7 @@ public abstract class GraphicsProgram : ShaderProgram
         _blendState = description.BlendState;
         _depthStencilState = description.DepthStencilState;
         _rasterizerState = description.RasterizerState;
-        _vertexLayouts = Util.ShallowClone(description.VertexLayouts) ?? Array.Empty<VertexLayoutDescription>();
+        _vertexLayouts = Util.ShallowClone(description.VertexLayouts);
     }
 
     /// <summary>

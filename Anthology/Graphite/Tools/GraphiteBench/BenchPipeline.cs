@@ -12,6 +12,7 @@ public readonly struct BenchView : IRenderView
 {
     public uint PixelWidth => BenchScene.TargetWidth;
     public uint PixelHeight => BenchScene.TargetHeight;
+    public int ViewId => 0;
 }
 
 

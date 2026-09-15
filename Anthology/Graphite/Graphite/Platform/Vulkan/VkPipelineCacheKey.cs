@@ -30,5 +30,5 @@ internal readonly struct VkPipelineCacheKey : IEquatable<VkPipelineCacheKey>
     public override bool Equals(object? obj) => obj is VkPipelineCacheKey k && Equals(k);
 
     public override int GetHashCode()
-        => HashCode.Combine(Outputs.GetHashCode(), (int)Topology);
+        => HashCode.Combine(Outputs, (int)Topology);
 }

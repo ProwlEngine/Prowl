@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 using Silk.NET.Vulkan;
 
@@ -88,9 +87,7 @@ internal static partial class VkFormats
 
     internal static ImageUsageFlags ToVkTextureUsage(TextureUsage vdUsage)
     {
-        ImageUsageFlags vkUsage = 0;
-
-        vkUsage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.TransferSrcBit;
+        ImageUsageFlags vkUsage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.TransferSrcBit;
         bool isDepthStencil = (vdUsage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil;
         if ((vdUsage & TextureUsage.Sampled) == TextureUsage.Sampled)
         {
@@ -124,29 +121,6 @@ internal static partial class VkFormats
                 return ImageType.Type3D;
             default:
                 throw Illegal.Value<TextureType>();
-        }
-    }
-
-    internal static DescriptorType ToVkDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options)
-    {
-        bool dynamicBinding = (options & ResourceLayoutElementOptions.DynamicBinding) != 0;
-        switch (kind)
-        {
-            case ResourceKind.UniformBuffer:
-                return dynamicBinding ? DescriptorType.UniformBufferDynamic : DescriptorType.UniformBuffer;
-            case ResourceKind.StructuredBufferReadWrite:
-            case ResourceKind.StructuredBufferReadOnly:
-                return dynamicBinding ? DescriptorType.StorageBufferDynamic : DescriptorType.StorageBuffer;
-            case ResourceKind.TextureReadOnly:
-                return (options & ResourceLayoutElementOptions.CombinedImageSampler) != 0
-                    ? DescriptorType.CombinedImageSampler
-                    : DescriptorType.SampledImage;
-            case ResourceKind.TextureReadWrite:
-                return DescriptorType.StorageImage;
-            case ResourceKind.Sampler:
-                return DescriptorType.Sampler;
-            default:
-                throw Illegal.Value<ResourceKind>();
         }
     }
 

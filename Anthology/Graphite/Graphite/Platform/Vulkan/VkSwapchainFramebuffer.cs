@@ -122,11 +122,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     private void CreateFramebuffers()
     {
-        for (int i = 0; i < _scFramebuffers.Length; i++)
-        {
-            _scFramebuffers[i]?.Dispose();
-        }
-        Array.Clear(_scFramebuffers, 0, _scFramebuffers.Length);
+        DestroySwapchainFramebuffers();
 
         Util.EnsureArrayMinimumSize(ref _scFramebuffers, (uint)_scImages.Length);
         Util.EnsureArrayMinimumSize(ref _scColorTextures, (uint)_scImages.Length);

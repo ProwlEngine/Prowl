@@ -44,11 +44,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 
         CreateDeviceFramebuffer(ref description, colorAttachmentCount, out _deviceFramebuffer);
 
-        if (DepthTarget != null)
-        {
-            AttachmentCount += 1;
-        }
-        AttachmentCount += (uint)ColorTargets.Count;
+        AttachmentCount = (uint)ColorTargets.Count + (DepthTarget is not null ? 1u : 0u);
 
         _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
     }

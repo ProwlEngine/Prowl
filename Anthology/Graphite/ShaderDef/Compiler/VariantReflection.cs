@@ -57,28 +57,14 @@ internal static class VariantReflection
 
         // Scan for modules that require a linked extern declaration.
         foreach ((Module module, string[] externDecls) in moduleExterns)
-        {
-            for (int decl = 0; decl < externDecls.Length; decl++)
-            {
-                string declName = externDecls[decl];
-                for (int variant = 0; variant < moduleVariants.Count; variant++)
-                {
-                    if (declName == moduleVariants[variant].Space.Name)
-                    {
-                        if (!module.Equals(requiredModule))
-                            linkedModules.Add(module);
-                        goto ContinueOuter;
-                    }
-                }
-            }
-
-        ContinueOuter:
-            continue;
-        }
+            if (!module.Equals(requiredModule) && externDecls.Any(n => moduleVariants.Any(v => v.Space.Name == n)))
+                linkedModules.Add(module);
 
         // Only axes declared by modules actually linked into this shader's compilation are relevant.
-        List<Module> linked = linkedModules;
-        List<VariantSpace> spaces = [.. moduleVariants.Where(v => linked.Contains(v.Module)).Select(v => v.Space)];
+        List<VariantSpace> spaces = [];
+        foreach ((Module module, VariantSpace space) in moduleVariants)
+            if (linkedModules.Contains(module))
+                spaces.Add(space);
 
         foreach (VariantSpace space in spaces)
         {

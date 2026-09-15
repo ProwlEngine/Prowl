@@ -35,7 +35,6 @@ internal static class Program
     static int Main(string[] args)
     {
         bool write = args.Contains("--write");
-        bool dump = args.Contains("--dump") || !write;
         string[] names = [.. args.Where(a => !a.StartsWith("--"))];
 
         string shaderDir = LocateDirectory("Tests/Compiler/Shaders");
@@ -49,14 +48,14 @@ internal static class Program
             if (names.Length > 0 && !names.Contains(module))
                 continue;
 
-            Process(module, shaderDir, knownGoodDir, write, dump);
+            Process(module, shaderDir, knownGoodDir, write);
         }
 
         return 0;
     }
 
 
-    static void Process(string module, string shaderDir, string knownGoodDir, bool write, bool dump)
+    static void Process(string module, string shaderDir, string knownGoodDir, bool write)
     {
         SlangShaderCompiler compiler = new();
 
@@ -91,7 +90,7 @@ internal static class Program
                         File.WriteAllBytes(Path.Combine(knownGoodDir, fileName), bytes);
                         Console.WriteLine($"  wrote {fileName} ({bytes.Length} bytes)");
                     }
-                    else if (dump)
+                    else
                     {
                         Console.WriteLine($"  {fileName} ({bytes.Length} bytes)");
                     }

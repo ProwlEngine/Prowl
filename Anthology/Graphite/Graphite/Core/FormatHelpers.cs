@@ -75,14 +75,6 @@ internal static class FormatHelpers
         return format == PixelFormat.D24_UNorm_S8_UInt || format == PixelFormat.D32_Float_S8_UInt;
     }
 
-    internal static bool IsDepthStencilFormat(PixelFormat format)
-    {
-        return format == PixelFormat.D32_Float_S8_UInt
-            || format == PixelFormat.D24_UNorm_S8_UInt
-            || format == PixelFormat.R16_UNorm
-            || format == PixelFormat.R32_Float;
-    }
-
     internal static bool IsCompressedFormat(PixelFormat format)
     {
         return format == PixelFormat.BC1_Rgb_UNorm
@@ -176,7 +168,30 @@ internal static class FormatHelpers
 
     private static bool IsSrgbCounterpart(PixelFormat viewFormat, PixelFormat realFormat)
     {
-        throw new NotImplementedException();
+        return GetSrgbCounterpart(viewFormat) == realFormat
+            || GetSrgbCounterpart(realFormat) == viewFormat;
+    }
+
+    /// <summary>
+    /// Returns the sRGB variant of a compressed format, or the format itself when it has none
+    /// (BC4, BC5 and ETC2 have no sRGB variants, so those only pair with themselves).
+    /// </summary>
+    private static PixelFormat GetSrgbCounterpart(PixelFormat format)
+    {
+        return format switch
+        {
+            PixelFormat.BC1_Rgb_UNorm => PixelFormat.BC1_Rgb_UNorm_SRgb,
+            PixelFormat.BC1_Rgb_UNorm_SRgb => PixelFormat.BC1_Rgb_UNorm,
+            PixelFormat.BC1_Rgba_UNorm => PixelFormat.BC1_Rgba_UNorm_SRgb,
+            PixelFormat.BC1_Rgba_UNorm_SRgb => PixelFormat.BC1_Rgba_UNorm,
+            PixelFormat.BC2_UNorm => PixelFormat.BC2_UNorm_SRgb,
+            PixelFormat.BC2_UNorm_SRgb => PixelFormat.BC2_UNorm,
+            PixelFormat.BC3_UNorm => PixelFormat.BC3_UNorm_SRgb,
+            PixelFormat.BC3_UNorm_SRgb => PixelFormat.BC3_UNorm,
+            PixelFormat.BC7_UNorm => PixelFormat.BC7_UNorm_SRgb,
+            PixelFormat.BC7_UNorm_SRgb => PixelFormat.BC7_UNorm,
+            _ => format,
+        };
     }
 
     internal static uint GetNumRows(uint height, PixelFormat format)

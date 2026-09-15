@@ -1,10 +1,12 @@
+using System;
+
 namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
 /// All render state options: rasterizer, blend, depth, stencil, multisampling, write masks.
 /// </summary>
-public class PassState
+public class PassState : IEquatable<PassState>
 {
 #pragma warning disable CS1591
     public bool? EnableCulling;
@@ -167,5 +169,92 @@ public class PassState
             AlphaToMask = AlphaToMask ?? other.AlphaToMask,
             WriteMask = WriteMask ?? other.WriteMask,
         };
+    }
+
+
+    /// <summary>
+    /// Field-wise equality, unset fields compare equal to each other.
+    /// </summary>
+    public bool Equals(PassState? other)
+    {
+        if (other is null)
+            return false;
+        if (ReferenceEquals(this, other))
+            return true;
+
+        return EnableCulling == other.EnableCulling
+            && CullMode == other.CullMode
+            && FrontFace == other.FrontFace
+            && EnablePolygonOffsetFill == other.EnablePolygonOffsetFill
+            && PolygonOffsetFactor == other.PolygonOffsetFactor
+            && PolygonOffsetUnits == other.PolygonOffsetUnits
+            && EnableDepthTest == other.EnableDepthTest
+            && DepthFunc == other.DepthFunc
+            && DepthWriteMask == other.DepthWriteMask
+            && EnableDepthClamp == other.EnableDepthClamp
+            && EnableStencilTest == other.EnableStencilTest
+            && StencilRef == other.StencilRef
+            && StencilReadMask == other.StencilReadMask
+            && StencilWriteMask == other.StencilWriteMask
+            && StencilFrontFunc == other.StencilFrontFunc
+            && StencilFrontFailOp == other.StencilFrontFailOp
+            && StencilFrontDepthFailOp == other.StencilFrontDepthFailOp
+            && StencilFrontPassOp == other.StencilFrontPassOp
+            && StencilBackFunc == other.StencilBackFunc
+            && StencilBackFailOp == other.StencilBackFailOp
+            && StencilBackDepthFailOp == other.StencilBackDepthFailOp
+            && StencilBackPassOp == other.StencilBackPassOp
+            && EnableBlend == other.EnableBlend
+            && BlendFunctionRgb == other.BlendFunctionRgb
+            && BlendFunctionAlpha == other.BlendFunctionAlpha
+            && BlendSrcRgb == other.BlendSrcRgb
+            && BlendDstRgb == other.BlendDstRgb
+            && BlendSrcAlpha == other.BlendSrcAlpha
+            && BlendDstAlpha == other.BlendDstAlpha
+            && AlphaToMask == other.AlphaToMask
+            && WriteMask == other.WriteMask;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => obj is PassState other && Equals(other);
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        HashCode hash = new();
+        hash.Add(EnableCulling);
+        hash.Add(CullMode);
+        hash.Add(FrontFace);
+        hash.Add(EnablePolygonOffsetFill);
+        hash.Add(PolygonOffsetFactor);
+        hash.Add(PolygonOffsetUnits);
+        hash.Add(EnableDepthTest);
+        hash.Add(DepthFunc);
+        hash.Add(DepthWriteMask);
+        hash.Add(EnableDepthClamp);
+        hash.Add(EnableStencilTest);
+        hash.Add(StencilRef);
+        hash.Add(StencilReadMask);
+        hash.Add(StencilWriteMask);
+        hash.Add(StencilFrontFunc);
+        hash.Add(StencilFrontFailOp);
+        hash.Add(StencilFrontDepthFailOp);
+        hash.Add(StencilFrontPassOp);
+        hash.Add(StencilBackFunc);
+        hash.Add(StencilBackFailOp);
+        hash.Add(StencilBackDepthFailOp);
+        hash.Add(StencilBackPassOp);
+        hash.Add(EnableBlend);
+        hash.Add(BlendFunctionRgb);
+        hash.Add(BlendFunctionAlpha);
+        hash.Add(BlendSrcRgb);
+        hash.Add(BlendDstRgb);
+        hash.Add(BlendSrcAlpha);
+        hash.Add(BlendDstAlpha);
+        hash.Add(AlphaToMask);
+        hash.Add(WriteMask);
+        return hash.ToHashCode();
     }
 }

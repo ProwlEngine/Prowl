@@ -1,7 +1,6 @@
 using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
-using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
 
@@ -18,6 +17,7 @@ internal readonly struct SceneView : IRenderView
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public int ViewId => 0;
 }
 
 

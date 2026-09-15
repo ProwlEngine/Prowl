@@ -98,11 +98,11 @@ internal unsafe partial class VkGraphicsDevice
                 SetDebugMarkerName(
                     DebugReportObjectTypeEXT.CommandBufferExt,
                     (ulong)CommandBuffer.CommandBuffer.Handle,
-                    string.Format("{0}_CommandBuffer", name));
+                    $"{name}_CommandBuffer");
                 SetDebugMarkerName(
                     DebugReportObjectTypeEXT.CommandPoolExt,
                     CommandBuffer.CommandPool.Handle,
-                    string.Format("{0}_CommandPool", name));
+                    $"{name}_CommandPool");
                 break;
             case VkFramebuffer framebuffer:
                 SetDebugMarkerName(

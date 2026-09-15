@@ -32,23 +32,17 @@ public sealed class SlangShaderCompiler : IShaderCompiler
         public required Func<string, Memory<byte>?> Provider;
 
         public Memory<byte>? LoadFile(string path)
-            => Provider.Invoke(path);
+            => Provider(path);
     }
 
 
-    private static FileProvider s_defaultProvider = new()
+    private static readonly FileProvider s_defaultProvider = new()
     {
-        Provider = (x) =>
-        {
-            if (!File.Exists(x))
-                return null;
-
-            return File.ReadAllBytes(x);
-        }
+        Provider = DefaultLoadFile
     };
 
 
-    private static byte[] s_variantModule =
+    private static readonly byte[] s_variantModule =
     """
     module VariantAttributes;
 
@@ -59,19 +53,19 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
     // Always loaded so user shaders can `import UVOrigin` and read IsUVOriginTopLeft. The extern is
     // resolved at link time by one of the hardcoded implementation modules below, chosen per backend.
-    private static byte[] UVOriginDeclModule =
+    private static readonly byte[] UVOriginDeclModule =
     """
     module UVOrigin;
     extern public static const bool IsUVOriginTopLeft;
     """u8.ToArray();
 
-    private static byte[] UVOriginTopLeftModule =
+    private static readonly byte[] UVOriginTopLeftModule =
     """
     module UVOriginTopLeft;
     export public static const bool IsUVOriginTopLeft = true;
     """u8.ToArray();
 
-    private static byte[] UVOriginBottomLeftModule =
+    private static readonly byte[] UVOriginBottomLeftModule =
     """
     module UVOriginBottomLeft;
     export public static const bool IsUVOriginTopLeft = false;
@@ -177,7 +171,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
         CompilerModule module = ModuleFor(backend, out int layoutIndex);
 
         Module variantModule = CreateVariantModule(prepared.Axes, combo);
-        Module uvModule = IsBackendTopLeft(backend) ? UvModule(true) : UvModule(false);
+        Module uvModule = UvModule(backend is GraphicsBackend.Vulkan);
 
         ComponentType composite = _session!.CreateCompositeComponentType([prepared.Composite, variantModule, uvModule], out DiagnosticInfo diagnostics);
         _handler.Invoke(diagnostics);
@@ -311,8 +305,13 @@ public sealed class SlangShaderCompiler : IShaderCompiler
     }
 
 
-    private static bool IsBackendTopLeft(GraphicsBackend backend)
-        => backend is GraphicsBackend.Vulkan;
+    private static Memory<byte>? DefaultLoadFile(string path)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        return File.ReadAllBytes(path);
+    }
 
 
     private void ResetSessionState()

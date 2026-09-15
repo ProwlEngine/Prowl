@@ -98,14 +98,13 @@ internal unsafe partial class VkDeviceMemoryManager
                                 freeBlock.BaseMappedPointer,
                                 false);
                             _freeBlocks.Insert(i, splitBlock);
-                            block = freeBlock;
                             block.Size = size;
                         }
 
 #if DEBUG
                         CheckAllocatedBlock(block);
 #endif
-                        _totalAllocatedBytes += alignedBlockSize;
+                        _totalAllocatedBytes += size;
                         return true;
                     }
                 }
@@ -117,6 +116,7 @@ internal unsafe partial class VkDeviceMemoryManager
 
         public void Free(VkMemoryBlock block)
         {
+            _totalAllocatedBytes -= block.Size;
             for (int i = 0; i < _freeBlocks.Count; i++)
             {
                 if (_freeBlocks[i].Offset > block.Offset)
@@ -134,7 +134,6 @@ internal unsafe partial class VkDeviceMemoryManager
 #if DEBUG
             RemoveAllocatedBlock(block);
 #endif
-            _totalAllocatedBytes -= block.Size;
         }
 
         private void MergeContiguousBlocks()

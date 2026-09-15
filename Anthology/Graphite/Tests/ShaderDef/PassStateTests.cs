@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 
 using Prowl.Graphite.ShaderDef.Compiler;
 
@@ -200,5 +201,86 @@ public class PassStateTests
 
         Assert.Equal(2, ex.Line);
         Assert.Contains("number", ex.Message);
+    }
+
+
+    [Fact]
+    public void Equals_SameFields_AreEqualWithSameHash()
+    {
+        PassState a = Parse.State("Cull Front\nZWrite Off\nBlend SourceAlpha InverseSourceAlpha");
+        PassState b = Parse.State("Cull Front\nZWrite Off\nBlend SourceAlpha InverseSourceAlpha");
+
+        Assert.NotSame(a, b);
+        Assert.Equal(a, b);
+        Assert.True(a.Equals((object)b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+
+    [Fact]
+    public void Equals_EmptyStates_AreEqual()
+    {
+        Assert.Equal(new PassState(), new PassState());
+        Assert.Equal(new PassState().GetHashCode(), new PassState().GetHashCode());
+    }
+
+
+    [Fact]
+    public void Equals_UnsetVersusSet_AreNotEqual()
+    {
+        Assert.NotEqual(new PassState(), Parse.State("Cull Back"));
+        Assert.NotEqual(Parse.State("Cull Back"), Parse.State("Cull Off"));
+        Assert.NotEqual(Parse.State("ZTest Less"), Parse.State("ZTest Always"));
+        Assert.NotEqual(Parse.State("ColorMask RGB"), Parse.State("ColorMask RGBA"));
+        Assert.NotEqual(Parse.State("Stencil { Ref 1 }"), Parse.State("Stencil { Ref 2 }"));
+    }
+
+
+    [Fact]
+    public void Equals_Null_IsFalse()
+    {
+        Assert.False(new PassState().Equals(null));
+    }
+
+
+    [Fact]
+    public void Equals_EveryFieldParticipates()
+    {
+        PassState reference = new();
+        foreach (FieldInfo field in typeof(PassState).GetFields(BindingFlags.Public | BindingFlags.Instance))
+        {
+            PassState changed = new();
+            field.SetValue(changed, NonDefaultValue(field.FieldType));
+
+            Assert.False(reference.Equals(changed), $"{field.Name} does not participate in Equals.");
+            Assert.NotEqual(reference.GetHashCode(), changed.GetHashCode());
+        }
+    }
+
+
+    [Fact]
+    public void Apply_ResultEqualsHandBuiltState()
+    {
+        PassState combined = Parse.State("Cull Off").Apply(Parse.State("Cull Back\nZWrite Off"));
+
+        Assert.Equal(Parse.State("Cull Off\nZWrite Off"), combined);
+    }
+
+
+    private static object NonDefaultValue(Type nullableType)
+    {
+        Type type = Nullable.GetUnderlyingType(nullableType)!;
+        if (type == typeof(bool))
+            return true;
+        if (type == typeof(float))
+            return 1.5f;
+        if (type == typeof(int))
+            return 7;
+        if (type == typeof(uint))
+            return 7u;
+        if (type.IsEnum)
+            return Enum.GetValues(type).GetValue(1)!;
+
+        throw new NotSupportedException(type.Name);
     }
 }

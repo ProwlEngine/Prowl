@@ -59,7 +59,7 @@ public struct FramebufferDescription : IEquatable<FramebufferDescription>
     /// <returns>True if all match.</returns>
     public readonly bool Equals(FramebufferDescription other)
     {
-        return Util.NullableEquals(DepthTarget, other.DepthTarget) && Util.ArrayEqualsEquatable(ColorTargets, other.ColorTargets);
+        return Nullable.Equals(DepthTarget, other.DepthTarget) && Util.ArrayEqualsEquatable(ColorTargets, other.ColorTargets);
     }
 
     /// <summary>

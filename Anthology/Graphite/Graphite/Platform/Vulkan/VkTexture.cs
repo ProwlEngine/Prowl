@@ -53,7 +53,7 @@ internal unsafe partial class VkTexture : Texture
             imageCI.Extent.Depth = Depth;
             imageCI.InitialLayout = ImageLayout.Preinitialized;
             imageCI.Usage = VkFormats.ToVkTextureUsage(Usage);
-            imageCI.Tiling = isStaging ? ImageTiling.Linear : ImageTiling.Optimal;
+            imageCI.Tiling = ImageTiling.Optimal;
             imageCI.Format = VkFormat;
             imageCI.Flags = ImageCreateFlags.CreateMutableFormatBit;
 
@@ -85,7 +85,7 @@ internal unsafe partial class VkTexture : Texture
                 prefersDedicatedAllocation = false;
             }
 
-            VkMemoryBlock memoryToken = gd.MemoryManager.Allocate(
+            _memoryBlock = gd.MemoryManager.Allocate(
                 gd.PhysicalDeviceMemProperties,
                 memoryRequirements.MemoryTypeBits,
                 MemoryPropertyFlags.DeviceLocalBit,
@@ -95,15 +95,11 @@ internal unsafe partial class VkTexture : Texture
                 prefersDedicatedAllocation,
                 _optimalImage,
                 default);
-            _memoryBlock = memoryToken;
             _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
             allocatedSize = memoryRequirements.Size;
 
             _imageLayouts = new ImageLayout[subresourceCount];
-            for (int i = 0; i < _imageLayouts.Length; i++)
-            {
-                _imageLayouts[i] = ImageLayout.Preinitialized;
-            }
+            Array.Fill(_imageLayouts, ImageLayout.Preinitialized);
         }
         else // isStaging
         {
@@ -301,7 +297,7 @@ internal unsafe partial class VkTexture : Texture
                 baseArrayLayer,
                 layerCount,
                 aspectMask,
-                _imageLayouts[CalculateSubresource(baseMipLevel, baseArrayLayer)],
+                oldLayout,
                 newLayout);
             _gd.Profiler?.RecordBarrier(BarrierBin.TextureTransition, 1);
 

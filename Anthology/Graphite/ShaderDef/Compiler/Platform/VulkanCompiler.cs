@@ -1,9 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Text;
 
 using Prowl.Slang;
 
@@ -16,10 +12,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 /// </summary>
 public class VulkanCompiler : CompilerModule
 {
-    private TargetDescription _target;
-
-    /// <inheritdoc/>
-    public TargetDescription Target => _target;
+    public TargetDescription Target { get; }
 
     /// <inheritdoc/>
     public GraphicsBackend Backend => GraphicsBackend.Vulkan;
@@ -30,7 +23,7 @@ public class VulkanCompiler : CompilerModule
     /// </summary>
     public VulkanCompiler(string profileString = "spirv_1_5")
     {
-        _target = new()
+        Target = new()
         {
             Profile = GlobalSession.FindProfile(profileString),
             Format = CompileTarget.Spirv
@@ -113,7 +106,7 @@ public class VulkanCompiler : CompilerModule
         Dictionary<uint, List<ResourceLayoutElementDescription>> bySet)
     {
         TypeLayoutReflection typeLayout = block.TypeLayout;
-        uint set = baseSpace + RegisterSpaceOf(block);
+        uint set = baseSpace + block.GetOffset(ParameterCategory.SubElementRegisterSpace);
 
         // Loose uniform data collapses into one implicit uniform buffer at the container's reserved binding.
         TypeLayoutReflection elementLayout = typeLayout.ElementTypeLayout;
@@ -131,11 +124,6 @@ public class VulkanCompiler : CompilerModule
                 && field.TypeLayout.Kind != TypeKind.Matrix)
                 Collect(field, set, stages, bySet);
     }
-
-
-    // The descriptor-set index a parameter block occupies, as assigned by Slang.
-    static uint RegisterSpaceOf(VariableLayoutReflection block) =>
-        block.GetOffset(ParameterCategory.SubElementRegisterSpace);
 
 
     static void Add(

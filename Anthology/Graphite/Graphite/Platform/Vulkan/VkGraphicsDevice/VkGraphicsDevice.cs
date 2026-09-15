@@ -80,7 +80,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             _mainSwapchain = new VkSwapchain(this, ref desc, surface);
         }
 
-        CreateDescriptorPool();
+        DescriptorPoolManager = new VkDescriptorPoolManager(this);
         CreateGraphicsCommandPool();
 
         PipelineCacheCreateInfo pcCI = new()
@@ -233,12 +233,10 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         {
             return instanceExtensions.Contains(CommonStrings.VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
         }
-#if NET5_0_OR_GREATER
         else if (OperatingSystem.IsAndroid())
         {
             return instanceExtensions.Contains(CommonStrings.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
         }
-#endif
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             if (RuntimeInformation.OSDescription.Contains("Unix")) // Android

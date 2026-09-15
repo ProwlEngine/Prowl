@@ -15,6 +15,7 @@ internal readonly struct SceneView : IRenderView
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public int ViewId => 0;
 }
 
 

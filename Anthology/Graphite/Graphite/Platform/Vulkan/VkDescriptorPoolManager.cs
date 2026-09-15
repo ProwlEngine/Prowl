@@ -61,6 +61,7 @@ internal unsafe partial class VkDescriptorPoolManager
 
                 poolInfo.Free(_gd, token, counts);
                 RecordFree();
+                break;
             }
         }
     }

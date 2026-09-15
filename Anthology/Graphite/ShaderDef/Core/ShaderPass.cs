@@ -44,8 +44,8 @@ public sealed class ShaderPass
     private int _activeIndex;
     private Variant? _fallback;
 
-    private Dictionary<int, GraphicsProgram> _programCache = new();
-    private Dictionary<int, GraphicsProgram> _fallbackProgramCache = new();
+    private Dictionary<ProgramKey, GraphicsProgram> _programCache = new();
+    private Dictionary<ProgramKey, GraphicsProgram> _fallbackProgramCache = new();
     private bool _created;
 
 
@@ -120,9 +120,9 @@ public sealed class ShaderPass
         {
             EnsureCreated();
             int count = 0;
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] != null && _variants[i]!.IsCompiledFor(_backend))
+                if (variant is { } v && v.IsCompiledFor(_backend))
                     count++;
             }
             return count;
@@ -138,9 +138,9 @@ public sealed class ShaderPass
         {
             EnsureCreated();
             int count = 0;
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] != null)
+                if (variant is not null)
                     count++;
             }
             return count;
@@ -160,9 +160,9 @@ public sealed class ShaderPass
         get
         {
             EnsureCreated();
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] == null)
+                if (variant is null)
                     return false;
             }
             return true;
@@ -177,9 +177,9 @@ public sealed class ShaderPass
         get
         {
             EnsureCreated();
-            for (int i = 0; i < _variants.Length; i++)
+            foreach (Variant? variant in _variants)
             {
-                if (_variants[i] == null || !_variants[i]!.IsCompiledFor(_backend))
+                if (variant is not { } v || !v.IsCompiledFor(_backend))
                     return false;
             }
             return true;
@@ -282,10 +282,19 @@ public sealed class ShaderPass
 
 
     internal GraphicsProgram ResolveProgram(BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
+        => ResolveProgram(State, baseBlend, baseDepth, baseRaster);
+
+
+    internal GraphicsProgram ResolveProgram(PassState state, BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
     {
         EnsureCreated();
 
-        if (_programCache.TryGetValue(_activeIndex, out GraphicsProgram? cached))
+        BlendStateDescription blend = state.ToBlendState(baseBlend);
+        DepthStencilStateDescription depth = state.ToDepthStencilState(baseDepth);
+        RasterizerStateDescription raster = state.ToRasterizerState(baseRaster);
+        ProgramKey key = new(_activeIndex, blend, depth, raster);
+
+        if (_programCache.TryGetValue(key, out GraphicsProgram? cached))
             return cached;
 
         Variant variant = Resolve(_activeIndex);
@@ -293,18 +302,18 @@ public sealed class ShaderPass
 
         // While degraded to the fallback, keep re-resolving (Resolve retries the real compile every
         // call) but reuse the fallback GraphicsProgram instead of rebuilding it every request.
-        if (isFallback && _fallbackProgramCache.TryGetValue(_activeIndex, out GraphicsProgram? cachedFallback))
+        if (isFallback && _fallbackProgramCache.TryGetValue(key, out GraphicsProgram? cachedFallback))
             return cachedFallback;
 
         if (!variant.TryGetDescription(_backend, out ShaderDescription description))
             throw new InvalidOperationException($"The active variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
 
-        description.BlendState = State.ToBlendState(baseBlend);
-        description.DepthStencilState = State.ToDepthStencilState(baseDepth);
-        description.RasterizerState = State.ToRasterizerState(baseRaster);
+        description.BlendState = blend;
+        description.DepthStencilState = depth;
+        description.RasterizerState = raster;
 
         GraphicsProgram program = _device!.ResourceFactory.CreateGraphicsProgram(description);
-        (isFallback ? _fallbackProgramCache : _programCache)[_activeIndex] = program;
+        (isFallback ? _fallbackProgramCache : _programCache)[key] = program;
         return program;
     }
 
@@ -377,4 +386,7 @@ public sealed class ShaderPass
 
     private ArgumentException UnknownKeyword(Keyword keyword)
         => new($"Keyword '{keyword.Name}={keyword.Value}' is not present in any variant axis of pass '{Name}'.");
+
+
+    private readonly record struct ProgramKey(int VariantIndex, BlendStateDescription Blend, DepthStencilStateDescription Depth, RasterizerStateDescription Raster);
 }

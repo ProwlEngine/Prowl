@@ -11,18 +11,13 @@ namespace Prowl.Graphite;
 /// </para>
 /// <para>One lock guards the free-list, so concurrent rents never collide.</para>
 /// </summary>
-internal sealed class TransientBufferPool : System.IDisposable
+internal sealed class TransientBufferPool(GraphicsDevice device) : System.IDisposable
 {
-    private readonly GraphicsDevice _device;
+    private readonly GraphicsDevice _device = device;
     private readonly object _lock = new();
     private readonly Dictionary<BufferDescription, List<Pooled>> _free = [];
     private readonly List<Pooled> _rented = [];
     private bool _disposed;
-
-    public TransientBufferPool(GraphicsDevice device)
-    {
-        _device = device;
-    }
 
     /// <summary>Rents a buffer matching desc. Goes back to free-list once executionId completes.</summary>
     public DeviceBuffer Rent(in BufferDescription desc, ulong executionId)
@@ -93,16 +88,10 @@ internal sealed class TransientBufferPool : System.IDisposable
         }
     }
 
-    private sealed class Pooled
+    private sealed class Pooled(DeviceBuffer buffer, in BufferDescription desc)
     {
-        public DeviceBuffer Buffer { get; }
-        public BufferDescription Desc { get; }
+        public DeviceBuffer Buffer { get; } = buffer;
+        public BufferDescription Desc { get; } = desc;
         public ulong RentedExecutionId;
-
-        public Pooled(DeviceBuffer buffer, in BufferDescription desc)
-        {
-            Buffer = buffer;
-            Desc = desc;
-        }
     }
 }

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 
 namespace Prowl.Graphite;
@@ -13,7 +12,7 @@ public abstract class ShaderProgram : GraphicsResource
 
     internal ShaderProgram(ResourceLayoutDescription[] resourceLayouts)
     {
-        _resourceLayouts = Util.ShallowClone(resourceLayouts) ?? Array.Empty<ResourceLayoutDescription>();
+        _resourceLayouts = Util.ShallowClone(resourceLayouts);
         DeepCloneUniformFields(_resourceLayouts);
         _bindingMetadata = SetBindingMetadata.Build(_resourceLayouts);
     }

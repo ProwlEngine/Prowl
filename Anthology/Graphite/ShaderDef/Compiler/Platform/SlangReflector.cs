@@ -231,50 +231,42 @@ internal static class SlangReflector
 
     static bool TryGetScalarType(TypeLayoutReflection typeLayout, out UniformScalarType type)
     {
-        switch (typeLayout.Kind)
+        type = typeLayout.Kind switch
         {
-            case TypeKind.Scalar:
-                type = typeLayout.ScalarType switch
-                {
-                    SlangScalar.Float32 => UniformScalarType.Float1,
-                    SlangScalar.Int32 => UniformScalarType.Int1,
-                    SlangScalar.Float64 => UniformScalarType.Double1,
-                    _ => Unsupported,
-                };
-                break;
+            TypeKind.Scalar => typeLayout.ScalarType switch
+            {
+                SlangScalar.Float32 => UniformScalarType.Float1,
+                SlangScalar.Int32 => UniformScalarType.Int1,
+                SlangScalar.Float64 => UniformScalarType.Double1,
+                _ => Unsupported,
+            },
 
-            case TypeKind.Vector:
-                type = (typeLayout.ScalarType, typeLayout.ColumnCount) switch
-                {
-                    (SlangScalar.Float32, 2) => UniformScalarType.Float2,
-                    (SlangScalar.Float32, 3) => UniformScalarType.Float3,
-                    (SlangScalar.Float32, 4) => UniformScalarType.Float4,
+            TypeKind.Vector => (typeLayout.ScalarType, typeLayout.ColumnCount) switch
+            {
+                (SlangScalar.Float32, 2) => UniformScalarType.Float2,
+                (SlangScalar.Float32, 3) => UniformScalarType.Float3,
+                (SlangScalar.Float32, 4) => UniformScalarType.Float4,
 
-                    (SlangScalar.Int32, 2) => UniformScalarType.Int2,
-                    (SlangScalar.Int32, 3) => UniformScalarType.Int3,
-                    (SlangScalar.Int32, 4) => UniformScalarType.Int4,
+                (SlangScalar.Int32, 2) => UniformScalarType.Int2,
+                (SlangScalar.Int32, 3) => UniformScalarType.Int3,
+                (SlangScalar.Int32, 4) => UniformScalarType.Int4,
 
-                    (SlangScalar.Float64, 2) => UniformScalarType.Double2,
-                    (SlangScalar.Float64, 3) => UniformScalarType.Double3,
-                    (SlangScalar.Float64, 4) => UniformScalarType.Double4,
+                (SlangScalar.Float64, 2) => UniformScalarType.Double2,
+                (SlangScalar.Float64, 3) => UniformScalarType.Double3,
+                (SlangScalar.Float64, 4) => UniformScalarType.Double4,
 
-                    _ => Unsupported,
-                };
-                break;
+                _ => Unsupported,
+            },
 
-            case TypeKind.Matrix:
-                type = (typeLayout.ScalarType, typeLayout.RowCount, typeLayout.ColumnCount) switch
-                {
-                    (SlangScalar.Float32, 4, 4) => UniformScalarType.Float4x4,
-                    (SlangScalar.Float64, 4, 4) => UniformScalarType.Double4x4,
-                    _ => Unsupported,
-                };
-                break;
+            TypeKind.Matrix => (typeLayout.ScalarType, typeLayout.RowCount, typeLayout.ColumnCount) switch
+            {
+                (SlangScalar.Float32, 4, 4) => UniformScalarType.Float4x4,
+                (SlangScalar.Float64, 4, 4) => UniformScalarType.Double4x4,
+                _ => Unsupported,
+            },
 
-            default:
-                type = Unsupported;
-                break;
-        }
+            _ => Unsupported
+        };
 
         return type != Unsupported;
     }

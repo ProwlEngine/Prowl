@@ -376,11 +376,6 @@ internal unsafe partial class VkGraphicsDevice
         }
     }
 
-    private void CreateDescriptorPool()
-    {
-        DescriptorPoolManager = new VkDescriptorPoolManager(this);
-    }
-
     private void CreateGraphicsCommandPool()
     {
         CommandPoolCreateInfo commandPoolCI = new(sType: StructureType.CommandPoolCreateInfo);

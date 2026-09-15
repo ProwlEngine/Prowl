@@ -68,7 +68,7 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         if (!GetPresentQueueIndex(out _presentQueueIndex))
         {
-            throw new RenderException($"The system does not support presenting the given Vulkan surface.");
+            throw new RenderException("The system does not support presenting the given Vulkan surface.");
         }
         _gd.Vk.GetDeviceQueue(_gd.Device, _presentQueueIndex, 0, out _presentQueue);
 
@@ -150,7 +150,7 @@ internal unsafe partial class VkSwapchain : Swapchain
         Result result = _gd.KhrSurface.GetPhysicalDeviceSurfaceCapabilities(_gd.PhysicalDevice, _surface, out SurfaceCapabilitiesKHR surfaceCapabilities);
         if (result == Result.ErrorSurfaceLostKhr)
         {
-            throw new RenderException($"The Swapchain's underlying surface has been lost.");
+            throw new RenderException("The Swapchain's underlying surface has been lost.");
         }
 
         if (surfaceCapabilities.MinImageExtent.Width == 0 && surfaceCapabilities.MinImageExtent.Height == 0
@@ -178,8 +178,8 @@ internal unsafe partial class VkSwapchain : Swapchain
             ? surfaceCapabilities.CurrentExtent
             : new Extent2D
             {
-                Width = Util.Clamp(width, surfaceCapabilities.MinImageExtent.Width, surfaceCapabilities.MaxImageExtent.Width),
-                Height = Util.Clamp(height, surfaceCapabilities.MinImageExtent.Height, surfaceCapabilities.MaxImageExtent.Height)
+                Width = Math.Clamp(width, surfaceCapabilities.MinImageExtent.Width, surfaceCapabilities.MaxImageExtent.Width),
+                Height = Math.Clamp(height, surfaceCapabilities.MinImageExtent.Height, surfaceCapabilities.MaxImageExtent.Height)
             };
 
         SwapchainCreateInfoKHR swapchainCI = new()
@@ -252,7 +252,7 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         if (_colorSrgb)
         {
-            throw new RenderException($"Unable to create an sRGB Swapchain for this surface.");
+            throw new RenderException("Unable to create an sRGB Swapchain for this surface.");
         }
 
         return formats[0];

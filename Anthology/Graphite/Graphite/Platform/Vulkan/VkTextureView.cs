@@ -26,15 +26,9 @@ internal unsafe partial class VkTextureView : TextureView
         imageViewCI.Image = tex.OptimalDeviceImage;
         imageViewCI.Format = VkFormats.ToVkPixelFormat(Format, (Target.Usage & TextureUsage.DepthStencil) != 0);
 
-        ImageAspectFlags aspectFlags;
-        if ((description.Target.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil)
-        {
-            aspectFlags = ImageAspectFlags.DepthBit;
-        }
-        else
-        {
-            aspectFlags = ImageAspectFlags.ColorBit;
-        }
+        ImageAspectFlags aspectFlags = (description.Target.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil
+            ? ImageAspectFlags.DepthBit
+            : ImageAspectFlags.ColorBit;
 
         imageViewCI.SubresourceRange = new ImageSubresourceRange(
             aspectFlags,

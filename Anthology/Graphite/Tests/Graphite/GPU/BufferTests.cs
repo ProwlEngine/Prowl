@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 using Prowl.Vector;
 
@@ -393,9 +392,9 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     {
         DeviceBuffer buffer = CreateBuffer(128, usage);
         Float4x4 mat1 = new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
-        GD.UpdateBuffer(buffer, 0, ref mat1);
+        GD.UpdateBuffer(buffer, 0, mat1);
         Float4x4 mat2 = new(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
-        GD.UpdateBuffer(buffer, 64, ref mat2);
+        GD.UpdateBuffer(buffer, 64, mat2);
 
         DeviceBuffer readback = GetReadback(buffer);
         MappedResourceView<Float4x4> readView = GD.Map<Float4x4>(readback, MapMode.Read);
@@ -416,8 +415,8 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.UpdateBuffer(buffer, 0, ref mat1);
-            cl.UpdateBuffer(buffer, 64, ref mat2);
+            cl.UpdateBuffer(buffer, 0, mat1);
+            cl.UpdateBuffer(buffer, 64, mat2);
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -454,10 +453,6 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         }
 
         BufferDescription description = new(64, usage);
-        if ((usage & BufferUsage.StructuredBufferReadOnly) != 0 || (usage & BufferUsage.StructuredBufferReadWrite) != 0)
-        {
-            description.StructureByteStride = 16;
-        }
         DeviceBuffer buffer = RF.CreateBuffer(description);
         GD.UpdateBuffer(buffer, 0, new Float4[4]);
         GD.WaitForIdle();

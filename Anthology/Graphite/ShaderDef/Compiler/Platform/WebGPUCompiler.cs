@@ -1,9 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Text;
 
 using Prowl.Slang;
 
@@ -16,10 +11,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 /// </summary>
 public class WebGPUCompiler : CompilerModule
 {
-    private TargetDescription _target;
-
-    /// <inheritdoc/>
-    public TargetDescription Target => _target;
+    public TargetDescription Target { get; }
 
     /// <inheritdoc/>
     public GraphicsBackend Backend => throw new NotImplementedException("WebGPU backend does not exist.");
@@ -30,7 +22,7 @@ public class WebGPUCompiler : CompilerModule
     /// <param name="profileString"></param>
     public WebGPUCompiler(string profileString = "wgsl_1_0")
     {
-        _target = new()
+        Target = new()
         {
             Profile = GlobalSession.FindProfile(profileString),
             Format = CompileTarget.Wgsl

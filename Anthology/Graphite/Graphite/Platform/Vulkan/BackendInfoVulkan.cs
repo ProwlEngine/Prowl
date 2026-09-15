@@ -6,8 +6,6 @@ using Prowl.Graphite.Vk;
 
 using Silk.NET.Vulkan;
 
-using static System.Net.WebRequestMethods;
-
 using VkImageLayout = Silk.NET.Vulkan.ImageLayout;
 
 namespace Prowl.Graphite;

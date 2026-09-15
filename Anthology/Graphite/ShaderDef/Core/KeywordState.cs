@@ -11,24 +11,21 @@ internal struct KeywordState
     private Dictionary<int, int> _nameIDToSlot;
     private ulong _hash;
 
-    private int[] _valueIDs;
     private Keyword[] _values;
 
 
     public KeywordState(Dictionary<int, int> nameIDToSlot, Keyword[] keywordSet)
     {
         _nameIDToSlot = nameIDToSlot;
-        _valueIDs = new int[keywordSet.Length];
         _values = new Keyword[keywordSet.Length];
 
         for (int i = 0; i < keywordSet.Length; i++)
         {
             Keyword keyword = keywordSet[i];
 
-            _valueIDs[i] = keyword.ValueId;
             _values[i] = keyword;
 
-            _hash ^= HashSlot(keyword.NameId, keyword.ValueId);
+            _hash ^= keyword.LongHash();
         }
     }
 
@@ -41,12 +38,11 @@ internal struct KeywordState
         if (!_nameIDToSlot.TryGetValue(keyword.NameId, out int slot))
             return false;
 
-        int oldValue = _valueIDs[slot];
-
-        _hash ^= HashSlot(keyword.NameId, oldValue);
-        _valueIDs[slot] = keyword.ValueId;
+        // _values[slot] holds the old value for this slot and carries the same NameId as keyword
+        // (slots are looked up by name id), so its LongHash replaces the old value's hash term.
+        _hash ^= _values[slot].LongHash();
         _values[slot] = keyword;
-        _hash ^= HashSlot(keyword.NameId, keyword.ValueId);
+        _hash ^= keyword.LongHash();
         return true;
     }
 
@@ -65,20 +61,6 @@ internal struct KeywordState
         }
 
         return score;
-    }
-
-
-    private static ulong HashSlot(int nameId, int valueId)
-    {
-        unchecked
-        {
-            ulong h = 1469598103934665603UL;
-
-            h ^= (ulong)nameId * 1099511628211UL;
-            h ^= (ulong)valueId * 16777619UL;
-
-            return h;
-        }
     }
 
 

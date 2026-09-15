@@ -57,6 +57,24 @@ file sealed class CountingPipeline : RenderPipeline<TestView>
     }
 }
 
+file sealed class ReconfigurablePipeline : RenderPipeline<TestView>
+{
+    private readonly IPresentPass<TestView> _present = new NoOpPresentPass();
+
+    public IPass<TestView> ActivePass { get; set; }
+
+    public ReconfigurablePipeline(IPass<TestView> initialPass)
+        => ActivePass = initialPass;
+
+    protected override void InitializePasses()
+    {
+        AddPass(ActivePass);
+        SetPresentPass(_present);
+    }
+
+    public void PublicInvalidateGraph() => InvalidateGraph();
+}
+
 public class RenderPipelineTests
 {
     [Fact]
@@ -94,5 +112,25 @@ public class RenderPipelineTests
         _ = pipeline.Graph;
 
         Assert.Equal(1, present.SetupCount);
+    }
+
+    [Fact]
+    public void InvalidateGraph_RebuildsWithPassesFromNextInitializePasses()
+    {
+        var passA = new TestPass("A", outputs: new[] { ("res", Desc.Color()) });
+        var passB = new TestPass("B", outputs: new[] { ("res", Desc.Color()) });
+
+        ReconfigurablePipeline pipeline = new(passA);
+
+        RenderGraph<TestView> first = pipeline.Graph;
+        Assert.Equal("A", first.OrderedPasses[0].Pass.Name);
+
+        pipeline.PublicInvalidateGraph();
+        pipeline.ActivePass = passB;
+
+        RenderGraph<TestView> second = pipeline.Graph;
+        Assert.NotSame(first, second);
+        Assert.Single(second.OrderedPasses);
+        Assert.Equal("B", second.OrderedPasses[0].Pass.Name);
     }
 }

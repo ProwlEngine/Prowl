@@ -72,16 +72,13 @@ public static class ShaderParser
         }
 
         if (passes.Count == 0)
-            throw new ParseException("Shader must contain at least one Pass", t.Line, t.Column);
+            throw Exceptions.NoPasses(t.Peek());
 
         string fallback = "";
         if (ParserUtility.PeekKeyword(ref t, "Fallback"))
         {
             t.Next();
             fallback = ParserUtility.QuotedString(ref t);
-
-            if (string.IsNullOrWhiteSpace(name))
-                throw new ParseException("Fallback must contain non-empty name", t.Line, t.Column);
         }
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
@@ -196,14 +193,14 @@ public static class ShaderParser
 
     // ==================== PassState ====================
 
-    static Dictionary<string, bool> OnStateMap = new()
+    static readonly Dictionary<string, bool> OnStateMap = new()
     {
         { "On", true },
         { "Off", false }
     };
 
 
-    static Dictionary<string, FaceCullMode> FaceCullModeMap = new()
+    static readonly Dictionary<string, FaceCullMode> FaceCullModeMap = new()
     {
         { "Back", FaceCullMode.Back },
         { "Front", FaceCullMode.Front },
