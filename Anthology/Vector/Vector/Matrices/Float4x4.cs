@@ -3,6 +3,7 @@
 
 using System;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Prowl.Vector;
@@ -573,6 +574,7 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
     /// Returns the result of a matrix-matrix multiplication.
     /// </summary>
     /// <returns>Order matters, so the result of A * B is that B is applied first, then A.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float4x4 operator *(Float4x4 a, Float4x4 b) => new Float4x4(
             a.c0 * b.c0.X + a.c1 * b.c0.Y + a.c2 * b.c0.Z + a.c3 * b.c0.W,
             a.c0 * b.c1.X + a.c1 * b.c1.Y + a.c2 * b.c1.Z + a.c3 * b.c1.W,

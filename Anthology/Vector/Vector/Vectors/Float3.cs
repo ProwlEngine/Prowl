@@ -301,24 +301,24 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
 
     #region Operators
 
-    public static Float3 operator -(Float3 v) => new Float3(-v.X, -v.Y, -v.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 v) => new Float3(-v.X, -v.Y, -v.Z);
 
-    public static Float3 operator +(Float3 a, Float3 b) => new Float3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
-    public static Float3 operator -(Float3 a, Float3 b) => new Float3(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
-    public static Float3 operator *(Float3 a, Float3 b) => new Float3(a.X * b.X, a.Y * b.Y, a.Z * b.Z);
-    public static Float3 operator /(Float3 a, Float3 b) => new Float3(a.X / b.X, a.Y / b.Y, a.Z / b.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(Float3 a, Float3 b) => new Float3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 a, Float3 b) => new Float3(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(Float3 a, Float3 b) => new Float3(a.X * b.X, a.Y * b.Y, a.Z * b.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(Float3 a, Float3 b) => new Float3(a.X / b.X, a.Y / b.Y, a.Z / b.Z);
     public static Float3 operator %(Float3 a, Float3 b) => new Float3(a.X % b.X, a.Y % b.Y, a.Z % b.Z);
 
-    public static Float3 operator +(Float3 v, float scalar) => new Float3(v.X + scalar, v.Y + scalar, v.Z + scalar);
-    public static Float3 operator -(Float3 v, float scalar) => new Float3(v.X - scalar, v.Y - scalar, v.Z - scalar);
-    public static Float3 operator *(Float3 v, float scalar) => new Float3(v.X * scalar, v.Y * scalar, v.Z * scalar);
-    public static Float3 operator /(Float3 v, float scalar) => new Float3(v.X / scalar, v.Y / scalar, v.Z / scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(Float3 v, float scalar) => new Float3(v.X + scalar, v.Y + scalar, v.Z + scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(Float3 v, float scalar) => new Float3(v.X - scalar, v.Y - scalar, v.Z - scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(Float3 v, float scalar) => new Float3(v.X * scalar, v.Y * scalar, v.Z * scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(Float3 v, float scalar) => new Float3(v.X / scalar, v.Y / scalar, v.Z / scalar);
     public static Float3 operator %(Float3 v, float scalar) => new Float3(v.X % scalar, v.Y % scalar, v.Z % scalar);
 
-    public static Float3 operator +(float scalar, Float3 v) => new Float3(scalar + v.X, scalar + v.Y, scalar + v.Z);
-    public static Float3 operator -(float scalar, Float3 v) => new Float3(scalar - v.X, scalar - v.Y, scalar - v.Z);
-    public static Float3 operator *(float scalar, Float3 v) => new Float3(scalar * v.X, scalar * v.Y, scalar * v.Z);
-    public static Float3 operator /(float scalar, Float3 v) => new Float3(scalar / v.X, scalar / v.Y, scalar / v.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator +(float scalar, Float3 v) => new Float3(scalar + v.X, scalar + v.Y, scalar + v.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator -(float scalar, Float3 v) => new Float3(scalar - v.X, scalar - v.Y, scalar - v.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator *(float scalar, Float3 v) => new Float3(scalar * v.X, scalar * v.Y, scalar * v.Z);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float3 operator /(float scalar, Float3 v) => new Float3(scalar / v.X, scalar / v.Y, scalar / v.Z);
     public static Float3 operator %(float scalar, Float3 v) => new Float3(scalar % v.X, scalar % v.Y, scalar % v.Z);
 
     #endregion
@@ -345,10 +345,10 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
 
     #region Equals and GetHashCode
 
-    public static bool operator ==(Float3 left, Float3 right) => left.Equals(right);
-    public static bool operator !=(Float3 left, Float3 right) => !left.Equals(right);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static bool operator ==(Float3 left, Float3 right) => left.Equals(right);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static bool operator !=(Float3 left, Float3 right) => !left.Equals(right);
     public override bool Equals(object? obj) => obj is Float3 && Equals((Float3)obj);
-    public bool Equals(Float3 other) => X == other.X && Y == other.Y && Z == other.Z;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public bool Equals(Float3 other) => X == other.X && Y == other.Y && Z == other.Z;
     public override int GetHashCode() => X.GetHashCode() ^ (Y.GetHashCode() << 2) ^ (Z.GetHashCode() >> 2);
 
     #endregion

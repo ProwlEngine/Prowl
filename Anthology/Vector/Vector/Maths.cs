@@ -1370,7 +1370,7 @@ public static partial class Maths
     public static Float2 Lerp(Float2 a, Float2 b, float t) => new Float2(Lerp(a.X, b.X, Saturate(t)), Lerp(a.Y, b.Y, Saturate(t)));
     /// <summary>Linearly interpolates between two Float3 vectors.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Float3 Lerp(Float3 a, Float3 b, float t) => new Float3(Lerp(a.X, b.X, Saturate(t)), Lerp(a.Y, b.Y, Saturate(t)), Lerp(a.Z, b.Z, Saturate(t)));
+    public static Float3 Lerp(Float3 a, Float3 b, float t) => a + (b - a) * Saturate(t);
     /// <summary>Linearly interpolates between two Float4 vectors.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float4 Lerp(Float4 a, Float4 b, float t) => new Float4(Lerp(a.X, b.X, Saturate(t)), Lerp(a.Y, b.Y, Saturate(t)), Lerp(a.Z, b.Z, Saturate(t)), Lerp(a.W, b.W, Saturate(t)));
@@ -1434,7 +1434,7 @@ public static partial class Maths
     public static Float2 LerpUnclamped(Float2 a, Float2 b, float t) => new Float2(LerpUnclamped(a.X, b.X, t), LerpUnclamped(a.Y, b.Y, t));
     /// <summary>Linearly interpolates between two vectors without clamping t.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Float3 LerpUnclamped(Float3 a, Float3 b, float t) => new Float3(LerpUnclamped(a.X, b.X, t), LerpUnclamped(a.Y, b.Y, t), LerpUnclamped(a.Z, b.Z, t));
+    public static Float3 LerpUnclamped(Float3 a, Float3 b, float t) => a + (b - a) * t;
     /// <summary>Linearly interpolates between two vectors without clamping t.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float4 LerpUnclamped(Float4 a, Float4 b, float t) => new Float4(LerpUnclamped(a.X, b.X, t), LerpUnclamped(a.Y, b.Y, t), LerpUnclamped(a.Z, b.Z, t), LerpUnclamped(a.W, b.W, t));
