@@ -323,7 +323,7 @@ public class RotationSubGizmo : ISubGizmo
         float wy = rotation.W * y;
         float wz = rotation.W * z;
 
-        Float3 res;
+        Float3 res = default;
         res.X = (1.0f - (yy + zz)) * point.X + (xy - wz) * point.Y + (xz + wy) * point.Z;
         res.Y = (xy + wz) * point.X + (1.0f - (xx + zz)) * point.Y + (yz - wx) * point.Z;
         res.Z = (xz - wy) * point.X + (yz + wx) * point.Y + (1.0f - (xx + yy)) * point.Z;
