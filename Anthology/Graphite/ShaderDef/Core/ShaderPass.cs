@@ -188,6 +188,43 @@ public sealed class ShaderPass
 
 
     /// <summary>
+    /// Variant axes of this pass in slot order. Empty until created.
+    /// </summary>
+    public IReadOnlyList<VariantSpace> Axes { get { EnsureCreated(); return _axes; } }
+
+
+    /// <summary>
+    /// Restores every axis to its first value (combo 0) and makes that the active variant. No reselect needed.
+    /// </summary>
+    public void ResetKeywords()
+    {
+        EnsureCreated();
+        _state.Reset(_combos[0]);
+        _activeIndex = 0;
+    }
+
+
+    /// <summary>
+    /// Sets every keyword whose name is an axis here, silently skipping the rest, then re-resolves once. Returns how many applied.
+    /// </summary>
+    public int ApplyKeywords(ReadOnlySpan<Keyword> keywords)
+    {
+        EnsureCreated();
+        int applied = 0;
+        for (int i = 0; i < keywords.Length; i++)
+        {
+            if (_state.SetKeyword(keywords[i]))
+                applied++;
+        }
+
+        if (applied > 0)
+            Reselect();
+
+        return applied;
+    }
+
+
+    /// <summary>
     /// Sets a keyword and re-resolves the active variant. Throws if name isn't a variant axis here.
     /// </summary>
     public void SetKeyword(Keyword keyword)

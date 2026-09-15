@@ -63,7 +63,7 @@ Axes are not declared in the ShaderDef markup itself - they come from the Slang 
 
 ### How a Pass Resolves Its Active Variant
 
-Each `ShaderPass` keeps a single `KeywordState` representing "what's currently selected" and an index into its `_variants` array for the currently active combination. Calling `SetKeyword`/`SetKeywords` (or the `Try*` variants, which don't throw on an unrecognized keyword name) updates that state and re-resolves:
+Each `ShaderPass` keeps a single `KeywordState` representing "what's currently selected" and an index into its `_variants` array for the currently active combination. Calling `SetKeyword`/`SetKeywords` (or the `Try*` variants, which don't throw on an unrecognized keyword name) updates that state and re-resolves. For per-draw composition, `ResetKeywords()` returns to the first combination and `ApplyKeywords(ReadOnlySpan<Keyword>)` sets every recognized name, skips the rest, and re-resolves once; `Axes` lists the pass's `VariantSpace`s for UI:
 
 ```csharp
 pass.SetKeyword(new Keyword("Lighting", "Baked"));

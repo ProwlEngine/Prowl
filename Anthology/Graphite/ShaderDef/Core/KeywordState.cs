@@ -31,6 +31,20 @@ internal struct KeywordState
 
 
     /// <summary>
+    /// Overwrites every slot from keywordSet (same shape as the constructor) without allocating.
+    /// </summary>
+    public void Reset(Keyword[] keywordSet)
+    {
+        _hash = 0;
+        for (int i = 0; i < keywordSet.Length; i++)
+        {
+            _values[i] = keywordSet[i];
+            _hash ^= keywordSet[i].LongHash();
+        }
+    }
+
+
+    /// <summary>
     /// Sets a keyword in its slot. Returns false and leaves state unchanged if name isn't in this set.
     /// </summary>
     public bool SetKeyword(Keyword keyword)
