@@ -94,6 +94,24 @@ public class PassKeywordTests : IDisposable
     }
 
 
+    // An axis the compiler collapsed away is not in this pass's axis list at all, so a material
+    // carrying its keyword must be treated as unknown rather than throwing or losing the selection.
+    [Fact]
+    public void ApplyKeywords_CollapsedAxisKeyword_IsSkippedAndVariantStaysValid()
+    {
+        _pass.ApplyKeywords([K("ALPHA_MODE", "Cutout")]);
+
+        int applied = _pass.ApplyKeywords([K("ANISOTROPIC", "true"), K("SKINNED", "true")]);
+
+        Assert.Equal(1, applied);
+        Assert.DoesNotContain(_pass.Axes, a => a.Name == "ANISOTROPIC");
+        Assert.NotNull(_pass.ActiveVariant);
+        Assert.Equal("true", Active("SKINNED"));
+        Assert.Equal("Cutout", Active("ALPHA_MODE"));
+        Assert.DoesNotContain(_pass.ActiveVariant.Keywords, k => k.Name == "ANISOTROPIC");
+    }
+
+
     [Fact]
     public void ApplyKeywords_LaterEntryWinsWithinSpan()
     {
