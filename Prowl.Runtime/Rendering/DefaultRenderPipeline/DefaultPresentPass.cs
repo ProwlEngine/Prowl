@@ -11,12 +11,8 @@ using RenderTexture = Prowl.Graphite.RenderTexture;
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
-/// The runtime-provided default presenter for <see cref="DefaultRenderPipeline"/>: blits the pipeline's
-/// final content into <see cref="CameraView.Target"/>'s framebuffer when set (an offscreen viewport
-/// render - editor Scene/Game view, a custom render-to-texture camera), or draws it into the swapchain
-/// otherwise (a bare runtime camera with no explicit target). When the pipeline has a
-/// <see cref="DefaultRenderPipeline.UIRenderer"/>, its drawn UI is composited on top only in the
-/// swapchain case - an offscreen render never gets UI drawn onto it, regardless of the flag.
+/// Blits <see cref="SceneResources.Final"/> into <see cref="CameraView.Target"/> when set, else into the swapchain,
+/// compositing the injected UI only in the swapchain case.
 /// </summary>
 public sealed class DefaultPresentPass : IPresentPass<CameraView>
 {
@@ -34,13 +30,11 @@ public sealed class DefaultPresentPass : IPresentPass<CameraView>
 
     public void Setup(PresentContextBuilder builder)
     {
-        _finalHandle = builder.GetInputTexture(DefaultChain.Final);
+        _finalHandle = builder.GetInputTexture(SceneResources.Final);
 
         if (_uiRenderer != null)
             _uiHandle = builder.GetInputTexture(_uiRenderer.SceneResourceId);
 
-        // Harmless when unused: SwapchainTarget is only consulted below when the view has no explicit
-        // Target, and Present() is what actually arms the present.
         builder.RequestSwapchain();
     }
 
@@ -51,12 +45,9 @@ public sealed class DefaultPresentPass : IPresentPass<CameraView>
         Resources.RenderTexture? target = context.View.Target;
         if (target != null)
         {
-            // Offscreen viewport - same size/format by construction (GraphTextureDesc.ViewSized off
-            // the view's own pixel size), so a raw copy is enough, no shader needed. No UI here even
-            // when a UIRenderer is set - only the swapchain-presenting camera gets UI composited in.
-            CommandBuffer copyCmd = context.GetCommandBuffer(Name);
-            copyCmd.CopyTexture(source.ColorTextures[0], target.MainTexture.Handle);
-            context.SubmitCommandBuffer(copyCmd);
+            CommandBuffer targetCmd = context.GetCommandBuffer(Name);
+            targetCmd.Blit(source.ColorTextures[0], target.frameBuffer, DefaultRenderPipeline.GetBlitMaterial());
+            context.SubmitCommandBuffer(targetCmd);
             return;
         }
 
@@ -64,8 +55,6 @@ public sealed class DefaultPresentPass : IPresentPass<CameraView>
         if (swap == null)
             return;
 
-        // The swapchain's format can differ from the chain's (sRGB variants, BGRA, ...), so this goes
-        // through a shader blit rather than a raw texture copy.
         CommandBuffer cmd = context.GetCommandBuffer(Name);
         cmd.Blit(source.ColorTextures[0], swap, DefaultRenderPipeline.GetBlitMaterial());
 
