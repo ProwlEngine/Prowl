@@ -75,14 +75,6 @@ internal static class FormatHelpers
         return format == PixelFormat.D24_UNorm_S8_UInt || format == PixelFormat.D32_Float_S8_UInt;
     }
 
-    internal static bool IsDepthStencilFormat(PixelFormat format)
-    {
-        return format == PixelFormat.D32_Float_S8_UInt
-            || format == PixelFormat.D24_UNorm_S8_UInt
-            || format == PixelFormat.R16_UNorm
-            || format == PixelFormat.R32_Float;
-    }
-
     internal static bool IsCompressedFormat(PixelFormat format)
     {
         return format == PixelFormat.BC1_Rgb_UNorm

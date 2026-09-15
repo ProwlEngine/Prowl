@@ -43,11 +43,6 @@ internal static class Util
         }
     }
 
-    internal static uint USizeOf<T>() where T : struct
-    {
-        return (uint)Unsafe.SizeOf<T>();
-    }
-
     internal static unsafe string GetString(byte* stringStart)
     {
         int characters = 0;
@@ -57,16 +52,6 @@ internal static class Util
         }
 
         return Encoding.UTF8.GetString(stringStart, characters);
-    }
-
-    internal static bool NullableEquals<T>(T? left, T? right) where T : struct, IEquatable<T>
-    {
-        if (left.HasValue && right.HasValue)
-        {
-            return left.Value.Equals(right.Value);
-        }
-
-        return left.HasValue == right.HasValue;
     }
 
     internal static bool ArrayEqualsEquatable<T>(T[] left, T[] right) where T : struct, IEquatable<T>
@@ -94,26 +79,8 @@ internal static class Util
 
     internal static void ClearArray<T>(T[] array)
     {
-        if (array != null)
-        {
-            Array.Clear(array, 0, array.Length);
-        }
-    }
-
-    public static uint Clamp(uint value, uint min, uint max)
-    {
-        if (value <= min)
-        {
-            return min;
-        }
-        else if (value >= max)
-        {
-            return max;
-        }
-        else
-        {
-            return value;
-        }
+        if (array is not null)
+            Array.Clear(array);
     }
 
     internal static int ArrayHash<T>(this T[] values)
@@ -239,21 +206,5 @@ internal static class Util
         }
     }
 
-    internal static T[] ShallowClone<T>(T[] array)
-    {
-        return (T[])array.Clone();
-    }
-
-    internal static void PackIntPtr(IntPtr sourcePtr, out uint low, out uint high)
-    {
-        ulong src64 = (ulong)sourcePtr;
-        low = (uint)(src64 & 0x00000000FFFFFFFF);
-        high = (uint)((src64 & 0xFFFFFFFF00000000u) >> 32);
-    }
-
-    internal static IntPtr UnpackIntPtr(uint low, uint high)
-    {
-        ulong src64 = low | ((ulong)high << 32);
-        return (IntPtr)src64;
-    }
+    internal static T[] ShallowClone<T>(T[]? array) => array is null ? [] : (T[])array.Clone();
 }

@@ -13,18 +13,13 @@ namespace Prowl.Graphite;
 /// One lock guards the free-list. Concurrent rents never get the same bundle.
 /// </para>
 /// </summary>
-internal sealed class TransientTexturePool : IDisposable
+internal sealed class TransientTexturePool(GraphicsDevice device) : IDisposable
 {
-    private readonly GraphicsDevice _device;
+    private readonly GraphicsDevice _device = device;
     private readonly object _lock = new();
     private readonly Dictionary<RenderTextureDescription, List<PooledBundle>> _free = [];
     private readonly List<PooledBundle> _rented = [];
     private bool _disposed;
-
-    public TransientTexturePool(GraphicsDevice device)
-    {
-        _device = device;
-    }
 
     /// <summary>
     /// Rents a bundle matching desc. Goes back to the free-list once executionId completes.
@@ -104,18 +99,13 @@ internal sealed class TransientTexturePool : IDisposable
     /// <summary>
     /// A pooled RenderTexture and the execution that owns it.
     /// </summary>
-    internal sealed class PooledBundle
+    internal sealed class PooledBundle(RenderTexture texture)
     {
-        public RenderTexture Texture { get; }
+        public RenderTexture Texture { get; } = texture;
         public RenderTextureDescription Desc => Texture.Desc;
 
         /// <summary>Owning execution. 0 means free.</summary>
         public ulong RentedExecutionId;
-
-        public PooledBundle(RenderTexture texture)
-        {
-            Texture = texture;
-        }
 
         public void DisposeResources() => Texture.Dispose();
     }
