@@ -161,6 +161,9 @@ public abstract class RenderPipeline<TView> : IDisposable
             }
         }
 
+        if (framebuffers.Count == 0)
+            return;
+
         Framebuffer[] outputs = framebuffers.ToArray();
         TransferCommandBuffer transfer = context.GetTransferCommandBuffer($"{node.Pass.Name} Capture");
         try
