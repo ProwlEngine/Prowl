@@ -23,6 +23,18 @@ public struct FrameData
     public float4 _SinTime;
     public float4 _CosTime;
     public float4 prowl_DeltaTime;
+
+    public float4 _FogColor;
+    public float4 _FogParams;
+    public float4 _FogStates;
+
+    public float4 _AmbientMode;
+    public float4 _AmbientColor;
+    public float4 _AmbientSkyColor;
+    public float4 _AmbientGroundColor;
+    public float4 _AmbientParams;
+
+    public float4 _ShadowFocusPos;
 }
 public ParameterBlock<FrameData> Frame;
 
