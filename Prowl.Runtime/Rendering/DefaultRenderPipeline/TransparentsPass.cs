@@ -1,27 +1,51 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Graphite;
 using Prowl.Graphite.RenderGraph;
+
+using Prowl.Runtime.Resources;
 
 using RenderTexture = Prowl.Graphite.RenderTexture;
 
 namespace Prowl.Runtime.Rendering;
 
-/// <summary>
-/// Copies the opaque chain forward, then (in the editor) records the reference grid on top.
-/// </summary>
-public sealed class TransparentsPass : CopyChainPass
+/// <summary>Transparent geometry over the scene color, back to front, then the editor grid.</summary>
+public sealed class TransparentsPass : RasterPass<CameraView>
 {
-    public TransparentsPass() : base("Transparents", DefaultChain.Transparents, present: false, inputId: DefaultChain.Opaque) { }
+    private TextureHandle _gbuffer;
+    private TextureHandle _depthCopy;
 
-    protected override void OnRender(RenderContext<CameraView> context, CommandBuffer cmd, RenderTexture output)
+    public override string Name => "Transparents";
+
+    public override void Setup(RenderContextBuilder builder)
+    {
+        _depthCopy = builder.GetInputTexture(SceneResources.DepthCopy);
+        _gbuffer = SetTargets(builder, SceneResources.GBuffer, SceneResources.GBufferDesc(),
+            ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded));
+    }
+
+    public override void Render(RenderContext<CameraView> context)
     {
         CameraView view = context.View;
+        SceneTargets.Resolve(context, _gbuffer);
 
-        if (view.Data.DisplayGrid && view.SceneDepthCopy != null)
-            GridRenderer.Render(cmd, view.Camera.Transform.Position, view.SceneDepthCopy);
+        CommandBuffer cmd = context.GetCommandBuffer(Name);
+        BindTarget(context, cmd);
+        cmd.SetProperties(view.FrameProperties);
 
-        EmitPlaceholderCommandBuffers(context, "Transparents", 2);
+        Scene? scene = view.Camera.Scene;
+        if (scene != null)
+            RenderableDrawer.Draw(cmd, view.Camera, scene.Culler.Renderables, view.Cull.Transparent, PassTags.Transparent);
+
+        if (view.Data.DisplayGrid)
+        {
+            RenderTexture depthCopy = context.GetRenderTexture(_depthCopy);
+            GridRenderer.Render(cmd, view.Camera.Transform.Position, depthCopy.DepthTexture!);
+        }
+
+        context.SubmitCommandBuffer(cmd);
     }
 }
