@@ -30,20 +30,20 @@ public sealed class FixedStructureFormat : ISerializationFormat
         var list = EchoObject.NewList();
 
         var fields = value.GetSerializableFields()
-            .OrderBy(f => f.Field.MetadataToken)
+            .OrderBy(f => f.MetadataToken)
             .ToArray();
 
         foreach (var cachedField in fields)
         {
             try
             {
-                object? fieldValue = cachedField.Field.GetValue(value);
-                EchoObject serializedValue = Serializer.Serialize(cachedField.Field.FieldType, fieldValue, context);
+                object? fieldValue = cachedField.GetValue(value);
+                EchoObject serializedValue = Serializer.Serialize(cachedField.MemberType, fieldValue, context);
                 list.ListAdd(serializedValue);
             }
             catch (Exception ex)
             {
-                Serializer.Logger.Error($"Failed to serialize field {cachedField.Field.Name} in fixed structure", ex);
+                Serializer.Logger.Error($"Failed to serialize field {cachedField.Name} in fixed structure", ex);
                 list.ListAdd(new EchoObject(EchoType.Null, null));
             }
         }
@@ -71,7 +71,7 @@ public sealed class FixedStructureFormat : ISerializationFormat
         var listValue = (List<EchoObject>)value.Value!;
 
         var fields = result.GetSerializableFields()
-            .OrderBy(f => f.Field.MetadataToken)
+            .OrderBy(f => f.MetadataToken)
             .ToArray();
 
         if (fields.Length != listValue.Count)
@@ -88,12 +88,12 @@ public sealed class FixedStructureFormat : ISerializationFormat
 
             try
             {
-                object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.Field.FieldType, context);
-                cachedField.Field.SetValue(result, deserializedValue);
+                object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.MemberType, context);
+                cachedField.SetValue(result, deserializedValue);
             }
             catch (Exception ex)
             {
-                Serializer.Logger.Error($"Failed to deserialize field {cachedField.Field.Name} in fixed structure", ex);
+                Serializer.Logger.Error($"Failed to deserialize field {cachedField.Name} in fixed structure", ex);
             }
         }
 

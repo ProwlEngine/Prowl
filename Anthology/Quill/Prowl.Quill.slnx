@@ -9,4 +9,5 @@
     <Project Path="Samples/GraphiteExample/GraphiteExample.csproj" />
   </Folder>
   <Project Path="Quill/Quill.csproj" />
+  <Project Path="Tests/Quill.Tests.csproj" />
 </Solution>

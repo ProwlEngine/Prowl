@@ -50,7 +50,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
                             continue;
                     }
 
-                    object? propValue = cachedField.Field.GetValue(value);
+                    object? propValue = cachedField.GetValue(value);
                     if (propValue == null)
                     {
                         // Use cached IgnoreOnNull flag
@@ -61,13 +61,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
                     else
                     {
                         // Serialize with field type as target to enable polymorphism detection
-                        EchoObject tag = Serializer.Serialize(cachedField.Field.FieldType, propValue, context);
+                        EchoObject tag = Serializer.Serialize(cachedField.MemberType, propValue, context);
                         compound.Add(cachedField.SerializedName, tag);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Serializer.Logger.Error($"Failed to serialize field {cachedField.Field.Name}", ex);
+                    Serializer.Logger.Error($"Failed to serialize field {cachedField.Name}", ex);
                     // We don't want to stop the serialization process because of a single field, so we just skip it and continue
                 }
             }
@@ -191,16 +191,16 @@ public sealed class AnyObjectFormat : ISerializationFormat
                 try
                 {
                     // Let the centralized deserializer handle type resolution for fields
-                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.Field.FieldType, context);
+                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.MemberType, context);
 
-                    if (cachedField.Field.IsInitOnly)
-                        Serializer.Logger.Warning($"Setting readonly field '{cachedField.Field.Name}' in type '{result.GetType().FullName}'.");
+                    if (cachedField.IsInitOnly)
+                        Serializer.Logger.Warning($"Setting readonly field '{cachedField.Name}' in type '{result.GetType().FullName}'.");
 
-                    cachedField.Field.SetValue(result, deserializedValue);
+                    cachedField.SetValue(result, deserializedValue);
                 }
                 catch (Exception ex)
                 {
-                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Field.Name}", ex);
+                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Name}", ex);
                     // We don't want to stop the deserialization process because of a single field, so we just skip it and continue
                 }
             }
@@ -234,12 +234,12 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
                 try
                 {
-                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.Field.FieldType, context);
-                    cachedField.Field.SetValue(target, deserializedValue);
+                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.MemberType, context);
+                    cachedField.SetValue(target, deserializedValue);
                 }
                 catch (Exception ex)
                 {
-                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Field.Name} into existing instance", ex);
+                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Name} into existing instance", ex);
                 }
             }
         }

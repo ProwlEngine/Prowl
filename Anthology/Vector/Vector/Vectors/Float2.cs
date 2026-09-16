@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 
 namespace Prowl.Vector;
 
@@ -25,7 +26,11 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
     public static Float2 UnitY => new Float2(0f, 1f);
 
 
-    public float X, Y;
+    // Stored as a Vector2 so the JIT keeps the whole value in one SIMD register.
+    private Vector2 _v;
+
+    [DataMember] public float X { readonly get => _v.X; set => _v.X = value; }
+    [DataMember] public float Y { readonly get => _v.Y; set => _v.Y = value; }
 
 
     #region Properties
@@ -57,7 +62,8 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
     #region Constructors
 
     public Float2(float scalar) : this(scalar, scalar) { }
-    public Float2(float x, float y) { X = x; Y = y; }
+    public Float2(float x, float y) => _v = new Vector2(x, y);
+    private Float2(Vector2 v) => _v = v;
     public Float2(Float2 v) : this(v.X, v.Y) { }
     public Float2(float[] array)
     {
@@ -261,24 +267,24 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
 
     #region Operators
 
-    public static Float2 operator -(Float2 v) => new Float2(-v.X, -v.Y);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator -(Float2 v) => new Float2(-v._v);
 
-    public static Float2 operator +(Float2 a, Float2 b) => new Float2(a.X + b.X, a.Y + b.Y);
-    public static Float2 operator -(Float2 a, Float2 b) => new Float2(a.X - b.X, a.Y - b.Y);
-    public static Float2 operator *(Float2 a, Float2 b) => new Float2(a.X * b.X, a.Y * b.Y);
-    public static Float2 operator /(Float2 a, Float2 b) => new Float2(a.X / b.X, a.Y / b.Y);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator +(Float2 a, Float2 b) => new Float2(a._v + b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator -(Float2 a, Float2 b) => new Float2(a._v - b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator *(Float2 a, Float2 b) => new Float2(a._v * b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator /(Float2 a, Float2 b) => new Float2(a._v / b._v);
     public static Float2 operator %(Float2 a, Float2 b) => new Float2(a.X % b.X, a.Y % b.Y);
 
-    public static Float2 operator +(Float2 v, float scalar) => new Float2(v.X + scalar, v.Y + scalar);
-    public static Float2 operator -(Float2 v, float scalar) => new Float2(v.X - scalar, v.Y - scalar);
-    public static Float2 operator *(Float2 v, float scalar) => new Float2(v.X * scalar, v.Y * scalar);
-    public static Float2 operator /(Float2 v, float scalar) => new Float2(v.X / scalar, v.Y / scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator +(Float2 v, float scalar) => new Float2(v._v + new Vector2(scalar));
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator -(Float2 v, float scalar) => new Float2(v._v - new Vector2(scalar));
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator *(Float2 v, float scalar) => new Float2(v._v * scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator /(Float2 v, float scalar) => new Float2(v._v / scalar);
     public static Float2 operator %(Float2 v, float scalar) => new Float2(v.X % scalar, v.Y % scalar);
 
-    public static Float2 operator +(float scalar, Float2 v) => new Float2(scalar + v.X, scalar + v.Y);
-    public static Float2 operator -(float scalar, Float2 v) => new Float2(scalar - v.X, scalar - v.Y);
-    public static Float2 operator *(float scalar, Float2 v) => new Float2(scalar * v.X, scalar * v.Y);
-    public static Float2 operator /(float scalar, Float2 v) => new Float2(scalar / v.X, scalar / v.Y);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator +(float scalar, Float2 v) => new Float2(new Vector2(scalar) + v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator -(float scalar, Float2 v) => new Float2(new Vector2(scalar) - v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator *(float scalar, Float2 v) => new Float2(scalar * v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float2 operator /(float scalar, Float2 v) => new Float2(new Vector2(scalar) / v._v);
     public static Float2 operator %(float scalar, Float2 v) => new Float2(scalar % v.X, scalar % v.Y);
 
     #endregion
@@ -287,9 +293,9 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
     #region Casting
 
     // System.Numerics Cast
-    public static implicit operator Vector2(Float2 value) => new Vector2(value.X, value.Y);
+    public static implicit operator Vector2(Float2 value) => value._v;
 
-    public static implicit operator Float2(Vector2 value) => new Float2(value.X, value.Y);
+    public static implicit operator Float2(Vector2 value) => new Float2(value);
 
 
     public static explicit operator Float2(Double2 v) => new Float2(v);

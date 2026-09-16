@@ -533,22 +533,25 @@ public static partial class Maths
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float2 ModF(Float2 x, out Float2 integer)
     {
-        integer = new Float2();
-        return new Float2(ModF(x.X, out integer.X), ModF(x.Y, out integer.Y));
+        var result = new Float2(ModF(x.X, out float ix), ModF(x.Y, out float iy));
+        integer = new Float2(ix, iy);
+        return result;
     }
     /// <summary>Splits a vector into integer and fractional parts componentwise.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float3 ModF(Float3 x, out Float3 integer)
     {
-        integer = new Float3();
-        return new Float3(ModF(x.X, out integer.X), ModF(x.Y, out integer.Y), ModF(x.Z, out integer.Z));
+        var result = new Float3(ModF(x.X, out float ix), ModF(x.Y, out float iy), ModF(x.Z, out float iz));
+        integer = new Float3(ix, iy, iz);
+        return result;
     }
     /// <summary>Splits a vector into integer and fractional parts componentwise.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float4 ModF(Float4 x, out Float4 integer)
     {
-        integer = new Float4();
-        return new Float4(ModF(x.X, out integer.X), ModF(x.Y, out integer.Y), ModF(x.Z, out integer.Z), ModF(x.W, out integer.W));
+        var result = new Float4(ModF(x.X, out float ix), ModF(x.Y, out float iy), ModF(x.Z, out float iz), ModF(x.W, out float iw));
+        integer = new Float4(ix, iy, iz, iw);
+        return result;
     }
     /// <summary>Splits a vector into integer and fractional parts componentwise.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1370,7 +1373,7 @@ public static partial class Maths
     public static Float2 Lerp(Float2 a, Float2 b, float t) => new Float2(Lerp(a.X, b.X, Saturate(t)), Lerp(a.Y, b.Y, Saturate(t)));
     /// <summary>Linearly interpolates between two Float3 vectors.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Float3 Lerp(Float3 a, Float3 b, float t) => new Float3(Lerp(a.X, b.X, Saturate(t)), Lerp(a.Y, b.Y, Saturate(t)), Lerp(a.Z, b.Z, Saturate(t)));
+    public static Float3 Lerp(Float3 a, Float3 b, float t) => a + (b - a) * Saturate(t);
     /// <summary>Linearly interpolates between two Float4 vectors.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float4 Lerp(Float4 a, Float4 b, float t) => new Float4(Lerp(a.X, b.X, Saturate(t)), Lerp(a.Y, b.Y, Saturate(t)), Lerp(a.Z, b.Z, Saturate(t)), Lerp(a.W, b.W, Saturate(t)));
@@ -1434,7 +1437,7 @@ public static partial class Maths
     public static Float2 LerpUnclamped(Float2 a, Float2 b, float t) => new Float2(LerpUnclamped(a.X, b.X, t), LerpUnclamped(a.Y, b.Y, t));
     /// <summary>Linearly interpolates between two vectors without clamping t.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Float3 LerpUnclamped(Float3 a, Float3 b, float t) => new Float3(LerpUnclamped(a.X, b.X, t), LerpUnclamped(a.Y, b.Y, t), LerpUnclamped(a.Z, b.Z, t));
+    public static Float3 LerpUnclamped(Float3 a, Float3 b, float t) => a + (b - a) * t;
     /// <summary>Linearly interpolates between two vectors without clamping t.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float4 LerpUnclamped(Float4 a, Float4 b, float t) => new Float4(LerpUnclamped(a.X, b.X, t), LerpUnclamped(a.Y, b.Y, t), LerpUnclamped(a.Z, b.Z, t), LerpUnclamped(a.W, b.W, t));

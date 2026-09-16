@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 
 namespace Prowl.Vector;
 
@@ -29,7 +30,13 @@ public partial struct Float4 : IEquatable<Float4>, IFormattable
     public static Float4 UnitW => new Float4(0f, 0f, 0f, 1f);
 
 
-    public float X, Y, Z, W;
+    // Stored as a Vector4 so the JIT keeps the whole value in one SIMD register.
+    private Vector4 _v;
+
+    [DataMember] public float X { readonly get => _v.X; set => _v.X = value; }
+    [DataMember] public float Y { readonly get => _v.Y; set => _v.Y = value; }
+    [DataMember] public float Z { readonly get => _v.Z; set => _v.Z = value; }
+    [DataMember] public float W { readonly get => _v.W; set => _v.W = value; }
 
 
     #region Properties
@@ -65,7 +72,8 @@ public partial struct Float4 : IEquatable<Float4>, IFormattable
     #region Constructors
 
     public Float4(float scalar) : this(scalar, scalar, scalar, scalar) { }
-    public Float4(float x, float y, float z, float w) { X = x; Y = y; Z = z; W = w; }
+    public Float4(float x, float y, float z, float w) => _v = new Vector4(x, y, z, w);
+    private Float4(Vector4 v) => _v = v;
     public Float4(Float4 v) : this(v.X, v.Y, v.Z, v.W) { }
     public Float4(float[] array)
     {
@@ -278,24 +286,24 @@ public partial struct Float4 : IEquatable<Float4>, IFormattable
 
     #region Operators
 
-    public static Float4 operator -(Float4 v) => new Float4(-v.X, -v.Y, -v.Z, -v.W);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator -(Float4 v) => new Float4(-v._v);
 
-    public static Float4 operator +(Float4 a, Float4 b) => new Float4(a.X + b.X, a.Y + b.Y, a.Z + b.Z, a.W + b.W);
-    public static Float4 operator -(Float4 a, Float4 b) => new Float4(a.X - b.X, a.Y - b.Y, a.Z - b.Z, a.W - b.W);
-    public static Float4 operator *(Float4 a, Float4 b) => new Float4(a.X * b.X, a.Y * b.Y, a.Z * b.Z, a.W * b.W);
-    public static Float4 operator /(Float4 a, Float4 b) => new Float4(a.X / b.X, a.Y / b.Y, a.Z / b.Z, a.W / b.W);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator +(Float4 a, Float4 b) => new Float4(a._v + b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator -(Float4 a, Float4 b) => new Float4(a._v - b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator *(Float4 a, Float4 b) => new Float4(a._v * b._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator /(Float4 a, Float4 b) => new Float4(a._v / b._v);
     public static Float4 operator %(Float4 a, Float4 b) => new Float4(a.X % b.X, a.Y % b.Y, a.Z % b.Z, a.W % b.W);
 
-    public static Float4 operator +(Float4 v, float scalar) => new Float4(v.X + scalar, v.Y + scalar, v.Z + scalar, v.W + scalar);
-    public static Float4 operator -(Float4 v, float scalar) => new Float4(v.X - scalar, v.Y - scalar, v.Z - scalar, v.W - scalar);
-    public static Float4 operator *(Float4 v, float scalar) => new Float4(v.X * scalar, v.Y * scalar, v.Z * scalar, v.W * scalar);
-    public static Float4 operator /(Float4 v, float scalar) => new Float4(v.X / scalar, v.Y / scalar, v.Z / scalar, v.W / scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator +(Float4 v, float scalar) => new Float4(v._v + new Vector4(scalar));
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator -(Float4 v, float scalar) => new Float4(v._v - new Vector4(scalar));
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator *(Float4 v, float scalar) => new Float4(v._v * scalar);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator /(Float4 v, float scalar) => new Float4(v._v / scalar);
     public static Float4 operator %(Float4 v, float scalar) => new Float4(v.X % scalar, v.Y % scalar, v.Z % scalar, v.W % scalar);
 
-    public static Float4 operator +(float scalar, Float4 v) => new Float4(scalar + v.X, scalar + v.Y, scalar + v.Z, scalar + v.W);
-    public static Float4 operator -(float scalar, Float4 v) => new Float4(scalar - v.X, scalar - v.Y, scalar - v.Z, scalar - v.W);
-    public static Float4 operator *(float scalar, Float4 v) => new Float4(scalar * v.X, scalar * v.Y, scalar * v.Z, scalar * v.W);
-    public static Float4 operator /(float scalar, Float4 v) => new Float4(scalar / v.X, scalar / v.Y, scalar / v.Z, scalar / v.W);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator +(float scalar, Float4 v) => new Float4(new Vector4(scalar) + v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator -(float scalar, Float4 v) => new Float4(new Vector4(scalar) - v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator *(float scalar, Float4 v) => new Float4(scalar * v._v);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public static Float4 operator /(float scalar, Float4 v) => new Float4(new Vector4(scalar) / v._v);
     public static Float4 operator %(float scalar, Float4 v) => new Float4(scalar % v.X, scalar % v.Y, scalar % v.Z, scalar % v.W);
 
     #endregion
@@ -304,9 +312,9 @@ public partial struct Float4 : IEquatable<Float4>, IFormattable
     #region Casting
 
     // System.Numerics cast
-    public static implicit operator Vector4(Float4 value) => new Vector4(value.X, value.Y, value.Z, value.W);
+    public static implicit operator Vector4(Float4 value) => value._v;
 
-    public static implicit operator Float4(Vector4 value) => new Float4(value.X, value.Y, value.Z, value.W);
+    public static implicit operator Float4(Vector4 value) => new Float4(value);
 
 
     public static explicit operator Float4(Float2 value) => new Float4(value.X, value.Y, 0f, 0f);
