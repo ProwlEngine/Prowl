@@ -218,6 +218,10 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
     private static void InvokeAfterDeserialize(object target, SerializationContext context)
     {
+        // The root sees the graph with every deferred back-patch already applied.
+        if (context.IsOutermostDeserialize)
+            context.RunDeferredActions();
+
         if (target is ISerializationCallbackReceiver callback)
         {
             try { callback.OnAfterDeserialize(); }
@@ -235,6 +239,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
         if (value.TagType != EchoType.Compound) return;
 
         Type objectType = target.GetType();
+
+        // Anything in the data that points back at its root resolves to the target, not to a new copy.
+        if (!objectType.IsValueType && value.TryGet("$id", out EchoObject? id))
+        {
+            context.idToObject[id!.IntValue] = target;
+            context.fullyDefinedIds.Add(id.IntValue);
+        }
 
         if (target is ISerializable serializable)
         {

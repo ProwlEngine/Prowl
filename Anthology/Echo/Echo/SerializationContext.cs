@@ -42,6 +42,12 @@ public class SerializationContext
     /// </summary>
     public HashSet<int> fullyDefinedIds = new();
 
+    /// <summary>
+    /// Definitions whose <c>$type</c> could not be resolved, by reference id. Lets a caller that can
+    /// stand in for a missing type recover the data when only a reference to it reached that caller.
+    /// </summary>
+    public Dictionary<int, EchoObject> unresolvedDefinitions = new();
+
     private List<Action>? _deferredActions;
     private int _deserializeDepth;
     private bool _runningDeferred;
@@ -50,13 +56,15 @@ public class SerializationContext
     /// Queues work to run after the whole object graph has finished deserializing (once every reference
     /// placeholder exists with its correct type). Used to recover data whose definition was serialized
     /// inline somewhere that couldn't be deserialized in the normal pass (e.g. inside a missing component).
-    /// Runs automatically when the outermost Deserialize/DeserializeInto call using this context returns.
+    /// Runs automatically before the root object's OnAfterDeserialize, or when the outermost
+    /// Deserialize/DeserializeInto call using this context returns.
     /// </summary>
     public void Defer(Action action) => (_deferredActions ??= new()).Add(action);
 
     // Called by the deserializer around every call so deferred actions can fire once the OUTERMOST call
     // (whichever overload, whatever context) unwinds - not per nested field, and not re-entrantly while
     // deferred actions are themselves deserializing.
+    internal bool IsOutermostDeserialize => _deserializeDepth == 1;
     internal void EnterDeserialize() => _deserializeDepth++;
     internal void ExitDeserialize()
     {

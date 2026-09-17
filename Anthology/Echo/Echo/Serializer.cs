@@ -114,8 +114,9 @@ public static class Serializer
     {
         if (value == null) return new EchoObject(EchoType.Null, null);
 
-        // EchoObject fields are already serialized data — embed as-is
-        if (value is EchoObject echo) return echo;
+        // EchoObject fields are already serialized data. One still attached to another tree (e.g. kept from
+        // a loaded file) is copied, since a tag can only have one parent.
+        if (value is EchoObject echo) return echo.Parent == null ? echo : echo.Clone();
 
         // Fast path: primitives, string, enum — skip entire pipeline
         if (targetType != null)
@@ -249,6 +250,9 @@ public static class Serializer
         // STEP 1: Extract type information and data (centralized)
         var envelope = ExtractTypeEnvelope(value, targetType);
 
+        if (envelope.TypeUnresolved)
+            RecordUnresolvedDefinition(envelope.Data, context);
+
         // STEP 2: Determine actual type to deserialize to
         var actualType = envelope.ActualType ?? targetType;
 
@@ -271,6 +275,20 @@ public static class Serializer
         // STEP 3: Get formatter and deserialize data (no type logic in formatter)
         var format = GetFormatForType(actualType);
         return format.Deserialize(envelope.Data, actualType, context);
+    }
+
+    // Kept out of DeserializeCore so its stack frame stays small for deeply nested graphs.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void RecordUnresolvedDefinition(EchoObject data, SerializationContext context)
+    {
+        if (data.TagType != EchoType.Compound || !data.TryGet("$id", out var id)) return;
+
+        foreach (string name in data.GetNames())
+        {
+            if (name == "$id" || name == "$type") continue;
+            context.unresolvedDefinitions[id.IntValue] = data;
+            return;
+        }
     }
 
     #endregion
@@ -395,13 +413,14 @@ public static class Serializer
         // Handle full type wrapper
         if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
         {
-            var type = ReconcileType(TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue), targetType) ?? targetType;
+            Type? resolved = TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue);
+            var type = ReconcileType(resolved, targetType) ?? targetType;
 
             // If there's a $value, use that as data
             if (value.TryGet("$value", out var dataValue))
-                return new TypeEnvelope { ActualType = type, Data = dataValue };
+                return new TypeEnvelope { ActualType = type, Data = dataValue, TypeUnresolved = resolved == null };
 
-            return new TypeEnvelope { ActualType = type, Data = value };
+            return new TypeEnvelope { ActualType = type, Data = value, TypeUnresolved = resolved == null };
         }
 
         // No type wrapper - use as-is
@@ -425,6 +444,7 @@ public static class Serializer
     {
         public Type? ActualType { get; set; }
         public EchoObject Data { get; set; } = null!;
+        public bool TypeUnresolved { get; set; }
     }
 
     #endregion
