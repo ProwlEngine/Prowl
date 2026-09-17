@@ -14,8 +14,8 @@ internal readonly struct CachedFieldInfo
 {
     private readonly FieldInfo? _field;
     private readonly PropertyInfo? _property;
-    // Key this member is (de)serialized under. Equals its name except for a field shadowed by a
-    // same-named field further down the hierarchy, which is qualified so the two don't collide.
+    // Key this member is (de)serialized under. Equals its name except for a member that shadows a
+    // same-named base member, which is qualified so the two don't collide.
     public readonly string SerializedName;
     public readonly string? SerializeIfCondition;
     public readonly bool HasIgnoreOnNull;
@@ -213,42 +213,39 @@ public static class ReflectionUtils
                                      BindingFlags.Instance |
                                      BindingFlags.DeclaredOnly;
 
-            // Start with the current type
-            List<CachedFieldInfo> fields = new List<CachedFieldInfo>();
-            HashSet<string> seenNames = new();
+            // Walk up the inheritance hierarchy to collect members from all base types, most derived first.
+            List<MemberInfo> members = new();
             Type? currentType = targetType;
-
-            // Walk up the inheritance hierarchy to collect fields from all base types. The most-derived
-            // field of a shadowed name is seen first and keeps the plain name; any same-named base field
-            // is qualified by its declaring type so both survive instead of colliding on one key.
             while (currentType != null && currentType != typeof(object))
             {
                 foreach (var field in currentType.GetFields(flags))
-                {
-                    if (!IsFieldSerializable(field))
-                        continue;
-
-                    string serializedName = seenNames.Add(field.Name)
-                        ? field.Name
-                        : $"{field.Name}@{field.DeclaringType!.FullName}";
-                    fields.Add(new CachedFieldInfo(field, serializedName));
-                }
+                    if (IsFieldSerializable(field))
+                        members.Add(field);
 
                 foreach (var property in currentType.GetProperties(flags))
-                {
-                    if (!IsPropertySerializable(property))
-                        continue;
-
-                    string serializedName = seenNames.Add(property.Name)
-                        ? property.Name
-                        : $"{property.Name}@{property.DeclaringType!.FullName}";
-                    fields.Add(new CachedFieldInfo(property, serializedName));
-                }
+                    if (IsPropertySerializable(property))
+                        members.Add(property);
 
                 currentType = currentType.BaseType;
             }
 
-            return fields.ToArray();
+            // The base most member of a shadowed name keeps the plain name, so adding a shadowing member in
+            // a subclass leaves existing data with the member that wrote it. Any other one is qualified by
+            // its declaring type so both survive instead of colliding on one key.
+            HashSet<string> seenNames = new();
+            var fields = new CachedFieldInfo[members.Count];
+            for (int i = members.Count - 1; i >= 0; i--)
+            {
+                MemberInfo member = members[i];
+                string serializedName = seenNames.Add(member.Name)
+                    ? member.Name
+                    : $"{member.Name}@{member.DeclaringType!.FullName}";
+                fields[i] = member is FieldInfo field
+                    ? new CachedFieldInfo(field, serializedName)
+                    : new CachedFieldInfo((PropertyInfo)member, serializedName);
+            }
+
+            return fields;
         });
     }
 
