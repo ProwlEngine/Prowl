@@ -29,13 +29,19 @@ public sealed class AnyObjectFormat : ISerializationFormat
             context.idToObject[id.Value] = value;
         }
 
+        // A throw from here on must not escape: this object's $id is already handed out, so dropping its
+        // definition would leave every other reference to it pointing at an empty placeholder.
         if (value is ISerializationCallbackReceiver callback)
-            callback.OnBeforeSerialize();
+        {
+            try { callback.OnBeforeSerialize(); }
+            catch (Exception ex) { Serializer.Logger.Error($"OnBeforeSerialize threw on {actualType.FullName}", ex); }
+        }
 
         // Serialize the object's data
         if (value is ISerializable serializable)
         {
-            serializable.Serialize(ref compound, context);
+            try { serializable.Serialize(ref compound, context); }
+            catch (Exception ex) { Serializer.Logger.Error($"Serialize threw on {actualType.FullName}, keeping what it wrote", ex); }
         }
         else
         {
@@ -179,7 +185,8 @@ public sealed class AnyObjectFormat : ISerializationFormat
     {
         if (result is ISerializable serializable)
         {
-            serializable.Deserialize(value, context);
+            try { serializable.Deserialize(value, context); }
+            catch (Exception ex) { Serializer.Logger.Error($"Deserialize threw on {result.GetType().FullName}, keeping what it loaded", ex); }
         }
         else
         {
@@ -206,8 +213,16 @@ public sealed class AnyObjectFormat : ISerializationFormat
             }
         }
 
-        if (result is ISerializationCallbackReceiver callback)
-            callback.OnAfterDeserialize();
+        InvokeAfterDeserialize(result, context);
+    }
+
+    private static void InvokeAfterDeserialize(object target, SerializationContext context)
+    {
+        if (target is ISerializationCallbackReceiver callback)
+        {
+            try { callback.OnAfterDeserialize(); }
+            catch (Exception ex) { Serializer.Logger.Error($"OnAfterDeserialize threw on {target.GetType().FullName}", ex); }
+        }
     }
 
     /// <summary>
@@ -223,7 +238,8 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         if (target is ISerializable serializable)
         {
-            serializable.Deserialize(value, context);
+            try { serializable.Deserialize(value, context); }
+            catch (Exception ex) { Serializer.Logger.Error($"Deserialize threw on {objectType.FullName}, keeping what it loaded", ex); }
         }
         else
         {
@@ -244,8 +260,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
             }
         }
 
-        if (target is ISerializationCallbackReceiver callback)
-            callback.OnAfterDeserialize();
+        InvokeAfterDeserialize(target, context);
     }
 
     private static object? DeserializePrimitiveValue(EchoObject value, Type targetType)
