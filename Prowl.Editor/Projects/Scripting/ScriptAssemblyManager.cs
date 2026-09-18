@@ -24,6 +24,7 @@ public static class ScriptAssemblyManager
     private static bool _recompileRequested;
     private static DateTime _lastScriptChange;
     private static bool _isCompiling;
+    private static bool _startupCompilePending;
     private static readonly object _pendingLock = new();
     private static ScriptCompiler.CompileResult? _pendingResult; // published cross-thread under _pendingLock
     private static DateTime _compileStartedUtc; // when the in-flight compile began, for the summary timing
@@ -91,19 +92,49 @@ public static class ScriptAssemblyManager
         _lastScriptChange = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// The compile a freshly-opened project waits on before its scene may load. True from
+    /// <see cref="RequestStartupCompile"/> until that compile has been decided, whichever way it went.
+    /// </summary>
+    public static bool AwaitingStartupCompile => _startupCompilePending;
+
+    /// <summary>
+    /// Ask for the compile that has to happen before the project's scene is read.
+    /// <para/>
+    /// A project whose scripts have never been built has no assembly on disk, so loading its scene first
+    /// would deserialize every user component against types that do not exist yet. They come back as
+    /// <c>MissingMonobehaviour</c>, and Echo negative-caches each name it could not resolve, so they stay
+    /// missing for the rest of the session even once the assembly lands. The scene waits on this instead.
+    /// <para/>
+    /// Unlike <see cref="RequestRecompile"/> this skips the debounce (nothing is still being typed at
+    /// startup) and runs whether or not the window has focus, since the first scene load is blocked
+    /// behind it and alt-tabbing away must not strand the editor with no scene.
+    /// </summary>
+    public static void RequestStartupCompile()
+    {
+        _recompileRequested = true;
+        _startupCompilePending = true;
+        _lastScriptChange = DateTime.MinValue;
+    }
+
+    /// <summary>Release whatever is waiting on the startup compile. Idempotent.</summary>
+    private static void SettleStartupCompile() => _startupCompilePending = false;
+
     /// <summary>Call once per frame. Triggers compilation after debounce period.</summary>
     public static void Update()
     {
         if (ConsumeFinishedCompile()) return;
 
         if (!_recompileRequested || _isCompiling) return;
-        if (Project.Current == null) return;
+        if (Project.Current == null) { SettleStartupCompile(); return; }
 
         // Only compile when the editor window is focused (don't spam while user is editing externally).
-        if (!Window.IsFocused) return;
+        // A startup compile is exempt: the first scene load is waiting on it, so leaving the window
+        // would otherwise leave the editor sitting on an empty scene until focus came back.
+        if (!_startupCompilePending && !Window.IsFocused) return;
 
-        // Wait for debounce
-        if (DateTime.UtcNow - _lastScriptChange < DebounceDelay) return;
+        // Wait for debounce (nothing is mid-edit at startup, so that compile skips it)
+        if (!_startupCompilePending && DateTime.UtcNow - _lastScriptChange < DebounceDelay) return;
 
         _recompileRequested = false;
 
@@ -112,9 +143,13 @@ public static class ScriptAssemblyManager
             Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any();
         bool hasPackages = ScriptCompiler.ProjectDeclaresPackages(project);
 
-        // Nothing to build and no packages to restore, so there is nothing to do.
+        // Nothing to build and no packages to restore, so there is nothing to do - and nothing for a
+        // waiting scene load to gain by waiting any longer.
         if (!hasScripts && !hasPackages)
+        {
+            SettleStartupCompile();
             return;
+        }
 
         _isCompiling = true;
         _compileStartedUtc = DateTime.UtcNow;
@@ -156,6 +191,10 @@ public static class ScriptAssemblyManager
             _pendingResult = null;
         }
         _isCompiling = false;
+
+        // Decided, whichever way it went. A compile that failed leaves the scene no better off for
+        // waiting, and the errors are in the console, so release the startup gate on every outcome.
+        SettleStartupCompile();
 
         int elapsedMs = (int)(DateTime.UtcNow - _compileStartedUtc).TotalMilliseconds;
 
@@ -474,6 +513,14 @@ public static class ScriptAssemblyManager
         {
             DebounceDelay = TimeSpan.FromSeconds(1);
             LoadAssemblies(project);
+
+            // Echo negative-caches every type name it fails to resolve and never retries it, so any name
+            // looked up before these assemblies existed is still remembered as missing. The migrate path
+            // clears those through EchoCacheMigrator; this path runs no walk, so clear them here. Matters
+            // when the startup compile failed and the scene loaded anyway - the retry after the user fixes
+            // the errors comes back through here, and without this the types stay missing regardless.
+            Prowl.Echo.Serializer.ClearCache();
+
             EditorApplication.Instance?.ReinitializeAfterReload();
             return true;
         }
