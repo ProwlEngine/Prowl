@@ -14,7 +14,6 @@
     <Project Path="Unwrapper/Unwrapper/Unwrapper.csproj" />
     <Project Path="Wicked/Prowl.Wicked/Prowl.Wicked.csproj" />
     <Project Path="Rosetta/Rosetta/Rosetta.csproj" />
-    <Project Path="Drift/Drift/Drift.csproj" />
     <Project Path="Slang/Slang/Prowl.Slang.csproj" />
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
     <Project Path="Graphite/ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
