@@ -111,7 +111,7 @@ public class EditorApplication : Game
                 // RequestStartupCompile skips the debounce time entirely and starts the compile process right away.
                 // This is crucial since without assemblies correctly compiled the scene would load in with broken
                 // references, which require correct script data to be in
-                ScriptAssemblyManager.RequestStartupCompile();
+                ScriptAssemblyManager.RequestRecompile(true);
 
                 projectAlreadyInitialized = true;
                 Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
@@ -446,7 +446,7 @@ public class EditorApplication : Game
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
 
                 // Compile before the scene is read - see the --project path above for why.
-                ScriptAssemblyManager.RequestStartupCompile();
+                ScriptAssemblyManager.RequestRecompile(true);
 
                 // Rebuild the scan-based registries (mesh features, menu items) against the loaded assemblies.
                 ReinitializeRegistries();

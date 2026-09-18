@@ -86,9 +86,14 @@ public static class ScriptAssemblyManager
     internal static bool RecompilePending { get => _recompileRequested; set => _recompileRequested = value; }
 
     /// <summary>Signal that scripts have changed and need recompilation.</summary>
-    public static void RequestRecompile()
+    /// <param name="isStartup"> When true, this skips the debounce (nothing is still being typed at
+    /// startup) and runs whether or not the window has focus, since the first scene load is blocked
+    /// behind it and alt-tabbing away must not strand the editor with no scene.</param>
+    public static void RequestRecompile(bool isStartup = false)
     {
         _recompileRequested = true;
+        if (isStartup)
+            _startupCompilePending = true;
         _lastScriptChange = DateTime.UtcNow;
     }
 
@@ -97,25 +102,6 @@ public static class ScriptAssemblyManager
     /// <see cref="RequestStartupCompile"/> until that compile has been decided, whichever way it went.
     /// </summary>
     public static bool AwaitingStartupCompile => _startupCompilePending;
-
-    /// <summary>
-    /// Ask for the compile that has to happen before the project's scene is read.
-    /// <para/>
-    /// A project whose scripts have never been built has no assembly on disk, so loading its scene first
-    /// would deserialize every user component against types that do not exist yet. They come back as
-    /// <c>MissingMonobehaviour</c>, and Echo negative-caches each name it could not resolve, so they stay
-    /// missing for the rest of the session even once the assembly lands. The scene waits on this instead.
-    /// <para/>
-    /// Unlike <see cref="RequestRecompile"/> this skips the debounce (nothing is still being typed at
-    /// startup) and runs whether or not the window has focus, since the first scene load is blocked
-    /// behind it and alt-tabbing away must not strand the editor with no scene.
-    /// </summary>
-    public static void RequestStartupCompile()
-    {
-        _recompileRequested = true;
-        _startupCompilePending = true;
-        _lastScriptChange = DateTime.MinValue;
-    }
 
     /// <summary>Release whatever is waiting on the startup compile. Idempotent.</summary>
     private static void SettleStartupCompile() => _startupCompilePending = false;
@@ -515,9 +501,9 @@ public static class ScriptAssemblyManager
             LoadAssemblies(project);
 
             // Echo negative-caches every type name it fails to resolve and never retries it, so any name
-            // looked up before these assemblies existed is still remembered as missing. The migrate path
-            // clears those through EchoCacheMigrator; this path runs no walk, so clear them here. Matters
-            // when the startup compile failed and the scene loaded anyway - the retry after the user fixes
+            // looked up before these assemblies existed is still remembered as missing.
+            // The migrate path clears those through EchoCacheMigrator; this path runs no walk, so clear them here.
+            // Matters when the startup compile failed and the scene loaded anyway - the retry after the user fixes
             // the errors comes back through here, and without this the types stay missing regardless.
             Prowl.Echo.Serializer.ClearCache();
 
