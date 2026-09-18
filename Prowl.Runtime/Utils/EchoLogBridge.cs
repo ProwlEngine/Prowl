@@ -13,12 +13,6 @@ namespace Prowl.Runtime;
 /// <summary>
 /// Routes Echo's serializer diagnostics into <see cref="Debug"/>.
 /// <para/>
-/// Echo defaults <see cref="Serializer.Logger"/> to a logger that discards everything, and every one
-/// of its own failure sites is a swallowed exception: a field that throws while being written is
-/// caught, omitted from the output, and the object is saved without it. Left unrouted that is silent
-/// data loss - a scene saves "successfully" minus whatever failed, and the gap only surfaces on a
-/// later load as missing values or broken references, far from the save that caused it.
-/// <para/>
 /// Installed by a module initializer rather than from a startup path, so it is live for the editor,
 /// the players, headless runs and tests alike, before anything can read or write a scene. There is no
 /// entry point left to forget it in.
