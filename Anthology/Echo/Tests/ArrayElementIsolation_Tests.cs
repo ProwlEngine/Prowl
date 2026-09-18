@@ -19,7 +19,7 @@ namespace Prowl.Echo.Test
         }
 
         [Fact]
-        public void OneThrowingElement_LeavesItNullAndKeepsTheRest()
+        public void OneThrowingElement_KeepsItAndTheRest()
         {
             object[] source = { "a", new ThrowsOnDeserialize(), "c" };
             var clone = Serializer.Deserialize<object[]>(Serializer.Serialize(source));
@@ -27,7 +27,7 @@ namespace Prowl.Echo.Test
             Assert.NotNull(clone);
             Assert.Equal(3, clone!.Length);
             Assert.Equal("a", clone[0]);
-            Assert.Null(clone[1]);
+            Assert.IsType<ThrowsOnDeserialize>(clone[1]);
             Assert.Equal("c", clone[2]);
         }
     }
