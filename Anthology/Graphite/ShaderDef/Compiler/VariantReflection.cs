@@ -19,26 +19,22 @@ internal static class VariantReflection
 
 
     /// <summary>
-    /// Collects variant axes visible when compiling requiredModule. linkedModules gets the required
-    /// module plus any other loaded module declaring a matching extern, so those get linked in too.
+    /// Collects variant axes declared by requiredModule or any module it transitively imports.
+    /// linkedModules gets the required module plus any of those declaring a matching extern.
     /// </summary>
     public static List<VariantSpace> CollectVariantSpaces(Session session, Module requiredModule, out List<Module> linkedModules)
     {
         linkedModules = [requiredModule];
 
-        List<Module> loadedModules = [];
-        int loadedCount = session.GetLoadedModuleCount();
-        for (int i = 0; i < loadedCount; i++)
-            loadedModules.Add(session.GetLoadedModule(i));
+        // The session is reused across every shader compiled during its lifetime, so GetLoadedModule
+        // enumerates modules belonging to unrelated shaders too. Only modules this pass transitively
+        // imports can define an axis it could read, so everything else is dropped up front.
+        List<Module> scopedModules = ScopeToImports(session, requiredModule);
 
         List<(Module, string[])> moduleExterns = [];
         List<(Module Module, VariantSpace Space)> moduleVariants = [];
 
-        // Collect all axes and extern declarations, tagged with their owning module. The session is
-        // reused across every shader compiled during its lifetime, so GetLoadedModule enumerates
-        // modules belonging to unrelated shaders too; the owning module is tracked here so unrelated
-        // axes can be filtered out below instead of polluting this shader's variant space.
-        foreach (Module loaded in loadedModules)
+        foreach (Module loaded in scopedModules)
         {
             DeclReflection[] decls = [.. GetExternFields(loaded)];
             string[] declNames = new string[decls.Length];
@@ -48,7 +44,7 @@ internal static class VariantReflection
                 DeclReflection decl = decls[j];
                 declNames[j] = decl.Name;
 
-                if (TryGetAxis(decl, loadedModules, out VariantSpace space))
+                if (TryGetAxis(decl, scopedModules, out VariantSpace space))
                     moduleVariants.Add((loaded, space));
             }
 
@@ -73,6 +69,44 @@ internal static class VariantReflection
         }
 
         return spaces;
+    }
+
+
+    // The modules requiredModule transitively imports, itself included. Slang reports dependencies by
+    // unique identity for file-backed modules and by file path for ones loaded from a source string,
+    // so a module matches on either. A module identifiable by neither is kept, since over-enumerating
+    // an axis only costs compile time while dropping a live one renders the wrong variant.
+    private static List<Module> ScopeToImports(Session session, Module requiredModule)
+    {
+        HashSet<string> dependencies = [];
+        int dependencyCount = requiredModule.GetDependencyFileCount();
+        for (int i = 0; i < dependencyCount; i++)
+            dependencies.Add(requiredModule.GetDependencyFilePath(i));
+
+        List<Module> scoped = [];
+        int loadedCount = session.GetLoadedModuleCount();
+
+        for (int i = 0; i < loadedCount; i++)
+        {
+            Module loaded = session.GetLoadedModule(i);
+
+            if (loaded.Equals(requiredModule))
+            {
+                scoped.Add(loaded);
+                continue;
+            }
+
+            string identity = loaded.GetUniqueIdentity();
+            string path = loaded.GetFilePath();
+
+            bool identifiable = !string.IsNullOrEmpty(identity) || !string.IsNullOrEmpty(path);
+            bool imported = dependencies.Contains(identity) || dependencies.Contains(path);
+
+            if (!identifiable || imported)
+                scoped.Add(loaded);
+        }
+
+        return scoped;
     }
 
 
