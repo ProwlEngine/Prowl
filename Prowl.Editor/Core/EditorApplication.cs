@@ -43,6 +43,8 @@ public class EditorApplication : Game
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
     private bool _wasFocused = true;
+    // A project's scene is queued here and opened by the frame loop once its scripts have been built.
+    private bool _sceneLoadPending;
     private IDisposable? _origamiScope;
 
     private string _curDefaultFont;
@@ -106,8 +108,10 @@ public class EditorApplication : Game
                 // Load user script assemblies before registry scanning
                 ScriptAssemblyManager.LoadAssemblies(project);
 
-                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
-                ScriptAssemblyManager.RequestRecompile();
+                // RequestStartupCompile skips the debounce time entirely and starts the compile process right away.
+                // This is crucial since without assemblies correctly compiled the scene would load in with broken
+                // references, which require correct script data to be in
+                ScriptAssemblyManager.RequestRecompile(true);
 
                 projectAlreadyInitialized = true;
                 Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
@@ -151,7 +155,9 @@ public class EditorApplication : Game
             if (savedLayout != null)
                 _dockSpace.Root = savedLayout;
 
-            EditorSceneManager.EnsureSceneLoaded();
+            // Rather than loading the scene here, we queue it: the frame loop opens it once the startup compile settles,
+            // so the scene is never read against types that have not been built yet.
+            _sceneLoadPending = true;
 
             // Skip launcher and intro animation entirely
             ProjectLauncher.Close();
@@ -439,8 +445,8 @@ public class EditorApplication : Game
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
 
-                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
-                ScriptAssemblyManager.RequestRecompile();
+                // Compile before the scene is read - see the --project path above for why.
+                ScriptAssemblyManager.RequestRecompile(true);
 
                 // Rebuild the scan-based registries (mesh features, menu items) against the loaded assemblies.
                 ReinitializeRegistries();
@@ -452,8 +458,8 @@ public class EditorApplication : Game
                 else
                     _dockSpace.Root = CreateDefaultLayout();
 
-                // Ensure a scene is always loaded
-                EditorSceneManager.EnsureSceneLoaded();
+                // Ensure a scene is always loaded (once the startup compile has settled).
+                _sceneLoadPending = true;
             }
         }
 
@@ -475,11 +481,22 @@ public class EditorApplication : Game
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
 
-            // Check for script recompilation
-            ScriptAssemblyManager.Update();
-
             // Lazy thumbnail generation one per frame
             ThumbnailGenerator.ProcessOne();
+        }
+
+        // Check for script recompilation. Not gated behind canProcessAssets while a startup compile is
+        // outstanding: the project's first scene load is waiting on that compile, and reimport gating
+        // (or an unfocused window) must not be able to strand the editor with no scene open.
+        if (canProcessAssets || ScriptAssemblyManager.AwaitingStartupCompile)
+            ScriptAssemblyManager.Update();
+
+        // The project's scene opens only once its scripts have been built, so it is never deserialized
+        // against types that do not exist yet.
+        if (_sceneLoadPending && !ScriptAssemblyManager.AwaitingStartupCompile)
+        {
+            _sceneLoadPending = false;
+            EditorSceneManager.EnsureSceneLoaded();
         }
 
         // Give idle assets a chance to be evicted. Not gated behind canProcessAssets/window focus -
