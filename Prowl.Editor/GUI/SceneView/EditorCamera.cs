@@ -130,6 +130,52 @@ public class EditorCamera
     /// <summary>Far plane to put back when leaving orthographic, which moves it to suit the zoom.</summary>
     private float _perspectiveFarClip;
 
+    /// <summary>Vertical field of view in degrees, used by perspective views and by focus framing.</summary>
+    public float FieldOfView
+    {
+        get => _camera.FieldOfView;
+        set => _camera.FieldOfView = Math.Clamp(value, 5f, 170f);
+    }
+
+    /// <summary>Distance to the near clip plane.</summary>
+    public float NearClip
+    {
+        get => _camera.NearClipPlane;
+        set => _camera.NearClipPlane = Math.Clamp(value, 0.001f, MathF.Max(0.002f, _camera.FarClipPlane - 0.001f));
+    }
+
+    /// <summary>Distance to the far clip plane. Orthographic views drive this from the zoom instead.</summary>
+    public float FarClip
+    {
+        get => _camera.IsOrthographic ? _perspectiveFarClip : _camera.FarClipPlane;
+        set
+        {
+            _perspectiveFarClip = MathF.Max(_camera.NearClipPlane + 0.001f, value);
+            if (!_camera.IsOrthographic) _camera.FarClipPlane = _perspectiveFarClip;
+        }
+    }
+
+    /// <summary>Half the height the orthographic view covers, in world units.</summary>
+    public float OrthographicSize
+    {
+        get => _camera.OrthographicSize;
+        set => SetOrthographicSize(value);
+    }
+
+    /// <summary>Fly speed in units per second.</summary>
+    public void SetMoveSpeed(float speed) => _moveSpeed = Math.Clamp(speed, 0.1f, 1000f);
+
+    /// <summary>Restores the lens to the defaults a fresh editor camera starts with.</summary>
+    public void ResetLens()
+    {
+        if (_camera.IsOrthographic) ToggleProjection();
+        _camera.FieldOfView = 60f;
+        _camera.NearClipPlane = 0.01f;
+        _perspectiveFarClip = 1000f;
+        _camera.FarClipPlane = _perspectiveFarClip;
+        _moveSpeed = 5f;
+    }
+
     /// <summary>Set the camera position directly.</summary>
     public void SetPosition(Float3 position)
     {
@@ -535,11 +581,14 @@ public class EditorCamera
         int count = 0;
         Float3 positionSum = Float3.Zero;
 
+        Float3 pivotNormal = Float3.Zero;
+
         foreach (var go in Selection.GetSelected<GameObject>())
         {
             count++;
             positionSum += go.Transform.Position;
             AccumulateRendererBounds(go, ref min, ref max, ref anyBounds);
+            AccumulateUIBounds(go, ref min, ref max, ref anyBounds, ref pivotNormal);
         }
 
         if (anyBounds) return (min + max) * 0.5f;
@@ -556,13 +605,19 @@ public class EditorCamera
         int goCount = 0;
         Float3 positionSum = Float3.Zero;
 
+        bool anyRenderer = false;
+        Float3 uiNormal = Float3.Zero;
+        bool anyUI = false;
+
         foreach (var go in Selection.GetSelected<GameObject>())
         {
             goCount++;
             positionSum += go.Transform.Position;
-            AccumulateRendererBounds(go, ref min, ref max, ref anyBounds);
+            AccumulateRendererBounds(go, ref min, ref max, ref anyRenderer);
+            AccumulateUIBounds(go, ref min, ref max, ref anyUI, ref uiNormal);
         }
         if (goCount == 0) return;
+        anyBounds = anyRenderer || anyUI;
 
         // Frame size is driven by renderer bounds when any are present; otherwise fall
         // back to the Transform position(s) so even empty GOs (lights, cameras) focus.
@@ -584,6 +639,15 @@ public class EditorCamera
         float fovRad = _camera.FieldOfView * MathF.PI / 180f;
         float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
         dist = MathF.Max(dist, 0.5f);
+
+        // A UI-only selection is a flat rect, so the view swings around to face it from whichever side
+        // the camera is already on. Anything with geometry keeps the angle it was viewed from.
+        if (anyUI && !anyRenderer && Float3.LengthSquared(uiNormal) > 1e-8f)
+        {
+            Float3 facing = Float3.Normalize(uiNormal);
+            if (Float3.Dot(facing, _position - target) < 0f) facing = -facing;
+            FaceDirection(-facing);
+        }
 
         // Set orbit distance and position camera to look at target
         _orbitDistance = dist;
@@ -611,6 +675,62 @@ public class EditorCamera
         }
         foreach (var child in go.Children)
             AccumulateRendererBounds(child, ref min, ref max, ref any);
+    }
+
+    /// <summary>
+    /// Grows the bounds by the world rect of any canvas or UI element on this object or below it, and
+    /// reports the facing of the last rect seen so the view can be squared up to it.
+    /// </summary>
+    private static void AccumulateUIBounds(GameObject go, ref Float3 min, ref Float3 max, ref bool any, ref Float3 normal)
+    {
+        var canvas = go.GetComponent<GameCanvas>();
+        if (canvas.IsValid())
+        {
+            Rect root = canvas.RootRect;
+            Float4x4 toWorld = canvas.CanvasToWorld;
+            Include(Float4x4.TransformPoint(new Float3((float)root.Min.X, (float)root.Min.Y, 0f), toWorld), ref min, ref max, ref any);
+            Include(Float4x4.TransformPoint(new Float3((float)root.Min.X, (float)root.Max.Y, 0f), toWorld), ref min, ref max, ref any);
+            Include(Float4x4.TransformPoint(new Float3((float)root.Max.X, (float)root.Max.Y, 0f), toWorld), ref min, ref max, ref any);
+            Include(Float4x4.TransformPoint(new Float3((float)root.Max.X, (float)root.Min.Y, 0f), toWorld), ref min, ref max, ref any);
+            normal = new Float3(toWorld.c2.X, toWorld.c2.Y, toWorld.c2.Z);
+        }
+
+        if (go.RectTransform is { } rect)
+        {
+            rect.ForceUpdateRectTransforms();
+            Float3[] corners = new Float3[4];
+            rect.GetWorldCorners(corners);
+            if (corners[0] != corners[2])
+            {
+                foreach (Float3 corner in corners)
+                    Include(corner, ref min, ref max, ref any);
+
+                Float3 edgeX = corners[3] - corners[0];
+                Float3 edgeY = corners[1] - corners[0];
+                normal = Float3.Cross(edgeX, edgeY);
+            }
+        }
+
+        foreach (var child in go.Children)
+            AccumulateUIBounds(child, ref min, ref max, ref any, ref normal);
+    }
+
+    private static void Include(Float3 point, ref Float3 min, ref Float3 max, ref bool any)
+    {
+        min = new Float3(MathF.Min(min.X, point.X), MathF.Min(min.Y, point.Y), MathF.Min(min.Z, point.Z));
+        max = new Float3(MathF.Max(max.X, point.X), MathF.Max(max.Y, point.Y), MathF.Max(max.Z, point.Z));
+        any = true;
+    }
+
+    /// <summary>Points the camera along <paramref name="forward"/> without moving it.</summary>
+    private void FaceDirection(Float3 forward)
+    {
+        if (Float3.LengthSquared(forward) < 1e-8f) return;
+
+        forward = Float3.Normalize(forward);
+        _yaw = Maths.ToDegrees(MathF.Atan2(forward.X, forward.Z));
+        _pitch = Math.Clamp(Maths.ToDegrees(MathF.Asin(-forward.Y)), -89f, 89f);
+        UpdateTransform();
     }
 
     /// <summary> Sets the camera's yaw and pitch without changing its position. Pitch is clamped to +/-89 degrees. </summary>
