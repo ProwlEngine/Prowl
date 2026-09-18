@@ -1044,7 +1044,7 @@ public class ProjectPanel : DockPanel
             }, icon: EditorIcons.ArrowsRotate);
 
             builder.Item(Loc.Get("menu.assets.reload_scripts"),
-                Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.RequestRecompile,
+                () => Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.RequestRecompile(),
                 icon: EditorIcons.ArrowsRotate);
         });
     }
