@@ -12,7 +12,6 @@
     <Project Path="Crumb/Crumb/Prowl.Crumb.csproj" />
     <Project Path="Photonic/Photonic/Photonic.csproj" />
     <Project Path="Unwrapper/Unwrapper/Unwrapper.csproj" />
-    <Project Path="Wicked/Prowl.Wicked/Prowl.Wicked.csproj" />
     <Project Path="Rosetta/Rosetta/Rosetta.csproj" />
     <Project Path="Slang/Slang/Prowl.Slang.csproj" />
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
@@ -39,7 +38,6 @@
     <Project Path="Clay/Tests/Clay.Tests.csproj" />
     <Project Path="Crumb/Tests/Prowl.Crumb.Tests.csproj" />
     <Project Path="Unwrapper/Tests/Unwrapper.Tests.csproj" />
-    <Project Path="Wicked/Prowl.Wicked.Tests/Prowl.Wicked.Tests.csproj" />
     <Project Path="Rosetta/Tests/Rosetta.Tests.csproj" />
     <Project Path="Paper/Tests/Paper.Tests.csproj" />
     <Project Path="Scaffold/Tests/Scaffold.Tests.csproj" />
