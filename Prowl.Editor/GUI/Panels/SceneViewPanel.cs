@@ -115,9 +115,12 @@ public class SceneViewPanel : DockPanel
                     () => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; },
                     () => _editorCamera?.ShowGizmos ?? true);
 
-                b.Toggle(Loc.Get("scene.camera_settings"),
-                    () => _showCameraSettings = !_showCameraSettings,
-                    () => _showCameraSettings);
+                if (_editorCamera != null)
+                {
+                    var cam = _editorCamera;
+                    b.Header(Loc.Get("scene.camera"));
+                    b.Custom(p => DrawCameraSettings(p, cam));
+                }
 
                 b.Header(Loc.Get("scene.navigation"));
                 b.Toggle(Loc.Get("scene.navmesh_always_show"),
@@ -143,70 +146,45 @@ public class SceneViewPanel : DockPanel
             }));
     }
 
-    private bool _showCameraSettings;
-
-    // Floating editor-camera panel, top-right of the viewport. Lens settings only: what the camera
-    // sees from where it is, rather than where it is, which the navigation controls own.
-    private void DrawCameraSettings(Paper paper, Scribe.FontFile font)
+    // Lens settings only: what the camera sees from where it is, rather than where it is, which the
+    // navigation controls own.
+    private static void DrawCameraSettings(Paper paper, EditorCamera cam)
     {
-        var cam = _editorCamera;
-        if (cam == null) return;
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
 
-        using (paper.Column("sv_cam")
-            .PositionType(PositionType.SelfDirected)
-            .Position(UnitValue.StretchOne, 12)
-            .Margin(0, 12, 0, 0)
-            .Width(232).Height(UnitValue.Auto)
-            .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(10, 10, 8, 10).Gap(6)
-            .BackgroundColor(EditorTheme.Glass)
-            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .Enter())
-        {
-            using (paper.Row("sv_cam_hdr").Height(18).Enter())
-            {
-                paper.Box("sv_cam_title").Width(UnitValue.StretchOne)
-                    .Text(Loc.Get("scene.camera"), font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+        CameraRow(paper, font, "sv_cam_proj", Loc.Get("scene.camera_orthographic"), () =>
+            Origami.Switch(paper, "sv_cam_proj_v", cam.IsOrthographic, _ => cam.ToggleProjection()).NoLabel().Show());
 
-                paper.Box("sv_cam_close").Width(18).Height(18).Rounded(Origami.Current.Metrics.SmallRounding)
-                    .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                    .Text(EditorIcons.X, font).TextColor(EditorTheme.Ink300)
-                    .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => _showCameraSettings = false);
-            }
+        if (cam.IsOrthographic)
+            CameraRow(paper, font, "sv_cam_size", Loc.Get("scene.camera_ortho_size"), () =>
+                Origami.NumericField<float>(paper, "sv_cam_size_v", cam.OrthographicSize, v => cam.OrthographicSize = v).Show());
+        else
+            CameraRow(paper, font, "sv_cam_fov", Loc.Get("scene.camera_fov"), () =>
+                Origami.Slider(paper, "sv_cam_fov_v", cam.FieldOfView, v => cam.FieldOfView = v, 10f, 120f).Format("F0").Show());
 
-            CameraRow(paper, font, "sv_cam_proj", Loc.Get("scene.camera_orthographic"), () =>
-                Origami.Switch(paper, "sv_cam_proj_v", cam.IsOrthographic, _ => cam.ToggleProjection()).NoLabel().Show());
+        CameraRow(paper, font, "sv_cam_near", Loc.Get("scene.camera_near"), () =>
+            Origami.NumericField<float>(paper, "sv_cam_near_v", cam.NearClip, v => cam.NearClip = v).Show());
 
-            if (cam.IsOrthographic)
-                CameraRow(paper, font, "sv_cam_size", Loc.Get("scene.camera_ortho_size"), () =>
-                    Origami.NumericField<float>(paper, "sv_cam_size_v", cam.OrthographicSize, v => cam.OrthographicSize = v).Show());
-            else
-                CameraRow(paper, font, "sv_cam_fov", Loc.Get("scene.camera_fov"), () =>
-                    Origami.Slider(paper, "sv_cam_fov_v", cam.FieldOfView, v => cam.FieldOfView = v, 10f, 120f).Format("F0").Show());
+        CameraRow(paper, font, "sv_cam_far", Loc.Get("scene.camera_far"), () =>
+            Origami.NumericField<float>(paper, "sv_cam_far_v", cam.FarClip, v => cam.FarClip = v).Show());
 
-            CameraRow(paper, font, "sv_cam_near", Loc.Get("scene.camera_near"), () =>
-                Origami.NumericField<float>(paper, "sv_cam_near_v", cam.NearClip, v => cam.NearClip = v).Show());
+        CameraRow(paper, font, "sv_cam_speed", Loc.Get("scene.camera_speed"), () =>
+            Origami.Slider(paper, "sv_cam_speed_v", cam.MoveSpeed, cam.SetMoveSpeed, 0.5f, 100f).Format("F1").Show());
 
-            CameraRow(paper, font, "sv_cam_far", Loc.Get("scene.camera_far"), () =>
-                Origami.NumericField<float>(paper, "sv_cam_far_v", cam.FarClip, v => cam.FarClip = v).Show());
-
-            CameraRow(paper, font, "sv_cam_speed", Loc.Get("scene.camera_speed"), () =>
-                Origami.Slider(paper, "sv_cam_speed_v", cam.MoveSpeed, cam.SetMoveSpeed, 0.5f, 100f).Format("F1").Show());
-
-            Origami.Button(paper, "sv_cam_reset", Loc.Get("scene.camera_reset"), cam.ResetLens).Height(22).Show();
-        }
+        Origami.Button(paper, "sv_cam_reset", Loc.Get("scene.camera_reset"), cam.ResetLens).FullWidth().Height(22).Show();
     }
 
     private static void CameraRow(Paper paper, Scribe.FontFile font, string id, string label, Action drawControl)
     {
-        using (paper.Row(id).Height(22).Gap(8).Enter())
+        float rh = Origami.Current.Metrics.RowHeight;
+        using (paper.Row(id).Height(rh).Gap(6).Enter())
         {
-            paper.Box($"{id}_l").Width(84)
-                .Text(label, font).TextColor(EditorTheme.Ink300)
+            paper.Box($"{id}_l").Width(70).Height(rh)
+                .Text(label, font).TextColor(EditorTheme.Ink300).TextTruncate()
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
-            using (paper.Row($"{id}_c").Width(UnitValue.StretchOne).Enter())
+            using (paper.Row($"{id}_c").Width(UnitValue.StretchOne).Height(rh).Enter())
                 drawControl();
         }
     }
@@ -546,8 +524,6 @@ public class SceneViewPanel : DockPanel
 
             // Floating transform-tools panel (top-left)
             DrawTransformTools(paper, font);
-            if (_showCameraSettings)
-                DrawCameraSettings(paper, font);
 
             // Speed indicator (shows briefly when scroll changes fly speed)
             DrawSpeedIndicator(paper, font, width, height);
@@ -725,7 +701,6 @@ public class SceneViewPanel : DockPanel
         state["near"] = _editorCamera.NearClip;
         state["far"] = _editorCamera.FarClip;
         state["speed"] = _editorCamera.MoveSpeed;
-        state["camSettings"] = _showCameraSettings;
         state["gizmos"] = _editorCamera.ShowGizmos;
         state["navAlwaysShow"] = NavMeshDebugDisplay.AlwaysShow;
         state["navShowDetail"] = NavMeshDebugDisplay.ShowDetail;
@@ -747,7 +722,6 @@ public class SceneViewPanel : DockPanel
         _pendingGrid = state["grid"]?.GetValue<bool>();
         _pendingLens = (state["fov"]?.GetValue<float>(), state["near"]?.GetValue<float>(),
                         state["far"]?.GetValue<float>(), state["speed"]?.GetValue<float>());
-        _showCameraSettings = state["camSettings"]?.GetValue<bool>() ?? false;
         _pendingGizmos = state["gizmos"]?.GetValue<bool>();
 
         NavMeshDebugDisplay.AlwaysShow = state["navAlwaysShow"]?.GetValue<bool>() ?? false;

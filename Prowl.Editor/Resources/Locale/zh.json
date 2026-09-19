@@ -28,7 +28,6 @@
   "scene.navmesh_show_detail": "显示 NavMesh 高度细节",
   "scene.navmesh_show_vertices": "显示 NavMesh 顶点",
   "scene.camera": "相机",
-  "scene.camera_settings": "相机设置",
   "scene.camera_orthographic": "正交",
   "scene.camera_fov": "视野",
   "scene.camera_ortho_size": "大小",

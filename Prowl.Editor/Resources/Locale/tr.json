@@ -28,7 +28,6 @@
   "scene.navmesh_show_detail": "NavMesh yukseklik ayrintisini goster",
   "scene.navmesh_show_vertices": "NavMesh koselerini goster",
   "scene.camera": "Kamera",
-  "scene.camera_settings": "Kamera ayarlari",
   "scene.camera_orthographic": "Ortografik",
   "scene.camera_fov": "Gorus alani",
   "scene.camera_ortho_size": "Boyut",

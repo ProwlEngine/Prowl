@@ -28,7 +28,6 @@
   "scene.navmesh_show_detail": "NavMesh の高さの詳細を表示",
   "scene.navmesh_show_vertices": "NavMesh の頂点を表示",
   "scene.camera": "カメラ",
-  "scene.camera_settings": "カメラ設定",
   "scene.camera_orthographic": "平行投影",
   "scene.camera_fov": "視野角",
   "scene.camera_ortho_size": "サイズ",

@@ -28,7 +28,6 @@
   "scene.navmesh_show_detail": "NavMesh Hoehendetails anzeigen",
   "scene.navmesh_show_vertices": "NavMesh Eckpunkte anzeigen",
   "scene.camera": "Kamera",
-  "scene.camera_settings": "Kameraeinstellungen",
   "scene.camera_orthographic": "Orthografisch",
   "scene.camera_fov": "Sichtfeld",
   "scene.camera_ortho_size": "Groesse",

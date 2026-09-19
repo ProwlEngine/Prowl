@@ -28,7 +28,6 @@
   "scene.navmesh_show_detail": "Afficher le detail de hauteur du NavMesh",
   "scene.navmesh_show_vertices": "Afficher les sommets du NavMesh",
   "scene.camera": "Camera",
-  "scene.camera_settings": "Parametres de la camera",
   "scene.camera_orthographic": "Orthographique",
   "scene.camera_fov": "Champ de vision",
   "scene.camera_ortho_size": "Taille",

@@ -28,7 +28,6 @@
   "scene.navmesh_show_detail": "NavMesh 높이 세부 정보 표시",
   "scene.navmesh_show_vertices": "NavMesh 정점 표시",
   "scene.camera": "카메라",
-  "scene.camera_settings": "카메라 설정",
   "scene.camera_orthographic": "직교",
   "scene.camera_fov": "시야각",
   "scene.camera_ortho_size": "크기",
