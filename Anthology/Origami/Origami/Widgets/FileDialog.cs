@@ -577,7 +577,16 @@ public static class FileDialog
                     .Text(mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font).TextColor(ink.C200)
                     .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 VC($"{id}_fnwrap", UnitValue.Stretch(), footH, () =>
-                    Origami.TextField(paper, $"{id}_fn", st.FileName, v => st.FileName = v)
+                    Origami.TextField(paper, $"{id}_fn", st.FileName, v =>
+                    {
+                        if (Path.IsPathRooted(v.Trim(['"', '\''])))
+                        {
+                            st.Selected = v.Trim(['"', '\'']);
+                            st.FileName = Path.GetFileName(st.Selected);
+                        }
+                        else
+                            st.Selected = v;
+                    })
                         .Width(UnitValue.Stretch()).Show());
                 VC($"{id}_cwrap", UnitValue.Auto, footH, () =>
                     Origami.Button(paper, $"{id}_cancel", "Cancel", () =>
