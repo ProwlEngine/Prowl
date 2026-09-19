@@ -37,6 +37,23 @@ public class PaperRenderer : ICanvasRenderer
     private const int BlurBaseShift = 2;
 
     private const int MaxBlurLevels = 6;
+
+    // Measured blur of the pipeline below, as a standard deviation in screen pixels. Rows are 1 to 4
+    // iterations, columns are offsets 1 to 3 in steps of 0.25. Offset 3 on one row matches offset 1 on
+    // the next, so walking the table gives one continuous range of strengths with no jump between rows.
+    private static readonly float[,] BlurSigmaTable =
+    {
+        { 4.17f, 5.02f, 5.69f, 6.36f, 6.93f, 7.43f, 7.86f, 8.32f, 8.72f },
+        { 8.72f, 11.07f, 12.64f, 14.04f, 15.15f, 16.09f, 16.93f, 17.89f, 18.80f },
+        { 17.63f, 23.15f, 26.25f, 28.84f, 30.90f, 32.71f, 34.39f, 36.37f, 38.25f },
+        { 35.35f, 47.56f, 53.39f, 58.16f, 62.10f, 65.67f, 69.04f, 73.03f, 76.81f },
+    };
+    private const float BlurOffsetMin = 1f;
+    private const float BlurOffsetStep = 0.25f;
+    // Measured blur of the half resolution capture alone, the sharpest backdrop available.
+    private const float CaptureSigma = 0.866f;
+    // A blur radius maps to a standard deviation of a quarter of it.
+    private const float SigmaPerRadius = 0.25f;
     private static readonly TextureImageFormat[] BlurFormat = [TextureImageFormat.Color4b];
     private Resources.Material _blurMat;
 
@@ -216,7 +233,7 @@ public class PaperRenderer : ICanvasRenderer
             float blurAmount = (float)drawCall.Brush.BackdropBlur;
             if (blurAmount > 0f)
             {
-                RenderTexture blurred = RenderBackdropBlur(cmd, blurAmount);
+                RenderTexture blurred = RenderBackdropBlur(cmd, blurAmount, out float blurMix);
 
                 cmd.SetRenderTarget(null);
                 cmd.SetViewport(0, 0, (uint)_fbWidth, (uint)_fbHeight);
@@ -224,6 +241,8 @@ public class PaperRenderer : ICanvasRenderer
                 cmd.SetShader(_shaderProgram);
                 cmd.SetMatrix("projection", in _projection);
                 cmd.SetTexture("backdropTexture", blurred.MainTexture);
+                cmd.SetTexture("backdropSharpTexture", _blurCapture!.MainTexture);
+                cmd.SetFloat("backdropMix", blurMix);
                 cmd.SetVector("viewportSize", new Float2(_fbWidth, _fbHeight));
                 cmd.SetInt("backdropFlipY", BackdropFlipY);
             }
@@ -276,17 +295,37 @@ public class PaperRenderer : ICanvasRenderer
     }
 
     /// <summary>
-    /// Maps a pixel blur radius onto a number of dual Kawase iterations plus a continuous sample
-    /// offset so the effective blur scales smoothly with radius even as the iteration count steps.
+    /// Maps a pixel blur radius onto dual Kawase iterations and a sample offset using the measured
+    /// <see cref="BlurSigmaTable"/>, so blur strength follows the radius smoothly. <paramref name="blurMix"/>
+    /// is how much of the blurred result to use over the sharp capture, below 1 only for radii weaker than
+    /// the pyramid's lightest blur.
     /// </summary>
-    private static void ComputeBlurParams(float radius, out int iterations, out float offset)
+    private static void ComputeBlurParams(float radius, out int iterations, out float offset, out float blurMix)
     {
-        // radius is in screen pixels, but the pyramid maths below works in base-level texels, and one
-        // of those spans 1 << BlurBaseShift pixels. Converting here is what makes a 22 pixel blur
-        // actually mean 22 pixels regardless of what resolution the pyramid starts at.
-        float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
-        iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
-        offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+        float sigma = radius * SigmaPerRadius;
+        float minSigma = BlurSigmaTable[0, 0];
+        iterations = 1;
+        offset = BlurOffsetMin;
+        blurMix = 1f;
+
+        if (sigma <= minSigma)
+        {
+            // Blending two kernels adds their variances by weight, so this weight gives the wanted spread.
+            float capture = CaptureSigma * CaptureSigma;
+            blurMix = Math.Clamp((sigma * sigma - capture) / (minSigma * minSigma - capture), 0f, 1f);
+            return;
+        }
+
+        int rows = BlurSigmaTable.GetLength(0), cols = BlurSigmaTable.GetLength(1);
+        int row = 0;
+        while (row < rows - 1 && sigma > BlurSigmaTable[row, cols - 1]) row++;
+        iterations = row + 1;
+
+        int col = 1;
+        while (col < cols - 1 && sigma > BlurSigmaTable[row, col]) col++;
+        float lo = BlurSigmaTable[row, col - 1], hi = BlurSigmaTable[row, col];
+        float t = Math.Clamp((sigma - lo) / (hi - lo), 0f, 1f);
+        offset = BlurOffsetMin + (col - 1 + t) * BlurOffsetStep;
     }
 
     /// <summary>
@@ -294,16 +333,16 @@ public class PaperRenderer : ICanvasRenderer
     /// UI shader's backdrop composite. When nothing has been drawn since the last blur and the radius
     /// is unchanged, the existing result is returned without redoing any of it.
     /// </summary>
-    private RenderTexture RenderBackdropBlur(CommandBuffer cmd, float radius)
+    private RenderTexture RenderBackdropBlur(CommandBuffer cmd, float radius, out float blurMix)
     {
         EnsureBlurTargets();
+        ComputeBlurParams(radius, out int iterations, out float offset, out blurMix);
         RenderTexture baseLevel = _blurLevels[0]!;
         if (!_backdropDirty && radius == _lastBlurRadius)
             return baseLevel;
 
         _backdropDirty = false;
         _lastBlurRadius = radius;
-        ComputeBlurParams(radius, out int iterations, out float offset);
 
         // A linear blit at exactly half size averages each two by two block, so the capture is a
         // proper box filter. Blitting straight to quarter size would skip most pixels and shimmer
