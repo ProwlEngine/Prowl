@@ -201,14 +201,19 @@ public class PreferencesPanel : DockPanel
                 DrawThemeRail(paper, font, railW);
                 paper.Box("pref_theme_rdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
-                Origami.ScrollView(paper, "pref_theme_ctrls", ctrlW, bodyH).Body(() =>
+                Origami.ScrollView(paper, "pref_theme_ctrls", ctrlW, bodyH).Body(view =>
                 {
-                    using (paper.Column("pref_theme_ctrl_col").Height(UnitValue.Auto)
+                    // At least as tall as the view, so the presets can center vertically when they fit.
+                    using (paper.Column("pref_theme_ctrl_col").Height(UnitValue.Auto).MinHeight(view.Height)
                         .Padding(PAD * 3, PAD * 3, PAD * 2, PAD * 3).Gap(SP).Enter())
                     {
                         switch (_themeCat)
                         {
-                            case "presets": DrawThemePresets(paper, font, s, theme); break;
+                            case "presets":
+                                using (paper.Column("pref_theme_pr_center").Height(UnitValue.Auto)
+                                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                                    DrawThemePresets(paper, font, s, theme);
+                                break;
                             case "colors":  DrawThemeColors(paper, s, theme); break;
                             case "type":    DrawThemeType(paper, s, theme); break;
                             case "layout":  DrawThemeLayout(paper, s, theme); break;

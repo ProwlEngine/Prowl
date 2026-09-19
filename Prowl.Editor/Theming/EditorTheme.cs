@@ -103,8 +103,8 @@ public static class EditorTheme
         t.Metrics = new OrigamiMetrics
         {
             Rounding          = Roundness,
-            ContainerRounding = Roundness + 2f,
-            SmallRounding     = MathF.Max(3f, Roundness * 0.5f),
+            ContainerRounding = Roundness > 0f ? Roundness + 2f : 0f,
+            SmallRounding     = Roundness * 0.5f,
             RowHeight         = RowHeight,
             HeaderHeight      = RowHeight,
             CompactHeight     = RowHeight - 4f,
@@ -321,8 +321,8 @@ public static class EditorTheme
     private static OrigamiTheme T => OrigamiTheme;
 
     // -- Neutral: editor depth stack. 100/200/500 are editor-specific; 300/400/600/700 map to the ramp. --
-    public static Color Neutral100 => Color.FromArgb(255, 6, 4, 9);        // void deepest base
-    public static Color Neutral200 => Color.FromArgb(240, 12, 10, 20);     // app shell
+    public static Color Neutral100 => WithAlpha(T.Neutral.C100, 255);      // void deepest base
+    public static Color Neutral200 => WithAlpha(T.Neutral.C400, 240);      // app shell
     public static Color Neutral300 => T.Neutral.C300;                      // panels / sidebar glass
     public static Color Neutral400 => T.Neutral.C500;                      // cards / raised surface
     public static Color Neutral500 => WithAlpha(T.BorderStrong, 46);   // border / separator

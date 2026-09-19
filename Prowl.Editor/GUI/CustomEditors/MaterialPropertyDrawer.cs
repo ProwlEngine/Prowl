@@ -37,7 +37,7 @@ public static class MaterialPropertyDrawer
         bool overridden = material.IsOverridden(prop.Name);
 
         using (paper.Row($"{id}_row")
-            .Height(EditorTheme.RowHeight)
+            .Height(UnitValue.Auto).MinHeight(EditorTheme.RowHeight)
             .Margin(0, EditorTheme.Spacing)
             .Enter())
         {
@@ -49,7 +49,7 @@ public static class MaterialPropertyDrawer
                 .BackgroundColor(overridden ? EditorTheme.Purple400 : System.Drawing.Color.Transparent)
                 .Rounded(1.5f);
 
-            using (paper.Box($"{id}_field").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).Enter())
+            using (paper.Box($"{id}_field").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(EditorTheme.RowHeight).Enter())
             {
                 DrawProperty(paper, id, material, prop, onChanged);
             }
