@@ -9,6 +9,7 @@ using System.Threading;
 using Jitter2;
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
+using Jitter2.DataStructures;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
@@ -183,8 +184,163 @@ public class PhysicsWorld
     // would return nonsense; _queryDepth is what makes that say so
     // instead of corrupting quietly.
     private int _queryDepth;
-    private readonly List<IDynamicTreeProxy> _queryProxies = [];
     private readonly List<ShapeCastHit> _queryHits = [];
+
+    private struct ShapeCastSink<TShape> : ISink<IDynamicTreeProxy>
+        where TShape : ISupportMappable
+    {
+        private readonly PhysicsWorld _world;
+        private readonly TShape _shape;
+        private readonly JQuaternion _orientation;
+        private readonly JVector _origin;
+        private readonly JVector _sweep;
+        private readonly JVector _direction;
+        private readonly float _maxDistance;
+        private readonly JBoundingBox _sweepBox;
+        private readonly List<ShapeCastHit> _hits;
+        private readonly QueryFilter _filter;
+
+        public ShapeCastSink(PhysicsWorld world, TShape shape, JQuaternion orientation,
+            JVector origin, JVector sweep, JVector direction, float maxDistance,
+            JBoundingBox sweepBox, List<ShapeCastHit> hits, QueryFilter filter)
+        {
+            _world = world;
+            _shape = shape;
+            _orientation = orientation;
+            _origin = origin;
+            _sweep = sweep;
+            _direction = direction;
+            _maxDistance = maxDistance;
+            _sweepBox = sweepBox;
+            _hits = hits;
+            _filter = filter;
+        }
+
+        public void Add(in IDynamicTreeProxy proxy)
+        {
+            if (proxy is TerrainHeightmapProxy terrainProxy)
+            {
+                if (_world.TerrainAccepted(terrainProxy, _filter))
+                    _world.SweepAgainstTerrain(_shape, _orientation, _origin, _sweep,
+                        _maxDistance, terrainProxy, _sweepBox, _hits);
+                return;
+            }
+
+            if (proxy is not RigidBodyShape targetShape || !_world.Accepts(targetShape, _filter))
+                return;
+
+            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
+
+            bool hit = NarrowPhase.Sweep(
+                _shape, targetShape,
+                _orientation, targetBody.Data.Orientation,
+                _origin, targetBody.Data.Position,
+                _sweep, JVector.Zero,
+                out JVector pointA, out JVector pointB, out JVector normal, out float lambda);
+
+            // Use the original inclusive range check in its negated form so NaN is rejected too.
+            if (!hit || !(lambda >= 0 && lambda <= 1.0f)) return;
+
+            float penetration = 0.0f;
+
+            // A zero normal means the shapes already overlapped at the start of the sweep, where
+            // Sweep reports lambda 0 and no direction. Recover the direction and depth from MPR/EPA.
+            if (normal.LengthSquared() <= 0)
+            {
+                lambda = 0.0f;
+
+                bool resolved = NarrowPhase.MprEpa(
+                    _shape, targetShape,
+                    _orientation, targetBody.Data.Orientation,
+                    _origin, targetBody.Data.Position,
+                    out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
+
+                if (resolved && separation.LengthSquared() > 0)
+                {
+                    pointA = deepestA;
+                    pointB = deepestB;
+                    normal = JVector.Normalize(separation);
+                }
+                else
+                {
+                    penetration = 0.0f;
+                    normal = _direction;
+                }
+            }
+
+            Collider owner = _world.GetShapeOwner(targetShape);
+            _hits.Add(new ShapeCastHit
+            {
+                Hit = true,
+                Fraction = lambda,
+                Distance = lambda * _maxDistance,
+                Penetration = penetration,
+                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
+                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
+                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Rigidbody = userData.Rigidbody,
+                Shape = targetShape,
+                Collider = owner,
+                Transform = ResolveHitTransform(userData.Rigidbody, owner)
+            });
+        }
+    }
+
+    private struct OverlapSink<TShape> : ISink<IDynamicTreeProxy>
+        where TShape : ISupportMappable
+    {
+        private readonly PhysicsWorld _world;
+        private readonly TShape _shape;
+        private readonly JQuaternion _orientation;
+        private readonly JVector _position;
+        private readonly List<ShapeCastHit> _hits;
+        private readonly QueryFilter _filter;
+
+        public OverlapSink(PhysicsWorld world, TShape shape, JQuaternion orientation,
+            JVector position, List<ShapeCastHit> hits, QueryFilter filter)
+        {
+            _world = world;
+            _shape = shape;
+            _orientation = orientation;
+            _position = position;
+            _hits = hits;
+            _filter = filter;
+        }
+
+        public void Add(in IDynamicTreeProxy proxy)
+        {
+            if (proxy is not RigidBodyShape targetShape || !_world.Accepts(targetShape, _filter))
+                return;
+
+            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
+
+            bool overlaps = NarrowPhase.MprEpa(
+                _shape, targetShape,
+                _orientation, targetBody.Data.Orientation,
+                _position, targetBody.Data.Position,
+                out JVector pointA, out JVector pointB, out JVector normal, out float penetration);
+
+            // A comparison with NaN is false; negate the valid condition to reject it.
+            if (!overlaps || !(penetration > 0)) return;
+
+            Collider owner = _world.GetShapeOwner(targetShape);
+            _hits.Add(new ShapeCastHit
+            {
+                Hit = true,
+                Fraction = 0,
+                Penetration = penetration,
+                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
+                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
+                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Rigidbody = userData.Rigidbody,
+                Shape = targetShape,
+                Collider = owner,
+                Transform = ResolveHitTransform(userData.Rigidbody, owner)
+            });
+        }
+    }
 
     internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
@@ -734,10 +890,6 @@ public class PhysicsWorld
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
         JVector sweep = jDirection * maxDistance;
 
-        // Get all shapes from the dynamic tree that could potentially be hit
-        List<IDynamicTreeProxy> potentialShapes = _queryProxies;
-        potentialShapes.Clear();
-
         // Create a bounding box that encompasses the entire sweep
         JBoundingBox sweepBox = new();
         var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
@@ -747,83 +899,9 @@ public class PhysicsWorld
         sweepBox.Min = JVector.Min(startBox.Min, endBox.Min);
         sweepBox.Max = JVector.Max(startBox.Max, endBox.Max);
 
-        World.DynamicTree.Query(potentialShapes, in sweepBox);
-
-        foreach (IDynamicTreeProxy proxy in potentialShapes)
-        {
-            if (proxy is TerrainHeightmapProxy terrainProxy)
-            {
-                // Shape cast against terrain heightmap triangles
-                if (TerrainAccepted(terrainProxy, filter))
-                    SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, maxDistance, terrainProxy, sweepBox, hits);
-                continue;
-            }
-
-            if (proxy is not RigidBodyShape targetShape) continue;
-
-            if (!Accepts(targetShape, filter)) continue;
-            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-
-            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
-
-            // Perform sweep test
-            bool hit = NarrowPhase.Sweep(
-                shape, targetShape,
-                jOrientation, targetBody.Data.Orientation,
-                jOrigin, targetBody.Data.Position,
-                sweep, JVector.Zero,
-                out JVector pointA, out JVector pointB, out JVector normal, out float lambda);
-
-            if (hit && lambda >= 0 && lambda <= 1.0)
-            {
-                float penetration = 0.0f;
-
-                // A zero normal means the shapes already overlapped at the start of the sweep, where
-                // Sweep reports lambda 0 and no direction. Recover the direction and the depth from
-                // MPR/EPA; the fraction stays 0, the depth belongs in Penetration.
-                if (normal.LengthSquared() <= 0)
-                {
-                    lambda = 0.0f;
-
-                    bool resolved = NarrowPhase.MprEpa(
-                        shape, targetShape,
-                        jOrientation, targetBody.Data.Orientation,
-                        jOrigin, targetBody.Data.Position,
-                        out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
-
-                    if (resolved && separation.LengthSquared() > 0)
-                    {
-                        pointA = deepestA;
-                        pointB = deepestB;
-                        normal = JVector.Normalize(separation);
-                    }
-                    else
-                    {
-                        // EPA did not converge. Report the sweep direction so the caller is still
-                        // blocked, rather than handing back a zero normal it would divide by.
-                        penetration = 0.0f;
-                        normal = jDirection;
-                    }
-                }
-
-                Collider owner = GetShapeOwner(targetShape);
-                var castHit = new ShapeCastHit
-                {
-                    Hit = true,
-                    Fraction = lambda,
-                    Distance = lambda * maxDistance,
-                    Penetration = penetration,
-                    Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                    Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                    HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
-                    Rigidbody = userData.Rigidbody,
-                    Shape = targetShape,
-                    Collider = owner,
-                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
-                };
-                hits.Add(castHit);
-            }
-        }
+        var sink = new ShapeCastSink<TShape>(this, shape, jOrientation, jOrigin, sweep,
+            jDirection, maxDistance, sweepBox, hits, filter);
+        World.DynamicTree.Query(ref sink, in sweepBox);
 
         // Nearest first, so callers can take hits[0] without scanning.
         hits.Sort(static (a, b) => a.Fraction.CompareTo(b.Fraction));
@@ -1296,50 +1374,11 @@ public class PhysicsWorld
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
         var jPosition = new JVector(position.X, position.Y, position.Z);
 
-        // Get all shapes from the dynamic tree that could potentially overlap
-        List<IDynamicTreeProxy> potentialShapes = _queryProxies;
-        potentialShapes.Clear();
-
         // Create a bounding box for the shape
         var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jPosition, out JBoundingBox shapeBounds);
-        World.DynamicTree.Query(potentialShapes, in shapeBounds);
-
-        foreach (IDynamicTreeProxy proxy in potentialShapes)
-        {
-            if (proxy is not RigidBodyShape targetShape) continue;
-
-            if (!Accepts(targetShape, filter)) continue;
-            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-
-            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
-
-            // Perform overlap test using sweep with zero distance
-            bool overlaps = NarrowPhase.MprEpa(
-                shape, targetShape,
-                jOrientation, targetBody.Data.Orientation,
-                jPosition, targetBody.Data.Position,
-                out JVector pointA, out JVector pointB, out JVector normal, out float penetration);
-
-            if (overlaps && penetration > 0)
-            {
-                Collider owner = GetShapeOwner(targetShape);
-                var hit = new ShapeCastHit
-                {
-                    Hit = true,
-                    Fraction = 0,
-                    Penetration = penetration,
-                    Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                    Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                    HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
-                    Rigidbody = userData.Rigidbody,
-                    Shape = targetShape,
-                    Collider = owner,
-                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
-                };
-                hits.Add(hit);
-            }
-        }
+        var sink = new OverlapSink<TShape>(this, shape, jOrientation, jPosition, hits, filter);
+        World.DynamicTree.Query(ref sink, in shapeBounds);
 
         return hits.Count;
     }
