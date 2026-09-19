@@ -52,11 +52,6 @@ public static class FileDialog
 
     public static bool IsOpen => _isOpen;
 
-    // ── Nebula palette literals ──────────────────────────────
-    // Frosted magenta-violet glass over a dark void. Ramps cover most of the surface;
-    // these carry the exact alpha the prototype (.w2fd*) uses for glass and accents.
-    private static readonly Color WindowBg = Color.FromArgb(235, 14, 11, 22);    // window body (dark glass)
-    private static readonly Color Selection = Color.FromArgb(230, 168, 85, 247);  // selected sidebar item
     private static readonly Color SideBg = Color.FromArgb(36, 0, 0, 0);        // sidebar background
 
     // ── API ──────────────────────────────────────────────────
@@ -360,12 +355,14 @@ public static class FileDialog
         void SideSep(string key) =>
             paper.Box($"{id}_ss_{key}").Height(1).Margin(4, 5, 4, 5).BackgroundColor(theme.BorderSoft);
 
+        Color selection = OrigamiTheme.WithAlpha(theme.Primary.C500, 230);
+
         void SideRow(string sid, IconPainter painter, Color iconCol, string label, string path)
         {
             bool sel = st.Path.Equals(path, StringComparison.OrdinalIgnoreCase);
             var r = paper.Row(sid).Height(m.RowHeight)
-                .BackgroundColor(sel ? Selection : Color.Transparent)
-                .Hovered.BackgroundColor(sel ? Selection : theme.Hover).End()
+                .BackgroundColor(sel ? selection : Color.Transparent)
+                .Hovered.BackgroundColor(sel ? selection : theme.Hover).End()
                 .Rounded(6).PaddingLeft(7).Gap(6).Clip();
             r.OnClick(0, (_, _) => NavigateTo(path, true));
             using (r.Enter())
@@ -383,7 +380,7 @@ public static class FileDialog
         // Frosted glass to match the dock windows: blur the content behind the dialog and thin the
         // fill slightly so the frost reads through (kept dark, a deep glass rather than a light wash).
         float winBlur = m.WindowBackdropBlur;
-        Color winBg = winBlur > 0f ? Color.FromArgb(205, WindowBg.R, WindowBg.G, WindowBg.B) : WindowBg;
+        Color winBg = OrigamiTheme.WithAlpha(theme.Neutral.C400, winBlur > 0f ? 205 : 235);
 
         var win = paper.Column($"{id}_win").Size(width, height)
             .BackgroundColor(winBg)
