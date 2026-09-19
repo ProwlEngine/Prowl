@@ -1397,7 +1397,16 @@ public partial class GameObject : EngineObject, ISerializable
         Children = [];
         foreach (EchoObject childTag in children?.List ?? [])
         {
-            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
+            GameObject? child;
+            try
+            {
+                child = Serializer.Deserialize<GameObject>(childTag, ctx);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"A child of '{Name}' threw while being loaded and was skipped. {e.GetType().Name}: {e.Message}");
+                continue;
+            }
             if (child.IsNotValid()) continue;
             child._parent = this;
             Children.Add(child);

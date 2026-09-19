@@ -245,6 +245,43 @@ public class UndoTests : EditorTestHarness
         Assert.Equal(compId, rc.Identifier); // identifier preserved so future records still resolve
     }
 
+    public sealed class UndoLinkComp : MonoBehaviour
+    {
+        public GameObject? Target;
+        public int Value;
+    }
+
+    [Fact]
+    public void RegisterDestroyObject_Undo_MissingScriptKeepsItsLinkToTheRestOfTheScene()
+    {
+        var source = new Scene();
+        var target = new GameObject("Target");
+        var holder = new GameObject("Holder");
+        var link = holder.AddComponent<UndoLinkComp>();
+        link.Target = target;
+        link.Value = 5;
+        source.Add(target);
+        source.Add(holder);
+        string whileMissing = Echo.Serializer.Serialize(typeof(object), source).WriteToString().Replace(nameof(UndoLinkComp), "Ghost_DoesNotExist");
+
+        var scene = Echo.Serializer.Deserialize<Scene>(Echo.EchoObject.ReadFromString(whileMissing))!;
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+        var loadedHolder = scene.AllObjects.Single(g => g.Name == "Holder");
+
+        Undo.RegisterDestroyObject(loadedHolder, "Delete");
+        DestroyGO(scene, loadedHolder);
+        Undo.IncrementGroup();
+        Undo.PerformUndo();
+
+        string saved = Echo.Serializer.Serialize(typeof(object), Scene.Current).WriteToString().Replace("Ghost_DoesNotExist", nameof(UndoLinkComp));
+        var restored = Echo.Serializer.Deserialize<Scene>(Echo.EchoObject.ReadFromString(saved))!;
+        var restoredLink = restored.AllObjects.Single(g => g.Name == "Holder").GetComponent<UndoLinkComp>()!;
+
+        Assert.Equal(5, restoredLink.Value);
+        Assert.Same(restored.AllObjects.Single(g => g.Name == "Target"), restoredLink.Target);
+    }
+
     [Fact]
     public void RegisterDestroyObject_Undo_RestoresChildren()
     {
