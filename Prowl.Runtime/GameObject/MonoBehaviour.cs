@@ -26,6 +26,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
+    // The identifier stored in the data this component was last loaded from. A scene load restores it.
+    [SerializeIgnore]
+    internal Guid LoadedIdentifier;
+
     // On the component rather than in a table keyed by component identifier: identifiers are handed out
     // fresh by every load, so such a table goes stale wherever a copy forgets to rewrite its keys.
     // Written out only when set, so an ordinary component costs nothing in a scene file.
@@ -522,6 +526,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         // A fresh identity every time: a copy of a component must not come back wearing the
         // original's identifier. Which source component this came from is recorded on the owning
         // GameObject's prefab link instead.
+        LoadedIdentifier = _identifier;
         if (!GameObject.PreservingIdentifiers)
             _identifier = Guid.NewGuid();
 

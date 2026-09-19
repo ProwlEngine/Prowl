@@ -34,6 +34,9 @@ public partial class GameObject : EngineObject, ISerializable
     [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
+    // The identifier stored in the data this object was last loaded from. A scene load restores it.
+    internal Guid LoadedIdentifier { get; private set; }
+
     private bool _static = false;
 
     private bool _enabled = true;
@@ -1301,13 +1304,12 @@ public partial class GameObject : EngineObject, ISerializable
     {
         DeserializeHeader(value);
 
-        // Always a fresh identity - Scene restores the real one by index once the whole graph has
-        // loaded, and a copy of an object must not come back wearing the original's identifier.
+        // Always a fresh identity - Scene restores the loaded one once the whole graph has loaded, and
+        // a copy of an object must not come back wearing the original's identifier.
         // Unless the caller asked for the stored ones, which is how a load can be told which
         // serialized object each live one came from.
-        _identifier = PreservingIdentifiers && Guid.TryParse(value["Identifier"]?.StringValue, out Guid storedId)
-            ? storedId
-            : Guid.NewGuid();
+        LoadedIdentifier = Guid.TryParse(value["Identifier"]?.StringValue, out Guid storedId) ? storedId : Guid.Empty;
+        _identifier = PreservingIdentifiers && LoadedIdentifier != Guid.Empty ? storedId : Guid.NewGuid();
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;
@@ -1370,12 +1372,15 @@ public partial class GameObject : EngineObject, ISerializable
                     continue;
                 }
 
-                // Keep the raw data as a MissingMonobehaviour so it survives a re-save, and back-patch any
+                // Keep the data as a MissingMonobehaviour so it survives a re-save, and back-patch any
                 // object definitions Echo stored inline in it once the whole graph has loaded.
                 Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
-                _components.Add(new MissingMonobehaviour { ComponentData = compTag });
                 EchoObject trapped = compTag;
-                ctx.Defer(() => BackPatchTrappedDefinitions(trapped, ctx));
+                ctx.Defer(() => BackPatchTrappedDefinitions(DefinitionOf(trapped, ctx), ctx));
+                var missing = new MissingMonobehaviour();
+                Serializer.DeserializeInto(compTag, missing, ctx);
+                _components.Add(missing);
+                _componentCache.Add(typeof(MissingMonobehaviour), missing);
                 continue;
             }
 
@@ -1412,6 +1417,13 @@ public partial class GameObject : EngineObject, ISerializable
             Children.Add(child);
         }
     }
+
+    // A bare reference means the definition was written inside a field that could not load it.
+    private static EchoObject DefinitionOf(EchoObject data, SerializationContext ctx)
+        => data.TryGet("$id", out EchoObject? id) && !data.GetNames().Any(n => n != "$id" && n != "$type")
+           && ctx.unresolvedDefinitions.TryGetValue(id!.IntValue, out EchoObject? definition)
+            ? definition
+            : data;
 
     /// <summary>
     /// Phase-2 recovery for objects whose definition was serialized inline inside a missing component. Runs
