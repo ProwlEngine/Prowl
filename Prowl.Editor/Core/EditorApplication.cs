@@ -538,7 +538,7 @@ public class EditorApplication : Game
 
         // Editor backdrop (behind the translucent glass panels) shared with the launcher.
         _nebula ??= new GUI.NebulaBackground(paper);
-        GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showComets: false);
+        GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
         DrawHeader(paper, w, h);
 

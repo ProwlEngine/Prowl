@@ -174,10 +174,6 @@ public class EditorThemeData
     // Nebula layer toggles + the raw void colour behind everything.
     /// <summary> Whether nebula gradient layers are shown. </summary>
     public bool BgShowGradients { get; set; } = true;
-    /// <summary> Whether nebula stars are shown. </summary>
-    public bool BgShowStars { get; set; } = true;
-    /// <summary> Whether nebula comets are shown. </summary>
-    public bool BgShowComets { get; set; } = true;
     /// <summary> Solid color behind all background layers as hex. </summary>
     public string BackgroundVoidColor { get; set; } = "#060409";
 

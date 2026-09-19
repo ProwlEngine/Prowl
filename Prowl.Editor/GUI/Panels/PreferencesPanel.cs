@@ -537,8 +537,6 @@ public class PreferencesPanel : DockPanel
         void NebulaLayers()
         {
             EditorGUI.SettingsToggle(paper, "pref_fx_grad", Loc.Get("pref.nebula_gradients"), theme.BgShowGradients, v => { theme.BgShowGradients = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
-            EditorGUI.SettingsToggle(paper, "pref_fx_stars", Loc.Get("pref.stars"), theme.BgShowStars, v => { theme.BgShowStars = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
-            EditorGUI.SettingsToggle(paper, "pref_fx_comets", Loc.Get("pref.comets"), theme.BgShowComets, v => { theme.BgShowComets = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
             EditorGUI.SettingsColorField(paper, "pref_fx_void", Loc.Get("pref.void_color"), () => theme.BackgroundVoidColor, v => { theme.BackgroundVoidColor = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
         }
 

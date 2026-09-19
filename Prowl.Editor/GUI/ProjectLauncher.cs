@@ -121,7 +121,7 @@ public static class ProjectLauncher
 
         // Animated Nebula backdrop.
         _nebula ??= new NebulaBackground(paper);
-        NebulaBackground.DrawEditorBackground(paper, _nebula, "pl_bg", w, h, dt);
+        NebulaBackground.DrawEditorBackground(paper, _nebula, "pl_bg", w, h, dt, showStarsAndComets: true);
 
         using (paper.Box("pl_container").PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h).Enter())
         using (paper.Column("pl_window")

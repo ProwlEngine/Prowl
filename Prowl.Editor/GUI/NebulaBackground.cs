@@ -22,13 +22,11 @@ public sealed class NebulaBackground
 
     private static Color Col(int r, int g, int b, float a = 1f) => Color32.FromArgb((int)Math.Round(a * 255), r, g, b);
 
-    // Per-layer visibility + the raw void colour behind everything (all settable from the theme).
+    // Per-layer visibility + the raw void colour behind everything.
     /// <summary> Whether to draw the coloured nebula gradients. </summary>
     public bool ShowClouds = true;    // the coloured nebula gradients
-    /// <summary> Whether to draw the tileable starfield. </summary>
-    public bool ShowStars = true;
-    /// <summary> Whether to draw the occasional comets. </summary>
-    public bool ShowComets = true;
+    /// <summary> Whether to draw the tileable starfield and the occasional comets. Only the launcher shows them, since inside a project they show through the windows. </summary>
+    public bool ShowStarsAndComets = true;
     /// <summary> The solid colour drawn behind all other layers. </summary>
     public System.Drawing.Color VoidColor = System.Drawing.Color.FromArgb(6, 4, 9);
 
@@ -90,19 +88,17 @@ public sealed class NebulaBackground
     {
         Retint(EditorTheme.Accent, EditorTheme.Blue400);
         ShowClouds = EditorTheme.BgShowGradients;
-        ShowStars = EditorTheme.BgShowStars;
-        ShowComets = EditorTheme.BgShowComets;
         VoidColor = EditorTheme.BackgroundVoidColor;
     }
 
     /// <summary>The single editor-backdrop draw path, shared by the editor shell and the launcher: applies
     /// the theme settings, advances the animation (respecting speed / frozen), then paints the animated
     /// nebula, a static nebula, a gradient, a solid colour or a wallpaper image per the Effects settings.
-    /// <paramref name="showComets"/> false hides comets regardless of the theme.</summary>
-    public static void DrawEditorBackground(Paper paper, NebulaBackground nebula, string id, float w, float h, float dt, bool showComets = true)
+    /// <paramref name="showStarsAndComets"/> is true for the launcher and false inside a project.</summary>
+    public static void DrawEditorBackground(Paper paper, NebulaBackground nebula, string id, float w, float h, float dt, bool showStarsAndComets)
     {
         nebula.ApplyThemeSettings();
-        nebula.ShowComets &= showComets;
+        nebula.ShowStarsAndComets = showStarsAndComets;
         nebula.Update(EditorTheme.AnimatedBackground ? dt * EditorTheme.BackgroundSpeed : 0f);
 
         var box = paper.Box(id).PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h).IsNotInteractable();
@@ -236,12 +232,12 @@ public sealed class NebulaBackground
                 0, w * 0.46f, Lighten(_primary, 0.12f, 0.38f), ColC(_primary, 0f));
         }
 
-        if (ShowStars && _starTex != null)
+        if (ShowStarsAndComets && _starTex != null)
             for (float ty = y; ty < y + h; ty += StarTexSize)
                 for (float tx = x; tx < x + w; tx += StarTexSize)
                     vg.DrawImage(_starTex, tx, ty, StarTexSize, StarTexSize);
 
-        if (ShowComets)
+        if (ShowStarsAndComets)
             foreach (var c in _comets)
             {
                 if (!c.active) continue;

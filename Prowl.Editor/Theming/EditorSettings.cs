@@ -114,8 +114,6 @@ public class EditorSettings
         EditorTheme.BackgroundColorA = ColorRamp.ParseHex(t.BackgroundColorA);
         EditorTheme.BackgroundColorB = ColorRamp.ParseHex(t.BackgroundColorB);
         EditorTheme.BgShowGradients = t.BgShowGradients;
-        EditorTheme.BgShowStars = t.BgShowStars;
-        EditorTheme.BgShowComets = t.BgShowComets;
         EditorTheme.BackgroundVoidColor = ColorRamp.ParseHex(t.BackgroundVoidColor);
         EditorTheme.BackgroundImagePath = t.BackgroundImagePath;
         EditorTheme.BackgroundImageFit = t.BackgroundImageFit;

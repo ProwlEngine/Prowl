@@ -259,10 +259,6 @@ public static class EditorTheme
     public static Color BackgroundColorB = Color.FromArgb(8, 6, 12);
     /// <summary> Shows gradient layers in the nebula background. </summary>
     public static bool BgShowGradients = true;
-    /// <summary> Shows star field in the nebula background. </summary>
-    public static bool BgShowStars = true;
-    /// <summary> Shows comet streaks in the nebula background. </summary>
-    public static bool BgShowComets = true;
     /// <summary> Deepest void color behind all background layers. </summary>
     public static Color BackgroundVoidColor = Color.FromArgb(6, 4, 9);
     /// <summary> Absolute path of the background image, used by the Image style. </summary>
