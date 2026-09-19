@@ -84,6 +84,16 @@ public sealed class ContextBuilder
         return this;
     }
 
+    /// <summary>
+    /// Add a row whose content <paramref name="draw"/> builds every frame, for controls such as fields and
+    /// sliders. It fills the menu width and clicking inside it leaves the menu open.
+    /// </summary>
+    public ContextBuilder Custom(Action<Paper> draw)
+    {
+        Items.Add(new CtxCustom { DrawContent = draw });
+        return this;
+    }
+
     /// <summary>Add a submenu that expands on hover.</summary>
     public ContextBuilder Submenu(string label, Action<ContextBuilder> build, string icon = "")
     {
@@ -267,16 +277,28 @@ public sealed class ContextBuilder
 
                 // Pill toggle on the right (matches the Nebula .tg switch).
                 var acc = theme.Primary.C500;
-                using (paper.Box($"{id}_tg_{index}").Width(32).Height(18).Rounded(MathF.Min(9f, theme.Metrics.Rounding * 1.5f))
+                using (paper.Box($"{id}_tg_{index}").Width(32).Height(18).Rounded(9)
                     .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .BackgroundColor(on ? acc : Color.FromArgb(26, 255, 255, 255))
                     .BorderColor(on ? Color.Transparent : theme.BorderSoft).BorderWidth(1)
                     .IsNotInteractable()
                     .Enter())
-                    paper.Box($"{id}_tk_{index}").Width(14).Height(14).Rounded(MathF.Min(7f, MathF.Max(0f, theme.Metrics.Rounding * 1.5f - 2f)))
+                    paper.Box($"{id}_tk_{index}").Width(14).Height(14).Rounded(7)
                         .PositionType(PositionType.SelfDirected).Position(on ? 16 : 2, 1.5f)
                         .BackgroundColor(Color.White).IsNotInteractable();
             }
+        }
+    }
+
+    internal sealed class CtxCustom : IContextItem
+    {
+        public Action<Paper>? DrawContent;
+
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
+        {
+            using (paper.Column($"{id}_cu_{index}").Height(UnitValue.Auto)
+                .Padding(RowPadX, RowPadX, 2, 2).Gap(theme.Metrics.Spacing).Enter())
+                DrawContent?.Invoke(paper);
         }
     }
 

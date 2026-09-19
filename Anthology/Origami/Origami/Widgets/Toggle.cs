@@ -420,7 +420,6 @@ public sealed class ToggleBuilder
 
         string? onText = _onText, offText = _offText, onGlyph = _onGlyph, offGlyph = _offGlyph;
         float fontSize = metrics.FontSize;
-        float rounding = metrics.Rounding;
 
         using (_paper.Box($"{_id}_track")
             .Width(trackW).Height(trackH)
@@ -439,8 +438,8 @@ public sealed class ToggleBuilder
                 float knobX = x + pad + (w - knob - pad * 2f) * EaseOutBack(t); // springy slide
                 float knobY = y + pad;
                 float textBoxW = w - knob - pad * 2f;
-                float trackR = MathF.Min(h * 0.5f, rounding * 1.6f);
-                float knobR = MathF.Min(knob * 0.5f, MathF.Max(0f, trackR - pad));
+                float trackR = h * 0.5f;
+                float knobR = knob * 0.5f;
 
                 // Track — single hardware-accelerated rounded rect.
                 canvas.RoundedRectFilled(x, y, w, h, trackR, trackBg);
