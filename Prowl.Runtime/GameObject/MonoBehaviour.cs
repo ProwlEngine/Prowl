@@ -394,14 +394,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <param name="paper"></param>
     public virtual void OnGui(Paper paper) { }
 
-    /// <summary>
-    /// Called when this GameObject's <see cref="Rigidbody3D"/> begins touching another. <paramref name="other"/>
-    /// is the body we hit. Override on a component sharing the GameObject with the Rigidbody3D; the engine
-    /// resolves it live at contact time, so no subscription is stored and it survives hot reload.
-    /// </summary>
+    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> begins touching another.</summary>
     public virtual void OnCollisionBegin(Collision collision) { }
 
-    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> stops touching <paramref name="other"/>. See <see cref="OnCollisionBegin"/>.</summary>
+    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> stops touching another.</summary>
     public virtual void OnCollisionEnd(Collision collision) { }
 
     /// <summary>Called once when <paramref name="other"/> first enters a <see cref="TriggerVolume"/> on this GameObject.</summary>
