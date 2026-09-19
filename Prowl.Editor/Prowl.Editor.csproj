@@ -40,10 +40,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Anthology\Origami\Origami\Origami.csproj" />
+    <!-- <ProjectReference Include="..\..\Anthology\Origami\Origami\Origami.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Photonic\Photonic\Photonic.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Rosetta\Rosetta\Rosetta.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
+    <PackageReference Include="Prowl.Origami" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Photonic" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Rosetta" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
