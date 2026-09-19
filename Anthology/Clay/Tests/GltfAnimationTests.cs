@@ -44,6 +44,41 @@ public sealed class GltfAnimationTests
     }
 
     [Fact]
+    public void ConvertCoordinateSystem_NegatesX_OnNodesAndCurves()
+    {
+        string path = TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb");
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var converted = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ConvertCoordinateSystem });
+
+        static Float3 Map(Float3 v) => new(-v.X, v.Y, v.Z);
+        static Quaternion MapRotation(Quaternion q) => new(q.X, -q.Y, -q.Z, q.W);
+        static void Same(Quaternion expected, Quaternion actual)
+            => Assert.True(MathF.Abs(Quaternion.Dot(expected, actual)) > 0.99999f, $"{expected} vs {actual}");
+
+        Assert.Equal(raw.Nodes.Count, converted.Nodes.Count);
+        for (int i = 0; i < raw.Nodes.Count; i++)
+        {
+            Assert.True(Float3.Length(Map(raw.Nodes[i].LocalPosition) - converted.Nodes[i].LocalPosition) < 1e-5f);
+            Same(MapRotation(raw.Nodes[i].LocalRotation), converted.Nodes[i].LocalRotation);
+        }
+
+        var rawBindings = raw.AnimationClips[0].Bindings.ToArray();
+        var convertedBindings = converted.AnimationClips[0].Bindings.ToArray();
+        Assert.Equal(rawBindings.Length, convertedBindings.Length);
+        float duration = raw.AnimationClips[0].Duration;
+        for (int b = 0; b < rawBindings.Length; b++)
+        {
+            foreach (float t in new[] { 0f, duration * 0.37f, duration })
+            {
+                if (rawBindings[b].Property == AnimatedProperty.Rotation)
+                    Same(MapRotation(rawBindings[b].Curve.EvaluateQuaternion(t)), convertedBindings[b].Curve.EvaluateQuaternion(t));
+                else if (rawBindings[b].Property == AnimatedProperty.Position)
+                    Assert.True(Float3.Length(Map(rawBindings[b].Curve.EvaluateFloat3(t)) - convertedBindings[b].Curve.EvaluateFloat3(t)) < 1e-5f);
+            }
+        }
+    }
+
+    [Fact]
     public void CesiumMan_Skin_HasValidJointReferences_AndNormalizedWeights()
     {
         var model = ModelImporter.Load(TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb"));

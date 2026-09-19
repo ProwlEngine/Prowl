@@ -41,7 +41,7 @@ public sealed class GltfGeometryTests
     }
 
     [Fact]
-    public void ConvertCoordinateSystem_FlipsZ_LeavesXAndYAlone()
+    public void ConvertCoordinateSystem_FlipsX_LeavesYAndZAlone()
     {
         string path = TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb");
 
@@ -57,9 +57,9 @@ public sealed class GltfGeometryTests
 
         for (int i = 0; i < rawMesh.VertexCount; i++)
         {
-            Assert.Equal(rawMesh.Vertices[i].X, convMesh.Vertices[i].X, precision: 5);
+            Assert.Equal(-rawMesh.Vertices[i].X, convMesh.Vertices[i].X, precision: 5);
             Assert.Equal(rawMesh.Vertices[i].Y, convMesh.Vertices[i].Y, precision: 5);
-            Assert.Equal(-rawMesh.Vertices[i].Z, convMesh.Vertices[i].Z, precision: 5);
+            Assert.Equal(rawMesh.Vertices[i].Z, convMesh.Vertices[i].Z, precision: 5);
         }
     }
 

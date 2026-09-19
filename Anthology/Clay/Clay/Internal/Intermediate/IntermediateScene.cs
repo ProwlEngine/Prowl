@@ -37,7 +37,7 @@ internal sealed class IntermediateScene
 /// <summary>Coordinate convention of an intermediate scene.</summary>
 internal enum CoordinateSystem
 {
-    /// <summary>Right-handed, Y-up, -Z forward (glTF native).</summary>
+    /// <summary>Right-handed, Y-up, models facing +Z (glTF native).</summary>
     RightHandedYUp,
     /// <summary>Right-handed, Z-up, -Y forward (Blender, some FBX).</summary>
     RightHandedZUp,

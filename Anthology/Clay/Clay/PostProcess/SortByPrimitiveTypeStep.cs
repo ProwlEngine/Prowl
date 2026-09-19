@@ -112,10 +112,22 @@ internal sealed class SortByPrimitiveTypeStep : IPostProcess
         if (src.VertexJoints is { } vj) dst.VertexJoints = (int[])vj.Clone();
         if (src.VertexWeights is { } vw) dst.VertexWeights = (float[])vw.Clone();
 
-        // Blend shapes belong to the triangle-mesh interpretation only; we share by reference
-        // since they're never edited after creation.
+        // Later steps edit blend shape deltas in place, so each mesh gets its own copy.
         foreach (var bs in src.BlendShapes)
-            dst.BlendShapes.Add(bs);
+        {
+            var copy = new IntermediateBlendShape { Name = bs.Name };
+            foreach (var frame in bs.Frames)
+            {
+                copy.Frames.Add(new IntermediateBlendShapeFrame
+                {
+                    Weight = frame.Weight,
+                    DeltaPositions = (Prowl.Vector.Float3[])frame.DeltaPositions.Clone(),
+                    DeltaNormals = (Prowl.Vector.Float3[]?)frame.DeltaNormals?.Clone(),
+                    DeltaTangents = (Prowl.Vector.Float3[]?)frame.DeltaTangents?.Clone(),
+                });
+            }
+            dst.BlendShapes.Add(copy);
+        }
 
         dst.Faces.AddRange(faces);
         return dst;

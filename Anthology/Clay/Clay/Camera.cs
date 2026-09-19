@@ -18,9 +18,9 @@ public enum CameraProjection
 /// <see cref="ModelNode"/> that references it; this carries only the lens.
 /// </summary>
 /// <remarks>
-/// The camera aims along its node's forward axis and is +Y up. In the source that is -Z, and
-/// <c>ConvertCoordinateSystem</c> mirrors it to +Z along with everything else, so after the standard
-/// pipeline a camera points the same way the engine's own do.
+/// The camera aims down its node's -Z and is +Y up, as the source defines it. For a Y up source
+/// <c>ConvertCoordinateSystem</c> negates X, which leaves that direction alone, so an engine that looks down
+/// +Z turns it half a turn about Y.
 /// </remarks>
 public sealed class Camera
 {

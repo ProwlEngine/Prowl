@@ -23,8 +23,7 @@ public enum LightType
 /// orientation come from the <see cref="ModelNode"/> that references it.
 /// </summary>
 /// <remarks>
-/// A directional or spot light aims along its node's forward axis, which is -Z in the source and
-/// +Z after <c>ConvertCoordinateSystem</c>, matching the camera convention.
+/// A directional or spot light aims down its node's -Z, the same as a <see cref="Camera"/>.
 /// <para>
 /// <see cref="Intensity"/> is carried in the source's photometric units, which are lux for
 /// directional lights and candela for point and spot. Engines that use an arbitrary intensity scale

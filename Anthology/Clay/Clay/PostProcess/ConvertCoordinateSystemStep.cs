@@ -12,76 +12,76 @@ namespace Prowl.Clay.PostProcess;
 /// (left-handed, Y-up, +Z forward).
 /// </summary>
 /// <remarks>
-/// The transform mirrors the Z axis. To preserve correct rendering:
+/// A right handed Y-up source has X negated, so a model authored facing +Z still faces +Z.
+/// A right handed Z-up source maps (x, y, z) to (-x, z, -y), its Y-up equivalent with X negated.
+/// Both are reflections, so:
 /// <list type="bullet">
-/// <item>Positions, normals, tangents and morph deltas have Z negated.</item>
-/// <item>Quaternions go from (x,y,z,w) to (-x,-y,z,w) - axis negation plus rotation reversal.</item>
-/// <item>Triangle winding is flipped because mirroring one axis flips face orientation.</item>
-/// <item>Bind/inverse-bind matrices are rebuilt from the converted TRS components.</item>
+/// <item>Positions, normals, tangents, morph deltas and animated positions go through the axis map.</item>
+/// <item>A quaternion's vector part becomes the negated axis map of it, which keeps it a rotation.</item>
+/// <item>Scale only has its axes permuted.</item>
+/// <item>Triangle winding and the tangent bitangent sign flip.</item>
+/// <item>Inverse bind matrices are conjugated by the axis map.</item>
 /// </list>
-/// Steps that operate on rotations and animation curves (phase 2) will also be coord-converted
-/// when they land.
 /// </remarks>
 internal sealed class ConvertCoordinateSystemStep : IPostProcess
 {
     public PostProcessFlags Flag => PostProcessFlags.ConvertCoordinateSystem;
     public string Name => "ConvertCoordinateSystem";
 
+    private static readonly AxisMap s_fromRightHandedYUp = new(new[] { 0, 1, 2 }, new[] { -1f, 1f, 1f });
+    private static readonly AxisMap s_fromRightHandedZUp = new(new[] { 0, 2, 1 }, new[] { -1f, 1f, -1f });
+
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        if (scene.SourceCoordinateSystem == CoordinateSystem.LeftHandedYUp)
-            return; // already in target convention
-
-        if (scene.SourceCoordinateSystem == CoordinateSystem.RightHandedZUp)
+        AxisMap map;
+        switch (scene.SourceCoordinateSystem)
         {
-            ConvertRightZUpToLeftYUp(scene);
-            scene.SourceCoordinateSystem = CoordinateSystem.LeftHandedYUp;
-            return;
-        }
-
-        if (scene.SourceCoordinateSystem != CoordinateSystem.RightHandedYUp)
-        {
-            context.Log.Warning(
-                $"Coordinate conversion from {scene.SourceCoordinateSystem} not implemented; geometry will not be re-oriented.",
-                Name);
-            return;
+            case CoordinateSystem.LeftHandedYUp:
+                return;
+            case CoordinateSystem.RightHandedYUp:
+                map = s_fromRightHandedYUp;
+                break;
+            case CoordinateSystem.RightHandedZUp:
+                map = s_fromRightHandedZUp;
+                break;
+            default:
+                context.Log.Warning(
+                    $"Coordinate conversion from {scene.SourceCoordinateSystem} not implemented; geometry will not be re-oriented.",
+                    Name);
+                return;
         }
 
         foreach (var node in scene.Nodes)
         {
-            node.LocalPosition = NegateZ(node.LocalPosition);
-            node.LocalRotation = MirrorZ(node.LocalRotation);
+            node.LocalPosition = map.Vector(node.LocalPosition);
+            node.LocalRotation = map.Rotation(node.LocalRotation);
+            node.LocalScale = map.Scale(node.LocalScale);
         }
 
         foreach (var mesh in scene.Meshes)
         {
             for (int i = 0; i < mesh.Positions.Count; i++)
-                mesh.Positions[i] = NegateZ(mesh.Positions[i]);
+                mesh.Positions[i] = map.Vector(mesh.Positions[i]);
 
             if (mesh.Normals is not null)
                 for (int i = 0; i < mesh.Normals.Count; i++)
-                    mesh.Normals[i] = NegateZ(mesh.Normals[i]);
+                    mesh.Normals[i] = map.Vector(mesh.Normals[i]);
 
             if (mesh.Tangents is not null)
                 for (int i = 0; i < mesh.Tangents.Count; i++)
                 {
                     var t = mesh.Tangents[i];
-                    // Reflection (det = -1) flips tangent-frame handedness, so negate the bitangent sign.
-                    mesh.Tangents[i] = new Float4(t.X, t.Y, -t.Z, -t.W);
+                    Float3 v = map.Vector(new Float3(t.X, t.Y, t.Z));
+                    mesh.Tangents[i] = new Float4(v.X, v.Y, v.Z, -t.W);
                 }
 
-            // Mirror-flip changes face winding; reverse triangle order so visible side stays consistent.
             for (int fi = 0; fi < mesh.Faces.Count; fi++)
             {
                 var face = mesh.Faces[fi];
                 if (face.Indices.Length == 3)
-                {
                     (face.Indices[1], face.Indices[2]) = (face.Indices[2], face.Indices[1]);
-                }
                 else if (face.Indices.Length > 3)
-                {
                     Array.Reverse(face.Indices);
-                }
             }
 
             foreach (var bs in mesh.BlendShapes)
@@ -90,15 +90,15 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
                 {
                     var verts = frame.DeltaPositions;
                     for (int i = 0; i < verts.Length; i++)
-                        verts[i] = NegateZ(verts[i]);
+                        verts[i] = map.Vector(verts[i]);
 
                     if (frame.DeltaNormals is { } dn)
                         for (int i = 0; i < dn.Length; i++)
-                            dn[i] = NegateZ(dn[i]);
+                            dn[i] = map.Vector(dn[i]);
 
                     if (frame.DeltaTangents is { } dt)
                         for (int i = 0; i < dt.Length; i++)
-                            dt[i] = NegateZ(dt[i]);
+                            dt[i] = map.Vector(dt[i]);
                 }
             }
         }
@@ -106,231 +106,80 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
         foreach (var skin in scene.Skins)
         {
             for (int i = 0; i < skin.InverseBindPoses.Count; i++)
-                skin.InverseBindPoses[i] = MirrorZ(skin.InverseBindPoses[i]);
+                skin.InverseBindPoses[i] = map.Matrix(skin.InverseBindPoses[i]);
         }
 
         foreach (var anim in scene.Animations)
         {
             foreach (var binding in anim.Bindings)
-                ConvertBinding(binding);
+                ConvertBinding(binding, map);
         }
 
-        // After this step, the scene is in the target system.
         scene.SourceCoordinateSystem = CoordinateSystem.LeftHandedYUp;
     }
 
-    private static void ConvertBinding(IntermediateAnimationBinding b)
+    // Cubic spline keys store in tangent, value and out tangent back to back, and each goes through the same map.
+    private static void ConvertBinding(IntermediateAnimationBinding b, AxisMap map)
     {
+        List<float> values = b.Values;
         int components = b.Dimension;
-        int stride = components;
-        // For cubic splines values come as (in-tan, value, out-tan) per key.
-        // We apply the same per-component sign to every triplet so the math stays consistent.
-        bool isCubic = b.Times.Count > 0 && b.Values.Count == b.Times.Count * components * 3;
-
-        if (b.Property == AnimatedProperty.Position)
+        for (int i = 0; i + components <= values.Count; i += components)
         {
-            // Negate Z component.
-            ApplyComponentNegate(b.Values, components, isCubic, componentIndex: 2);
+            if (b.Property == AnimatedProperty.Position && components == 3)
+                Write(values, i, map.Vector(new Float3(values[i], values[i + 1], values[i + 2])));
+            else if (b.Property == AnimatedProperty.Scale && components == 3)
+                Write(values, i, map.Scale(new Float3(values[i], values[i + 1], values[i + 2])));
+            else if (b.Property == AnimatedProperty.Rotation && components == 4)
+                Write(values, i, map.Rotation(new Quaternion(values[i], values[i + 1], values[i + 2], values[i + 3])));
         }
-        else if (b.Property == AnimatedProperty.Rotation)
-        {
-            // Quaternion (x, y, z, w) -> (-x, -y, z, w).
-            ApplyComponentNegate(b.Values, components, isCubic, componentIndex: 0);
-            ApplyComponentNegate(b.Values, components, isCubic, componentIndex: 1);
-        }
-        // Scale and BlendShapeWeight bindings need no coord-flip.
-        _ = stride;
     }
 
-    private static void ApplyComponentNegate(List<float> values, int components, bool isCubic, int componentIndex)
+    private static void Write(List<float> values, int i, Float3 v)
     {
-        int stride = components * (isCubic ? 3 : 1);
-        // For cubic splines we negate the same component in in-tangent, value, and out-tangent.
-        if (isCubic)
+        values[i] = v.X;
+        values[i + 1] = v.Y;
+        values[i + 2] = v.Z;
+    }
+
+    private static void Write(List<float> values, int i, Quaternion q)
+    {
+        values[i] = q.X;
+        values[i + 1] = q.Y;
+        values[i + 2] = q.Z;
+        values[i + 3] = q.W;
+    }
+
+    // A reflection that permutes axes and flips signs: output axis i is Signs[i] times input axis Sources[i].
+    private sealed class AxisMap
+    {
+        private readonly int[] _sources;
+        private readonly float[] _signs;
+        private readonly Float4x4 _matrix;
+
+        public AxisMap(int[] sources, float[] signs)
         {
-            int keys = values.Count / stride;
-            for (int k = 0; k < keys; k++)
+            _sources = sources;
+            _signs = signs;
+            var columns = new Float4[4];
+            for (int j = 0; j < 3; j++)
             {
-                int baseIdx = k * stride;
-                for (int t = 0; t < 3; t++)
-                {
-                    int idx = baseIdx + t * components + componentIndex;
-                    values[idx] = -values[idx];
-                }
+                Float3 column = Vector(new Float3(j == 0 ? 1f : 0f, j == 1 ? 1f : 0f, j == 2 ? 1f : 0f));
+                columns[j] = new Float4(column.X, column.Y, column.Z, 0f);
             }
+            columns[3] = new Float4(0f, 0f, 0f, 1f);
+            _matrix = new Float4x4(columns[0], columns[1], columns[2], columns[3]);
         }
-        else
+
+        public Float3 Vector(Float3 v) => new(_signs[0] * v[_sources[0]], _signs[1] * v[_sources[1]], _signs[2] * v[_sources[2]]);
+
+        public Float3 Scale(Float3 s) => new(s[_sources[0]], s[_sources[1]], s[_sources[2]]);
+
+        public Quaternion Rotation(Quaternion q)
         {
-            int count = values.Count / components;
-            for (int i = 0; i < count; i++)
-                values[i * components + componentIndex] = -values[i * components + componentIndex];
-        }
-    }
-
-    /// <summary>
-    /// Converts an entire scene from RH Z-up (3ds Max default, some FBX exports) to LH Y-up.
-    /// The basis transform is (x, y, z) -> (x, z, y), which swaps Y and Z. The determinant is -1
-    /// so handedness flips, which means triangle winding reverses. Quaternions transform under
-    /// the same axis swap with an extra sign flip on the imaginary part to account for the
-    /// chirality change (see ConvertCoordinateSystemStep.SwapYZRotation).
-    /// </summary>
-    private static void ConvertRightZUpToLeftYUp(IntermediateScene scene)
-    {
-        foreach (var node in scene.Nodes)
-        {
-            node.LocalPosition = SwapYZ(node.LocalPosition);
-            node.LocalRotation = SwapYZRotation(node.LocalRotation);
-            node.LocalScale = SwapYZScale(node.LocalScale);
+            Float3 axis = Vector(new Float3(q.X, q.Y, q.Z));
+            return new Quaternion(-axis.X, -axis.Y, -axis.Z, q.W);
         }
 
-        foreach (var mesh in scene.Meshes)
-        {
-            for (int i = 0; i < mesh.Positions.Count; i++)
-                mesh.Positions[i] = SwapYZ(mesh.Positions[i]);
-
-            if (mesh.Normals is not null)
-                for (int i = 0; i < mesh.Normals.Count; i++)
-                    mesh.Normals[i] = SwapYZ(mesh.Normals[i]);
-
-            if (mesh.Tangents is not null)
-                for (int i = 0; i < mesh.Tangents.Count; i++)
-                {
-                    var t = mesh.Tangents[i];
-                    // Reflection (det = -1) flips tangent-frame handedness, so negate the bitangent sign.
-                    mesh.Tangents[i] = new Float4(t.X, t.Z, t.Y, -t.W);
-                }
-
-            // Handedness flipped (det = -1), so winding reverses.
-            for (int fi = 0; fi < mesh.Faces.Count; fi++)
-            {
-                var face = mesh.Faces[fi];
-                if (face.Indices.Length == 3)
-                    (face.Indices[1], face.Indices[2]) = (face.Indices[2], face.Indices[1]);
-                else if (face.Indices.Length > 3)
-                    Array.Reverse(face.Indices);
-            }
-
-            foreach (var bs in mesh.BlendShapes)
-            {
-                foreach (var frame in bs.Frames)
-                {
-                    var verts = frame.DeltaPositions;
-                    for (int i = 0; i < verts.Length; i++)
-                        verts[i] = SwapYZ(verts[i]);
-                    if (frame.DeltaNormals is { } dn)
-                        for (int i = 0; i < dn.Length; i++)
-                            dn[i] = SwapYZ(dn[i]);
-                    if (frame.DeltaTangents is { } dt)
-                        for (int i = 0; i < dt.Length; i++)
-                            dt[i] = SwapYZ(dt[i]);
-                }
-            }
-        }
-
-        foreach (var skin in scene.Skins)
-        {
-            for (int i = 0; i < skin.InverseBindPoses.Count; i++)
-                skin.InverseBindPoses[i] = SwapYZ(skin.InverseBindPoses[i]);
-        }
-
-        foreach (var anim in scene.Animations)
-        {
-            foreach (var binding in anim.Bindings)
-                ConvertBindingYZ(binding);
-        }
-    }
-
-    private static void ConvertBindingYZ(IntermediateAnimationBinding b)
-    {
-        int components = b.Dimension;
-        bool isCubic = b.Times.Count > 0 && b.Values.Count == b.Times.Count * components * 3;
-
-        if (b.Property == AnimatedProperty.Position || b.Property == AnimatedProperty.Scale)
-        {
-            // (x, y, z) -> (x, z, y): swap components 1 and 2 in every value triplet.
-            SwapComponents(b.Values, components, isCubic, 1, 2);
-        }
-        else if (b.Property == AnimatedProperty.Rotation)
-        {
-            // Quaternion (x, y, z, w) -> (-x, -z, -y, w): swap Y/Z and negate imaginary parts.
-            // We do the swap+negate per key (also for cubic spline tangent triplets so the math stays consistent).
-            SwapComponents(b.Values, components, isCubic, 1, 2);
-            ApplyComponentNegate(b.Values, components, isCubic, componentIndex: 0);
-            ApplyComponentNegate(b.Values, components, isCubic, componentIndex: 1);
-            ApplyComponentNegate(b.Values, components, isCubic, componentIndex: 2);
-        }
-    }
-
-    private static void SwapComponents(List<float> values, int components, bool isCubic, int a, int b)
-    {
-        int stride = components * (isCubic ? 3 : 1);
-        if (isCubic)
-        {
-            int keys = values.Count / stride;
-            for (int k = 0; k < keys; k++)
-            {
-                int baseIdx = k * stride;
-                for (int t = 0; t < 3; t++)
-                {
-                    int i = baseIdx + t * components + a;
-                    int j = baseIdx + t * components + b;
-                    (values[i], values[j]) = (values[j], values[i]);
-                }
-            }
-        }
-        else
-        {
-            int count = values.Count / components;
-            for (int k = 0; k < count; k++)
-            {
-                int i = k * components + a;
-                int j = k * components + b;
-                (values[i], values[j]) = (values[j], values[i]);
-            }
-        }
-    }
-
-    private static Float3 SwapYZ(Float3 v) => new(v.X, v.Z, v.Y);
-    private static Float3 SwapYZScale(Float3 v) => new(v.X, v.Z, v.Y);
-    private static Quaternion SwapYZRotation(Quaternion q) => new(-q.X, -q.Z, -q.Y, q.W);
-
-    private static Float4x4 SwapYZ(Float4x4 m)
-    {
-        // Conjugate by S = swap-rows-1-and-2 matrix: result = S * m * S.
-        // S * m swaps rows 1 and 2 of m (i.e. swaps Y and Z components of every column).
-        // (S * m) * S swaps columns 1 and 2 of the result.
-        Float4 c0 = new(m.c0.X, m.c0.Z, m.c0.Y, m.c0.W);
-        Float4 c1 = new(m.c1.X, m.c1.Z, m.c1.Y, m.c1.W);
-        Float4 c2 = new(m.c2.X, m.c2.Z, m.c2.Y, m.c2.W);
-        Float4 c3 = new(m.c3.X, m.c3.Z, m.c3.Y, m.c3.W);
-        // Swap columns 1 and 2.
-        return new Float4x4(c0, c2, c1, c3);
-    }
-
-    private static Float3 NegateZ(Float3 v) => new(v.X, v.Y, -v.Z);
-
-    private static Quaternion MirrorZ(Quaternion q) =>
-        new(-q.X, -q.Y, q.Z, q.W);
-
-    private static Float4x4 MirrorZ(Float4x4 m)
-    {
-        // S * M * S where S = diag(1,1,-1,1).
-        // Effect: negate row 2 and column 2 of the rotation block.
-        // Columns of m: c0, c1, c2, c3 each is Float4.
-        var c0 = m.c0;
-        var c1 = m.c1;
-        var c2 = m.c2;
-        var c3 = m.c3;
-
-        // S * M: negate the third row (Z component of every column).
-        c0 = new Float4(c0.X, c0.Y, -c0.Z, c0.W);
-        c1 = new Float4(c1.X, c1.Y, -c1.Z, c1.W);
-        c2 = new Float4(c2.X, c2.Y, -c2.Z, c2.W);
-        c3 = new Float4(c3.X, c3.Y, -c3.Z, c3.W);
-
-        // (S*M) * S: negate column 2.
-        c2 = new Float4(-c2.X, -c2.Y, -c2.Z, -c2.W);
-
-        return new Float4x4(c0, c1, c2, c3);
+        public Float4x4 Matrix(Float4x4 m) => _matrix * m * Float4x4.Transpose(_matrix);
     }
 }
