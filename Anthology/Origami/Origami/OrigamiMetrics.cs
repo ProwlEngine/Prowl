@@ -95,6 +95,12 @@ public sealed class OrigamiMetrics
     /// Requires a renderer with backdrop-blur support; 0 disables it.</summary>
     public float WindowBackdropBlur = 22f;
 
+    /// <summary>Whether docked windows blur what is behind them. Floating windows always do, since they overlap other content.</summary>
+    public bool BlurDockedWindows = true;
+
+    /// <summary>Opacity of dock window fills, from 0 (see through) to 1 (solid). The tab bar stays a little more opaque than the body.</summary>
+    public float WindowOpacity = 0.8f;
+
     /// <summary>Horizontal padding inside each tab.</summary>
     public float TabPadding = 11f;
 
@@ -164,6 +170,9 @@ public sealed class OrigamiMetrics
         FontSizeSmall = LerpF(a.FontSizeSmall, b.FontSizeSmall, t),
         LabelWidth = LerpF(a.LabelWidth, b.LabelWidth, t),
         TabBarHeight = LerpF(a.TabBarHeight, b.TabBarHeight, t),
+        WindowBackdropBlur = LerpF(a.WindowBackdropBlur, b.WindowBackdropBlur, t),
+        BlurDockedWindows = b.BlurDockedWindows,
+        WindowOpacity = LerpF(a.WindowOpacity, b.WindowOpacity, t),
         TabPadding = LerpF(a.TabPadding, b.TabPadding, t),
         TabGap = LerpF(a.TabGap, b.TabGap, t),
         TabCloseSize = LerpF(a.TabCloseSize, b.TabCloseSize, t),
@@ -204,6 +213,9 @@ public sealed class OrigamiMetrics
         FontSize = FontSize,
         FontSizeSmall = FontSizeSmall,
         LabelWidth = LabelWidth,
+        WindowBackdropBlur = WindowBackdropBlur,
+        BlurDockedWindows = BlurDockedWindows,
+        WindowOpacity = WindowOpacity,
         TabBarHeight = TabBarHeight,
         TabPadding = TabPadding,
         TabGap = TabGap,

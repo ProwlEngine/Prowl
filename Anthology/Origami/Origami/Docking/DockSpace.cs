@@ -280,20 +280,14 @@ public class DockSpace
         _leafRects[node] = new Rect(new Float2(x + ox, y + oy), new Float2(x + w + ox, y + h + oy));
         _leafOwner[node] = fw;
 
-        var bodyColor = theme.Neutral.C400;
-        var tabBarColor = theme.Neutral.C300;
+        float bodyAlpha = Math.Clamp(m.WindowOpacity, 0f, 1f);
+        float tabBarAlpha = bodyAlpha + (1f - bodyAlpha) * 0.25f;
+        var bodyColor = OrigamiTheme.WithAlpha(theme.Neutral.C400, (int)(bodyAlpha * 255));
+        var tabBarColor = OrigamiTheme.WithAlpha(theme.Neutral.C300, (int)(tabBarAlpha * 255));
         var borderColor = theme.Neutral.C200;
         int id = node.GetHashCode();
 
-        // Frosted glass: with backdrop blur on, thin the fill slightly so the blurred content behind
-        // reads through as frost — but keep the panels dark and solid (they should be a deep glass,
-        // not a light purple wash). Without blur the surfaces stay their normal tint.
-        float winBlur = m.WindowBackdropBlur;
-        if (winBlur > 0f)
-        {
-            bodyColor = Color.FromArgb(199, bodyColor.R, bodyColor.G, bodyColor.B);
-            tabBarColor = Color.FromArgb(217, tabBarColor.R, tabBarColor.G, tabBarColor.B);
-        }
+        float winBlur = fw != null || m.BlurDockedWindows ? m.WindowBackdropBlur : 0f;
 
         using (paper.Box($"leaf_{id}")
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
