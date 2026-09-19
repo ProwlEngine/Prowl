@@ -9,7 +9,10 @@ using Prowl.OrigamiUI;
 namespace Prowl.Editor.Theming;
 
 /// <summary>Static editor-background style used when the animated background is off.</summary>
-public enum EditorBackgroundStyle { Nebula, Gradient, Color }
+public enum EditorBackgroundStyle { Nebula, Gradient, Color, Image }
+
+/// <summary>How a background image is fitted to the window, like desktop wallpaper settings.</summary>
+public enum BackgroundImageFit { Fill, Fit, Stretch, Tile, Center }
 
 /// <summary>
 /// A color ramp with a single primary color. Other stops are computed from RGB offsets.
@@ -145,6 +148,8 @@ public class EditorThemeData
     // Effects
     /// <summary> Whether glass surfaces use a blur effect. </summary>
     public bool GlassBlur { get; set; } = true;
+    /// <summary> Opacity of dock window fills, from 0 to 1. </summary>
+    public float WindowOpacity { get; set; } = 0.8f;
     /// <summary> Strength of the glass blur effect. </summary>
     public float BlurAmount { get; set; } = 22f;
     /// <summary> Whether drop shadows are rendered. </summary>
@@ -175,6 +180,14 @@ public class EditorThemeData
     public bool BgShowComets { get; set; } = true;
     /// <summary> Solid color behind all background layers as hex. </summary>
     public string BackgroundVoidColor { get; set; } = "#060409";
+
+    // Image background: a file on this machine, read directly and never imported into a project.
+    /// <summary> Absolute path of the background image. </summary>
+    public string BackgroundImagePath { get; set; } = "";
+    /// <summary> How the background image is fitted to the window. </summary>
+    public BackgroundImageFit BackgroundImageFit { get; set; } = BackgroundImageFit.Fill;
+    /// <summary> How much the background image is darkened, from 0 to 1. </summary>
+    public float BackgroundImageDim { get; set; } = 0.3f;
 
     // Default ramp stops (RGB) = Origami's ramps. Customization is applied on top of Origami's
     // live theme, preserving each stop's alpha, so translucent glass surfaces stay glass.
@@ -211,6 +224,12 @@ public class EditorThemeData
         ApplyRamp(t.Green, Green);
         ApplyRamp(t.Amber, Amber);
         ApplyRamp(t.Ink, Ink);
+
+        // Surface tokens follow the neutral ramp so menus, dropdowns, popovers and toasts pick up a retint.
+        t.Glass = KeepAlpha(t.Glass, Neutral.GetStop(0));
+        t.BorderSoft = KeepAlpha(t.BorderSoft, Neutral.GetStop(1));
+        t.BorderStrong = KeepAlpha(t.BorderStrong, Neutral.GetStop(1));
+        t.Popover = KeepAlpha(t.Popover, Neutral.GetStop(2));
     }
 
     private static void ApplyRamp(OrigamiRamp dst, ColorRamp src)

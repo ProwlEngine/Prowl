@@ -538,7 +538,7 @@ public class EditorApplication : Game
 
         // Editor backdrop (behind the translucent glass panels) shared with the launcher.
         _nebula ??= new GUI.NebulaBackground(paper);
-        GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime);
+        GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showComets: false);
 
         DrawHeader(paper, w, h);
 
@@ -583,7 +583,7 @@ public class EditorApplication : Game
         using (paper.Row("play_pill").PositionType(PositionType.SelfDirected)
             .Size(UnitValue.Auto).Rounded(EditorTheme.Roundness)
             .Margin(UnitValue.StretchOne)
-            .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
+            .BackdropBlur(EditorTheme.DockedBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
@@ -640,7 +640,7 @@ public class EditorApplication : Game
     {
         float clH = HeaderChipHeight;
         float pad = EditorTheme.DockPadding;
-        float blur = Origami.Current.Metrics.WindowBackdropBlur;
+        float blur = EditorTheme.DockedBlur;
         float rectPadX = 10f, dot = 8f;
 
         int fps = _dispFps;
@@ -698,7 +698,7 @@ public class EditorApplication : Game
     private static void StatusChip(Paper paper, string id, float hRect, string text, Prowl.Scribe.FontFile font)
     {
         using (paper.Row(id).Width(UnitValue.Auto).Height(hRect).Padding(10, 10, 0, 0).Rounded(7)
-            .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
+            .BackdropBlur(EditorTheme.DockedBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable().Enter())
         {

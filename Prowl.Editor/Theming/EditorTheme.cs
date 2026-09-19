@@ -130,6 +130,8 @@ public static class EditorTheme
             IndicatorGap      = IndicatorGap,
             // Glass Blur toggle drives every backdrop-blur surface (dock windows, file dialog, header).
             WindowBackdropBlur = EffectiveBlur,
+            BlurDockedWindows = UsesImageBackground,
+            WindowOpacity = WindowOpacity,
         };
 
         t.Font         = Font;
@@ -235,6 +237,8 @@ public static class EditorTheme
     // -- Effects (mirrored from EditorThemeData; applied globally) -----
     /// <summary> Enables glass-morphism blur on backdrop surfaces. </summary>
     public static bool GlassBlur = true;
+    /// <summary> Opacity of dock window fills, from 0 to 1. </summary>
+    public static float WindowOpacity = 0.8f;
     /// <summary> Blur radius in pixels when GlassBlur is enabled. </summary>
     public static float BlurAmount = 22f;
     /// <summary> Enables drop shadows on popovers, dropdowns and modals. </summary>
@@ -261,9 +265,21 @@ public static class EditorTheme
     public static bool BgShowComets = true;
     /// <summary> Deepest void color behind all background layers. </summary>
     public static Color BackgroundVoidColor = Color.FromArgb(6, 4, 9);
+    /// <summary> Absolute path of the background image, used by the Image style. </summary>
+    public static string BackgroundImagePath = "";
+    /// <summary> How the background image is fitted to the window. </summary>
+    public static BackgroundImageFit BackgroundImageFit = BackgroundImageFit.Fill;
+    /// <summary> How much the background image is darkened, from 0 to 1. </summary>
+    public static float BackgroundImageDim = 0.3f;
 
     /// <summary>True when the (animated or static) nebula should be drawn rather than a gradient/solid.</summary>
     public static bool UsesNebulaBackground => AnimatedBackground || BackgroundStyle == EditorBackgroundStyle.Nebula;
+
+    /// <summary>True when a wallpaper image is behind the editor, the only background with enough detail for docked windows to need blur.</summary>
+    public static bool UsesImageBackground => !UsesNebulaBackground && BackgroundStyle == EditorBackgroundStyle.Image;
+
+    /// <summary>Blur radius for glass that sits over the background but never over other windows, such as docked windows and header chips.</summary>
+    public static float DockedBlur => UsesImageBackground ? EffectiveBlur : 0f;
 
     /// <summary>The blur radius actually pushed into Origami's metrics (0 when Glass Blur is off).</summary>
     public static float EffectiveBlur => GlassBlur ? BlurAmount : 0f;
@@ -313,7 +329,7 @@ public static class EditorTheme
     public static Color Neutral200 => Color.FromArgb(240, 12, 10, 20);     // app shell
     public static Color Neutral300 => T.Neutral.C300;                      // panels / sidebar glass
     public static Color Neutral400 => T.Neutral.C500;                      // cards / raised surface
-    public static Color Neutral500 => Color.FromArgb(46, 178, 150, 255);   // border / separator
+    public static Color Neutral500 => WithAlpha(T.BorderStrong, 46);   // border / separator
     public static Color Neutral600 => T.Neutral.C600;
     public static Color Neutral700 => T.Neutral.C700;
 
@@ -359,8 +375,8 @@ public static class EditorTheme
     public static Color Amber700 => T.Amber.C700;
 
     // -- Ink: borders (100/200 editor-specific) + text hierarchy (300 hint -> 500 primary). --
-    public static Color Ink100 => Color.FromArgb(40, 178, 150, 255);
-    public static Color Ink200 => Color.FromArgb(72, 190, 150, 255);
+    public static Color Ink100 => WithAlpha(T.BorderStrong, 40);
+    public static Color Ink200 => WithAlpha(T.BorderStrong, 72);
     public static Color Ink300 => T.Ink.C300;
     public static Color Ink400 => T.Ink.C400;
     public static Color Ink500 => T.Ink.C500;

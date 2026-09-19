@@ -326,7 +326,7 @@ public class ConsolePanel : DockPanel
                 canvas.RectFilled(left, rowY, 2f, rowH, EditorTheme.Accent);
             }
             else if (vi == hoverRow)
-                canvas.RectFilled(left, rowY, w, rowH, Color.FromArgb(13, 168, 85, 247));
+                canvas.RectFilled(left, rowY, w, rowH, EditorTheme.WithAlpha(EditorTheme.Accent, 13));
 
             float ix = left + padL;
             icon.Draw(canvas, new Rect(ix, line1 - iconSize * 0.5f, ix + iconSize, line1 + iconSize * 0.5f), color, 1.6f);

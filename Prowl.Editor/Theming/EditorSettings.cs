@@ -103,6 +103,7 @@ public class EditorSettings
 
         // Effects
         EditorTheme.GlassBlur = t.GlassBlur;
+        EditorTheme.WindowOpacity = t.WindowOpacity;
         EditorTheme.BlurAmount = t.BlurAmount;
         EditorTheme.DropShadows = t.DropShadows;
         EditorTheme.AccentGlow = t.AccentGlow;
@@ -116,6 +117,9 @@ public class EditorSettings
         EditorTheme.BgShowStars = t.BgShowStars;
         EditorTheme.BgShowComets = t.BgShowComets;
         EditorTheme.BackgroundVoidColor = ColorRamp.ParseHex(t.BackgroundVoidColor);
+        EditorTheme.BackgroundImagePath = t.BackgroundImagePath;
+        EditorTheme.BackgroundImageFit = t.BackgroundImageFit;
+        EditorTheme.BackgroundImageDim = t.BackgroundImageDim;
 
         // Push the freshly-applied editor theme into Origami. Brief lerp so user-visible
         // theme tweaks animate instead of snapping.
