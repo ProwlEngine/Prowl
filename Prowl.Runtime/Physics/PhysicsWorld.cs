@@ -9,6 +9,7 @@ using System.Threading;
 using Jitter2;
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
+using Jitter2.DataStructures;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
@@ -32,7 +33,7 @@ public enum PhysicsThreadModel
 /// <para/>
 /// <b>Threading:</b> every member here is main-thread only, and queries additionally must not overlap
 /// each other. Jitter's own read paths are thread-safe, so this is Prowl's restriction rather than
-/// Jitter's: the query layer reuses scratch buffers and cast shapes instead of allocating per call, and
+/// Jitter's: the query layer reuses scratch buffers, and
 /// a query first pushes pending Transform edits into their bodies. Breaking either rule is reported
 /// rather than silently returning wrong results. If you need a query from a job, marshal it back.
 /// </summary>
@@ -175,53 +176,170 @@ public class PhysicsWorld
     private readonly Dictionary<ulong, Collider> _shapeOwnersById = [];
 
     // Scratch state for queries, shared rather than allocated per call: a character controller issues
-    // about ten casts a frame, each of which would otherwise allocate two lists and a shape.
+    // about ten casts a frame, each of which would otherwise allocate two lists.
     //
     // INVARIANT: a query must never run inside another query. Nothing on a query path calls into user
     // code, so this holds as of today (09/08/26), and collision and trigger callbacks are raised between queries rather
-    // than during one. If that ever changes, these buffers and the cached shapes below are shared
-    // mutable state and both queries would return nonsense; _queryDepth is what makes that say so
+    // than during one. If that ever changes, these buffers are shared mutable state and both queries
+    // would return nonsense; _queryDepth is what makes that say so
     // instead of corrupting quietly.
     private int _queryDepth;
-    private readonly List<IDynamicTreeProxy> _queryProxies = [];
     private readonly List<ShapeCastHit> _queryHits = [];
-    private readonly SphereShape _querySphere = new(0.5f);
-    private readonly BoxShape _queryBox = new(1.0f, 1.0f, 1.0f);
-    private readonly CapsuleShape _queryCapsule = new(0.5f, 1.0f);
-    private readonly CylinderShape _queryCylinder = new(1.0f, 0.5f);
-    private readonly ConeShape _queryCone = new(0.5f, 1.0f);
 
-    private SphereShape QuerySphere(float radius)
+    private struct ShapeCastSink<TShape> : ISink<IDynamicTreeProxy>
+        where TShape : ISupportMappable
     {
-        _querySphere.Radius = radius;
-        return _querySphere;
+        private readonly PhysicsWorld _world;
+        private readonly TShape _shape;
+        private readonly JQuaternion _orientation;
+        private readonly JVector _origin;
+        private readonly JVector _sweep;
+        private readonly JVector _direction;
+        private readonly float _maxDistance;
+        private readonly JBoundingBox _sweepBox;
+        private readonly List<ShapeCastHit> _hits;
+        private readonly QueryFilter _filter;
+
+        public ShapeCastSink(PhysicsWorld world, TShape shape, JQuaternion orientation,
+            JVector origin, JVector sweep, JVector direction, float maxDistance,
+            JBoundingBox sweepBox, List<ShapeCastHit> hits, QueryFilter filter)
+        {
+            _world = world;
+            _shape = shape;
+            _orientation = orientation;
+            _origin = origin;
+            _sweep = sweep;
+            _direction = direction;
+            _maxDistance = maxDistance;
+            _sweepBox = sweepBox;
+            _hits = hits;
+            _filter = filter;
+        }
+
+        public void Add(in IDynamicTreeProxy proxy)
+        {
+            if (proxy is TerrainHeightmapProxy terrainProxy)
+            {
+                if (_world.TerrainAccepted(terrainProxy, _filter))
+                    _world.SweepAgainstTerrain(_shape, _orientation, _origin, _sweep,
+                        _maxDistance, terrainProxy, _sweepBox, _hits);
+                return;
+            }
+
+            if (proxy is not RigidBodyShape targetShape || !_world.Accepts(targetShape, _filter))
+                return;
+
+            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
+
+            bool hit = NarrowPhase.Sweep(
+                _shape, targetShape,
+                _orientation, targetBody.Data.Orientation,
+                _origin, targetBody.Data.Position,
+                _sweep, JVector.Zero,
+                out JVector pointA, out JVector pointB, out JVector normal, out float lambda);
+
+            // Use the original inclusive range check in its negated form so NaN is rejected too.
+            if (!hit || !(lambda >= 0 && lambda <= 1.0f)) return;
+
+            float penetration = 0.0f;
+
+            // A zero normal means the shapes already overlapped at the start of the sweep, where
+            // Sweep reports lambda 0 and no direction. Recover the direction and depth from MPR/EPA.
+            if (normal.LengthSquared() <= 0)
+            {
+                lambda = 0.0f;
+
+                bool resolved = NarrowPhase.MprEpa(
+                    _shape, targetShape,
+                    _orientation, targetBody.Data.Orientation,
+                    _origin, targetBody.Data.Position,
+                    out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
+
+                if (resolved && separation.LengthSquared() > 0)
+                {
+                    pointA = deepestA;
+                    pointB = deepestB;
+                    normal = JVector.Normalize(separation);
+                }
+                else
+                {
+                    penetration = 0.0f;
+                    normal = _direction;
+                }
+            }
+
+            Collider owner = _world.GetShapeOwner(targetShape);
+            _hits.Add(new ShapeCastHit
+            {
+                Hit = true,
+                Fraction = lambda,
+                Distance = lambda * _maxDistance,
+                Penetration = penetration,
+                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
+                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
+                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Rigidbody = userData.Rigidbody,
+                Shape = targetShape,
+                Collider = owner,
+                Transform = ResolveHitTransform(userData.Rigidbody, owner)
+            });
+        }
     }
 
-    private BoxShape QueryBox(Float3 size)
+    private struct OverlapSink<TShape> : ISink<IDynamicTreeProxy>
+        where TShape : ISupportMappable
     {
-        _queryBox.Size = new JVector(size.X, size.Y, size.Z);
-        return _queryBox;
-    }
+        private readonly PhysicsWorld _world;
+        private readonly TShape _shape;
+        private readonly JQuaternion _orientation;
+        private readonly JVector _position;
+        private readonly List<ShapeCastHit> _hits;
+        private readonly QueryFilter _filter;
 
-    private CapsuleShape QueryCapsule(float radius, float length)
-    {
-        _queryCapsule.Radius = radius;
-        _queryCapsule.Length = length;
-        return _queryCapsule;
-    }
+        public OverlapSink(PhysicsWorld world, TShape shape, JQuaternion orientation,
+            JVector position, List<ShapeCastHit> hits, QueryFilter filter)
+        {
+            _world = world;
+            _shape = shape;
+            _orientation = orientation;
+            _position = position;
+            _hits = hits;
+            _filter = filter;
+        }
 
-    private CylinderShape QueryCylinder(float radius, float height)
-    {
-        _queryCylinder.Radius = radius;
-        _queryCylinder.Height = height;
-        return _queryCylinder;
-    }
+        public void Add(in IDynamicTreeProxy proxy)
+        {
+            if (proxy is not RigidBodyShape targetShape || !_world.Accepts(targetShape, _filter))
+                return;
 
-    private ConeShape QueryCone(float radius, float height)
-    {
-        _queryCone.Radius = radius;
-        _queryCone.Height = height;
-        return _queryCone;
+            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
+
+            bool overlaps = NarrowPhase.MprEpa(
+                _shape, targetShape,
+                _orientation, targetBody.Data.Orientation,
+                _position, targetBody.Data.Position,
+                out JVector pointA, out JVector pointB, out JVector normal, out float penetration);
+
+            // A comparison with NaN is false; negate the valid condition to reject it.
+            if (!overlaps || !(penetration > 0)) return;
+
+            Collider owner = _world.GetShapeOwner(targetShape);
+            _hits.Add(new ShapeCastHit
+            {
+                Hit = true,
+                Fraction = 0,
+                Penetration = penetration,
+                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
+                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
+                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Rigidbody = userData.Rigidbody,
+                Shape = targetShape,
+                Collider = owner,
+                Transform = ResolveHitTransform(userData.Rigidbody, owner)
+            });
+        }
     }
 
     internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
@@ -751,7 +869,16 @@ public class PhysicsWorld
         finally { ExitQuery(); }
     }
 
-    private int ShapeCastAllCore(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
+    private int ShapeCastAll<TShape>(TShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
+        where TShape : ISupportMappable
+    {
+        EnterQuery(nameof(ShapeCastAll));
+        try { return ShapeCastAllCore(shape, orientation, origin, direction, maxDistance, hits, filter); }
+        finally { ExitQuery(); }
+    }
+
+    private int ShapeCastAllCore<TShape>(TShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
+        where TShape : ISupportMappable
     {
         hits.Clear();
         if (!ValidateQuery(origin, direction, maxDistance, nameof(ShapeCastAll))) return 0;
@@ -763,97 +890,18 @@ public class PhysicsWorld
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
         JVector sweep = jDirection * maxDistance;
 
-        // Get all shapes from the dynamic tree that could potentially be hit
-        List<IDynamicTreeProxy> potentialShapes = _queryProxies;
-        potentialShapes.Clear();
-
         // Create a bounding box that encompasses the entire sweep
         JBoundingBox sweepBox = new();
-        shape.CalculateBoundingBox(new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W), jOrigin, out JBoundingBox startBox);
-        shape.CalculateBoundingBox(new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W), jOrigin + sweep, out JBoundingBox endBox);
+        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
+        ShapeHelper.CalculateBoundingBox(shape, jOrientation, jOrigin, out JBoundingBox startBox);
+        ShapeHelper.CalculateBoundingBox(shape, jOrientation, jOrigin + sweep, out JBoundingBox endBox);
 
         sweepBox.Min = JVector.Min(startBox.Min, endBox.Min);
         sweepBox.Max = JVector.Max(startBox.Max, endBox.Max);
 
-        World.DynamicTree.Query(potentialShapes, in sweepBox);
-
-        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
-
-        foreach (IDynamicTreeProxy proxy in potentialShapes)
-        {
-            if (proxy is TerrainHeightmapProxy terrainProxy)
-            {
-                // Shape cast against terrain heightmap triangles
-                if (TerrainAccepted(terrainProxy, filter))
-                    SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, maxDistance, terrainProxy, sweepBox, hits);
-                continue;
-            }
-
-            if (proxy is not RigidBodyShape targetShape) continue;
-
-            if (!Accepts(targetShape, filter)) continue;
-            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-
-            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
-
-            // Perform sweep test
-            bool hit = NarrowPhase.Sweep(
-                shape, targetShape,
-                jOrientation, targetBody.Data.Orientation,
-                jOrigin, targetBody.Data.Position,
-                sweep, JVector.Zero,
-                out JVector pointA, out JVector pointB, out JVector normal, out float lambda);
-
-            if (hit && lambda >= 0 && lambda <= 1.0)
-            {
-                float penetration = 0.0f;
-
-                // A zero normal means the shapes already overlapped at the start of the sweep, where
-                // Sweep reports lambda 0 and no direction. Recover the direction and the depth from
-                // MPR/EPA; the fraction stays 0, the depth belongs in Penetration.
-                if (normal.LengthSquared() <= 0)
-                {
-                    lambda = 0.0f;
-
-                    bool resolved = NarrowPhase.MprEpa(
-                        shape, targetShape,
-                        jOrientation, targetBody.Data.Orientation,
-                        jOrigin, targetBody.Data.Position,
-                        out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
-
-                    if (resolved && separation.LengthSquared() > 0)
-                    {
-                        pointA = deepestA;
-                        pointB = deepestB;
-                        normal = JVector.Normalize(separation);
-                    }
-                    else
-                    {
-                        // EPA did not converge. Report the sweep direction so the caller is still
-                        // blocked, rather than handing back a zero normal it would divide by.
-                        penetration = 0.0f;
-                        normal = jDirection;
-                    }
-                }
-
-                Collider owner = GetShapeOwner(targetShape);
-                var castHit = new ShapeCastHit
-                {
-                    Hit = true,
-                    Fraction = lambda,
-                    Distance = lambda * maxDistance,
-                    Penetration = penetration,
-                    Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                    Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                    HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
-                    Rigidbody = userData.Rigidbody,
-                    Shape = targetShape,
-                    Collider = owner,
-                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
-                };
-                hits.Add(castHit);
-            }
-        }
+        var sink = new ShapeCastSink<TShape>(this, shape, jOrientation, jOrigin, sweep,
+            jDirection, maxDistance, sweepBox, hits, filter);
+        World.DynamicTree.Query(ref sink, in sweepBox);
 
         // Nearest first, so callers can take hits[0] without scanning.
         hits.Sort(static (a, b) => a.Fraction.CompareTo(b.Fraction));
@@ -863,9 +911,10 @@ public class PhysicsWorld
     /// <summary>
     /// Sweep a shape against terrain heightmap triangles within the sweep bounding box.
     /// </summary>
-    private void SweepAgainstTerrain(RigidBodyShape shape, JQuaternion jOrientation,
+    private void SweepAgainstTerrain<TShape>(TShape shape, JQuaternion jOrientation,
         JVector jOrigin, JVector sweep, float sweepDistance, TerrainHeightmapProxy terrainProxy,
         JBoundingBox sweepBox, List<ShapeCastHit> hits)
+        where TShape : ISupportMappable
     {
         if (!_terrainProxies.TryGetValue(terrainProxy, out ITerrainHeightProvider hp))
             return;
@@ -979,6 +1028,22 @@ public class PhysicsWorld
         return false;
     }
 
+    private bool ShapeCast<TShape>(TShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
+        where TShape : ISupportMappable
+    {
+        List<ShapeCastHit> hits = _queryHits;
+        int hitCount = ShapeCastAll(shape, orientation, origin, direction, maxDistance, hits, filter);
+
+        if (hitCount > 0)
+        {
+            hitInfo = hits[0];
+            return true;
+        }
+
+        hitInfo = new ShapeCastHit();
+        return false;
+    }
+
     /// <summary>
     /// Generic shape cast that returns only the closest hit with default orientation and layer mask.
     /// </summary>
@@ -1006,7 +1071,7 @@ public class PhysicsWorld
     /// </summary>
     public bool SphereCast(Float3 origin, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, out hitInfo, filter);
+        return ShapeCast(SupportPrimitives.CreateSphere(radius), Quaternion.Identity, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -1028,7 +1093,7 @@ public class PhysicsWorld
     /// </summary>
     public int SphereCastAll(Float3 origin, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, hits, filter);
+        return ShapeCastAll(SupportPrimitives.CreateSphere(radius), Quaternion.Identity, origin, direction, maxDistance, hits, filter);
     }
 
     /// <summary>
@@ -1056,8 +1121,7 @@ public class PhysicsWorld
         Float3 capsuleAxis = point2 - point1;
         float capsuleLength = Float3.Length(capsuleAxis);
 
-        // Reused capsule shape (aligned along Y-axis)
-        CapsuleShape capsule = QueryCapsule(radius, capsuleLength);
+        var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
@@ -1090,8 +1154,7 @@ public class PhysicsWorld
         Float3 capsuleAxis = point2 - point1;
         float capsuleLength = Float3.Length(capsuleAxis);
 
-        // Reused capsule shape (aligned along Y-axis)
-        CapsuleShape capsule = QueryCapsule(radius, capsuleLength);
+        var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
@@ -1150,7 +1213,8 @@ public class PhysicsWorld
     /// </summary>
     public bool BoxCast(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QueryBox(size), orientation, origin, direction, maxDistance, out hitInfo, filter);
+        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        return ShapeCast(SupportPrimitives.CreateBox(halfExtents), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -1173,7 +1237,8 @@ public class PhysicsWorld
     /// </summary>
     public int BoxCastAll(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QueryBox(size), orientation, origin, direction, maxDistance, hits, filter);
+        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        return ShapeCastAll(SupportPrimitives.CreateBox(halfExtents), orientation, origin, direction, maxDistance, hits, filter);
     }
 
     /// <summary>
@@ -1197,7 +1262,7 @@ public class PhysicsWorld
     /// </summary>
     public bool CylinderCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, out hitInfo, filter);
+        return ShapeCast(SupportPrimitives.CreateCylinder(radius, height * 0.5f), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -1221,7 +1286,7 @@ public class PhysicsWorld
     /// </summary>
     public int CylinderCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, hits, filter);
+        return ShapeCastAll(SupportPrimitives.CreateCylinder(radius, height * 0.5f), orientation, origin, direction, maxDistance, hits, filter);
     }
 
     /// <summary>
@@ -1245,7 +1310,7 @@ public class PhysicsWorld
     /// </summary>
     public bool ConeCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QueryCone(radius, height), orientation, origin, direction, maxDistance, out hitInfo, filter);
+        return ShapeCast(SupportPrimitives.CreateCone(radius, height), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -1269,7 +1334,7 @@ public class PhysicsWorld
     /// </summary>
     public int ConeCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QueryCone(radius, height), orientation, origin, direction, maxDistance, hits, filter);
+        return ShapeCastAll(SupportPrimitives.CreateCone(radius, height), orientation, origin, direction, maxDistance, hits, filter);
     }
 
     #endregion
@@ -1292,7 +1357,16 @@ public class PhysicsWorld
         finally { ExitQuery(); }
     }
 
-    private int OverlapCore(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, QueryFilter filter)
+    private int Overlap<TShape>(TShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, QueryFilter filter)
+        where TShape : ISupportMappable
+    {
+        EnterQuery(nameof(Overlap));
+        try { return OverlapCore(shape, orientation, position, hits, filter); }
+        finally { ExitQuery(); }
+    }
+
+    private int OverlapCore<TShape>(TShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, QueryFilter filter)
+        where TShape : ISupportMappable
     {
         hits.Clear();
         if (!ValidateQuery(position, nameof(Overlap))) return 0;
@@ -1300,49 +1374,11 @@ public class PhysicsWorld
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
         var jPosition = new JVector(position.X, position.Y, position.Z);
 
-        // Get all shapes from the dynamic tree that could potentially overlap
-        List<IDynamicTreeProxy> potentialShapes = _queryProxies;
-        potentialShapes.Clear();
-
         // Create a bounding box for the shape
-        shape.CalculateBoundingBox(new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W), jPosition, out JBoundingBox shapeBounds);
-        World.DynamicTree.Query(potentialShapes, in shapeBounds);
-
-        foreach (IDynamicTreeProxy proxy in potentialShapes)
-        {
-            if (proxy is not RigidBodyShape targetShape) continue;
-
-            if (!Accepts(targetShape, filter)) continue;
-            var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-
-            Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
-
-            // Perform overlap test using sweep with zero distance
-            bool overlaps = NarrowPhase.MprEpa(
-                shape, targetShape,
-                new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W), targetBody.Data.Orientation,
-                jPosition, targetBody.Data.Position,
-                out JVector pointA, out JVector pointB, out JVector normal, out float penetration);
-
-            if (overlaps && penetration > 0)
-            {
-                Collider owner = GetShapeOwner(targetShape);
-                var hit = new ShapeCastHit
-                {
-                    Hit = true,
-                    Fraction = 0,
-                    Penetration = penetration,
-                    Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                    Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                    HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
-                    Rigidbody = userData.Rigidbody,
-                    Shape = targetShape,
-                    Collider = owner,
-                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
-                };
-                hits.Add(hit);
-            }
-        }
+        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
+        ShapeHelper.CalculateBoundingBox(shape, jOrientation, jPosition, out JBoundingBox shapeBounds);
+        var sink = new OverlapSink<TShape>(this, shape, jOrientation, jPosition, hits, filter);
+        World.DynamicTree.Query(ref sink, in shapeBounds);
 
         return hits.Count;
     }
@@ -1372,7 +1408,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapSphere(Float3 position, float radius, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QuerySphere(radius), Quaternion.Identity, position, hits, filter);
+        return Overlap(SupportPrimitives.CreateSphere(radius), Quaternion.Identity, position, hits, filter);
     }
 
     /// <summary>
@@ -1398,8 +1434,7 @@ public class PhysicsWorld
         Float3 capsuleAxis = point2 - point1;
         float capsuleLength = Float3.Length(capsuleAxis);
 
-        // Reused capsule shape (aligned along Y-axis)
-        CapsuleShape capsule = QueryCapsule(radius, capsuleLength);
+        var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
@@ -1425,7 +1460,8 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapBox(Float3 position, Float3 size, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QueryBox(size), orientation, position, hits, filter);
+        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        return Overlap(SupportPrimitives.CreateBox(halfExtents), orientation, position, hits, filter);
     }
 
     /// <summary>
@@ -1447,7 +1483,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapCylinder(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QueryCylinder(radius, height), orientation, position, hits, filter);
+        return Overlap(SupportPrimitives.CreateCylinder(radius, height * 0.5f), orientation, position, hits, filter);
     }
 
     /// <summary>
@@ -1469,7 +1505,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapCone(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QueryCone(radius, height), orientation, position, hits, filter);
+        return Overlap(SupportPrimitives.CreateCone(radius, height), orientation, position, hits, filter);
     }
 
     #endregion
