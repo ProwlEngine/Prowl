@@ -25,6 +25,17 @@ public class PreviewRenderer : IDisposable
     /// <summary>Whether to draw a grid plane in the preview.</summary>
     public bool ShowGrid { get; set; }
 
+    /// <summary>Clear to transparent instead of the skybox, so only the subject has alpha.</summary>
+    public bool TransparentBackground
+    {
+        get => _camera.ClearFlags == CameraClearFlags.SolidColor;
+        set
+        {
+            _camera.ClearFlags = value ? CameraClearFlags.SolidColor : CameraClearFlags.Skybox;
+            _camera.ClearColor = new Color(0f, 0f, 0f, 0f);
+        }
+    }
+
     // Orbit camera state
     private float _orbitYaw = 30f;
     private float _orbitPitch = 20f;

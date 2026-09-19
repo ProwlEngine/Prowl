@@ -218,7 +218,7 @@ public static class EditorTheme
     // Base spacing/padding the full Origami metric scale (SpacingSmall..PaddingLarge) is derived from
     // these in BuildOrigamiTheme, so tweaking them retunes gaps/padding everywhere (property grid, etc.).
     /// <summary> Base spacing unit from which the full Origami spacing scale is derived. </summary>
-    public static float Spacing = 4f;
+    public static float Spacing = 2f;
     /// <summary> Base padding unit from which the full Origami padding scale is derived. </summary>
     public static float Padding = 6f;
     /// <summary> Base font size for UI text. </summary>

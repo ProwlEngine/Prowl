@@ -132,7 +132,7 @@ public class EditorThemeData
     /// <summary> Width of property labels in pixels. </summary>
     public float LabelWidth { get; set; } = 150f;
     /// <summary> Spacing between UI elements in pixels. </summary>
-    public float Spacing { get; set; } = 4f;
+    public float Spacing { get; set; } = 2f;
     /// <summary> Padding inside UI elements in pixels. </summary>
     public float Padding { get; set; } = 6f;
     // Single knob driving both the dock gutter padding and the splitter thickness.
@@ -270,11 +270,12 @@ public class EditorThemeData
         catch { return null; }
     }
 
-    /// <summary> Creates a default EditorThemeData with initialized ramps. </summary>
+    /// <summary> Creates the default theme, <see cref="ThemePresets.Default"/> with initialized ramps. </summary>
     public static EditorThemeData CreateDefault()
     {
         var d = new EditorThemeData();
         d.InitRamps();
+        ThemePresets.Default.ApplyTo(d);
         return d;
     }
 }
