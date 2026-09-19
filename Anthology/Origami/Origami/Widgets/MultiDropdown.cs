@@ -247,7 +247,7 @@ public sealed class MultiDropdownBuilder<T>
         Color tx = _theme.Primary.C700;                 // acc-300
 
         using (_paper.Row(id).Width(UnitValue.Auto).Height(22)
-            .Padding(9, 3, 0, 0).Rounded(6)
+            .Padding(9, 3, 0, 0).Rounded(_theme.Metrics.SmallRounding)
             .BackgroundColor(bg).BorderColor(bd).BorderWidth(1)
             .Enter())
         {
@@ -258,7 +258,7 @@ public sealed class MultiDropdownBuilder<T>
 
             var rm = onRemove;
             var xcol = tx;
-            using (_paper.Box($"{id}_x").Size(15).Rounded(4).Margin(3, 0, UnitValue.Stretch(), UnitValue.Stretch())
+            using (_paper.Box($"{id}_x").Size(15).Rounded(_theme.Metrics.SmallRounding).Margin(3, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .Hovered.BackgroundColor(Color.FromArgb(64, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B)).End()
                 .StopEventPropagation().OnClick(_ => rm())
                 .Enter())

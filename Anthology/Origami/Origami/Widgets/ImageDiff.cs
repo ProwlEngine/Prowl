@@ -59,10 +59,10 @@ public sealed class ImageDiffBuilder
         var primary = _theme.Primary;
         var font = _theme.Font;
 
-        // .w2diff: 9px radius, 1px soft border, clipped, dark fallback behind the images.
+        // .w2diff: 1px soft border, clipped, dark fallback behind the images.
         var container = _paper.Box($"{_id}_box")
             .Width(_width).Height(_height)
-            .Rounded(9f)
+            .Rounded(_theme.Metrics.ContainerRounding)
             .BorderColor(_theme.BorderSoft).BorderWidth(1)
             .Clip()
             .BackgroundColor(Color.FromArgb(255, 20, 20, 24));
@@ -196,7 +196,7 @@ public sealed class ImageDiffBuilder
                         float bph = (float)bs.Y + padTY * 2f;
                         float bpx = x + margin;
                         float bpy = y + h - margin - bph;
-                        canvas.RoundedRectFilled(bpx, bpy, bpw, bph, 6f, tagBg);
+                        canvas.RoundedRectFilled(bpx, bpy, bpw, bph, _theme.Metrics.SmallRounding, tagBg);
                         canvas.DrawText("Before", bpx + padTX, bpy + padTY, tagFg, tagFont, font);
 
                         var as_ = canvas.MeasureText("After", tagFont, font);
@@ -204,7 +204,7 @@ public sealed class ImageDiffBuilder
                         float aph = (float)as_.Y + padTY * 2f;
                         float apx = x + w - margin - apw;
                         float apy = y + h - margin - aph;
-                        canvas.RoundedRectFilled(apx, apy, apw, aph, 6f, tagBg);
+                        canvas.RoundedRectFilled(apx, apy, apw, aph, _theme.Metrics.SmallRounding, tagBg);
                         canvas.DrawText("After", apx + padTX, apy + padTY, tagFg, tagFont, font);
                     }
                 }));

@@ -619,9 +619,13 @@ public class DockSpace
             var fw = FloatingWindows[i];
             if (fw == _dragSourceWindow) continue;   // the window we're dragging follows the cursor; ignore it
             if (!Hit(mouse, fw.Position.X, fw.Position.Y, fw.Size.X, fw.Size.Y)) continue;
-            HoverLeaves(mouse, m, fw);
+            if (!HoverTabBars(mouse, fw)) HoverLeaves(mouse, m, fw);
             return;   // block fall-through even if the cursor sits on a splitter gap inside the window
         }
+
+        // Reordering into a tab bar wins over root docking, since bars along the edge sit inside the root zones.
+        _rootHoveredZone = DockZone.None;
+        if (HoverTabBars(mouse, null)) return;
 
         // Root edge zones (dock to the outer edges of the whole space).
         float edgeW = m.IndicatorSize + m.IndicatorGap;
@@ -640,9 +644,8 @@ public class DockSpace
         HoverLeaves(mouse, m, null);
     }
 
-    // Resolve the hovered leaf + zone among the leaves owned by <paramref name="owner"/> (null = root tree):
-    // tab-bar insertion takes priority, then the center/edge dock indicators.
-    private void HoverLeaves(Float2 mouse, OrigamiMetrics m, FloatingWindow? owner)
+    // Tab-bar insertion among the leaves owned by <paramref name="owner"/> (null = root tree). True when a bar is hovered.
+    private bool HoverTabBars(Float2 mouse, FloatingWindow? owner)
     {
         foreach (var (node, tb) in _tabBars)
         {
@@ -661,9 +664,14 @@ public class DockSpace
             _hoveredZone = DockZone.Tab;
             _hoveredTabIndex = idx;
             _hoveredTabCaretX = caret;
-            return;
+            return true;
         }
+        return false;
+    }
 
+    // Resolve the hovered leaf and its center/edge dock indicator among the leaves owned by <paramref name="owner"/>.
+    private void HoverLeaves(Float2 mouse, OrigamiMetrics m, FloatingWindow? owner)
+    {
         foreach (var (node, rect) in _leafRects)
         {
             if (_leafOwner.GetValueOrDefault(node) != owner) continue;

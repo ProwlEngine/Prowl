@@ -127,7 +127,7 @@ public static class TooltipSystem
             .Position(tooltipX, tooltipY)
             .Width(tooltipW).Height(UnitValue.Auto)
             .BackgroundColor(bgColor)
-            .Rounded(7f)
+            .Rounded(m.ContainerRounding)
             .DropShadow(0, 6, 20, 0, Color.FromArgb(128, 0, 0, 0))
             .Padding(padX, padX, padY, padY)
             .Gap(m.SpacingSmall)

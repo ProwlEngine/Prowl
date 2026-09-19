@@ -122,7 +122,7 @@ public sealed class ButtonGroupBuilder
         float rounding = _roundingOverride ?? metrics.Rounding;
         bool seg = _style == ButtonGroupStyle.Segmented;
         float padX = seg ? 12f : 13f;
-        float segRound = MathF.Max(3f, rounding - 2f);
+        float segRound = MathF.Max(0f, rounding - 2f);
 
         UnitValue widthValue = _width ?? UnitValue.Auto;
         var groupBox = _paper.Row(_id).Width(widthValue).Height(_height).Rounded(rounding);
@@ -357,9 +357,9 @@ public sealed class ButtonGroupBuilder
                 byte aBody = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
                 byte aText = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
 
-                canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
+                canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, _theme.Metrics.SmallRounding,
                     Color.FromArgb(aShadow, 0, 0, 0));
-                canvas.RoundedRectFilled(bx, by, bw, bh, 3f,
+                canvas.RoundedRectFilled(bx, by, bw, bh, _theme.Metrics.SmallRounding,
                     Color.FromArgb(aBody, ttBg.R, ttBg.G, ttBg.B));
                 canvas.DrawText(text, bx + padX, by + padY,
                     Color.FromArgb(aText, ttFg.R, ttFg.G, ttFg.B), fontSize, font);

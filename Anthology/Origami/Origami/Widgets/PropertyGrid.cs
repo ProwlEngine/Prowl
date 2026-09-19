@@ -779,25 +779,28 @@ public static class PropertyGridRenderer
         // ── Simple (leaf element) list ─────────────────────────
         void DrawSimple()
         {
-            const float rowH = 30f;
+            float rowH = m.RowHeight + 6f;
+            float headH = m.RowHeight + 2f;
+            float cr = m.ContainerRounding;
             using (paper.Column($"{id}_coll").Width(ST).Height(UnitValue.Auto)
-                .Rounded(8).BorderColor(bd).BorderWidth(1).Clip().Enter())
+                .Rounded(cr).BorderColor(bd).BorderWidth(1).Clip().Enter())
             {
                 var listEl = paper.CurrentParent;
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_se");
+                float headBottom = expanded || anim > 0.001f ? 0f : cr;
 
-                using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium).BackgroundColor(glass)
+                using (paper.Row($"{id}_ch").Width(ST).Height(headH).Rounded(cr, cr, headBottom, headBottom).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
-                    paper.Box($"{id}_ci").Width(14).Height(26).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, acc, size: 12f);
-                    paper.Box($"{id}_cc").Width(ST).Height(26).IsNotInteractable()
+                    paper.Box($"{id}_ci").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, acc, size: 12f);
+                    paper.Box($"{id}_cc").Width(ST).Height(headH).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? $"{list.Count} elements" : $"{label}  ({list.Count})", font)
                         .TextColor(tMid).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
-                    paper.Box($"{id}_cv").Width(12).Height(26).Margin(0, 0, ST, ST).IsNotInteractable()
+                    paper.Box($"{id}_cv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
                         .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
                 }
 
@@ -824,7 +827,7 @@ public static class PropertyGridRenderer
                             using (paper.Box($"{id}_v_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
                                 DrawFieldControl(paper, $"{id}_el_{sk}", elementType, list[idx], config, v => { list[idx] = v; onChange(list); }, depth + 1);
 
-                            paper.Box($"{id}_x_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
+                            paper.Box($"{id}_x_{sk}").Width(18).Height(18).Rounded(m.SmallRounding).Margin(0, 0, ST, ST)
                                 .Hovered.BackgroundColor(redBg).End()
                                 .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
                                 .OnClick(idx, (j, _) => RemoveAt(j)).Cursor(PaperCursor.Pointer);
@@ -833,7 +836,7 @@ public static class PropertyGridRenderer
                             paper.Box($"{id}_d_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
                     }
 
-                    paper.Box($"{id}_add").Width(ST).Height(26)
+                    paper.Box($"{id}_add").Width(ST).Height(headH).RoundedBottom(cr)
                         .Hovered.BackgroundColor(theme.Hover).End()
                         .Text("+ Add Element", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(0, (_, _) => AddNew()).Cursor(PaperCursor.Pointer);
@@ -844,9 +847,10 @@ public static class PropertyGridRenderer
         // ── One nested element card (foldout with its own property fields) ──
         void DrawElement(int i, string sk)
         {
-            const float rowH = 28f;
+            float rowH = m.RowHeight + 4f;
+            float cr = m.ContainerRounding;
             var cardB = paper.Column($"{id}_nel_{sk}").Width(ST).Height(UnitValue.Auto)
-                .Rounded(8).BorderColor(bd).BorderWidth(1)
+                .Rounded(cr).BorderColor(bd).BorderWidth(1)
                 .BackgroundColor(BeingDragged(sk) ? theme.Selected : System.Drawing.Color.FromArgb(6, 255, 255, 255)).Clip();
             CaptureRow(i, cardB);
             using (cardB.Enter())
@@ -858,7 +862,7 @@ public static class PropertyGridRenderer
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer);
-                if (exp) nh.RoundedTop(8); else nh.Rounded(8);   // hover fill follows the card corners
+                if (exp) nh.RoundedTop(cr); else nh.Rounded(cr);   // hover fill follows the card corners
                 using (nh.Enter())
                 {
                     // Absorb the click (so the grip doesn't toggle the card header's expand) per-event
@@ -878,7 +882,7 @@ public static class PropertyGridRenderer
                     paper.Box($"{id}_nt_{sk}").Width(ST).Height(rowH).IsNotInteractable()
                         .Text(list[i]?.GetType().Name ?? elementType.Name, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-                    paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
+                    paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(m.SmallRounding).Margin(0, 0, ST, ST)
                         .Hovered.BackgroundColor(redBg).End()
                         .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
                         .OnClick(i, (j, e) => { e.StopPropagation(); RemoveAt(j); }).Cursor(PaperCursor.Pointer);
@@ -909,25 +913,28 @@ public static class PropertyGridRenderer
         void DrawNested()
         {
             var color = DepthColor(depth);
+            float headH = m.RowHeight + 6f;
+            float cr = m.ContainerRounding;
             using (paper.Column($"{id}_nl").Width(ST).Height(UnitValue.Auto)
-                .Rounded(9).BorderColor(bd).BorderWidth(1).BackgroundColor(System.Drawing.Color.FromArgb(36, 0, 0, 0)).Clip().Enter())
+                .Rounded(cr).BorderColor(bd).BorderWidth(1).BackgroundColor(System.Drawing.Color.FromArgb(36, 0, 0, 0)).Clip().Enter())
             {
                 var listEl = paper.CurrentParent;
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_ne");
+                float headBottom = expanded || anim > 0.001f ? 0f : cr;
 
-                using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingLarge).BackgroundColor(glass)
+                using (paper.Row($"{id}_nlh").Width(ST).Height(headH).Rounded(cr, cr, headBottom, headBottom).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingLarge).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
-                    paper.Box($"{id}_nli").Width(14).Height(30).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, color, size: 13f);
-                    paper.Box($"{id}_nlt").Width(UnitValue.Auto).Height(30).IsNotInteractable()
+                    paper.Box($"{id}_nli").Width(14).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, color, size: 13f);
+                    paper.Box($"{id}_nlt").Width(UnitValue.Auto).Height(headH).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? elementType.Name : label, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
-                    paper.Box($"{id}_nlc").Width(ST).Height(30).Margin(4, 0, 0, 0).IsNotInteractable()
+                    paper.Box($"{id}_nlc").Width(ST).Height(headH).Margin(4, 0, 0, 0).IsNotInteractable()
                         .Text($"[{list.Count}]", mono).TextColor(tLo).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
-                    paper.Box($"{id}_nlv").Width(12).Height(30).Margin(0, 0, ST, ST).IsNotInteractable()
+                    paper.Box($"{id}_nlv").Width(12).Height(headH).Margin(0, 0, ST, ST).IsNotInteractable()
                         .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
                 }
 
@@ -940,12 +947,12 @@ public static class PropertyGridRenderer
                     using (paper.Column($"{id}_nlb").Width(ST).Height(UnitValue.Auto).Padding(m.Padding, m.Padding, m.Padding, m.Padding).Gap(m.SpacingMedium).Enter())
                     {
                         if (list.Count == 0)
-                            paper.Box($"{id}_nle").Width(ST).Height(24).IsNotInteractable()
+                            paper.Box($"{id}_nle").Width(ST).Height(m.RowHeight).IsNotInteractable()
                                 .Text("Empty list", font).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
                         for (int i = 0; i < list.Count; i++)
                             DrawElement(i, stableIds[i]);
 
-                        paper.Box($"{id}_nladd").Width(ST).Height(26).Rounded(6)
+                        paper.Box($"{id}_nladd").Width(ST).Height(m.RowHeight + 2f).Rounded(m.Rounding)
                             .Hovered.BackgroundColor(theme.Hover).End()
                             .Text($"+ Add {elementType.Name}", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
                             .OnClick(0, (_, _) => AddNew()).Cursor(PaperCursor.Pointer);

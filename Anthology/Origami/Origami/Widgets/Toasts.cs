@@ -106,12 +106,12 @@ public sealed class Toasts
     // Prototype .w2toast geometry (literal px, matching the Nebula HTML/CSS).
     private const float ToastWidth = 300f;   // >= min-width 240
     private const float BadgeSize = 26f;     // .tic 26x26
-    private const float BadgeRadius = 7f;
+    private static float BadgeRadius => Origami.Current.Metrics.Rounding;
     private const float CloseSize = 14f;
     private const float PadX = 13f;          // padding 11px 13px
     private const float PadY = 11f;
     private const float Gap = 11f;           // flex gap
-    private const float CardRadius = 10f;    // border-radius 10
+    private static float CardRadius => Origami.Current.Metrics.ContainerRounding;
     private const float StackGap = 9f;       // .w2toast-stack gap 9
 
     private const float FadeInTime = 0.3f;

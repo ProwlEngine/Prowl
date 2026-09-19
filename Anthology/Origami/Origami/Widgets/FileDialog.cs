@@ -285,7 +285,7 @@ public static class FileDialog
         void TbBtn(string bid, IconPainter painter, bool enabled, Action onClick)
         {
             var col = enabled ? ink.C400 : ink.C200;
-            var b = paper.Box(bid).Width(30).Height(26).Rounded(6)
+            var b = paper.Box(bid).Width(30).Height(26).Rounded(m.Rounding)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch());   // vertically center in the toolbar row
             if (enabled) { b.Hovered.BackgroundColor(theme.Hover).End(); b.OnClick(0, (_, _) => onClick()); }
             using (b.Enter())
@@ -323,7 +323,7 @@ public static class FileDialog
                 if (start > 0)
                 {
                     string tp = crumbs[start - 1].Path;
-                    var eb = paper.Box($"{id}_cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(5)
+                    var eb = paper.Box($"{id}_cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text("...", font).TextColor(ink.C300).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                         .Hovered.BackgroundColor(theme.Hover).End();
                     eb.OnClick(0, (_, _) => NavigateTo(tp, true));
@@ -334,7 +334,7 @@ public static class FileDialog
                 {
                     var (label, cpath) = crumbs[i];
                     bool last = i == crumbs.Count - 1;
-                    var cb = paper.Box($"{id}_cr_{i}").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(5)
+                    var cb = paper.Box($"{id}_cr_{i}").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text(label, last ? titleFont : font).TextColor(last ? ink.C500 : ink.C300)
                         .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     if (!last)
@@ -363,7 +363,7 @@ public static class FileDialog
             var r = paper.Row(sid).Height(m.RowHeight)
                 .BackgroundColor(sel ? selection : Color.Transparent)
                 .Hovered.BackgroundColor(sel ? selection : theme.Hover).End()
-                .Rounded(6).PaddingLeft(7).Gap(6).Clip();
+                .Rounded(m.Rounding).PaddingLeft(7).Gap(6).Clip();
             r.OnClick(0, (_, _) => NavigateTo(path, true));
             using (r.Enter())
             {
@@ -384,7 +384,7 @@ public static class FileDialog
 
         var win = paper.Column($"{id}_win").Size(width, height)
             .BackgroundColor(winBg)
-            .BorderColor(theme.BorderSoft).BorderWidth(1).Rounded(9).Clip();
+            .BorderColor(theme.BorderSoft).BorderWidth(1).Rounded(m.ContainerRounding).Clip();
         if (winBlur > 0f)
             win.BackdropBlur(winBlur);
         if (floating)
@@ -402,7 +402,7 @@ public static class FileDialog
             // Use Padding: the edge buttons set an explicit Margin for vertical
             // centering, which would override container child-margins and touch the edges.
             using (paper.Row($"{id}_tb").Height(toolbarH)
-                .BackgroundColor(theme.Glass).RoundedTop(9f)
+                .BackgroundColor(theme.Glass).RoundedTop(m.ContainerRounding)
                 .Padding(10, 10, 0, 0).Gap(4).Enter())
             {
                 TbBtn($"{id}_back", DrawBack, st.HistoryIndex > 0, NavBack);
@@ -570,7 +570,7 @@ public static class FileDialog
                 _ => "Open",
             };
             using (paper.Row($"{id}_foot").Height(footH)
-                .BackgroundColor(theme.Glass).RoundedBottom(9f)
+                .BackgroundColor(theme.Glass).RoundedBottom(m.ContainerRounding)
                 .Padding(11, 11, 0, 0).Gap(8).Enter())
             {
                 paper.Box($"{id}_foot_l").Width(UnitValue.Auto).Height(footH)

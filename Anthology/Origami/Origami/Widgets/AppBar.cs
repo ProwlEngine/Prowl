@@ -96,7 +96,7 @@ public sealed class AppBarBuilder
         const float gap = 10f;
         var acc = _theme.Primary.C500;
 
-        using (_paper.Row(_id).Width(UnitValue.Percentage(100)).Height(_height).Rounded(9).Padding(12, 12, 0, 0)
+        using (_paper.Row(_id).Width(UnitValue.Percentage(100)).Height(_height).Rounded(_theme.Metrics.ContainerRounding).Padding(12, 12, 0, 0)
             .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
             .Enter())
         {
@@ -112,7 +112,7 @@ public sealed class AppBarBuilder
                 {
                     case Kind.Brand:
                         var brandIcon = it.Icon;
-                        using (_paper.Box($"{_id}_logo").Size(28).Rounded(8).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                        using (_paper.Box($"{_id}_logo").Size(28).Rounded(_theme.Metrics.Rounding).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(acc).Enter())
                             _paper.Draw((canvas, r) => brandIcon?.Draw(canvas, Center(r, 15f), ink.C700));
                         _paper.Box($"{_id}_title").Width(UnitValue.Auto).Height(UnitValue.Auto)
@@ -122,7 +122,7 @@ public sealed class AppBarBuilder
                         break;
 
                     case Kind.Tag:
-                        _paper.Box($"{_id}_tag{i}").Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5)
+                        _paper.Box($"{_id}_tag{i}").Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(_theme.Metrics.SmallRounding)
                             .Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch()).Padding(6, 6, 2, 2)
                             .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
                             .Text(it.Text, monoFont!).FontSize(_theme.Metrics.FontSizeSmall - 3.5f)
@@ -137,7 +137,7 @@ public sealed class AppBarBuilder
                     case Kind.Action:
                         var icon = it.Icon;
                         var onClick = it.OnClick;
-                        using (_paper.Box($"{_id}_a_{it.Id}").Size(27).Rounded(7)
+                        using (_paper.Box($"{_id}_a_{it.Id}").Size(27).Rounded(_theme.Metrics.Rounding)
                             .Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .Hovered.BackgroundColor(_theme.Hover).End()
                             .OnClick(0, (_, _) => onClick?.Invoke())

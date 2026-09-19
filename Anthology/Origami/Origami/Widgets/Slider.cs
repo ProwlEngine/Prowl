@@ -656,9 +656,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                         byte aBody = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
                         byte aText = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
 
-                        canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
+                        canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, metrics.SmallRounding,
                             Color.FromArgb(aShadow, 0, 0, 0));
-                        canvas.RoundedRectFilled(bx, by, bw, bh, 3f,
+                        canvas.RoundedRectFilled(bx, by, bw, bh, metrics.SmallRounding,
                             Color.FromArgb(aBody, tooltipBg.R, tooltipBg.G, tooltipBg.B));
                         canvas.DrawText(tt, bx + padX, by + padY,
                             Color.FromArgb(aText, tooltipFg.R, tooltipFg.G, tooltipFg.B),

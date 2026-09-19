@@ -226,7 +226,7 @@ public sealed class TableBuilder
             .Height(_scroll ? UnitValue.Pixels(_scrollH) : UnitValue.Auto)
             .Clip();
         if (_bordered)
-            container.Rounded(9f).BorderColor(bdSoft).BorderWidth(1);
+            container.Rounded(m.ContainerRounding).BorderColor(bdSoft).BorderWidth(1);
 
         using (container.Enter())
         {
@@ -234,7 +234,7 @@ public sealed class TableBuilder
             var headRow = _paper.Row($"{_id}_head")
                 .Width(UnitValue.Stretch()).Height(hHead)
                 .BackgroundColor(glassIn);
-            if (_bordered) headRow.RoundedTop(9f);
+            if (_bordered) headRow.RoundedTop(m.ContainerRounding);
             using (headRow.Enter())
             {
                 for (int c = 0; c < _columns.Count; c++)
@@ -246,6 +246,8 @@ public sealed class TableBuilder
                     var hcell = _paper.Row($"{_id}_h{c}")
                         .Width(UnitValue.Stretch(col.Flex)).Height(hHead)
                         .Padding(10, 10, 0, 0);
+                    if (_bordered)
+                        hcell.Rounded(c == 0 ? m.ContainerRounding : 0f, c == _columns.Count - 1 ? m.ContainerRounding : 0f, 0f, 0f);
                     if (col.Sortable && _onSort != null)
                     {
                         hcell.Hovered.BackgroundColor(hover).End();
@@ -359,6 +361,7 @@ public sealed class TableBuilder
                     .Width(UnitValue.Stretch()).Height(hRow)
                     .BackgroundColor(selected ? accDim : Color.Transparent)
                     .Hovered.BackgroundColor(selected ? accDim : hover).End();
+                if (_bordered && isLast) rowBuilder.RoundedBottom(m.ContainerRounding);
 
                 if (_multiSelect && _onSelectModified != null)
                     rowBuilder.OnClick(idx, (ci, e) =>

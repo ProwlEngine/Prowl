@@ -124,7 +124,7 @@ public sealed class ContextBuilder
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
-                .Rounded(6f)
+                .Rounded(theme.Metrics.Rounding)
                 .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
             if (Enabled)
@@ -248,7 +248,7 @@ public sealed class ContextBuilder
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
-                .Rounded(6f)
+                .Rounded(theme.Metrics.Rounding)
                 .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
             if (Enabled)
@@ -267,13 +267,13 @@ public sealed class ContextBuilder
 
                 // Pill toggle on the right (matches the Nebula .tg switch).
                 var acc = theme.Primary.C500;
-                using (paper.Box($"{id}_tg_{index}").Width(32).Height(18).Rounded(9)
+                using (paper.Box($"{id}_tg_{index}").Width(32).Height(18).Rounded(MathF.Min(9f, theme.Metrics.Rounding * 1.5f))
                     .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .BackgroundColor(on ? acc : Color.FromArgb(26, 255, 255, 255))
                     .BorderColor(on ? Color.Transparent : theme.BorderSoft).BorderWidth(1)
                     .IsNotInteractable()
                     .Enter())
-                    paper.Box($"{id}_tk_{index}").Width(14).Height(14).Rounded(7)
+                    paper.Box($"{id}_tk_{index}").Width(14).Height(14).Rounded(MathF.Min(7f, MathF.Max(0f, theme.Metrics.Rounding * 1.5f - 2f)))
                         .PositionType(PositionType.SelfDirected).Position(on ? 16 : 2, 1.5f)
                         .BackgroundColor(Color.White).IsNotInteractable();
             }
@@ -304,7 +304,7 @@ public sealed class ContextBuilder
                 .Height(RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
-                .Rounded(6f)
+                .Rounded(theme.Metrics.Rounding)
                 .Hovered.BackgroundColor(theme.Hover).End()
                 // Remember this row's on-screen rect so next frame the submenu can decide which side to
                 // open on (this frame's layout isn't available yet at build time).
@@ -368,7 +368,7 @@ public static class ContextMenu
     private static IModal? _modalHandle;
 
     // Nebula .w2menu container literals.
-    private const float MenuRadius = 9f;
+    private static float MenuRadius => Origami.Current.Metrics.ContainerRounding;
     private const float MenuPad = 5f;
     internal const float MenuWidth = 200f;
 

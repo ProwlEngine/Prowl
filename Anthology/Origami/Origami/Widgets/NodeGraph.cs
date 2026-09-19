@@ -800,7 +800,7 @@ public sealed class NodeGraphBuilder
 
         float sx = pos.X * zoom + st.PanX, sy = pos.Y * zoom + st.PanY;
         float w = size.X * zoom, h = size.Y * zoom;
-        float rounding = 6f * zoom;
+        float rounding = _theme.Metrics.Rounding * zoom;
 
         var note = _paper.Column($"{_id}_sk_{sid}")
             .PositionType(PositionType.SelfDirected).Left(sx).Top(sy).Width(w).Height(h)
@@ -877,7 +877,7 @@ public sealed class NodeGraphBuilder
         float sx = gpos.X * zoom + st.PanX, sy = gpos.Y * zoom + st.PanY;
         float w = gsize.X * zoom, h = gsize.Y * zoom;
         float titleH = Math.Max(18f, 26f * zoom);
-        float rounding = 8f * zoom;
+        float rounding = _theme.Metrics.ContainerRounding * zoom;
 
         // Frame — non-interactive so nodes/wires/bg inside stay usable.
         _paper.Box($"{_id}_g_{gid}")

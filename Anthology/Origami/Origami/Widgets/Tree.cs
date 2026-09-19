@@ -545,11 +545,12 @@ public sealed class TreeBuilder
                     var borderColor = Color.FromArgb(borderA, 255, 200, 0);
                     float x = (float)r.Min.X, y = (float)r.Min.Y;
                     float w = (float)r.Size.X, h = (float)r.Size.Y;
-                    canvas.RoundedRectFilled(x, y, w, h, 4, 4, 4, 4, fillColor);
+                    float pr = _theme.Metrics.SmallRounding, prIn = MathF.Max(0f, pr - 1f);
+                    canvas.RoundedRectFilled(x, y, w, h, pr, pr, pr, pr, fillColor);
                     canvas.SetStrokeColor(borderColor);
                     canvas.SetStrokeWidth(2f);
                     canvas.BeginPath();
-                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, 3, 3, 3, 3);
+                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, prIn, prIn, prIn, prIn);
                     canvas.Stroke();
                 });
             });

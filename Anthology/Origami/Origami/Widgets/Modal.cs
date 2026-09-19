@@ -112,7 +112,7 @@ public sealed class DialogModal : IModal
             .Width(Width).Height(Height > 0 ? UnitValue.Pixels(Height) : UnitValue.Auto)
             .BackgroundColor(theme.Popover)
             .BorderColor(theme.BorderStrong).BorderWidth(1)
-            .Rounded(13f).Clip()
+            .Rounded(theme.Metrics.ContainerRounding).Clip()
             .DropShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
             .Layer(layer)
             .StopEventPropagation();
@@ -137,7 +137,7 @@ public sealed class DialogModal : IModal
             .Width(EmbeddedWidth.HasValue ? UnitValue.Pixels(EmbeddedWidth.Value) : UnitValue.Stretch())
             .Height(Height > 0 ? UnitValue.Pixels(Height) : UnitValue.Auto)
             .BorderColor(Origami.Current.BorderSoft).BorderWidth(1)
-            .Rounded(9f).Clip();
+            .Rounded(Origami.Current.Metrics.ContainerRounding).Clip();
 
         using (container.Enter())
             DrawInner(paper, id, embedded: true, onClose: null);
@@ -149,7 +149,7 @@ public sealed class DialogModal : IModal
         var m = theme.Metrics;
         var font = theme.Font!;
         var ink = theme.Ink;
-        float radius = embedded ? 9f : 13f;
+        float radius = m.ContainerRounding;
         float headH = m.FontSize + 18f;
 
         // ── Head (.w2mm-head): glass-in strip, leading icon + title + close X ──
@@ -180,7 +180,7 @@ public sealed class DialogModal : IModal
                 var close = onClose;
                 paper.Box($"{idp}_x").Width(18).Height(18)
                     .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                    .Rounded(5f)
+                    .Rounded(m.SmallRounding)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => close())
                     .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>

@@ -123,7 +123,7 @@ public sealed class TabsBuilder
         const float padX = 14f;
 
         using (_paper.Row(_id).Width(_width ?? UnitValue.Auto).Height(th)
-            .Rounded(th * 0.5f).BackgroundColor(_theme.Glass) // glass-in track
+            .Rounded(MathF.Min(th * 0.5f, _theme.Metrics.Rounding * 2.5f)).BackgroundColor(_theme.Glass) // glass-in track
             .BorderWidth(1).BorderColor(_theme.Neutral.C200).Padding(3, 3, 3, 3).Enter())
         {
             for (int i = 0; i < _items.Count; i++)
@@ -139,6 +139,7 @@ public sealed class TabsBuilder
         bool isSelected = i == _selectedIndex;
         bool closeable = _onClose != null;
         float closeSize = closeable ? 15f : 0f;
+        float pillR = MathF.Min(th * 0.5f, MathF.Max(0f, _theme.Metrics.Rounding * 2.5f - 3f));
 
         float badgeW = 0f;
         if (!string.IsNullOrEmpty(item.Badge) && font != null)
@@ -153,7 +154,7 @@ public sealed class TabsBuilder
             .Width(tabW).Height(pills ? UnitValue.Stretch() : th)
             .OnClick(_ => _onSelect(idx))
             .Cursor(PaperCursor.Pointer);
-        if (pills) tabBox.Rounded(th * 0.5f).Margin(i == 0 ? 0 : 4, 0, 0, 0);
+        if (pills) tabBox.Rounded(pillR).Margin(i == 0 ? 0 : 4, 0, 0, 0);
         if (_onTabPress != null)
             tabBox.OnPress(e => _onTabPress!(idx, e.PointerPosition));
 
@@ -167,6 +168,7 @@ public sealed class TabsBuilder
             var snap = new TabSnapshot
             {
                 Pills = pills,
+                PillR = pillR,
                 PadX = padX,
                 FontSize = fs,
                 HoverT = hoverT,
@@ -188,7 +190,7 @@ public sealed class TabsBuilder
                 _paper.Box($"{_id}_x{i}")
                     .PositionType(PositionType.SelfDirected)
                     .Position(tabW - closeSize - padX + 4f, (th - closeSize) * 0.5f)
-                    .Size(closeSize, closeSize).Rounded(closeSize * 0.5f)
+                    .Size(closeSize, closeSize).Rounded(MathF.Min(closeSize * 0.5f, _theme.Metrics.SmallRounding * 2.5f))
                     .Hovered.BackgroundColor(Color.FromArgb(60, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B)).End()
                     // Per-event stop (not blanket .StopEventPropagation()) so closing a tab doesn't
                     // also select it, while the wheel still bubbles to a parent ScrollView.
@@ -214,7 +216,7 @@ public sealed class TabsBuilder
     private struct TabSnapshot
     {
         public bool Pills;
-        public float PadX, FontSize, HoverT, SelT, CloseInset;
+        public float PadX, FontSize, HoverT, SelT, CloseInset, PillR;
         public string Label;
         public IOrigamiIcon? Icon;
         public string? Glyph, Badge;
@@ -235,9 +237,9 @@ public sealed class TabsBuilder
         {
             // Selected pill: accent fill. Unselected: transparent + hover tint.
             if (s.HoverT > 0.001f && s.SelT < 0.99f)
-                canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, Color.FromArgb((int)(0.12f * 255 * s.HoverT * (1f - s.SelT)), acc.R, acc.G, acc.B));
+                canvas.RoundedRectFilled(x, y, w, h, s.PillR, Color.FromArgb((int)(0.12f * 255 * s.HoverT * (1f - s.SelT)), acc.R, acc.G, acc.B));
             if (s.SelT > 0.01f)
-                canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, Color.FromArgb((int)(255 * s.SelT), acc.R, acc.G, acc.B));
+                canvas.RoundedRectFilled(x, y, w, h, s.PillR, Color.FromArgb((int)(255 * s.SelT), acc.R, acc.G, acc.B));
             labelCol = OrigamiRamp.LerpColor(OrigamiRamp.LerpColor(ink.C300, ink.C400, s.HoverT), ink.C700, s.SelT);
         }
         else
@@ -282,7 +284,7 @@ public sealed class TabsBuilder
         {
             float bh = bfs + 7f, bw = badgeTextW + 14f;
             float bx = cx + 8f, by = y + (h - bh) * 0.5f;
-            canvas.RoundedRectFilled(bx, by, bw, bh, bh * 0.5f, Color.FromArgb(45, acc.R, acc.G, acc.B));
+            canvas.RoundedRectFilled(bx, by, bw, bh, MathF.Min(bh * 0.5f, s.Theme.Metrics.SmallRounding * 3f), Color.FromArgb(45, acc.R, acc.G, acc.B));
             var bts = canvas.MeasureText(s.Badge!, bfs, s.Font);
             canvas.DrawText(s.Badge!, bx + (bw - (float)bts.X) * 0.5f, by + (bh - (float)bts.Y) * 0.5f, s.Accent.C700, bfs, s.Font);
         }

@@ -143,7 +143,7 @@ public sealed class ColorFieldBuilder
             // Swatch (rounded, subtle white rim).
             _paper.Box($"{_id}_sw")
                 .Width(sws).Height(sws).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                .Rounded(6)
+                .Rounded(metrics.SmallRounding)
                 .BackgroundColor(SysColor.FromArgb(ai, ri, gi, bi))
                 .BorderColor(swatchBorder).BorderWidth(1)
                 .IsNotInteractable();

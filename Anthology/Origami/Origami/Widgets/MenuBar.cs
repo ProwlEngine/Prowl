@@ -84,7 +84,7 @@ public sealed class MenuBarBuilder
         // (to switch menus) while a click anywhere else drops focus.
         Color barFill = _background ? _theme.Glass : Color.FromArgb(0, 0, 0, 0);
         Color barBorder = _background ? _theme.BorderSoft : Color.FromArgb(0, 0, 0, 0);
-        using (_paper.Row(_id).Width(UnitValue.Auto).Height(_height).Rounded(8).Padding(5, 5, 0, 0)
+        using (_paper.Row(_id).Width(UnitValue.Auto).Height(_height).Rounded(_theme.Metrics.ContainerRounding).Padding(5, 5, 0, 0)
             .Layer(open ? Layer.Topmost + 2 : Layer.Base)
             .BackgroundColor(barFill).BorderColor(barBorder).BorderWidth(_background ? 1 : 0)
             .Enter())
@@ -110,7 +110,7 @@ public sealed class MenuBarBuilder
         bool active = state.Open == index;
 
         var box = _paper.Box($"{_id}_i{index}")
-            .Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(6).Padding(10, 10, 4, 4)
+            .Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(_theme.Metrics.Rounding).Padding(10, 10, 4, 4)
             .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
             .BackgroundColor(active ? _theme.Hover : Color.FromArgb(0, 0, 0, 0))
             .Hovered.BackgroundColor(_theme.Hover).End()

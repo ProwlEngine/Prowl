@@ -127,7 +127,7 @@ public sealed class SkeletonBuilder
         {
             SkeletonShape.Pill => MathF.Min(_width, _height) * 0.5f,
             SkeletonShape.Circle => MathF.Min(_width, _height) * 0.5f,
-            _ => _radiusOverride ?? 6f,
+            _ => _radiusOverride ?? _theme.Metrics.Rounding,
         };
     }
 

@@ -214,11 +214,11 @@ public sealed class HeaderBuilder
             .Height(rowHeight)
             .Margin(0, 0, _topMargin, _bottomMargin);
 
-        // The component/foldout row carries the .w2hdrrow chrome: glass-in fill, bd-soft border, radius 8.
+        // The component/foldout row carries the .w2hdrrow chrome: glass-in fill, bd-soft border.
         if (isComponent)
             box.BackgroundColor(_theme.Glass)
                .BorderColor(_theme.BorderSoft).BorderWidth(1)
-               .Rounded(8f);
+               .Rounded(rounding);
 
         if (_onClick != null)
         {
@@ -483,7 +483,7 @@ public sealed class HeaderBuilder
 
     private static void DrawCheckbox(Quill.Canvas canvas, float x, float y, float size, bool on, Color accent, Color check)
     {
-        float r = size * 0.28f;
+        float r = Origami.Current.Metrics.SmallRounding;
         Color border = on ? accent : Origami.Current.BorderStrong; // bd-strong
         Color fill = on ? accent : Origami.Current.Glass;          // acc / glass-in
         canvas.RoundedRectFilled(x, y, size, size, r, border);

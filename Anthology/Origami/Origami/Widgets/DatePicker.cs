@@ -361,7 +361,7 @@ internal static class OrigamiCalendar
     private static readonly string[] DowLetters = { "S", "M", "T", "W", "T", "F", "S" };
 
     private const float Gap = 2f;
-    private const float DayRound = 6f;
+    private static float DayRound => Origami.Current.Metrics.Rounding;
 
     public static void DrawBody(Paper paper, string id, Scribe.FontFile font, OrigamiTheme theme,
         float contentWidth, int viewYear, int viewMonth,

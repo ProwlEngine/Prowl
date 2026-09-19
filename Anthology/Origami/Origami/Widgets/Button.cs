@@ -469,7 +469,7 @@ public sealed class ButtonBuilder
             canvas.SetStrokeColor(Color.FromArgb(ringA, ring.R, ring.G, ring.B));
             canvas.SetStrokeWidth(2f);
             canvas.BeginPath();
-            canvas.RoundedRect(x - pad, y - pad, w + pad * 2f, h + pad * 2f, r + pad);
+            canvas.RoundedRect(x - pad, y - pad, w + pad * 2f, h + pad * 2f, r > 0f ? r + pad : 0f);
             canvas.Stroke();
             canvas.RestoreState();
         }

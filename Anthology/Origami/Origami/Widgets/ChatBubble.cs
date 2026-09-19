@@ -129,7 +129,7 @@ public sealed class ChatBubbleBuilder
         bool avatarOnRight = hasAvatar && _tail == BubbleTailDirection.Right;
 
         // Corner radii: one corner is cut short to read as the "tail" (prototype has no pointer triangle).
-        const float radius = 14f, tailR = 5f;
+        float radius = m.ContainerRounding * 1.75f, tailR = m.SmallRounding;
         float tl = radius, tr = radius, br = radius, bl = radius;
         if (_showTail)
         {

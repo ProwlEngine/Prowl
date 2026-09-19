@@ -79,7 +79,7 @@ public sealed class IconToolbarBuilder
         bar.Gap(gap);
         if (_center && !_vertical) bar.Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0);
         if (_container)
-            bar.Rounded(10f).Padding(pad, pad, pad, pad)
+            bar.Rounded(_theme.Metrics.ContainerRounding).Padding(pad, pad, pad, pad)
                .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1);
 
         using (bar.Enter())
@@ -90,7 +90,7 @@ public sealed class IconToolbarBuilder
                 bool on = i == _selected;
                 var (icon, tooltip) = _items[i];
 
-                var b = _paper.Box($"{_id}_b{i}").Width(btn).Height(btn).Rounded(7f)
+                var b = _paper.Box($"{_id}_b{i}").Width(btn).Height(btn).Rounded(_theme.Metrics.Rounding)
                     .OnClick(_ => _setter(idx));
 
                 if (on)

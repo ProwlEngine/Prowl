@@ -420,6 +420,7 @@ public sealed class ToggleBuilder
 
         string? onText = _onText, offText = _offText, onGlyph = _onGlyph, offGlyph = _offGlyph;
         float fontSize = metrics.FontSize;
+        float rounding = metrics.Rounding;
 
         using (_paper.Box($"{_id}_track")
             .Width(trackW).Height(trackH)
@@ -438,9 +439,11 @@ public sealed class ToggleBuilder
                 float knobX = x + pad + (w - knob - pad * 2f) * EaseOutBack(t); // springy slide
                 float knobY = y + pad;
                 float textBoxW = w - knob - pad * 2f;
+                float trackR = MathF.Min(h * 0.5f, rounding * 1.6f);
+                float knobR = MathF.Min(knob * 0.5f, MathF.Max(0f, trackR - pad));
 
                 // Track — single hardware-accelerated rounded rect.
-                canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, trackBg);
+                canvas.RoundedRectFilled(x, y, w, h, trackR, trackBg);
 
                 // Off-state hairline border (fades out as it turns on).
                 if (t < 0.98f)
@@ -449,7 +452,7 @@ public sealed class ToggleBuilder
                     canvas.SetStrokeColor(Color.FromArgb((int)(borderCol.A * (1f - t)), borderCol.R, borderCol.G, borderCol.B));
                     canvas.SetStrokeWidth(1f);
                     canvas.BeginPath();
-                    canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, h * 0.5f);
+                    canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, MathF.Max(0f, trackR - 0.5f));
                     canvas.Stroke();
                     canvas.RestoreState();
                 }
@@ -473,7 +476,7 @@ public sealed class ToggleBuilder
                 }
 
                 // Knob — full-radius rounded rect == circle, cheaper than path Circle.
-                canvas.RoundedRectFilled(knobX, knobY, knob, knob, knob * 0.5f, knobFill);
+                canvas.RoundedRectFilled(knobX, knobY, knob, knob, knobR, knobFill);
 
                 string? glyph = t > 0.5f ? onGlyph : offGlyph;
                 if (!string.IsNullOrEmpty(glyph) && font != null)
@@ -511,7 +514,7 @@ public sealed class ToggleBuilder
 
         Color glyphFg = WithAlpha(_theme.Ink.C700, effT);
         bool drawMark = effT > 0.05f;
-        float radius = _size * 0.32f;
+        float radius = metrics.SmallRounding;
 
         using (_paper.Box($"{_id}_chk")
             .Width(_size).Height(_size)

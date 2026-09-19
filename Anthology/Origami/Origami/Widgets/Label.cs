@@ -776,9 +776,9 @@ public sealed class LabelBuilder
                 byte aBody = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
                 byte aText = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
 
-                canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
+                canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, _theme.Metrics.SmallRounding,
                     Color.FromArgb(aShadow, 0, 0, 0));
-                canvas.RoundedRectFilled(bx, by, bw, bh, 3f,
+                canvas.RoundedRectFilled(bx, by, bw, bh, _theme.Metrics.SmallRounding,
                     Color.FromArgb(aBody, ttBg.R, ttBg.G, ttBg.B));
                 canvas.DrawText(tt, bx + padX, by + padY,
                     Color.FromArgb(aText, ttFg.R, ttFg.G, ttFg.B), fontSize, font);

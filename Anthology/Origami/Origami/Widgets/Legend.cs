@@ -111,7 +111,7 @@ public sealed class LegendBuilder
 
                 using (_paper.Row($"{_id}_row_{i}").Height(_swatchSize).Gap(2f).Enter())
                 {
-                    ElementBuilder swatch = _paper.Box($"{_id}_sw_{i}").Size(_swatchSize).BackgroundColor(swatchColor).Rounded(2f);
+                    ElementBuilder swatch = _paper.Box($"{_id}_sw_{i}").Size(_swatchSize).BackgroundColor(swatchColor).Rounded(_theme.Metrics.SmallRounding);
 
                     if (InteractiveActive)
                         swatch.OnClick(_ => _onToggle?.Invoke(key));

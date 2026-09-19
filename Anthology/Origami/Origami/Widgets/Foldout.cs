@@ -116,7 +116,7 @@ public sealed class FoldoutBuilder
 
         var ink = _theme.Ink;
         var metrics = _theme.Metrics;
-        float rounding = _roundingOverride ?? 9f;
+        float rounding = _roundingOverride ?? metrics.ContainerRounding;
 
         // Nebula "w2fold" tokens.
         Color bdSoft = _theme.BorderSoft;   // --bd-soft
@@ -138,7 +138,7 @@ public sealed class FoldoutBuilder
         const float padX = 11f;                  // header horizontal padding
         const float gap = 8f;                   // flex gap between header children
 
-        // Outer card: 1px bd-soft border, radius 9, overflow hidden.
+        // Outer card: 1px bd-soft border, overflow hidden.
         var container = _paper.Column($"{_id}")
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)

@@ -296,7 +296,7 @@ internal static class DropdownInternal
             .BackgroundColor(popBg)
             .BorderColor(popBorder).BorderWidth(1)
             .DropShadow(0, 14, 40, -6, p.Theme.Shadow)
-            .Rounded(9)
+            .Rounded(p.Theme.Metrics.ContainerRounding)
             .Padding(padX, padX, padY, padY)
             .Gap(searchGap)
             .HookToParent()
@@ -314,7 +314,7 @@ internal static class DropdownInternal
                     .BackgroundColor(p.Theme.Neutral.C100)
                     .BorderColor(p.Theme.Neutral.C400).BorderWidth(1)
                     .Focused.BorderColor(ramp.C500).End()
-                    .Rounded(3)
+                    .Rounded(p.Theme.Metrics.Rounding)
                     .Padding(6, 4, 0, 0)
                     .Gap(4)
                     .TabIndex(0)
@@ -348,7 +348,7 @@ internal static class DropdownInternal
                     if (!string.IsNullOrEmpty(searchText) && icons.Close != null)
                     {
                         paper.Box($"{p.Id}_search_clr")
-                            .Rounded(8).Size(16)
+                            .Rounded(p.Theme.Metrics.SmallRounding).Size(16)
                             .Hovered.BackgroundColor(p.Theme.Neutral.C300).End()
                             .Icon(paper, icons.Close, ink.C400, 1.3f)
                             .OnClick(e =>
@@ -398,7 +398,7 @@ internal static class DropdownInternal
                                 .Height(p.ItemHeight)
                                 .BackgroundColor(rowBg)
                                 .Hovered.BackgroundColor(enabled ? hoverTint : rowBg).End()
-                                .Rounded(6)
+                                .Rounded(p.Theme.Metrics.Rounding)
                                 .Padding(9, 9, 0, 0)
                                 .Gap(9)
                                 .OnClick(e =>
@@ -489,7 +489,7 @@ internal static class DropdownInternal
                     int capturedPage = pageIdx;
 
                     paper.Box($"{p.Id}_pg_prev")
-                        .Width(20).Height(paginationH).Rounded(3)
+                        .Width(20).Height(paginationH).Rounded(p.Theme.Metrics.SmallRounding)
                         .BackgroundColor(canPrev ? p.Theme.Neutral.C300 : p.Theme.Neutral.C200)
                         .Hovered.BackgroundColor(canPrev ? ramp.C400 : p.Theme.Neutral.C200).End()
                         .Icon(paper, icons.ChevronLeft, canPrev ? ink.C500 : ink.C300, size: 13f)
@@ -508,7 +508,7 @@ internal static class DropdownInternal
                         .FontSize(p.Theme.Metrics.FontSize * 0.85f);
 
                     paper.Box($"{p.Id}_pg_next")
-                        .Width(20).Height(paginationH).Rounded(3)
+                        .Width(20).Height(paginationH).Rounded(p.Theme.Metrics.SmallRounding)
                         .BackgroundColor(canNext ? p.Theme.Neutral.C300 : p.Theme.Neutral.C200)
                         .Hovered.BackgroundColor(canNext ? ramp.C400 : p.Theme.Neutral.C200).End()
                         .Icon(paper, icons.ChevronRight, canNext ? ink.C500 : ink.C300, size: 13f)
@@ -560,7 +560,7 @@ internal static class DropdownInternal
         const float sz = 15f;
         float x = (float)(rect.Min.X + (rect.Size.X - sz) / 2);
         float y = (float)(rect.Min.Y + (rect.Size.Y - sz) / 2);
-        const float rad = 5f;
+        float rad = theme.Metrics.SmallRounding;
 
         if (isOn)
         {
