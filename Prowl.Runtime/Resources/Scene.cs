@@ -424,7 +424,19 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public IEnumerable<GameObject> AllObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed); } }
 
     /// <summary> Enumerates all registered objects that are currently active and saveable. </summary>
-    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && !o.HideFlags.HasFlag(HideFlags.DontSave) && !o.HideFlags.HasFlag(HideFlags.HideAndDontSave)); } }
+    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
+
+    /// <summary>
+    /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
+    /// and for anything under one: a child written out without its parent would load back as a stray root.
+    /// </summary>
+    private static bool IsSaveable(GameObject obj)
+    {
+        for (GameObject? go = obj; go.IsValid(); go = go.Parent)
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0)
+                return false;
+        return true;
+    }
 
     /// <summary> Enumerates all registered objects that are currently active. </summary>
     public IEnumerable<GameObject> ActiveObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.EnabledInHierarchy); } }
@@ -820,7 +832,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public void OnBeforeSerialize()
     {
-        serializeObj = [.. AllObjects];
+        serializeObj = [.. SaveableObjects];
     }
 
     public void OnAfterDeserialize()
@@ -923,6 +935,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>
     /// Collects every Camera on an enabled-in-hierarchy GameObject, sorted by Camera.Depth.
     /// </summary>
+    /// <remarks>
+    /// Cameras on <see cref="HideFlags.HideAndDontSave"/> objects are skipped. Those are editor helpers
+    /// (scene view, previews) that render themselves into their own targets; letting them into the
+    /// game's camera list draws the scene again, and uses shadow atlas space, for nothing.
+    /// </remarks>
     internal List<Camera> GatherActiveCameras()
     {
         var cameras = new List<Camera>();
@@ -931,6 +948,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             GameObject go = _allObj[i];
             if (go.IsDisposed || !go.EnabledInHierarchy) continue;
+            if ((go.HideFlags & HideFlags.HideAndDontSave) != 0) continue; // not HasFlag: it boxes in unoptimized builds
 
             foreach (MonoBehaviour component in go._components)
             {
