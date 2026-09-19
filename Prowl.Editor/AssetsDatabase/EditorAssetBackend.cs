@@ -210,31 +210,25 @@ public class EditorAssetBackend : AssetBackendBase
     /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>
     public void RefreshResourcesMap()
     {
-        var map = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in _guidToEntry.Values)
-            AddResourcePaths(map, entry, "[Resources]");
-        Runtime.GameResources.Initialize(map);
+        var resources = new List<ResourceEntry>();
+        foreach (var entry in _guidToEntry.Values.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase))
+            AddResourcePaths(resources, entry);
+        Runtime.GameResources.Initialize(resources);
     }
 
     /// <summary>
-    /// Adds the load paths of <paramref name="entry"/> and its sub assets to <paramref name="map"/> when it
+    /// Adds the load paths of <paramref name="entry"/> and its sub assets to <paramref name="resources"/> when it
     /// lives inside a Resources folder. Shared with the build so the editor and a player resolve alike.
+    /// Callers add entries in asset path order, which decides who wins when load paths clash.
     /// </summary>
-    internal static void AddResourcePaths(Dictionary<string, Guid> map, AssetEntry entry, string logPrefix)
+    internal static void AddResourcePaths(List<ResourceEntry> resources, AssetEntry entry)
     {
         string? loadPath = Runtime.GameResources.GetLoadPath(entry.Path);
         if (loadPath == null) return;
 
-        Add(loadPath, entry.Guid);
+        resources.Add(new ResourceEntry(loadPath, entry.Guid, entry.MainAssetTypeName ?? ""));
         foreach (var sub in entry.SubAssets)
-            Add(Runtime.GameResources.GetLoadPath(entry.Path, sub.Name)!, sub.Guid);
-
-        void Add(string path, Guid guid)
-        {
-            if (map.ContainsKey(path))
-                Runtime.Debug.LogWarning($"{logPrefix} Duplicate load path '{path}': '{entry.Path}' overrides another asset.");
-            map[path] = guid;
-        }
+            resources.Add(new ResourceEntry(Runtime.GameResources.GetLoadPath(entry.Path, sub.Name)!, sub.Guid, sub.TypeName));
     }
 
     // ================================================================

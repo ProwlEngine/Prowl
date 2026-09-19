@@ -268,23 +268,22 @@ public class BuildSystemProjectTests : EditorTestHarness
     public void GenerateManifest_IsByteIdenticalRegardlessOfSetOrder()
     {
         var guids = Enumerable.Range(0, 64).Select(_ => Guid.NewGuid()).ToArray();
-        var resources = guids.Take(8).Select((g, i) => ($"Textures/Asset{i}", g)).ToArray();
+        var resources = guids.Take(8).Select((g, i) => new ResourceEntry($"Textures/Asset{i}", g, "")).ToList();
         Guid defaultScene = guids[0];
 
         string first = WriteManifest(guids, resources, defaultScene);
-        string second = WriteManifest(guids.Reverse().ToArray(), resources.Reverse().ToArray(), defaultScene);
+        string second = WriteManifest(guids.Reverse().ToArray(), resources, defaultScene);
 
         Assert.Equal(
             Convert.ToHexString(File.ReadAllBytes(first)),
             Convert.ToHexString(File.ReadAllBytes(second)));
     }
 
-    private string WriteManifest(Guid[] assets, (string Path, Guid Guid)[] resources, Guid defaultScene)
+    private string WriteManifest(Guid[] assets, List<ResourceEntry> resources, Guid defaultScene)
     {
         string path = Path.Combine(Path.GetTempPath(), $"prowl-manifest-{Guid.NewGuid():N}.bin");
         var pipeline = new OrderProbePipeline();
-        pipeline.Write(path, new HashSet<Guid>(assets),
-            resources.ToDictionary(r => r.Path, r => r.Guid), defaultScene);
+        pipeline.Write(path, new HashSet<Guid>(assets), resources, defaultScene);
         return path;
     }
 
@@ -355,7 +354,7 @@ public class BuildSystemProjectTests : EditorTestHarness
     /// <summary>Exposes the protected manifest writer; the abstract members are never reached.</summary>
     private class OrderProbePipeline : BuildPipeline
     {
-        public void Write(string outputPath, HashSet<Guid> assets, Dictionary<string, Guid> resources, Guid defaultScene)
+        public void Write(string outputPath, HashSet<Guid> assets, List<ResourceEntry> resources, Guid defaultScene)
             => GenerateManifest(outputPath, assets, resources, defaultScene);
 
         public override string DisplayName => "order-probe";

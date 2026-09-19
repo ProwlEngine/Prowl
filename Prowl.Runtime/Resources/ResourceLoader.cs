@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Prowl.Runtime;
+
+/// <summary>An asset reachable through <see cref="GameResources"/>, with the type it loads as.</summary>
+public readonly record struct ResourceEntry(string LoadPath, Guid Guid, string TypeName);
 
 /// <summary>
 /// Load assets by path at runtime. Only assets inside a Resources folder, or a folder below one, can
@@ -16,38 +20,109 @@ namespace Prowl.Runtime;
 /// Assets/Art/Resources/Models/Hero.fbx#Body    GameResources.Load<Mesh<("Models/Hero#Body")
 ///                                              GameResources.Load<Mesh<("Art/Resources/Models/Hero.fbx#Body")
 /// </code>
+/// Several assets may share a load path, for example Enemy.png and Enemy.prefab, or the same path in two
+/// Resources folders. The first one, by asset path, that is of the requested type is used.
 /// </remarks>
 public static class GameResources
 {
     private const string ResourcesFolder = "Resources";
     private const char SubAssetSeparator = '#';
 
-    private static Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
+    private static ResourceEntry[] _all = [];
+    private static Dictionary<string, List<ResourceEntry>> _byPath = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Initialize the resources mapping. Called by the player at startup.</summary>
-    public static void Initialize(Dictionary<string, Guid> pathToGuid)
+    /// <summary>
+    /// Initialize the resources mapping. Called by the editor and the player at startup.
+    /// Entries sharing a load path are tried in the order given.
+    /// </summary>
+    public static void Initialize(IEnumerable<ResourceEntry>? entries)
     {
-        _pathToGuid = pathToGuid ?? new(StringComparer.OrdinalIgnoreCase);
+        ResourceEntry[] all = entries?.ToArray() ?? [];
+        var byPath = new Dictionary<string, List<ResourceEntry>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in all)
+        {
+            if (!byPath.TryGetValue(entry.LoadPath, out var list))
+                byPath[entry.LoadPath] = list = [];
+            list.Add(entry);
+        }
+        _byPath = byPath;
+        _all = all;
     }
 
     /// <summary>
     /// Load an asset or sub asset by its load path, or by its project path inside a Resources folder.
-    /// Returns null if the path is not found, is outside every Resources folder, or can't be loaded.
+    /// Returns null if nothing of type <typeparamref name="T"/> is found at the path or it can't be loaded.
     /// </summary>
     public static T? Load<T>(string path) where T : EngineObject
     {
-        Guid guid = GetGuid(path);
-        return guid == Guid.Empty ? null : AssetDatabase.Get(guid) as T;
+        foreach (var entry in Candidates<T>(path))
+            if (AssetDatabase.Get(entry.Guid) is T asset)
+                return asset;
+        return null;
+    }
+
+    /// <summary>Load every Resources asset and sub asset of type <typeparamref name="T"/>.</summary>
+    public static List<T> LoadAll<T>() where T : EngineObject => LoadMatching<T>(_all);
+
+    /// <summary>
+    /// Load every asset and sub asset of type <typeparamref name="T"/> under a folder, including its
+    /// sub folders, or inside a single file when the path names one.
+    /// </summary>
+    public static List<T> LoadAll<T>(string path) where T : EngineObject
+    {
+        string? key = ToLoadPath(path);
+        if (key == null) return LoadMatching<T>(_all);
+
+        return LoadMatching<T>(_all.Where(e => IsAtOrBelow(e.LoadPath, key)));
     }
 
     /// <summary>Check if a resource path exists.</summary>
     public static bool Exists(string path) => GetGuid(path) != Guid.Empty;
 
-    /// <summary>Get the GUID for a resource path, or Guid.Empty if not found.</summary>
-    public static Guid GetGuid(string path)
+    /// <summary>Check if a resource of type <typeparamref name="T"/> exists at the path.</summary>
+    public static bool Exists<T>(string path) where T : EngineObject => GetGuid<T>(path) != Guid.Empty;
+
+    /// <summary>Get the GUID of the first resource at the path, or Guid.Empty if not found.</summary>
+    public static Guid GetGuid(string path) => GetGuid<EngineObject>(path);
+
+    /// <summary>
+    /// Get the GUID of the first resource of type <typeparamref name="T"/> at the path, or Guid.Empty
+    /// if not found. Nothing is loaded.
+    /// </summary>
+    public static Guid GetGuid<T>(string path) where T : EngineObject
+    {
+        foreach (var entry in Candidates<T>(path))
+            return entry.Guid;
+        return Guid.Empty;
+    }
+
+    private static IEnumerable<ResourceEntry> Candidates<T>(string path) where T : EngineObject
     {
         string? key = ToLoadPath(path);
-        return key != null && _pathToGuid.TryGetValue(key, out var guid) ? guid : Guid.Empty;
+        if (key == null || !_byPath.TryGetValue(key, out var entries)) return [];
+        return entries.Where(IsOfType<T>);
+    }
+
+    private static List<T> LoadMatching<T>(IEnumerable<ResourceEntry> entries) where T : EngineObject
+    {
+        var assets = new List<T>();
+        foreach (var entry in entries.Where(IsOfType<T>))
+            if (AssetDatabase.Get(entry.Guid) is T asset)
+                assets.Add(asset);
+        return assets;
+    }
+
+    // An entry whose type can't be resolved is still a candidate, and is checked once loaded.
+    private static bool IsOfType<T>(ResourceEntry entry)
+    {
+        Type? type = RuntimeUtils.ResolveType(entry.TypeName);
+        return type == null || typeof(T).IsAssignableFrom(type);
+    }
+
+    private static bool IsAtOrBelow(string loadPath, string folder)
+    {
+        if (!loadPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) return false;
+        return loadPath.Length == folder.Length || loadPath[folder.Length] is '/' or SubAssetSeparator;
     }
 
     /// <summary>

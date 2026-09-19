@@ -380,7 +380,7 @@ public abstract class BuildPipeline
     /// manifest naming a file the build does not contain turns a build problem into a runtime one.
     /// </summary>
     protected void GenerateManifest(string outputPath, HashSet<Guid> assets,
-        Dictionary<string, Guid> resourcesMap, Guid defaultSceneGuid)
+        List<ResourceEntry> resourcesMap, Guid defaultSceneGuid)
     {
         var root = EchoObject.NewCompound();
         root["defaultScene"] = new EchoObject(defaultSceneGuid.ToString());
@@ -390,10 +390,16 @@ public abstract class BuildPipeline
             assetsTag[guid.ToString()] = new EchoObject($"{guid}.asset");
         root["assets"] = assetsTag;
 
-        var resTag = EchoObject.NewCompound();
-        foreach (var (path, guid) in resourcesMap.Where(kv => assets.Contains(kv.Value))
-                     .OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            resTag[path] = new EchoObject(guid.ToString());
+        // Kept in the order collected, since that order decides which asset wins a shared load path.
+        var resTag = EchoObject.NewList();
+        foreach (var resource in resourcesMap.Where(r => assets.Contains(r.Guid)))
+        {
+            var item = EchoObject.NewCompound();
+            item["path"] = new EchoObject(resource.LoadPath);
+            item["guid"] = new EchoObject(resource.Guid.ToString());
+            item["type"] = new EchoObject(resource.TypeName);
+            resTag.ListAdd(item);
+        }
         root["resources"] = resTag;
 
         root.WriteToBinary(new FileInfo(outputPath));

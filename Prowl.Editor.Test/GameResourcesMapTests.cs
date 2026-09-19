@@ -4,6 +4,7 @@
 using Prowl.Editor.Build;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 
 using Xunit;
 
@@ -73,9 +74,44 @@ public class GameResourcesMapTests : EditorTestHarness
 
         var collected = AssetCollector.Collect(Assets, [], dependenciesOnly: true);
 
-        Assert.Equal(texture, collected.ResourcesMap["Icons/Heart"]);
-        Assert.Equal(sprite, collected.ResourcesMap[$"Icons/Heart#{spriteName}"]);
+        Assert.Contains(collected.ResourcesMap, r => r.LoadPath == "Icons/Heart" && r.Guid == texture);
+        Assert.Contains(collected.ResourcesMap, r => r.LoadPath == $"Icons/Heart#{spriteName}" && r.Guid == sprite);
         Assert.Contains(sprite, collected.AllAssets);
-        Assert.DoesNotContain(collected.ResourcesMap.Keys, k => k.StartsWith("Art/", StringComparison.OrdinalIgnoreCase) || k.Contains("Other"));
+        Assert.DoesNotContain(collected.ResourcesMap, r => r.LoadPath.StartsWith("Art/", StringComparison.OrdinalIgnoreCase) || r.LoadPath.Contains("Other"));
+    }
+
+    [Fact]
+    public void Maps_RecordTheAssetType()
+    {
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
+
+        var (texture, sprite, spriteName) = ImportSpriteTexture("Resources/Icons/Heart.png");
+        Assets.RefreshResourcesMap();
+
+        Assert.Equal(texture, GameResources.GetGuid<Texture2D>("Icons/Heart"));
+        Assert.Equal(sprite, GameResources.GetGuid<Sprite>($"Icons/Heart#{spriteName}"));
+        Assert.Equal(Guid.Empty, GameResources.GetGuid<Sprite>("Icons/Heart"));
+
+        var collected = AssetCollector.Collect(Assets, [], dependenciesOnly: true);
+        Assert.Contains(collected.ResourcesMap, r => r.Guid == sprite && RuntimeUtils.ResolveType(r.TypeName) == typeof(Sprite));
+    }
+
+    [Fact]
+    public void SharedLoadPath_ResolvesToTheFirstAssetPath()
+    {
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
+
+        var (second, _, _) = ImportSpriteTexture("B/Resources/Icons/Heart.png");
+        var (first, _, _) = ImportSpriteTexture("A/Resources/Icons/Heart.png");
+        Assets.RefreshResourcesMap();
+
+        Assert.Equal(first, GameResources.GetGuid<Texture2D>("Icons/Heart"));
+        Assert.Equal(first, GameResources.GetGuid<Texture2D>("B/Resources/Icons/Heart.png"));
+
+        var collected = AssetCollector.Collect(Assets, [], dependenciesOnly: true);
+        var hearts = collected.ResourcesMap.Where(r => r.LoadPath == "Icons/Heart").Select(r => r.Guid).ToList();
+        Assert.Equal([first, second], hearts);
     }
 }
