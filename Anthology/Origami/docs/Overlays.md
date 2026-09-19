@@ -50,6 +50,7 @@ Origami.Toast("Upload complete")
 - `.Info()` / `.Success()` / `.Warning()` / `.Error()` set both the accent color and icon (Error defaults to a 5s duration)
 - `.Duration(seconds)` overrides the default 3s display time
 - Static shortcuts: `Toasts.Success(title, message)`, `Toasts.Error(title, message)`, etc.
+- Showing a toast identical to one on screen (same title, message and type) moves that toast to the front, restarts its timer and adds a counter to the title, like `Saved (x3)`
 
 ## Tooltip
 

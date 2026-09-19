@@ -53,9 +53,23 @@ public sealed class Toasts
     /// <summary>Set display duration in seconds (default 3).</summary>
     public Toasts Duration(float seconds) { _duration = seconds; return this; }
 
-    /// <summary>Fire the toast notification.</summary>
+    /// <summary>Fire the toast notification. An identical toast already on screen is moved to the front and its counter bumped instead.</summary>
     public void Show()
-        => s_toasts.Add(new ToastEntry { Title = _title, Message = _message, Type = _type, Duration = _duration, Elapsed = 0 });
+    {
+        int index = s_toasts.FindIndex(t => t.Title == _title && t.Message == _message && t.Type == _type);
+        if (index < 0)
+        {
+            s_toasts.Add(new ToastEntry { Title = _title, Message = _message, Type = _type, Duration = _duration });
+            return;
+        }
+
+        var toast = s_toasts[index];
+        s_toasts.RemoveAt(index);
+        toast.Count++;
+        toast.Duration = _duration;
+        toast.Elapsed = MathF.Min(toast.Elapsed, FadeInTime);
+        s_toasts.Add(toast);
+    }
 
     // ── Static convenience shortcuts ────────────────────────
 
@@ -84,6 +98,7 @@ public sealed class Toasts
         public ToastType Type;
         public float Duration;
         public float Elapsed;
+        public int Count = 1;
     }
 
     private static readonly List<ToastEntry> s_toasts = [];
@@ -138,18 +153,19 @@ public sealed class Toasts
 
             float slideX = (1f - MathF.Min(1f, toast.Elapsed / 0.2f)) * 40f;
 
-            byte Fa(int a) => (byte)Math.Clamp((int)(a * fade), 0, 255);
+            Color Fade(Color c) => Color.FromArgb(Math.Clamp((int)(c.A * fade), 0, 255), c.R, c.G, c.B);
 
             var semantic = GetSemantic(toast.Type, theme);
             bool hasSub = !string.IsNullOrEmpty(toast.Message);
 
-            var bg = Color.FromArgb(Fa(247), 28, 23, 42);                         // rgba(28,23,42,0.97)
-            var border = Color.FromArgb(Fa(66), 190, 150, 255);                       // bd-strong
-            var shadow = Color.FromArgb(Fa(150), 0, 0, 0);                            // 0 14 40 rgba(0,0,0,.6)
-            var titleColor = Color.FromArgb(Fa(255), theme.Ink.C500.R, theme.Ink.C500.G, theme.Ink.C500.B); // t-hi
-            var subColor = Color.FromArgb(Fa(255), theme.Ink.C200.R, theme.Ink.C200.G, theme.Ink.C200.B); // t-lo
-            var badgeBg = Color.FromArgb(Fa(38), semantic.R, semantic.G, semantic.B);  // ~15% alpha
-            var iconColor = Color.FromArgb(Fa(255), semantic.R, semantic.G, semantic.B);
+            var bg = Fade(theme.Popover);
+            var border = Fade(theme.BorderStrong);
+            var shadow = Fade(theme.Shadow);
+            var titleColor = Fade(theme.Ink.C500);
+            var subColor = Fade(theme.Ink.C200);
+            var badgeBg = Fade(OrigamiTheme.WithAlpha(semantic, 38));
+            var iconColor = Fade(semantic);
+            string title = toast.Count > 1 ? $"{toast.Title} (x{toast.Count})" : toast.Title;
 
             float mainH = metrics.FontSize + 2f;
             float subH = metrics.FontSizeSmall;
@@ -195,7 +211,7 @@ public sealed class Toasts
                 {
                     paper.Box($"toast_t_{i}")
                         .Height(mainH)
-                        .Text(toast.Title, titleFace).TextColor(titleColor)
+                        .Text(title, titleFace).TextColor(titleColor)
                         .FontSize(metrics.FontSize)
                         .Alignment(TextAlignment.MiddleLeft)
                         .IsNotInteractable();
