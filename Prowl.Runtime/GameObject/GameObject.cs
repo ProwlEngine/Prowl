@@ -1463,7 +1463,8 @@ public partial class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// Handles a missing component by attempting to recover it.
+    /// Handles a component saved in the older MissingMonobehaviour wrapper by attempting to recover it.
+    /// Missing components are now saved in their original shape and never reach this.
     /// </summary>
     /// <param name="compTag">The SerializedProperty containing the component data.</param>
     /// <param name="ctx">The serialization context.</param>
@@ -1471,25 +1472,42 @@ public partial class GameObject : EngineObject, ISerializable
         Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
     private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx)
     {
-        // Were missing! see if we can recover
-        MissingMonobehaviour missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
-        if (missing == null || missing.ComponentData == null) return;
+        MissingMonobehaviour? missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
+        if (missing.IsNotValid()) return;
 
-        EchoObject oldData = missing.ComponentData;
-        // Try to recover the component
-        if (oldData.TryGet("$type", out EchoObject? typeProp)
-            && !string.IsNullOrWhiteSpace(typeProp?.StringValue))
+        // Recovered when its type exists again, otherwise it stays missing so the data survives another save.
+        MonoBehaviour? component = missing!.ComponentData != null ? TryRecoverComponent(missing.ComponentData) : null;
+        if (component.IsValid())
+            component!.LoadedIdentifier = missing.LoadedIdentifier;
+        else
+            component = missing;
+
+        _components.Add(component!);
+        _componentCache.Add(component!.GetType(), component);
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
+    private MonoBehaviour? TryRecoverComponent(EchoObject data)
+    {
+        string? typeName = data.Get("$type")?.StringValue;
+        if (string.IsNullOrWhiteSpace(typeName)) return null;
+
+        Type? oType = RuntimeUtils.FindType(typeName);
+        if (oType == null || !typeof(MonoBehaviour).IsAssignableFrom(oType))
         {
-            Type? oType = RuntimeUtils.FindType(typeProp!.StringValue);
-            if (oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType))
-            {
-                // We have the type! Deserialize it and add it to the components
-                MonoBehaviour? component = Serializer.Deserialize(oldData, oType) as MonoBehaviour;
-                if (component.IsValid())
-                {
-                    _components.Add(component);
-                }
-            }
+            Debug.LogWarning("Missing Monobehaviour Type: " + typeName + " On " + Name);
+            return null;
+        }
+
+        try
+        {
+            return Serializer.Deserialize(data, oType) as MonoBehaviour;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"'{oType.Name}' on '{Name}' threw while being recovered, so it was kept as missing. {e.GetType().Name}: {e.Message}");
+            return null;
         }
     }
 }
