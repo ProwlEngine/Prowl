@@ -61,14 +61,7 @@ public static class AssetCollector
             foreach (var sub in entry.SubAssets)
                 allAssets.Add(sub.Guid);
 
-            // Build the load path: everything after the last "Resources/" segment, no extension
-            string loadPath = GetResourceLoadPath(entry.Path);
-            if (!string.IsNullOrEmpty(loadPath))
-            {
-                if (resourcesMap.ContainsKey(loadPath))
-                    Runtime.Debug.LogWarning($"[Build] Duplicate Resources load path '{loadPath}': '{entry.Path}' overrides another asset.");
-                resourcesMap[loadPath] = entry.Guid;
-            }
+            EditorAssetBackend.AddResourcePaths(resourcesMap, entry, "[Build]");
         }
 
         // Resources assets are build entry points just like scenes - in DependenciesOnly mode their
@@ -166,35 +159,5 @@ public static class AssetCollector
     }
 
     /// <summary>Check if an asset path is under a Resources/ folder.</summary>
-    private static bool IsResourcesAsset(string relativePath)
-    {
-        var segments = relativePath.Split('/', '\\');
-        return segments.Any(s => s.Equals("Resources", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Get the load path for a Resources asset.
-    /// "Art/Resources/Textures/Grass.png" -> "Textures/Grass"
-    /// </summary>
-    private static string GetResourceLoadPath(string relativePath)
-    {
-        string normalized = relativePath.Replace('\\', '/');
-        int idx = normalized.LastIndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
-        if (idx < 0)
-        {
-            // Check if it starts with "Resources/"
-            if (normalized.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
-                idx = -1; // will add "/Resources/".Length below
-            else
-                return "";
-        }
-
-        string afterResources = normalized[(idx + "/Resources/".Length)..];
-        // Remove extension
-        int dotIdx = afterResources.LastIndexOf('.');
-        if (dotIdx >= 0)
-            afterResources = afterResources[..dotIdx];
-
-        return afterResources;
-    }
+    private static bool IsResourcesAsset(string relativePath) => Runtime.GameResources.GetLoadPath(relativePath) != null;
 }
