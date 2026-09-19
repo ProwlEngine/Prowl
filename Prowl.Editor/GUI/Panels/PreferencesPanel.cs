@@ -243,7 +243,7 @@ public class PreferencesPanel : DockPanel
             footer: () =>
             {
                 using (paper.Row("pref_thr_note").Height(UnitValue.Auto).Margin(0, 0, 10, 0)
-                    .Rounded(9).Padding(10, 10, 9, 9)
+                    .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(10, 10, 9, 9)
                     .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable().Enter())
                     paper.Box("pref_thr_note_t").Height(UnitValue.Auto).IsNotInteractable()
                         .Text(Loc.Get("pref.theme_note"), font)
@@ -279,7 +279,7 @@ public class PreferencesPanel : DockPanel
                     Toasts.Info(Loc.Get("pref.toast_theme"), Loc.Get("pref.toast_exported", new { file = System.IO.Path.GetFileName(path) }));
                 }, filters: new[] { "*.prowltheme" }, filterLabels: new[] { Loc.Get("pref.theme_filter") }), leftGap: 8f);
 
-            paper.Box("pref_ft_apply").Width(UnitValue.Auto).Height(30).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(8).Padding(16, 16, 0, 0)
+            paper.Box("pref_ft_apply").Width(UnitValue.Auto).Height(30).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(16, 16, 0, 0)
                 .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright)
                 .Hovered.Glow(0, 2, 12, -2, Color.FromArgb(150, EditorTheme.Accent)).End()
                 .Text($"{EditorIcons.Check}  Apply", semi).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
@@ -403,13 +403,13 @@ public class PreferencesPanel : DockPanel
             bool on = string.Equals(theme.Name, p.Name, StringComparison.OrdinalIgnoreCase);
             PresetCard(paper, font, $"pref_pr_c{i}", p.Name, on, () => ApplyPreset(s, p), id =>
             {
-                using (paper.Row(id).Height(34).Rounded(7).Padding(6, 6, 6, 6).Gap(4)
+                using (paper.Row(id).Height(34).Rounded(EditorTheme.Roundness).Padding(6, 6, 6, 6).Gap(4)
                     .BackgroundColor(Hx(p.Bg)).IsNotInteractable().Enter())
                 {
-                    paper.Box($"{id}_a").Rounded(4)
+                    paper.Box($"{id}_a").Rounded(Origami.Current.Metrics.SmallRounding)
                         .BackgroundLinearGradient(0, 0, 1, 1, Hx(p.Accent), Hx(p.Accent2)).IsNotInteractable();
-                    paper.Box($"{id}_b").Rounded(4).BackgroundColor(Hx(p.Accent2)).IsNotInteractable();
-                    paper.Box($"{id}_p").Rounded(4).BackgroundColor(Hx(p.Panel))
+                    paper.Box($"{id}_b").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(Hx(p.Accent2)).IsNotInteractable();
+                    paper.Box($"{id}_p").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(Hx(p.Panel))
                         .BorderColor(EditorTheme.WithAlpha(Hx(p.Text), 38)).BorderWidth(1).IsNotInteractable();
                 }
             });
@@ -452,7 +452,7 @@ public class PreferencesPanel : DockPanel
 
     private static void PresetCard(Paper paper, Scribe.FontFile font, string id, string name, bool on, Action onClick, Action<string> drawSwatch)
     {
-        var card = paper.Column(id).Height(UnitValue.Auto).Rounded(10)
+        var card = paper.Column(id).Height(UnitValue.Auto).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(PAD, PAD, PAD, PAD).Gap(SP * 1.5f)
             .BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Glass)
             .BorderColor(on ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(on ? 2 : 1)
@@ -612,7 +612,7 @@ public class PreferencesPanel : DockPanel
             .BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         using (paper.Column("pref_pv_center").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Gap(SP * 2).Enter())
         {
-            using (paper.Column("pref_pv_card").Height(cardH).Rounded(radius + 2).Clip()
+            using (paper.Column("pref_pv_card").Height(cardH).Rounded(Origami.Current.Metrics.ContainerRounding).Clip()
                 .DropShadow(0, 10, 26, -6, Color.FromArgb(150, 0, 0, 0))
                 .BackgroundColor(EditorTheme.Neutral200).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
@@ -620,7 +620,7 @@ public class PreferencesPanel : DockPanel
                 using (paper.Row("pref_pv_title").Height(30).Padding(PAD, PAD, 0, 0).Gap(SP * 1.5f)
                     .BackgroundColor(surface).Enter())
                 {
-                    paper.Box("pref_pv_logo").Width(13).Height(13).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(4)
+                    paper.Box("pref_pv_logo").Width(13).Height(13).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(radius * 0.5f)
                         .BackgroundColor(EditorTheme.Accent).IsNotInteractable();
                     paper.Box("pref_pv_name").Margin(SP, 0, 0, 0).IsNotInteractable()
                         .Text("Prowl", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
@@ -641,7 +641,7 @@ public class PreferencesPanel : DockPanel
                     paper.Box("pref_pv_edit").IsNotInteractable()
                         .Text(Loc.Get("menu.edit"), font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleLeft);
-                    paper.Box("pref_pv_play").Width(20).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness * 0.5f)
+                    paper.Box("pref_pv_play").Width(20).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(radius * 0.5f)
                         .Glow(0, 0, 12, 0, Color.FromArgb(170, EditorTheme.Accent))
                         .BackgroundColor(EditorTheme.Accent).IsNotInteractable()
                         .Text(EditorIcons.Play, font).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
@@ -667,7 +667,7 @@ public class PreferencesPanel : DockPanel
                                 .Padding(SP, SP, 0, 0).Gap(SP)
                                 .BackgroundColor(sel ? EditorTheme.Selected : Color.Transparent).Enter())
                             {
-                                paper.Box($"pref_pv_hd{i}").Width(7).Height(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(2)
+                                paper.Box($"pref_pv_hd{i}").Width(7).Height(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(radius * 0.5f)
                                     .BackgroundColor(sel ? EditorTheme.Accent : EditorTheme.Blue400).IsNotInteractable();
                                 paper.Box($"pref_pv_hn{i}").Margin(SP * 0.5f, 0, 0, 0).IsNotInteractable()
                                     .Text(items[i], font).TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink400)
@@ -823,7 +823,7 @@ public class PreferencesPanel : DockPanel
 
                 // Binding button
                 paper.Box($"pref_sc_bind_{shortcut.Id}")
-                    .Width(160).Height(EditorTheme.RowHeight - 4).Rounded(8)
+                    .Width(160).Height(EditorTheme.RowHeight - 4).Rounded(EditorTheme.Roundness)
                     .BackgroundColor(isRebinding ? EditorTheme.Accent : EditorTheme.Glass)
                     .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                     .Hovered.BackgroundColor(isRebinding ? EditorTheme.Accent : EditorTheme.Hover).BorderColor(EditorTheme.BorderStrong).End()
@@ -841,7 +841,7 @@ public class PreferencesPanel : DockPanel
                 if (isOverridden)
                 {
                     paper.Box($"pref_sc_rst_{shortcut.Id}")
-                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(8)
+                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(EditorTheme.Roundness)
                         .BackgroundColor(EditorTheme.Glass)
                         .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                         .Hovered.BackgroundColor(EditorTheme.Hover).BorderColor(EditorTheme.BorderStrong).End()

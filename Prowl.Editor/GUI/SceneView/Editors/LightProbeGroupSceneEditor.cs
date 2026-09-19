@@ -147,7 +147,7 @@ public class LightProbeGroupSceneEditor : SceneTool
     private void ToolBtn(Paper paper, string id, string icon, Scribe.FontFile font, Action onClick)
     {
         paper.Box(id)
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(SColor.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text(icon, font).TextColor(EditorTheme.Ink500)

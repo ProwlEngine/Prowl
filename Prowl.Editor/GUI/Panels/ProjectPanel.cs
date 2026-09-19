@@ -320,7 +320,7 @@ public class ProjectPanel : DockPanel
 
     private void NavBtn(Paper p, Scribe.FontFile font, string id, string glyph, bool enabled, Action onClick)
     {
-        var b = p.Box(id).Width(24).Height(24).Rounded(6).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        var b = p.Box(id).Width(24).Height(24).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .Text(glyph, font).TextColor(enabled ? EditorTheme.Ink300 : EditorTheme.InkFaint).FontSize(13f).Alignment(TextAlignment.MiddleCenter);
         if (enabled) { b.Hovered.BackgroundColor(EditorTheme.Hover).End(); b.OnClick(_ => onClick()); }
         else b.IsNotInteractable();
@@ -642,7 +642,7 @@ public class ProjectPanel : DockPanel
                         p.Box($"proj_fn_drop_{node.Id.GetHashCode()}")
                             .PositionType(PositionType.SelfDirected)
                             .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
-                            .Rounded(3).IsNotInteractable()
+                            .Rounded(EditorTheme.Roundness).IsNotInteractable()
                             .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                             .BorderColor(EditorTheme.Purple400).BorderWidth(1);
                     }
@@ -908,12 +908,12 @@ public class ProjectPanel : DockPanel
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 if (hasSubs)
-                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(5).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(Origami.Current.Metrics.SmallRounding).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                         .BackgroundColor(EditorTheme.Selected).BorderColor(Color.FromArgb(77, EditorTheme.Purple400)).BorderWidth(1)
                         .Text(item.Subs.Count.ToString(), semi).TextColor(EditorTheme.AccentText)
                         .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
                 else if (isSub)
-                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(5).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(Origami.Current.Metrics.SmallRounding).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                         .BackgroundColor(EditorTheme.Selected).BorderColor(Color.FromArgb(77, EditorTheme.Purple400)).BorderWidth(1)
                         .Text("sub", semi).TextColor(EditorTheme.AccentText)
                         .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
@@ -1222,7 +1222,7 @@ public class ProjectPanel : DockPanel
     {
         string pid = parent.Guid.ToString();
         using (paper.Column($"proj_drawer_{pid}").Width(UnitValue.Percentage(100)).Height(UnitValue.Auto)
-            .Margin(0, 0, 3, 7).Padding(11, 11, 10, 10).Rounded(10)
+            .Margin(0, 0, 3, 7).Padding(11, 11, 10, 10).Rounded(Origami.Current.Metrics.ContainerRounding)
             .BackgroundColor(Color.FromArgb(61, 0, 0, 0)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
@@ -1253,7 +1253,7 @@ public class ProjectPanel : DockPanel
         bool isSelected = Selection.IsSelected(sub);
 
         using (paper.Column($"proj_sub_{sub.Guid}").Width(62).Height(UnitValue.Auto).Margin(0, 6, 0, 6)
-            .Padding(3, 3, 5, 5).Rounded(8).Gap(5)
+            .Padding(3, 3, 5, 5).Rounded(Origami.Current.Metrics.ContainerRounding).Gap(5)
             .BackgroundColor(isSelected ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
             .OnClick((sub, idx, subObjects), (cap, e) =>
@@ -1273,26 +1273,27 @@ public class ProjectPanel : DockPanel
             .Enter())
         {
             var thumbTex = EditorAssetBackend.Instance?.GetThumbnailTexture(sub.Guid);
+            float thumbRound = EditorTheme.Roundness;
             if (thumbTex != null)
             {
                 paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(UnitValue.StretchOne, UnitValue.StretchOne, 0, 0)
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     {
                         float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
-                        canvas.DrawImageRounded(thumbTex, x, y, w, h, 8f);
+                        canvas.DrawImageRounded(thumbTex, x, y, w, h, thumbRound);
                         var bd = Prowl.Vector.Color32.FromArgb(EditorTheme.BorderSoft.A, EditorTheme.BorderSoft.R, EditorTheme.BorderSoft.G, EditorTheme.BorderSoft.B);
                         canvas.SaveState();
                         canvas.SetStrokeColor(bd);
                         canvas.SetStrokeWidth(1f);
                         canvas.BeginPath();
-                        canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, 8f);
+                        canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, thumbRound);
                         canvas.Stroke();
                         canvas.RestoreState();
                     }));
             }
             else
             {
-                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(UnitValue.StretchOne, UnitValue.StretchOne, 0, 0).Rounded(8)
+                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(UnitValue.StretchOne, UnitValue.StretchOne, 0, 0).Rounded(thumbRound)
                     .BackgroundLinearGradient(0, 0, 1, 1, Color.FromArgb(58, style.Color), Color.FromArgb(16, style.Color))
                     .BorderColor(Color.FromArgb(68, style.Color)).BorderWidth(1)
                     .Icon(paper, style.Icon, style.Color, size: 20f);
@@ -1311,13 +1312,14 @@ public class ProjectPanel : DockPanel
         bool isSelected = Selection.IsSelected(item);
         bool isSubAsset = item.IsSubAsset;
         bool isPinged = item.Guid != Guid.Empty && item.Guid == Selection.PingedGuid;
+        float cellRound = Origami.Current.Metrics.ContainerRounding;
 
         using (paper.Column(id)
             .Width(cellSize).Height(UnitValue.Auto)
             .BackgroundColor(isSelected ? EditorTheme.Selected : (isSubAsset ? Color.FromArgb(20, EditorTheme.Accent) : Color.Transparent))
             .BorderColor(isSelected ? Color.FromArgb(102, EditorTheme.Purple400) : Color.Transparent).BorderWidth(1)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
-            .Rounded(9)
+            .Rounded(cellRound)
             .OnClick((item, idx, itemObjects), (cap, e) =>
             {
                 e.StopPropagation();
@@ -1367,11 +1369,12 @@ public class ProjectPanel : DockPanel
                     var borderColor = Color.FromArgb(borderA, 255, 200, 0);
                     float x = (float)r.Min.X, y = (float)r.Min.Y;
                     float w = (float)r.Size.X, h = (float)r.Size.Y;
-                    canvas.RoundedRectFilled(x, y, w, h, 4, 4, 4, 4, fillColor);
+                    canvas.RoundedRectFilled(x, y, w, h, cellRound, cellRound, cellRound, cellRound, fillColor);
                     canvas.SetStrokeColor(borderColor);
                     canvas.SetStrokeWidth(2f);
                     canvas.BeginPath();
-                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, 3, 3, 3, 3);
+                    float inner = MathF.Max(0f, cellRound - 1f);
+                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, inner, inner, inner, inner);
                     canvas.Stroke();
                 });
             })
@@ -1384,9 +1387,9 @@ public class ProjectPanel : DockPanel
             {
                 float ts = cellSize - 8;
                 paper.Box($"{id}_stk2").PositionType(PositionType.SelfDirected).Position(10, 10).Size(ts, ts)
-                    .Rounded(10).BackgroundColor(Color.FromArgb(130, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
+                    .Rounded(cellRound).BackgroundColor(Color.FromArgb(130, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
                 paper.Box($"{id}_stk1").PositionType(PositionType.SelfDirected).Position(7, 7).Size(ts, ts)
-                    .Rounded(10).BackgroundColor(Color.FromArgb(235, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
+                    .Rounded(cellRound).BackgroundColor(Color.FromArgb(235, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
             }
 
             // Thumbnail area
@@ -1400,13 +1403,13 @@ public class ProjectPanel : DockPanel
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     {
                         float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
-                        canvas.DrawImageRounded(thumbTex, x, y, w, h, 10f);
+                        canvas.DrawImageRounded(thumbTex, x, y, w, h, cellRound);
                         var bd = Prowl.Vector.Color32.FromArgb(EditorTheme.BorderSoft.A, EditorTheme.BorderSoft.R, EditorTheme.BorderSoft.G, EditorTheme.BorderSoft.B);
                         canvas.SaveState();
                         canvas.SetStrokeColor(bd);
                         canvas.SetStrokeWidth(1f);
                         canvas.BeginPath();
-                        canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, 10f);
+                        canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, cellRound);
                         canvas.Stroke();
                         canvas.RestoreState();
                     }));
@@ -1418,7 +1421,7 @@ public class ProjectPanel : DockPanel
                     : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 
                 float tileSz = cellSize - 8;
-                var tile = paper.Box($"{id}_t").Width(tileSz).Height(tileSz).Margin(4, 4, 4, 0).Rounded(10);
+                var tile = paper.Box($"{id}_t").Width(tileSz).Height(tileSz).Margin(4, 4, 4, 0).Rounded(cellRound);
 
                 if (style.Bare)
                 {
@@ -1444,7 +1447,7 @@ public class ProjectPanel : DockPanel
             {
                 bool expanded = _expandedAssets.Contains(item.Guid);
                 using (paper.Row($"{id}_sb").PositionType(PositionType.SelfDirected).Position(cellSize - 34, -2)
-                    .Width(UnitValue.Auto).Height(17).Rounded(9).Padding(6, 6, 0, 0).Gap(3)
+                    .Width(UnitValue.Auto).Height(17).Rounded(EditorTheme.Roundness > 0f ? 9 : 0).Padding(6, 6, 0, 0).Gap(3)
                     .BackgroundColor(EditorTheme.Accent).DropShadow(0, 2, 8, 0, Color.FromArgb(128, 0, 0, 0))
                     .StopEventPropagation()
                     .OnClick(item.Guid, (guid, _) =>
@@ -1489,7 +1492,7 @@ public class ProjectPanel : DockPanel
                 paper.Box($"{id}_drop")
                     .PositionType(PositionType.SelfDirected)
                     .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
-                    .Rounded(4).IsNotInteractable()
+                    .Rounded(cellRound).IsNotInteractable()
                     .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                     .BorderColor(EditorTheme.Purple400).BorderWidth(2);
             }

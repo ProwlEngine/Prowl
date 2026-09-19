@@ -177,7 +177,7 @@ public static class EditorGuide
             // Glowing, gently pulsing ring around the spotlighted region.
             float pulse = 0.55f + 0.45f * MathF.Sin(_time * 3.2f);
             paper.Box("grd_ring").PositionType(PositionType.SelfDirected).Position(hx - 3, hy - 3).Size(hw + 6, hh + 6)
-                .Layer(Layer.Overlay).Rounded(8).IsNotInteractable()
+                .Layer(Layer.Overlay).Rounded(Origami.Current.Metrics.ContainerRounding).IsNotInteractable()
                 .BorderColor(Color.FromArgb((int)(220 * appear), EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B)).BorderWidth(2)
                 .Glow(0, 0, 22, 2, Color.FromArgb((int)(150 * pulse * appear), EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B));
 
@@ -227,10 +227,11 @@ public static class EditorGuide
         bool gated = step.WaitUntil != null && !step.WaitUntil();
         var semi = EditorTheme.FontSemiBold ?? font;
         var display = EditorTheme.FontDisplay ?? EditorTheme.DefaultBoldFont ?? semi;
+        var m = Origami.Current.Metrics;
 
         float heroH = centered ? 66 : 52;
         using (paper.Column("grd_card").PositionType(PositionType.SelfDirected).Position(cx, cy)
-            .Width(cardW).Height(UnitValue.Auto).Layer(Layer.Overlay).Rounded(14).Clip()
+            .Width(cardW).Height(UnitValue.Auto).Layer(Layer.Overlay).Rounded(m.ContainerRounding).Clip()
             .BackgroundColor(Color.FromArgb(252, 24, 20, 36))
             .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
             .Glow(0, 14, 40, -12, Color.FromArgb(85, EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B))
@@ -238,12 +239,12 @@ public static class EditorGuide
         {
             // Accent gradient hero strip (top corners rounded to match the card).
             using (paper.Row("grd_hero").Width(UnitValue.StretchOne).Height(heroH)
-                .Padding(pad, pad, 0, 0).Gap(13).RoundedTop(13)
+                .Padding(pad, pad, 0, 0).Gap(13).RoundedTop(m.ContainerRounding)
                 .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright).Enter())
             {
                 if (!string.IsNullOrEmpty(step.Icon))
                     paper.Box("grd_icon").Width(centered ? 40 : 30).Height(centered ? 40 : 30)
-                        .Margin(0, 13, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(9)
+                        .Margin(0, 13, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(m.Rounding)
                         .BackgroundColor(Color.FromArgb(60, 255, 255, 255)).IsNotInteractable()
                         .Text(step.Icon, semi).TextColor(Color.White).FontSize(centered ? 20f : 15f)
                         .Alignment(TextAlignment.MiddleCenter);
@@ -265,7 +266,7 @@ public static class EditorGuide
             // Optional migration tip (Unreal / Godot equivalent).
             if (!string.IsNullOrEmpty(step.TipKey))
                 using (paper.Row("grd_tip").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-                    .Margin(pad, pad, 0, 4).Rounded(8).Padding(10, 10, 8, 8).Gap(8)
+                    .Margin(pad, pad, 0, 4).Rounded(m.ContainerRounding).Padding(10, 10, 8, 8).Gap(8)
                     .BackgroundColor(EditorTheme.Selected).Enter())
                 {
                     // Own-text is only aligned horizontally, so center the bulb by centering its

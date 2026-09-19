@@ -105,7 +105,7 @@ public static class RenameOverlay
             .Position(0, (position == Position.Top ? 0 : UnitValue.Stretch()))
             .Width(UnitValue.Stretch())
             .Height(EditorTheme.RowHeight)
-            .Rounded(3)
+            .Rounded(EditorTheme.Roundness)
             .BorderWidth(1)
             .BackgroundColor(EditorTheme.Neutral100)
             .BorderColor(EditorTheme.Purple400)

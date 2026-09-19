@@ -48,6 +48,7 @@ public static class ProjectLauncher
     private static Color Bd => Color.FromArgb(33, EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B);
     private static Color InputBd => Color.FromArgb(41, EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B);
     private static Color CardBg => Col(255, 255, 255, 0.025f);
+    private static OrigamiMetrics M => Origami.Current.Metrics;
 
     // Cycled tip strip drawn at the bottom of the launcher background.
     private static readonly string[] _tipKeys =
@@ -130,7 +131,7 @@ public static class ProjectLauncher
             .BackgroundColor(WinGlass)
             .BackdropBlur(22)
             .BorderColor(Bd).BorderWidth(1)
-            .Rounded(10)
+            .Rounded(M.ContainerRounding)
             .DropShadow(0, 16, 44, -8, Col(0, 0, 0, 0.9f))
             .Clip()
             .Enter())
@@ -172,7 +173,7 @@ public static class ProjectLauncher
                 LanguageDropdown(P, font);
 
             using (P.Row("pl_tabs").Width(UnitValue.Auto).Height(34).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-                .BackgroundColor(EditorTheme.Glass).BorderColor(InputBd).BorderWidth(1).Rounded(9).Enter())
+                .BackgroundColor(EditorTheme.Glass).BorderColor(InputBd).BorderWidth(1).Rounded(M.ContainerRounding).Enter())
             {
                 TabChip(P, Loc.Get("launcher.tab_recent"), 0);
                 TabChip(P, Loc.Get("launcher.new_project"), 1);
@@ -219,7 +220,7 @@ public static class ProjectLauncher
     // Small pill showing a language's region tag (e.g. "US"), sized to its text.
     private static void LangChip(Paper P, string id, string text, Scribe.FontFile font)
     {
-        P.Box(id).Width(UnitValue.Auto).Height(17).Rounded(5).Margin(5, 5, UnitValue.StretchOne, UnitValue.StretchOne).Padding(6, 6, 0, 0)
+        P.Box(id).Width(UnitValue.Auto).Height(17).Rounded(M.SmallRounding).Margin(5, 5, UnitValue.StretchOne, UnitValue.StretchOne).Padding(6, 6, 0, 0)
             .BackgroundColor(Col(255, 255, 255, 0.06f)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable()
             .Text(text, font).FontSize(9.5f * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleCenter);
@@ -230,7 +231,7 @@ public static class ProjectLauncher
         bool on = _tab == index;
         float leftM = index == 0 ? 3 : 4;
         float rightM = index == 1 ? 3 : 0;
-        P.Box("pl_tab" + index).Width(UnitValue.Auto).Height(28).Rounded(8)
+        P.Box("pl_tab" + index).Width(UnitValue.Auto).Height(28).Rounded(M.Rounding)
             .Margin(leftM, rightM, UnitValue.StretchOne, UnitValue.StretchOne).Padding(14, 14, 0, 0)
             .BackgroundColor(on ? EditorTheme.Accent : Color.Transparent)
             .Text(label, EditorTheme.FontMedium ?? EditorTheme.DefaultFont)
@@ -253,7 +254,7 @@ public static class ProjectLauncher
                         .Search(Loc.Get("launcher.search"))
                         .Height(34).Show();
 
-                using (P.Row("pl_open").Width(UnitValue.Auto).Height(34).Rounded(9).Margin(9, 26, UnitValue.StretchOne, UnitValue.StretchOne)
+                using (P.Row("pl_open").Width(UnitValue.Auto).Height(34).Rounded(M.Rounding).Margin(9, 26, UnitValue.StretchOne, UnitValue.StretchOne)
                     .BackgroundColor(EditorTheme.Glass).BorderColor(InputBd).BorderWidth(1)
                     .Hovered.BorderColor(EditorTheme.BorderStrong).End()
                     .OnClick(_ => OpenProjectDialog())
@@ -294,7 +295,7 @@ public static class ProjectLauncher
         bool exists = Directory.Exists(entry.Path);
         var mono = EditorTheme.FontMono ?? font;
 
-        using (P.Row("pl_card" + i).Height(70).Rounded(11)
+        using (P.Row("pl_card" + i).Height(70).Rounded(M.ContainerRounding)
             .BackgroundColor(CardBg).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Transition(GuiProp.BackgroundColor, 0.15f)
             .Transition(GuiProp.BorderColor, 0.15f)
@@ -317,7 +318,7 @@ public static class ProjectLauncher
             // click off the card's open-project handler.
             bool fav = entry.Favorite;
             Color amber = EditorTheme.Amber400;
-            using (P.Box("pl_fav" + i).Width(44).Height(44).Rounded(12).Margin(16, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            using (P.Box("pl_fav" + i).Width(44).Height(44).Rounded(M.Rounding).Margin(16, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .Hovered.BackgroundColor(Col(255, 255, 255, 0.08f)).End()
                 .StopEventPropagation()
                 .OnClick(entry, (e, _) => RecentProjects.SetFavorite(e.Path, !e.Favorite))
@@ -333,11 +334,11 @@ public static class ProjectLauncher
 
                     // Version chip (or a "missing" chip when the folder is gone).
                     if (exists)
-                        P.Box("pl_cver" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
+                        P.Box("pl_cver" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(M.SmallRounding).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
                             .BackgroundColor(Raised)
                             .Text($"v{EngineVersion()}", mono).FontSize(10 * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleCenter);
                     else
-                        P.Box("pl_cmiss" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
+                        P.Box("pl_cmiss" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(M.SmallRounding).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
                             .BackgroundColor(Color.FromArgb(128, EditorTheme.Red300))
                             .Text(Loc.Get("launcher.missing"), mono).FontSize(10 * TS).TextColor(EditorTheme.Red400).Alignment(TextAlignment.MiddleCenter);
 
@@ -427,7 +428,7 @@ public static class ProjectLauncher
                     .Height(38).Mono()
                     .TrailingContent(() =>
                     {
-                        using (P.Box("pl_locbtn").Width(24).Height(24).Margin(2, 6, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(6)
+                        using (P.Box("pl_locbtn").Width(24).Height(24).Margin(2, 6, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(M.SmallRounding)
                             .Hovered.BackgroundColor(Col(255, 255, 255, 0.07f)).End()
                             .OnClick(_ => BrowseLocation())
                             .Enter())
@@ -437,7 +438,7 @@ public static class ProjectLauncher
 
                 P.Box("pl_cfgsp");
 
-                using (P.Row("pl_cta").Height(44).Rounded(11)
+                using (P.Row("pl_cta").Height(44).Rounded(M.Rounding)
                     .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright)
                     .Glow(0, 8, 26, -4, Color.FromArgb(153, EditorTheme.Purple400))
                     .OnClick(_ => TryCreateProject())
@@ -459,12 +460,12 @@ public static class ProjectLauncher
     {
         (Color c1, Color c2) = GlyphColors(0.0, true);
         using (P.Column("pl_tpl0").Margin(col == 0 ? 0 : 6, col == 1 ? 0 : 6, 0, 0)
-            .Rounded(12).Padding(17, 17, 17, 17)
+            .Rounded(M.ContainerRounding).Padding(17, 17, 17, 17)
             .BackgroundColor(EditorTheme.Selected)
             .BorderColor(EditorTheme.Accent).BorderWidth(1.5f)
             .Enter())
         {
-            using (P.Box("pl_tplico0").Width(46).Height(46).Rounded(12).Margin(0, 0, 0, 11)
+            using (P.Box("pl_tplico0").Width(46).Height(46).Rounded(M.Rounding).Margin(0, 0, 0, 11)
                 .BackgroundLinearGradient(0, 0, 1, 1, c1, c2).Enter())
                 P.Draw((vg, r) => DrawIcon(vg, r, EditorIcons.FileLines_I, 24, EditorTheme.Ink700, 1.3f));
 
@@ -479,7 +480,7 @@ public static class ProjectLauncher
     private static void EmptySlot(Paper P, int idx, int col)
     {
         using (P.Column("pl_tpl" + idx).Margin(col == 0 ? 0 : 6, col == 1 ? 0 : 6, 0, 0)
-            .Rounded(12)
+            .Rounded(M.ContainerRounding)
             .BackgroundColor(Col(255, 255, 255, 0.015f))
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())

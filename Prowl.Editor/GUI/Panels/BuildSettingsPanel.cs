@@ -172,7 +172,7 @@ public class BuildSettingsPanel : DockPanel
 
         const float rowH = 28f;
 
-        var rowB = paper.Row($"bp_sc_{sk}").Height(rowH).Rounded(7).Margin(0, 0, 0, 3)
+        var rowB = paper.Row($"bp_sc_{sk}").Height(rowH).Rounded(Origami.Current.Metrics.Rounding).Margin(0, 0, 0, 3)
             .Padding(8, 4, 0, 0).Gap(8)
             .BackgroundColor(beingDragged || on ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Hover).End();
@@ -230,7 +230,7 @@ public class BuildSettingsPanel : DockPanel
                 .Text(displayName, font).TextColor(on ? EditorTheme.Ink500 : EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-            paper.Box($"bp_sc_{sk}_rm").Width(rowH).Rounded(6)
+            paper.Box($"bp_sc_{sk}_rm").Width(rowH).Rounded(Origami.Current.Metrics.Rounding)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink300)
                 .Hovered.TextColor(EditorTheme.Red400).End()
@@ -398,7 +398,7 @@ public class BuildSettingsPanel : DockPanel
         bool sel = selectable && _selectedIndex == slot.realIndex;
 
         var card = paper.Column($"bp_card_{cell}").MinHeight(78)
-            .Rounded(9).Padding(6, 6, 11, 11).Gap(6)
+            .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(6, 6, 11, 11).Gap(6)
             .BackgroundColor(sel ? EditorTheme.Selected : EditorTheme.Glass)
             .BorderColor(sel ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(1);
 

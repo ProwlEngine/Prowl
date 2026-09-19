@@ -84,7 +84,7 @@ public static class SelectorModal
             .Size(380, 460)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
-            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Layer(layer)
             .StopEventPropagation()
             .Enter())
@@ -116,6 +116,7 @@ public static class SelectorModal
         using (paper.Row("sel_header")
             .Height(32).PaddingLeft(12).PaddingRight(8).Gap(8)
             .BackgroundColor(EditorTheme.Neutral200)
+            .RoundedTop(Origami.Current.Metrics.ContainerRounding)
             .Enter())
         {
             paper.Box("sel_title").Height(32)
@@ -126,7 +127,7 @@ public static class SelectorModal
             paper.Box("sel_spacer");
 
             paper.Box("sel_close")
-                .Width(24).Height(24).Rounded(4)
+                .Width(24).Height(24).Rounded(Origami.Current.Metrics.Rounding)
                 .Hovered.BackgroundColor(EditorTheme.Red300).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
@@ -163,7 +164,7 @@ public static class SelectorModal
     {
         bool active = _activeTab == tab;
         paper.Box(id)
-            .Height(24).Rounded(4)
+            .Height(24).Rounded(Origami.Current.Metrics.Rounding)
             .BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Neutral200)
             .Hovered.BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Text(label, font)
@@ -199,7 +200,7 @@ public static class SelectorModal
             paper.Box("sel_s_none")
                 .Height(EditorTheme.RowHeight).PaddingLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()
-                .Rounded(3)
+                .Rounded(Origami.Current.Metrics.Rounding)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
                 .TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft)
@@ -262,7 +263,7 @@ public static class SelectorModal
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight).PaddingLeft(8).Gap(4)
             .Hovered.BackgroundColor(EditorTheme.Purple400).End()
-            .Rounded(3)
+            .Rounded(Origami.Current.Metrics.Rounding)
             .OnClick(value, (val, _) =>
             {
                 _callback?.Invoke(val);
@@ -328,7 +329,7 @@ public static class SelectorModal
             paper.Box("sel_a_none")
                 .Height(EditorTheme.RowHeight).PaddingLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()
-                .Rounded(3)
+                .Rounded(Origami.Current.Metrics.Rounding)
                 .Text($"{EditorIcons.Circle}  None ({_targetType.Name})", font)
                 .TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft)
@@ -373,7 +374,7 @@ public static class SelectorModal
         using (paper.Column(id)
             .Width(cellSize).Height(totalCellH)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Rounded(4)
+            .Rounded(Origami.Current.Metrics.Rounding)
             .OnClick(guid, (g, _) =>
             {
                 var asset = Runtime.AssetDatabase.Get(g);
@@ -385,21 +386,22 @@ public static class SelectorModal
         {
             if (thumbTex != null)
             {
+                float thumbRound = Origami.Current.Metrics.SmallRounding;
                 paper.Box($"{id}_t")
                     .Width(cellSize - 4).Height(cellSize - 4)
-                    .Margin(2, 2, 2, 0).Rounded(4)
+                    .Margin(2, 2, 2, 0).Rounded(thumbRound)
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     {
-                        canvas.DrawImage(thumbTex,
+                        canvas.DrawImageRounded(thumbTex,
                             (float)r.Min.X, (float)r.Min.Y,
-                            (float)r.Size.X, (float)r.Size.Y);
+                            (float)r.Size.X, (float)r.Size.Y, thumbRound);
                     }));
             }
             else
             {
                 paper.Box($"{id}_t")
                     .Width(cellSize - 4).Height(cellSize - 4)
-                    .Margin(2, 2, 2, 0).Rounded(4)
+                    .Margin(2, 2, 2, 0).Rounded(Origami.Current.Metrics.SmallRounding)
                     .Text(EditorIcons.Cube, font)
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(cellSize * 0.45f)

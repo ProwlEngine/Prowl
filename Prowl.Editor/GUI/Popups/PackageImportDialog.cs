@@ -305,7 +305,7 @@ public static class PackageImportDialog
             .Size(DialogWidth, DialogHeight)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
-            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Layer(layer)
             .StopEventPropagation()
             .Enter())
@@ -325,7 +325,7 @@ public static class PackageImportDialog
         using (paper.Row("pkgimp_title")
             .Height(32)
             .BackgroundColor(EditorTheme.Neutral200)
-            .Rounded(8)
+            .Rounded(Origami.Current.Metrics.ContainerRounding)
             .PaddingLeft(12)
             .Enter())
         {
@@ -344,7 +344,7 @@ public static class PackageImportDialog
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Rounded(4)
+                .Rounded(Origami.Current.Metrics.Rounding)
                 .OnClick((_) => Close());
         }
     }
@@ -455,15 +455,16 @@ public static class PackageImportDialog
             float thumbDisplaySize = Math.Min(detailWidth - 32, 128);
             if (thumbTex != null)
             {
+                float thumbRound = Origami.Current.Metrics.ContainerRounding;
                 paper.Box("pkgimp_thumb")
                     .Size(thumbDisplaySize, thumbDisplaySize)
-                    .Rounded(4)
+                    .Rounded(thumbRound)
                     .BackgroundColor(EditorTheme.Neutral200)
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     {
-                        canvas.DrawImage(thumbTex,
+                        canvas.DrawImageRounded(thumbTex,
                             (float)r.Min.X, (float)r.Min.Y,
-                            (float)r.Size.X, (float)r.Size.Y);
+                            (float)r.Size.X, (float)r.Size.Y, thumbRound);
                     }));
             }
 

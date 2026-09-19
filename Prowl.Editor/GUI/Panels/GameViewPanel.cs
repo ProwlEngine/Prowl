@@ -339,7 +339,7 @@ public class GameViewPanel : DockPanel
             .Position(x, y)
             .Width(panelW).Height(UnitValue.Auto)
             .BackgroundColor(EditorTheme.Neutral200)
-            .Rounded(5).Padding(pad, pad, pad, pad).Gap(1)
+            .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(pad, pad, pad, pad).Gap(1)
             .Enter())
         {
             // FPS + frame time
@@ -426,7 +426,8 @@ public class GameViewPanel : DockPanel
         int head = RenderStats.FrameTimeIndex;
         int len = history.Length;
 
-        canvas.RoundedRectFilled(x, y, w, h, 3, 3, 3, 3,
+        float round = EditorTheme.Roundness * 0.5f;
+        canvas.RoundedRectFilled(x, y, w, h, round, round, round, round,
             Prowl.Vector.Color32.FromArgb(255, 10, 10, 14));
 
         float maxMs = 8f;

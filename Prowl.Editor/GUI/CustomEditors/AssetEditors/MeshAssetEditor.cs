@@ -98,7 +98,7 @@ public class MeshAssetEditor : AssetImporterEditor
         // Preview hero card wraps the 3D orbit preview in themed chrome.
         using (paper.Box($"{id}_previewCard").Height(200)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
-            .Rounded(8).Clip()
+            .Rounded(m.ContainerRounding).Clip()
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .JustifyContent(LayoutJustification.Center).AlignItems(LayoutAlignment.Center).Enter())

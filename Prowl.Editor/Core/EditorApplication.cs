@@ -664,7 +664,7 @@ public class EditorApplication : Game
         {
             // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
             // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
-            using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(120)).Height(clH).Rounded(7)
+            using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(120)).Height(clH).Rounded(Origami.Current.Metrics.ContainerRounding)
                 .Padding(rectPadX, rectPadX, 0, 0).BackdropBlur(blur)
                 .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
@@ -685,7 +685,7 @@ public class EditorApplication : Game
             StatusChip(paper, "hs_ver", clH, versionText, font);
             StatusChip(paper, "hs_proj", clH, projectText, font);
 
-            paper.Box("hs_cog").Width(clH).Height(clH).Rounded(7)
+            paper.Box("hs_cog").Width(clH).Height(clH).Rounded(EditorTheme.Roundness)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink400)
                 .Hovered.TextColor(EditorTheme.Ink500).End()
@@ -697,7 +697,7 @@ public class EditorApplication : Game
     // A themed glass chip that auto-sizes to its text (horizontal padding + Auto width, no MeasureText).
     private static void StatusChip(Paper paper, string id, float hRect, string text, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row(id).Width(UnitValue.Auto).Height(hRect).Padding(10, 10, 0, 0).Rounded(7)
+        using (paper.Row(id).Width(UnitValue.Auto).Height(hRect).Padding(10, 10, 0, 0).Rounded(Origami.Current.Metrics.ContainerRounding)
             .BackdropBlur(EditorTheme.DockedBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable().Enter())
@@ -786,7 +786,7 @@ public class EditorApplication : Game
 
             // Quick-access to Preferences > Theme (theming is a big part of the editor now).
             paper.Box("hdr_theme_btn").Width(barH).Height(barH)
-                .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(7)
+                .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(EditorTheme.Roundness)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(EditorIcons.Palette, font).TextColor(EditorTheme.Ink400)
                 .Hovered.TextColor(EditorTheme.Ink500).End()

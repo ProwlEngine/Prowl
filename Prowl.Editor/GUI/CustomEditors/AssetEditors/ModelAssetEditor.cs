@@ -82,7 +82,7 @@ public class ModelAssetEditor : ImportSettingsEditor
             var pr = PreviewWidget.For(entry.Guid, showGrid: true).Get(model, p => p.SetupForPrefab(model));
             using (paper.Box($"{id}_previewCard").Height(200)
                 .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
-                .Rounded(8).Clip()
+                .Rounded(m.ContainerRounding).Clip()
                 .BackgroundColor(EditorTheme.Neutral300)
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                 .JustifyContent(LayoutJustification.Center).AlignItems(LayoutAlignment.Center).Enter())
@@ -229,7 +229,7 @@ public class ModelAssetEditor : ImportSettingsEditor
         if (!HasPendingChanges(entry, asset))
         {
             paper.Box($"{id}_reimport").Width(UnitValue.Auto).Height(30)
-                .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(8).Padding(16, 16, 0, 0)
+                .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(m.Rounding).Padding(16, 16, 0, 0)
                 .BackgroundColor(EditorTheme.Accent)
                 .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
                 .Text($"{EditorIcons.ArrowsRotate}  Reimport", EditorTheme.FontSemiBold ?? font)

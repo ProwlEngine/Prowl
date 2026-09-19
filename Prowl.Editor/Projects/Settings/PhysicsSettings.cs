@@ -222,7 +222,7 @@ public class PhysicsSettings : ProjectSettingsBase
                     paper.Box($"phys_cmc_{i}_{j}")
                         .Size(cellSize, cellSize)
                         .BackgroundColor(collides ? Color.FromArgb(255, 60, 160, 60) : EditorTheme.Ink100)
-                        .Rounded(2)
+                        .Rounded(Origami.Current.Metrics.SmallRounding)
                         .Hovered.BackgroundColor(collides ? Color.FromArgb(255, 80, 180, 80) : EditorTheme.Ink200).End()
                         .OnClick((ci, cj), (pair, _) =>
                         {

@@ -335,7 +335,7 @@ public class WidgetPlaygroundPanel : DockPanel
             using (paper.Box("ctx_demo_area")
                 .Height(60)
                 .BackgroundColor(EditorTheme.Neutral300)
-                .Rounded(6)
+                .Rounded(Origami.Current.Metrics.ContainerRounding)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .PaddingLeft(16).PaddingTop(8)
                 .Enter())
@@ -400,7 +400,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 .Width(200)
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Rounded(3)
+                .Rounded(Origami.Current.Metrics.Rounding)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Tooltip("This is a tooltip! It appears after a short hover delay.");
             if (EditorTheme.DefaultFont != null)

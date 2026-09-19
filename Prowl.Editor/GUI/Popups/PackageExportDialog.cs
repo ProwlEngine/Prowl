@@ -140,7 +140,7 @@ public static class PackageExportDialog
             .Size(DialogWidth, DialogHeight)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
-            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Layer(layer)
             .StopEventPropagation()
             .Enter())
@@ -157,7 +157,7 @@ public static class PackageExportDialog
         using (paper.Row("pkgexp_title")
             .Height(32)
             .BackgroundColor(EditorTheme.Neutral200)
-            .Rounded(8)
+            .Rounded(Origami.Current.Metrics.ContainerRounding)
             .PaddingLeft(12)
             .Enter())
         {
@@ -175,7 +175,7 @@ public static class PackageExportDialog
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Rounded(4)
+                .Rounded(Origami.Current.Metrics.Rounding)
                 .OnClick((_) => Close());
         }
     }

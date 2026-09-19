@@ -95,7 +95,7 @@ public class HierarchyPanel : DockPanel
                 using (paper.Row("hier_prefab_breadcrumb")
                     .Height(24)
                     .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                    .Rounded(3).Margin(4, 4, 4, 0)
+                    .Rounded(Origami.Current.Metrics.SmallRounding).Margin(4, 4, 4, 0)
                     .PaddingLeft(6).Gap(4)
                     .Enter())
                 {
@@ -156,7 +156,7 @@ public class HierarchyPanel : DockPanel
             using (paper.Row("hier_scene_hdr")
                 .Height(EditorTheme.RowHeight)
                 .Margin(6, 6, 0, 2)
-                .Rounded(6).Padding(8, 8, 0, 0).Gap(6)
+                .Rounded(EditorTheme.Roundness).Padding(8, 8, 0, 0).Gap(6)
                 .BackgroundColor(EditorTheme.Glass)
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
@@ -186,7 +186,7 @@ public class HierarchyPanel : DockPanel
                 // glance. Stops propagation so clicking it doesn't also collapse the scene section.
                 float addSize = EditorTheme.RowHeight - 2f;
                 paper.Box("hier_scene_add")
-                    .Width(addSize).Height(addSize).Rounded(6)
+                    .Width(addSize).Height(addSize).Rounded(EditorTheme.Roundness)
                     .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Hovered.BackgroundColor(EditorTheme.Hover).End()
                     .Text(EditorIcons.Plus, font)

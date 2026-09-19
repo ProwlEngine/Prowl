@@ -157,7 +157,7 @@ public class SceneViewPanel : DockPanel
             .Position(UnitValue.StretchOne, 12)
             .Margin(0, 12, 0, 0)
             .Width(232).Height(UnitValue.Auto)
-            .Rounded(9).Padding(10, 10, 8, 10).Gap(6)
+            .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(10, 10, 8, 10).Gap(6)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
@@ -168,7 +168,7 @@ public class SceneViewPanel : DockPanel
                     .Text(Loc.Get("scene.camera"), font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-                paper.Box("sv_cam_close").Width(18).Height(18).Rounded(5)
+                paper.Box("sv_cam_close").Width(18).Height(18).Rounded(Origami.Current.Metrics.SmallRounding)
                     .Hovered.BackgroundColor(EditorTheme.Hover).End()
                     .Text(EditorIcons.X, font).TextColor(EditorTheme.Ink300)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
@@ -219,7 +219,7 @@ public class SceneViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
             .Width(34).Height(UnitValue.Auto)
-            .Rounded(9).Padding(5, 5, 5, 5).Gap(3)
+            .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(5, 5, 5, 5).Gap(3)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
@@ -245,7 +245,7 @@ public class SceneViewPanel : DockPanel
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
         paper.Box("sv_move_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
@@ -253,7 +253,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
 
         paper.Box("sv_rotate_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
@@ -261,7 +261,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
 
         paper.Box("sv_scale_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
@@ -269,7 +269,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
 
         paper.Box("sv_universal_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
@@ -1033,7 +1033,7 @@ public class SceneViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(x, y).Size(boxW, boxH)
             .BackgroundColor(Color.FromArgb(a, EditorTheme.Neutral400))
-            .Rounded(6)
+            .Rounded(EditorTheme.Roundness)
             .IsNotInteractable()
             .Text($"{_editorCamera.MoveSpeed:F1}", font)
             .TextColor(Color.FromArgb(ta, EditorTheme.Ink500))

@@ -228,7 +228,7 @@ public class EnvironmentPanel : DockPanel
         bool hasBaked = LightmapBakeService.HasBakedData(scene);
 
         using (paper.Column($"{id}_card").Height(UnitValue.Auto).Margin(m.PaddingLarge, m.PaddingLarge, 16, 0)
-            .Padding(12, 12, 12, 12).Rounded(9).BackgroundColor(EditorTheme.Glass)
+            .Padding(12, 12, 12, 12).Rounded(m.ContainerRounding).BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Gap(10).Enter())
         {
             if (baking)
@@ -274,7 +274,7 @@ public class EnvironmentPanel : DockPanel
     private static void ChipButton(Paper paper, string id, string label, Action onClick)
     {
         var font = EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(34).Rounded(9).Padding(14, 14, 0, 0)
+        paper.Box(id).Width(UnitValue.Auto).Height(34).Rounded(Origami.Current.Metrics.Rounding).Padding(14, 14, 0, 0)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Hovered.BorderColor(EditorTheme.BorderStrong).End()
             .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)

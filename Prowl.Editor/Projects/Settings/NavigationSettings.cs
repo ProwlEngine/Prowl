@@ -210,7 +210,7 @@ public class NavigationSettings : ProjectSettingsBase
         }
 
         paper.Box(id)
-            .Width(width).Height(22).Rounded(3)
+            .Width(width).Height(22).Rounded(Origami.Current.Metrics.SmallRounding)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
             .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
@@ -254,7 +254,7 @@ public class NavigationSettings : ProjectSettingsBase
             {
                 // Swatch in the same color the scene-view overlay uses for this area.
                 paper.Box($"nav_area_swatch_{i}")
-                    .Width(SwatchW).Height(22).Rounded(2)
+                    .Width(SwatchW).Height(22).Rounded(Origami.Current.Metrics.SmallRounding)
                     .BackgroundColor(AreaSwatchColor(i));
 
                 paper.Box($"nav_area_slot_{i}")

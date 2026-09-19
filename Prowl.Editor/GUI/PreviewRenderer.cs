@@ -159,11 +159,12 @@ public class PreviewRenderer : IDisposable
         Render();
 
         if (_rt == null || _rt.MainTexture == null) return;
+        float round = Prowl.OrigamiUI.Origami.Current.Metrics.ContainerRounding;
 
         paper.Box(id)
             .Size(width, height)
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 38, 42))
-            .Rounded(4)
+            .Rounded(round)
             .StopEventPropagation()
             .OnDragging((e) =>
             {
@@ -191,7 +192,7 @@ public class PreviewRenderer : IDisposable
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
                     Prowl.Vector.Spatial.Transform2D.CreateScale(rw, -rh));
-                canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4, new Color32(255, 255, 255, 255));
+                canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, new Color32(255, 255, 255, 255));
                 canvas.ClearBrushTexture();
             }));
     }

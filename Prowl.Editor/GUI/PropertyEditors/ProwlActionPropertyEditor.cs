@@ -59,9 +59,9 @@ public class ProwlActionPropertyEditor : PropertyEditor
         // Outer card - mirrors the PropertyGrid collection editor: rounded bordered container with a
         // titled header, a padded body of per-element cards, and an accent "add" footer.
         using (paper.Column($"{id}_box").Height(UnitValue.Auto)
-            .Rounded(8).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Clip().Enter())
+            .Rounded(Origami.Current.Metrics.ContainerRounding).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Clip().Enter())
         {
-            using (paper.Row($"{id}_hdr").Height(28).RoundedTop(8).Padding(10, 10, 0, 0)
+            using (paper.Row($"{id}_hdr").Height(28).RoundedTop(Origami.Current.Metrics.ContainerRounding).Padding(10, 10, 0, 0)
                 .BackgroundColor(EditorTheme.Glass).Enter())
             {
                 paper.Box($"{id}_hl").Height(28).IsNotInteractable()
@@ -85,7 +85,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
                         remove: () => { calls.RemoveAt(idx); onChange(action); });
                 }
 
-                paper.Box($"{id}_add").Height(26).Rounded(6)
+                paper.Box($"{id}_add").Height(26).Rounded(Origami.Current.Metrics.Rounding)
                     .Hovered.BackgroundColor(EditorTheme.Hover).End()
                     .Text("+ Add Call", semi).TextColor(EditorTheme.AccentText)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
@@ -105,7 +105,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
         GameObject? owner = ownerGo.IsValid() ? ownerGo : (ownerComp.IsValid() ? ownerComp.GameObject : null);
 
         using (paper.Column(id).Height(UnitValue.Auto)
-            .Rounded(6).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Rounded(Origami.Current.Metrics.Rounding).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .BackgroundColor(Color.FromArgb(8, 255, 255, 255)).Clip().Enter())
         {
             // Card header: index label + delete button.
@@ -114,7 +114,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
                 paper.Box($"{id}_ct").Height(26).IsNotInteractable()
                     .Text($"Call {index}", mono).TextColor(EditorTheme.InkDim)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                paper.Box($"{id}_cx").Width(18).Height(18).Rounded(4).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                paper.Box($"{id}_cx").Width(18).Height(18).Rounded(Origami.Current.Metrics.SmallRounding).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Hovered.BackgroundColor(Color.FromArgb(40, EditorTheme.Red400)).End()
                     .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)

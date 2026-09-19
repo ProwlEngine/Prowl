@@ -71,7 +71,7 @@ public class TerrainEditor : CustomEditor
 
         // Main card: a bordered, clipped panel laid out as [ rail | content ].
         using (paper.Row($"{id}_main").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-            .Margin(8, 8, 6, 0).Rounded(10).Clip()
+            .Margin(8, 8, 6, 0).Rounded(Origami.Current.Metrics.ContainerRounding).Clip()
             .BackgroundColor(SColor.FromArgb(36, 0, 0, 0))
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
         {
@@ -132,10 +132,10 @@ public class TerrainEditor : CustomEditor
     private static void DrawEmptyState(Paper paper, string id, Prowl.Scribe.FontFile font)
     {
         using (paper.Column(id).Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-            .Margin(8, 8, 8, 8).Padding(20, 20, 26, 24).Rounded(12)
+            .Margin(8, 8, 8, 8).Padding(20, 20, 26, 24).Rounded(Origami.Current.Metrics.ContainerRounding)
             .BorderColor(EditorTheme.BorderStrong).BorderWidth(1).Enter())
         {
-            paper.Box($"{id}_ic").Width(58).Height(58).Rounded(14)
+            paper.Box($"{id}_ic").Width(58).Height(58).Rounded(Origami.Current.Metrics.Rounding)
                 .Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 12)
                 .BackgroundColor(EditorTheme.Selected).IsNotInteractable()
                 .Icon(paper, EditorIcons.Mountain_I, EditorTheme.AccentText, size: 30f);
@@ -152,7 +152,7 @@ public class TerrainEditor : CustomEditor
         var m = Origami.Current.Metrics;
         using (paper.Row(id).Width(UnitValue.StretchOne).Height(UnitValue.Auto).MinHeight(34)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.SpacingLarge)
-            .Padding(9, 9, 6, 6).Rounded(8).Gap(m.SpacingMedium)
+            .Padding(9, 9, 6, 6).Rounded(m.ContainerRounding).Gap(m.SpacingMedium)
             .BackgroundColor(EditorTheme.WithAlpha(EditorTheme.Amber400, 26))
             .BorderColor(EditorTheme.WithAlpha(EditorTheme.Amber400, 71)).BorderWidth(1).Enter())
         {
@@ -238,7 +238,7 @@ public class TerrainEditor : CustomEditor
                 bool selected = PaintLayer == i;
                 Texture2D? albedo = data.Layers[i].Albedo.Res;
                 string lname = albedo.IsValid() ? albedo.Name : $"Layer {i}";
-                using (paper.Row($"{id}_l{i}").Width(UnitValue.StretchOne).Height(28).Rounded(7).Padding(8, 8, 0, 0).Gap(8)
+                using (paper.Row($"{id}_l{i}").Width(UnitValue.StretchOne).Height(28).Rounded(m.Rounding).Padding(8, 8, 0, 0).Gap(8)
                     .BackgroundColor(selected ? EditorTheme.Selected : SColor.Transparent)
                     .Hovered.BackgroundColor(selected ? EditorTheme.Selected : EditorTheme.Hover).End()
                     .OnClick(_ => PaintLayer = idx).Enter())
@@ -248,13 +248,13 @@ public class TerrainEditor : CustomEditor
                             .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(EditorTheme.Accent).IsNotInteractable();
                     var albThumb = EditorAssetBackend.Instance?.GetThumbnailTexture(data.Layers[i].Albedo.AssetID);
-                    var swBox = paper.Box($"{id}_l{i}_sw").Width(16).Height(16).Rounded(4)
+                    var swBox = paper.Box($"{id}_l{i}_sw").Width(16).Height(16).Rounded(m.SmallRounding)
                         .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                         .BorderColor(EditorTheme.WithAlpha(SColor.White, 38)).BorderWidth(1).IsNotInteractable();
                     if (albThumb != null)
                         swBox.Clip().OnPostLayout((h, rect) => paper.Draw(ref h, (canvas, rr) =>
                             canvas.DrawImageRounded(albThumb, (float)rr.Min.X, (float)rr.Min.Y,
-                                (float)rr.Size.X, (float)rr.Size.Y, 4f)));
+                                (float)rr.Size.X, (float)rr.Size.Y, m.SmallRounding)));
                     else
                         swBox.BackgroundColor(SwatchColor(i));
                     paper.Box($"{id}_l{i}_idx").Width(12).Height(UnitValue.StretchOne).IsNotInteractable()
@@ -553,7 +553,7 @@ public class TerrainEditor : CustomEditor
     /// <summary>Small 20x20 glass icon button (design .tr-mini).</summary>
     private static void MiniButton(Paper paper, string id, IOrigamiIcon icon, Action onClick, bool danger = false, bool enabled = true)
     {
-        var b = paper.Box(id).Width(20).Height(20).Rounded(5)
+        var b = paper.Box(id).Width(20).Height(20).Rounded(Origami.Current.Metrics.SmallRounding)
             .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1);
         if (enabled)
@@ -570,7 +570,7 @@ public class TerrainEditor : CustomEditor
         var m = Origami.Current.Metrics;
         using (paper.Row(id).Width(UnitValue.StretchOne).Height(UnitValue.Auto).MinHeight(32)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.Spacing)
-            .Padding(10, 10, 8, 8).Rounded(8).Gap(7)
+            .Padding(10, 10, 8, 8).Rounded(m.ContainerRounding).Gap(7)
             .BackgroundColor(EditorTheme.WithAlpha(EditorTheme.Blue400, 20))
             .BorderColor(EditorTheme.WithAlpha(EditorTheme.Blue400, 51)).BorderWidth(1).Enter())
         {
@@ -606,14 +606,14 @@ public class TerrainEditor : CustomEditor
                         bool sel = selected == idx;
                         var tint = SwatchColor(idx);
                         using (paper.Column($"{id}_t{idx}").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                            .Padding(3, 3, 6, 6).Gap(5).Rounded(9)
+                            .Padding(3, 3, 6, 6).Gap(5).Rounded(m.ContainerRounding)
                             .BackgroundColor(sel ? EditorTheme.Selected : SColor.Transparent)
                             .Hovered.BackgroundColor(sel ? EditorTheme.Selected : EditorTheme.Hover).End()
                             .BorderColor(sel ? EditorTheme.WithAlpha(EditorTheme.Accent, 102) : SColor.Transparent).BorderWidth(1)
                             .OnClick(_ => onSelect(capture)).Enter())
                         {
                             var thumb = EditorAssetBackend.Instance?.GetThumbnailTexture(getThumbGuid(idx));
-                            var thumbBox = paper.Box($"{id}_t{idx}_th").Width(46).Height(46).Rounded(9)
+                            var thumbBox = paper.Box($"{id}_t{idx}_th").Width(46).Height(46).Rounded(m.Rounding)
                                 .Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0)
                                 .BackgroundColor(EditorTheme.WithAlpha(tint, 34))
                                 .BorderColor(EditorTheme.WithAlpha(tint, 85)).BorderWidth(1)
@@ -621,7 +621,7 @@ public class TerrainEditor : CustomEditor
                             if (thumb != null)
                                 thumbBox.Clip().OnPostLayout((h, rect) => paper.Draw(ref h, (canvas, rr) =>
                                     canvas.DrawImageRounded(thumb, (float)rr.Min.X, (float)rr.Min.Y,
-                                        (float)rr.Size.X, (float)rr.Size.Y, 9f)));
+                                        (float)rr.Size.X, (float)rr.Size.Y, m.Rounding)));
                             else
                                 thumbBox.Icon(paper, getIcon(idx), tint, size: 20f);
                             paper.Box($"{id}_t{idx}_n").Width(UnitValue.StretchOne).Height(12).IsNotInteractable()
@@ -631,7 +631,7 @@ public class TerrainEditor : CustomEditor
                     }
                     else if (idx == count)
                     {
-                        paper.Box($"{id}_add").Width(UnitValue.Stretch()).Height(70).Rounded(9)
+                        paper.Box($"{id}_add").Width(UnitValue.Stretch()).Height(70).Rounded(m.ContainerRounding)
                             .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
                             .Hovered.BackgroundColor(EditorTheme.Selected).End()
                             .OnClick(_ => onAdd())
