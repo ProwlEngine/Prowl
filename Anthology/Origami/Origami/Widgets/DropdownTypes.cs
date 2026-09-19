@@ -389,7 +389,7 @@ internal static class DropdownInternal
                                 p.ItemHeight, ramp, ink, p.Theme);
 
                             // Selected + hovered rows both wash with the accent tint (prototype .w2mrow.on2 / :hover).
-                            Color hoverTint = Color.FromArgb((int)(0.12f * 255), 168, 85, 247);
+                            Color hoverTint = p.Theme.Hover;
                             Color rowBg = (selected || highlighted) ? hoverTint : Color.Transparent;
 
                             int capturedReal = realIdx;
