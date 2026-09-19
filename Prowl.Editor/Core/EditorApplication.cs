@@ -35,6 +35,7 @@ public class EditorApplication : Game
     public static OrigamiUI.PropertyGridConfig PropertyGridConfig { get; private set; } = null!;
 
     private DockSpace _dockSpace = null!;
+    private PanelMaximizer _panelMaximizer = null!;
     private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
@@ -94,6 +95,7 @@ public class EditorApplication : Game
         ApplyFramePacing();
 
         _dockSpace = new DockSpace(CreateDefaultLayout());
+        _panelMaximizer = new PanelMaximizer(_dockSpace);
 
         // If launched with --project arg, open the project and load assemblies
         // BEFORE registries scan so user types are visible to all registries
@@ -153,7 +155,7 @@ public class EditorApplication : Game
             // Restore layout
             var savedLayout = LoadDockLayout();
             if (savedLayout != null)
-                _dockSpace.Root = savedLayout;
+                SetDockLayout(savedLayout);
 
             // Rather than loading the scene here, we queue it: the frame loop opens it once the startup compile settles,
             // so the scene is never read against types that have not been built yet.
@@ -452,11 +454,7 @@ public class EditorApplication : Game
                 ReinitializeRegistries();
 
                 // Restore layout from project (or use default)
-                var savedLayout = LoadDockLayout();
-                if (savedLayout != null)
-                    _dockSpace.Root = savedLayout;
-                else
-                    _dockSpace.Root = CreateDefaultLayout();
+                SetDockLayout(LoadDockLayout() ?? CreateDefaultLayout());
 
                 // Ensure a scene is always loaded (once the startup compile has settled).
                 _sceneLoadPending = true;
@@ -545,7 +543,7 @@ public class EditorApplication : Game
         float pad = EditorTheme.DockPadding;
         float dockY = EditorTheme.MenuBarHeight + pad;
         float dockH = h - dockY - pad - EditorTheme.StatusBarHeight;
-        _dockSpace.Draw(paper, pad, dockY, w - pad * 2, dockH);
+        _panelMaximizer.Draw(paper, pad, dockY, w - pad * 2, dockH);
 
         DrawStatusBar(paper, w, h);
 
@@ -1248,11 +1246,12 @@ public class EditorApplication : Game
     }
 
     /// <summary>
-    /// Find an open panel of the given type across all docked and floating nodes.
+    /// Find an open panel of the given type across all docked and floating nodes, including docked panels
+    /// hidden behind a maximized one.
     /// </summary>
     public DockPanel? FindOpenPanel(Type panelType)
     {
-        return FindInNode(_dockSpace.Root, panelType)
+        return FindInNode(_panelMaximizer.LayoutRoot, panelType)
             ?? _dockSpace.FloatingWindows
                 .Select(fw => FindInNode(fw.Node, panelType))
                 .FirstOrDefault(p => p != null);
@@ -1269,7 +1268,7 @@ public class EditorApplication : Game
     /// <summary>Enumerate every open panel across the docked tree and all floating windows.</summary>
     private IEnumerable<DockPanel> EnumerateAllPanels()
     {
-        foreach (var p in EnumerateNodePanels(_dockSpace.Root))
+        foreach (var p in EnumerateNodePanels(_panelMaximizer.LayoutRoot))
             yield return p;
         foreach (var fw in _dockSpace.FloatingWindows)
             foreach (var p in EnumerateNodePanels(fw.Node))
@@ -1299,6 +1298,9 @@ public class EditorApplication : Game
         var existing = FindOpenPanel(panelType);
         if (existing != null)
         {
+            // Asking for a panel the maximized one is hiding brings the full layout back to show it.
+            if (_panelMaximizer.IsHidden(existing))
+                _panelMaximizer.Restore();
             FocusPanel(panelType);
             return;
         }
@@ -1494,10 +1496,17 @@ public class EditorApplication : Game
                 System.IO.File.Delete(Project.Current.EditorStatePath);
         }
         catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to clear layout: {ex.Message}"); }
-        _dockSpace.Root = CreateDefaultLayout();
+        SetDockLayout(CreateDefaultLayout());
 
         EditorSettings.Instance.SeenGuides.Clear();
         EditorSettings.Instance.Save();
+    }
+
+    /// <summary>Replace the whole docked layout, dropping any maximized panel along with the old one.</summary>
+    private void SetDockLayout(DockNode root)
+    {
+        _panelMaximizer.Discard();
+        _dockSpace.Root = root;
     }
 
     private void SaveDockLayout()
@@ -1505,7 +1514,10 @@ public class EditorApplication : Game
         if (Project.Current == null) return;
         try
         {
-            string json = DockSerializer.Serialize(_dockSpace);
+            // Save the layout as the user arranged it, which a maximized panel only covers for the moment.
+            var layout = new DockSpace(_panelMaximizer.LayoutRoot);
+            layout.FloatingWindows.AddRange(_dockSpace.FloatingWindows);
+            string json = DockSerializer.Serialize(layout);
             System.IO.File.WriteAllText(Project.Current.EditorStatePath, json);
         }
         catch (Exception ex) { Runtime.Debug.LogError($"Failed to save layout: {ex.Message}"); }
@@ -1800,7 +1812,7 @@ public class EditorApplication : Game
 
     private void SaveActiveTab()
     {
-        _savedActiveTabNode = FindNodeContainingPanel(_dockSpace.Root, typeof(GameViewPanel));
+        _savedActiveTabNode = FindNodeContainingPanel(_panelMaximizer.LayoutRoot, typeof(GameViewPanel));
         if (_savedActiveTabNode == null)
         {
             foreach (var fw in _dockSpace.FloatingWindows)
@@ -1825,7 +1837,8 @@ public class EditorApplication : Game
 
     private void FocusPanel(Type panelType)
     {
-        var node = FindNodeContainingPanel(_dockSpace.Root, panelType);
+        // Behind a maximized panel this only picks the tab its leaf will show once the layout is back.
+        var node = FindNodeContainingPanel(_panelMaximizer.LayoutRoot, panelType);
         if (node == null)
         {
             foreach (var fw in _dockSpace.FloatingWindows)
