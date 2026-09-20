@@ -42,6 +42,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private static Scene? _pendingScene;
 
+    /// <summary>Whether a <see cref="Load"/> is queued and has not been applied yet, so <see cref="Current"/>
+    /// is still the outgoing scene.</summary>
+    public static bool IsLoadPending => _pendingScene != null;
+
     /// <summary>
     /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
     /// happens at the end of the frame, alongside the destroy queue, so the outgoing scene stays
