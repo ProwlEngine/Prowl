@@ -27,6 +27,7 @@ them lands in a single commit, no cross-repo version juggling, no publish chain.
 | `Graphite`   | Prowl.Graphite    | Low-level GPU graphics (Vulkan / D3D11); also `.Compiler`, `.ShaderDef`, `.Variants` |
 | `Recast`     | Prowl.Recast      | DotRecast fork for Navmesh generation and pathfinding |
 | `Aperture`   | Prowl.Aperture    | Image loading (BMP/DDS/EXR/GIF/HDR/ICO/JPEG/PNG/PNM/PSD/RAW/TGA/TIFF/WebP) |
+| `Motion`     | Prowl.Motion      | Skeletal animation, graphs, IK and humanoid retargeting |
 
 ## Versioning
 

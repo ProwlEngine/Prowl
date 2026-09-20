@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <RootNamespace>Prowl.Motion</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Package metadata -->
+    <PackageId>Prowl.Motion</PackageId>
+    <Title>Prowl.Motion</Title>
+
+    <Description>Skeletal animation library for the Prowl Game Engine. Compressed clips, blend trees, state machines, layers and masks, root motion and warping, IK, and humanoid retargeting through a muscle space.</Description>
+    <PackageTags>animation;skeletal;retargeting;humanoid;ik;blend-tree;state-machine;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Vector\Vector\Vector.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Motion.Tests" />
+  </ItemGroup>
+
+</Project>

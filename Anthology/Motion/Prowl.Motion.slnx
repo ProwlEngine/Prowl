@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Motion/Motion.csproj" />
+  <Project Path="Tests/Motion.Tests.csproj" />
+</Solution>
