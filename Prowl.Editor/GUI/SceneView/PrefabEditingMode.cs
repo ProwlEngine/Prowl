@@ -69,8 +69,25 @@ public static class PrefabEditingMode
         EnterInternal(prefabGuid);
     }
 
+    /// <summary>
+    /// Start a session once the scene swap has landed. A scene load only applies at the end of the frame,
+    /// so starting now would snapshot the scene being swapped out, which for a switch between prefabs is
+    /// the previous session's own scene, and restore that as the user's scene when the session ends.
+    /// </summary>
     private static void EnterInternal(Guid prefabGuid)
     {
+        if (Scene.IsLoadPending)
+        {
+            Action? onLoaded = null;
+            onLoaded = () =>
+            {
+                Scene.OnSceneLoaded -= onLoaded;
+                EnterInternal(prefabGuid);
+            };
+            Scene.OnSceneLoaded += onLoaded;
+            return;
+        }
+
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab == null)
         {
