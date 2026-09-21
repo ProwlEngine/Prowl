@@ -30,7 +30,7 @@ public static class NodeGraphPreview
         CountSides(node, out int left, out int right, out int top, out int bottom);
         if (node.Pill) return Math.Max(NodeGraphBuilder.PillH, Math.Max(left, right) * 16f + 6f);
         // Collapsed still has to fit its sockets, so a node with many ports folds to a taller strip.
-        if (node.Collapsed) return Math.Max(metrics.HeaderHeight, Math.Max(left, right) * NodeGraphBuilder.CollapsedPortSpacing);
+        if (node.Folded) return Math.Max(metrics.HeaderHeight, Math.Max(left, right) * NodeGraphBuilder.CollapsedPortSpacing);
 
         int rows = Math.Max(left, right);
         float body = rows > 0
