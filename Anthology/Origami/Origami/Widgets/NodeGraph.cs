@@ -1137,6 +1137,21 @@ public sealed class NodeGraphBuilder
     private void DrawBadge(GraphBadge badge, string id, float headerH, Color accent, Color titleCol, FontFile? font)
     {
         Color fill = badge.Color ?? accent;
+
+        // An icon alone is drawn as just the icon, larger, with no chip behind it: small enough to sit
+        // beside a labelled chip, loud enough to be seen.
+        if (badge.Icon is { } lone && badge.Text.Length == 0)
+        {
+            const float size = 20f;
+            var mark = _paper.Box(id).Width(size).Height(size).Margin(6f, 0, UnitValue.Stretch(), UnitValue.Stretch());
+            if (badge.Content != null) mark.Tooltip(badge.Content);
+            else if (!string.IsNullOrEmpty(badge.Tooltip)) mark.Tooltip(badge.Tooltip!);
+
+            using (mark.Enter())
+                _paper.Draw((canvas, rr) => lone.Draw(canvas, rr, fill));
+            return;
+        }
+
         float h = headerH - 10f;
         var chip = _paper.Row(id)
             .Height(h).Margin(6f, 0, UnitValue.Stretch(), UnitValue.Stretch())
@@ -1146,16 +1161,12 @@ public sealed class NodeGraphBuilder
         if (badge.Content != null) chip.Tooltip(badge.Content);
         else if (!string.IsNullOrEmpty(badge.Tooltip)) chip.Tooltip(badge.Tooltip!);
 
-        // An icon on its own is a square, which is what lets a warning sit small beside a labelled chip.
-        bool iconOnly = badge.Icon != null && badge.Text.Length == 0;
-        if (iconOnly) chip.Width(h);
-
-        using (chip.Padding(iconOnly ? 0 : 5f, iconOnly ? 0 : 5f, 0, 0).Enter())
+        using (chip.Padding(5f, 5f, 0, 0).Enter())
         {
             if (badge.Icon is { } icon)
             {
                 float isz = 10f;
-                using (_paper.Box(id + "icon").Width(iconOnly ? UnitValue.Stretch() : isz).Height(UnitValue.Percentage(100)).IsNotInteractable().Enter())
+                using (_paper.Box(id + "icon").Width(isz).Height(UnitValue.Percentage(100)).IsNotInteractable().Enter())
                     _paper.Draw((canvas, rr) =>
                     {
                         float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f), iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
