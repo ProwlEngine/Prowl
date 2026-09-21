@@ -46,24 +46,47 @@ public static class TooltipSystem
 
     public static float ShowDelay { get => _showDelay; set => _showDelay = MathF.Max(0f, value); }
 
-    public static void Hover(int elementId, TooltipContent content)
+    // The claim made this frame. An element and its parent can both be hovered and both have a
+    // tooltip, and the deeper one is the one the pointer is really on, so it wins.
+    private static TooltipContent? _claim;
+    private static int _claimId;
+    private static int _claimDepth = -1;
+
+    public static void Hover(int elementId, TooltipContent content) => Hover(elementId, content, 0);
+
+    /// <summary>Asks to show a tooltip for an element this frame. A deeper element outranks a shallower one.</summary>
+    public static void Hover(int elementId, TooltipContent content, int depth)
     {
-        if (_activeElementId == elementId)
-            _hoverTime += _lastDeltaTime;
-        else
-        {
-            _activeElementId = elementId;
-            _hoverTime = 0;
-        }
-        _pending = content;
+        if (depth < _claimDepth) return;
+        _claim = content;
+        _claimId = elementId;
+        _claimDepth = depth;
     }
 
     public static void Hover(int elementId, string text)
         => Hover(elementId, new TooltipContent(text));
 
+    /// <summary>
+    /// Settles the frame's claims into the tooltip to show. Only the winner counts toward the hover
+    /// delay; before this, every claimant reset it in turn and nested tooltips never appeared.
+    /// </summary>
+    private static void TakeClaim()
+    {
+        if (_claim != null)
+        {
+            if (_activeElementId == _claimId) _hoverTime += _lastDeltaTime;
+            else { _activeElementId = _claimId; _hoverTime = 0; }
+        }
+
+        _pending = _claim;
+        _claim = null;
+        _claimDepth = -1;
+    }
+
     public static void Draw(Paper paper)
     {
         _lastDeltaTime = paper.DeltaTime;
+        TakeClaim();
 
         if (_pending == null)
         {
@@ -215,21 +238,21 @@ public static class TooltipSystem
 public static class TooltipExtensions
 {
     public static ElementBuilder Tooltip(this ElementBuilder builder, string text)
-    {
-        builder.OnHover(text, (captured, e) => TooltipSystem.Hover(e.Source.Data.ID, captured));
-        return builder;
-    }
+        => builder.Tooltip(new TooltipContent(text));
 
     public static ElementBuilder Tooltip(this ElementBuilder builder, string title, string description)
-    {
-        var content = new TooltipContent { Title = title, Text = description };
-        builder.OnHover(content, (captured, e) => TooltipSystem.Hover(e.Source.Data.ID, captured));
-        return builder;
-    }
+        => builder.Tooltip(new TooltipContent { Title = title, Text = description });
 
     public static ElementBuilder Tooltip(this ElementBuilder builder, TooltipContent content)
     {
-        builder.OnHover(content, (captured, e) => TooltipSystem.Hover(e.Source.Data.ID, captured));
+        builder.OnHover(content, (captured, e) => TooltipSystem.Hover(e.Source.Data.ID, captured, Depth(e.Source)));
         return builder;
+    }
+
+    private static int Depth(ElementHandle handle)
+    {
+        int depth = 0;
+        for (ElementHandle h = handle.GetParentHandle(); h.IsValid; h = h.GetParentHandle()) depth++;
+        return depth;
     }
 }
