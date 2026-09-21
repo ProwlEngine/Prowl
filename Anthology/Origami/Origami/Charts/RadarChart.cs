@@ -64,6 +64,16 @@ public sealed class RadarChart<T> : CircularCore<RadarChart<T>, T>
         return this;
     }
 
+    /// <summary>Add one polygon over the spokes. Value i in <paramref name="values"/> is plotted on the
+    /// spoke made by data item i; missing values sit at the bottom of the range.</summary>
+    public RadarChart<T> Series(string label, Color color, ReadOnlySpan<double> values)
+    {
+        var s = new RadarSeries { Label = label ?? "", Tint = color, Values = values.ToArray() };
+        _series.Add(s);
+        _lastSeries = s;
+        return this;
+    }
+
     /// <summary>Colour of the most recently added series.</summary>
     public RadarChart<T> Color(Color color) { if (_lastSeries != null) _lastSeries.Tint = color; return this; }
 

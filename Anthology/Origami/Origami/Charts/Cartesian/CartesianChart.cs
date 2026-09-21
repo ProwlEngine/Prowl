@@ -70,6 +70,18 @@ public abstract class CartesianModuleBase<TSelf, T> : ICartesianModule<T> where 
         return Self;
     }
 
+    /// <summary>Add a series of pre-sampled values. Index in <paramref name="values"/>
+    /// maps to the x axis, shared with every other module on the chart.</summary>
+    public TSelf Series(string label, Color color, ReadOnlySpan<double> values)
+    {
+        var s = new CartesianSeries<T> { Label = label ?? "", Color = color, Owner = this };
+        for (int i = 0; i < values.Length; i++)
+            s.Points.Add((i, values[i], default));
+        _series.Add(s);
+        _lastSeries = s;
+        return Self;
+    }
+
     /// <summary>Y selector run against the chart's data set (passed to <c>Chart.CreateCartesian(...)</c>)
     /// and its shared x selector (<c>Cartesian.X(...)</c>) to build this module's implicit series. X is
     /// deliberately not settable per module - every module reads the same x, which is what lets the

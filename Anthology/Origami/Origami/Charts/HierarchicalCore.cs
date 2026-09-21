@@ -58,7 +58,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     private string _title = "";
 
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 220f;
+    private UnitValue _height = UnitValue.Pixels(220f);
     private float _padding = 0f;
 
     private OrigamiVariant _variant = OrigamiVariant.Primary;
@@ -71,7 +71,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     private Func<T, int, Color>? _colorFunction;
 
     private bool _legend = true;
-    private float _legendWidth = DefaultLegendWidth;
+    private UnitValue _legendWidth = UnitValue.Pixels(DefaultLegendWidth);
     private float? _legendFontSize;
     private bool _legendInteractive;
 
@@ -119,7 +119,9 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     public TSelf Width(float width) { _width = MathF.Max(32f, width); return Self; }
     public TSelf Width(UnitValue width) { _width = width; return Self; }
     public TSelf Height(float height) { _height = MathF.Max(32f, height); return Self; }
+    public TSelf Height(UnitValue height) { _height = height; return Self; }
     public TSelf Size(float width, float height) { _width = MathF.Max(32f, width); _height = MathF.Max(32f, height); return Self; }
+    public TSelf Size(UnitValue width, UnitValue height) { _width = width; _height = height; return Self; }
 
     /// <summary>Does double duty: the container's own padding, so a hierarchical chart lines up with the
     /// other families at the same setting, and the gap in pixels left between sibling cells, ring
@@ -161,6 +163,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
 
     /// <summary>Width in pixels of the legend column. Defaults to 125.</summary>
     public TSelf LegendWidth(float width) { _legendWidth = MathF.Max(1f, width); return Self; }
+    public TSelf LegendWidth(UnitValue width) { _legendWidth = width; return Self; }
 
     /// <summary>Font size, in pixels, of the legend's labels. Unset uses the same XS size the rest of the
     /// chart chrome does.</summary>
