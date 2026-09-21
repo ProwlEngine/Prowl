@@ -297,7 +297,7 @@ public sealed class Blend1DDefinition : PoseNodeDefinition
 /// builds the blended sync track of the pair, and plays both over the same sync range so they stay
 /// phase locked. Only the one or two sources in use are updated.
 /// </summary>
-internal abstract class ParameterizedBlend1DInstance : PoseNodeInstance
+internal abstract class ParameterizedBlend1DInstance : PoseNodeInstance, IBlendWeights
 {
     private readonly SyncTrack _blendedTrack = new();
     private ValueNodeInstance _parameter = null!;
@@ -366,6 +366,16 @@ internal abstract class ParameterizedBlend1DInstance : PoseNodeInstance
         NormalizedTime = current;
         PlayingBackward = backward;
         LoopCount += backward ? -wraps : wraps;
+    }
+
+    public float WeightOf(int childNodeIndex)
+    {
+        if (!IsInitialized || Children == null || Children.Length == 0) return 0f;
+
+        float weight = 0f;
+        if (Children[_low].NodeIndex == childNodeIndex) weight += _low == _high ? 1f : 1f - _weight;
+        if (_low != _high && Children[_high].NodeIndex == childNodeIndex) weight += _weight;
+        return weight;
     }
 
     private void EvaluateBlendSpace(GraphContext context)

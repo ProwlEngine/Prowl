@@ -113,7 +113,7 @@ public sealed class Blend2DDefinition : PoseNodeDefinition
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
-    private sealed class Instance : PoseNodeInstance
+    private sealed class Instance : PoseNodeInstance, IBlendWeights
     {
         private readonly Blend2DDefinition _def;
         private readonly SyncTrack _blendedTrack = new();
@@ -124,6 +124,16 @@ public sealed class Blend2DDefinition : PoseNodeDefinition
         public Instance(Blend2DDefinition def) => _def = def;
 
         public override SyncTrack SyncTrack => _blendedTrack;
+
+        public float WeightOf(int childNodeIndex)
+        {
+            if (!IsInitialized || _children == null) return 0f;
+
+            float weight = 0f;
+            for (int i = 0; i < _activeCount; i++)
+                if (_children[_active[i].Index].NodeIndex == childNodeIndex) weight += _active[i].Weight;
+            return weight;
+        }
 
         public override void Bind(GraphBindContext context)
         {

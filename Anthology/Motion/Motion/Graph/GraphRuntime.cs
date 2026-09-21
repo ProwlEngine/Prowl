@@ -173,6 +173,16 @@ public sealed class GraphBindContext
 
     private string? NameOf(int index) => NodeNames is not null && NodeNames.TryGetValue(index, out string? name) ? name : null;
 }
+/// <summary>
+/// How much of each input a blend is using right now, for an editor or a debug view. Reads only; the
+/// weights are the ones the blend worked out in its last update.
+/// </summary>
+public interface IBlendWeights
+{
+    /// <summary>The weight given to the input fed by the node at this index, or 0 when it is not in the blend.</summary>
+    float WeightOf(int childNodeIndex);
+}
+
 
 /// <summary>
 /// Base for all runtime node instances. Nodes are initialized when they become part of the active
