@@ -131,8 +131,8 @@ public sealed class ColorFieldBuilder
             var palette = _palette;
             row.OnClick(e =>
             {
-                float anchorX = (float)e.ElementRect.Min.X;
-                float anchorY = (float)e.ElementRect.Max.Y + 2;
+                float anchorX = (float)e.ScreenRect.Min.X;
+                float anchorY = (float)e.ScreenRect.Max.Y + 2;
                 Modal.Push(new ColorPickerModal(id, value, setter, showAlpha, hdr, palette, anchorX, anchorY));
             });
             row.Cursor(PaperCursor.Pointer);
