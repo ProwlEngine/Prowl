@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
@@ -80,6 +82,30 @@ public class ElementEvent
 
         ref ElementData data = ref Source.Data;
         return data._isIdentityWorldTransform ? screenPoint : data._worldInverse.TransformPoint(screenPoint);
+    }
+
+    /// <summary>
+    /// Where <see cref="ElementRect"/> is drawn on screen, the box around its transformed corners. Anything
+    /// placed beside the element from outside it, like a popover, anchors to this.
+    /// </summary>
+    public Rect ScreenRect
+    {
+        get
+        {
+            if (!Source.IsValid || Source.Data._isIdentityWorldTransform) return ElementRect;
+
+            Transform2D world = Source.Data._worldTransform;
+            Float2 a = world.TransformPoint(ElementRect.Min);
+            Float2 b = world.TransformPoint(ElementRect.Max);
+            Float2 c = world.TransformPoint(new Float2(ElementRect.Min.X, ElementRect.Max.Y));
+            Float2 d = world.TransformPoint(new Float2(ElementRect.Max.X, ElementRect.Min.Y));
+
+            return new Rect(
+                Math.Min(Math.Min(a.X, b.X), Math.Min(c.X, d.X)),
+                Math.Min(Math.Min(a.Y, b.Y), Math.Min(c.Y, d.Y)),
+                Math.Max(Math.Max(a.X, b.X), Math.Max(c.X, d.X)),
+                Math.Max(Math.Max(a.Y, b.Y), Math.Max(c.Y, d.Y)));
+        }
     }
 
     /// <summary>
