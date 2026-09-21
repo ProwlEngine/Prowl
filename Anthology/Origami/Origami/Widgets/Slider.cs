@@ -688,19 +688,19 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
 
     private void ApplyDrag(PaperUI.Events.DragEvent e, ElementHandle trackHandle)
     {
-        // Map pointer position back to a value along the track. Pointer position is in screen
-        // space; we pull the rect from the layout and project onto it.
+        // Map pointer position back to a value along the track, in the track's own layout space so a
+        // transformed slider still lines up with the pointer.
         var r = trackHandle.Data.LayoutRect;
         double t;
         if (!_vertical)
         {
             double w = (double)r.Size.X;
-            t = w > 0 ? ((double)e.PointerPosition.X - (double)r.Min.X) / w : 0;
+            t = w > 0 ? ((double)e.LocalPosition.X - (double)r.Min.X) / w : 0;
         }
         else
         {
             double h = (double)r.Size.Y;
-            t = h > 0 ? 1.0 - ((double)e.PointerPosition.Y - (double)r.Min.Y) / h : 0;
+            t = h > 0 ? 1.0 - ((double)e.LocalPosition.Y - (double)r.Min.Y) / h : 0;
         }
         t = Math.Clamp(t, 0.0, 1.0);
 

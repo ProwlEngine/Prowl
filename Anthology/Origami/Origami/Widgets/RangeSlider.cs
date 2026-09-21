@@ -185,7 +185,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                     {
                         // Decide which thumb to drag based on the closer thumb to the pointer.
                         var r = trackHandle.Data.LayoutRect;
-                        double t = PointerToT(e.PointerPosition, r, _vertical);
+                        double t = PointerToT(e.LocalPosition, r, _vertical);
                         int which = (Math.Abs(t - tLo) < Math.Abs(t - tHi)) ? 1 : 2;
                         _paper.SetElementStorage(trackHandle, KeyDragging, which);
                         _paper.SetElementStorage(trackHandle, KeyDragOrigin, t);
@@ -504,7 +504,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     private void ApplyDrag(PaperUI.Events.DragEvent e, ElementHandle trackHandle, T curLo, T curHi, int which)
     {
         var r = trackHandle.Data.LayoutRect;
-        double t = PointerToT(e.PointerPosition, r, _vertical);
+        double t = PointerToT(e.LocalPosition, r, _vertical);
         T newV = SliderInternal.TToValue<T>(t, _min, _max, _logarithmic);
         if (_step.HasValue && _snapWhileDragging) newV = SliderInternal.Snap(newV, _min, _step.Value);
         newV = SliderInternal.Clamp(newV, _min, _max);

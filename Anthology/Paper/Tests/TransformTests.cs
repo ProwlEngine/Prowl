@@ -109,6 +109,56 @@ public class TransformTests
         Assert.Equal(point.Y, roundTrip.Y, 3);
     }
 
+    /// <summary>
+    /// An event on a transformed element reports the pointer in the element's own space. Hit testing
+    /// already undid the transform; without this the event would hand a slider or a text caret the
+    /// screen position, and anything scaled would answer as if it were not.
+    /// </summary>
+    [Fact]
+    public void An_event_on_a_scaled_element_reports_the_pointer_in_its_own_space()
+    {
+        var paper = NewPaper();
+        Run(paper, Trees.ScaledTarget);
+
+        // "target" is 100 wide, scaled 3x from its left edge, so screen x 150 is its own x 50.
+        var handle = paper.FindElementHandleByID(Ids["target"]);
+        var e = new Prowl.PaperUI.Events.ElementEvent(handle, handle.Data.LayoutRect, new Float2(150f, 50f));
+
+        Assert.Equal(50f, e.LocalPosition.X, 3);
+        Assert.Equal(0.5f, e.NormalizedPosition.X, 3);
+        Assert.Equal(150f, e.PointerPosition.X, 3);
+    }
+
+    [Fact]
+    public void A_drag_across_a_scaled_parent_reports_its_distance_in_the_childs_units()
+    {
+        var paper = NewPaper();
+        Run(paper, Trees.ScaledParent);
+
+        var handle = paper.FindElementHandleByID(Ids["child"]);
+        var drag = new Prowl.PaperUI.Events.DragEvent(handle, handle.Data.LayoutRect, new Float2(60f, 20f),
+            new Float2(30f, 20f), new Float2(30f, 0f), new Float2(30f, 0f), Prowl.PaperUI.Events.DragPhase.Dragging);
+
+        // The parent scales by 2, so 30 screen pixels are 15 of the child's own.
+        Assert.Equal(15f, drag.Delta.X, 3);
+        Assert.Equal(15f, drag.TotalDelta.X, 3);
+        Assert.Equal(15f, drag.StartPosition.X, 3);
+        Assert.Equal(30f, drag.ScreenDelta.X, 3);
+    }
+
+    [Fact]
+    public void An_untransformed_event_is_left_alone()
+    {
+        var paper = NewPaper();
+        Run(paper, Trees.TwoBoxes);
+
+        var handle = paper.FindElementHandleByID(Ids["target"]);
+        var e = new Prowl.PaperUI.Events.ElementEvent(handle, handle.Data.LayoutRect, new Float2(150f, 50f));
+
+        Assert.Equal(150f, e.LocalPosition.X, 3);
+        Assert.Equal(50f, e.RelativePosition.X, 3);
+    }
+
     private static Paper NewPaper() => new(new NullRenderer(), 800, 600, new FontAtlasSettings());
 
     private static void Run(Paper paper, Action<Paper> tree)
@@ -201,6 +251,12 @@ public class TransformTests
             using (Row(p, "outer").Height(100).Translate(100, 0).Enter())
             using (Row(p, "inner").Width(100).Height(100).Translate(100, 0).Enter())
                 Box(p, "child").Width(100).Height(100);
+        }
+
+        public static void ScaledParent(Paper p)
+        {
+            using (Row(p, "scaled").Width(200).Height(100).TransformOrigin(0, 0).Scale(2, 2).Enter())
+                Box(p, "child").Width(100).Height(50);
         }
 
         public static void ScaledTarget(Paper p)

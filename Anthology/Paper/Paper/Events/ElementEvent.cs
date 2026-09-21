@@ -4,6 +4,7 @@
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI.Events;
 
@@ -21,6 +22,13 @@ public class ElementEvent
     // The raw pointer position in screen coordinates
     /// <summary> Gets the raw pointer position in screen coordinates. </summary>
     public Float2 PointerPosition { get; }
+
+    /// <summary>
+    /// The pointer in the element's own layout space, the space <see cref="ElementRect"/> is in. The
+    /// same as <see cref="PointerPosition"/> unless the element or an ancestor is transformed, and then
+    /// this is the one to compare against the rectangle.
+    /// </summary>
+    public Float2 LocalPosition { get; private set; }
 
     // The pointer position normalized to the element (0,0 = top-left, 1,1 = bottom-right)
     /// <summary> The pointer position normalized to the element (0,0 = top-left, 1,1 = bottom-right). </summary>
@@ -65,12 +73,39 @@ public class ElementEvent
         UpdateRelativePositions();
     }
 
+    /// <summary> A screen point in the source element's layout space. </summary>
+    public Float2 ToLocal(Float2 screenPoint)
+    {
+        if (!Source.IsValid) return screenPoint;
+
+        ref ElementData data = ref Source.Data;
+        return data._isIdentityWorldTransform ? screenPoint : data._worldInverse.TransformPoint(screenPoint);
+    }
+
+    /// <summary>
+    /// A screen distance in the source element's layout space: a drag of 20 pixels across an element
+    /// scaled by 2 covers 10 of its own units.
+    /// </summary>
+    public Float2 ToLocalVector(Float2 screenVector)
+    {
+        if (!Source.IsValid) return screenVector;
+
+        ref ElementData data = ref Source.Data;
+        if (data._isIdentityWorldTransform) return screenVector;
+
+        Transform2D inverse = data._worldInverse;
+        return inverse.TransformPoint(screenVector) - inverse.TransformPoint(Float2.Zero);
+    }
+
     private void UpdateRelativePositions()
     {
-        // Calculate relative position (pointer position relative to element's origin)
+        // The pointer arrives in screen space while the rectangle is in layout space, and the two only
+        // agree when nothing above the element is transformed.
+        LocalPosition = ToLocal(PointerPosition);
+
         RelativePosition = new Float2(
-            PointerPosition.X - ElementRect.Min.X,
-            PointerPosition.Y - ElementRect.Min.Y
+            LocalPosition.X - ElementRect.Min.X,
+            LocalPosition.Y - ElementRect.Min.Y
         );
 
         // Calculate normalized position (0-1 range within the element)

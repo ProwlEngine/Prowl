@@ -584,7 +584,8 @@ namespace Prowl.PaperUI
         private void BubbleEventToParents(in ElementHandle element, ElementEvent evt)
         {
             ref ElementData data = ref element.Data;
-            if (data.StopPropagation || evt.IsPropagationStopped)
+            bool drag = evt is DragEvent;
+            if (data.StopPropagation || (drag && data.StopDragPropagation) || evt.IsPropagationStopped)
                 return;
 
             ElementHandle current = element.GetParentHandle();
@@ -596,7 +597,7 @@ namespace Prowl.PaperUI
                 evt.Retarget(current, data.LayoutRect);
                 InvokeHandler(data, evt);
 
-                if (data.StopPropagation || evt.IsPropagationStopped)
+                if (data.StopPropagation || (drag && data.StopDragPropagation) || evt.IsPropagationStopped)
                     break;
                 current = current.GetParentHandle();
             }

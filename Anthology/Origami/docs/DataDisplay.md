@@ -222,6 +222,91 @@ Origami.NodeGraph(paper, "graph", 800, 500)
 - `Controller(new NodeGraphController())` gives programmatic control over pan/zoom/selection (`FrameAll()`, `CenterOn(...)`, `FocusNode(...)`)
 - `OnValidateConnection(...)` rejects invalid wire connections before `OnConnect` fires
 - `OnNodesMoved(...)`, `OnDeleteSelection(...)`, `OnNodeContext(...)` cover the common edit interactions
+- `Minimap()` shows the nodes, groups and notes in the corner, click or drag it to move the view
+- `SnapToGrid(step)` snaps anything dragged on the canvas (nodes, groups, notes) to the step; wire reroute points move freely
+- `AllowSelfConnections()` leaves a node wired to itself to the validator
+- `ReadOnly()` shows the graph without letting anything be moved, wired or deleted
+- `InitialView(pan, zoom)` sets where the graph opens, once, the first time that widget id is shown
+- Node ids have to be unique; two nodes sharing one throws rather than drawing one of them twice
+
+### Node content
+
+A node draws its own body: fields, sliders, a preview, anything Paper can build. Set `BodyHeight` for
+the space it needs, and multiply sizes by `ctx.Zoom` so the content scales with the graph.
+
+```csharp
+node.BodyHeight = 46f;
+node.Body = ctx =>
+{
+    using (ctx.Paper.Row(ctx.Id("row")).Width(ctx.Paper.Percent(100)).Height(ctx.S(16f)).Enter())
+        ctx.Paper.Box(ctx.Id("label")).Text("Scale", font).FontSize(ctx.S(11f));
+};
+```
+
+Anything inside the body that handles its own input goes through `ctx.Control(...)`, which stops the
+event bubbling up: without it a drag on a slider moves the node instead. A drag on the body's
+background still moves the node, as it should.
+
+`Badge` puts a chip on the header (an error marker, a live value) with its own hover text, `Tooltip`
+on a node or a port explains it, and `Collapsible` adds a fold chevron that raises
+`OnNodeToggleCollapsed` for the host to act on. A collapsed node draws its header alone, and its
+`Body` is not called at all, so live content costs nothing while it is folded.
+
+`Pill` makes a node a small capsule with no header, for a relay or reroute point. A capsule has room
+for its tooltip and its sockets, and nothing else, so `Badge` and `Collapsible` do not apply to one.
+
+`GraphPort.Side` puts a port on any of the four edges and `PortShape.Arrow` draws it as a chevron, so
+a left-to-right data graph and a top-down behaviour tree are the same code path. A node with ports
+along its top or bottom edge is widened to fit them, which `NodeGraphPreview.MeasureWidth` reports.
+
+### Ports that do not exist yet
+
+A node that takes a list of inputs (a layer stack, a blend space, a sub graph's parameters) carries an
+open socket: `GraphPort.IsPlaceholder`. It draws as a hollow plus, and wiring it raises `OnConnect`
+with `ToPlaceholder` or `FromPlaceholder` set, so the host creates the real port, names it after
+whatever is at the other end, and rewrites the request to use it.
+
+```csharp
+node.Inputs.Add(new GraphPort("add", "") { IsPlaceholder = true });
+
+void Connect(ConnectionRequest req)
+{
+    if (req.NeedsPort && !CreatePort(ref req)) return;
+    wires.Add(new GraphConnection(req.FromNode, req.FromPort, req.ToNode, req.ToPort));
+}
+```
+
+Dragging out of a placeholder works too, so an inputs card can be dragged onto whatever it should
+feed and take that port's name.
+
+### Sub graphs
+
+The widget draws one graph at a time, so a sub graph is a second list of nodes the host swaps in.
+`OnNodeDoubleClick` is the way in, the host keeps the stack and draws its own breadcrumb to come back,
+and whether the inner graph lives in this file or in another asset is never the widget's business.
+
+A sub graph node has no ports of its own: the host derives them from the inner graph, so renaming a
+parameter inside renames the port outside. Deriving them runs every frame, so compare before you
+rebuild, or every node allocates a fresh set of ports per frame. Mark the inner graph's boundary cards `Pinned`
+and they can be wired but not dragged or deleted, and no group carries them off.
+
+The sample's Shader Graph panel does all of this in about a hundred lines: a `GraphDoc` per graph, a
+path of ids, ports derived in `SyncSubGraphs`, and `Create Sub Graph` in the multi-select menu, which
+moves the selection into a new document and turns every wire crossing the boundary into a parameter.
+
+### A running graph
+
+`GraphConnection.Thickness` scales a wire's width, `Flow` sends dots travelling along it and
+`FlowSpeed` sets how fast, so a blend weight or an active path is visible while the graph runs. Hook
+`OnDisconnect(...)` and dragging a connected input moves that wire instead of starting a second one.
+
+Two wires between the same pair of ports look identical to the widget, so give each a
+`GraphConnection.Id` if a graph allows them: selection, reroute points and `OnDisconnect` all key on
+it, and without one the pair is treated as a single wire.
+
+`OnStickyEdited(...)` reports an edited note, and `OnWireAddPoint` / `OnWirePointMoved` /
+`OnWireRemovePoint` cover reroute points: right-click a wire to drop one, drag it, right-click it to
+take it away.
 
 Notes: the builder does not mutate your node/connection lists itself (aside from what you do in the callbacks) — `OnConnect`, `OnNodesMoved`, and `OnDeleteSelection` all hand back data for the caller to apply.
 

@@ -907,6 +907,17 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Keeps drags that start in this element from reaching its parents, while clicks and presses
+        /// still bubble. A control inside something draggable wants exactly this: working the control
+        /// must not drag the container, but clicking it should still select the container.
+        /// </summary>
+        public ElementBuilder StopDragPropagation()
+        {
+            _handle.Data.StopDragPropagation = true;
+            return this;
+        }
+
         /// <summary>Sets the layout direction for child elements.</summary>
         /// <param name="layoutType">How child elements should be arranged (Row or Column)</param>
         public ElementBuilder LayoutType(LayoutType layoutType)

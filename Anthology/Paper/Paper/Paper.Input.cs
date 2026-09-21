@@ -104,6 +104,18 @@ namespace Prowl.PaperUI
             }
         }
 
+        /// <summary>
+        /// The pointer in an element's layout space, the space its rectangle is in. The same as
+        /// <see cref="PointerPos"/> unless the element or an ancestor is transformed.
+        /// </summary>
+        public Float2 PointerPosIn(LayoutEngine.ElementHandle handle)
+        {
+            if (!handle.IsValid) return _pointerPos;
+
+            ref LayoutEngine.ElementData data = ref handle.Data;
+            return data._isIdentityWorldTransform ? _pointerPos : data._worldInverse.TransformPoint(_pointerPos);
+        }
+
         // Mouse wheel
         /// <summary> Cumulative mouse wheel scroll value since the last reset. Positive values indicate forward/up scrolling, negative indicates backward/down. </summary>
         public float PointerWheel { get; private set; } = 0;

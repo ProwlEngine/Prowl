@@ -25,6 +25,8 @@ public struct ElementData
     public bool IsNotInteractable;
     /// <summary> When true, events on this element do not propagate to parent elements. </summary>
     public bool StopPropagation;
+    /// <summary> When true, drags on this element stay here while clicks and presses still reach its parents. </summary>
+    public bool StopDragPropagation;
 
     /// <summary>Mouse cursor shape requested while this element is hovered. Defaults to
     /// <see cref="PaperCursor.Inherit"/> (take the nearest ancestor's, or the arrow at the root).</summary>
@@ -196,6 +198,7 @@ public struct ElementData
             IsFocusable = true,
             IsNotInteractable = false,
             StopPropagation = false,
+            StopDragPropagation = false,
             ParentIndex = -1,
             ChildIndices = null,   // supplied by CreateElement, which reuses the slot's existing list
             IsHookedToParent = false,

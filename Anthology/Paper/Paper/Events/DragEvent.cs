@@ -18,12 +18,19 @@ public enum DragPhase
 /// <summary> Provides data for drag pointer events, including the start position, the per-frame delta, the total accumulated delta, and the current drag phase (Start, Dragging, or End). </summary>
 public class DragEvent : ElementEvent
 {
-    /// <summary> Gets the pointer position at the start of the drag, in the element's coordinate space. </summary>
-    public Float2 StartPosition { get; }
-    /// <summary> Gets the change in pointer position since the last drag event, in screen coordinates. </summary>
-    public Float2 Delta { get; }
-    /// <summary> Gets the accumulated drag distance since the drag started, as opposed to Delta which is the change since the last event. </summary>
-    public Float2 TotalDelta { get; }
+    private readonly Float2 _startScreen, _deltaScreen, _totalScreen;
+
+    /// <summary> Gets the pointer position at the start of the drag, in the element's layout space. </summary>
+    public Float2 StartPosition => ToLocal(_startScreen);
+    /// <summary> Gets the change in pointer position since the last drag event, in the element's layout space. </summary>
+    public Float2 Delta => ToLocalVector(_deltaScreen);
+    /// <summary> Gets the accumulated drag distance since the drag started, in the element's layout space, as opposed to Delta which is the change since the last event. </summary>
+    public Float2 TotalDelta => ToLocalVector(_totalScreen);
+
+    /// <summary> The change since the last drag event in screen pixels, whatever the element is transformed by. </summary>
+    public Float2 ScreenDelta => _deltaScreen;
+    /// <summary> The distance since the drag started in screen pixels, whatever the element is transformed by. </summary>
+    public Float2 ScreenTotalDelta => _totalScreen;
 
     /// <summary> Gets the phase of the drag operation (Start, Dragging, or End) that this event represents. </summary>
     public DragPhase Phase { get; }
@@ -32,9 +39,9 @@ public class DragEvent : ElementEvent
     public DragEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, Float2 startPos, Float2 delta, Float2 totalDelta, DragPhase phase = DragPhase.Start)
         : base(source, elementRect, pointerPos)
     {
-        StartPosition = startPos;
-        Delta = delta;
-        TotalDelta = totalDelta;
+        _startScreen = startPos;
+        _deltaScreen = delta;
+        _totalScreen = totalDelta;
         Phase = phase;
     }
 }

@@ -756,7 +756,7 @@ public static class PropertyGridRenderer
                     int cur = stableIds.IndexOf(k);
                     var cys = paper.GetElementStorage<List<float>>(colEl, "rowCys", null!);
                     if (cur < 0 || cys == null) return;
-                    float py = (float)paper.PointerPos.Y;
+                    float py = (float)paper.PointerPosIn(colEl).Y;
                     int target = cur; float best = float.MaxValue;
                     for (int t = 0; t < cys.Count && t < list.Count; t++)
                     {
