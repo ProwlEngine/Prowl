@@ -58,6 +58,8 @@ public sealed class GraphBadge
     public IOrigamiIcon? Icon;
     public Color? Color;
     public string? Tooltip;
+    /// <summary>A richer tooltip than plain text, drawn by the host. Wins over <see cref="Tooltip"/>.</summary>
+    public TooltipContent? Content;
 
     public GraphBadge() { }
     public GraphBadge(string text, Color? color = null, string? tooltip = null) { Text = text; Color = color; Tooltip = tooltip; }
@@ -69,8 +71,9 @@ public sealed class GraphBadge
 /// so the content only has to fill it.
 /// </summary>
 /// <remarks>
-/// Everything inside scales with the graph, so multiply sizes and font sizes by <see cref="Zoom"/>
-/// (<see cref="S"/> does it). Element ids are scoped to the node already, so plain names do not clash
+/// The card is laid out at graph scale and zoomed by a transform, so anything placed inside, any
+/// Origami widget included, is sized as if the graph were at 100% and follows the zoom on its own,
+/// pointer input and all. Element ids are scoped to the node already, so plain names do not clash
 /// with another node's.
 /// </remarks>
 public sealed class NodeBodyContext
@@ -82,22 +85,25 @@ public sealed class NodeBodyContext
 
     public Paper Paper { get; }
     public GraphNode Node { get; }
-    /// <summary>Current graph zoom. Multiply every size by it.</summary>
+    /// <summary>Current graph zoom, for deciding how much detail is worth drawing. Sizes do not need it.</summary>
     public float Zoom { get; }
     public Color Accent { get; }
     public bool Selected { get; }
 
-    /// <summary>Scales a graph-space length to screen pixels.</summary>
-    public float S(float value) => value * Zoom;
+    /// <summary>
+    /// A length in the body's own units. The card's transform does the zooming, so this is the value
+    /// unchanged; it stays so bodies written against the old per-length scaling keep working.
+    /// </summary>
+    public float S(float value) => value;
 
     /// <summary>
-    /// Marks an element as owning its input: a slider, a field, a button. Without it a drag inside the
-    /// body bubbles up and moves the node instead of working the control, while a plain drag on the
-    /// body's background still moves the node as usual.
+    /// Marks an element as owning its drags: a slider, a field, a chart. Without it a drag inside the
+    /// body bubbles up and moves the node instead of working the control. Clicks still bubble, so
+    /// clicking a control selects its node, and a plain drag on the body's background moves the node.
     /// </summary>
     public ElementBuilder Control(ElementBuilder element)
     {
-        element.StopEventPropagation();
+        element.StopDragPropagation();
         return element;
     }
 
@@ -132,7 +138,18 @@ public sealed class GraphNode
     public string? Tooltip;
 
     /// <summary>A chip on the header: an error, a warning, a live value.</summary>
+    /// <summary>
+    /// An outline for a state the host wants seen, such as running, drawn with a soft glow of the same
+    /// colour. Selection still takes the outline while the node is selected.
+    /// </summary>
+    public Color? Outline;
+
+    /// <summary>Draws the card faded back, for a node the graph is not reaching right now.</summary>
+    public bool Dimmed;
+
     public GraphBadge? Badge;
+    /// <summary>More chips beside <see cref="Badge"/>, in order, such as a warning next to an output marker.</summary>
+    public List<GraphBadge> Badges = new();
 
     /// <summary>
     /// Draws the node's own content below the port rows. Set <see cref="BodyHeight"/> to the space it
@@ -1009,26 +1026,35 @@ public sealed class NodeGraphBuilder
         bool selected = st.SelNodes.Contains(node.Id);
         float zoom = st.Zoom;
 
+        // The card keeps its top left corner where the view puts it and is laid out at graph scale, then
+        // zoomed about that corner. Everything inside is sized as at 100%, which is what lets ordinary
+        // widgets live in a card: the transform scales them and Paper maps the pointer back for them.
         float sx = l.Pos.X * zoom + st.PanX;
         float sy = l.Pos.Y * zoom + st.PanY;
-        float w = l.W * zoom, h = l.H * zoom;
-        float headerH = _headerH * zoom;
-        float rounding = _nodeRounding * zoom;
+        float w = l.W, h = l.H;
+        float headerH = _headerH;
+        float rounding = _nodeRounding;
+
+        // Outlines and glows stay the same on screen at any zoom, so they are divided back out.
+        float hairline = 1f / zoom;
 
         using var scope = Scope(node.Id);
-        if (node.Pill) { DrawPill(st, node, accent, selected, sx, sy, w, h); return; }
+        if (node.Pill) { DrawPill(st, node, accent, selected, sx, sy, w, h, zoom); return; }
 
         var card = _paper.Column("card")
             .PositionType(PositionType.SelfDirected).Left(sx).Top(sy)
             .Width(w).Height(h)
+            .TransformOrigin(0, 0).Scale(zoom)
             .Rounded(rounding)
             .BackgroundColor(nodeBg)
-            .BorderColor(selected ? accent : borderSoft).BorderWidth(selected ? 1.6f : 1f)
+            .BorderColor(selected ? accent : node.Outline ?? borderSoft)
+            .BorderWidth((selected || node.Outline.HasValue ? 1.6f : 1f) * hairline)
             .Clip()
             .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
         WireNodeEvents(card, node, st);
         if (!string.IsNullOrEmpty(node.Tooltip)) card.Tooltip(node.Title, node.Tooltip!);
-        if (selected) card.Glow(0, 0, 14f, 1f, WithA(accent, 90));
+        if (selected) card.Glow(0, 0, 14f * hairline, hairline, WithA(accent, 90));
+        else if (node.Outline is { } outline) card.Glow(0, 0, 18f * hairline, hairline, WithA(outline, 60));
 
         using (card.Enter())
         {
@@ -1040,12 +1066,12 @@ public sealed class NodeGraphBuilder
                 .RoundedTop(rounding).IsNotInteractable();
             if (folded) header.Rounded(rounding);
 
-            using (header.Padding(10f * zoom, 10f * zoom, 0, 0).Enter())
+            using (header.Padding(10f, 10f, 0, 0).Enter())
             {
                 if (node.Icon != null && detail != Detail.Block)
                 {
-                    var icon = node.Icon; float isz = 14f * zoom;
-                    using (_paper.Box("icon").Width(isz).Height(headerH).Margin(0, 7f * zoom, 0, 0).IsNotInteractable().Enter())
+                    var icon = node.Icon; float isz = 14f;
+                    using (_paper.Box("icon").Width(isz).Height(headerH).Margin(0, 7f, 0, 0).IsNotInteractable().Enter())
                         _paper.Draw((canvas, rr) =>
                         {
                             float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f), iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
@@ -1054,14 +1080,18 @@ public sealed class NodeGraphBuilder
                 }
                 if (detail != Detail.Block && semi != null)
                     _paper.Box("title").Width(UnitValue.Stretch()).Height(headerH)
-                        .Text(node.Title, semi).FontSize(_titleFont * zoom)
+                        .Text(node.Title, semi).FontSize(_titleFont)
                         .TextColor(titleCol).Alignment(TextAlignment.MiddleLeft).TextTruncate().IsNotInteractable();
 
-                if (detail == Detail.Full && node.Badge != null)
-                    DrawBadge(node, node.Badge, headerH, zoom, accent, titleCol, font);
+                if (detail == Detail.Full)
+                {
+                    if (node.Badge != null) DrawBadge(node.Badge, "badge", headerH, accent, titleCol, font);
+                    for (int i = 0; i < node.Badges.Count; i++)
+                        DrawBadge(node.Badges[i], "badge" + i, headerH, accent, titleCol, font);
+                }
 
                 if (detail == Detail.Full && node.Collapsible)
-                    DrawCollapseToggle(node, st, headerH, zoom, portLabelCol);
+                    DrawCollapseToggle(node, st, headerH, portLabelCol);
             }
 
             // Body: input/output labels (only at Full LOD; Left/Right ports carry labels).
@@ -1073,48 +1103,59 @@ public sealed class NodeGraphBuilder
                     // stretching, so the body keeps the space the layout reserved for it.
                     using (_paper.Column("body").Width(UnitValue.Percentage(100))
                         .Height(node.Body != null && node.BodyHeight > 0f
-                            ? (BodyPadTop + rows * _portRowH) * zoom
+                            ? BodyPadTop + rows * _portRowH
                             : UnitValue.Stretch())
-                        .Padding(0, 0, BodyPadTop * zoom, node.Body != null ? 0 : BodyPadBottom * zoom).IsNotInteractable().Enter())
+                        .Padding(0, 0, BodyPadTop, node.Body != null ? 0 : BodyPadBottom).IsNotInteractable().Enter())
                         for (int i = 0; i < rows; i++)
-                            using (_paper.Row("row", i).Width(UnitValue.Percentage(100)).Height(_portRowH * zoom).Enter())
+                            using (_paper.Row("row", i).Width(UnitValue.Percentage(100)).Height(_portRowH).Enter())
                             {
                                 _paper.Box("in", i).Width(UnitValue.Stretch()).Height(UnitValue.Percentage(100))
-                                    .Margin(PortLabelPadX * zoom, 0, 0, 0)
-                                    .Text(i < l.LeftCount ? l.Ports[i].Port.Label : "", font).FontSize(_portFont * zoom)
+                                    .Margin(PortLabelPadX, 0, 0, 0)
+                                    .Text(i < l.LeftCount ? l.Ports[i].Port.Label : "", font).FontSize(_portFont)
                                     .TextColor(portLabelCol).Alignment(TextAlignment.MiddleLeft).TextTruncate();
                                 _paper.Box("out", i).Width(UnitValue.Stretch()).Height(UnitValue.Percentage(100))
-                                    .Margin(0, PortLabelPadX * zoom, 0, 0)
-                                    .Text(i < l.RightCount ? l.Ports[l.LeftCount + i].Port.Label : "", font).FontSize(_portFont * zoom)
+                                    .Margin(0, PortLabelPadX, 0, 0)
+                                    .Text(i < l.RightCount ? l.Ports[l.LeftCount + i].Port.Label : "", font).FontSize(_portFont)
                                     .TextColor(portLabelCol).Alignment(TextAlignment.MiddleRight).TextTruncate();
                             }
 
                 if (node.Body != null && node.BodyHeight > 0f)
-                    using (_paper.Box("bodyhost").Width(UnitValue.Percentage(100)).Height(node.BodyHeight * zoom)
-                        .Margin(0, 0, 0, BodyPadBottom * zoom).Enter())
+                    using (_paper.Box("bodyhost").Width(UnitValue.Percentage(100)).Height(node.BodyHeight)
+                        .Margin(0, 0, 0, BodyPadBottom).Enter())
                         node.Body(new NodeBodyContext(_paper, node, zoom, accent, selected));
             }
+
+            // Paper has no per element opacity, so a faded card is the card with the canvas laid over it.
+            if (node.Dimmed)
+                _paper.Box("dim").PositionType(PositionType.SelfDirected).Left(0).Top(0)
+                    .Width(UnitValue.Percentage(100)).Height(UnitValue.Percentage(100))
+                    .BackgroundColor(WithA(_theme.Neutral.C100, 150)).IsNotInteractable();
         }
     }
 
     // A chip at the right of the header: a live value, a state, or a problem with the detail on hover.
-    private void DrawBadge(GraphNode node, GraphBadge badge, float headerH, float zoom, Color accent, Color titleCol, FontFile? font)
+    private void DrawBadge(GraphBadge badge, string id, float headerH, Color accent, Color titleCol, FontFile? font)
     {
         Color fill = badge.Color ?? accent;
-        float h = Math.Max(10f, headerH - 10f * zoom);
-        var chip = _paper.Row("badge")
-            .Height(h).Margin(6f * zoom, 0, UnitValue.Stretch(), UnitValue.Stretch())
-            .Rounded(_theme.Metrics.SmallRounding * zoom)
+        float h = headerH - 10f;
+        var chip = _paper.Row(id)
+            .Height(h).Margin(6f, 0, UnitValue.Stretch(), UnitValue.Stretch())
+            .Rounded(_theme.Metrics.SmallRounding)
             .BackgroundColor(WithA(fill, 55))
             .BorderColor(WithA(fill, 150)).BorderWidth(1f);
-        if (!string.IsNullOrEmpty(badge.Tooltip)) chip.Tooltip(badge.Tooltip!);
+        if (badge.Content != null) chip.Tooltip(badge.Content);
+        else if (!string.IsNullOrEmpty(badge.Tooltip)) chip.Tooltip(badge.Tooltip!);
 
-        using (chip.Padding(5f * zoom, 5f * zoom, 0, 0).Enter())
+        // An icon on its own is a square, which is what lets a warning sit small beside a labelled chip.
+        bool iconOnly = badge.Icon != null && badge.Text.Length == 0;
+        if (iconOnly) chip.Width(h);
+
+        using (chip.Padding(iconOnly ? 0 : 5f, iconOnly ? 0 : 5f, 0, 0).Enter())
         {
             if (badge.Icon is { } icon)
             {
-                float isz = Math.Max(6f, 10f * zoom);
-                using (_paper.Box("badgeicon").Width(isz).Height(UnitValue.Percentage(100)).IsNotInteractable().Enter())
+                float isz = 10f;
+                using (_paper.Box(id + "icon").Width(iconOnly ? UnitValue.Stretch() : isz).Height(UnitValue.Percentage(100)).IsNotInteractable().Enter())
                     _paper.Draw((canvas, rr) =>
                     {
                         float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f), iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
@@ -1123,20 +1164,20 @@ public sealed class NodeGraphBuilder
             }
 
             if (badge.Text.Length > 0 && font != null)
-                _paper.Box("badgetext").Height(UnitValue.Percentage(100))
-                    .Margin(badge.Icon != null ? 4f * zoom : 0, 0, 0, 0)
-                    .Text(badge.Text, font).FontSize(_portFont * zoom * 0.92f)
+                _paper.Box(id + "text").Height(UnitValue.Percentage(100))
+                    .Margin(badge.Icon != null ? 4f : 0, 0, 0, 0)
+                    .Text(badge.Text, font).FontSize(_portFont * 0.92f)
                     .TextColor(titleCol).Alignment(TextAlignment.MiddleCenter).IsNotInteractable();
         }
     }
 
     // The fold chevron. The host owns the flag, so the widget only reports the click.
-    private void DrawCollapseToggle(GraphNode node, GraphState st, float headerH, float zoom, Color iconCol)
+    private void DrawCollapseToggle(GraphNode node, GraphState st, float headerH, Color iconCol)
     {
-        float size = Math.Max(10f, 14f * zoom);
+        float size = 14f;
         bool collapsed = node.Collapsed;
         var toggle = _paper.Box("fold")
-            .Width(size).Height(headerH).Margin(5f * zoom, 0, 0, 0)
+            .Width(size).Height(headerH).Margin(5f, 0, 0, 0)
             .Cursor(PaperCursor.Pointer)
             .Tooltip(collapsed ? "Expand" : "Collapse");
         toggle.OnClick(st, (state, e) => _onToggleCollapsed?.Invoke(node));
@@ -1147,7 +1188,7 @@ public sealed class NodeGraphBuilder
             {
                 float cx = (float)(rr.Min.X + rr.Size.X * 0.5f), cy = (float)(rr.Min.Y + rr.Size.Y * 0.5f);
                 float e = size * 0.28f;
-                canvas.SaveState(); canvas.SetStrokeColor(col); canvas.SetStrokeWidth(Math.Max(1f, 1.4f * zoom));
+                canvas.SaveState(); canvas.SetStrokeColor(col); canvas.SetStrokeWidth(1.4f);
                 canvas.BeginPath();
                 if (collapsed) { canvas.MoveTo(cx - e, cy - e); canvas.LineTo(cx + e, cy); canvas.LineTo(cx - e, cy + e); }
                 else { canvas.MoveTo(cx - e, cy - e * 0.6f); canvas.LineTo(cx, cy + e * 0.6f); canvas.LineTo(cx + e, cy - e * 0.6f); }
@@ -1158,17 +1199,19 @@ public sealed class NodeGraphBuilder
     // ── Pill node (relay / reroute): a small solid capsule, no text. A capsule has no header, so a
     // badge and a collapse toggle have nowhere to go; the tooltip still works.
     private void DrawPill(GraphState st, GraphNode node, Color accent, bool selected,
-        float sx, float sy, float w, float h)
+        float sx, float sy, float w, float h, float zoom)
     {
+        float hairline = 1f / zoom;
         var pill = _paper.Box("pill")
             .PositionType(PositionType.SelfDirected).Left(sx).Top(sy).Width(w).Height(h)
+            .TransformOrigin(0, 0).Scale(zoom)
             .Rounded(h * 0.5f)
             .BackgroundColor(WithA(accent, 235))
-            .BorderColor(selected ? _theme.Ink.C700 : WithA(accent, 255)).BorderWidth(selected ? 1.8f : 1f)
+            .BorderColor(selected ? _theme.Ink.C700 : WithA(accent, 255)).BorderWidth((selected ? 1.8f : 1f) * hairline)
             .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
         WireNodeEvents(pill, node, st);
         if (!string.IsNullOrEmpty(node.Tooltip)) pill.Tooltip(node.Title, node.Tooltip!);
-        if (selected) pill.Glow(0, 0, 12f, 1f, WithA(accent, 110));
+        if (selected) pill.Glow(0, 0, 12f * hairline, hairline, WithA(accent, 110));
     }
 
     // Sticky rect after applying any live move/resize drag.
@@ -1491,7 +1534,8 @@ public sealed class NodeGraphBuilder
         card.OnDragging(st, (state, e) =>
         {
             if (state.Mode != DragMode.MoveNodes) return;
-            state.RawDrag += new Float2(e.Delta.X / state.Zoom, e.Delta.Y / state.Zoom);
+            // The card is zoomed by its transform, so the event already reports the drag in graph units.
+            state.RawDrag += e.Delta;
             state.DragOffset = SnapDelta(node.Position, state.RawDrag);
         });
         card.OnDragEnd(st, (state, e) =>
