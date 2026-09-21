@@ -66,6 +66,20 @@ public static class TooltipSystem
     public static void Hover(int elementId, string text)
         => Hover(elementId, new TooltipContent(text));
 
+    /// <summary>Asks to show a tooltip for an element, ranked by how deep it sits in the tree.</summary>
+    public static void Hover(ElementHandle element, TooltipContent content)
+        => Hover(element.Data.ID, content, Depth(element));
+
+    public static void Hover(ElementHandle element, string text)
+        => Hover(element, new TooltipContent(text));
+
+    internal static int Depth(ElementHandle handle)
+    {
+        int depth = 0;
+        for (ElementHandle h = handle.GetParentHandle(); h.IsValid; h = h.GetParentHandle()) depth++;
+        return depth;
+    }
+
     /// <summary>
     /// Settles the frame's claims into the tooltip to show. Only the winner counts toward the hover
     /// delay; before this, every claimant reset it in turn and nested tooltips never appeared.
@@ -245,14 +259,7 @@ public static class TooltipExtensions
 
     public static ElementBuilder Tooltip(this ElementBuilder builder, TooltipContent content)
     {
-        builder.OnHover(content, (captured, e) => TooltipSystem.Hover(e.Source.Data.ID, captured, Depth(e.Source)));
+        builder.OnHover(content, (captured, e) => TooltipSystem.Hover(e.Source, captured));
         return builder;
-    }
-
-    private static int Depth(ElementHandle handle)
-    {
-        int depth = 0;
-        for (ElementHandle h = handle.GetParentHandle(); h.IsValid; h = h.GetParentHandle()) depth++;
-        return depth;
     }
 }

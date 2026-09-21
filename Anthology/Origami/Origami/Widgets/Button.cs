@@ -372,7 +372,7 @@ public sealed class ButtonBuilder
 
             // Hover tooltip routed through the shared TooltipSystem (drawn in Origami.EndFrame).
             if (!string.IsNullOrEmpty(_tooltip) && isHovered)
-                TooltipSystem.Hover(handle.Data.ID, _tooltip!);
+                TooltipSystem.Hover(handle, _tooltip!);
         }
     }
 
