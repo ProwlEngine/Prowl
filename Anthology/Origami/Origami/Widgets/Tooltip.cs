@@ -24,6 +24,8 @@ public sealed class TooltipContent
     public string? Shortcut;
     public Action<Paper>? CustomDraw;
     public float MaxWidth = 200f;
+    /// <summary>The narrowest the bubble gets, for custom content that needs room the title does not give it.</summary>
+    public float MinWidth;
 
     public TooltipContent() { }
     public TooltipContent(string text) => Text = text;
@@ -103,7 +105,7 @@ public static class TooltipSystem
         if (hasShortcut) textW += (float)paper.MeasureText(content.Shortcut!, fontSize, font).X + m.PaddingLarge;
 
         float naturalW = textW + padX * 2 + (hasIcon ? m.HeaderHeight : 0f);
-        float tooltipW = MathF.Min(content.MaxWidth, naturalW);
+        float tooltipW = MathF.Min(content.MaxWidth, MathF.Max(content.MinWidth, naturalW));
         if (tooltipW < 40) tooltipW = 40;
         bool needsWrap = naturalW > content.MaxWidth;
 
