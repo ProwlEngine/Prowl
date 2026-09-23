@@ -67,10 +67,11 @@ public sealed class BoneMask
 
     /// <summary>
     /// Builds a mask by feathering authored seed weights down the hierarchy: each bone inherits the
-    /// weight of its nearest seeded ancestor (or itself), and bones with no seeded ancestor are 0.
+    /// weight of its nearest seeded ancestor (or itself), and bones with no seeded ancestor take the
+    /// rest weight.
     /// This turns sparse region authoring (e.g. "spine = 1") into a full per-bone mask.
     /// </summary>
-    public static BoneMask CreateHierarchical(Skeleton skeleton, IReadOnlyList<(int Bone, float Weight)> seeds)
+    public static BoneMask CreateHierarchical(Skeleton skeleton, IReadOnlyList<(int Bone, float Weight)> seeds, float restWeight = 0f)
     {
         ArgumentNullException.ThrowIfNull(skeleton);
         ArgumentNullException.ThrowIfNull(seeds);
@@ -79,7 +80,7 @@ public sealed class BoneMask
         foreach ((int bone, float weight) in seeds)
             seeded[bone] = Maths.Clamp(weight, 0f, 1f);
 
-        var mask = new BoneMask(skeleton, 0f);
+        var mask = new BoneMask(skeleton, Maths.Clamp(restWeight, 0f, 1f));
         for (int i = 0; i < skeleton.BoneCount; i++)
         {
             int current = i;
