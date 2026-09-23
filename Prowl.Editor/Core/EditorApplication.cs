@@ -1848,6 +1848,30 @@ public class EditorApplication : Game
         }
     }
 
+    /// <summary>Brings one particular panel to the front of whatever leaf holds it.</summary>
+    public void FocusPanelInstance(DockPanel panel)
+    {
+        DockNode? node = FindNodeContainingInstance(_dockSpace.Root, panel);
+        if (node == null)
+            foreach (var fw in _dockSpace.FloatingWindows)
+            {
+                node = FindNodeContainingInstance(fw.Node, panel);
+                if (node != null) break;
+            }
+
+        if (node?.Tabs == null) return;
+
+        int index = node.Tabs.IndexOf(panel);
+        if (index >= 0) node.ActiveTabIndex = index;
+    }
+
+    private static DockNode? FindNodeContainingInstance(DockNode? node, DockPanel panel)
+    {
+        if (node == null) return null;
+        if (node.IsLeaf) return node.Tabs != null && node.Tabs.Contains(panel) ? node : null;
+        return FindNodeContainingInstance(node.ChildA, panel) ?? FindNodeContainingInstance(node.ChildB, panel);
+    }
+
     private static DockNode? FindNodeContainingPanel(DockNode? node, Type panelType)
     {
         if (node == null) return null;
