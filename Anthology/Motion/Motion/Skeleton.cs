@@ -120,6 +120,15 @@ public sealed class Skeleton
     /// <summary>Parent indices with invalid and cyclic links replaced by <see cref="InvalidIndex"/>.</summary>
     internal int[] SanitizedParentIndices => _hierarchy.Parents;
 
+    /// <summary>Depth first bone order, each bone directly followed by its descendants.</summary>
+    internal int[] SubtreeOrder => _hierarchy.SubtreeOrder;
+
+    /// <summary>Each bone's position in <see cref="SubtreeOrder"/>.</summary>
+    internal int[] SubtreeStart => _hierarchy.SubtreeStart;
+
+    /// <summary>The position in <see cref="SubtreeOrder"/> just past each bone's last descendant.</summary>
+    internal int[] SubtreeEnd => _hierarchy.SubtreeEnd;
+
     /// <summary>True if <paramref name="boneIndex"/> is a low LOD bone or an ancestor of one.</summary>
     internal bool IsInLowLodSet(int boneIndex) => _inLowLodSet[boneIndex];
 

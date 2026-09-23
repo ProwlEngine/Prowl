@@ -39,8 +39,8 @@ public sealed class GraphContext
     public float FrameTime;
 
     /// <summary>
-    /// The previous frame's output pose (model-space transforms valid), used to resolve bone targets
-    /// in poseless value nodes. One frame of latency.
+    /// The previous frame's output pose, used to resolve bone targets in poseless value nodes. One frame
+    /// of latency. Its model space is worked out the first time a node asks for it.
     /// </summary>
     public Pose? PreviousPose;
 

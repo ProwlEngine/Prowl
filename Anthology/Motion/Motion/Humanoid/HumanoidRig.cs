@@ -23,6 +23,12 @@ public sealed class HumanoidRig
     private readonly int[] _mirrorBones;
     private readonly int[] _codecOrder;
     private readonly bool[] _bodyBones;
+    private readonly int[] _bodyRoots;
+    private readonly Quaternion[] _preInverse;
+    private readonly Quaternion[] _postInverse;
+    private readonly int[] _encodeOrder;
+    private readonly int[] _massBones;
+    private readonly float[] _massWeights;
 
     internal HumanoidRig(Skeleton skeleton, HumanDescription description, HumanoidFrames frames)
     {
@@ -66,11 +72,87 @@ public sealed class HumanoidRig
         _mirrorBones = PoseMirror.BuildMirrorBones(this);
         _codecOrder = BuildCodecOrder();
         _bodyBones = new bool[skeleton.BoneCount];
+        var bodyRoots = new List<int>();
         foreach (int index in _codecOrder)
         {
             int parent = skeleton.SanitizedParentIndices[index];
             _bodyBones[index] = _humanBones[index] >= 0 || parent != Skeleton.InvalidIndex && _bodyBones[parent];
+            if (_bodyBones[index] && (parent == Skeleton.InvalidIndex || !_bodyBones[parent]))
+                bodyRoots.Add(index);
         }
+        _bodyRoots = bodyRoots.ToArray();
+
+        _preInverse = new Quaternion[HumanTrait.BoneCount];
+        _postInverse = new Quaternion[HumanTrait.BoneCount];
+        for (int i = 0; i < HumanTrait.BoneCount; i++)
+        {
+            _preInverse[i] = Quaternion.Inverse(frames.Pre[i]);
+            _postInverse[i] = Quaternion.Inverse(frames.Post[i]);
+        }
+
+        _encodeOrder = BuildEncodeOrder();
+        (_massBones, _massWeights) = BuildMassWeights();
+    }
+
+    // The codec order without the unmapped bones nothing is measured against, such as the end nodes
+    // past the fingertips, whose rotation encoding would work out and never read.
+    private int[] BuildEncodeOrder()
+    {
+        int[] parents = _skeleton.SanitizedParentIndices;
+        var needed = new bool[_skeleton.BoneCount];
+        void Need(int index)
+        {
+            for (; index != Skeleton.InvalidIndex && !needed[index]; index = parents[index])
+                needed[index] = true;
+        }
+
+        foreach (HumanBodyBone bone in HumanTrait.AllBones)
+        {
+            if (!HasBone(bone))
+                continue;
+            Need(_boneIndices[(int)bone]);
+            Need(_frames.FrameParent[(int)bone]);
+        }
+
+        var order = new List<int>(_codecOrder.Length);
+        foreach (int index in _codecOrder)
+            if (needed[index])
+                order.Add(index);
+        return order.ToArray();
+    }
+
+    // The centre of mass is a fixed weighting of bone positions, so the weights are read off the full
+    // calculation once, one bone at a time.
+    private (int[] Bones, float[] Weights) BuildMassWeights()
+    {
+        var bones = new List<int>();
+        var weights = new List<float>();
+        for (int index = 0; index < _skeleton.BoneCount; index++)
+        {
+            float weight = HumanoidFrameBuilder.CenterOfMass(new SingleBonePositions(this, index), _frames.SegmentMass).X;
+            if (weight != 0f)
+            {
+                bones.Add(index);
+                weights.Add(weight);
+            }
+        }
+        return (bones.ToArray(), weights.ToArray());
+    }
+
+    // Every bone at the origin except one, one unit along X.
+    private readonly struct SingleBonePositions : IBonePositions
+    {
+        private readonly HumanoidRig _rig;
+        private readonly int _index;
+
+        public SingleBonePositions(HumanoidRig rig, int index)
+        {
+            _rig = rig;
+            _index = index;
+        }
+
+        public bool Has(HumanBodyBone bone) => _rig.HasBone(bone);
+        public Float3 Get(HumanBodyBone bone) => _rig.GetSkeletonBoneIndex(bone) == _index ? new Float3(1f, 0f, 0f) : Float3.Zero;
     }
 
     public Skeleton Skeleton => _skeleton;
@@ -146,8 +228,32 @@ public sealed class HumanoidRig
 
     internal int[] CodecOrder => _codecOrder;
 
+    // The codec order restricted to the bones encoding has to work out.
+    internal int[] EncodeOrder => _encodeOrder;
+
+    /// <summary>The mass weighted centre of the body, from model space bone positions indexed by skeleton bone.</summary>
+    internal Float3 CenterOfMass(Float3[] position)
+    {
+        Float3 sum = Float3.Zero;
+        for (int i = 0; i < _massBones.Length; i++)
+            sum += position[_massBones[i]] * _massWeights[i];
+        return sum;
+    }
+
+    /// <summary>The mass weighted centre of the body in a pose.</summary>
+    internal Float3 CenterOfMass(Pose pose)
+    {
+        Float3 sum = Float3.Zero;
+        for (int i = 0; i < _massBones.Length; i++)
+            sum += pose.GetModelSpaceTransform(_massBones[i]).position * _massWeights[i];
+        return sum;
+    }
+
     // The bones that turn with the body: the mapped ones and everything under them.
     internal bool[] BodyBones => _bodyBones;
+
+    // The body bones whose parent is not a body bone. Turning the body only changes their local rotation.
+    internal int[] BodyRoots => _bodyRoots;
 
     // Turns body values from the axes of a rig facing +Z into the rig's bind body frame, where mirroring happens.
     internal Quaternion FacingToBody => Quaternion.Normalize(Quaternion.Inverse(_frames.Facing) * _frames.BodyBind);
@@ -181,6 +287,10 @@ public sealed class HumanoidRig
     internal Quaternion GetPre(HumanBodyBone bone) => _frames.Pre[(int)bone];
 
     internal Quaternion GetPost(HumanBodyBone bone) => _frames.Post[(int)bone];
+
+    internal Quaternion GetPreInverse(HumanBodyBone bone) => _preInverse[(int)bone];
+
+    internal Quaternion GetPostInverse(HumanBodyBone bone) => _postInverse[(int)bone];
 
     // The bone's local rotation in the T pose the rig was measured in.
     internal Quaternion GetTPoseLocal(int skeletonIndex) => _frames.TPoseLocal[skeletonIndex];

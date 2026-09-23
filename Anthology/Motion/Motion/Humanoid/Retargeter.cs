@@ -54,7 +54,7 @@ public static class Retargeter
         Quaternion facing = rig.Facing;
         Quaternion body = HumanoidFrameBuilder.BodyFrame(positions) ?? rig.BodyBindRotation;
         result.BodyRotation = Quaternion.Normalize(Quaternion.Inverse(facing) * body * Quaternion.Inverse(rig.BodyBindRotation) * facing);
-        result.BodyPosition = Quaternion.Inverse(facing) * (HumanoidFrameBuilder.CenterOfMass(positions, rig.SegmentMass) - rig.Floor) * (1f / scale);
+        result.BodyPosition = Quaternion.Inverse(facing) * (rig.CenterOfMass(position) - rig.Floor) * (1f / scale);
 
         HumanMuscleSpace.Encode(rig, world, result);
 
@@ -98,14 +98,18 @@ public static class Retargeter
         Quaternion desired = Quaternion.Normalize(facing * humanPose.BodyRotation * Quaternion.Inverse(facing) * rig.BodyBindRotation);
         Quaternion turn = HumanoidFrameBuilder.BodyFrame(positions) is { } current ? Quaternion.Normalize(desired * Quaternion.Inverse(current)) : Quaternion.Identity;
         Float3 hipsPosition = result.GetModelSpaceTransform(hipsIndex).position;
-        Float3 center = HumanoidFrameBuilder.CenterOfMass(positions, rig.SegmentMass);
+        Float3 center = rig.CenterOfMass(result);
         hipsPosition = rig.Floor + facing * humanPose.BodyPosition * rig.Scale - turn * (center - hipsPosition);
 
-        bool[] body = rig.BodyBones;
-        for (int index = 0; index < skeleton.BoneCount; index++)
-            if (body[index])
-                world[index] = Quaternion.Normalize(turn * world[index]);
-        WriteLocals(skeleton, world, result);
+        // Every body bone turns with its parent, so only the bones the body hangs from change locally.
+        foreach (int root in rig.BodyRoots)
+        {
+            int parent = parents[root];
+            Quaternion parentWorld = parent == Skeleton.InvalidIndex ? Quaternion.Identity : world[parent];
+            Quaternion turned = Quaternion.Normalize(turn * world[root]);
+            Transform3D local = result.GetTransform(root);
+            result.SetTransform(root, new Transform3D(local.position, Quaternion.Normalize(Quaternion.Inverse(parentWorld) * turned), local.scale));
+        }
 
         int hipsParent = parents[hipsIndex];
         Transform3D parentModel = hipsParent == Skeleton.InvalidIndex ? Transform3D.Identity : result.GetModelSpaceTransform(hipsParent);
@@ -128,7 +132,7 @@ public static class Retargeter
             Transform3D bind = skeleton.GetBoneParentSpaceTransform(index);
             int parent = parents[index];
             Quaternion parentWorld = parent == Skeleton.InvalidIndex ? Quaternion.Identity : world[parent];
-            result.WriteLocal(index, new Transform3D(bind.position, Quaternion.Normalize(Quaternion.Inverse(parentWorld) * world[index]), bind.scale));
+            result.WriteLocal(index, new Transform3D(bind.position, Quaternion.Normalize(Quaternion.Conjugate(parentWorld) * world[index]), bind.scale));
         }
         result.FinishWrite(PoseState.Pose);
         result.CalculateModelSpaceTransforms();

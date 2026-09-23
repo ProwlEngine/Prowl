@@ -49,6 +49,68 @@ internal sealed class BoneHierarchy
                 state[chain[i]] = 2;
             }
         }
+
+        BuildSubtreeOrder(count);
+    }
+
+    /// <summary>
+    /// Every bone depth first, so each bone is followed directly by all of its descendants. A bone's
+    /// descendants are the positions from <see cref="SubtreeStart"/> up to <see cref="SubtreeEnd"/>.
+    /// </summary>
+    public int[] SubtreeOrder { get; private set; } = null!;
+
+    /// <summary>A bone's position in <see cref="SubtreeOrder"/>.</summary>
+    public int[] SubtreeStart { get; private set; } = null!;
+
+    /// <summary>The position just past a bone's last descendant in <see cref="SubtreeOrder"/>.</summary>
+    public int[] SubtreeEnd { get; private set; } = null!;
+
+    private void BuildSubtreeOrder(int count)
+    {
+        var childCount = new int[count + 1];
+        for (int i = 0; i < count; i++)
+            if (Parents[i] >= 0)
+                childCount[Parents[i] + 1]++;
+        for (int i = 0; i < count; i++)
+            childCount[i + 1] += childCount[i];
+
+        var children = new int[count];
+        var fill = (int[])childCount.Clone();
+        for (int i = 0; i < count; i++)
+            if (Parents[i] >= 0)
+                children[fill[Parents[i]]++] = i;
+
+        SubtreeOrder = new int[count];
+        SubtreeStart = new int[count];
+        SubtreeEnd = new int[count];
+        var stack = new int[count];
+        int written = 0;
+        for (int root = 0; root < count; root++)
+        {
+            if (Parents[root] >= 0)
+                continue;
+
+            int depth = 0;
+            stack[depth++] = root;
+            while (depth > 0)
+            {
+                int bone = stack[--depth];
+                SubtreeStart[bone] = written;
+                SubtreeOrder[written++] = bone;
+                for (int c = childCount[bone + 1] - 1; c >= childCount[bone]; c--)
+                    stack[depth++] = children[c];
+            }
+        }
+
+        for (int k = count - 1; k >= 0; k--)
+        {
+            int bone = SubtreeOrder[k];
+            if (SubtreeEnd[bone] == 0)
+                SubtreeEnd[bone] = k + 1;
+            int parent = Parents[bone];
+            if (parent >= 0 && SubtreeEnd[parent] < SubtreeEnd[bone])
+                SubtreeEnd[parent] = SubtreeEnd[bone];
+        }
     }
 
     /// <summary>Every bone, each parent before its children.</summary>

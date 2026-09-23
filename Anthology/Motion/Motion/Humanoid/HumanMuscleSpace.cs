@@ -22,6 +22,7 @@ internal static class HumanMuscleSpace
 
     // Below this bend the upper twist eases toward the bone's own twist.
     private const float StraightDegrees = 10f;
+    private static readonly float s_straightSin = MathF.Sin(StraightDegrees * DegToRad);
 
     private static readonly (HumanBodyBone Upper, HumanBodyBone Lower, HumanBodyBone End)[] s_limbs =
     {
@@ -61,10 +62,11 @@ internal static class HumanMuscleSpace
                 Float3 angles = Angles(rig, pose, bone);
                 float share = TwistShare(rig, bone);
                 Quaternion post = rig.GetPost(bone);
-                Quaternion local = rig.GetPre(bone) * Swing(angles.Y, angles.Z) * Quaternion.AxisAngle(s_x, angles.X * share) * Quaternion.Inverse(post);
+                Quaternion postInverse = rig.GetPostInverse(bone);
+                Quaternion local = rig.GetPre(bone) * Swing(angles.Y, angles.Z) * TwistX(angles.X * share) * postInverse;
                 world[index] = Quaternion.Normalize(parentNominal * local);
                 nominal[index] = share < 1f
-                    ? Quaternion.Normalize(world[index] * post * Quaternion.AxisAngle(s_x, angles.X * (1f - share)) * Quaternion.Inverse(post))
+                    ? Quaternion.Normalize(world[index] * post * TwistX(angles.X * (1f - share)) * postInverse)
                     : world[index];
             }
             else
@@ -84,7 +86,7 @@ internal static class HumanMuscleSpace
         int[] parents = skeleton.SanitizedParentIndices;
         int hipsIndex = rig.GetSkeletonBoneIndex(HumanBodyBone.Hips);
 
-        foreach (int index in rig.CodecOrder)
+        foreach (int index in rig.EncodeOrder)
         {
             int parent = parents[index];
             Quaternion parentNominal = parent == Skeleton.InvalidIndex ? Quaternion.Identity : nominal[parent];
@@ -92,7 +94,7 @@ internal static class HumanMuscleSpace
             if (index == hipsIndex || !rig.TryGetHumanBone(index, out HumanBodyBone bone))
             {
                 Quaternion parentWorld = parent == Skeleton.InvalidIndex ? Quaternion.Identity : world[parent];
-                nominal[index] = Quaternion.Normalize(parentNominal * Quaternion.Inverse(parentWorld) * world[index]);
+                nominal[index] = Quaternion.Normalize(parentNominal * Quaternion.Conjugate(parentWorld) * world[index]);
                 continue;
             }
 
@@ -101,12 +103,17 @@ internal static class HumanMuscleSpace
             int limb = LimbOf(bone);
             if (limb < 0)
             {
-                Float3 angles = Decompose(Quaternion.Inverse(rig.GetPre(bone)) * Quaternion.Inverse(parentNominal) * world[index] * rig.GetPost(bone));
-                Store(rig, result, bone, angles);
+                Split(rig.GetPreInverse(bone) * Quaternion.Conjugate(parentNominal) * world[index] * rig.GetPost(bone), out Quaternion twist, out Quaternion swing);
+                bool keepX = !Locked(bone, MuscleAxis.X), keepY = !Locked(bone, MuscleAxis.Y), keepZ = !Locked(bone, MuscleAxis.Z);
+                Store(rig, result, bone, new Float3(
+                    keepX ? 2f * MathF.Atan2(twist.X, twist.W) : 0f,
+                    keepY ? 2f * MathF.Atan2(swing.Y, swing.W) : 0f,
+                    keepZ ? 2f * MathF.Atan2(swing.Z, swing.W) : 0f));
 
                 // Children are measured against what decoding rebuilds, which drops the axes the bone has no muscle for.
-                Float3 kept = new(Locked(bone, MuscleAxis.X) ? 0f : angles.X, Locked(bone, MuscleAxis.Y) ? 0f : angles.Y, Locked(bone, MuscleAxis.Z) ? 0f : angles.Z);
-                nominal[index] = Quaternion.Normalize(parentNominal * rig.GetPre(bone) * Swing(kept.Y, kept.Z) * Quaternion.AxisAngle(s_x, kept.X) * Quaternion.Inverse(rig.GetPost(bone)));
+                Quaternion keptSwing = Quaternion.Normalize(new Quaternion(0f, keepY ? swing.Y : 0f, keepZ ? swing.Z : 0f, swing.W));
+                Quaternion keptTwist = keepX ? twist : Quaternion.Identity;
+                nominal[index] = Quaternion.Normalize(parentNominal * rig.GetPre(bone) * keptSwing * keptTwist * rig.GetPostInverse(bone));
             }
             else if (s_limbs[limb].Upper == bone)
             {
@@ -129,15 +136,15 @@ internal static class HumanMuscleSpace
         int end = rig.GetSkeletonBoneIndex(limb.End);
         Quaternion preUpper = rig.GetPre(limb.Upper), postUpper = rig.GetPost(limb.Upper);
         Quaternion preLower = rig.GetPre(limb.Lower), postLower = rig.GetPost(limb.Lower);
-        Quaternion preEnd = rig.GetPre(limb.End), postEnd = rig.GetPost(limb.End);
+        Quaternion postEnd = rig.GetPost(limb.End);
 
         // Bones between the three joints that are not mapped ride along as they are.
-        Quaternion between = Quaternion.Inverse(world[upper]) * world[rig.GetFrameParent(limb.Lower)];
-        Quaternion betweenEnd = Quaternion.Inverse(world[lower]) * world[rig.GetFrameParent(limb.End)];
+        Quaternion between = Quaternion.Conjugate(world[upper]) * world[rig.GetFrameParent(limb.Lower)];
+        Quaternion betweenEnd = Quaternion.Conjugate(world[lower]) * world[rig.GetFrameParent(limb.End)];
 
-        Float3 upperAngles = Decompose(Quaternion.Inverse(preUpper) * Quaternion.Inverse(parentNominal) * world[upper] * postUpper);
+        Float3 upperAngles = Decompose(rig.GetPreInverse(limb.Upper) * Quaternion.Conjugate(parentNominal) * world[upper] * postUpper);
         Quaternion swung = parentNominal * preUpper * Swing(upperAngles.Y, upperAngles.Z);
-        Quaternion toLower = Quaternion.Inverse(postUpper) * between * preLower;
+        Quaternion toLower = rig.GetPostInverse(limb.Upper) * between * preLower;
 
         // The lower bone's own aim, so bones between it and the end joint that are not mapped do not bend the limb.
         Float3 wrist = world[lower] * postLower * s_x;
@@ -145,21 +152,21 @@ internal static class HumanMuscleSpace
         float guess = share > 1e-4f ? upperAngles.X / share : 0f;
         float twist = HingeTwist(rig, limb.Lower, Quaternion.Inverse(swung) * wrist, toLower, guess);
 
-        Quaternion upperNominal = Quaternion.Normalize(swung * Quaternion.AxisAngle(s_x, twist) * Quaternion.Inverse(postUpper));
+        Quaternion upperNominal = Quaternion.Normalize(swung * TwistX(twist) * rig.GetPostInverse(limb.Upper));
         Quaternion lowerFrame = upperNominal * between * preLower;
         Float3 v = Quaternion.Inverse(lowerFrame) * wrist;
         float bend = MathF.Atan2(v.Y, v.X);
 
         // The lower bone's twist makes the end bone's twist about its own axis zero.
         Quaternion bent = lowerFrame * Swing(0f, bend);
-        Quaternion lead = Quaternion.Inverse(preEnd) * Quaternion.Inverse(betweenEnd) * postLower;
+        Quaternion lead = rig.GetPreInverse(limb.End) * Quaternion.Inverse(betweenEnd) * postLower;
         Quaternion trail = Quaternion.Inverse(bent) * world[end] * postEnd;
         float a = (lead * trail).X;
         float b = (lead * new Quaternion(-1f, 0f, 0f, 0f) * trail).X;
         float lowerTwist = Wrap(2f * MathF.Atan2(-a, b));
 
-        lowerNominal = Quaternion.Normalize(bent * Quaternion.AxisAngle(s_x, lowerTwist) * Quaternion.Inverse(postLower));
-        Float3 endAngles = Decompose(lead * Quaternion.AxisAngle(s_x, -lowerTwist) * trail);
+        lowerNominal = Quaternion.Normalize(bent * TwistX(lowerTwist) * rig.GetPostInverse(limb.Lower));
+        Float3 endAngles = Decompose(lead * TwistX(-lowerTwist) * trail);
 
         Store(rig, result, limb.Upper, new Float3(twist, upperAngles.Y, upperAngles.Z));
         Store(rig, result, limb.Lower, new Float3(lowerTwist, 0f, bend));
@@ -181,7 +188,7 @@ internal static class HumanMuscleSpace
         float r = MathF.Sqrt(a * a + b * b);
         if (r < 1e-6f)
             return guess;
-        float weight = Math.Clamp(r / (MathF.Sin(StraightDegrees * DegToRad) * Float3.Length(u)), 0f, 1f);
+        float weight = Math.Clamp(r / (s_straightSin * Float3.Length(u)), 0f, 1f);
         weight = weight * weight * (3f - 2f * weight);
 
         float phase = MathF.Atan2(b, a);
@@ -207,7 +214,7 @@ internal static class HumanMuscleSpace
     // How far the bend a candidate twist leaves on the lower bone lies outside its muscle range.
     private static float Excess(HumanoidRig rig, HumanBodyBone lower, float twist, Float3 u, Quaternion toLower)
     {
-        Float3 v = Quaternion.Inverse(Quaternion.AxisAngle(s_x, twist) * toLower) * u;
+        Float3 v = Quaternion.Inverse(TwistX(twist) * toLower) * u;
         return MathF.Abs(MuscleValue(rig, lower, MuscleAxis.Z, MathF.Atan2(v.Y, v.X))) - 1f;
     }
 
@@ -232,7 +239,32 @@ internal static class HumanMuscleSpace
 
     /// <summary>The swing about Y then Z from the tangents of the half angles.</summary>
     internal static Quaternion Swing(float y, float z)
-        => Quaternion.Normalize(new Quaternion(0f, MathF.Tan(y * 0.5f), MathF.Tan(z * 0.5f), 1f));
+        => Quaternion.Normalize(new Quaternion(0f, y == 0f ? 0f : MathF.Tan(y * 0.5f), z == 0f ? 0f : MathF.Tan(z * 0.5f), 1f));
+
+    /// <summary>
+    /// Splits a rotation into a twist about X and the swing before it, as rotations, with no
+    /// trigonometry. The twist and the swing have a positive W, and the swing has no X part.
+    /// </summary>
+    private static void Split(Quaternion q, out Quaternion twist, out Quaternion swing)
+    {
+        if (q.W < 0f)
+            q = -q;
+        float length = MathF.Sqrt(q.X * q.X + q.W * q.W);
+        twist = length > 1e-12f ? new Quaternion(q.X / length, 0f, 0f, q.W / length) : Quaternion.Identity;
+        swing = q * new Quaternion(-twist.X, 0f, 0f, twist.W);
+        if (swing.W < 0f)
+            swing = -swing;
+        swing = new Quaternion(0f, swing.Y, swing.Z, swing.W);
+    }
+
+    /// <summary>A turn about X, with no trigonometry at all for a zero angle.</summary>
+    private static Quaternion TwistX(float angle)
+    {
+        if (angle == 0f)
+            return Quaternion.Identity;
+        (float sin, float cos) = MathF.SinCos(angle * 0.5f);
+        return new Quaternion(sin, 0f, 0f, cos);
+    }
 
     /// <summary>Splits a rotation into a swing (tangent half angle form) followed by a twist about X.</summary>
     internal static Float3 Decompose(Quaternion q)
@@ -240,7 +272,7 @@ internal static class HumanMuscleSpace
         if (q.W < 0f)
             q = -q;
         float twist = 2f * MathF.Atan2(q.X, q.W);
-        Quaternion swing = q * Quaternion.AxisAngle(s_x, -twist);
+        Quaternion swing = q * TwistX(-twist);
         if (swing.W < 0f)
             swing = -swing;
         return new Float3(twist, 2f * MathF.Atan2(swing.Y, swing.W), 2f * MathF.Atan2(swing.Z, swing.W));

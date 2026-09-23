@@ -17,6 +17,11 @@ public sealed class Pose
     private ModelSpaceCache _cache;
     private PoseState _state;
 
+    // Bones written since the cache was last complete, as a range of the skeleton's depth first order.
+    // Only that range is rebuilt, and a bone outside it is still up to date.
+    private int _dirtyStart;
+    private int _dirtyEnd;
+
     private enum ModelSpaceCache : byte { None, LowLod, All }
 
     /// <summary>Creates an unset pose sized for the given skeleton.</summary>
@@ -39,7 +44,7 @@ public sealed class Pose
     public bool IsValid => _state != PoseState.Unset;
 
     /// <summary>True if the model-space cache is currently valid.</summary>
-    public bool HasModelSpaceTransforms => _cache == ModelSpaceCache.All;
+    public bool HasModelSpaceTransforms => _cache == ModelSpaceCache.All && _dirtyEnd <= _dirtyStart;
 
     /// <summary>The parent-space transforms (the authoritative data).</summary>
     public IReadOnlyList<Transform3D> Transforms => _local;
@@ -65,23 +70,82 @@ public sealed class Pose
     {
         _local[boneIndex] = transform;
         _state = _state is PoseState.AdditivePose or PoseState.ZeroPose ? PoseState.AdditivePose : PoseState.Pose;
-        _cache = ModelSpaceCache.None;
+        if (_cache == ModelSpaceCache.All)
+            MarkDirty(boneIndex);
+        else
+            _cache = ModelSpaceCache.None;
     }
 
     /// <summary>Gets a bone's model-space (global) transform, computing the cache on demand.</summary>
     public Transform3D GetModelSpaceTransform(int boneIndex)
     {
-        bool cached = _cache == ModelSpaceCache.All || (_cache == ModelSpaceCache.LowLod && _skeleton.IsInLowLodSet(boneIndex));
-        if (!cached)
+        if (_cache == ModelSpaceCache.All)
+        {
+            if (_dirtyEnd > _dirtyStart)
+            {
+                int position = _skeleton.SubtreeStart[boneIndex];
+                if (position >= _dirtyStart && position < _dirtyEnd)
+                    RebuildDirty();
+            }
+        }
+        else if (_cache != ModelSpaceCache.LowLod || !_skeleton.IsInLowLodSet(boneIndex))
+        {
             CalculateModelSpaceTransforms();
+        }
         return _model[boneIndex];
     }
 
-    /// <summary>Computes the model-space cache from the parent-space transforms.</summary>
+    /// <summary>
+    /// Brings the model-space cache up to date. Only the bones written since it was last complete are
+    /// rebuilt, and a cache that is already complete is left as it is.
+    /// </summary>
     public void CalculateModelSpaceTransforms()
     {
-        TransformOps.ComputeModelSpace(_local, _skeleton.EvaluationOrder, _skeleton.SanitizedParentIndices, _model);
+        if (_cache == ModelSpaceCache.All)
+        {
+            if (_dirtyEnd > _dirtyStart)
+                RebuildDirty();
+            return;
+        }
+        Rebuild(0, _local.Length);
         _cache = ModelSpaceCache.All;
+        _dirtyStart = _dirtyEnd = 0;
+    }
+
+    private void MarkDirty(int boneIndex)
+    {
+        int start = _skeleton.SubtreeStart[boneIndex];
+        int end = _skeleton.SubtreeEnd[boneIndex];
+        if (_dirtyEnd <= _dirtyStart)
+        {
+            _dirtyStart = start;
+            _dirtyEnd = end;
+            return;
+        }
+        if (start < _dirtyStart) _dirtyStart = start;
+        if (end > _dirtyEnd) _dirtyEnd = end;
+    }
+
+    private void RebuildDirty()
+    {
+        Rebuild(_dirtyStart, _dirtyEnd);
+        _dirtyStart = _dirtyEnd = 0;
+    }
+
+    // Every bone in the range is rebuilt from its parent, which comes earlier in the depth first order
+    // and is either outside the range and still valid, or already rebuilt.
+    private void Rebuild(int start, int end)
+    {
+        int[] order = _skeleton.SubtreeOrder;
+        int[] parents = _skeleton.SanitizedParentIndices;
+        Transform3D[] local = _local;
+        Transform3D[] model = _model;
+        for (int k = start; k < end; k++)
+        {
+            int bone = order[k];
+            int parent = parents[bone];
+            model[bone] = parent < 0 ? local[bone] : TransformOps.Combine(model[parent], local[bone]);
+        }
     }
 
     /// <summary>
@@ -98,10 +162,17 @@ public sealed class Pose
         }
         TransformOps.ComputeModelSpace(_local, _skeleton.LowLodEvaluationOrder, _skeleton.SanitizedParentIndices, _model);
         _cache = ModelSpaceCache.LowLod;
+        _dirtyStart = _dirtyEnd = 0;
     }
 
     /// <summary>Invalidates the model-space cache.</summary>
-    public void ClearModelSpaceTransforms() => _cache = ModelSpaceCache.None;
+    public void ClearModelSpaceTransforms() => Invalidate();
+
+    private void Invalidate()
+    {
+        _cache = ModelSpaceCache.None;
+        _dirtyStart = _dirtyEnd = 0;
+    }
 
     /// <summary>Sets the pose to the skeleton's reference pose.</summary>
     public void SetToReferencePose(bool calculateModelSpace = true)
@@ -153,8 +224,14 @@ public sealed class Pose
             Array.Clear(_floats, shared, _floats.Length - shared);
         _state = other._state;
         _cache = other._cache;
+        _dirtyStart = other._dirtyStart;
+        _dirtyEnd = other._dirtyEnd;
         if (_cache != ModelSpaceCache.None)
             Array.Copy(other._model, _model, _model.Length);
+
+        // The dirty range is measured in the source skeleton's bone order.
+        if (_dirtyEnd > _dirtyStart && !ReferenceEquals(other._skeleton, _skeleton))
+            Invalidate();
     }
 
     // Internal bulk-write helpers used by the clip sampler and the blender (no per-bone state churn).
@@ -167,6 +244,6 @@ public sealed class Pose
     internal void FinishWrite(PoseState state)
     {
         _state = state;
-        _cache = ModelSpaceCache.None;
+        Invalidate();
     }
 }

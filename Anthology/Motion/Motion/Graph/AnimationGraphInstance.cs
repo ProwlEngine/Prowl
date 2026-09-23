@@ -78,7 +78,6 @@ public sealed class AnimationGraphInstance
 
         _previousPose = new Pose(skeleton);
         _previousPose.SetToReferencePose();
-        _previousPose.CalculateModelSpaceTransforms();
 
         _context = new GraphContext
         {
@@ -249,7 +248,6 @@ public sealed class AnimationGraphInstance
         if (_root.IsInitialized)
             _root.Shutdown(_context);
         _previousPose.SetToReferencePose();
-        _previousPose.CalculateModelSpaceTransforms();
     }
 
     private void BeginTick(float deltaTime, Transform3D worldTransform)
@@ -268,7 +266,6 @@ public sealed class AnimationGraphInstance
     private void FinishTick()
     {
         _previousPose.CopyFrom(_root.Pose);
-        _previousPose.CalculateModelSpaceTransforms();
     }
 
     /// <summary>The graph these instances were built from.</summary>
