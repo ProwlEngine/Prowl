@@ -30,6 +30,12 @@ public abstract class GraphAnimator : AnimatorBase
     /// <summary>The underlying graph instance (for advanced access / inspection).</summary>
     public AnimationGraphInstance Graph => _instance;
 
+    /// <summary>
+    /// Lets the graph's own nodes ask the engine where the ground is, through this animator's
+    /// <see cref="AnimatorBase.RaycastGround"/>.
+    /// </summary>
+    protected void ProbeGroundWith(IGroundProbe probe) => _instance.Ground = probe;
+
     /// <summary>Events sampled during the most recent update.</summary>
     public SampledEventsBuffer Events => _instance.Events;
 

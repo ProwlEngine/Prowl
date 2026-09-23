@@ -4,7 +4,16 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// Base for the engine-facing animator components. It owns the working <see cref="Pose"/>, advances
+/// A way for a graph to ask the world where the ground is, in world space. The engine implements it;
+/// Motion only calls it.
+/// </summary>
+public interface IGroundProbe
+{
+    /// <summary>Casts a ray and reports what it lands on, or false when it hits nothing.</summary>
+    bool Raycast(Float3 worldOrigin, Float3 worldDirection, float maxDistance, out Float3 worldPoint, out Float3 worldNormal);
+}
+
+/// <summary> It owns the working <see cref="Pose"/>, advances
 /// playback, optionally solves humanoid foot IK against the engine's collision world, and pushes the
 /// result out to engine objects.
 ///
