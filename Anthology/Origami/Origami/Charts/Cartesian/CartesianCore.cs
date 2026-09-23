@@ -294,6 +294,17 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
         return Self;
     }
 
+    /// <summary>Add a series of pre-sampled values. Index in <paramref name="values"/> maps to the x axis.</summary>
+    public TSelf Series(string label, Color color, ReadOnlySpan<double> values)
+    {
+        var s = new CartesianSeries<T> { Label = label ?? "", Color = color };
+        for (int i = 0; i < values.Length; i++)
+            s.Points.Add((i, values[i], default));
+        _series.Add(s);
+        _lastSeries = s;
+        return Self;
+    }
+
     /// <summary>Name used for the implicit series produced by <see cref="X"/>/<see cref="Y"/> selectors
     /// over the chart's data set.</summary>
     public TSelf Name(string text) { _pointSeriesName = text ?? ""; return Self; }

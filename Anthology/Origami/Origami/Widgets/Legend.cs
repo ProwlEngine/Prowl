@@ -52,7 +52,7 @@ public sealed class LegendBuilder
     private readonly OrigamiTheme _theme;
     private readonly IReadOnlyList<LegendEntry> _entries;
 
-    private float _width = 125f;
+    private UnitValue _width = UnitValue.Pixels(125f);
     private float _padding;
     private float _swatchSize = 12f;
     private float _rowGap = 2f;
@@ -70,6 +70,7 @@ public sealed class LegendBuilder
 
     /// <summary>Width, in pixels, of the legend column. Defaults to 125.</summary>
     public LegendBuilder Width(float width) { _width = MathF.Max(1f, width); return this; }
+    public LegendBuilder Width(UnitValue width) { _width = width; return this; }
 
     /// <summary>Top inset of the legend column, so its first row lines up with whatever sits beside it
     /// (a chart's plot area, say) rather than its own container's edge. Defaults to 0.</summary>

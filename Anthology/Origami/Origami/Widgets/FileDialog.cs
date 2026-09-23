@@ -105,6 +105,7 @@ public static class FileDialog
         public List<FileEntry> Entries = [];
         public int SortColumn;
         public bool SortAscending = true;
+        public bool ShowHiddenEntries = false;
         public bool Initialized;
 
         // Navigation history (back / forward)
@@ -143,7 +144,7 @@ public static class FileDialog
         string p = startPath ?? AppContext.BaseDirectory;
         if (!Directory.Exists(p)) p = AppContext.BaseDirectory;
         st.Path = Path.GetFullPath(p);
-        st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending);
+        st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries);
         st.History = new List<string> { st.Path };
         st.HistoryIndex = 0;
         st.Initialized = true;
@@ -168,7 +169,7 @@ public static class FileDialog
         var labelFont = theme.Medium ?? font;
 
         // ── navigation / sort (local, per-id) ────────────────────
-        void Reload() => st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending);
+        void Reload() => st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries);
 
         void NavigateTo(string path, bool addHistory)
         {
@@ -282,11 +283,13 @@ public static class FileDialog
             : st.Entries.Where(e => e.Name.Contains(st.Search, StringComparison.OrdinalIgnoreCase)).ToList();
 
         // ── small reusable pieces ────────────────────────────────
-        void TbBtn(string bid, IconPainter painter, bool enabled, Action onClick)
+        void TbBtn(string bid, IconPainter painter, bool enabled, Action onClick, string? tooltip = null)
         {
             var col = enabled ? ink.C400 : ink.C200;
             var b = paper.Box(bid).Width(30).Height(26).Rounded(m.Rounding)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch());   // vertically center in the toolbar row
+            if (tooltip != null)
+                b.Tooltip(tooltip!);
             if (enabled) { b.Hovered.BackgroundColor(theme.Hover).End(); b.OnClick(0, (_, _) => onClick()); }
             using (b.Enter())
                 paper.Draw((canvas, rect) => DrawIcon(canvas, rect, painter, 15f, col));
@@ -412,6 +415,7 @@ public static class FileDialog
                 VC($"{id}_swrap", UnitValue.Pixels(132), toolbarH, () =>
                     Origami.TextField(paper, $"{id}_search", st.Search, v => st.Search = v)
                         .Search("Search").Width(UnitValue.Stretch()).Height(26).Show());
+                TbBtn($"{id}_toggle_hidden", st.ShowHiddenEntries ? DrawOpenEye : DrawClosedEye, true, () => { st.ShowHiddenEntries = !st.ShowHiddenEntries; Reload(); }, tooltip: st.ShowHiddenEntries ? "Hide hidden files" : "Show hidden files");
                 TbBtn($"{id}_newf", DrawPlus, true, () => { st.CreatingFolder = !st.CreatingFolder; st.NewFolderName = "New Folder"; });
                 if (onClose != null)
                     TbBtn($"{id}_close", DrawClose, true, onClose);
@@ -577,7 +581,16 @@ public static class FileDialog
                     .Text(mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font).TextColor(ink.C200)
                     .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 VC($"{id}_fnwrap", UnitValue.Stretch(), footH, () =>
-                    Origami.TextField(paper, $"{id}_fn", st.FileName, v => st.FileName = v)
+                    Origami.TextField(paper, $"{id}_fn", st.FileName, v =>
+                    {
+                        if (Path.IsPathRooted(v.Trim(['"', '\''])))
+                        {
+                            st.Selected = v.Trim(['"', '\'']);
+                            st.FileName = Path.GetFileName(st.Selected);
+                        }
+                        else
+                            st.Selected = v;
+                    })
                         .Width(UnitValue.Stretch()).Show());
                 VC($"{id}_cwrap", UnitValue.Auto, footH, () =>
                     Origami.Button(paper, $"{id}_cancel", "Cancel", () =>
@@ -856,8 +869,16 @@ public static class FileDialog
         c.Stroke();
         c.RestoreState();
     }
+    private static void DrawOpenEye(Canvas c, float cx, float cy, float s, Color col)
+    {
+        OrigamiIconSet.Eye.Draw(c, new Rect(cx - s/2, cy - s/2, cx + s / 2, cy + s / 2), col);
+    }
+    private static void DrawClosedEye(Canvas c, float cx, float cy, float s, Color col)
+    {
+        OrigamiIconSet.EyeOff.Draw(c, new Rect(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2), col);
+    }
 
-    private static List<FileEntry> LoadDir(string path, int sortColumn, bool ascending)
+    private static List<FileEntry> LoadDir(string path, int sortColumn, bool ascending, bool showHidden = false)
     {
         var list = new List<FileEntry>();
         try
@@ -865,12 +886,12 @@ public static class FileDialog
             var di = new DirectoryInfo(path);
             foreach (var dir in di.EnumerateDirectories())
             {
-                if ((dir.Attributes & FileAttributes.Hidden) != 0) continue;
+                if (!showHidden && (dir.Attributes & FileAttributes.Hidden) != 0) continue;
                 list.Add(new FileEntry { Name = dir.Name, FullPath = dir.FullName, IsDirectory = true, LastModified = dir.LastWriteTime });
             }
             foreach (var file in di.EnumerateFiles())
             {
-                if ((file.Attributes & FileAttributes.Hidden) != 0) continue;
+                if (!showHidden && (file.Attributes & FileAttributes.Hidden) != 0) continue;
                 list.Add(new FileEntry { Name = file.Name, FullPath = file.FullName, IsDirectory = false, Size = file.Length, LastModified = file.LastWriteTime });
             }
         }

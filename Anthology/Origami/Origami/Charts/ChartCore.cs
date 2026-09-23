@@ -31,7 +31,7 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
     private string _title = "";
 
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 220f;
+    private UnitValue _height = UnitValue.Pixels(220f);
     private float _padding = 0f;
 
     private OrigamiVariant _variant = OrigamiVariant.Primary;
@@ -70,7 +70,9 @@ public abstract class ChartCore<TSelf, T> where TSelf : ChartCore<TSelf, T>
     public TSelf Width(float width) { _width = MathF.Max(32f, width); return Self; }
     public TSelf Width(UnitValue width) { _width = width; return Self; }
     public TSelf Height(float height) { _height = MathF.Max(32f, height); return Self; }
+    public TSelf Height(UnitValue height) { _height = height; return Self; }
     public TSelf Size(float width, float height) { _width = MathF.Max(32f, width); _height = MathF.Max(32f, height); return Self; }
+    public TSelf Size(UnitValue width, UnitValue height) { _width = width; _height = height; return Self; }
     public TSelf Padding(float padding) { _padding = MathF.Max(0f, padding); return Self; }
 
     public TSelf Variant(OrigamiVariant v) { _variant = v; return Self; }
