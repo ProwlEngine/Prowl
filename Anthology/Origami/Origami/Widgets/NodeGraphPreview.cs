@@ -77,7 +77,8 @@ public static class NodeGraphPreview
 
     /// <summary>
     /// Draws the graph scaled to fit <paramref name="area"/>. <paramref name="wires"/> may be null to
-    /// draw the nodes alone, which is usually enough at thumbnail size.
+    /// draw the nodes alone, which is usually enough at thumbnail size. <paramref name="groups"/> are
+    /// drawn behind the nodes as tinted boxes, and count toward what has to fit.
     /// </summary>
     public static void Paint(
         Canvas canvas,
@@ -86,11 +87,23 @@ public static class NodeGraphPreview
         IReadOnlyList<GraphConnection>? wires,
         OrigamiTheme theme,
         float padding = 5f,
-        float minBoxSize = 2f)
+        float minBoxSize = 2f,
+        IReadOnlyList<GraphGroup>? groups = null)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(theme);
         if (!TryMeasure(nodes, theme.Metrics, out Float2 min, out Float2 size)) return;
+
+        if (groups is { Count: > 0 })
+        {
+            Float2 max = min + size;
+            foreach (var g in groups)
+            {
+                min = new Float2(Math.Min(min.X, g.Position.X), Math.Min(min.Y, g.Position.Y));
+                max = new Float2(Math.Max(max.X, g.Position.X + g.Size.X), Math.Max(max.Y, g.Position.Y + g.Size.Y));
+            }
+            size = new Float2(Math.Max(max.X - min.X, 1f), Math.Max(max.Y - min.Y, 1f));
+        }
 
         float w = (float)area.Size.X - padding * 2f, h = (float)area.Size.Y - padding * 2f;
         if (w <= 1f || h <= 1f) return;
@@ -102,6 +115,18 @@ public static class NodeGraphPreview
 
         Float2 Place(Float2 graphPoint)
             => new(ox + (graphPoint.X - min.X) * scale, oy + (graphPoint.Y - min.Y) * scale);
+
+        if (groups is { Count: > 0 })
+        {
+            foreach (var g in groups)
+            {
+                Float2 p = Place(g.Position);
+                float gw = g.Size.X * scale, gh = g.Size.Y * scale;
+                Color tint = g.Color ?? theme.Primary.C500;
+                canvas.RectFilled(p.X, p.Y, gw, gh, ToColor32(tint, 0.14f));
+                canvas.RectFilled(p.X, p.Y, gw, Math.Min(gh, Math.Max(2f, 32f * scale)), ToColor32(tint, 0.3f));
+            }
+        }
 
         if (wires is { Count: > 0 })
         {

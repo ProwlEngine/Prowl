@@ -36,6 +36,12 @@ public sealed class GraphPort
     public string? Tooltip;
 
     /// <summary>
+    /// A control drawn beside an input's label while nothing is wired into it, for the value the port
+    /// falls back to. A wire hides it, since the wire decides then.
+    /// </summary>
+    public Action<NodeBodyContext>? Inline;
+
+    /// <summary>
     /// An empty socket standing in for the port that does not exist yet: the way a node takes a list of
     /// inputs, or a sub graph grows a new result. It draws as a hollow plus, and a wire dropped on it
     /// (or dragged from it) arrives as a connection request with <see cref="ConnectionRequest.ToPlaceholder"/>
@@ -1123,12 +1129,16 @@ public sealed class NodeGraphBuilder
                 .RoundedTop(rounding).IsNotInteractable();
             if (folded) header.Rounded(rounding);
 
+            // A folded card is its header, which can be taller than a header when many ports share it, so
+            // everything in it is as tall as the header is and centres on it.
+            float rowH = folded ? h : headerH;
+
             using (header.Padding(10f, 10f, 0, 0).Enter())
             {
                 if (node.Icon != null && detail != Detail.Block)
                 {
                     var icon = node.Icon; float isz = 14f;
-                    using (_paper.Box("icon").Width(isz).Height(headerH).Margin(0, 7f, 0, 0).IsNotInteractable().Enter())
+                    using (_paper.Box("icon").Width(isz).Height(rowH).Margin(0, 7f, 0, 0).IsNotInteractable().Enter())
                         _paper.Draw((canvas, rr) =>
                         {
                             float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f), iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
@@ -1136,24 +1146,24 @@ public sealed class NodeGraphBuilder
                         });
                 }
                 if (detail != Detail.Block && semi != null)
-                    _paper.Box("title").Width(UnitValue.Stretch()).Height(headerH)
+                    _paper.Box("title").Width(UnitValue.Stretch()).Height(rowH)
                         .Text(node.Title, semi).FontSize(_titleFont)
                         .TextColor(titleCol).Alignment(TextAlignment.MiddleLeft).TextTruncate().IsNotInteractable();
 
                 if (node.HeaderOnly && detail == Detail.Full && font != null && node.Outputs.Count > 0)
-                    _paper.Box("outlabel").Width(UnitValue.Auto).Height(headerH).Margin(6f, 0, 0, 0)
+                    _paper.Box("outlabel").Width(UnitValue.Auto).Height(rowH).Margin(6f, 0, 0, 0)
                         .Text(node.Outputs[0].Label, font).FontSize(_portFont)
                         .TextColor(portLabelCol).Alignment(TextAlignment.MiddleRight).IsNotInteractable();
 
                 if (detail == Detail.Full)
                 {
-                    if (node.Badge != null) DrawBadge(node.Badge, "badge", headerH, accent, titleCol, font);
+                    if (node.Badge != null) DrawBadge(node.Badge, "badge", rowH, accent, titleCol, font);
                     for (int i = 0; i < node.Badges.Count; i++)
-                        DrawBadge(node.Badges[i], "badge" + i, headerH, accent, titleCol, font);
+                        DrawBadge(node.Badges[i], "badge" + i, rowH, accent, titleCol, font);
                 }
 
                 if (detail == Detail.Full && node.Collapsible)
-                    DrawCollapseToggle(node, st, headerH, portLabelCol);
+                    DrawCollapseToggle(node, st, rowH, portLabelCol);
             }
 
             // Body: input/output labels (only at Full LOD; Left/Right ports carry labels).
@@ -1171,10 +1181,25 @@ public sealed class NodeGraphBuilder
                         for (int i = 0; i < rows; i++)
                             using (_paper.Row("row", i).Width(UnitValue.Percentage(100)).Height(_portRowH).Enter())
                             {
-                                _paper.Box("in", i).Width(UnitValue.Stretch()).Height(UnitValue.Percentage(100))
-                                    .Margin(PortLabelPadX, 0, 0, 0)
-                                    .Text(i < l.LeftCount ? l.Ports[i].Port.Label : "", font).FontSize(_portFont)
-                                    .TextColor(portLabelCol).Alignment(TextAlignment.MiddleLeft).TextTruncate();
+                                GraphPort? input = i < l.LeftCount ? l.Ports[i].Port : null;
+                                if (input?.Inline != null && FindWireInto(node.Id, input.Id) == null)
+                                {
+                                    using (_paper.Row("in", i).Width(UnitValue.Stretch()).Height(UnitValue.Percentage(100))
+                                        .Margin(PortLabelPadX, 0, 0, 0).AlignItems(LayoutAlignment.Center).Enter())
+                                    {
+                                        _paper.Box("inlabel").Width(UnitValue.Auto).Height(UnitValue.Percentage(100))
+                                            .Text(input.Label, font).FontSize(_portFont)
+                                            .TextColor(portLabelCol).Alignment(TextAlignment.MiddleLeft);
+                                        using (_paper.Row("inline").Width(UnitValue.Stretch()).Height(UnitValue.Percentage(100))
+                                            .Margin(6f, 0, 0, 0).AlignItems(LayoutAlignment.Center).StopDragPropagation().Enter())
+                                            input.Inline(new NodeBodyContext(_paper, node, zoom, accent, selected));
+                                    }
+                                }
+                                else
+                                    _paper.Box("in", i).Width(UnitValue.Stretch()).Height(UnitValue.Percentage(100))
+                                        .Margin(PortLabelPadX, 0, 0, 0)
+                                        .Text(input?.Label ?? "", font).FontSize(_portFont)
+                                        .TextColor(portLabelCol).Alignment(TextAlignment.MiddleLeft).TextTruncate();
                                 _paper.Box("out", i).Width(UnitValue.Stretch()).Height(UnitValue.Percentage(100))
                                     .Margin(0, PortLabelPadX, 0, 0)
                                     .Text(i < l.RightCount ? l.Ports[l.LeftCount + i].Port.Label : "", font).FontSize(_portFont)
@@ -1696,7 +1721,7 @@ public sealed class NodeGraphBuilder
 
             if (!layouts.TryGetValue(c.FromNode, out var lf) || !layouts.TryGetValue(c.ToNode, out var lt)) continue;
             if (!TryAnchor(lf, c.FromPort, true, out var a) || !TryAnchor(lt, c.ToPort, false, out var b)) continue;
-            float d = WireDistGraph(a, EffectiveCPs(c, st), b, DirOf(lf, c.FromPort, true), DirOf(lt, c.ToPort, false), graphPos, out int s);
+            float d = WireDistGraph(a, EffectiveCPs(c, st), b, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false), graphPos, out int s);
             if (d < best) { best = d; wire = c; seg = s; }
         }
         return wire != null;
@@ -1924,7 +1949,7 @@ public sealed class NodeGraphBuilder
 
             if (!layouts.TryGetValue(c.FromNode, out var lf) || !layouts.TryGetValue(c.ToNode, out var lt)) continue;
             if (!TryAnchor(lf, c.FromPort, true, out var ga) || !TryAnchor(lt, c.ToPort, false, out var gb)) continue;
-            foreach (var (p, _) in SampleWireGraph(ga, EffectiveCPs(c, st), gb, DirOf(lf, c.FromPort, true), DirOf(lt, c.ToPort, false)))
+            foreach (var (p, _) in WireRoute(ga, EffectiveCPs(c, st), gb, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false)))
                 if (p.X >= minX && p.X <= maxX && p.Y >= minY && p.Y <= maxY) { st.SelEdges.Add(EdgeKey(c)); break; }
         }
         FireSelection(st);
@@ -1978,34 +2003,27 @@ public sealed class NodeGraphBuilder
         {
             if (!s.Layouts.TryGetValue(c.FromNode, out var lf) || !s.Layouts.TryGetValue(c.ToNode, out var lt)) continue;
             if (!TryAnchor(lf, c.FromPort, true, out var ga) || !TryAnchor(lt, c.ToPort, false, out var gb)) continue;
-            Float2 a = ToScreen(ga, ox, oy, in s), b = ToScreen(gb, ox, oy, in s);
             bool sel = s.SelectedWires != null && s.SelectedWires.Contains(c);
-            int da = DirOf(lf, c.FromPort, true), db = DirOf(lt, c.ToPort, false);
             Color32 col = sel ? s.WireSelected : (c.Color.HasValue ? ToC32(c.Color.Value, 0.85f) : s.WireDefault);
 
             float scale = float.IsFinite(c.Thickness) ? Math.Clamp(c.Thickness, 0.1f, 8f) : 1f;
             float wt = s.WireThick * scale, wSel = wt * 1.75f, wGlow = wt * 3.5f;
-            var cps = EffectiveCPs(c, s.St);
-            if (cps.Count == 0)
-            {
-                if (sel) PaintWire(canvas, a, b, da, db, ToC32(s.Accent, 0.28f), wGlow);
-                PaintWire(canvas, a, b, da, db, col, sel ? wSel : wt);
-                if (c.Flow) PaintFlowOnCurve(canvas, a, b, da, db, PortColor(lf, c.FromPort, true, in s), PortColor(lt, c.ToPort, false, in s), wt, s.Zoom, s.Time * c.FlowSpeed);
-            }
-            else
-            {
-                var samples = SampleWireGraph(ga, cps, gb, da, db);
-                var pts = new List<Float2>(samples.Count);
-                foreach (var t in samples) pts.Add(ToScreen(t.p, ox, oy, in s));
-                if (sel) PaintWirePath(canvas, pts, ToC32(s.Accent, 0.28f), wGlow);
-                PaintWirePath(canvas, pts, col, sel ? wSel : wt);
-                if (c.Flow) PaintFlowOnPath(canvas, pts, PortColor(lf, c.FromPort, true, in s), PortColor(lt, c.ToPort, false, in s), wt, s.Zoom, s.Time * c.FlowSpeed);
-            }
+
+            var route = WireRoute(ga, EffectiveCPs(c, s.St), gb, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false));
+            s_wirePts.Clear();
+            foreach (var t in route) s_wirePts.Add(ToScreen(t.p, ox, oy, in s));
+
+            if (sel) PaintWirePath(canvas, s_wirePts, ToC32(s.Accent, 0.28f), wGlow);
+            PaintWirePath(canvas, s_wirePts, col, sel ? wSel : wt);
+            if (c.Flow) PaintFlowDots(canvas, s_wirePts, PortColor(lf, c.FromPort, true, in s), PortColor(lt, c.ToPort, false, in s), wt, s.Zoom, s.Time * c.FlowSpeed);
         }
     }
 
     // Dots running from the output end to the input end, so an active wire reads at a glance.
     private const int FlowDots = 3;
+
+    // Reused each frame so painting wires costs no allocations.
+    private static readonly List<Float2> s_wirePts = new();
 
     // A dot carries its ports' own colours, so a wire shows what is travelling along it.
     private static Color PortColor(NodeLayout l, string portId, bool output, in Snapshot s)
@@ -2022,18 +2040,6 @@ public sealed class NodeGraphBuilder
     // Reused each frame so the flow costs no allocations.
     private static readonly List<Float2> s_flowPts = new(FlowSamples + 1);
     private const int FlowSamples = 24;
-
-    private static void PaintFlowOnCurve(Canvas canvas, Float2 a, Float2 b, int dirA, int dirB, Color from, Color to, float width, float zoom, float time)
-    {
-        var (c1, c2) = BezierHandles(a, b, dirA, dirB);
-        s_flowPts.Clear();
-        for (int i = 0; i <= FlowSamples; i++)
-            s_flowPts.Add(CubicAt(a, c1, c2, b, i / (float)FlowSamples));
-        PaintFlowDots(canvas, s_flowPts, from, to, width, zoom, time);
-    }
-
-    private static void PaintFlowOnPath(Canvas canvas, List<Float2> pts, Color from, Color to, float width, float zoom, float time)
-        => PaintFlowDots(canvas, pts, from, to, width, zoom, time);
 
     /// <summary>
     /// Spaces the dots by distance along the wire rather than by curve parameter. A cubic crawls near
@@ -2086,15 +2092,6 @@ public sealed class NodeGraphBuilder
 
     private static float Frac(float v) => v - MathF.Floor(v);
 
-    private static Float2 CubicAt(Float2 p0, Float2 p1, Float2 p2, Float2 p3, float t)
-    {
-        float u = 1f - t;
-        float w0 = u * u * u, w1 = 3f * u * u * t, w2 = 3f * u * t * t, w3 = t * t * t;
-        return new Float2(
-            p0.X * w0 + p1.X * w1 + p2.X * w2 + p3.X * w3,
-            p0.Y * w0 + p1.Y * w1 + p2.Y * w2 + p3.Y * w3);
-    }
-
     private void PaintForeground(Canvas canvas, Rect rect, in Snapshot s)
     {
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
@@ -2133,8 +2130,15 @@ public sealed class NodeGraphBuilder
             Float2 b = new((float)_paper.PointerPos.X, (float)_paper.PointerPos.Y);
             Color32 col = s.ConnHitNode == null ? ToC32(s.Accent, 0.8f)
                 : (s.ConnHitValid ? ToC32(_theme.Green.C500, 1f) : ToC32(_theme.Red.C500, 1f));
+            // The loose end has no port yet, so it takes the side a port facing the source would have.
             PortSide srcSide = SideOf(ln, st.ConnPort, st.ConnFromOutput);
-            PaintWire(canvas, a, b, DirForSide(srcSide), st.ConnFromOutput ? -1 : 1, col, 2.5f);
+            float nub = WireNub * s.Zoom;
+            s_wirePts.Clear();
+            s_wirePts.Add(a);
+            s_wirePts.Add(a + SideVector(srcSide) * nub);
+            s_wirePts.Add(b + SideVector(Opposite(srcSide)) * nub);
+            s_wirePts.Add(b);
+            PaintWirePath(canvas, s_wirePts, col, 2.5f);
             canvas.CircleFilled(b.X, b.Y, 4f, col);
         }
     }
@@ -2155,9 +2159,25 @@ public sealed class NodeGraphBuilder
         foreach (var s in l.Ports) if (s.IsOutput == output && s.Port.Id == portId) return s.Side;
         return output ? PortSide.Right : PortSide.Left;
     }
-    private static int DirOf(NodeLayout l, string portId, bool output) => DirForSide(SideOf(l, portId, output));
-    // Tangent direction (x-component sign) for a side, used to shape the bezier handle.
-    private static int DirForSide(PortSide side) => side switch { PortSide.Left => -1, PortSide.Right => 1, _ => 0 };
+
+    // How far a wire runs straight out of its port before turning toward the other end, in graph space.
+    private const float WireNub = 16f;
+
+    private static Float2 SideVector(PortSide side) => side switch
+    {
+        PortSide.Left => new Float2(-1f, 0f),
+        PortSide.Right => new Float2(1f, 0f),
+        PortSide.Top => new Float2(0f, -1f),
+        _ => new Float2(0f, 1f),
+    };
+
+    private static PortSide Opposite(PortSide side) => side switch
+    {
+        PortSide.Left => PortSide.Right,
+        PortSide.Right => PortSide.Left,
+        PortSide.Top => PortSide.Bottom,
+        _ => PortSide.Top,
+    };
 
     private static void PaintGrid(Canvas canvas, float ox, float oy, float w, float h, in Snapshot s)
     {
@@ -2173,29 +2193,7 @@ public sealed class NodeGraphBuilder
         canvas.RestoreState();
     }
 
-    // Bezier handles that leave each endpoint along its port's axis (horizontal or vertical).
-    private static (Float2 c1, Float2 c2) BezierHandles(Float2 a, Float2 b, int dirA, int dirB)
-    {
-        if (dirA == 0 || dirB == 0)
-        {
-            float k = Math.Clamp(MathF.Abs(b.Y - a.Y) * 0.5f, 24f, 160f);
-            return (new Float2(a.X, a.Y + (b.Y > a.Y ? k : -k)), new Float2(b.X, b.Y + (b.Y > a.Y ? -k : k)));
-        }
-        float kk = Math.Clamp(MathF.Abs(b.X - a.X) * 0.5f, 24f, 160f);
-        return (new Float2(a.X + dirA * kk, a.Y), new Float2(b.X + dirB * kk, b.Y));
-    }
-
-    // Direct (no control point) wire as one smooth cubic bezier.
-    private static void PaintWire(Canvas canvas, Float2 a, Float2 b, int dirA, int dirB, Color32 color, float width)
-    {
-        var (c1, c2) = BezierHandles(a, b, dirA, dirB);
-        canvas.SaveState();
-        canvas.SetStrokeColor(color); canvas.SetStrokeWidth(width); canvas.SetStrokeCap(EndCapStyle.Round);
-        canvas.BeginPath(); canvas.MoveTo(a.X, a.Y); canvas.BezierCurveTo(c1.X, c1.Y, c2.X, c2.Y, b.X, b.Y); canvas.Stroke();
-        canvas.RestoreState();
-    }
-
-    // Stroke a pre-sampled screen-space polyline (used for wires routed through control points).
+    // Strokes a wire's route, already in screen space.
     private static void PaintWirePath(Canvas canvas, List<Float2> pts, Color32 color, float width)
     {
         if (pts.Count < 2) return;
@@ -2207,26 +2205,23 @@ public sealed class NodeGraphBuilder
         canvas.RestoreState();
     }
 
-    // Sample the wire path in graph space, tagging each sample with the segment index it belongs to
-    // (segment k is the span between control point k-1 and k, so a click on segment k inserts at index k).
-    private static List<(Float2 p, int seg)> SampleWireGraph(Float2 a, IReadOnlyList<Float2> cps, Float2 b, int dirA, int dirB)
+    /// <summary>
+    /// The straight lines a wire is drawn as, in graph space: a short nub straight out of each port,
+    /// joined by a line, and through any reroute points in between. Each point carries the index of
+    /// the span it ends, where span k lies between reroute points k-1 and k, so a click on span k
+    /// inserts a point at k.
+    /// </summary>
+    private static List<(Float2 p, int seg)> WireRoute(Float2 a, IReadOnlyList<Float2> cps, Float2 b, PortSide sideA, PortSide sideB)
     {
-        var outp = new List<(Float2, int)>();
-        if (cps.Count == 0)
+        var route = new List<(Float2, int)>(cps.Count + 4)
         {
-            var (c1, c2) = BezierHandles(a, b, dirA, dirB);
-            for (int i = 0; i <= 20; i++) outp.Add((Bezier(a, c1, c2, b, i / 20f), 0));
-            return outp;
-        }
-        var f = new List<Float2>(cps.Count + 2) { a };
-        f.AddRange(cps); f.Add(b);
-        for (int k = 0; k < f.Count - 1; k++)
-        {
-            Float2 p0 = f[Math.Max(0, k - 1)], p1 = f[k], p2 = f[k + 1], p3 = f[Math.Min(f.Count - 1, k + 2)];
-            Float2 cc1 = p1 + (p2 - p0) * (1f / 6f), cc2 = p2 - (p3 - p1) * (1f / 6f);
-            for (int i = (k == 0 ? 0 : 1); i <= 10; i++) outp.Add((Bezier(p1, cc1, cc2, p2, i / 10f), k));
-        }
-        return outp;
+            (a, 0),
+            (a + SideVector(sideA) * WireNub, 0),
+        };
+        for (int k = 0; k < cps.Count; k++) route.Add((cps[k], k));
+        route.Add((b + SideVector(sideB) * WireNub, cps.Count));
+        route.Add((b, cps.Count));
+        return route;
     }
 
     private static List<Float2> EffectiveCPs(GraphConnection c, GraphState st)
@@ -2242,9 +2237,9 @@ public sealed class NodeGraphBuilder
     }
 
     // Nearest distance (graph space) from p to the wire, and the segment index of the closest point.
-    private static float WireDistGraph(Float2 a, IReadOnlyList<Float2> cps, Float2 b, int dirA, int dirB, Float2 p, out int seg)
+    private static float WireDistGraph(Float2 a, IReadOnlyList<Float2> cps, Float2 b, PortSide sideA, PortSide sideB, Float2 p, out int seg)
     {
-        var samples = SampleWireGraph(a, cps, b, dirA, dirB);
+        var samples = WireRoute(a, cps, b, sideA, sideB);
         float best = float.MaxValue; seg = 0;
         for (int i = 1; i < samples.Count; i++)
         {
@@ -2457,13 +2452,6 @@ public sealed class NodeGraphBuilder
         => new Float2(ox + graph.X * s.Zoom + s.PanX, oy + graph.Y * s.Zoom + s.PanY);
 
     private static float Dist(float ax, float ay, float bx, float by) { float dx = ax - bx, dy = ay - by; return MathF.Sqrt(dx * dx + dy * dy); }
-
-    private static Float2 Bezier(Float2 a, Float2 c1, Float2 c2, Float2 b, float t)
-    {
-        float u = 1 - t;
-        float w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t;
-        return new Float2(w0 * a.X + w1 * c1.X + w2 * c2.X + w3 * b.X, w0 * a.Y + w1 * c1.Y + w2 * c2.Y + w3 * b.Y);
-    }
 
     private static float DistToSeg(Float2 p, Float2 a, Float2 b)
     {
