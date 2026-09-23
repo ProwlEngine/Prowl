@@ -178,7 +178,7 @@ public sealed class DrivenChannelDefinition : PoseNodeDefinition
     public float ToValue { get; set; } = 1f;
 
     /// <summary>
-    /// Axis to measure the turn about, in the bone's parent space. Left at zero the total turn is used,
+    /// Axis to measure the turn about, in the bone's own reference space. Left at zero the total turn is used,
     /// which is always positive.
     /// </summary>
     public Float3 Axis { get; set; }

@@ -35,11 +35,20 @@ public sealed class GraphContext
     /// <summary>Seconds of graph time elapsed since the instance started (unscaled by speed nodes).</summary>
     public double Time;
 
+    /// <summary>How far <see cref="Time"/> moved this update: the real frame time, whatever a speed node has done to <see cref="DeltaTime"/>.</summary>
+    public float FrameTime;
+
     /// <summary>
     /// The previous frame's output pose (model-space transforms valid), used to resolve bone targets
     /// in poseless value nodes. One frame of latency.
     /// </summary>
     public Pose? PreviousPose;
+
+    /// <summary>
+    /// How the graph asks the world where the ground is, when it has one. The host sets it, and a node
+    /// that wants the ground under a foot uses it rather than being fed heights from outside.
+    /// </summary>
+    public IGroundProbe? Ground;
 
     /// <summary>The character's world transform. World space targets are converted to character space with its inverse.</summary>
     public Transform3D WorldTransform = Transform3D.Identity;
@@ -233,6 +242,9 @@ public abstract class GraphNodeInstance
 
     protected void MarkNodeActive(GraphContext context) => _lastUpdateId = context.UpdateId;
 
+    /// <summary>The value and mask nodes this node reads, as bound.</summary>
+    internal IReadOnlyList<GraphNodeInstance> Dependencies => _dependencies;
+
     internal void AddDependency(GraphNodeInstance node)
     {
         if (!_dependencies.Contains(node))
@@ -366,24 +378,73 @@ public abstract class PassthroughPoseNodeInstance : PoseNodeInstance
     }
 }
 
-/// <summary>A runtime value node. The result is cached per update id so re-reads are free.</summary>
+/// <summary>
+/// A runtime value node. The result is cached per update id so re-reads are free, except that a node
+/// whose answer rests on the sampled events is read again once the events have changed: read before the
+/// clip that fires an event has played, or before a blend weighs it, it would otherwise hold a stale answer all frame.
+/// </summary>
 public abstract class ValueNodeInstance : GraphNodeInstance
 {
     private uint _lastUpdate = uint.MaxValue;
     private ParameterValue _cached;
+    private int _eventsSeen;
+    private bool? _readsEvents;
 
     public ParameterValue GetValue(GraphContext context)
     {
-        if (_lastUpdate != context.UpdateId)
+        if (_lastUpdate != context.UpdateId || (ReadsEventsHere() && context.Events.Version != _eventsSeen))
         {
             _lastUpdate = context.UpdateId;
+            _eventsSeen = context.Events.Version;
             MarkNodeActive(context);
             _cached = Compute(context);
         }
         return _cached;
     }
 
+    /// <summary>
+    /// The node's answer as the frame ended, for inspection. A node reading events may have answered
+    /// before the events it looks for arrived, so it works its answer out again, but only when nothing
+    /// that would run again keeps state, since stepping state outside a tick would change the graph.
+    /// Otherwise it gives its last answer as it stands.
+    /// </summary>
+    internal ParameterValue Inspect(GraphContext context)
+        => ReadsEventsHere() && SafeToRunAgain() ? GetValue(context) : _cached;
+
+    /// <summary>Whether working the answer out again leaves no state behind. Nodes with none say so.</summary>
+    protected virtual bool KeepsNoState => false;
+
+    private bool? _safeToRunAgain;
+
+    // Only what reads events runs again, so only those inputs need to be free of state.
+    private bool SafeToRunAgain()
+    {
+        if (_safeToRunAgain is { } known) return known;
+
+        bool safe = KeepsNoState;
+        foreach (GraphNodeInstance input in Dependencies)
+            if (input is ValueNodeInstance value && value.ReadsEventsHere())
+                safe &= value.SafeToRunAgain();
+        _safeToRunAgain = safe;
+        return safe;
+    }
+
     protected abstract ParameterValue Compute(GraphContext context);
+
+    /// <summary>Whether the node reads the sampled events buffer itself.</summary>
+    protected virtual bool ReadsEvents => false;
+
+    /// <summary>Whether the node's answer rests on the sampled events, itself or through anything it reads.</summary>
+    private bool ReadsEventsHere()
+    {
+        if (_readsEvents is { } known) return known;
+
+        bool reads = ReadsEvents;
+        foreach (GraphNodeInstance input in Dependencies)
+            reads |= input is ValueNodeInstance value && value.ReadsEventsHere();
+        _readsEvents = reads;
+        return reads;
+    }
 
     protected override void OnShutdown(GraphContext context) => _lastUpdate = uint.MaxValue;
 }

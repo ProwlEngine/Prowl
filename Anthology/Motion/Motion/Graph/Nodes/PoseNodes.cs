@@ -368,18 +368,31 @@ public sealed class MirrorDefinition : PoseNodeDefinition
 {
     public MirrorDefinition(int child) => Child = child;
     public int Child { get; }
+
+    /// <summary>A bool value node that switches the mirror on and off, or -1 to always mirror.</summary>
+    public int EnabledNodeIndex { get; init; } = -1;
+
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly MirrorDefinition _def;
+        private ValueNodeInstance? _enabled;
         public Instance(MirrorDefinition def) => _def = def;
-        public override void Bind(GraphBindContext context) => BindChild(context, _def.Child);
+
+        public override void Bind(GraphBindContext context)
+        {
+            BindChild(context, _def.Child);
+            _enabled = context.OptionalValueNode(_def.EnabledNodeIndex, ValueInputKind.Number);
+        }
 
         protected override void OnUpdate(GraphContext context)
         {
             Child.Update(context);
             CopyResultFrom(Child);
+            if (_enabled != null && !_enabled.GetValue(context).AsBool())
+                return;
+
             if (context.Avatar is { IsHuman: true } avatar)
             {
                 PoseMirror.Apply(avatar, Child.Pose, Pose);
@@ -398,19 +411,27 @@ public sealed class MirrorDefinition : PoseNodeDefinition
 /// </summary>
 public sealed class RootMotionOverrideDefinition : PoseNodeDefinition
 {
-    public RootMotionOverrideDefinition(int child, float speedScale, float maxLinearSpeed, float maxAngularDegrees)
+    public RootMotionOverrideDefinition(int child, FloatInput speedScale, FloatInput maxLinearSpeed, FloatInput maxAngularDegrees)
     { Child = child; SpeedScale = speedScale; MaxLinearSpeed = maxLinearSpeed; MaxAngularDegrees = maxAngularDegrees; }
     public int Child { get; }
-    public float SpeedScale { get; }
-    public float MaxLinearSpeed { get; }
-    public float MaxAngularDegrees { get; }
+    public FloatInput SpeedScale { get; }
+    public FloatInput MaxLinearSpeed { get; }
+    public FloatInput MaxAngularDegrees { get; }
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly RootMotionOverrideDefinition _def;
+        private BoundFloat _speedScale, _maxLinear, _maxAngular;
         public Instance(RootMotionOverrideDefinition def) => _def = def;
-        public override void Bind(GraphBindContext context) => BindChild(context, _def.Child);
+
+        public override void Bind(GraphBindContext context)
+        {
+            BindChild(context, _def.Child);
+            _speedScale = BoundFloat.Bind(context, _def.SpeedScale);
+            _maxLinear = BoundFloat.Bind(context, _def.MaxLinearSpeed);
+            _maxAngular = BoundFloat.Bind(context, _def.MaxAngularDegrees);
+        }
 
         protected override void OnUpdate(GraphContext context)
         {
@@ -421,9 +442,9 @@ public sealed class RootMotionOverrideDefinition : PoseNodeDefinition
 
             var options = new RootMotionOverrideOptions
             {
-                LinearSpeedScale = _def.SpeedScale,
-                MaxLinearSpeed = _def.MaxLinearSpeed,
-                MaxAngularSpeedDegrees = _def.MaxAngularDegrees,
+                LinearSpeedScale = _speedScale.Get(context),
+                MaxLinearSpeed = _maxLinear.Get(context),
+                MaxAngularSpeedDegrees = _maxAngular.Get(context),
             };
             RootMotionDelta = RootMotionWarp.Override(Child.RootMotionDelta, context.DeltaTime, options);
         }

@@ -46,7 +46,7 @@ public static class Blender
             float w = weight * mask.GetWeight(b);
             result.WriteLocal(b, Transform3D.Lerp(source.GetTransform(b), target.GetTransform(b), w));
         }
-        BlendFloats(result, source, target, weight);
+        BlendFloats(result, source, target, weight, mask);
         result.FinishWrite(CombinedState(source, target));
     }
 
@@ -76,7 +76,7 @@ public static class Blender
             float w = weight * mask.GetWeight(b);
             result.WriteLocal(b, ApplyAdditive(basePose.GetTransform(b), additivePose.GetTransform(b), w));
         }
-        AddFloats(result, basePose, additivePose, weight);
+        AddFloats(result, basePose, additivePose, weight, mask);
         result.FinishWrite(CombinedState(basePose, additivePose));
     }
 
@@ -159,26 +159,29 @@ public static class Blender
         Blend(result, scratchSource, scratchTarget, weight);
     }
 
-    // Float channels are not bones, so a bone mask never weights them.
-    private static void BlendFloats(Pose result, Pose source, Pose target, float weight)
+    // A channel belongs to no bone, so a mask weighs it by its own channel weight.
+    private static void BlendFloats(Pose result, Pose source, Pose target, float weight, BoneMask? mask = null)
     {
         int count = result.FloatChannelCount;
         if (count == 0 || source.FloatChannelCount != count || target.FloatChannelCount != count)
             return;
+        bool masked = mask is not null && mask.ChannelCount == count;
         for (int c = 0; c < count; c++)
         {
             float a = source.GetFloat(c);
-            result.WriteFloat(c, a + (target.GetFloat(c) - a) * weight);
+            float w = masked ? weight * mask!.GetChannelWeight(c) : weight;
+            result.WriteFloat(c, a + (target.GetFloat(c) - a) * w);
         }
     }
 
-    private static void AddFloats(Pose result, Pose basePose, Pose additivePose, float weight)
+    private static void AddFloats(Pose result, Pose basePose, Pose additivePose, float weight, BoneMask? mask = null)
     {
         int count = result.FloatChannelCount;
         if (count == 0 || basePose.FloatChannelCount != count || additivePose.FloatChannelCount != count)
             return;
+        bool masked = mask is not null && mask.ChannelCount == count;
         for (int c = 0; c < count; c++)
-            result.WriteFloat(c, basePose.GetFloat(c) + additivePose.GetFloat(c) * weight);
+            result.WriteFloat(c, basePose.GetFloat(c) + additivePose.GetFloat(c) * (masked ? weight * mask!.GetChannelWeight(c) : weight));
     }
 
     // Rotation delta applied on top of the base, translation and scale deltas added (scaled by weight).

@@ -83,6 +83,13 @@ public sealed class AnimationGraph
 
     public int AddFloatParameter(string name, float defaultValue = 0f) => AddControlParameter(name, AnimationValueType.Float, ParameterValue.FromFloat(defaultValue));
     public int AddBoolParameter(string name, bool defaultValue = false) => AddControlParameter(name, AnimationValueType.Bool, ParameterValue.FromBool(defaultValue));
+
+    /// <summary>A bool parameter that a state machine turns back off once a transition fires on it.</summary>
+    public int AddTriggerParameter(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        return AddNode(new ControlParameterDefinition(name, AnimationValueType.Bool, ParameterValue.FromBool(false)) { IsTrigger = true });
+    }
     public int AddIntParameter(string name, int defaultValue = 0) => AddControlParameter(name, AnimationValueType.Int, ParameterValue.FromInt(defaultValue));
     public int AddVectorParameter(string name, Float3 defaultValue = default) => AddControlParameter(name, AnimationValueType.Vector, ParameterValue.FromVector(defaultValue));
 
@@ -181,7 +188,7 @@ public sealed class AnimationGraph
     public int AddWeightedBlend(IReadOnlyList<WeightedPose> inputs) => AddNode(new WeightedBlendDefinition(inputs));
 
     /// <summary>Adds a node easing toward its child, closing half the remaining gap every half life.</summary>
-    public int AddPoseSmoothing(int child, float halfLifeSeconds) => AddNode(new PoseSmoothingDefinition(child, halfLifeSeconds));
+    public int AddPoseSmoothing(int child, FloatInput halfLifeSeconds) => AddNode(new PoseSmoothingDefinition(child, halfLifeSeconds));
 
     /// <summary>Adds a value node reading a float channel off a pose node (without playing it).</summary>
     public int AddPoseChannel(int poseNodeIndex, StringID channel, float defaultValue = 0f)
@@ -249,12 +256,12 @@ public sealed class AnimationGraph
     /// Adds a node bending a travelling clip's playback rate so it covers ground at the speed a float
     /// value node asks for.
     /// </summary>
-    public int AddStrideWarp(int child, int desiredSpeedNodeIndex, float naturalSpeed = 0f)
-        => AddNode(new StrideWarpDefinition(child, desiredSpeedNodeIndex) { NaturalSpeed = naturalSpeed });
+    public int AddStrideWarp(int child, int desiredSpeedNodeIndex, FloatInput? naturalSpeed = null)
+        => AddNode(new StrideWarpDefinition(child, desiredSpeedNodeIndex) { NaturalSpeed = naturalSpeed ?? 0f });
 
     /// <summary>Adds a node keeping only part of its child's root motion.</summary>
-    public int AddRootMotionFilter(int child, RootMotionChannels keep, float scale = 1f)
-        => AddNode(new RootMotionFilterDefinition(child, keep) { Scale = scale });
+    public int AddRootMotionFilter(int child, RootMotionChannels keep, FloatInput? scale = null)
+        => AddNode(new RootMotionFilterDefinition(child, keep) { Scale = scale ?? 1f });
 
     /// <summary>
     /// Adds a node fed by the host rather than by playback: write into the instance's source pose each
@@ -274,7 +281,7 @@ public sealed class AnimationGraph
     public int AddMuscleLayer(int basePose, int layerPose, int weightNodeIndex = -1, HumanPoseMask? mask = null, bool additive = false, int referenceNodeIndex = -1)
         => AddNode(new MuscleLayerDefinition(basePose, layerPose, weightNodeIndex) { Mask = mask, Additive = additive, ReferenceNodeIndex = referenceNodeIndex });
 
-    public int AddMirror(int child) => AddNode(new MirrorDefinition(child));
+    public int AddMirror(int child, int enabledNodeIndex = -1) => AddNode(new MirrorDefinition(child) { EnabledNodeIndex = enabledNodeIndex });
 
     /// <summary>
     /// Plants the humanoid feet on world space ground heights (and optional world space ground normal
@@ -291,6 +298,10 @@ public sealed class AnimationGraph
     public int AddOrientationWarpAngle(int clipChild, int angleDegreesNodeIndex)
         => AddNode(new OrientationWarpDefinition(clipChild, angleDegreesNodeIndex, isAngleOffset: true));
 
+    /// <summary>Scales a turning clip's root rotation so the clip turns by the angle (degrees) a value node asks for.</summary>
+    public int AddTurnWarp(int clipChild, int angleDegreesNodeIndex)
+        => AddNode(new TurnWarpDefinition(clipChild, angleDegreesNodeIndex));
+
     /// <summary>Warps a clip's root motion so total travel matches a desired character-space displacement (Float3 value node).</summary>
     public int AddTargetWarp(int clipChild, int displacementNodeIndex)
         => AddNode(new TargetWarpDefinition(clipChild, displacementNodeIndex));
@@ -301,11 +312,12 @@ public sealed class AnimationGraph
     public int AddTwoBoneIK(int child, int targetNodeIndex, int upper, int mid, int end, int weightNodeIndex = -1, float defaultWeight = 1f)
         => AddNode(new TwoBoneIKDefinition(child, targetNodeIndex, upper, mid, end, weightNodeIndex, defaultWeight));
 
-    public int AddLookAt(int child, int targetNodeIndex, float clamp = 0.3f, float body = 0.4f, float head = 1f, float eyes = 1f, float weight = 1f)
-        => AddNode(new LookAtDefinition(child, targetNodeIndex, weight, clamp, body, head, eyes));
+    public int AddLookAt(int child, int targetNodeIndex, FloatInput? clamp = null, FloatInput? body = null,
+        FloatInput? head = null, FloatInput? eyes = null, FloatInput? weight = null)
+        => AddNode(new LookAtDefinition(child, targetNodeIndex, weight ?? 1f, clamp ?? 0.3f, body ?? 0.4f, head ?? 1f, eyes ?? 1f));
 
-    public int AddRootMotionOverride(int child, float speedScale = 1f, float maxLinearSpeed = 0f, float maxAngularDegrees = 0f)
-        => AddNode(new RootMotionOverrideDefinition(child, speedScale, maxLinearSpeed, maxAngularDegrees));
+    public int AddRootMotionOverride(int child, FloatInput? speedScale = null, FloatInput? maxLinearSpeed = null, FloatInput? maxAngularDegrees = null)
+        => AddNode(new RootMotionOverrideDefinition(child, speedScale ?? 1f, maxLinearSpeed ?? 0f, maxAngularDegrees ?? 0f));
 
     public int AddBlend1D(int parameterNodeIndex, IReadOnlyList<(int Child, float Threshold)> entries, bool loop = true)
     {
@@ -445,6 +457,13 @@ public sealed class AnimationGraph
 
     /// <summary>Adds a bone-mask node with a uniform fixed weight on every bone.</summary>
     public int AddFixedWeightBoneMask(float weight) => AddNode(new FixedWeightBoneMaskDefinition(weight));
+
+    /// <summary>Adds a mask built ahead of time for the skeleton the graph will run on.</summary>
+    public int AddStaticBoneMask(BoneMask mask) => AddNode(new StaticBoneMaskDefinition(mask));
+
+    /// <summary>Adds a value node reading how the character itself is moving and turning.</summary>
+    public int AddCharacterMotion(CharacterMotionValue value, float halfLife = 0.1f)
+        => AddNode(new CharacterMotionDefinition(value) { HalfLife = halfLife });
 
     /// <summary>Adds a bone-mask node that lerps between two masks by a float value node.</summary>
     public int AddBoneMaskBlend(int maskA, int maskB, int blendNodeIndex) => AddNode(new BoneMaskBlendDefinition(maskA, maskB, blendNodeIndex));

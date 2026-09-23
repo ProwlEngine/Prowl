@@ -110,6 +110,17 @@ public sealed class AnimationGraphInstance
     /// <summary>Events sampled this update.</summary>
     public SampledEventsBuffer Events => _events;
 
+    /// <summary>How nodes in this graph ask the world where the ground is, or null when nothing can be asked.</summary>
+    public IGroundProbe? Ground
+    {
+        get => _ground;
+        set => _context.Ground = _ground = value;
+    }
+
+    // The probe this instance was given. Played inside another graph, it keeps its own and only borrows
+    // the host's when it has none, so a graph plugged into a slot keeps the probe it came with.
+    private IGroundProbe? _ground;
+
     /// <summary>The root pose node (used by hosts to forward its full timing).</summary>
     internal PoseNodeInstance Root => _root;
 
@@ -177,7 +188,7 @@ public sealed class AnimationGraphInstance
         _parametersChanged = true;
     }
 
-    private ParameterValue GetParameter(int index) => _parameters[index];
+    internal ParameterValue GetParameter(int index) => _parameters[index];
 
     // ---- Evaluation ----------------------------------------------------------------------------
 
@@ -206,6 +217,7 @@ public sealed class AnimationGraphInstance
     internal void UpdateAsChild(GraphContext parent)
     {
         _context.Events = parent.Events;
+        _context.Ground = _ground ?? parent.Ground;
         BeginTick(parent.DeltaTime, parent.WorldTransform);
         _context.SyncRange = parent.SyncRange;
         _context.BranchState = parent.BranchState;
@@ -220,6 +232,7 @@ public sealed class AnimationGraphInstance
     {
         if (_root.IsInitialized)
             ResetGraphState();
+        _context.Ground = _ground ?? parent.Ground;
         BeginTick(0f, parent.WorldTransform);
         _root.Initialize(_context, initialTime);
     }
@@ -245,7 +258,8 @@ public sealed class AnimationGraphInstance
         _updateId++;
         _parametersChanged = false;
         _context.DeltaTime = dt;
-        _context.Time += Math.Abs((double)dt);
+        _context.FrameTime = MathF.Abs(dt);
+        _context.Time += _context.FrameTime;
         _context.UpdateId = _updateId;
         _context.WorldTransform = worldTransform;
         _context.WorldTransformInverse = TransformOps.Inverse(worldTransform);
@@ -270,7 +284,8 @@ public sealed class AnimationGraphInstance
     /// <summary>
     /// Reads a value node only if it already produced a value this update. A debug view has to leave
     /// the graph exactly as it found it, and <see cref="EvaluateValueNode"/> will tick a node that has
-    /// not run, which advances edge detectors and cached values as a real tick would.
+    /// not run, which advances edge detectors and cached values as a real tick would. An event reader
+    /// that keeps no state gives its answer as the frame ended rather than as it first read.
     /// </summary>
     public bool TryReadValueNode(int index, out ParameterValue value)
     {
@@ -279,7 +294,7 @@ public sealed class AnimationGraphInstance
         if (_nodes[index] is not ValueNodeInstance node) return false;
         if (_parametersChanged || !node.WasUpdated(_context)) return false;
 
-        value = node.GetValue(_context);
+        value = node.Inspect(_context);
         return true;
     }
 
@@ -300,8 +315,11 @@ public sealed class AnimationGraphInstance
         if (_nodes[index] is not ValueNodeInstance value)
             throw new ArgumentException($"Node {index} is not a value node.", nameof(index));
 
-        if (_parametersChanged || !value.WasUpdated(_context))
-            BeginInspectionTick();
+        // A node that already ran this frame answers as the frame ended, and looking never steps its state.
+        if (!_parametersChanged && value.WasUpdated(_context))
+            return value.Inspect(_context);
+
+        BeginInspectionTick();
         return value.GetValue(_context);
     }
 
@@ -357,6 +375,9 @@ public sealed class AnimationGraphInstance
             (adjacency[from] ??= new List<int>()).Add(to);
             if (!isPose)
                 continue;
+            if (poseParent[to] == from)
+                throw new GraphValidationException(to, graph.Nodes[to].Name,
+                    $"is listed twice by node {from}. A pose node keeps playback state and would be played twice a frame, so give each entry its own node.");
             if (poseParent[to] >= 0)
                 throw new GraphValidationException(to, graph.Nodes[to].Name,
                     $"is used by more than one parent (nodes {poseParent[to]} and {from}). A pose node keeps playback state, so give each parent its own node.");

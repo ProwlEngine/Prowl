@@ -23,6 +23,12 @@ public sealed class ControlParameterDefinition : ValueNodeDefinition
 
     public ParameterValue DefaultValue { get; }
 
+    /// <summary>
+    /// A bool that turns itself off once a state machine transition fires on it, so the game sets it
+    /// once rather than holding it and remembering to let go.
+    /// </summary>
+    public bool IsTrigger { get; init; }
+
     /// <summary>Index into the instance's parameter store.</summary>
     public int ParameterIndex { get; internal set; } = -1;
 
@@ -33,7 +39,35 @@ internal sealed class ControlParameterInstance : ValueNodeInstance
 {
     private readonly ControlParameterDefinition _def;
     public ControlParameterInstance(ControlParameterDefinition def) => _def = def;
+    protected override bool KeepsNoState => true;
+    public bool IsTrigger => _def.IsTrigger;
     protected override ParameterValue Compute(GraphContext context) => context.Parameters[_def.ParameterIndex];
+
+    /// <summary>Every parameter a node reads, however indirectly, through the value nodes it was bound to.</summary>
+    public static ControlParameterInstance[] ReadBy(GraphNodeInstance node)
+    {
+        var found = new List<ControlParameterInstance>();
+        var seen = new HashSet<GraphNodeInstance>();
+        var stack = new Stack<GraphNodeInstance>();
+        stack.Push(node);
+
+        while (stack.Count > 0)
+        {
+            GraphNodeInstance current = stack.Pop();
+            if (!seen.Add(current)) continue;
+
+            if (current is ControlParameterInstance parameter) found.Add(parameter);
+            foreach (GraphNodeInstance input in current.Dependencies) stack.Push(input);
+        }
+        return found.ToArray();
+    }
+
+    /// <summary>Turns a set trigger back off. Anything that is not a trigger keeps its value.</summary>
+    public void Consume(GraphContext context)
+    {
+        if (_def.IsTrigger && context.Parameters[_def.ParameterIndex].AsBool())
+            context.Parameters[_def.ParameterIndex] = ParameterValue.FromBool(false);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -89,7 +123,9 @@ public sealed class AnimationPoseDefinition : PoseNodeDefinition
         private ValueNodeInstance _time = null!;
         public Instance(AnimationPoseDefinition def) => _def = def;
 
-        public override SyncTrack SyncTrack => _def.Clip.SyncTrack;
+        // A pose picked by a value has no clock, so it reports no length and a blend times itself by the
+        // children that do play.
+        public override SyncTrack SyncTrack => SyncTrack.Default;
 
         public override void Bind(GraphBindContext context)
         {
@@ -98,7 +134,7 @@ public sealed class AnimationPoseDefinition : PoseNodeDefinition
             _time = context.ValueNode(_def.TimeNodeIndex, ValueInputKind.Number);
         }
 
-        protected override void OnInitialize(GraphContext context, SyncTrackTime? initialTime) => Duration = _def.Clip.Duration;
+        protected override void OnInitialize(GraphContext context, SyncTrackTime? initialTime) => Duration = 0f;
 
         protected override void OnUpdate(GraphContext context)
         {
@@ -147,6 +183,18 @@ public sealed class ClipNodeDefinition : PoseNodeDefinition
     /// <summary>Optional bool value node; when it rises to true the clip time resets to the start. -1 = none.</summary>
     public int ResetTimeNodeIndex { get; set; } = -1;
 
+    /// <summary>Where playback starts, as a share of the clip, when nothing else sets its time.</summary>
+    public float StartTime { get; set; }
+
+    /// <summary>
+    /// Starts somewhere at random instead of at <see cref="StartTime"/>, so a crowd playing one clip does
+    /// not march in step.
+    /// </summary>
+    public bool RandomStart { get; set; }
+
+    /// <summary>The seed a random start picks with, so a graph can be replayed exactly. 0 seeds from the clock.</summary>
+    public uint RandomSeed { get; set; }
+
     public override GraphNodeInstance CreateInstance() => new ClipNodeInstance(this);
 }
 
@@ -157,6 +205,7 @@ internal sealed class ClipNodeInstance : PoseNodeInstance
     private ValueNodeInstance? _reverse;
     private ValueNodeInstance? _reset;
     private ClipCursor _cursor;
+    private RandomSource _random;
     private bool _resetWasSet;
     private bool _firstUpdate;
 
@@ -166,6 +215,12 @@ internal sealed class ClipNodeInstance : PoseNodeInstance
 
     /// <summary>The playback step taken by the last update (direction, wraps), used by warp nodes.</summary>
     internal PlaybackSpan LastSpan { get; private set; }
+
+    /// <summary>
+    /// Goes up each time the reset driver sends the clip back to its start. A reseek moves the clip
+    /// without a loop wrap, so a node built on where the clip was can tell it has to start again.
+    /// </summary>
+    internal int SeekCount { get; private set; }
 
     /// <summary>The clip this node plays (used by warp nodes that wrap a clip).</summary>
     public AnimationClipBase Clip => _def.Clip;
@@ -178,8 +233,10 @@ internal sealed class ClipNodeInstance : PoseNodeInstance
         Pose = new Pose(context.Skeleton);
         _mapping = _def.Clip.GetMappingTo(context.Skeleton);
         Duration = EffectiveDuration;
-        _reverse = context.OptionalValueNode(_def.PlayInReverseNodeIndex, ValueInputKind.Number);
-        _reset = context.OptionalValueNode(_def.ResetTimeNodeIndex, ValueInputKind.Number);
+        // Both are read as true or false, so a flag or a number both say what they need to.
+        _reverse = context.OptionalValueNode(_def.PlayInReverseNodeIndex);
+        _reset = context.OptionalValueNode(_def.ResetTimeNodeIndex);
+        _random = new RandomSource(_def.RandomSeed);
     }
 
     private float EffectiveDuration
@@ -195,11 +252,18 @@ internal sealed class ClipNodeInstance : PoseNodeInstance
     {
         Duration = EffectiveDuration;
         _cursor = default;
-        _cursor.Time = initialTime.HasValue ? SyncTrack.GetPercentageThrough(initialTime.Value) : 0f;
+        _cursor.Time = initialTime.HasValue ? SyncTrack.GetPercentageThrough(initialTime.Value) : StartFraction();
         PreviousTime = NormalizedTime = _cursor.Time;
         LastSpan = new PlaybackSpan(_cursor.Time, _cursor.Time, 0, false, true);
         _resetWasSet = false;
         _firstUpdate = true;
+    }
+
+    private float StartFraction()
+    {
+        if (_def.RandomStart) return _random.NextFloat();
+        float start = _def.StartTime;
+        return float.IsFinite(start) ? Math.Clamp(start, 0f, 1f) : 0f;
     }
 
     protected override void OnUpdate(GraphContext context)
@@ -230,7 +294,10 @@ internal sealed class ClipNodeInstance : PoseNodeInstance
                 _resetWasSet = resetSet;
             }
             if (resetNow)
+            {
                 _cursor.Time = reverse ? 1f : 0f;
+                SeekCount++;
+            }
 
             float deltaSeconds = reverse ? -context.DeltaTime : context.DeltaTime;
             span = _cursor.Advance(deltaSeconds, Duration, _def.Loop, _firstUpdate || resetNow);

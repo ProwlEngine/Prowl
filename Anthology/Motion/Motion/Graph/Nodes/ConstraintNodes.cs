@@ -267,7 +267,7 @@ public sealed class TwistDistributionDefinition : PoseNodeDefinition
     /// <summary>Each twist bone and the fraction of the roll it takes.</summary>
     public (StringID Bone, float Share)[] TwistBones { get; }
 
-    /// <summary>The limb axis the roll is measured about, in the driver's parent space.</summary>
+    /// <summary>The limb axis the roll is measured about, in the driver's own reference space.</summary>
     public Float3 Axis { get; set; } = new(1f, 0f, 0f);
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
@@ -302,10 +302,9 @@ public sealed class TwistDistributionDefinition : PoseNodeDefinition
         }
 
         /// <summary>
-        /// The axis is given in the driver's parent space, which is where the roll is measured. A twist
-        /// bone is turned about its own axes, so the same direction is carried into each bone's space
-        /// through the reference pose. They only coincide when a twist bone happens to share the
-        /// driver's parent orientation.
+        /// The axis is given in the driver's own reference space, which is where the roll is measured. A
+        /// twist bone is turned about its own axes, so the same direction is carried into each bone's
+        /// space through the reference pose.
         /// </summary>
         private void BuildBoneAxes(Skeleton skeleton)
         {
@@ -314,9 +313,7 @@ public sealed class TwistDistributionDefinition : PoseNodeDefinition
                 return;
 
             IReadOnlyList<Transform3D> model = skeleton.ModelSpaceReferencePose;
-            int driverParent = skeleton.GetParentBoneIndex(_driver);
-            Quaternion parentRotation = driverParent == Skeleton.InvalidIndex ? Quaternion.Identity : model[driverParent].rotation;
-            Float3 modelAxis = parentRotation * _axis;
+            Float3 modelAxis = model[_driver].rotation * _axis;
 
             for (int i = 0; i < _bones.Length; i++)
             {

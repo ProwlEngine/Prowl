@@ -3,13 +3,15 @@ using Prowl.Vector;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A per-bone weight array in [0,1] used to restrict blends to part of the skeleton.
+/// A per-bone weight array in [0,1] used to restrict blends to part of the skeleton, with a weight per
+/// float channel alongside. Channels start at 1, fully affected, since a channel belongs to no bone.
 /// Combine is element-wise multiply; blend is a per-weight lerp.
 /// </summary>
 public sealed class BoneMask
 {
     private readonly Skeleton _skeleton;
     private readonly float[] _weights;
+    private readonly float[] _channels;
 
     /// <summary>Creates a mask for the skeleton with every weight set to <paramref name="fixedWeight"/>.</summary>
     public BoneMask(Skeleton skeleton, float fixedWeight = 0f)
@@ -19,6 +21,8 @@ public sealed class BoneMask
         _weights = new float[skeleton.BoneCount];
         if (fixedWeight != 0f)
             Array.Fill(_weights, Maths.Clamp(fixedWeight, 0f, 1f));
+        _channels = new float[skeleton.FloatChannelCount];
+        Array.Fill(_channels, 1f);
     }
 
     public Skeleton Skeleton => _skeleton;
@@ -26,9 +30,20 @@ public sealed class BoneMask
     /// <summary>Number of weights (one per bone).</summary>
     public int Length => _weights.Length;
 
+    /// <summary>Number of channel weights (one per float channel).</summary>
+    public int ChannelCount => _channels.Length;
+
     public float GetWeight(int boneIndex) => _weights[boneIndex];
 
     public void SetWeight(int boneIndex, float weight) => _weights[boneIndex] = Maths.Clamp(weight, 0f, 1f);
+
+    /// <summary>How much of a layer reaches one float channel.</summary>
+    public float GetChannelWeight(int channelIndex) => _channels[channelIndex];
+
+    public void SetChannelWeight(int channelIndex, float weight) => _channels[channelIndex] = Maths.Clamp(weight, 0f, 1f);
+
+    /// <summary>Sets every channel weight to the given value.</summary>
+    public void ResetChannelWeights(float weight) => Array.Fill(_channels, Maths.Clamp(weight, 0f, 1f));
 
     /// <summary>Sets every weight to the given value.</summary>
     public void ResetWeights(float weight) => Array.Fill(_weights, Maths.Clamp(weight, 0f, 1f));
@@ -42,6 +57,8 @@ public sealed class BoneMask
 
         for (int i = 0; i < _weights.Length; i++)
             _weights[i] *= other._weights[i];
+        for (int i = 0; i < _channels.Length; i++)
+            _channels[i] *= other._channels[i];
     }
 
     /// <summary>Lerps every weight toward the target mask by t in [0,1].</summary>
@@ -54,6 +71,8 @@ public sealed class BoneMask
         float clamped = Maths.Clamp(t, 0f, 1f);
         for (int i = 0; i < _weights.Length; i++)
             _weights[i] = Maths.Lerp(_weights[i], target._weights[i], clamped);
+        for (int i = 0; i < _channels.Length; i++)
+            _channels[i] = Maths.Lerp(_channels[i], target._channels[i], clamped);
     }
 
     public void CopyFrom(BoneMask other)
@@ -63,6 +82,7 @@ public sealed class BoneMask
             throw new ArgumentException("Bone mask lengths must match.", nameof(other));
 
         Array.Copy(other._weights, _weights, _weights.Length);
+        Array.Copy(other._channels, _channels, _channels.Length);
     }
 
     /// <summary>

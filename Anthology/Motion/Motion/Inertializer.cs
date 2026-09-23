@@ -93,6 +93,11 @@ public sealed class Inertializer
     private readonly Channel[] _floats;
     private readonly Transform3D[] _previous;
     private readonly Transform3D[] _beforePrevious;
+
+    // The poses asked for, before any offset. A jump is judged on these: judged on the output, the
+    // offset still decaying from the last jump looks like a new one every frame.
+    private readonly Transform3D[] _previousTarget;
+    private readonly Transform3D[] _beforePreviousTarget;
     private readonly float[] _previousFloats;
     private readonly float[] _beforePreviousFloats;
     private float _lastDeltaTime;
@@ -105,6 +110,8 @@ public sealed class Inertializer
         _floats = new Channel[skeleton.FloatChannelCount];
         _previous = new Transform3D[skeleton.BoneCount];
         _beforePrevious = new Transform3D[skeleton.BoneCount];
+        _previousTarget = new Transform3D[skeleton.BoneCount];
+        _beforePreviousTarget = new Transform3D[skeleton.BoneCount];
         _previousFloats = new float[skeleton.FloatChannelCount];
         _beforePreviousFloats = new float[skeleton.FloatChannelCount];
     }
@@ -151,15 +158,15 @@ public sealed class Inertializer
         {
             Transform3D transform = target.GetTransform(b);
 
-            float step = AngleBetween(_previous[b].rotation, transform.rotation);
-            float lastStep = AngleBetween(_beforePrevious[b].rotation, _previous[b].rotation);
+            float step = AngleBetween(_previousTarget[b].rotation, transform.rotation);
+            float lastStep = AngleBetween(_beforePreviousTarget[b].rotation, _previousTarget[b].rotation);
             if (step > radians && step > lastStep * JumpRatio + 1e-4f)
                 return true;
 
             if (distance > 0f)
             {
-                step = Float3.Length(_previous[b].position - transform.position);
-                lastStep = Float3.Length(_beforePrevious[b].position - _previous[b].position);
+                step = Float3.Length(_previousTarget[b].position - transform.position);
+                lastStep = Float3.Length(_beforePreviousTarget[b].position - _previousTarget[b].position);
                 if (step > distance && step > lastStep * JumpRatio + 1e-5f)
                     return true;
             }
@@ -237,6 +244,8 @@ public sealed class Inertializer
         {
             ref BoneState state = ref _bones[b];
             Transform3D transform = target.GetTransform(b);
+            _beforePreviousTarget[b] = _previousTarget[b];
+            _previousTarget[b] = transform;
 
             float angle = state.Rotation.Advance(step);
             if (angle != 0f)

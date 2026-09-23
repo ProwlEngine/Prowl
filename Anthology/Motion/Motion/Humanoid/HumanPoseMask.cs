@@ -21,8 +21,25 @@ public sealed class HumanPoseMask
 {
     private readonly float[] _bones = new float[HumanTrait.BoneCount];
     private readonly float[] _goals = new float[HumanPose.GoalCount];
+    private readonly Dictionary<StringID, float> _channels = new();
+    private float _channelWeight = 1f;
 
     public float RootWeight { get; set; }
+
+    /// <summary>
+    /// How much of a layer reaches a float channel with no weight of its own. A channel belongs to no
+    /// body part, so it has its own weight, and starts fully affected.
+    /// </summary>
+    public float ChannelWeight
+    {
+        get => _channelWeight;
+        set => _channelWeight = Maths.Clamp(value, 0f, 1f);
+    }
+
+    /// <summary>How much of a layer reaches one float channel.</summary>
+    public float GetChannelWeight(StringID channel) => _channels.TryGetValue(channel, out float weight) ? weight : _channelWeight;
+
+    public void SetChannelWeight(StringID channel, float weight) => _channels[channel] = Maths.Clamp(weight, 0f, 1f);
 
     public float GetBoneWeight(HumanBodyBone bone) => _bones[(int)bone];
     public void SetBoneWeight(HumanBodyBone bone, float weight) => _bones[(int)bone] = Maths.Clamp(weight, 0f, 1f);

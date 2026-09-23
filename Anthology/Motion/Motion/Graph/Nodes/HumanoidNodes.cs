@@ -266,6 +266,7 @@ public sealed class MuscleLayerDefinition : PoseNodeDefinition
             RootMotionDelta = _base.RootMotionDelta;
 
             float weight = Math.Clamp(_weight?.GetValue(context).AsFloat() ?? _def.Weight, 0f, 1f);
+            context.Events.UpdateWeights(_layer.SampledEventRange, weight);
             if (!(weight > 0f))
             {
                 Pose.CopyFrom(_base.Pose);
@@ -310,7 +311,8 @@ public sealed class MuscleLayerDefinition : PoseNodeDefinition
                     to -= referencePose?.GetFloat(c) ?? 0f;
                 else
                     to -= from;
-                Pose.SetFloat(c, from + to * weight);
+                float masked = _def.Mask is null ? weight : weight * _def.Mask.GetChannelWeight(Pose.Skeleton.GetFloatChannelID(c));
+                Pose.SetFloat(c, from + to * masked);
             }
         }
     }

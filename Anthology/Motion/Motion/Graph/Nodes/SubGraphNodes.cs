@@ -29,6 +29,8 @@ public sealed class ReferencedGraphDefinition : PoseNodeDefinition
         private readonly ReferencedGraphDefinition _def;
         private AnimationGraphInstance _child = null!;
         private (ValueNodeInstance Node, int Parameter)[] _links = null!;
+        private bool[] _handedTrue = null!;
+        private ControlParameterInstance[]?[] _linkParameters = null!;
 
         public Instance(ReferencedGraphDefinition def) => _def = def;
 
@@ -39,6 +41,8 @@ public sealed class ReferencedGraphDefinition : PoseNodeDefinition
             _child = _def.Graph.CreateInstance(context.Skeleton, context.Avatar);
             Pose = new Pose(context.Skeleton);
             _links = new (ValueNodeInstance, int)[_def.ParameterLinks.Count];
+            _handedTrue = new bool[_links.Length];
+            _linkParameters = new ControlParameterInstance[]?[_links.Length];
             for (int i = 0; i < _links.Length; i++)
             {
                 (int parentNode, string childParameter) = _def.ParameterLinks[i];
@@ -69,12 +73,34 @@ public sealed class ReferencedGraphDefinition : PoseNodeDefinition
             ReflectParameters(context);
             _child.UpdateAsChild(context);
             CopyResultFrom(_child.Root);
+            SpendTriggers(context);
+        }
+
+        /// <summary>
+        /// A value handed down is a copy, so when the child's transition spends a trigger it was given,
+        /// the parent's triggers behind that value have to go too, however the value was worked out, or
+        /// they hand it down again next frame and it never runs out.
+        /// </summary>
+        private void SpendTriggers(GraphContext context)
+        {
+            for (int i = 0; i < _links.Length; i++)
+            {
+                if (!_handedTrue[i] || _child.GetParameter(_links[i].Parameter).AsBool()) continue;
+
+                _linkParameters[i] ??= ControlParameterInstance.ReadBy(_links[i].Node);
+                foreach (ControlParameterInstance parameter in _linkParameters[i]!)
+                    parameter.Consume(context);
+            }
         }
 
         private void ReflectParameters(GraphContext context)
         {
             for (int i = 0; i < _links.Length; i++)
-                _child.SetParameterValue(_links[i].Parameter, _links[i].Node.GetValue(context));
+            {
+                ParameterValue value = _links[i].Node.GetValue(context);
+                _handedTrue[i] = value.Type == AnimationValueType.Bool && value.AsBool();
+                _child.SetParameterValue(_links[i].Parameter, value);
+            }
         }
     }
 }

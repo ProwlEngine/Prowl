@@ -113,9 +113,11 @@ public sealed class FootLockDefinition : PoseNodeDefinition
 
         private static float Approach(float value, float target, float deltaTime, float seconds)
         {
-            if (!(seconds > 0f) || !(deltaTime > 0f))
+            if (!(seconds > 0f))
                 return target;
-            float step = deltaTime / seconds;
+            if (!(MathF.Abs(deltaTime) > 0f))
+                return value;
+            float step = MathF.Abs(deltaTime) / seconds;
             return value < target ? MathF.Min(target, value + step) : MathF.Max(target, value - step);
         }
 
@@ -148,12 +150,12 @@ public sealed class StrideWarpDefinition : PoseNodeDefinition
     public int DesiredSpeedNodeIndex { get; }
 
     /// <summary>The clip's own travel speed, or 0 to measure it from the clip's root motion.</summary>
-    public float NaturalSpeed { get; set; }
+    public FloatInput NaturalSpeed { get; set; }
 
     /// <summary>Limits on how far the playback rate may be bent.</summary>
-    public float MinScale { get; set; } = 0.5f;
+    public FloatInput MinScale { get; set; } = 0.5f;
 
-    public float MaxScale { get; set; } = 2f;
+    public FloatInput MaxScale { get; set; } = 2f;
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
@@ -161,6 +163,7 @@ public sealed class StrideWarpDefinition : PoseNodeDefinition
     {
         private readonly StrideWarpDefinition _def;
         private ValueNodeInstance _desired = null!;
+        private BoundFloat _natural, _minScale, _maxScale;
         private float _scale = 1f;
 
         public Instance(StrideWarpDefinition def) => _def = def;
@@ -172,6 +175,9 @@ public sealed class StrideWarpDefinition : PoseNodeDefinition
         {
             BindChild(context, _def.Child);
             _desired = context.ValueNode(_def.DesiredSpeedNodeIndex, ValueInputKind.Number);
+            _natural = BoundFloat.Bind(context, _def.NaturalSpeed);
+            _minScale = BoundFloat.Bind(context, _def.MinScale);
+            _maxScale = BoundFloat.Bind(context, _def.MaxScale);
         }
 
         protected override void OnUpdate(GraphContext context)
@@ -200,11 +206,14 @@ public sealed class StrideWarpDefinition : PoseNodeDefinition
             if (!float.IsFinite(desired) || desired < 0f)
                 return 1f;
 
-            float natural = _def.NaturalSpeed > 0f ? _def.NaturalSpeed : NaturalFromChild();
+            float asked = _natural.Get(context);
+            float natural = asked > 0f ? asked : NaturalFromChild();
             if (!(natural > 1e-4f))
                 return 1f;
 
-            return Math.Clamp(desired / natural, _def.MinScale, _def.MaxScale);
+            // Either bound can be driven, so they may arrive crossed, which a clamp would throw on.
+            float min = _minScale.Get(context), max = _maxScale.Get(context);
+            return Math.Clamp(desired / natural, MathF.Min(min, max), MathF.Max(min, max));
         }
 
         private float NaturalFromChild() => Child is ClipNodeInstance clip ? clip.Clip.AverageLinearSpeed : 0f;
@@ -243,30 +252,46 @@ public sealed class RootMotionFilterDefinition : PoseNodeDefinition
     public RootMotionChannels Keep { get; }
 
     /// <summary>Scales whatever survives the filter, so motion can be damped rather than removed.</summary>
-    public float Scale { get; set; } = 1f;
+    public FloatInput Scale { get; set; } = 1f;
+
+    /// <summary>Scales the travel that survives, on top of <see cref="Scale"/>.</summary>
+    public FloatInput TravelScale { get; set; } = 1f;
+
+    /// <summary>Scales the turn that survives, on top of <see cref="Scale"/>.</summary>
+    public FloatInput TurnScale { get; set; } = 1f;
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly RootMotionFilterDefinition _def;
+        private BoundFloat _scale, _travel, _turn;
 
         public Instance(RootMotionFilterDefinition def) => _def = def;
 
-        public override void Bind(GraphBindContext context) => BindChild(context, _def.Child);
+        public override void Bind(GraphBindContext context)
+        {
+            BindChild(context, _def.Child);
+            _scale = BoundFloat.Bind(context, _def.Scale);
+            _travel = BoundFloat.Bind(context, _def.TravelScale);
+            _turn = BoundFloat.Bind(context, _def.TurnScale);
+        }
 
         protected override void OnUpdate(GraphContext context)
         {
             base.OnUpdate(context);
 
+            float scale = _scale.Get(context);
+            float travel = scale * _travel.Get(context);
+            float turn = scale * _turn.Get(context);
             Transform3D delta = RootMotionDelta;
             var position = new Float3(
-                (_def.Keep & RootMotionChannels.X) != 0 ? delta.position.X * _def.Scale : 0f,
-                (_def.Keep & RootMotionChannels.Y) != 0 ? delta.position.Y * _def.Scale : 0f,
-                (_def.Keep & RootMotionChannels.Z) != 0 ? delta.position.Z * _def.Scale : 0f);
+                (_def.Keep & RootMotionChannels.X) != 0 ? delta.position.X * travel : 0f,
+                (_def.Keep & RootMotionChannels.Y) != 0 ? delta.position.Y * travel : 0f,
+                (_def.Keep & RootMotionChannels.Z) != 0 ? delta.position.Z * travel : 0f);
 
             Quaternion rotation = (_def.Keep & RootMotionChannels.Rotation) != 0
-                ? (_def.Scale == 1f ? delta.rotation : Quaternion.Slerp(Quaternion.Identity, delta.rotation, _def.Scale))
+                ? (turn == 1f ? delta.rotation : Quaternion.Slerp(Quaternion.Identity, delta.rotation, turn))
                 : Quaternion.Identity;
 
             RootMotionDelta = new Transform3D(position, rotation, delta.scale);

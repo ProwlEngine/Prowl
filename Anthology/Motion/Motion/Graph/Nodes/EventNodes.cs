@@ -42,6 +42,9 @@ public sealed class IdEventConditionDefinition : ValueNodeDefinition
     {
         private readonly IdEventConditionDefinition _def;
         public Instance(IdEventConditionDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
+
+        protected override bool ReadsEvents => true;
 
         protected override ParameterValue Compute(GraphContext context)
         {
@@ -91,6 +94,9 @@ public sealed class FootEventConditionDefinition : ValueNodeDefinition
     {
         private readonly FootEventConditionDefinition _def;
         public Instance(FootEventConditionDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
+
+        protected override bool ReadsEvents => true;
 
         protected override ParameterValue Compute(GraphContext context)
         {
@@ -142,6 +148,9 @@ public sealed class TransitionEventConditionDefinition : ValueNodeDefinition
     {
         private readonly TransitionEventConditionDefinition _def;
         public Instance(TransitionEventConditionDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
+
+        protected override bool ReadsEvents => true;
 
         protected override ParameterValue Compute(GraphContext context)
         {

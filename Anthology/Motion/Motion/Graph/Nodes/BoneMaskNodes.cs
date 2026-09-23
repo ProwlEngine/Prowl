@@ -16,6 +16,10 @@ public sealed class HierarchicalBoneMaskDefinition : BoneMaskNodeDefinition
         => Seeds = new List<(StringID, float)>(seeds).ToArray();
 
     public (StringID Bone, float Weight)[] Seeds { get; }
+
+    /// <summary>The weight of every bone no seed reaches.</summary>
+    public float RestWeight { get; init; }
+
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : BoneMaskNodeInstance
@@ -33,10 +37,32 @@ public sealed class HierarchicalBoneMaskDefinition : BoneMaskNodeDefinition
                 if (index != Skeleton.InvalidIndex)
                     seeds.Add((index, weight));
             }
-            _mask = BoneMask.CreateHierarchical(context.Skeleton, seeds);
+            _mask = BoneMask.CreateHierarchical(context.Skeleton, seeds, _def.RestWeight);
         }
 
         protected override BoneMask Compute(GraphContext context) => _mask;
+    }
+}
+
+/// <summary>A mask built ahead of time for the skeleton the graph runs on, such as one from an asset.</summary>
+public sealed class StaticBoneMaskDefinition : BoneMaskNodeDefinition
+{
+    public StaticBoneMaskDefinition(BoneMask mask) => Mask = mask ?? throw new ArgumentNullException(nameof(mask));
+    public BoneMask Mask { get; }
+    public override GraphNodeInstance CreateInstance() => new Instance(this);
+
+    private sealed class Instance : BoneMaskNodeInstance
+    {
+        private readonly StaticBoneMaskDefinition _def;
+        public Instance(StaticBoneMaskDefinition def) => _def = def;
+
+        public override void Bind(GraphBindContext context)
+        {
+            if (_def.Mask.Length != context.Skeleton.BoneCount)
+                throw context.Error($"has a mask for {_def.Mask.Length} bones, but the skeleton has {context.Skeleton.BoneCount}.");
+        }
+
+        protected override BoneMask Compute(GraphContext context) => _def.Mask;
     }
 }
 

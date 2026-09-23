@@ -41,6 +41,7 @@ public sealed class RandomSelectorDefinition : PoseNodeDefinition
         private PoseNodeInstance[] _children = null!;
         private RandomSource _random;
         private int _selected = -1;
+        private int _previous = -1;
         private int _startLoop;
 
         public Instance(RandomSelectorDefinition def) => _def = def;
@@ -54,6 +55,8 @@ public sealed class RandomSelectorDefinition : PoseNodeDefinition
             if (_def.Weights is not null && _def.Weights.Length != _def.Children.Length)
                 throw context.Error("a random selector needs one weight per child.");
 
+            // Seeded once, so each entry draws the next pick rather than the first one again.
+            _random = new RandomSource(_def.Seed);
             Pose = new Pose(context.Skeleton);
             _children = new PoseNodeInstance[_def.Children.Length];
             for (int i = 0; i < _children.Length; i++)
@@ -62,7 +65,6 @@ public sealed class RandomSelectorDefinition : PoseNodeDefinition
 
         protected override void OnInitialize(GraphContext context, SyncTrackTime? initialTime)
         {
-            _random = new RandomSource(_def.Seed);
             _selected = Pick();
             _children[_selected].Initialize(context, initialTime);
             _startLoop = _children[_selected].LoopCount;
@@ -101,8 +103,9 @@ public sealed class RandomSelectorDefinition : PoseNodeDefinition
                 return 0;
 
             int chosen = _def.Weights is null ? (int)_random.Next((uint)_children.Length) : PickWeighted();
-            if (_def.AvoidRepeats && chosen == _selected)
-                chosen = _def.Weights is null ? (chosen + 1 + (int)_random.Next((uint)(_children.Length - 1))) % _children.Length : PickWeighted(skip: _selected);
+            if (_def.AvoidRepeats && chosen == _previous)
+                chosen = _def.Weights is null ? (chosen + 1 + (int)_random.Next((uint)(_children.Length - 1))) % _children.Length : PickWeighted(skip: _previous);
+            _previous = chosen;
             return chosen;
         }
 

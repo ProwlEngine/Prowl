@@ -4,7 +4,8 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-public enum FloatMathOp : byte { Add, Subtract, Multiply, Divide, Min, Max }
+/// <summary>An arithmetic operation. Absolute and Negate read A alone.</summary>
+public enum FloatMathOp : byte { Add, Subtract, Multiply, Divide, Min, Max, Absolute, Negate }
 public enum CompareOp : byte { Greater, GreaterOrEqual, Less, LessOrEqual, Equal, NotEqual }
 public enum BoolOp : byte { And, Or, Not }
 public enum VectorComponent : byte { X, Y, Z, Length }
@@ -91,7 +92,7 @@ internal struct EasedFloat
 
         if (target != _target)
         {
-            Add(target - _target, step);
+            Add(target - _target, step, easeTime);
             _target = target;
         }
 
@@ -104,11 +105,21 @@ internal struct EasedFloat
         return value;
     }
 
-    private void Add(float amount, float age)
+    // Changes closer together than this share of the ease time join one step, so a target that moves
+    // every frame keeps this many steps at most whatever the frame rate, each off by less than the share.
+    private const int Slices = 64;
+
+    private void Add(float amount, float age, float easeTime)
     {
+        if (_count > 0 && _ages![_count - 1] < easeTime / Slices)
+        {
+            _amounts![_count - 1] += amount;
+            return;
+        }
+
         if (_amounts is null || _count == _amounts.Length)
         {
-            int size = _amounts is null ? 8 : _amounts.Length * 2;
+            int size = _amounts is null ? Slices + 2 : _amounts.Length * 2;
             Array.Resize(ref _amounts, size);
             Array.Resize(ref _ages, size);
         }
@@ -141,6 +152,7 @@ public sealed class ConstValueDefinition : ValueNodeDefinition
     {
         private readonly ConstValueDefinition _def;
         public Instance(ConstValueDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
         protected override ParameterValue Compute(GraphContext context) => _def.Value;
     }
 }
@@ -151,6 +163,9 @@ public sealed class ConstValueDefinition : ValueNodeDefinition
 public sealed class FloatMathDefinition : ValueNodeDefinition
 {
     public FloatMathDefinition(int a, int b, FloatMathOp op) { A = a; B = b; Op = op; }
+
+    /// <summary>Whether the operation reads A alone, leaving B unwired.</summary>
+    public static bool IsUnary(FloatMathOp op) => op is FloatMathOp.Absolute or FloatMathOp.Negate;
     public int A { get; }
     public int B { get; }
     public FloatMathOp Op { get; }
@@ -162,10 +177,19 @@ public sealed class FloatMathDefinition : ValueNodeDefinition
         private readonly FloatMathDefinition _def;
         private ValueNodeInstance _a = null!, _b = null!;
         public Instance(FloatMathDefinition def) => _def = def;
-        public override void Bind(GraphBindContext context) { _a = context.ValueNode(_def.A, ValueInputKind.Number); _b = context.ValueNode(_def.B, ValueInputKind.Number); }
+        protected override bool KeepsNoState => true;
+        public override void Bind(GraphBindContext context)
+        {
+            _a = context.ValueNode(_def.A, ValueInputKind.Number);
+            if (!IsUnary(_def.Op)) _b = context.ValueNode(_def.B, ValueInputKind.Number);
+        }
+
         protected override ParameterValue Compute(GraphContext context)
         {
             float a = _a.GetValue(context).AsFloat();
+            if (IsUnary(_def.Op))
+                return ParameterValue.FromFloat(_def.Op == FloatMathOp.Absolute ? MathF.Abs(a) : -a);
+
             float b = _b.GetValue(context).AsFloat();
             float r = _def.Op switch
             {
@@ -200,6 +224,7 @@ public sealed class FloatCompareDefinition : ValueNodeDefinition
         private readonly FloatCompareDefinition _def;
         private ValueNodeInstance _a = null!, _b = null!;
         public Instance(FloatCompareDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
         public override void Bind(GraphBindContext context) { _a = context.ValueNode(_def.A, ValueInputKind.Number); _b = context.ValueNode(_def.B, ValueInputKind.Number); }
         protected override ParameterValue Compute(GraphContext context)
         {
@@ -232,6 +257,10 @@ public sealed class FloatRemapDefinition : ValueNodeDefinition
     public float InMax { get; }
     public float OutMin { get; }
     public float OutMax { get; }
+
+    /// <summary>Keeps the result inside the output range rather than extrapolating past it.</summary>
+    public bool Clamp { get; init; }
+
     public override AnimationValueType ValueType => AnimationValueType.Float;
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
@@ -246,6 +275,7 @@ public sealed class FloatRemapDefinition : ValueNodeDefinition
             float v = _input.GetValue(context).AsFloat();
             float span = _def.InMax - _def.InMin;
             float t = MathF.Abs(span) < 1e-9f ? 0f : (v - _def.InMin) / span;
+            if (_def.Clamp) t = Math.Clamp(t, 0f, 1f);
             return ParameterValue.FromFloat(_def.OutMin + (_def.OutMax - _def.OutMin) * t);
         }
     }
@@ -313,10 +343,16 @@ public sealed class FloatSwitchDefinition : ValueNodeDefinition
         private readonly FloatSwitchDefinition _def;
         private ValueNodeInstance _selector = null!, _true = null!, _false = null!;
         public Instance(FloatSwitchDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
         public override void Bind(GraphBindContext context)
         { _selector = context.ValueNode(_def.Selector, ValueInputKind.Number); _true = context.ValueNode(_def.TrueValue, ValueInputKind.Number); _false = context.ValueNode(_def.FalseValue, ValueInputKind.Number); }
         protected override ParameterValue Compute(GraphContext context)
-            => ParameterValue.FromFloat((_selector.GetValue(context).AsBool() ? _true : _false).GetValue(context).AsFloat());
+        {
+            // Both sides are read every frame, so an input that keeps state keeps stepping while unused.
+            float whenTrue = _true.GetValue(context).AsFloat();
+            float whenFalse = _false.GetValue(context).AsFloat();
+            return ParameterValue.FromFloat(_selector.GetValue(context).AsBool() ? whenTrue : whenFalse);
+        }
     }
 }
 
@@ -337,6 +373,7 @@ public sealed class FloatRangeComparisonDefinition : ValueNodeDefinition
         private readonly FloatRangeComparisonDefinition _def;
         private ValueNodeInstance _input = null!;
         public Instance(FloatRangeComparisonDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
         public override void Bind(GraphBindContext context) => _input = context.ValueNode(_def.Input, ValueInputKind.Number);
         protected override ParameterValue Compute(GraphContext context)
         {
@@ -424,19 +461,30 @@ public sealed class FloatEaseDefinition : ValueNodeDefinition
 public sealed class FloatSelectorDefinition : ValueNodeDefinition
 {
     public FloatSelectorDefinition(IReadOnlyList<int> conditionNodes, IReadOnlyList<float> values, float defaultValue, float easeTime = 0.2f, EasingOp easing = EasingOp.None)
+        : this(conditionNodes, ToInputs(values), FloatInput.Of(defaultValue), easeTime, easing) { }
+
+    /// <summary>A chooser whose values, and its default, may each be a fixed number or a value node.</summary>
+    public FloatSelectorDefinition(IReadOnlyList<int> conditionNodes, IReadOnlyList<FloatInput> values, FloatInput defaultValue, float easeTime = 0.2f, EasingOp easing = EasingOp.None)
     {
         if (conditionNodes.Count != values.Count)
             throw new ArgumentException("FloatSelector needs one value per condition.");
         ConditionNodes = new List<int>(conditionNodes).ToArray();
-        Values = new List<float>(values).ToArray();
-        DefaultValue = defaultValue;
+        ValueInputs = new List<FloatInput>(values).ToArray();
+        DefaultInput = defaultValue;
         EaseTime = easeTime;
         Easing = easing;
     }
 
+    private static FloatInput[] ToInputs(IReadOnlyList<float> values)
+    {
+        var inputs = new FloatInput[values.Count];
+        for (int i = 0; i < inputs.Length; i++) inputs[i] = values[i];
+        return inputs;
+    }
+
     public int[] ConditionNodes { get; }
-    public float[] Values { get; }
-    public float DefaultValue { get; }
+    public FloatInput[] ValueInputs { get; }
+    public FloatInput DefaultInput { get; }
     public float EaseTime { get; }
     public EasingOp Easing { get; }
     public override AnimationValueType ValueType => AnimationValueType.Float;
@@ -446,6 +494,8 @@ public sealed class FloatSelectorDefinition : ValueNodeDefinition
     {
         private readonly FloatSelectorDefinition _def;
         private ValueNodeInstance[] _conditions = null!;
+        private BoundFloat[] _values = null!;
+        private BoundFloat _default;
         private EasedFloat _value;
         private double _lastTime;
         private bool _started;
@@ -454,21 +504,30 @@ public sealed class FloatSelectorDefinition : ValueNodeDefinition
         public override void Bind(GraphBindContext context)
         {
             _conditions = new ValueNodeInstance[_def.ConditionNodes.Length];
+            _values = new BoundFloat[_conditions.Length];
             for (int i = 0; i < _conditions.Length; i++)
+            {
                 _conditions[i] = context.ValueNode(_def.ConditionNodes[i], ValueInputKind.Number);
+                _values[i] = BoundFloat.Bind(context, _def.ValueInputs[i]);
+            }
+            _default = BoundFloat.Bind(context, _def.DefaultInput);
         }
 
         protected override void OnInitialize(GraphContext context) => _started = false;
 
         protected override ParameterValue Compute(GraphContext context)
         {
-            float target = _def.DefaultValue;
+            // Every input is read, not just up to the first that holds, so inputs that keep state keep stepping.
+            float target = _default.Get(context);
+            bool picked = false;
             for (int i = 0; i < _conditions.Length; i++)
             {
-                if (_conditions[i].GetValue(context).AsBool())
+                bool holds = _conditions[i].GetValue(context).AsBool();
+                float value = _values[i].Get(context);
+                if (holds && !picked)
                 {
-                    target = _def.Values[i];
-                    break;
+                    target = value;
+                    picked = true;
                 }
             }
 
@@ -507,6 +566,7 @@ public sealed class BoolLogicDefinition : ValueNodeDefinition
         private ValueNodeInstance _a = null!;
         private ValueNodeInstance? _b;
         public Instance(BoolLogicDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
         public override void Bind(GraphBindContext context)
         {
             _a = context.ValueNode(_def.A, ValueInputKind.Number);
@@ -518,8 +578,8 @@ public sealed class BoolLogicDefinition : ValueNodeDefinition
             bool r = _def.Op switch
             {
                 BoolOp.Not => !a,
-                BoolOp.And => a && _b!.GetValue(context).AsBool(),
-                BoolOp.Or => a || _b!.GetValue(context).AsBool(),
+                BoolOp.And => _b!.GetValue(context).AsBool() & a,
+                BoolOp.Or => _b!.GetValue(context).AsBool() | a,
                 _ => a
             };
             return ParameterValue.FromBool(r);
@@ -585,6 +645,7 @@ public sealed class IdComparisonDefinition : ValueNodeDefinition
         private readonly IdComparisonDefinition _def;
         private ValueNodeInstance _input = null!;
         public Instance(IdComparisonDefinition def) => _def = def;
+        protected override bool KeepsNoState => true;
         public override void Bind(GraphBindContext context) => _input = context.ValueNode(_def.Input, ValueInputKind.Id);
         protected override ParameterValue Compute(GraphContext context)
         {

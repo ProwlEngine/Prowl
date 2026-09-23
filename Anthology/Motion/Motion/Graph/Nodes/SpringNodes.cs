@@ -52,10 +52,10 @@ public sealed class SpringBonesDefinition : PoseNodeDefinition
     public int BoneCount { get; }
 
     /// <summary>How strongly a bone is pulled back to where the animation put it.</summary>
-    public float Stiffness { get; set; } = 40f;
+    public FloatInput Stiffness { get; set; } = 40f;
 
     /// <summary>How quickly the swinging dies down.</summary>
-    public float Damping { get; set; } = 6f;
+    public FloatInput Damping { get; set; } = 6f;
 
     /// <summary>Constant acceleration in the character's own space, usually a downward pull.</summary>
     public Float3 Gravity { get; set; }
@@ -77,6 +77,7 @@ public sealed class SpringBonesDefinition : PoseNodeDefinition
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly SpringBonesDefinition _def;
+        private BoundFloat _stiffness, _damping;
         private ValueNodeInstance? _weight;
         private int[] _bones = null!;
         private int[] _parents = null!;
@@ -90,6 +91,8 @@ public sealed class SpringBonesDefinition : PoseNodeDefinition
 
         public override void Bind(GraphBindContext context)
         {
+            _stiffness = BoundFloat.Bind(context, _def.Stiffness);
+            _damping = BoundFloat.Bind(context, _def.Damping);
             BindChild(context, _def.Child);
             _weight = context.OptionalValueNode(_def.WeightNodeIndex, ValueInputKind.Number);
 
@@ -143,18 +146,19 @@ public sealed class SpringBonesDefinition : PoseNodeDefinition
                 return;
 
             Transform3D world = context.WorldTransform;
-            float dt = context.DeltaTime;
+            // The chain swings on real time whichever way the clip plays, and a paused frame holds the swing.
+            float dt = float.IsFinite(context.DeltaTime) ? MathF.Abs(context.DeltaTime) : 0f;
             float weight = Math.Clamp(_weight?.GetValue(context).AsFloat() ?? 1f, 0f, 1f);
 
             bool teleported = Float3.LengthSquared(world.position - _lastOrigin) > _def.TeleportDistance * _def.TeleportDistance;
-            if (!_started || teleported || !(dt > 0f))
+            if (!_started || teleported)
             {
                 Snap(world);
                 return;
             }
 
             Float3 gravity = _def.Gravity;
-            float decay = MathF.Exp(-MathF.Max(_def.Damping, 0f) * dt);
+            float decay = MathF.Exp(-MathF.Max(_damping.Get(context), 0f) * dt);
             float maxAngle = _def.MaxAngleDegrees * MathF.PI / 180f;
             Quaternion toModel = Quaternion.Inverse(world.rotation);
 
@@ -175,7 +179,7 @@ public sealed class SpringBonesDefinition : PoseNodeDefinition
                 }
 
                 // Spring toward where the animation wants the tip, in world space, so character motion drags it.
-                Float3 acceleration = (target - _tips[i]) * _def.Stiffness + world.rotation * gravity;
+                Float3 acceleration = (target - _tips[i]) * _stiffness.Get(context) + world.rotation * gravity;
                 _velocities[i] = (_velocities[i] + acceleration * dt) * decay;
                 _tips[i] += _velocities[i] * dt;
 

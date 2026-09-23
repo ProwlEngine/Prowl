@@ -217,12 +217,22 @@ public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
 
     public int Count => _events.Count;
 
+    /// <summary>
+    /// Goes up with every change to the buffer: an event added, or one reweighted, ignored, mirrored or
+    /// moved to the inactive branch. A reader that cached an answer can tell it may be out of date.
+    /// </summary>
+    public int Version { get; private set; }
+
     public SampledEvent this[int index] => _events[index];
 
     /// <summary>An empty range at the current end of the buffer, where the next events will be added.</summary>
     public SampledEventRange EmptyRangeAtEnd => new(_events.Count, _events.Count);
 
-    public void Clear() => _events.Clear();
+    public void Clear()
+    {
+        _events.Clear();
+        Version++;
+    }
 
     /// <summary>Adds an event sampled at full weight from the active branch.</summary>
     public void Add(AnimationEvent e) => Add(e, 1f, true, -1);
@@ -231,6 +241,7 @@ public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
     {
         ArgumentNullException.ThrowIfNull(e);
         _events.Add(new SampledEvent(e, percentageThrough, isFromActiveBranch, sourceNodeIndex));
+        Version++;
     }
 
     /// <summary>Adds every event of another buffer (used by sub graphs), returning the range they occupy.</summary>
@@ -238,6 +249,7 @@ public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
     {
         int start = _events.Count;
         _events.AddRange(other._events);
+        Version++;
         return new SampledEventRange(start, _events.Count);
     }
 
@@ -250,6 +262,7 @@ public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
         Span<SampledEvent> span = CollectionsMarshal.AsSpan(_events);
         for (int i = range.Start; i < range.End; i++)
             span[i].Weight *= multiplier;
+        Version++;
     }
 
     /// <summary>Marks every event in the range as ignored.</summary>
@@ -258,6 +271,7 @@ public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
         Span<SampledEvent> span = CollectionsMarshal.AsSpan(_events);
         for (int i = range.Start; i < range.End; i++)
             span[i].IsIgnored = true;
+        Version++;
     }
 
     /// <summary>Swaps every foot event in the range for the other foot's (used when a pose is mirrored).</summary>
@@ -267,6 +281,7 @@ public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
         for (int i = range.Start; i < range.End; i++)
             if (span[i].Event is FootEvent foot)
                 span[i].Event = foot.Mirrored;
+        Version++;
     }
 
     /// <summary>Marks every event in the range as coming from an inactive branch.</summary>
@@ -275,6 +290,7 @@ public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
         Span<SampledEvent> span = CollectionsMarshal.AsSpan(_events);
         for (int i = range.Start; i < range.End; i++)
             span[i].IsFromActiveBranch = false;
+        Version++;
     }
 
     /// <summary>

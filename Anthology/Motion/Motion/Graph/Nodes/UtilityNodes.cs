@@ -32,20 +32,19 @@ public sealed class NoiseValueDefinition : ValueNodeDefinition
     {
         private readonly NoiseValueDefinition _def;
         private float _time;
-        private uint _lastUpdateId;
+        private GraphClock _clock;
 
         public Instance(NoiseValueDefinition def) => _def = def;
 
-        protected override void OnInitialize(GraphContext context) => _time = 0f;
+        protected override void OnInitialize(GraphContext context)
+        {
+            _time = 0f;
+            _clock.Start(context);
+        }
 
         protected override ParameterValue Compute(GraphContext context)
         {
-            // The clock only advances once per frame, however many readers there are.
-            if (_lastUpdateId != context.UpdateId)
-            {
-                _lastUpdateId = context.UpdateId;
-                _time += context.DeltaTime;
-            }
+            _time += _clock.Advance(context);
 
             float value = 0f;
             float amplitude = 1f;
@@ -114,25 +113,26 @@ public sealed class TimerValueDefinition : ValueNodeDefinition
         private readonly TimerValueDefinition _def;
         private ValueNodeInstance? _reset;
         private float _time;
-        private uint _lastUpdateId;
+        private GraphClock _clock;
 
         public Instance(TimerValueDefinition def) => _def = def;
 
         public override void Bind(GraphBindContext context)
             => _reset = context.OptionalValueNode(_def.ResetNodeIndex, ValueInputKind.Number);
 
-        protected override void OnInitialize(GraphContext context) => _time = 0f;
+        protected override void OnInitialize(GraphContext context)
+        {
+            _time = 0f;
+            _clock.Start(context);
+        }
 
         protected override ParameterValue Compute(GraphContext context)
         {
-            if (_lastUpdateId != context.UpdateId)
-            {
-                _lastUpdateId = context.UpdateId;
-                if (_reset is not null && _reset.GetValue(context).AsBool())
-                    _time = 0f;
-                else
-                    _time += context.DeltaTime;
-            }
+            float elapsed = _clock.Advance(context);
+            if (_reset is not null && _reset.GetValue(context).AsBool())
+                _time = 0f;
+            else
+                _time += elapsed;
 
             float value = _time;
             if (_def.LoopSeconds > 0f)
@@ -176,7 +176,7 @@ public sealed class FloatSpringDefinition : ValueNodeDefinition
         private ValueNodeInstance _input = null!;
         private float _value, _velocity;
         private bool _started;
-        private uint _lastUpdateId;
+        private GraphClock _clock;
 
         public Instance(FloatSpringDefinition def) => _def = def;
 
@@ -186,6 +186,7 @@ public sealed class FloatSpringDefinition : ValueNodeDefinition
         {
             _started = false;
             _velocity = 0f;
+            _clock.Start(context);
         }
 
         protected override ParameterValue Compute(GraphContext context)
@@ -201,19 +202,15 @@ public sealed class FloatSpringDefinition : ValueNodeDefinition
                 return ParameterValue.FromFloat(_value);
             }
 
-            if (_lastUpdateId == context.UpdateId)
-                return ParameterValue.FromFloat(_value);
-
-            _lastUpdateId = context.UpdateId;
-            float dt = context.DeltaTime;
+            float dt = _clock.Advance(context);
             if (!(dt > 0f))
                 return ParameterValue.FromFloat(_value);
 
-            // Semi implicit integration of a damped spring, which stays stable at long frame times.
+            // Implicit integration of a damped spring, which stays stable however long the frame.
             float angular = 2f * MathF.PI * MathF.Max(_def.Frequency, 0f);
             float stiffness = angular * angular;
             float damping = 2f * MathF.Max(_def.Damping, 0f) * angular;
-            _velocity += (stiffness * (target - _value) - damping * _velocity) * dt;
+            _velocity = (_velocity + stiffness * (target - _value) * dt) / (1f + damping * dt + stiffness * dt * dt);
             _value += _velocity * dt;
             return ParameterValue.FromFloat(_value);
         }
@@ -324,5 +321,26 @@ public sealed class DebugPoseDefinition : PoseNodeDefinition
             => float.IsFinite(transform.position.X) && float.IsFinite(transform.position.Y) && float.IsFinite(transform.position.Z)
             && float.IsFinite(transform.rotation.X) && float.IsFinite(transform.rotation.Y) && float.IsFinite(transform.rotation.Z) && float.IsFinite(transform.rotation.W)
             && float.IsFinite(transform.scale.X) && float.IsFinite(transform.scale.Y) && float.IsFinite(transform.scale.Z);
+    }
+}
+
+/// <summary>
+/// How much graph time has passed since a stateful value node last stepped. It reads the graph's own
+/// clock rather than the delta time of whichever node reads it first, so a node read from inside a
+/// slowed or paused branch still steps once per frame by the real time, whatever order the graph is walked in.
+/// </summary>
+internal struct GraphClock
+{
+    private double _last;
+
+    /// <summary>Starts counting from the beginning of this frame, so the frame a node joins counts in full.</summary>
+    public void Start(GraphContext context) => _last = context.Time - context.FrameTime;
+
+    /// <summary>Seconds since the last step, zero for a second read in the same frame.</summary>
+    public float Advance(GraphContext context)
+    {
+        float elapsed = (float)(context.Time - _last);
+        _last = context.Time;
+        return elapsed > 0f ? elapsed : 0f;
     }
 }

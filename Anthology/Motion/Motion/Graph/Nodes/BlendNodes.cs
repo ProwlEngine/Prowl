@@ -295,6 +295,11 @@ public sealed class WeightedBlendDefinition : PoseNodeDefinition
             }
 
             CopyTimingFrom(_inputs[0]);
+
+            // An input fires its events as strongly as it shows, so a clip at weight 0 makes no footsteps.
+            for (int i = 0; i < _inputs.Length; i++)
+                context.Events.UpdateWeights(_inputs[i].SampledEventRange, total > 0f ? _values[i] / total : i == 0 ? 1f : 0f);
+
             if (total <= 0f)
             {
                 CopyResultFrom(_inputs[0]);
@@ -326,7 +331,7 @@ public sealed class WeightedBlendDefinition : PoseNodeDefinition
 /// </summary>
 public sealed class PoseSmoothingDefinition : PoseNodeDefinition
 {
-    public PoseSmoothingDefinition(int child, float halfLifeSeconds)
+    public PoseSmoothingDefinition(int child, FloatInput halfLifeSeconds)
     {
         Child = child;
         HalfLifeSeconds = halfLifeSeconds;
@@ -334,13 +339,14 @@ public sealed class PoseSmoothingDefinition : PoseNodeDefinition
 
     public int Child { get; }
 
-    public float HalfLifeSeconds { get; }
+    public FloatInput HalfLifeSeconds { get; }
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly PoseSmoothingDefinition _def;
+        private BoundFloat _halfLife;
         private bool _started;
 
         public Instance(PoseSmoothingDefinition def) => _def = def;
@@ -348,6 +354,7 @@ public sealed class PoseSmoothingDefinition : PoseNodeDefinition
         public override void Bind(GraphBindContext context)
         {
             BindChild(context, _def.Child);
+            _halfLife = BoundFloat.Bind(context, _def.HalfLifeSeconds);
         }
 
         protected override void OnInitialize(GraphContext context, SyncTrackTime? initialTime)
@@ -362,14 +369,15 @@ public sealed class PoseSmoothingDefinition : PoseNodeDefinition
             CopyTimingFrom(Child);
             RootMotionDelta = Child.RootMotionDelta;
 
-            if (!_started || !(_def.HalfLifeSeconds > 0f))
+            float halfLife = _halfLife.Get(context);
+            if (!_started || !(halfLife > 0f))
             {
                 Pose.CopyFrom(Child.Pose);
                 _started = true;
                 return;
             }
 
-            float weight = 1f - MathF.Pow(0.5f, context.DeltaTime / _def.HalfLifeSeconds);
+            float weight = 1f - MathF.Pow(0.5f, MathF.Abs(context.DeltaTime) / halfLife);
             Blender.Blend(Pose, Pose, Child.Pose, Math.Clamp(weight, 0f, 1f));
         }
     }

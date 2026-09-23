@@ -81,37 +81,44 @@ public sealed class TwoBoneIKDefinition : PoseNodeDefinition
 /// </summary>
 public sealed class LookAtDefinition : PoseNodeDefinition
 {
-    public LookAtDefinition(int child, int targetNodeIndex, float clamp, float body, float head, float eyes)
+    public LookAtDefinition(int child, int targetNodeIndex, FloatInput clamp, FloatInput body, FloatInput head, FloatInput eyes)
         : this(child, targetNodeIndex, 1f, clamp, body, head, eyes) { }
 
-    public LookAtDefinition(int child, int targetNodeIndex, float weight, float clamp, float body, float head, float eyes)
+    public LookAtDefinition(int child, int targetNodeIndex, FloatInput weight, FloatInput clamp, FloatInput body, FloatInput head, FloatInput eyes)
     { Child = child; TargetNodeIndex = targetNodeIndex; Weight = weight; Clamp = clamp; Body = body; Head = head; Eyes = eyes; }
     public int Child { get; }
     public int TargetNodeIndex { get; }
-    public float Weight { get; }
-    public float Clamp { get; }
-    public float Body { get; }
-    public float Head { get; }
-    public float Eyes { get; }
+    public FloatInput Weight { get; }
+    public FloatInput Clamp { get; }
+    public FloatInput Body { get; }
+    public FloatInput Head { get; }
+    public FloatInput Eyes { get; }
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly LookAtDefinition _def;
         private ValueNodeInstance _target = null!;
+        private BoundFloat _weight, _clamp, _body, _head, _eyes;
         public Instance(LookAtDefinition def) => _def = def;
 
         public override void Bind(GraphBindContext context)
         {
             BindChild(context, _def.Child);
             _target = context.ValueNode(_def.TargetNodeIndex, ValueInputKind.Vector | ValueInputKind.Target);
+            _weight = BoundFloat.Bind(context, _def.Weight);
+            _clamp = BoundFloat.Bind(context, _def.Clamp);
+            _body = BoundFloat.Bind(context, _def.Body);
+            _head = BoundFloat.Bind(context, _def.Head);
+            _eyes = BoundFloat.Bind(context, _def.Eyes);
         }
 
         protected override void OnUpdate(GraphContext context)
         {
             base.OnUpdate(context);
             if (context.Avatar is { IsHuman: true } avatar && IKGoalResolver.TryResolve(_target.GetValue(context), Pose, context, out Float3 goal))
-                LookAtSolver.Solve(Pose, avatar.Humanoid!, goal, _def.Weight, _def.Clamp, _def.Body, _def.Head, _def.Eyes);
+                LookAtSolver.Solve(Pose, avatar.Humanoid!, goal, _weight.Get(context), _clamp.Get(context),
+                    _body.Get(context), _head.Get(context), _eyes.Get(context));
         }
     }
 }
@@ -145,6 +152,18 @@ public sealed class FootGroundingDefinition : PoseNodeDefinition
     public int WeightNodeIndex { get; }
     public int LeftNormalNodeIndex { get; }
     public int RightNormalNodeIndex { get; }
+
+    /// <summary>
+    /// Finds the ground under each foot with the graph's own ground probe, rather than being told where
+    /// it is. Without a probe the node falls back to the heights wired into it.
+    /// </summary>
+    public bool ProbeGround { get; set; }
+
+    /// <summary>How far the probe looks below a foot, in world units.</summary>
+    public float ProbeDistance { get; set; } = 1f;
+
+    /// <summary>How far above a foot the probe starts, so ground it is already standing in is still found.</summary>
+    public float ProbeRise { get; set; } = 0.5f;
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
@@ -193,6 +212,18 @@ public sealed class FootGroundingDefinition : PoseNodeDefinition
             Float3 worldNormal = normal is not null ? normal.GetValue(context).Vector : Up;
 
             Float3 footWorld = context.WorldTransform.TransformPoint(Pose.GetModelSpaceTransform(rig.GetSkeletonBoneIndex(footBone)).position);
+
+            if (_def.ProbeGround && context.Ground is { } ground)
+            {
+                Float3 from = new(footWorld.X, footWorld.Y + _def.ProbeRise, footWorld.Z);
+                // Nothing underfoot means nothing to stand on, so the foot is left where the pose puts it.
+                if (!ground.Raycast(from, -Up, _def.ProbeRise + _def.ProbeDistance, out Float3 hit, out Float3 hitNormal))
+                    return;
+
+                groundY = hit.Y;
+                worldNormal = hitNormal;
+            }
+
             Float3 groundPoint = context.WorldToCharacter(new Float3(footWorld.X, groundY, footWorld.Z));
             Float3 groundNormal = context.WorldNormalToCharacter(worldNormal);
             FootGrounding.Ground(Pose, rig, goal, groundPoint, groundNormal, weight);

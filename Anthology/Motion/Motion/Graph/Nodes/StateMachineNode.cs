@@ -118,6 +118,7 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
     private int _active = -1;
     private Transition? _transition;
     private Skeleton _skeleton = null!;
+    private Dictionary<ValueNodeInstance, ControlParameterInstance[]>? _parametersRead;
 
     public StateMachineInstance(StateMachineDefinition def) => _def = def;
 
@@ -231,8 +232,25 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
                 continue;
 
             StartTransition(context, info, firstEvent);
+            if (info.Condition is not null)
+                foreach (ControlParameterInstance parameter in ParametersRead(info.Condition))
+                    parameter.Consume(context);
             return;
         }
+    }
+
+    /// <summary>
+    /// Every parameter a condition reads, however indirectly, found the first time it fires and kept,
+    /// so a transition can turn off the triggers it fired on without searching again.
+    /// </summary>
+    private ControlParameterInstance[] ParametersRead(ValueNodeInstance condition)
+    {
+        _parametersRead ??= new Dictionary<ValueNodeInstance, ControlParameterInstance[]>();
+        if (_parametersRead.TryGetValue(condition, out ControlParameterInstance[]? known)) return known;
+
+        ControlParameterInstance[] result = ControlParameterInstance.ReadBy(condition);
+        _parametersRead[condition] = result;
+        return result;
     }
 
     private void StartTransition(GraphContext context, TransitionData info, int firstEvent)
@@ -243,6 +261,7 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
         float sourcePrevious = PreviousTime;
         float sourceCurrent = NormalizedTime;
         float sourceDuration = Duration;
+        bool sourceBackward = PlayingBackward;
         SyncTrack sourceTrack = SyncTrack;
         bool targetIsLive = info.Target == _active || (_transition is not null && _transition.Involves(info.Target));
 
@@ -271,7 +290,11 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
 
         float duration = info.Duration;
         if (info.ClampToSource && sourceDuration > 1e-4f && !transition.SourceIsFrozen)
-            duration = MathF.Min(duration, MathF.Max((1f - sourceCurrent) * sourceDuration, 0f));
+        {
+            // What is left of the source runs to its start when it plays backward, and to its end otherwise.
+            float left = sourceBackward ? sourceCurrent : 1f - sourceCurrent;
+            duration = MathF.Min(duration, MathF.Max(left * sourceDuration, 0f));
+        }
 
         _active = info.Target;
         PoseNodeInstance target = _states[_active].Content;
@@ -319,6 +342,7 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
         NormalizedTime = transition.CurrentTime;
         Duration = transition.Duration;
         LoopCount = transition.Target.LoopCount;
+        PlayingBackward = transition.Target.PlayingBackward;
     }
 
     private void EndTransition(GraphContext context)
@@ -454,7 +478,7 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
             _duration = duration;
             _easing = easing;
             _synchronized = synchronized;
-            _progress = duration > 0f ? Math.Clamp(MathF.Max(deltaTime, 0f) / duration, 0f, 1f) : 1f;
+            _progress = duration > 0f ? Math.Clamp(MathF.Abs(deltaTime) / duration, 0f, 1f) : 1f;
             _blendWeight = Ease(_progress, easing);
             _sourceEvents = sourceEvents;
             UpdateTiming(synchronized ? sourceRange : null, 0f);
