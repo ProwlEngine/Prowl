@@ -95,10 +95,9 @@ public static class NewScriptDialog
                                 if (font != null)
                                 {
                                     paper.Box($"scr_tpl_ico_{i}")
-                                        .Width(22).Height(28)
-                                        .Text(tpl.Icon, font)
-                                        .TextColor(EditorTheme.Ink500)
-                                        .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+                                        .Width(28).Height(28)
+                                        .Icon(paper, tpl.OrigamiIcon, EditorTheme.Ink500, size: 24f);
+
                                     paper.Box($"scr_tpl_name_{i}")
                                         .Width(UnitValue.Stretch()).Height(28)
                                         .Text(tpl.Name, font)
