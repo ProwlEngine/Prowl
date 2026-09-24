@@ -36,6 +36,7 @@ public class EditorApplication : Game
     public static OrigamiUI.PropertyGridConfig PropertyGridConfig { get; private set; } = null!;
 
     private DockSpace _dockSpace = null!;
+    private PanelMaximizer _panelMaximizer = null!;
     private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
@@ -44,6 +45,8 @@ public class EditorApplication : Game
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
     private bool _wasFocused = true;
+    // A project's scene is queued here and opened by the frame loop once its scripts have been built.
+    private bool _sceneLoadPending;
     private IDisposable? _origamiScope;
 
     private string _curDefaultFont;
@@ -95,6 +98,7 @@ public class EditorApplication : Game
         ApplyFramePacing();
 
         _dockSpace = new DockSpace(CreateDefaultLayout());
+        _panelMaximizer = new PanelMaximizer(_dockSpace);
 
         // If launched with --project arg, open the project and load assemblies
         // BEFORE registries scan so user types are visible to all registries
@@ -109,8 +113,10 @@ public class EditorApplication : Game
                 // Load user script assemblies before registry scanning
                 ScriptAssemblyManager.LoadAssemblies(project);
 
-                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
-                ScriptAssemblyManager.RequestRecompile();
+                // RequestStartupCompile skips the debounce time entirely and starts the compile process right away.
+                // This is crucial since without assemblies correctly compiled the scene would load in with broken
+                // references, which require correct script data to be in
+                ScriptAssemblyManager.RequestRecompile(true);
 
                 projectAlreadyInitialized = true;
                 Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
@@ -152,9 +158,11 @@ public class EditorApplication : Game
             // Restore layout
             var savedLayout = LoadDockLayout();
             if (savedLayout != null)
-                _dockSpace.Root = savedLayout;
+                SetDockLayout(savedLayout);
 
-            EditorSceneManager.EnsureSceneLoaded();
+            // Rather than loading the scene here, we queue it: the frame loop opens it once the startup compile settles,
+            // so the scene is never read against types that have not been built yet.
+            _sceneLoadPending = true;
 
             // Skip launcher and intro animation entirely
             ProjectLauncher.Close();
@@ -442,21 +450,17 @@ public class EditorApplication : Game
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
 
-                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
-                ScriptAssemblyManager.RequestRecompile();
+                // Compile before the scene is read - see the --project path above for why.
+                ScriptAssemblyManager.RequestRecompile(true);
 
                 // Rebuild the scan-based registries (mesh features, menu items) against the loaded assemblies.
                 ReinitializeRegistries();
 
                 // Restore layout from project (or use default)
-                var savedLayout = LoadDockLayout();
-                if (savedLayout != null)
-                    _dockSpace.Root = savedLayout;
-                else
-                    _dockSpace.Root = CreateDefaultLayout();
+                SetDockLayout(LoadDockLayout() ?? CreateDefaultLayout());
 
-                // Ensure a scene is always loaded
-                EditorSceneManager.EnsureSceneLoaded();
+                // Ensure a scene is always loaded (once the startup compile has settled).
+                _sceneLoadPending = true;
             }
         }
 
@@ -466,6 +470,8 @@ public class EditorApplication : Game
         bool focused = Window.IsFocused;
         if (focused && !_wasFocused)
             EditorAssetBackend.Instance?.Refresh();
+        if (focused != _wasFocused)
+            ApplyFramePacing();
         _wasFocused = focused;
 
         ExternalAssetDrop.ProcessPending();
@@ -476,11 +482,22 @@ public class EditorApplication : Game
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
 
-            // Check for script recompilation
-            ScriptAssemblyManager.Update();
-
             // Lazy thumbnail generation one per frame
             ThumbnailGenerator.ProcessOne();
+        }
+
+        // Check for script recompilation. Not gated behind canProcessAssets while a startup compile is
+        // outstanding: the project's first scene load is waiting on that compile, and reimport gating
+        // (or an unfocused window) must not be able to strand the editor with no scene open.
+        if (canProcessAssets || ScriptAssemblyManager.AwaitingStartupCompile)
+            ScriptAssemblyManager.Update();
+
+        // The project's scene opens only once its scripts have been built, so it is never deserialized
+        // against types that do not exist yet.
+        if (_sceneLoadPending && !ScriptAssemblyManager.AwaitingStartupCompile)
+        {
+            _sceneLoadPending = false;
+            EditorSceneManager.EnsureSceneLoaded();
         }
 
         // Give idle assets a chance to be evicted. Not gated behind canProcessAssets/window focus -
@@ -522,14 +539,14 @@ public class EditorApplication : Game
 
         // Editor backdrop (behind the translucent glass panels) shared with the launcher.
         _nebula ??= new GUI.NebulaBackground(paper);
-        GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime);
+        GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime, showStarsAndComets: false);
 
         DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
         float dockY = EditorTheme.MenuBarHeight + pad;
         float dockH = h - dockY - pad - EditorTheme.StatusBarHeight;
-        _dockSpace.Draw(paper, pad, dockY, w - pad * 2, dockH);
+        _panelMaximizer.Draw(paper, pad, dockY, w - pad * 2, dockH);
 
         DrawStatusBar(paper, w, h);
 
@@ -567,7 +584,7 @@ public class EditorApplication : Game
         using (paper.Row("play_pill").PositionType(PositionType.SelfDirected)
             .Size(UnitValue.Auto).Rounded(EditorTheme.Roundness)
             .Margin(UnitValue.StretchOne)
-            .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
+            .BackdropBlur(EditorTheme.DockedBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
@@ -588,12 +605,11 @@ public class EditorApplication : Game
         }
     }
 
-    // ── Smoothed perf readouts ──────────────────────────────────────────
-    // Raw per-frame FPS / frame-time flicker far too fast to read. The frame time is an exponential
-    // moving average (~0.5s time constant) so the FPS/ms readout glides continuously instead of
-    // snapping; memory samples once a second (GC total moves in coarse steps anyway).
+    // Smoothed perf readouts. FPS and frame time average the frames of the last few seconds, memory samples once a second.
+    private const float PerfAverageSeconds = 2.5f;
+    private static readonly Queue<float> _frameTimes = new();
+    private static double _frameTimeSum;
     private static double _perfWindow;
-    private static float _emaMs;
     private static int _dispFps;
     private static float _dispMs;
     private static long _dispMemMb;
@@ -602,12 +618,14 @@ public class EditorApplication : Game
     {
         if (dt <= 0f) return;
 
-        float ms = dt * 1000f;
-        if (_emaMs <= 0f) _emaMs = ms;                    // seed on the first frame
-        float alpha = 1f - MathF.Exp(-dt / 2f);           // ~2s time constant, dt-based -> frame-rate independent
-        _emaMs += (ms - _emaMs) * alpha;
-        _dispMs = _emaMs;
-        _dispFps = Math.Min(9999, (int)MathF.Round(1000f / _emaMs));
+        _frameTimes.Enqueue(dt);
+        _frameTimeSum += dt;
+        while (_frameTimes.Count > 1 && _frameTimeSum - _frameTimes.Peek() >= PerfAverageSeconds)
+            _frameTimeSum -= _frameTimes.Dequeue();
+
+        float averageMs = (float)(_frameTimeSum * 1000.0 / _frameTimes.Count);
+        _dispMs = averageMs;
+        _dispFps = Math.Min(9999, (int)MathF.Round(1000f / averageMs));
 
         _perfWindow += dt;
         if (_perfWindow >= 1.0 || _dispMemMb == 0)
@@ -623,7 +641,7 @@ public class EditorApplication : Game
     {
         float clH = HeaderChipHeight;
         float pad = EditorTheme.DockPadding;
-        float blur = Origami.Current.Metrics.WindowBackdropBlur;
+        float blur = EditorTheme.DockedBlur;
         float rectPadX = 10f, dot = 8f;
 
         int fps = _dispFps;
@@ -647,7 +665,7 @@ public class EditorApplication : Game
         {
             // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
             // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
-            using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(120)).Height(clH).Rounded(7)
+            using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(120)).Height(clH).Rounded(Origami.Current.Metrics.ContainerRounding)
                 .Padding(rectPadX, rectPadX, 0, 0).BackdropBlur(blur)
                 .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
@@ -668,7 +686,7 @@ public class EditorApplication : Game
             StatusChip(paper, "hs_ver", clH, versionText, font);
             StatusChip(paper, "hs_proj", clH, projectText, font);
 
-            paper.Box("hs_cog").Width(clH).Height(clH).Rounded(7)
+            paper.Box("hs_cog").Width(clH).Height(clH).Rounded(EditorTheme.Roundness)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink400)
                 .Hovered.TextColor(EditorTheme.Ink500).End()
@@ -680,8 +698,8 @@ public class EditorApplication : Game
     // A themed glass chip that auto-sizes to its text (horizontal padding + Auto width, no MeasureText).
     private static void StatusChip(Paper paper, string id, float hRect, string text, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row(id).Width(UnitValue.Auto).Height(hRect).Padding(10, 10, 0, 0).Rounded(7)
-            .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
+        using (paper.Row(id).Width(UnitValue.Auto).Height(hRect).Padding(10, 10, 0, 0).Rounded(Origami.Current.Metrics.ContainerRounding)
+            .BackdropBlur(EditorTheme.DockedBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable().Enter())
         {
@@ -769,7 +787,7 @@ public class EditorApplication : Game
 
             // Quick-access to Preferences > Theme (theming is a big part of the editor now).
             paper.Box("hdr_theme_btn").Width(barH).Height(barH)
-                .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(7)
+                .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(EditorTheme.Roundness)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(EditorIcons.Palette, font).TextColor(EditorTheme.Ink400)
                 .Hovered.TextColor(EditorTheme.Ink500).End()
@@ -1231,11 +1249,12 @@ public class EditorApplication : Game
     }
 
     /// <summary>
-    /// Find an open panel of the given type across all docked and floating nodes.
+    /// Find an open panel of the given type across all docked and floating nodes, including docked panels
+    /// hidden behind a maximized one.
     /// </summary>
     public DockPanel? FindOpenPanel(Type panelType)
     {
-        return FindInNode(_dockSpace.Root, panelType)
+        return FindInNode(_panelMaximizer.LayoutRoot, panelType)
             ?? _dockSpace.FloatingWindows
                 .Select(fw => FindInNode(fw.Node, panelType))
                 .FirstOrDefault(p => p != null);
@@ -1252,7 +1271,7 @@ public class EditorApplication : Game
     /// <summary>Enumerate every open panel across the docked tree and all floating windows.</summary>
     private IEnumerable<DockPanel> EnumerateAllPanels()
     {
-        foreach (var p in EnumerateNodePanels(_dockSpace.Root))
+        foreach (var p in EnumerateNodePanels(_panelMaximizer.LayoutRoot))
             yield return p;
         foreach (var fw in _dockSpace.FloatingWindows)
             foreach (var p in EnumerateNodePanels(fw.Node))
@@ -1282,6 +1301,9 @@ public class EditorApplication : Game
         var existing = FindOpenPanel(panelType);
         if (existing != null)
         {
+            // Asking for a panel the maximized one is hiding brings the full layout back to show it.
+            if (_panelMaximizer.IsHidden(existing))
+                _panelMaximizer.Restore();
             FocusPanel(panelType);
             return;
         }
@@ -1478,10 +1500,17 @@ public class EditorApplication : Game
                 System.IO.File.Delete(Project.Current.EditorStatePath);
         }
         catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to clear layout: {ex.Message}"); }
-        _dockSpace.Root = CreateDefaultLayout();
+        SetDockLayout(CreateDefaultLayout());
 
         EditorSettings.Instance.SeenGuides.Clear();
         EditorSettings.Instance.Save();
+    }
+
+    /// <summary>Replace the whole docked layout, dropping any maximized panel along with the old one.</summary>
+    private void SetDockLayout(DockNode root)
+    {
+        _panelMaximizer.Discard();
+        _dockSpace.Root = root;
     }
 
     private void SaveDockLayout()
@@ -1489,7 +1518,10 @@ public class EditorApplication : Game
         if (Project.Current == null) return;
         try
         {
-            string json = DockSerializer.Serialize(_dockSpace);
+            // Save the layout as the user arranged it, which a maximized panel only covers for the moment.
+            var layout = new DockSpace(_panelMaximizer.LayoutRoot);
+            layout.FloatingWindows.AddRange(_dockSpace.FloatingWindows);
+            string json = DockSerializer.Serialize(layout);
             System.IO.File.WriteAllText(Project.Current.EditorStatePath, json);
         }
         catch (Exception ex) { Runtime.Debug.LogError($"Failed to save layout: {ex.Message}"); }
@@ -1610,8 +1642,14 @@ public class EditorApplication : Game
     {
         if (Application.IsPlaying) return;
 
-        Application.VSync = EditorSettings.Instance.VSync;
-        Application.TargetFrameRate = EditorSettings.Instance.TargetFrameRate;
+        var settings = EditorSettings.Instance;
+        Application.VSync = settings.VSync;
+
+        int limit = settings.TargetFrameRate;
+        int unfocused = settings.UnfocusedFrameRate;
+        if (!Window.IsFocused && unfocused > 0 && (limit == 0 || unfocused < limit))
+            limit = unfocused;
+        Application.TargetFrameRate = limit;
     }
 
     private void EnterPlayMode()
@@ -1620,7 +1658,7 @@ public class EditorApplication : Game
 
         // Playing the prefab editing scene would run the editor-only camera/light rig, and stopping
         // restores it as the "editor scene", from where a save writes runtime state to the prefab.
-        if (PrefabEditingMode.IsEditing)
+        if (PrefabEditingMode.IsEditing || PrefabEditingMode.IsPrefabEditScene(Runtime.Resources.Scene.Current))
         {
             Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
             return;
@@ -1778,7 +1816,7 @@ public class EditorApplication : Game
 
     private void SaveActiveTab()
     {
-        _savedActiveTabNode = FindNodeContainingPanel(_dockSpace.Root, typeof(GameViewPanel));
+        _savedActiveTabNode = FindNodeContainingPanel(_panelMaximizer.LayoutRoot, typeof(GameViewPanel));
         if (_savedActiveTabNode == null)
         {
             foreach (var fw in _dockSpace.FloatingWindows)
@@ -1803,7 +1841,8 @@ public class EditorApplication : Game
 
     private void FocusPanel(Type panelType)
     {
-        var node = FindNodeContainingPanel(_dockSpace.Root, panelType);
+        // Behind a maximized panel this only picks the tab its leaf will show once the layout is back.
+        var node = FindNodeContainingPanel(_panelMaximizer.LayoutRoot, panelType);
         if (node == null)
         {
             foreach (var fw in _dockSpace.FloatingWindows)
@@ -1824,6 +1863,30 @@ public class EditorApplication : Game
                 }
             }
         }
+    }
+
+    /// <summary>Brings one particular panel to the front of whatever leaf holds it.</summary>
+    public void FocusPanelInstance(DockPanel panel)
+    {
+        DockNode? node = FindNodeContainingInstance(_dockSpace.Root, panel);
+        if (node == null)
+            foreach (var fw in _dockSpace.FloatingWindows)
+            {
+                node = FindNodeContainingInstance(fw.Node, panel);
+                if (node != null) break;
+            }
+
+        if (node?.Tabs == null) return;
+
+        int index = node.Tabs.IndexOf(panel);
+        if (index >= 0) node.ActiveTabIndex = index;
+    }
+
+    private static DockNode? FindNodeContainingInstance(DockNode? node, DockPanel panel)
+    {
+        if (node == null) return null;
+        if (node.IsLeaf) return node.Tabs != null && node.Tabs.Contains(panel) ? node : null;
+        return FindNodeContainingInstance(node.ChildA, panel) ?? FindNodeContainingInstance(node.ChildB, panel);
     }
 
     private static DockNode? FindNodeContainingPanel(DockNode? node, Type panelType)

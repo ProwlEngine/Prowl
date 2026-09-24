@@ -339,7 +339,7 @@ public class InspectorPanel : DockPanel
             .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, height)
             .Layer(Layer.Overlay)
             .BackgroundColor(Color.FromArgb(38, EditorTheme.Purple400))
-            .BorderColor(EditorTheme.Purple400).BorderWidth(2).Rounded(6)
+            .BorderColor(EditorTheme.Purple400).BorderWidth(2).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Enter())
         {
             paper.Box("insp_script_drop_lbl")
@@ -405,7 +405,7 @@ public class InspectorPanel : DockPanel
             paper.Box("insp_h_icon")
                 .Width(32).Height(32)
                 .BackgroundColor(EditorTheme.Hover)
-                .Rounded(6)
+                .Rounded(EditorTheme.Roundness)
                 .Text(icon, font)
                 .TextColor(EditorTheme.Purple400)
                 .FontSize(18f)
@@ -665,7 +665,7 @@ public class InspectorPanel : DockPanel
                 .Width(UnitValue.Auto).Height(20)
                 .PaddingLeft(6).PaddingRight(6)
                 .BackgroundColor(EditorTheme.Selected)
-                .Rounded(4)
+                .Rounded(Origami.Current.Metrics.SmallRounding)
                 .Text(Loc.Get("inspector.sub_asset"), font)
                 .TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSizeSmall)
@@ -890,7 +890,7 @@ public class InspectorPanel : DockPanel
         Origami.Header(paper, "log_msg_hdr", Loc.Get("inspector.message")).Show();
         paper.Box("log_msg")
             .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(40)
-            .BackgroundColor(EditorTheme.Neutral400).Rounded(3)
+            .BackgroundColor(EditorTheme.Neutral400).Rounded(EditorTheme.Roundness)
             .Padding(8, 8, 6, 6)
             .Text(log.Message, font).TextColor(textColor)
             .Wrap(Scribe.TextWrapMode.Wrap)
@@ -913,7 +913,7 @@ public class InspectorPanel : DockPanel
 
                 paper.Box($"log_frame_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(18)
-                    .BackgroundColor(frameBg).Rounded(2)
+                    .BackgroundColor(frameBg).Rounded(Origami.Current.Metrics.SmallRounding)
                     .Padding(8, 0, 2, 2)
                     .Text(frameText, font).TextColor(EditorTheme.Ink400)
                     .FontSize(fs - 2);
@@ -957,7 +957,7 @@ public class InspectorPanel : DockPanel
         }
 
         paper.Box(id)
-            .Height(EditorTheme.RowHeight).PaddingLeft(8).Rounded(3)
+            .Height(EditorTheme.RowHeight).PaddingLeft(8).Rounded(EditorTheme.Roundness)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text($"{icon}  {displayName}", font)
             .TextColor(EditorTheme.Ink500)

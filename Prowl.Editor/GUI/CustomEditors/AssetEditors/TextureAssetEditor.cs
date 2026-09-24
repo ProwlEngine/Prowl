@@ -54,7 +54,7 @@ public class TextureAssetEditor : ImportSettingsEditor
             // Preview card: checkerboard behind the image so alpha reads clearly.
             paper.Box($"{id}_preview")
                 .Height(200).Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
-                .Rounded(8).Clip()
+                .Rounded(m.ContainerRounding).Clip()
                 .BackgroundColor(EditorTheme.Neutral300)
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                 .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>

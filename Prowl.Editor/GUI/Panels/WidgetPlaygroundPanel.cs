@@ -45,6 +45,18 @@ public class WidgetPlaygroundPanel : DockPanel
     private static readonly string[] _swatchPalette =
         ["#7C5CFF", "#4C8CFF", "#2ECC71", "#F5A623", "#E74C3C", "#FF6FB0"];
 
+    private int _dropdownIndex;
+    private int _dropdown2Index = 2;
+    private string _searchText = "";
+    private int _intSlider = 5;
+    private Vector.Float2 _vec2 = new(1.5f, 2.5f);
+    private Vector.Float3 _vec3 = new(10f, 20f, 30f);
+    private Vector.Color _color = new(0.2f, 0.6f, 1f, 1f);
+    private float _progress = 0.45f;
+
+    private static readonly string[] Fruits = { "Apple", "Banana", "Cherry", "Date", "Elderberry" };
+    private static readonly string[] Modes = { "Constant", "Curve", "Random Between Two" };
+
     // Test class for property grid exercises every type the grid supports
     public class TestComponent
     {
@@ -232,6 +244,102 @@ public class WidgetPlaygroundPanel : DockPanel
                 }
             }
 
+            Origami.Separator(paper, "sep6").Show();
+
+            // === Dropdowns ===
+            Origami.Header(paper, "h_dd", "Dropdowns").Show();
+
+            EditorGUI.Row(paper, "dd_fruit", "Fruit", () =>
+                Origami.Dropdown(paper, "dd_fruit_v", _dropdownIndex, v => _dropdownIndex = v, Fruits).Show());
+            EditorGUI.Row(paper, "dd_mode", "Mode", () =>
+                Origami.Dropdown(paper, "dd_mode_v", _dropdown2Index, v => _dropdown2Index = v, Modes).Show());
+
+            Origami.Separator(paper, "sep7").Show();
+
+            // === Search Bar ===
+            Origami.Header(paper, "h_search", "Search Bar").Show();
+
+            Origami.SearchField(paper, "sb_1", _searchText, v => _searchText = v, "Type to search...").Show();
+
+            Origami.Separator(paper, "sep8").Show();
+
+            // === Enum Dropdown ===
+            Origami.Header(paper, "h_enum", "Enum Dropdown").Show();
+
+            EditorGUI.Row(paper, "dd_enum", "Test Enum", () =>
+                Origami.EnumDropdown(paper, "dd_enum_v", _testEnum, v => _testEnum = v).Show());
+
+            Origami.Separator(paper, "sep8b").Show();
+
+            // === Int Slider ===
+            Origami.Header(paper, "h_isl", "Int Slider").Show();
+
+            EditorGUI.Row(paper, "isl_1", "Count", () =>
+                Origami.IntSlider(paper, "isl_1_v", _intSlider, v => _intSlider = v, 0, 20).Show());
+
+            Origami.Separator(paper, "sep8c").Show();
+
+            // === Vector Fields ===
+            Origami.Header(paper, "h_vec", "Vector Fields").Show();
+
+            EditorGUI.Row(paper, "v2_1", "Position 2D", () =>
+                Origami.Float2Field(paper, "v2_1_vf", _vec2, v => _vec2 = v).Show());
+            EditorGUI.Row(paper, "v3_1", "Position 3D", () =>
+                Origami.Float3Field(paper, "v3_1_vf", _vec3, v => _vec3 = v).Show());
+
+            Origami.Separator(paper, "sep8d").Show();
+
+            // === Color Field ===
+            Origami.Header(paper, "h_col", "Color Field").Show();
+
+            EditorGUI.Row(paper, "cf_1", "Tint", () =>
+                Origami.ColorField(paper, "cf_1_cf", _color, v => _color = v).Show());
+
+            Origami.Separator(paper, "sep8e").Show();
+
+            // === Progress Bar ===
+            Origami.Header(paper, "h_prog", "Progress Bar").Show();
+
+            Origami.ProgressBar(paper, "pb_1", _progress).Label("Loading").ShowPercent().Show();
+            EditorGUI.Row(paper, "pb_ctrl", "Progress", () =>
+                Origami.Slider(paper, "pb_ctrl_v", _progress, v => _progress = v, 0f, 1f)
+                    .Format("F2").Show());
+
+            Origami.Separator(paper, "sep9").Show();
+
+            // === Context Menu ===
+            Origami.Header(paper, "h_ctx", "Context Menu (Right-Click)").Show();
+
+            using (paper.Box("ctx_demo_area")
+                .Height(60)
+                .BackgroundColor(EditorTheme.Neutral300)
+                .Rounded(Origami.Current.Metrics.ContainerRounding)
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                .PaddingLeft(16).PaddingTop(8)
+                .Enter())
+            {
+                if (EditorTheme.DefaultFont != null)
+                    paper.Box("ctx_hint")
+                        .IsNotInteractable()
+                        .Text("Right-click here for a context menu", EditorTheme.DefaultFont)
+                        .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize);
+
+                Origami.RightClickMenu(paper, "ctx_test", menu =>
+                {
+                    menu.Item("Cut", () => _textValue = "Cut!")
+                        .Item("Copy", () => _textValue = "Copy!")
+                        .Item("Paste", () => _textValue = "Paste!")
+                        .Separator()
+                        .Item("Delete", () => _textValue = "Deleted!", enabled: _toggleA)
+                        .Separator()
+                        .Submenu("More Options", sub =>
+                        {
+                            sub.Item("Option A", () => _textValue = "Option A");
+                            sub.Item("Option B", () => _textValue = "Option B");
+                        });
+                });
+            }
+
             EditorGUI.Divider(paper, "div_2", verticalMargin: 6);
 
             // === Group ===
@@ -258,6 +366,38 @@ public class WidgetPlaygroundPanel : DockPanel
             EditorGUI.SectionHeader(paper, "h_empty", "Empty State");
             if (EditorTheme.DefaultFont != null)
                 EditorGUI.EmptyState(paper, "empty_1", "Nothing to show here.", EditorTheme.DefaultFont);
+
+            EditorGUI.Divider(paper, "div_3b", verticalMargin: 6);
+
+            // === Toasts ===
+            EditorGUI.SectionHeader(paper, "h_toast", "Toast Notifications");
+
+            using (paper.Row("toast_row").Height(EditorTheme.RowHeight).Gap(6).Enter())
+            {
+                Origami.Button(paper, "btn_toast_info", "Info", () => Toasts.Info("Info", "Something happened")).Show();
+                Origami.Button(paper, "btn_toast_ok", "Success", () => Toasts.Success("Saved", "Scene saved successfully")).Show();
+                Origami.Button(paper, "btn_toast_warn", "Warning", () => Toasts.Warning("Warning", "Asset may be outdated")).Show();
+                Origami.Button(paper, "btn_toast_err", "Error", () => Toasts.Error("Error", "Failed to compile shader")).Show();
+            }
+
+            EditorGUI.Divider(paper, "div_3c", verticalMargin: 6);
+
+            // === Tooltip ===
+            EditorGUI.SectionHeader(paper, "h_tooltip", "Tooltip (hover the button)");
+
+            var tooltipBtn = paper.Box("tooltip_demo")
+                .Height(EditorTheme.RowHeight)
+                .Width(200)
+                .BackgroundColor(EditorTheme.Ink100)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Rounded(Origami.Current.Metrics.Rounding)
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                .Tooltip("This is a tooltip! It appears after a short hover delay.");
+            if (EditorTheme.DefaultFont != null)
+                tooltipBtn.Text("Hover me for tooltip", EditorTheme.DefaultFont)
+                    .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+
+            EditorGUI.Divider(paper, "div_3d", verticalMargin: 6);
 
             // === StatChip ===
             EditorGUI.SectionHeader(paper, "h_stat", "Stat Chip");

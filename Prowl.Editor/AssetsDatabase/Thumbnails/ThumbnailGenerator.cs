@@ -235,7 +235,7 @@ public static class ThumbnailGenerator
     {
         try
         {
-            using var preview = new PreviewRenderer(ThumbnailSize, ThumbnailSize);
+            using var preview = new PreviewRenderer(ThumbnailSize, ThumbnailSize) { TransparentBackground = true };
             setup(preview);
             preview.Render();
 

@@ -72,7 +72,7 @@ public class TerrainSceneEditor : SceneTool
         // Transform tool button (always available)
         bool isTransform = _useTransformTool;
         paper.Box($"{id}_xform")
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isTransform ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
@@ -109,7 +109,7 @@ public class TerrainSceneEditor : SceneTool
     {
         bool active = !_useTransformTool;
         paper.Box(id)
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(active ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text(icon, font).TextColor(EditorTheme.Ink500)
@@ -129,7 +129,7 @@ public class TerrainSceneEditor : SceneTool
     {
         bool active = !_useTransformTool && TerrainEditor.ActiveHeightTool == tool;
         paper.Box(id)
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(active ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text(icon, font).TextColor(EditorTheme.Ink500)

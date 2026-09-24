@@ -21,7 +21,7 @@ public class PlayerAssetBackend : AssetBackendBase
     private readonly Dictionary<Guid, string> _guidToPath = new();
     private readonly List<ZipArchive> _pakArchives = new();
 
-    public Dictionary<string, Guid> ResourcesMap { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<ResourceEntry> ResourceEntries { get; } = new();
     public Guid DefaultSceneGuid { get; private set; }
 
     public PlayerAssetBackend(AssetPackagingMode mode, string basePath = "Content")
@@ -214,10 +214,10 @@ public class PlayerAssetBackend : AssetBackendBase
                 if (Guid.TryParse(kvp.Key, out var guid))
                     _guidToPath[guid] = kvp.Value.StringValue;
 
-        if (echo.TryGet("resources", out var resTag) && resTag.TagType == EchoType.Compound)
-            foreach (var kvp in resTag.Tags)
-                if (Guid.TryParse(kvp.Value.StringValue, out var guid))
-                    ResourcesMap[kvp.Key] = guid;
+        if (echo.TryGet("resources", out var resTag) && resTag.TagType == EchoType.List)
+            foreach (var item in resTag.List)
+                if (item.TryGet("path", out var path) && item.TryGet("guid", out var guidTag) && Guid.TryParse(guidTag.StringValue, out var guid))
+                    ResourceEntries.Add(new ResourceEntry(path.StringValue, guid, item.TryGet("type", out var type) ? type.StringValue : ""));
     }
 
     /// <summary>Read Echo binary from byte array.</summary>

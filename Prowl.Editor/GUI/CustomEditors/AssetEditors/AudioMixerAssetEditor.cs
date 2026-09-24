@@ -398,7 +398,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
             bool silenced = group.Mute || group.SilencedBySolo;
 
             paper.Box($"{stripId}_meter").Width(MeterWidth).Height(UnitValue.Stretch())
-                .Rounded(3).IsNotInteractable()
+                .Rounded(Origami.Current.Metrics.SmallRounding).IsNotInteractable()
                 .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     DrawMeter(canvas, r, shown, silenced)));
 
@@ -472,7 +472,8 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         float w = (float)rect.Size.X;
         float h = (float)rect.Size.Y;
 
-        canvas.RoundedRectFilled(x, y, w, h, 3, ToCanvas(EditorTheme.Neutral200));
+        float round = Origami.Current.Metrics.SmallRounding;
+        canvas.RoundedRectFilled(x, y, w, h, round, ToCanvas(EditorTheme.Neutral200));
 
         if (silenced || peak <= 0.0f) return;
 
@@ -487,7 +488,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         Color32 high = decibels > -3.0f ? ToCanvas(EditorTheme.Red400) : ToCanvas(EditorTheme.Amber400);
 
         canvas.SetLinearBrush(x, y + h, x, y, low, high);
-        canvas.RoundedRectFilled(x, y + h - barHeight, w, barHeight, 3, Color32.FromArgb(255, 255, 255, 255));
+        canvas.RoundedRectFilled(x, y + h - barHeight, w, barHeight, round, Color32.FromArgb(255, 255, 255, 255));
         canvas.ClearBrush();
     }
 

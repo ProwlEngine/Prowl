@@ -42,6 +42,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private static Scene? _pendingScene;
 
+    /// <summary>Whether a <see cref="Load"/> is queued and has not been applied yet, so <see cref="Current"/>
+    /// is still the outgoing scene.</summary>
+    public static bool IsLoadPending => _pendingScene != null;
+
     /// <summary>
     /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
     /// happens at the end of the frame, alongside the destroy queue, so the outgoing scene stays
@@ -196,22 +200,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     [SerializeField]
     private GameObject[] serializeObj = null;
-
-    /// <summary>
-    /// Parallel to serializeObj stores the original identifier for each GO.
-    /// </summary>
-    [SerializeField]
-    private Guid[] _goIdentifiers = null;
-
-    /// <summary>
-    /// Flat array of component identifiers. _compIdOffsets[i] is the index into this
-    /// array for GO i's first component. Component count = offset[i+1] - offset[i].
-    /// </summary>
-    [SerializeField]
-    private Guid[] _compIdentifiers = null;
-
-    [SerializeField]
-    private int[] _compIdOffsets = null;
 
     [SerializeIgnore]
     private List<GameObject> _allObj = new();
@@ -427,7 +415,19 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public IEnumerable<GameObject> AllObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed); } }
 
     /// <summary> Enumerates all registered objects that are currently active and saveable. </summary>
-    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && !o.HideFlags.HasFlag(HideFlags.DontSave) && !o.HideFlags.HasFlag(HideFlags.HideAndDontSave)); } }
+    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
+
+    /// <summary>
+    /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
+    /// and for anything under one: a child written out without its parent would load back as a stray root.
+    /// </summary>
+    private static bool IsSaveable(GameObject obj)
+    {
+        for (GameObject? go = obj; go.IsValid(); go = go.Parent)
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0)
+                return false;
+        return true;
+    }
 
     /// <summary> Enumerates all registered objects that are currently active. </summary>
     public IEnumerable<GameObject> ActiveObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.EnabledInHierarchy); } }
@@ -819,59 +819,29 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Remove all identifiers and reference to any possible gameobject that could hold a
         // user-defined script as it might leave the ALC alive
         serializeObj = null;
-        _goIdentifiers = null;
-        _compIdentifiers = null;
-        _compIdOffsets = null;
     }
 
     public void OnBeforeSerialize()
     {
-        serializeObj = [.. AllObjects];
-
-        // Capture identifiers so they can be restored after deserialization
-        _goIdentifiers = new Guid[serializeObj.Length];
-        var compIds = new List<Guid>();
-        _compIdOffsets = new int[serializeObj.Length + 1];
-
-        for (int i = 0; i < serializeObj.Length; i++)
-        {
-            _goIdentifiers[i] = serializeObj[i].Identifier;
-            _compIdOffsets[i] = compIds.Count;
-            foreach (var comp in serializeObj[i].GetComponents<MonoBehaviour>())
-                compIds.Add(comp.Identifier);
-        }
-        _compIdOffsets[serializeObj.Length] = compIds.Count;
-        _compIdentifiers = compIds.ToArray();
+        serializeObj = [.. SaveableObjects];
     }
 
     public void OnAfterDeserialize()
     {
         if (serializeObj == null) return;
 
-        // Restore identifiers GOs and components got fresh IDs during deserialization
-        if (_goIdentifiers != null && _goIdentifiers.Length == serializeObj.Length)
+        // GameObjects and components got fresh identifiers while loading, a scene keeps the stored ones.
+        foreach (GameObject obj in serializeObj)
         {
-            for (int i = 0; i < serializeObj.Length; i++)
-            {
-                // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
-                if (serializeObj[i] == null) continue;
-                serializeObj[i].SetIdentifier(_goIdentifiers[i]);
+            // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
+            if (obj == null) continue;
+            if (obj.LoadedIdentifier != Guid.Empty)
+                obj.SetIdentifier(obj.LoadedIdentifier);
 
-                if (_compIdentifiers != null && _compIdOffsets != null)
-                {
-                    int start = _compIdOffsets[i];
-                    int end = _compIdOffsets[i + 1];
-                    var comps = serializeObj[i].GetComponents<MonoBehaviour>().ToList();
-                    for (int c = 0; c < comps.Count && start + c < end; c++)
-                        comps[c].Identifier = _compIdentifiers[start + c];
-                }
-            }
+            foreach (MonoBehaviour comp in obj.GetComponents<MonoBehaviour>())
+                if (comp.LoadedIdentifier != Guid.Empty)
+                    comp.Identifier = comp.LoadedIdentifier;
         }
-
-        // Clear temp data
-        _goIdentifiers = null;
-        _compIdentifiers = null;
-        _compIdOffsets = null;
 
         foreach (GameObject obj in serializeObj)
             if (obj != null) Add(obj);
@@ -957,6 +927,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>
     /// Collects every Camera on an enabled-in-hierarchy GameObject, sorted by Camera.Depth.
     /// </summary>
+    /// <remarks>
+    /// Cameras on <see cref="HideFlags.HideAndDontSave"/> objects are skipped. Those are editor helpers
+    /// (scene view, previews) that render themselves into their own targets; letting them into the
+    /// game's camera list draws the scene again, and uses shadow atlas space, for nothing.
+    /// </remarks>
     internal List<Camera> GatherActiveCameras()
     {
         var cameras = new List<Camera>();
@@ -965,6 +940,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             GameObject go = _allObj[i];
             if (go.IsDisposed || !go.EnabledInHierarchy) continue;
+            if ((go.HideFlags & HideFlags.HideAndDontSave) != 0) continue; // not HasFlag: it boxes in unoptimized builds
 
             foreach (MonoBehaviour component in go._components)
             {

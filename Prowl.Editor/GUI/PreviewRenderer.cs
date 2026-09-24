@@ -35,6 +35,17 @@ public class PreviewRenderer : IDisposable
     /// <summary>Whether to draw a grid plane in the preview.</summary>
     public bool ShowGrid { get; set; }
 
+    /// <summary>Clear to transparent instead of the skybox, so only the subject has alpha.</summary>
+    public bool TransparentBackground
+    {
+        get => _camera.ClearFlags == CameraClearFlags.SolidColor;
+        set
+        {
+            _camera.ClearFlags = value ? CameraClearFlags.SolidColor : CameraClearFlags.Skybox;
+            _camera.ClearColor = new Color(0f, 0f, 0f, 0f);
+        }
+    }
+
     // Orbit camera state
     private float _orbitYaw = 30f;
     private float _orbitPitch = 20f;
@@ -178,11 +189,12 @@ public class PreviewRenderer : IDisposable
         Render();
 
         if (_rt == null || _rt.MainTexture == null) return;
+        float round = Prowl.OrigamiUI.Origami.Current.Metrics.ContainerRounding;
 
         paper.Box(id)
             .Size(width, height)
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 38, 42))
-            .Rounded(4)
+            .Rounded(round)
             .StopEventPropagation()
             .OnDragging((e) =>
             {
@@ -209,7 +221,7 @@ public class PreviewRenderer : IDisposable
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry) *
                     Prowl.Vector.Spatial.Transform2D.CreateScale(rw, rh));
-                canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4, new Color32(255, 255, 255, 255));
+                canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, new Color32(255, 255, 255, 255));
                 canvas.ClearBrushTexture();
             }));
     }

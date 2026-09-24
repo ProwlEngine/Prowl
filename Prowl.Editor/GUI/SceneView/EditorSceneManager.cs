@@ -237,6 +237,15 @@ public static class EditorSceneManager
         // scene anyone means to save. Its own save goes through PrefabEditingMode.
         if (!GuardNotEditingPrefab("save a scene")) return false;
 
+        // Recognized by identity rather than by the flag, so a session that ended without its scene being
+        // swapped back cannot write the prefab and its editor-only rig over the user's scene file.
+        if (PrefabEditingMode.IsPrefabEditScene(Scene.Current))
+        {
+            Debug.LogError($"The open scene is a prefab editing scene, so it was not saved over '{relativePath}'. " +
+                "Open a scene to get back to one.");
+            return false;
+        }
+
         string absolutePath = Path.Combine(Project.Current.AssetsPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 

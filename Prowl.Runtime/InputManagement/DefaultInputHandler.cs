@@ -379,7 +379,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             return Float2.Zero;
 
         Thumbstick thumbstick = gamepad.Thumbsticks[axisIndex];
-        return new Float2(thumbstick.X, thumbstick.Y); // We flip y to make UP on the stick positive
+        return new Float2(thumbstick.X, -thumbstick.Y); // We flip y to make UP on the stick positive
     }
 
     public float GetGamepadTrigger(int gamepadIndex, int triggerIndex)

@@ -285,7 +285,8 @@ internal sealed class GradientEditorModal : IModal
                 canvas.SetStrokeColor(borderCol);
                 canvas.SetStrokeWidth(1);
                 canvas.BeginPath();
-                canvas.RoundedRect(x, barY, w, BarHeight, 2, 2, 2, 2);
+                float barRound = theme.Metrics.SmallRounding;
+                canvas.RoundedRect(x, barY, w, BarHeight, barRound, barRound, barRound, barRound);
                 canvas.Stroke();
 
                 // Color markers (top)

@@ -52,8 +52,7 @@ public class PreferencesPanel : DockPanel
         ("presets", "pref.cat_presets", EditorIcons.Swatchbook),
         ("colors",  "pref.cat_colors",  EditorIcons.Droplet),
         ("type",    "pref.cat_type",    EditorIcons.Font),
-        ("spacing", "pref.cat_spacing", EditorIcons.TableCells),
-        ("shape",   "pref.cat_shape",   EditorIcons.Cube),
+        ("layout",  "pref.cat_layout",  EditorIcons.TableCells),
         ("effects", "pref.cat_effects", EditorIcons.Bolt),
     };
 
@@ -108,6 +107,8 @@ public class PreferencesPanel : DockPanel
     // Only applies outside play mode; the game gets an unpaced loop and sets its own.
     private static readonly int[] FrameRates = [0, 30, 60, 120, 144, 240];
     private static readonly string[] FrameRateNames = ["Unlimited", "30", "60", "120", "144", "240"];
+    private static readonly int[] UnfocusedFrameRates = [0, 5, 10, 15, 30, 60];
+    private static readonly string[] UnfocusedFrameRateNames = ["Same as Focused", "5", "10", "15", "30", "60"];
 
     private void DrawGeneral(Paper paper, EditorSettings s)
     {
@@ -155,6 +156,16 @@ public class PreferencesPanel : DockPanel
                     EditorApplication.ApplyFramePacing();
                 }, FrameRateNames).Show());
 
+        int unfocusedIndex = Array.IndexOf(UnfocusedFrameRates, s.UnfocusedFrameRate);
+        EditorGUI.SettingsRow(paper, "pref_unfocused_fps", Loc.Get("pref.unfocused_frame_rate"), () =>
+            Origami.Dropdown(paper, "pref_unfocused_fps_v", unfocusedIndex < 0 ? 0 : unfocusedIndex,
+                v =>
+                {
+                    s.UnfocusedFrameRate = UnfocusedFrameRates[v];
+                    s.Save();
+                    EditorApplication.ApplyFramePacing();
+                }, UnfocusedFrameRateNames).Show());
+
         EditorGUI.SectionHeader(paper, "pref_gen_maint", Loc.Get("pref.maintenance"));
         EditorGUI.SettingsRow(paper, "pref_clear_cache", Loc.Get("pref.clear_cache"), () =>
             Origami.Button(paper, "pref_clear_cache_b", $"{EditorIcons.ArrowsRotate}  {Loc.Get("pref.clear_cache_btn")}",
@@ -190,32 +201,26 @@ public class PreferencesPanel : DockPanel
                 DrawThemeRail(paper, font, railW);
                 paper.Box("pref_theme_rdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
-                if (_themeCat == "presets")
+                Origami.ScrollView(paper, "pref_theme_ctrls", ctrlW, bodyH).Body(view =>
                 {
-                    // Presets are short, so they get no scroll and are centered vertically in the area.
-                    using (paper.Column("pref_theme_ctrls_pr").Width(ctrlW).Height(bodyH).Padding(22, 22, 0, 0).Enter())
-                    using (paper.Column("pref_theme_pr_center").Height(UnitValue.Auto)
-                        .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-                        DrawThemePresets(paper, font, s, theme);
-                }
-                else
-                {
-                    Origami.ScrollView(paper, "pref_theme_ctrls", ctrlW, bodyH).Body(() =>
+                    // At least as tall as the view, so the presets can center vertically when they fit.
+                    using (paper.Column("pref_theme_ctrl_col").Height(UnitValue.Auto).MinHeight(view.Height)
+                        .Padding(PAD * 3, PAD * 3, PAD * 2, PAD * 3).Gap(SP).Enter())
                     {
-                        using (paper.Column("pref_theme_ctrl_col").Height(UnitValue.Auto)
-                            .Padding(PAD * 3, PAD * 3, PAD * 2, PAD * 3).Gap(SP).Enter())
+                        switch (_themeCat)
                         {
-                            switch (_themeCat)
-                            {
-                                case "colors":  DrawThemeColors(paper, s, theme); break;
-                                case "type":    DrawThemeType(paper, s, theme); break;
-                                case "spacing": DrawThemeSpacing(paper, s, theme); break;
-                                case "shape":   DrawThemeShape(paper, s, theme); break;
-                                case "effects": DrawThemeEffects(paper, s, theme); break;
-                            }
+                            case "presets":
+                                using (paper.Column("pref_theme_pr_center").Height(UnitValue.Auto)
+                                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                                    DrawThemePresets(paper, font, s, theme);
+                                break;
+                            case "colors":  DrawThemeColors(paper, s, theme); break;
+                            case "type":    DrawThemeType(paper, s, theme); break;
+                            case "layout":  DrawThemeLayout(paper, s, theme); break;
+                            case "effects": DrawThemeEffects(paper, s, theme); break;
                         }
-                    });
-                }
+                    }
+                });
 
                 if (showPreview)
                 {
@@ -238,7 +243,7 @@ public class PreferencesPanel : DockPanel
             footer: () =>
             {
                 using (paper.Row("pref_thr_note").Height(UnitValue.Auto).Margin(0, 0, 10, 0)
-                    .Rounded(9).Padding(10, 10, 9, 9)
+                    .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(10, 10, 9, 9)
                     .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable().Enter())
                     paper.Box("pref_thr_note_t").Height(UnitValue.Auto).IsNotInteractable()
                         .Text(Loc.Get("pref.theme_note"), font)
@@ -274,7 +279,7 @@ public class PreferencesPanel : DockPanel
                     Toasts.Info(Loc.Get("pref.toast_theme"), Loc.Get("pref.toast_exported", new { file = System.IO.Path.GetFileName(path) }));
                 }, filters: new[] { "*.prowltheme" }, filterLabels: new[] { Loc.Get("pref.theme_filter") }), leftGap: 8f);
 
-            paper.Box("pref_ft_apply").Width(UnitValue.Auto).Height(30).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(8).Padding(16, 16, 0, 0)
+            paper.Box("pref_ft_apply").Width(UnitValue.Auto).Height(30).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(16, 16, 0, 0)
                 .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright)
                 .Hovered.Glow(0, 2, 12, -2, Color.FromArgb(150, EditorTheme.Accent)).End()
                 .Text($"{EditorIcons.Check}  Apply", semi).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
@@ -288,21 +293,35 @@ public class PreferencesPanel : DockPanel
     //  (th-sec / th-row / th-swrow / th-preset controls)
     // ================================================================
 
-    private readonly record struct ThemePreset(string Name, string Accent, string Accent2, string Bg, string Panel, string Text);
-
-    // "Indigo" is the shipped default (Origami's defaults match it), so selecting it equals a full reset.
-    private static readonly ThemePreset[] _presets =
+    // Layouts set shape and sizing only, never colors or effects.
+    private readonly record struct LayoutPreset(string Name, float Roundness, float Spacing, float Padding, float RowHeight,
+        float FontSize, float LabelWidth, float TabBarHeight, float TabPadding, float MenuBarHeight, float StatusBarHeight,
+        float DockSpacing)
     {
-        new("Indigo",   "#6366F1", "#8B5CF6", "#0C0C1A", "#181830", "#EAEAF7"),
-        new("Nebula",   "#A855F7", "#60A5FA", "#0F0C18", "#262036", "#F0EEF7"),
-        new("Ember",    "#F97316", "#38BDF8", "#160F0C", "#2A1E16", "#F7EFE8"),
-        new("Verdant",  "#4ADE80", "#22C55E", "#0B1410", "#182A20", "#E8F7EF"),
-        new("Abyss",    "#60A5FA", "#06B6D4", "#0A0F1A", "#182233", "#E8F0F7"),
-        new("Bloom",    "#EC4899", "#A855F7", "#170C14", "#2A1826", "#F7E8F2"),
-        new("Graphite", "#94A3B8", "#64748B", "#0D0F12", "#20242C", "#ECEEF2"),
-        new("Solar",    "#FBBF24", "#60A5FA", "#161009", "#221A0C", "#F7F1E4"),
-        new("Cyan",     "#06B6D4", "#14B8A6", "#0A1416", "#122528", "#E4F5F7"),
+        public bool Matches(EditorThemeData t) =>
+            t.Roundness == Roundness && t.Spacing == Spacing && t.Padding == Padding && t.RowHeight == RowHeight &&
+            t.FontSize == FontSize && t.LabelWidth == LabelWidth && t.TabBarHeight == TabBarHeight &&
+            t.TabPadding == TabPadding && t.MenuBarHeight == MenuBarHeight && t.StatusBarHeight == StatusBarHeight &&
+            t.DockSpacing == DockSpacing;
+
+        public void ApplyTo(EditorThemeData t)
+        {
+            t.Roundness = Roundness; t.Spacing = Spacing; t.Padding = Padding; t.RowHeight = RowHeight;
+            t.FontSize = FontSize; t.LabelWidth = LabelWidth; t.TabBarHeight = TabBarHeight;
+            t.TabPadding = TabPadding; t.MenuBarHeight = MenuBarHeight; t.StatusBarHeight = StatusBarHeight;
+            t.DockSpacing = DockSpacing;
+        }
+    }
+
+    // "Default" matches the EditorThemeData defaults.
+    private static readonly LayoutPreset[] _layouts =
+    {
+        new("Default",  Roundness: 6f,  Spacing: 2f, Padding: 6f, RowHeight: 24f, FontSize: 17f, LabelWidth: 150f, TabBarHeight: 32f, TabPadding: 12f, MenuBarHeight: 40f, StatusBarHeight: 26f, DockSpacing: 6f),
+        new("Compact",  Roundness: 0f,  Spacing: 1f, Padding: 4f, RowHeight: 20f, FontSize: 15f, LabelWidth: 130f, TabBarHeight: 26f, TabPadding: 8f,  MenuBarHeight: 32f, StatusBarHeight: 22f, DockSpacing: 3f),
+        new("Spacious", Roundness: 10f, Spacing: 4f, Padding: 9f, RowHeight: 28f, FontSize: 18f, LabelWidth: 170f, TabBarHeight: 36f, TabPadding: 14f, MenuBarHeight: 44f, StatusBarHeight: 28f, DockSpacing: 8f),
     };
+
+    private const int PresetColumns = 4;
 
     // Palettes always include the ramp's real default so the current colour reads as selected.
     private static readonly string[] _accentPalette =
@@ -314,16 +333,13 @@ public class PreferencesPanel : DockPanel
 
     private void ApplyPreset(EditorSettings s, ThemePreset p)
     {
-        var t = s.Theme;
-        // Presets only theme the brand/surface/text ramps; the status ramps return to defaults.
-        t.Purple.Primary = p.Accent;   t.Purple.OverrideAll = false;
-        t.Blue.Primary = p.Accent2;    t.Blue.OverrideAll = false;
-        t.Neutral.Primary = p.Panel;   t.Neutral.OverrideAll = false;
-        t.Ink.Primary = p.Text;        t.Ink.OverrideAll = false;
-        t.Red.Primary = "#FB7185";     t.Red.OverrideAll = false;
-        t.Green.Primary = "#4ADE80";   t.Green.OverrideAll = false;
-        t.Amber.Primary = "#FBBF24";   t.Amber.OverrideAll = false;
-        t.Name = p.Name;
+        p.ApplyTo(s.Theme);
+        s.ApplyTheme(); s.Save();
+    }
+
+    private void ApplyLayout(EditorSettings s, LayoutPreset layout)
+    {
+        layout.ApplyTo(s.Theme);
         s.ApplyTheme(); s.Save();
     }
 
@@ -331,50 +347,81 @@ public class PreferencesPanel : DockPanel
     private void DrawThemePresets(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_pr_hdr", Loc.Get("pref.builtin_themes"), first: true, compact: true);
-
-        const int cols = 3;
-        for (int r = 0; r * cols < _presets.Length; r++)
+        PresetGrid(paper, "pref_pr", ThemePresets.All.Length, i =>
         {
-            using (paper.Row($"pref_pr_row{r}").Height(UnitValue.Auto).Margin(0, 0, 0, SP * 2).Gap(SP * 2).Enter())
+            var p = ThemePresets.All[i];
+            bool on = string.Equals(theme.Name, p.Name, StringComparison.OrdinalIgnoreCase);
+            PresetCard(paper, font, $"pref_pr_c{i}", p.Name, on, () => ApplyPreset(s, p), id =>
             {
-                for (int c = 0; c < cols; c++)
+                using (paper.Row(id).Height(34).Rounded(EditorTheme.Roundness).Padding(6, 6, 6, 6).Gap(4)
+                    .BackgroundColor(Hx(p.Bg)).IsNotInteractable().Enter())
                 {
-                    int i = r * cols + c;
-                    if (i >= _presets.Length) { paper.Box($"pref_pr_e{r}{c}").Height(1).IsNotInteractable(); continue; }
-                    var p = _presets[i];
-                    bool on = string.Equals(theme.Name, p.Name, StringComparison.OrdinalIgnoreCase);
-
-                    var card = paper.Column($"pref_pr_c{i}").Height(UnitValue.Auto).Rounded(10)
-                        .Padding(PAD * 1.5f, PAD * 1.5f, PAD * 1.5f, PAD * 1.5f).Gap(SP * 2)
-                        .BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Glass)
-                        .BorderColor(on ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(on ? 2 : 1)
-                        .Hovered.BorderColor(on ? EditorTheme.Accent : EditorTheme.BorderStrong).End()
-                        .OnClick(i, (idx, _) => ApplyPreset(s, _presets[idx]));
-                    if (on) card.Glow(0, 8, 22, -10, Color.FromArgb(130, EditorTheme.Accent));
-
-                    using (card.Enter())
-                    {
-                        using (paper.Row($"pref_pr_c{i}_sw").Height(38).Rounded(7).Padding(6, 6, 6, 6).Gap(4)
-                            .BackgroundColor(Hx(p.Bg)).IsNotInteractable().Enter())
-                        {
-                            paper.Box($"pref_pr_c{i}_a").Rounded(4)
-                                .BackgroundLinearGradient(0, 0, 1, 1, Hx(p.Accent), Hx(p.Accent2)).IsNotInteractable();
-                            paper.Box($"pref_pr_c{i}_b").Rounded(4).BackgroundColor(Hx(p.Accent2)).IsNotInteractable();
-                            paper.Box($"pref_pr_c{i}_p").Rounded(4).BackgroundColor(Hx(p.Panel))
-                                .BorderColor(EditorTheme.WithAlpha(Hx(p.Text), 38)).BorderWidth(1).IsNotInteractable();
-                        }
-                        using (paper.Row($"pref_pr_c{i}_nm").Height(15).Enter())
-                        {
-                            paper.Box($"pref_pr_c{i}_nt").IsNotInteractable()
-                                .Text(p.Name, EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
-                                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
-                            if (on)
-                                paper.Box($"pref_pr_c{i}_ck").Width(12).IsNotInteractable()
-                                    .Text(EditorIcons.Check, font).TextColor(EditorTheme.AccentText)
-                                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
-                        }
-                    }
+                    paper.Box($"{id}_a").Rounded(Origami.Current.Metrics.SmallRounding)
+                        .BackgroundLinearGradient(0, 0, 1, 1, Hx(p.Accent), Hx(p.Accent2)).IsNotInteractable();
+                    paper.Box($"{id}_b").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(Hx(p.Accent2)).IsNotInteractable();
+                    paper.Box($"{id}_p").Rounded(Origami.Current.Metrics.SmallRounding).BackgroundColor(Hx(p.Panel))
+                        .BorderColor(EditorTheme.WithAlpha(Hx(p.Text), 38)).BorderWidth(1).IsNotInteractable();
                 }
+            });
+        });
+
+        EditorGUI.SectionHeader(paper, "pref_ly_hdr", Loc.Get("pref.builtin_layouts"), compact: true);
+        PresetGrid(paper, "pref_ly", _layouts.Length, i =>
+        {
+            var l = _layouts[i];
+            PresetCard(paper, font, $"pref_ly_c{i}", l.Name, l.Matches(theme), () => ApplyLayout(s, l), id =>
+            {
+                float pillRound = l.Roundness * 0.6f;
+                using (paper.Row(id).Height(34).Rounded(l.Roundness).Padding(l.Padding, l.Padding, l.Padding, l.Padding).Gap(l.Spacing)
+                    .BackgroundColor(EditorTheme.Popover).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable().Enter())
+                {
+                    paper.Box($"{id}_a").Rounded(pillRound)
+                        .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright).IsNotInteractable();
+                    paper.Box($"{id}_b").Rounded(pillRound).BackgroundColor(EditorTheme.Selected).IsNotInteractable();
+                    paper.Box($"{id}_c").Rounded(pillRound).BackgroundColor(EditorTheme.Selected).IsNotInteractable();
+                }
+            });
+        });
+    }
+
+    private static void PresetGrid(Paper paper, string id, int count, Action<int> drawCard)
+    {
+        for (int r = 0; r * PresetColumns < count; r++)
+        {
+            using (paper.Row($"{id}_row{r}").Height(UnitValue.Auto).Margin(0, 0, 0, SP * 2).Gap(SP * 2).Enter())
+            {
+                for (int c = 0; c < PresetColumns; c++)
+                {
+                    int i = r * PresetColumns + c;
+                    if (i < count) drawCard(i);
+                    else paper.Box($"{id}_e{r}{c}").Height(1).IsNotInteractable();
+                }
+            }
+        }
+    }
+
+    private static void PresetCard(Paper paper, Scribe.FontFile font, string id, string name, bool on, Action onClick, Action<string> drawSwatch)
+    {
+        var card = paper.Column(id).Height(UnitValue.Auto).Rounded(Origami.Current.Metrics.ContainerRounding)
+            .Padding(PAD, PAD, PAD, PAD).Gap(SP * 1.5f)
+            .BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Glass)
+            .BorderColor(on ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(on ? 2 : 1)
+            .Hovered.BorderColor(on ? EditorTheme.Accent : EditorTheme.BorderStrong).End()
+            .OnClick(0, (_, _) => onClick());
+        if (on) card.Glow(0, 8, 22, -10, Color.FromArgb(130, EditorTheme.Accent));
+
+        using (card.Enter())
+        {
+            drawSwatch($"{id}_sw");
+            using (paper.Row($"{id}_nm").Height(15).Enter())
+            {
+                paper.Box($"{id}_nt").IsNotInteractable()
+                    .Text(name, EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
+                if (on)
+                    paper.Box($"{id}_ck").Width(12).IsNotInteractable()
+                        .Text(EditorIcons.Check, font).TextColor(EditorTheme.AccentText)
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
             }
         }
     }
@@ -413,25 +460,11 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SettingsSlider(paper, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, v => { theme.FontSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
     }
 
-    // ---- Spacing & Density ----
-    private void DrawThemeSpacing(Paper paper, EditorSettings s, EditorThemeData theme)
+    // ---- Layout ----
+    private void DrawThemeLayout(Paper paper, EditorSettings s, EditorThemeData theme)
     {
-        EditorGUI.SectionHeader(paper, "pref_sp_density", Loc.Get("pref.density"), first: true, compact: true);
-
-        int densityIdx =
-            (theme.Spacing == 2f && theme.Padding == 4f && theme.RowHeight == 20f) ? 0 :
-            (theme.Spacing == 6f && theme.Padding == 9f && theme.RowHeight == 28f) ? 2 :
-            (theme.Spacing == 4f && theme.Padding == 6f && theme.RowHeight == 24f) ? 1 : -1;
-
-        EditorGUI.Row(paper, "pref_sp_seg", Loc.Get("pref.preset"), () =>
-            Origami.ButtonGroup(paper, "pref_sp_bg", densityIdx, idx =>
-            {
-                (float sp, float pad, float rh) = idx switch { 0 => (2f, 4f, 20f), 2 => (6f, 9f, 28f), _ => (4f, 6f, 24f) };
-                theme.Spacing = sp; theme.Padding = pad; theme.RowHeight = rh;
-                s.ApplyTheme(); s.Save();
-            }).Segmented().Item(Loc.Get("pref.compact")).Item(Loc.Get("pref.cozy")).Item(Loc.Get("pref.spacious")).Show(), compact: true);
-
-        EditorGUI.SectionHeader(paper, "pref_sp_metrics", Loc.Get("pref.metrics"), compact: true);
+        EditorGUI.SectionHeader(paper, "pref_sp_metrics", Loc.Get("pref.metrics"), first: true, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_round", Loc.Get("pref.roundness"), theme.Roundness, 0, 20, v => { theme.Roundness = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_spacing", Loc.Get("pref.spacing"), theme.Spacing, 0, 12, v => { theme.Spacing = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_padding", Loc.Get("pref.padding"), theme.Padding, 0, 16, v => { theme.Padding = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsSlider(paper, "pref_sp_row", Loc.Get("pref.row_height"), theme.RowHeight, 16, 40, v => { theme.RowHeight = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
@@ -444,17 +477,11 @@ public class PreferencesPanel : DockPanel
         EditorGUI.SettingsSlider(paper, "pref_sp_scale", Loc.Get("pref.user_scale"), theme.UserScale, 0.5f, 2, v => { theme.UserScale = v; s.Save(); }, "F2", separator: false, compact: true);
     }
 
-    // ---- Corners & Borders ----
-    private void DrawThemeShape(Paper paper, EditorSettings s, EditorThemeData theme)
-    {
-        EditorGUI.SectionHeader(paper, "pref_sh_corner", Loc.Get("pref.corner_radius"), first: true, compact: true);
-        EditorGUI.SettingsSlider(paper, "pref_sh_round", Loc.Get("pref.roundness"), theme.Roundness, 0, 20, v => { theme.Roundness = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
-    }
-
     // ---- Effects ----
     private void DrawThemeEffects(Paper paper, EditorSettings s, EditorThemeData theme)
     {
         EditorGUI.SectionHeader(paper, "pref_fx_depth", Loc.Get("pref.depth"), first: true, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_fx_opacity", Loc.Get("pref.window_opacity"), theme.WindowOpacity, 0.3f, 1f, v => { theme.WindowOpacity = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
         EditorGUI.SettingsToggle(paper, "pref_fx_glass", Loc.Get("pref.glass_blur"), theme.GlassBlur, v => { theme.GlassBlur = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
         if (theme.GlassBlur)
             EditorGUI.SettingsSlider(paper, "pref_fx_blur", Loc.Get("pref.blur_amount"), theme.BlurAmount, 0, 40, v => { theme.BlurAmount = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
@@ -465,8 +492,6 @@ public class PreferencesPanel : DockPanel
         void NebulaLayers()
         {
             EditorGUI.SettingsToggle(paper, "pref_fx_grad", Loc.Get("pref.nebula_gradients"), theme.BgShowGradients, v => { theme.BgShowGradients = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
-            EditorGUI.SettingsToggle(paper, "pref_fx_stars", Loc.Get("pref.stars"), theme.BgShowStars, v => { theme.BgShowStars = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
-            EditorGUI.SettingsToggle(paper, "pref_fx_comets", Loc.Get("pref.comets"), theme.BgShowComets, v => { theme.BgShowComets = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
             EditorGUI.SettingsColorField(paper, "pref_fx_void", Loc.Get("pref.void_color"), () => theme.BackgroundVoidColor, v => { theme.BackgroundVoidColor = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
         }
 
@@ -492,10 +517,38 @@ public class PreferencesPanel : DockPanel
             {
                 EditorGUI.SettingsColorField(paper, "pref_fx_ca", Loc.Get("env.color"), () => theme.BackgroundColorA, v => { theme.BackgroundColorA = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
             }
+            else if (theme.BackgroundStyle == EditorBackgroundStyle.Image)
+            {
+                DrawBackgroundImagePicker(paper, s, theme);
+                EditorGUI.Row(paper, "pref_fx_fit", Loc.Get("pref.bg_fit"), () =>
+                    Origami.EnumDropdown(paper, "pref_fx_fit_v", theme.BackgroundImageFit,
+                        v => { theme.BackgroundImageFit = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+                EditorGUI.SettingsSlider(paper, "pref_fx_dim", Loc.Get("pref.bg_dim"), theme.BackgroundImageDim, 0, 1, v => { theme.BackgroundImageDim = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+                EditorGUI.SettingsColorField(paper, "pref_fx_ca", Loc.Get("pref.bg_fill"), () => theme.BackgroundColorA, v => { theme.BackgroundColorA = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+            }
         }
 
         EditorGUI.SectionHeader(paper, "pref_fx_render", Loc.Get("pref.rendering"), compact: true);
         EditorGUI.SettingsToggle(paper, "pref_fx_aa", Loc.Get("pref.anti_aliasing"), theme.AntiAliasing, v => { theme.AntiAliasing = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+    }
+
+    private static readonly string[] _imageFilters = ["*.png;*.jpg;*.jpeg;*.bmp;*.tga;*.webp"];
+
+    private static void DrawBackgroundImagePicker(Paper paper, EditorSettings s, EditorThemeData theme)
+    {
+        string label = string.IsNullOrEmpty(theme.BackgroundImagePath)
+            ? Loc.Get("pref.bg_image_none")
+            : System.IO.Path.GetFileName(theme.BackgroundImagePath);
+
+        EditorGUI.Row(paper, "pref_fx_img", Loc.Get("pref.bg_image"), () =>
+            Origami.Button(paper, "pref_fx_img_v", $"{EditorIcons.FolderOpen}  {label}", () =>
+                EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
+                {
+                    if (path == null) return;
+                    theme.BackgroundImagePath = path;
+                    s.ApplyTheme(); s.Save();
+                }, startPath: string.IsNullOrEmpty(theme.BackgroundImagePath) ? null : System.IO.Path.GetDirectoryName(theme.BackgroundImagePath),
+                filters: _imageFilters, filterLabels: [Loc.Get("pref.image_filter")])).Show(), compact: true);
     }
 
     // ---- Live preview (mini editor chrome drawn with live EditorTheme tokens) ----
@@ -509,7 +562,7 @@ public class PreferencesPanel : DockPanel
             .BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         using (paper.Column("pref_pv_center").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Gap(SP * 2).Enter())
         {
-            using (paper.Column("pref_pv_card").Height(cardH).Rounded(radius + 2).Clip()
+            using (paper.Column("pref_pv_card").Height(cardH).Rounded(Origami.Current.Metrics.ContainerRounding).Clip()
                 .DropShadow(0, 10, 26, -6, Color.FromArgb(150, 0, 0, 0))
                 .BackgroundColor(EditorTheme.Neutral200).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
@@ -517,7 +570,7 @@ public class PreferencesPanel : DockPanel
                 using (paper.Row("pref_pv_title").Height(30).Padding(PAD, PAD, 0, 0).Gap(SP * 1.5f)
                     .BackgroundColor(surface).Enter())
                 {
-                    paper.Box("pref_pv_logo").Width(13).Height(13).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(4)
+                    paper.Box("pref_pv_logo").Width(13).Height(13).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(radius * 0.5f)
                         .BackgroundColor(EditorTheme.Accent).IsNotInteractable();
                     paper.Box("pref_pv_name").Margin(SP, 0, 0, 0).IsNotInteractable()
                         .Text("Prowl", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
@@ -538,7 +591,7 @@ public class PreferencesPanel : DockPanel
                     paper.Box("pref_pv_edit").IsNotInteractable()
                         .Text(Loc.Get("menu.edit"), font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleLeft);
-                    paper.Box("pref_pv_play").Width(20).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness * 0.5f)
+                    paper.Box("pref_pv_play").Width(20).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(radius * 0.5f)
                         .Glow(0, 0, 12, 0, Color.FromArgb(170, EditorTheme.Accent))
                         .BackgroundColor(EditorTheme.Accent).IsNotInteractable()
                         .Text(EditorIcons.Play, font).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
@@ -564,7 +617,7 @@ public class PreferencesPanel : DockPanel
                                 .Padding(SP, SP, 0, 0).Gap(SP)
                                 .BackgroundColor(sel ? EditorTheme.Selected : Color.Transparent).Enter())
                             {
-                                paper.Box($"pref_pv_hd{i}").Width(7).Height(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(2)
+                                paper.Box($"pref_pv_hd{i}").Width(7).Height(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(radius * 0.5f)
                                     .BackgroundColor(sel ? EditorTheme.Accent : EditorTheme.Blue400).IsNotInteractable();
                                 paper.Box($"pref_pv_hn{i}").Margin(SP * 0.5f, 0, 0, 0).IsNotInteractable()
                                     .Text(items[i], font).TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink400)
@@ -720,7 +773,7 @@ public class PreferencesPanel : DockPanel
 
                 // Binding button
                 paper.Box($"pref_sc_bind_{shortcut.Id}")
-                    .Width(160).Height(EditorTheme.RowHeight - 4).Rounded(8)
+                    .Width(160).Height(EditorTheme.RowHeight - 4).Rounded(EditorTheme.Roundness)
                     .BackgroundColor(isRebinding ? EditorTheme.Accent : EditorTheme.Glass)
                     .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                     .Hovered.BackgroundColor(isRebinding ? EditorTheme.Accent : EditorTheme.Hover).BorderColor(EditorTheme.BorderStrong).End()
@@ -738,7 +791,7 @@ public class PreferencesPanel : DockPanel
                 if (isOverridden)
                 {
                     paper.Box($"pref_sc_rst_{shortcut.Id}")
-                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(8)
+                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(EditorTheme.Roundness)
                         .BackgroundColor(EditorTheme.Glass)
                         .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                         .Hovered.BackgroundColor(EditorTheme.Hover).BorderColor(EditorTheme.BorderStrong).End()

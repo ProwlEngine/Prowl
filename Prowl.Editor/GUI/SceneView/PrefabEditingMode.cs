@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
@@ -38,6 +39,13 @@ public static class PrefabEditingMode
     // editor-only camera/light/etc. that we add for visibility.
     private static GameObject? _editingRoot;
 
+    // Every scene a session has built, so one can still be recognized after the session that made it
+    // ended. A prefab and its editor-only rig is not a scene anyone means to save over their own.
+    private static readonly ConditionalWeakTable<Scene, object> _editScenes = new();
+
+    /// <summary>Whether <paramref name="scene"/> was built to edit a prefab in, rather than opened as a scene.</summary>
+    public static bool IsPrefabEditScene(Scene? scene) => scene != null && _editScenes.TryGetValue(scene, out _);
+
     /// <summary>
     /// Enter prefab editing mode. If another prefab is already being edited with unsaved
     /// changes, prompts to save before switching rather than silently discarding them.
@@ -69,8 +77,25 @@ public static class PrefabEditingMode
         EnterInternal(prefabGuid);
     }
 
+    /// <summary>
+    /// Start a session once the scene swap has landed. A scene load only applies at the end of the frame,
+    /// so starting now would snapshot the scene being swapped out, which for a switch between prefabs is
+    /// the previous session's own scene, and restore that as the user's scene when the session ends.
+    /// </summary>
     private static void EnterInternal(Guid prefabGuid)
     {
+        if (Scene.IsLoadPending)
+        {
+            Action? onLoaded = null;
+            onLoaded = () =>
+            {
+                Scene.OnSceneLoaded -= onLoaded;
+                EnterInternal(prefabGuid);
+            };
+            Scene.OnSceneLoaded += onLoaded;
+            return;
+        }
+
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab == null)
         {
@@ -105,6 +130,7 @@ public static class PrefabEditingMode
         // Instantiate prefab into isolated scene
         var editScene = new Scene();
         editScene.Name = $"Editing: {prefab.Name}";
+        _editScenes.AddOrUpdate(editScene, new object());
 
         var go = GameObject.InstantiateDetached(prefab);
         if (go == null)

@@ -247,17 +247,20 @@ internal static class ClayBackedImporter
             }
         }
 
-        // 5b. Cameras and lights. Both are node-attached with no geometry, so they only need the
-        // component putting on the GameObject the node already produced.
+        // 5b. Cameras and spot lights aim down their node's -Z, so each goes on a child turned to face +Z.
+        // A directional light already shines along -Forward, and a point light has no direction.
         if (settings.ImportCameras)
             for (int i = 0; i < clayModel.Nodes.Count; i++)
                 if (clayModel.Nodes[i].CameraIndex is int ci and >= 0)
-                    BuildCamera(clayModel.Cameras[ci], nodeGOs[i]);
+                    BuildCamera(clayModel.Cameras[ci], ForwardChild(nodeGOs[i], "Camera"));
 
         if (settings.ImportLights)
             for (int i = 0; i < clayModel.Nodes.Count; i++)
                 if (clayModel.Nodes[i].LightIndex is int li and >= 0)
-                    BuildLight(clayModel.Lights[li], nodeGOs[i]);
+                {
+                    Clay.Light light = clayModel.Lights[li];
+                    BuildLight(light, light.Type == Clay.LightType.Spot ? ForwardChild(nodeGOs[i], "Light") : nodeGOs[i]);
+                }
 
         // 6. Animations.
         var animations = new List<PAnim>(clayModel.AnimationClips.Count);
@@ -419,11 +422,15 @@ internal static class ClayBackedImporter
     // Camera / light bake
     // ----------------------------------------------------------------------------------------
 
-    /// <summary>
-    /// Attaches a <see cref="Camera"/> matching the source lens. Orientation needs no handling here:
-    /// glTF aims a camera down its node's -Z, and Clay's coordinate conversion mirrors that to the
-    /// +Z the engine treats as forward.
-    /// </summary>
+    private static GameObject ForwardChild(GameObject node, string name)
+    {
+        var child = new GameObject(name);
+        child.SetParent(node, worldPositionStays: false);
+        child.Transform.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, MathF.PI);
+        return child;
+    }
+
+    /// <summary>Attaches a <see cref="Camera"/> matching the source lens.</summary>
     private static void BuildCamera(Clay.Camera src, GameObject go)
     {
         var cam = go.AddComponent<Camera>();

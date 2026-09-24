@@ -255,7 +255,7 @@ public static class EditorGUI
             foreach (var (cid, label, icon) in cats)
             {
                 bool on = cid == active;
-                using (paper.Row($"{id}_{cid}").Height(rowHeight).Rounded(8).Padding(10, 10, 0, 0)
+                using (paper.Row($"{id}_{cid}").Height(rowHeight).Rounded(EditorTheme.Roundness).Padding(10, 10, 0, 0)
                     .BackgroundColor(on ? EditorTheme.Selected : Color.Transparent)
                     .Hovered.BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Hover).End()
                     .OnClick(cid, (c, _) => onSelect(c))
@@ -326,7 +326,7 @@ public static class EditorGUI
         var m = Origami.Current.Metrics;
         using (paper.Column(id).Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge)
-            .Rounded(10).Clip()
+            .Rounded(m.ContainerRounding).Clip()
             .BackgroundColor(Color.FromArgb(38, 0, 0, 0)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
         {
             var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
@@ -357,7 +357,7 @@ public static class EditorGUI
     public static void Chip(Paper paper, string id, string label, Action onClick, float leftGap = 0f)
     {
         var font = EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(leftGap, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(8).Padding(11, 11, 0, 0)
+        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(leftGap, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(11, 11, 0, 0)
             .BackgroundColor(EditorTheme.Neutral400).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Hovered.BorderColor(EditorTheme.BorderStrong).End()
             .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
@@ -369,7 +369,7 @@ public static class EditorGUI
     public static void CtaButton(Paper paper, string id, string label, Color bg, Action onClick, bool grow = false, float height = 28f)
     {
         var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
-        paper.Box(id).Width(grow ? UnitValue.StretchOne : UnitValue.Auto).Height(height).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(8).Padding(16, 16, 0, 0)
+        paper.Box(id).Width(grow ? UnitValue.StretchOne : UnitValue.Auto).Height(height).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(16, 16, 0, 0)
             .BackgroundColor(bg)
             .Hovered.BackgroundColor(Color.FromArgb(230, bg.R, bg.G, bg.B)).End()
             .Text(label, font).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
@@ -382,7 +382,7 @@ public static class EditorGUI
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
-        paper.Box(id).Width(24).Height(24).Rounded(6).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        paper.Box(id).Width(24).Height(24).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(icon, font).TextColor(EditorTheme.Ink300).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(_ => onClick());
@@ -393,7 +393,7 @@ public static class EditorGUI
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
-        paper.Box(id).Width(26).Height(26).Rounded(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        paper.Box(id).Width(26).Height(26).Rounded(EditorTheme.Roundness).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .BackgroundColor(active ? EditorTheme.Selected : Color.Transparent)
             .Transition(GuiProp.BackgroundColor, 0.15f)
             .Hovered.BackgroundColor(active ? EditorTheme.Selected : EditorTheme.Hover).End()
@@ -413,7 +413,7 @@ public static class EditorGUI
     /// <summary>A read-only info chip for displaying asset statistics inline.</summary>
     public static void StatChip(Paper paper, string id, string text, Scribe.FontFile font)
     {
-        paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(6).Padding(9, 9, 0, 0)
+        paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(EditorTheme.Roundness).Padding(9, 9, 0, 0)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable()
             .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
@@ -426,7 +426,7 @@ public static class EditorGUI
         var font = EditorTheme.DefaultFont;
         paper.Box(id).Height(24)
             .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-            .Rounded(3)
+            .Rounded(Origami.Current.Metrics.SmallRounding)
             .Text(text, font)
             .TextColor(EditorTheme.Purple400)
             .FontSize(EditorTheme.FontSizeSmall)
@@ -472,15 +472,17 @@ public static class EditorGUI
         {
             var col = ColorRamp.ParseHex(hex);
             bool on = string.Equals(ramp.Primary, hex, StringComparison.OrdinalIgnoreCase);
+            float round = Origami.Current.Metrics.SmallRounding;
+            float ringRound = round > 0f ? round + 2f : 0f;
             paper.Box($"{id}_p_{hex}").Width(28).Height(28).Margin(0, sp * 2, UnitValue.StretchOne, UnitValue.StretchOne)
                 .OnClick(hex, (h, _) => { ramp.Primary = h; ramp.OverrideAll = false; s.ApplyTheme(); s.Save(); })
                 .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                 {
                     float cx = (float)(r.Min.X + r.Size.X / 2), cy = (float)(r.Min.Y + r.Size.Y / 2);
                     const float sw = 20f;
-                    canvas.RoundedRectFilled(cx - sw / 2, cy - sw / 2, sw, sw, 6f,
+                    canvas.RoundedRectFilled(cx - sw / 2, cy - sw / 2, sw, sw, round,
                         Prowl.Vector.Color32.FromArgb(255, col.R, col.G, col.B));
-                    canvas.RoundedRect(cx - sw / 2, cy - sw / 2, sw, sw, 6f);
+                    canvas.RoundedRect(cx - sw / 2, cy - sw / 2, sw, sw, round);
                     canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(30, 255, 255, 255));
                     canvas.SetStrokeWidth(1f);
                     canvas.Stroke();
@@ -488,7 +490,7 @@ public static class EditorGUI
                     {
                         var acc = EditorTheme.Accent;
                         const float ring = 27f;
-                        canvas.RoundedRect(cx - ring / 2, cy - ring / 2, ring, ring, 8f);
+                        canvas.RoundedRect(cx - ring / 2, cy - ring / 2, ring, ring, ringRound);
                         canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(255, acc.R, acc.G, acc.B));
                         canvas.SetStrokeWidth(2f);
                         canvas.Stroke();

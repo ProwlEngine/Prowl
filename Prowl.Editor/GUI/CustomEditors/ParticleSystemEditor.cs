@@ -43,7 +43,7 @@ public class ParticleSystemComponentEditor : CustomEditor
             .Height(EditorTheme.RowHeight)
             .PaddingLeft(8)
             .BackgroundColor(EditorTheme.Neutral300)
-            .Rounded(2)
+            .Rounded(Origami.Current.Metrics.Rounding)
             .Margin(UnitValue.Auto, EditorTheme.Spacing)
             .Text("Particle System", font)
             .TextColor(EditorTheme.Ink500)
@@ -319,7 +319,7 @@ public class ParticleSystemComponentEditor : CustomEditor
 
             using (paper.Column($"{id}_b{i}")
                 .Height(UnitValue.Auto)
-                .BackgroundColor(EditorTheme.Neutral300).Rounded(3)
+                .BackgroundColor(EditorTheme.Neutral300).Rounded(Origami.Current.Metrics.Rounding)
                 .Margin(0, 0, 0, 2)
                 .Padding(6, 6, 3, 3)
                 .Enter())
@@ -332,7 +332,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                         .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
 
                     paper.Box($"{id}_bx{i}")
-                        .Width(18).Height(EditorTheme.RowHeight).Rounded(3)
+                        .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)

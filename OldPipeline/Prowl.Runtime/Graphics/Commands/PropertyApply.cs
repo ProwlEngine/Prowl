@@ -84,15 +84,18 @@ internal static class PropertyApply
         // the upload savings). Matches the previous Graphics.SetUniformMatrix behavior.
         int loc = LocationOf(p, name);
         if (loc < 0) return;
-        Graphics.GL.UniformMatrix4(loc, 1u, false, in m.c0.X);
+        Graphics.GL.UniformMatrix4(loc, 1u, false, in FirstElement(in m));
     }
+
+    // The first of the sixteen column major floats, for handing a matrix or matrix array to GL.
+    private static ref readonly float FirstElement(in Float4x4 m) => ref MemoryMarshal.Cast<Float4x4, float>(new ReadOnlySpan<Float4x4>(in m))[0];
 
     public static void SetMatrixArray(GraphicsProgram p, string name, uint count, ReadOnlySpan<Float4x4> data)
     {
         if (data.Length == 0) return;
         int loc = LocationOf(p, name);
         if (loc < 0) return;
-        Graphics.GL.UniformMatrix4(loc, count, false, in data[0].c0.X);
+        Graphics.GL.UniformMatrix4(loc, count, false, in FirstElement(in data[0]));
     }
 
     public static void BindUniformBuffer(GraphicsProgram p, string name, GraphicsBuffer buf, uint bindingPoint)
@@ -248,7 +251,7 @@ internal static class PropertyApply
             if (kv.Value == null || kv.Value.Length == 0) continue;
             int loc = LocationOf(p, kv.Key);
             if (loc < 0) continue;
-            Graphics.GL.UniformMatrix4(loc, (uint)kv.Value.Length, false, in kv.Value[0].c0.X);
+            Graphics.GL.UniformMatrix4(loc, (uint)kv.Value.Length, false, in FirstElement(in kv.Value[0]));
         }
     }
 

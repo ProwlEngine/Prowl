@@ -22,19 +22,16 @@ public sealed class NebulaBackground
 
     private static Color Col(int r, int g, int b, float a = 1f) => Color32.FromArgb((int)Math.Round(a * 255), r, g, b);
 
-    // Per-layer visibility + the raw void colour behind everything (all settable from the theme).
+    // Per-layer visibility + the raw void colour behind everything.
     /// <summary> Whether to draw the coloured nebula gradients. </summary>
     public bool ShowClouds = true;    // the coloured nebula gradients
-    /// <summary> Whether to draw the tileable starfield. </summary>
-    public bool ShowStars = true;
-    /// <summary> Whether to draw the occasional comets. </summary>
-    public bool ShowComets = true;
+    /// <summary> Whether to draw the tileable starfield and the occasional comets. Only the launcher shows them, since inside a project they show through the windows. </summary>
+    public bool ShowStarsAndComets = true;
     /// <summary> The solid colour drawn behind all other layers. </summary>
     public System.Drawing.Color VoidColor = System.Drawing.Color.FromArgb(6, 4, 9);
 
     // Theme tint (primary/secondary); the whole nebula is coloured from these.
-    private System.Drawing.Color _primary = System.Drawing.Color.FromArgb(168, 85, 247);
-    private System.Drawing.Color _secondary = System.Drawing.Color.FromArgb(96, 165, 250);
+    private System.Drawing.Color _primary;
     private Color ColC(System.Drawing.Color c, float a) => Col(c.R, c.G, c.B, a);
     private Color Lighten(System.Drawing.Color c, float t, float a) =>
         Col((int)(c.R + (255 - c.R) * t), (int)(c.G + (255 - c.G) * t), (int)(c.B + (255 - c.B) * t), a);
@@ -58,12 +55,13 @@ public sealed class NebulaBackground
     {
         _paper = paper;
 
-        var cc = new[] { Col(168, 85, 247, 0.40f), Col(217, 107, 216, 0.26f), Col(80, 90, 220, 0.24f), Col(52, 211, 238, 0.14f) };
         var cr = new[] { 0.42f, 0.40f, 0.40f, 0.30f };
         var sx = new[] { 0.43f, 0.67f, 0.52f, 0.14f };
         var sy = new[] { 0.37f, 0.55f, 0.92f, 0.60f };
         for (int i = 0; i < 4; i++)
-            _clouds[i] = new Cloud { cx = sx[i], cy = sy[i], ang = (float)(_rng.NextDouble() * MathF.Tau), rf = cr[i], color = cc[i], phase = (float)(_rng.NextDouble() * 6.28f), timer = 0f };
+            _clouds[i] = new Cloud { cx = sx[i], cy = sy[i], ang = (float)(_rng.NextDouble() * MathF.Tau), rf = cr[i], phase = (float)(_rng.NextDouble() * 6.28f), timer = 0f };
+
+        ApplyThemeSettings();
     }
 
     /// <summary> Advances the nebula animation (clouds and comets) by the given time delta. </summary>
@@ -79,7 +77,6 @@ public sealed class NebulaBackground
     public void Retint(System.Drawing.Color primary, System.Drawing.Color secondary)
     {
         _primary = primary;
-        _secondary = secondary;
         _clouds[0].color = ColC(primary, 0.40f);
         _clouds[1].color = ColC(secondary, 0.26f);
         _clouds[2].color = ColC(secondary, 0.22f);
@@ -91,17 +88,17 @@ public sealed class NebulaBackground
     {
         Retint(EditorTheme.Accent, EditorTheme.Blue400);
         ShowClouds = EditorTheme.BgShowGradients;
-        ShowStars = EditorTheme.BgShowStars;
-        ShowComets = EditorTheme.BgShowComets;
         VoidColor = EditorTheme.BackgroundVoidColor;
     }
 
     /// <summary>The single editor-backdrop draw path, shared by the editor shell and the launcher: applies
     /// the theme settings, advances the animation (respecting speed / frozen), then paints the animated
-    /// nebula, a static nebula, a gradient, or a solid colour per the Effects settings.</summary>
-    public static void DrawEditorBackground(Paper paper, NebulaBackground nebula, string id, float w, float h, float dt)
+    /// nebula, a static nebula, a gradient, a solid colour or a wallpaper image per the Effects settings.
+    /// <paramref name="showStarsAndComets"/> is true for the launcher and false inside a project.</summary>
+    public static void DrawEditorBackground(Paper paper, NebulaBackground nebula, string id, float w, float h, float dt, bool showStarsAndComets)
     {
         nebula.ApplyThemeSettings();
+        nebula.ShowStarsAndComets = showStarsAndComets;
         nebula.Update(EditorTheme.AnimatedBackground ? dt * EditorTheme.BackgroundSpeed : 0f);
 
         var box = paper.Box(id).PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h).IsNotInteractable();
@@ -110,7 +107,12 @@ public sealed class NebulaBackground
         else if (EditorTheme.BackgroundStyle == EditorBackgroundStyle.Gradient)
             box.BackgroundLinearGradient(0, 0, 0, 1, EditorTheme.BackgroundColorA, EditorTheme.BackgroundColorB);
         else
+        {
             box.BackgroundColor(EditorTheme.BackgroundColorA);
+            if (EditorTheme.BackgroundStyle == EditorBackgroundStyle.Image && EditorWallpaper.Get(EditorTheme.BackgroundImagePath) is { } wallpaper)
+                box.OnPostLayout((hnd, rect) => paper.Draw(ref hnd, (canvas, r) =>
+                    EditorWallpaper.Draw(canvas, r, wallpaper, EditorTheme.BackgroundImageFit, EditorTheme.BackgroundImageDim)));
+        }
     }
 
     private void UpdateClouds(float dt)
@@ -230,12 +232,12 @@ public sealed class NebulaBackground
                 0, w * 0.46f, Lighten(_primary, 0.12f, 0.38f), ColC(_primary, 0f));
         }
 
-        if (ShowStars && _starTex != null)
+        if (ShowStarsAndComets && _starTex != null)
             for (float ty = y; ty < y + h; ty += StarTexSize)
                 for (float tx = x; tx < x + w; tx += StarTexSize)
                     vg.DrawImage(_starTex, tx, ty, StarTexSize, StarTexSize);
 
-        if (ShowComets)
+        if (ShowStarsAndComets)
             foreach (var c in _comets)
             {
                 if (!c.active) continue;

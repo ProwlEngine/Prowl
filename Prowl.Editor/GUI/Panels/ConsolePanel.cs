@@ -216,7 +216,7 @@ public class ConsolePanel : DockPanel
         var mono = EditorTheme.FontMono ?? font;
         Color ic = dim ? Color.FromArgb(115, iconColor.R, iconColor.G, iconColor.B) : iconColor;
 
-        using (p.Row(id).Width(UnitValue.Auto).Height(24).Rounded(6).Padding(8, 8, 0, 0).Gap(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        using (p.Row(id).Width(UnitValue.Auto).Height(24).Rounded(EditorTheme.Roundness).Padding(8, 8, 0, 0).Gap(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .BackgroundColor(on ? EditorTheme.Glass : Color.Transparent)
             .BorderColor(on ? EditorTheme.BorderSoft : Color.Transparent).BorderWidth(1)
             .Transition(GuiProp.BackgroundColor, 0.15f).Transition(GuiProp.BorderColor, 0.15f)
@@ -347,7 +347,7 @@ public class ConsolePanel : DockPanel
                 canvas.RectFilled(left, rowY, 2f, rowH, EditorTheme.Accent);
             }
             else if (vi == hoverRow)
-                canvas.RectFilled(left, rowY, w, rowH, Color.FromArgb(13, 168, 85, 247));
+                canvas.RectFilled(left, rowY, w, rowH, EditorTheme.WithAlpha(EditorTheme.Accent, 13));
 
             float ix = left + padL;
             icon.Draw(canvas, new Rect(ix, line1 - iconSize * 0.5f, ix + iconSize, line1 + iconSize * 0.5f), color, 1.6f);
@@ -382,7 +382,7 @@ public class ConsolePanel : DockPanel
                 msg.CountLayout ??= Make(msg.Count.ToString(), bold, EditorTheme.FontSizeSmall);
                 float cw = LW(msg.CountLayout), badgeW = cw + 12f, badgeH = 16f;
                 float badgeX = rightCursor - badgeW, badgeY = line1 - badgeH * 0.5f;
-                canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, badgeH * 0.5f, EditorTheme.Neutral400);
+                canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, EditorTheme.Roundness > 0f ? badgeH * 0.5f : 0f, EditorTheme.Neutral400);
                 canvas.DrawLayout(msg.CountLayout, badgeX + (badgeW - cw) * 0.5f, line1 - LH(msg.CountLayout) * 0.5f, EditorTheme.Ink300);
                 rightCursor -= badgeW + gap;
             }

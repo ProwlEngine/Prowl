@@ -64,6 +64,21 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     /// <summary>Number of backdrop-blur downsample/upsample levels the graph declares scratch textures for.</summary>
     public const int MaxBlurLevels = 6;
 
+    // Measured blur of the pipeline below, as a standard deviation in screen pixels. Rows are 1 to 4
+    // iterations, columns are offsets 1 to 3 in steps of 0.25. Offset 3 on one row matches offset 1 on
+    // the next, so walking the table gives one continuous range of strengths with no jump between rows.
+    private static readonly float[,] BlurSigmaTable =
+    {
+        { 4.17f, 5.02f, 5.69f, 6.36f, 6.93f, 7.43f, 7.86f, 8.32f, 8.72f },
+        { 8.72f, 11.07f, 12.64f, 14.04f, 15.15f, 16.09f, 16.93f, 17.89f, 18.80f },
+        { 17.63f, 23.15f, 26.25f, 28.84f, 30.90f, 32.71f, 34.39f, 36.37f, 38.25f },
+        { 35.35f, 47.56f, 53.39f, 58.16f, 62.10f, 65.67f, 69.04f, 73.03f, 76.81f },
+    };
+    private const float BlurOffsetMin = 1f;
+    private const float BlurOffsetStep = 0.25f;
+    // A blur radius maps to a standard deviation of a quarter of it.
+    private const float SigmaPerRadius = 0.25f;
+
     private GraphicsDevice _device;
 
     public bool SupportsBackdropBlur => true;
@@ -525,17 +540,23 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     }
 
     /// <summary>
-    /// Maps a pixel blur radius onto a number of dual-Kawase iterations plus a continuous sample offset
-    /// so the effective blur scales smoothly with radius even as the iteration count steps.
+    /// Maps a pixel blur radius onto dual-Kawase iterations and a sample offset using the measured
+    /// <see cref="BlurSigmaTable"/>, so blur strength follows the radius smoothly.
     /// </summary>
     private static void ComputeBlurParams(float radius, out int iterations, out float offset)
     {
-        // radius is in screen pixels, but the pyramid maths below works in base-level texels, and the
-        // base level (_blurHandles[0]) is half resolution. Converting here is what makes a 22 pixel
-        // blur actually mean 22 pixels rather than 44.
-        float r = MathF.Max(radius * 0.5f, 2f);
-        iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
-        offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+        float sigma = radius * SigmaPerRadius;
+
+        int rows = BlurSigmaTable.GetLength(0), cols = BlurSigmaTable.GetLength(1);
+        int row = 0;
+        while (row < rows - 1 && sigma > BlurSigmaTable[row, cols - 1]) row++;
+        iterations = row + 1;
+
+        int col = 1;
+        while (col < cols - 1 && sigma > BlurSigmaTable[row, col]) col++;
+        float lo = BlurSigmaTable[row, col - 1], hi = BlurSigmaTable[row, col];
+        float t = Math.Clamp((sigma - lo) / (hi - lo), 0f, 1f);
+        offset = BlurOffsetMin + (col - 1 + t) * BlurOffsetStep;
     }
 
     private void RenderBackdropBlur(CommandBuffer cmd, float radius, RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur)

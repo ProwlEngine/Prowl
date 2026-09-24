@@ -83,6 +83,14 @@ public class SceneViewPanel : DockPanel
                 _hasPendingPose = false;
             }
             if (_pendingGrid is bool pg) { _editorCamera.ShowGrid = pg; _pendingGrid = null; }
+            if (_pendingLens is { } lens)
+            {
+                if (lens.Fov is float fov) _editorCamera.FieldOfView = fov;
+                if (lens.Far is float far) _editorCamera.FarClip = far;
+                if (lens.Near is float near) _editorCamera.NearClip = near;
+                if (lens.Speed is float speed) _editorCamera.SetMoveSpeed(speed);
+                _pendingLens = null;
+            }
             if (_pendingGizmos is bool pz) { _editorCamera.ShowGizmos = pz; _pendingGizmos = null; }
         }
         ActiveCamera = _editorCamera;
@@ -108,6 +116,13 @@ public class SceneViewPanel : DockPanel
                     () => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; },
                     () => _editorCamera?.ShowGizmos ?? true);
 
+                if (_editorCamera != null)
+                {
+                    var cam = _editorCamera;
+                    b.Header(Loc.Get("scene.camera"));
+                    b.Custom(p => DrawCameraSettings(p, cam));
+                }
+
                 b.Header(Loc.Get("scene.navigation"));
                 b.Toggle(Loc.Get("scene.navmesh_always_show"),
                     () => NavMeshDebugDisplay.AlwaysShow = !NavMeshDebugDisplay.AlwaysShow,
@@ -132,6 +147,49 @@ public class SceneViewPanel : DockPanel
             }));
     }
 
+    // Lens settings only: what the camera sees from where it is, rather than where it is, which the
+    // navigation controls own.
+    private static void DrawCameraSettings(Paper paper, EditorCamera cam)
+    {
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        CameraRow(paper, font, "sv_cam_proj", Loc.Get("scene.camera_orthographic"), () =>
+            Origami.Switch(paper, "sv_cam_proj_v", cam.IsOrthographic, _ => cam.ToggleProjection()).NoLabel().Show());
+
+        if (cam.IsOrthographic)
+            CameraRow(paper, font, "sv_cam_size", Loc.Get("scene.camera_ortho_size"), () =>
+                Origami.NumericField<float>(paper, "sv_cam_size_v", cam.OrthographicSize, v => cam.OrthographicSize = v).Show());
+        else
+            CameraRow(paper, font, "sv_cam_fov", Loc.Get("scene.camera_fov"), () =>
+                Origami.Slider(paper, "sv_cam_fov_v", cam.FieldOfView, v => cam.FieldOfView = v, 10f, 120f).Format("F0").Show());
+
+        CameraRow(paper, font, "sv_cam_near", Loc.Get("scene.camera_near"), () =>
+            Origami.NumericField<float>(paper, "sv_cam_near_v", cam.NearClip, v => cam.NearClip = v).Show());
+
+        CameraRow(paper, font, "sv_cam_far", Loc.Get("scene.camera_far"), () =>
+            Origami.NumericField<float>(paper, "sv_cam_far_v", cam.FarClip, v => cam.FarClip = v).Show());
+
+        CameraRow(paper, font, "sv_cam_speed", Loc.Get("scene.camera_speed"), () =>
+            Origami.Slider(paper, "sv_cam_speed_v", cam.MoveSpeed, cam.SetMoveSpeed, 0.5f, 100f).Format("F1").Show());
+
+        Origami.Button(paper, "sv_cam_reset", Loc.Get("scene.camera_reset"), cam.ResetLens).FullWidth().Height(22).Show();
+    }
+
+    private static void CameraRow(Paper paper, Scribe.FontFile font, string id, string label, Action drawControl)
+    {
+        float rh = Origami.Current.Metrics.RowHeight;
+        using (paper.Row(id).Height(rh).Gap(6).Enter())
+        {
+            paper.Box($"{id}_l").Width(70).Height(rh)
+                .Text(label, font).TextColor(EditorTheme.Ink300).TextTruncate()
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+
+            using (paper.Row($"{id}_c").Width(UnitValue.StretchOne).Height(rh).Enter())
+                drawControl();
+        }
+    }
+
     // Floating transform-tools panel, top-left of the viewport. The active scene-view
     // editor may replace the default gizmo-mode buttons with its own toolbar.
     private void DrawTransformTools(Paper paper, Scribe.FontFile font)
@@ -140,7 +198,7 @@ public class SceneViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(12, 12)
             .Width(34).Height(UnitValue.Auto)
-            .Rounded(9).Padding(5, 5, 5, 5).Gap(3)
+            .Rounded(Origami.Current.Metrics.ContainerRounding).Padding(5, 5, 5, 5).Gap(3)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
@@ -166,7 +224,7 @@ public class SceneViewPanel : DockPanel
         bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
         paper.Box("sv_move_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
@@ -174,7 +232,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
 
         paper.Box("sv_rotate_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
@@ -182,7 +240,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
 
         paper.Box("sv_scale_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
@@ -190,7 +248,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
 
         paper.Box("sv_universal_btn")
-            .Width(24).Height(24).Rounded(6)
+            .Width(24).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
@@ -639,6 +697,10 @@ public class SceneViewPanel : DockPanel
         state["yaw"] = _editorCamera.Yaw;
         state["pitch"] = _editorCamera.Pitch;
         state["grid"] = _editorCamera.ShowGrid;
+        state["fov"] = _editorCamera.FieldOfView;
+        state["near"] = _editorCamera.NearClip;
+        state["far"] = _editorCamera.FarClip;
+        state["speed"] = _editorCamera.MoveSpeed;
         state["gizmos"] = _editorCamera.ShowGizmos;
         state["navAlwaysShow"] = NavMeshDebugDisplay.AlwaysShow;
         state["navShowDetail"] = NavMeshDebugDisplay.ShowDetail;
@@ -658,6 +720,8 @@ public class SceneViewPanel : DockPanel
 
         // Camera is created lazily in OnGUI; stash toggles and apply when it exists.
         _pendingGrid = state["grid"]?.GetValue<bool>();
+        _pendingLens = (state["fov"]?.GetValue<float>(), state["near"]?.GetValue<float>(),
+                        state["far"]?.GetValue<float>(), state["speed"]?.GetValue<float>());
         _pendingGizmos = state["gizmos"]?.GetValue<bool>();
 
         NavMeshDebugDisplay.AlwaysShow = state["navAlwaysShow"]?.GetValue<bool>() ?? false;
@@ -666,6 +730,7 @@ public class SceneViewPanel : DockPanel
     }
 
     private bool? _pendingGrid;
+    private (float? Fov, float? Near, float? Far, float? Speed)? _pendingLens;
     private bool? _pendingGizmos;
 
     /// <summary>
@@ -942,7 +1007,7 @@ public class SceneViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(x, y).Size(boxW, boxH)
             .BackgroundColor(Color.FromArgb(a, EditorTheme.Neutral400))
-            .Rounded(6)
+            .Rounded(EditorTheme.Roundness)
             .IsNotInteractable()
             .Text($"{_editorCamera.MoveSpeed:F1}", font)
             .TextColor(Color.FromArgb(ta, EditorTheme.Ink500))
