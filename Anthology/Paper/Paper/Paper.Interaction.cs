@@ -1078,10 +1078,20 @@ namespace Prowl.PaperUI
                 }
                 else
                 {
+                    if (IsKeyDown(PaperKey.LeftShift) || IsKeyDown(PaperKey.RightShift))
+                    {
+                        // Shift-Tab to Tab backwards
+                        // Move to previous element, wrapping around to last if at start
+                        int prevIndex = (currentIndex - 1 + tabbableElements.Count) % tabbableElements.Count;
+                        nextElementId = tabbableElements[prevIndex].elementId;
+                    }
+                    else
+                    {
                     // Move to next element, wrapping around to first if at end
                     int nextIndex = (currentIndex + 1) % tabbableElements.Count;
                     nextElementId = tabbableElements[nextIndex].elementId;
                 }
+            }
             }
 
             // Focus the next element
