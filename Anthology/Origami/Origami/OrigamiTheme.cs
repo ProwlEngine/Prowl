@@ -75,6 +75,12 @@ public sealed class OrigamiTheme
     /// <summary>Accent-tinted selected / active fill. Tracks <see cref="Primary"/>.</summary>
     public Color Selected => WithAlpha(Primary.C500, 41);
 
+    /// <summary>Accent-tinted for focused elements<see cref="Primary"/>.</summary>
+    public Color FocusBorder => Primary.C500;
+
+    /// <summary>Accent-tinted for focused glow<see cref="Primary"/>.</summary>
+    public Color FocusGlow => WithAlpha(Primary.C500, 130);
+
     /// <summary>Return <paramref name="c"/> with a new alpha (0-255). Handy for state overlays.</summary>
     public static Color WithAlpha(Color c, int a) => Color.FromArgb(a, c.R, c.G, c.B);
 

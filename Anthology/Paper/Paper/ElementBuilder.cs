@@ -573,6 +573,10 @@ namespace Prowl.PaperUI
         /// <summary>Style properties applied when the element has focus.</summary>
         public StateDrivenStyle Focused => StateDrivenStyle.Get(this, _paper.IsElementFocused(_handle.Data.ID));
 
+        // <summary>Style properties applied when the _Parent_ element has focus - but we want to apply to this element even though it's not interactable
+        public StateDrivenStyle ParentFocused => StateDrivenStyle.Get(this, _paper.IsParentFocused);
+
+
         public ElementBuilder(Paper paper, ElementHandle handle) : base(handle)
         {
             _paper = paper;

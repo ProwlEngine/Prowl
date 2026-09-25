@@ -275,7 +275,7 @@ public sealed class TextFieldBuilder
                           : subtle ? Color.Transparent
                                       : (_variant == OrigamiVariant.Default ? bdSoft : ramp.C400);
         Color focusBorder = hasError ? _theme.Red.C500
-                          : (_variant == OrigamiVariant.Default ? _theme.Primary.C500 : ramp.C500);
+                          : (_variant == OrigamiVariant.Default ? _theme.FocusBorder : ramp.C500);
 
         // Total widget height = field row + helper line (when present).
         float helperH = (hasError || !string.IsNullOrEmpty(_helperText)) ? 16f : 0f;
@@ -287,7 +287,7 @@ public sealed class TextFieldBuilder
 
             // ── Field row (border, slots, text element) ────────────────
             // Soft accent glow on focus (not a hard ring).
-            Color glowColor = hasError ? Color.FromArgb(130, _theme.Red.C500.R, _theme.Red.C500.G, _theme.Red.C500.B) : Color.FromArgb(130, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B);
+            Color glowColor = hasError ? Color.FromArgb(130, _theme.Red.C500) : _theme.FocusGlow;
             var rowBuilder = _paper.Row($"{_id}_row")
                 .Width(UnitValue.Stretch()).Height(fieldH)
                 .BackgroundColor(bgColor)
@@ -299,7 +299,7 @@ public sealed class TextFieldBuilder
             using (rowBuilder.Enter())
             {
                 rowHandle = _paper.CurrentParent;
-
+                
                 // Leading slot ─────────────────────────────────────────
                 if (_isSearch)
                 {
