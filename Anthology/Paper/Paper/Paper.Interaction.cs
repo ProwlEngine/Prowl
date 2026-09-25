@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
-using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
 {
@@ -1038,9 +1036,9 @@ namespace Prowl.PaperUI
                     }
                     else
                     {
-                    tabbableElements.Add((data.TabIndex, data.ID));
+                        tabbableElements.Add((data.TabIndex, data.ID));
+                    }
                 }
-            }
             }
 
             // If no tabbable elements, do nothing
@@ -1087,11 +1085,11 @@ namespace Prowl.PaperUI
                     }
                     else
                     {
-                    // Move to next element, wrapping around to first if at end
-                    int nextIndex = (currentIndex + 1) % tabbableElements.Count;
-                    nextElementId = tabbableElements[nextIndex].elementId;
+                        // Move to next element, wrapping around to first if at end
+                        int nextIndex = (currentIndex + 1) % tabbableElements.Count;
+                        nextElementId = tabbableElements[nextIndex].elementId;
+                    }
                 }
-            }
             }
 
             // Focus the next element
