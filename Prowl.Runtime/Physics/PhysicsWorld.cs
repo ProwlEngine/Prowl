@@ -252,16 +252,8 @@ public class PhysicsWorld
                     _direction, _maxDistance, ref pointA, ref pointB, out normal, out lambda, out penetration))
                 return;
 
-                    pointA = deepestA;
-                    pointB = deepestB;
-                    normal = JVector.Normalize(separation);
-                }
-                else
-                {
-                    penetration = 0.0f;
-                    normal = _direction;
-                }
-            }
+            // Starting in contact, a move along the surface or away from it is not stopped by it.
+            if (StartsAlong(lambda, penetration, _direction, normal)) return;
 
             Collider owner = _world.GetShapeOwner(targetShape);
             _hits.Add(new ShapeCastHit
