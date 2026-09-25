@@ -345,7 +345,7 @@ public abstract class Collider : MonoBehaviour
     /// static geometry. A disabled rigidbody is skipped because its Jitter body has been removed, so
     /// attaching to it would drop the collider out of the world entirely.
     /// </summary>
-    private Rigidbody3D FindOwningRigidbody()
+    internal Rigidbody3D FindOwningRigidbody()
     {
         foreach (Rigidbody3D rb in GetComponentsInParent<Rigidbody3D>())
             if (rb.IsValid() && rb.EnabledInHierarchy) return rb;
