@@ -62,6 +62,20 @@ public class LayerFilter : IBroadPhaseFilter
 
     internal void ClearIgnoredCollisions() => Volatile.Write(ref _ignore, []);
 
+    // Constraints whose two bodies still collide. Every other constraint keeps its bodies apart.
+    private HashSet<Constraint> _collidingConstraints = [];
+
+    internal void SetCollidesConnected(Constraint constraint, bool collides)
+    {
+        HashSet<Constraint> next = [];
+        foreach (Constraint c in Volatile.Read(ref _collidingConstraints))
+            if (c.IsValid) next.Add(c);
+
+        if (collides) next.Add(constraint);
+        else next.Remove(constraint);
+        Volatile.Write(ref _collidingConstraints, next);
+    }
+
     private static bool TryOrderPair(ref Rigidbody3D bodyA, ref Rigidbody3D bodyB)
     {
         if (bodyA.IsNotValid() || bodyB.IsNotValid()) return false;
@@ -81,14 +95,15 @@ public class LayerFilter : IBroadPhaseFilter
         return copy;
     }
 
-    private static bool AreConstrainedTogether(RigidBody a, RigidBody b)
+    private bool AreConstrainedTogether(RigidBody a, RigidBody b)
     {
         if (a.Constraints.Count == 0 || b.Constraints.Count == 0) return false;
 
         if (b.Constraints.Count < a.Constraints.Count) (a, b) = (b, a);
 
+        HashSet<Constraint> colliding = Volatile.Read(ref _collidingConstraints);
         foreach (Constraint constraint in a.Constraints)
-            if (constraint.Body1 == b || constraint.Body2 == b) return true;
+            if ((constraint.Body1 == b || constraint.Body2 == b) && !colliding.Contains(constraint)) return true;
 
         return false;
     }
@@ -97,7 +112,7 @@ public class LayerFilter : IBroadPhaseFilter
     {
         if (proxyA is RigidBodyShape rbsA && proxyB is RigidBodyShape rbsB)
         {
-            // Things with constraints dont collide against eachother. (TODO: This should be toggleable)
+            // Bodies joined by a constraint do not collide, unless it says they should.
             if (AreConstrainedTogether(rbsA.RigidBody, rbsB.RigidBody))
                 return false;
 

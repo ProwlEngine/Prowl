@@ -48,6 +48,10 @@ public class PhysicsWorld
     /// <summary>Undoes <see cref="IgnoreCollisionBetween"/> for a pair.</summary>
     public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.EnableCollisionBetween(bodyA, bodyB);
 
+    /// <summary>Lets the two bodies of a constraint collide with each other, or keeps them apart.</summary>
+    internal void SetCollidesConnected(Jitter2.Dynamics.Constraints.Constraint constraint, bool collides)
+        => _layerFilter.SetCollidesConnected(constraint, collides);
+
     /// <summary>Forgets every pair passed to <see cref="IgnoreCollisionBetween"/>.</summary>
     public void ClearIgnoredCollisions() => _layerFilter.ClearIgnoredCollisions();
 
@@ -244,20 +248,10 @@ public class PhysicsWorld
 
             float penetration = 0.0f;
 
-            // A zero normal means the shapes already overlapped at the start of the sweep, where
-            // Sweep reports lambda 0 and no direction. Recover the direction and depth from MPR/EPA.
-            if (normal.LengthSquared() <= 0)
-            {
-                lambda = 0.0f;
+            if (normal.LengthSquared() <= 0 && !ResolveStartContact(_shape, targetShape, _orientation, _origin,
+                    _direction, _maxDistance, ref pointA, ref pointB, out normal, out lambda, out penetration))
+                return;
 
-                bool resolved = NarrowPhase.MprEpa(
-                    _shape, targetShape,
-                    _orientation, targetBody.Data.Orientation,
-                    _origin, targetBody.Data.Position,
-                    out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
-
-                if (resolved && separation.LengthSquared() > 0)
-                {
                     pointA = deepestA;
                     pointB = deepestB;
                     normal = JVector.Normalize(separation);
@@ -285,6 +279,68 @@ public class PhysicsWorld
                 Transform = ResolveHitTransform(userData.Rigidbody, owner)
             });
         }
+    }
+
+    // How far a move is tried along its direction to tell whether it presses into a surface it starts
+    // exactly touching, which has no gap to measure and no depth to resolve.
+    private const float ContactProbe = 1e-3f;
+
+    // Below this, a move is taken to run along a surface rather than into it.
+    private const float ApproachEpsilon = 1e-4f;
+
+    private static bool StartsAlong(float lambda, float penetration, in JVector direction, in JVector normal)
+        => lambda <= 0f && penetration < ContactProbe && JVector.Dot(direction, normal) <= ApproachEpsilon;
+
+    private static bool ResolveStartContact<TShape>(in TShape shape, RigidBodyShape target, in JQuaternion orientation,
+        in JVector origin, in JVector direction, float maxDistance,
+        ref JVector pointA, ref JVector pointB, out JVector normal, out float lambda, out float penetration)
+        where TShape : ISupportMappable
+    {
+        Jitter2.Dynamics.RigidBody body = target.RigidBody;
+        lambda = 0.0f;
+
+        if (NarrowPhase.MprEpa(shape, target, orientation, body.Data.Orientation, origin, body.Data.Position,
+                out JVector deepestA, out JVector deepestB, out JVector separation, out penetration)
+            && separation.LengthSquared() > 0)
+        {
+            normal = JVector.Normalize(separation);
+            pointA = deepestA;
+            pointB = deepestB;
+            return true;
+        }
+        penetration = 0.0f;
+
+        // Apart by a hair: the closest points give the real direction to the other shape.
+        if (NarrowPhase.Distance(shape, target, orientation, body.Data.Orientation, origin, body.Data.Position,
+                out JVector closestA, out JVector closestB, out JVector toward, out float gap))
+        {
+            float approach = JVector.Dot(direction, toward);
+            if (approach <= ApproachEpsilon)
+            {
+                normal = JVector.Zero;
+                return false;
+            }
+
+            pointA = closestA;
+            pointB = closestB;
+            normal = toward;
+            lambda = maxDistance > 0f ? Math.Clamp(gap / approach / maxDistance, 0f, 1f) : 0f;
+            return true;
+        }
+
+        // Exactly touching: a nudge along the move overlaps only if the move presses in.
+        if (NarrowPhase.MprEpa(shape, target, orientation, body.Data.Orientation, origin + direction * ContactProbe,
+                body.Data.Position, out deepestA, out deepestB, out separation, out _)
+            && separation.LengthSquared() > 0)
+        {
+            pointA = deepestA;
+            pointB = deepestB;
+            normal = JVector.Normalize(separation);
+            return true;
+        }
+
+        normal = JVector.Zero;
+        return false;
     }
 
     private struct OverlapSink<TShape> : ISink<IDynamicTreeProxy>
@@ -422,6 +478,7 @@ public class PhysicsWorld
 
         bool ignoringBody = filter.IgnoreRigidbody.IsValid();
         if (ignoringBody && userData.Rigidbody == filter.IgnoreRigidbody) return false;
+        if (filter.IgnoreBodies != null && userData.Rigidbody.IsValid() && filter.IgnoreBodies.Contains(userData.Rigidbody)) return false;
 
         // Static colliders share one body per layer, so a shape with no rigidbody of its own still has
         // to be checked against the ignored one, by way of the collider that created it. One lookup
@@ -964,6 +1021,8 @@ public class PhysicsWorld
                         n = -JVector.NormalizeSafe((triangle.B - triangle.A) % (triangle.C - triangle.A));
                         if (n.LengthSquared() <= 0) continue;
                     }
+
+                    if (StartsAlong(lambda, 0f, JVector.NormalizeSafe(sweep), n)) continue;
 
                     bestLambda = lambda;
                     bestNormal = n;

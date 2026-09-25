@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 namespace Prowl.Runtime;
 
 /// <summary>
@@ -22,6 +24,9 @@ public struct QueryFilter
     /// <summary>Skip this one collider.</summary>
     public Collider IgnoreCollider;
 
+    /// <summary>Skip everything attached to any of these rigidbodies.</summary>
+    public IReadOnlySet<Rigidbody3D>? IgnoreBodies;
+
     /// <summary>Hits anything on any layer.</summary>
     public static readonly QueryFilter Default = new(LayerMask.Everything);
 
@@ -38,6 +43,14 @@ public struct QueryFilter
         return filter;
     }
 
+    /// <summary>This filter, additionally skipping everything attached to any of <paramref name="bodies"/>.</summary>
+    public readonly QueryFilter Ignoring(IReadOnlySet<Rigidbody3D> bodies)
+    {
+        QueryFilter filter = this;
+        filter.IgnoreBodies = bodies;
+        return filter;
+    }
+
     /// <summary>This filter, additionally skipping <paramref name="collider"/>.</summary>
     public readonly QueryFilter Ignoring(Collider collider)
     {
@@ -47,7 +60,7 @@ public struct QueryFilter
     }
 
     /// <summary>Whether anything is excluded beyond the layer mask. Lets queries skip the owner lookup.</summary>
-    internal readonly bool HasExclusions => IgnoreRigidbody.IsValid() || IgnoreCollider.IsValid();
+    internal readonly bool HasExclusions => IgnoreRigidbody.IsValid() || IgnoreCollider.IsValid() || IgnoreBodies is { Count: > 0 };
 
     public static implicit operator QueryFilter(LayerMask layerMask) => new(layerMask);
 }
