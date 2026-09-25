@@ -18,6 +18,7 @@ namespace Prowl.Runtime;
 public class ConeLimitConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 axis = Float3.UnitY;
+    [SerializeField] private Float3 connectedAxis = Float3.Zero;
     [SerializeField] private float minAngle = 0.0f;
     [SerializeField] private float maxAngle = 45.0f;
     [SerializeField] private float softness = 0.001f;
@@ -34,6 +35,20 @@ public class ConeLimitConstraint : PhysicsConstraint
         set
         {
             axis = value;
+            RecreateConstraint();
+        }
+    }
+
+    /// <summary>
+    /// The cone's centre in local space of the connected body, or zero for wherever <see cref="Axis"/>
+    /// points when the joint is made.
+    /// </summary>
+    public Float3 ConnectedAxis
+    {
+        get => connectedAxis;
+        set
+        {
+            connectedAxis = value;
             RecreateConstraint();
         }
     }
@@ -119,11 +134,14 @@ public class ConeLimitConstraint : PhysicsConstraint
     protected override void CreateConstraint(World world, RigidBody body1, RigidBody body2)
     {
         Jitter2.LinearMath.JVector worldAxis = LocalDirToWorld(axis, Body1.Transform);
+        Jitter2.LinearMath.JVector worldConnectedAxis = connectedAxis != Float3.Zero && connectedBody.IsValid()
+            ? LocalDirToWorld(connectedAxis, connectedBody.Transform)
+            : worldAxis;
 
         constraint = world.CreateConstraint<ConeLimit>(body1, body2);
 
         var limit = AngularLimit.FromDegree(ClampedMinAngle, ClampedMaxAngle);
-        constraint.Initialize(worldAxis, limit);
+        constraint.Initialize(worldAxis, worldConnectedAxis, limit);
 
         constraint.Softness = softness;
         constraint.Bias = biasFactor;
@@ -144,7 +162,7 @@ public class ConeLimitConstraint : PhysicsConstraint
         float scale = GizmoScale;
         float length = scale * 1.3f;
         Float3 apex = WorldPivot;
-        Float3 dir = WorldAxis(axis);
+        Float3 dir = connectedAxis != Float3.Zero ? WorldConnectedAxis(connectedAxis) : WorldAxis(axis);
 
         DrawJointMarker(apex);
         Debug.DrawAxisLine(apex, dir, scale * 1.5f, AxisColor);
