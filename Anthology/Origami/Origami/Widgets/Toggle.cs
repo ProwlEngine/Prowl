@@ -338,7 +338,7 @@ public sealed class ToggleBuilder
         if (_customVisual != null)
         {
             var ctx = new ToggleVisualContext(_value, _indeterminate, !_disabled && !_readOnly,
-                t, ramp, ink, _size, _theme);
+                t, ramp, ink, _size, _theme);           
             // Wrap custom visual in a sized box so the row layout is stable regardless of what
             // the caller draws inside.
             using (_paper.Box($"{_id}_cust")
