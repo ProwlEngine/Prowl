@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
-using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
 {
@@ -1024,6 +1022,7 @@ namespace Prowl.PaperUI
         {
             // Get all elements with valid tab indices
             var tabbableElements = new List<(int tabIndex, int elementId)>();
+            var unindexedTabbableElements = new List<(int tabInex, int elementId)>();
 
             // Brute force search through all elements
             for (int i = 0; i < _elementCount; i++)
@@ -1031,16 +1030,24 @@ namespace Prowl.PaperUI
                 ref ElementData data = ref _elements[i];
                 if (data.TabIndex >= 0 && data.IsFocusable && data.Visible)
                 {
-                    tabbableElements.Add((data.TabIndex, data.ID));
+                    if (data.TabIndex == 0)
+                    {
+                        unindexedTabbableElements.Add((0, data.ID)); //unindexed - keep in order seen (do not Sort)
+                    }
+                    else
+                    {
+                        tabbableElements.Add((data.TabIndex, data.ID));
+                    }
                 }
             }
 
             // If no tabbable elements, do nothing
-            if (tabbableElements.Count == 0)
+            if (unindexedTabbableElements.Count == 0 && tabbableElements.Count == 0)
                 return;
 
             // Sort by tab index
             tabbableElements.Sort((a, b) => a.tabIndex.CompareTo(b.tabIndex));
+            tabbableElements.AddRange(unindexedTabbableElements);  // add unindexed to back of list
 
             int nextElementId;
 
@@ -1069,9 +1076,19 @@ namespace Prowl.PaperUI
                 }
                 else
                 {
-                    // Move to next element, wrapping around to first if at end
-                    int nextIndex = (currentIndex + 1) % tabbableElements.Count;
-                    nextElementId = tabbableElements[nextIndex].elementId;
+                    if (IsKeyDown(PaperKey.LeftShift) || IsKeyDown(PaperKey.RightShift))
+                    {
+                        // Shift-Tab to Tab backwards
+                        // Move to previous element, wrapping around to last if at start
+                        int prevIndex = (currentIndex - 1 + tabbableElements.Count) % tabbableElements.Count;
+                        nextElementId = tabbableElements[prevIndex].elementId;
+                    }
+                    else
+                    {
+                        // Move to next element, wrapping around to first if at end
+                        int nextIndex = (currentIndex + 1) % tabbableElements.Count;
+                        nextElementId = tabbableElements[nextIndex].elementId;
+                    }
                 }
             }
 
