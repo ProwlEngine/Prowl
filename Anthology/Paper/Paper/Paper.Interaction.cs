@@ -1024,6 +1024,7 @@ namespace Prowl.PaperUI
         {
             // Get all elements with valid tab indices
             var tabbableElements = new List<(int tabIndex, int elementId)>();
+            var unindexedTabbableElements = new List<(int tabInex, int elementId)>();
 
             // Brute force search through all elements
             for (int i = 0; i < _elementCount; i++)
@@ -1031,16 +1032,24 @@ namespace Prowl.PaperUI
                 ref ElementData data = ref _elements[i];
                 if (data.TabIndex >= 0 && data.IsFocusable && data.Visible)
                 {
+                    if (data.TabIndex == 0)
+                    {
+                        unindexedTabbableElements.Add((0, data.ID)); //unindexed - keep in order seen (do not Sort)
+                    }
+                    else
+                    {
                     tabbableElements.Add((data.TabIndex, data.ID));
                 }
             }
+            }
 
             // If no tabbable elements, do nothing
-            if (tabbableElements.Count == 0)
+            if (unindexedTabbableElements.Count == 0 && tabbableElements.Count == 0)
                 return;
 
             // Sort by tab index
             tabbableElements.Sort((a, b) => a.tabIndex.CompareTo(b.tabIndex));
+            tabbableElements.AddRange(unindexedTabbableElements);  // add unindexed to back of list
 
             int nextElementId;
 
