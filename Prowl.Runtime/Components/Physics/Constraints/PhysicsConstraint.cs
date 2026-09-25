@@ -20,6 +20,18 @@ public abstract class PhysicsConstraint : MonoBehaviour
 {
     [SerializeField] protected Rigidbody3D connectedBody;
     [SerializeField] protected bool enabledOnStart = true;
+    [SerializeField] protected bool collideConnected;
+
+    /// <summary>Whether the two connected bodies still collide with each other.</summary>
+    public bool CollideConnected
+    {
+        get => collideConnected;
+        set
+        {
+            collideConnected = value;
+            ApplyCollideConnected();
+        }
+    }
 
     /// <summary>
     /// The rigidbody connected by this constraint. If null, the constraint connects to the world.
@@ -161,6 +173,16 @@ public abstract class PhysicsConstraint : MonoBehaviour
         // Set initial enabled state. Through Active so a joint's constraints all get it, not just the
         // single one GetConstraint can name.
         Active = enabledOnStart;
+        ApplyCollideConnected();
+    }
+
+    private void ApplyCollideConnected()
+    {
+        Resources.Scene scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsNotValid() || scene.Physics == null) return;
+
+        foreach (Constraint constraint in GetConstraints())
+            scene.Physics.SetCollidesConnected(constraint, collideConnected);
     }
 
     #region Gizmos
