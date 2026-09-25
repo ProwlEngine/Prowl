@@ -228,9 +228,7 @@ public sealed class ToggleBuilder
             // ── Row (focusable + clickable) ───────────────────────────
             var row = _paper.Row($"{_id}_row")
                 .Width(_stretch ? UnitValue.Stretch() : UnitValue.Auto)
-                .Height(rowH)
-                .Rounded(metrics.Rounding)
-                .BorderWidth(1).BorderColor(Color.Transparent);
+                .Height(rowH);
 
             if (interactive)
             {
@@ -340,7 +338,7 @@ public sealed class ToggleBuilder
         if (_customVisual != null)
         {
             var ctx = new ToggleVisualContext(_value, _indeterminate, !_disabled && !_readOnly,
-                t, ramp, ink, _size, _theme);
+                t, ramp, ink, _size, _theme);           
             // Wrap custom visual in a sized box so the row layout is stable regardless of what
             // the caller draws inside.
             using (_paper.Box($"{_id}_cust")
@@ -421,9 +419,13 @@ public sealed class ToggleBuilder
         string? onText = _onText, offText = _offText, onGlyph = _onGlyph, offGlyph = _offGlyph;
         float fontSize = metrics.FontSize;
 
+        Color focusBorder = _theme.FocusBorder;
+        Color glowColor = _theme.FocusGlow;
         using (_paper.Box($"{_id}_track")
             .Width(trackW).Height(trackH)
             .Margin(leftPad, rightPad, UnitValue.Stretch(), UnitValue.Stretch())
+            .Rounded(trackH / 2.0f).BorderColor(borderCol).BorderWidth(1)
+            .ParentFocused.BorderColor(focusBorder).Glow(0, 0, 10, 1, glowColor).End()
             .IsNotInteractable()
             .Enter())
         {
@@ -443,18 +445,6 @@ public sealed class ToggleBuilder
 
                 // Track — single hardware-accelerated rounded rect.
                 canvas.RoundedRectFilled(x, y, w, h, trackR, trackBg);
-
-                // Off-state hairline border (fades out as it turns on).
-                if (t < 0.98f)
-                {
-                    canvas.SaveState();
-                    canvas.SetStrokeColor(Color.FromArgb((int)(borderCol.A * (1f - t)), borderCol.R, borderCol.G, borderCol.B));
-                    canvas.SetStrokeWidth(1f);
-                    canvas.BeginPath();
-                    canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, MathF.Max(0f, trackR - 0.5f));
-                    canvas.Stroke();
-                    canvas.RestoreState();
-                }
 
                 // OnText — visible on the left while on (the side the knob has vacated).
                 if (font != null && !string.IsNullOrEmpty(onText) && t > 0.05f)
@@ -515,9 +505,13 @@ public sealed class ToggleBuilder
         bool drawMark = effT > 0.05f;
         float radius = metrics.SmallRounding;
 
+        Color focusBorder = _theme.FocusBorder;
+        Color glowColor = _theme.FocusGlow;
         using (_paper.Box($"{_id}_chk")
             .Width(_size).Height(_size)
             .Margin(leftPad, rightPad, UnitValue.Stretch(), UnitValue.Stretch())
+            .Rounded(radius).BorderColor(border).BorderWidth(1)
+            .ParentFocused.BorderColor(focusBorder).Glow(0, 0, 10, 1, glowColor).End()
             .IsNotInteractable()
             .Enter())
         {
@@ -527,10 +521,9 @@ public sealed class ToggleBuilder
                 float y = (float)rect.Min.Y;
                 float w = (float)rect.Size.X;
                 float h = (float)rect.Size.Y;
-
-                // Hairline border via two stacked filled rounded rects — no path/stroke pass.
-                canvas.RoundedRectFilled(x, y, w, h, radius, border);
-                canvas.RoundedRectFilled(x + 1, y + 1, w - 2, h - 2, MathF.Max(0, radius - 1), fill);
+                
+                // Fill
+                canvas.RoundedRectFilled(x, y, w, h, radius, fill);
 
                 // Vector check / dash (the UI font has no tick glyph).
                 if (drawMark)
@@ -571,9 +564,13 @@ public sealed class ToggleBuilder
         Color dotCol = _disabled ? _theme.Ink.C300 : onColor;
         float anim = t;
 
+        Color focusBorder = _theme.FocusBorder;
+        Color glowColor = _theme.FocusGlow;
         using (_paper.Box($"{_id}_radio")
             .Width(_size).Height(_size)
             .Margin(leftPad, rightPad, UnitValue.Stretch(), UnitValue.Stretch())
+            .Rounded(_size/2.0f).BorderColor(ringCol).BorderWidth(2)
+            .ParentFocused.BorderColor(focusBorder).Glow(0, 0, 10, 1, glowColor).End()
             .IsNotInteractable()
             .Enter())
         {
@@ -587,15 +584,6 @@ public sealed class ToggleBuilder
                 float cx = x + w * 0.5f;
                 float cy = y + h * 0.5f;
 
-
-                // Ring (stroked so the centre stays transparent).
-                canvas.SaveState();
-                canvas.SetStrokeColor(ringCol);
-                canvas.SetStrokeWidth(2f);
-                canvas.BeginPath();
-                canvas.Circle(cx, cy, r - 1f);
-                canvas.Stroke();
-                canvas.RestoreState();
 
                 float dotR = r * 0.47f * anim;
                 if (dotR >= 0.5f)
