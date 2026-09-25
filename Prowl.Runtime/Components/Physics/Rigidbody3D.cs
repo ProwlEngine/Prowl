@@ -557,12 +557,10 @@ public sealed class Rigidbody3D : MonoBehaviour
         // Get all colliders in this GameObject and its children
         var colliders = GetComponentsInChildren<Collider>();
 
+        // A collider under a nested rigidbody belongs to that one, not to this.
         foreach (var collider in colliders)
-        {
-            // Try to attach the collider to this rigidbody
-            // This will fail if the collider is already claimed by another rigidbody
-            collider.TryAttachTo(this);
-        }
+            if (ReferenceEquals(collider.FindOwningRigidbody(), this))
+                collider.TryAttachTo(this);
     }
 
     public override void OnDisable()
