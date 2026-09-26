@@ -42,7 +42,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private float _height = 24f;
     private bool _readOnly;
     private string _placeholder = "";
-    private bool _selectAllOnFocus;
+    private bool _selectAllOnFocus = true; // default to true
 
     private T? _min;
     private T? _max;
@@ -62,6 +62,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private string? _suffixText;
     private bool _stepper;
     private bool _dragLabel;
+    private int _dragDecimalPlaces;
     private bool _prefixCompact;
 
     internal NumericFieldBuilder(Paper paper, string id, T value, Action<T> setter, OrigamiTheme theme)
@@ -142,9 +143,14 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     /// <summary>Make the <see cref="Prefix"/> label a horizontal scrub handle (drag to change the value).
     /// <paramref name="compact"/> tightens the label padding (for vector axis tags).</summary>
-    public NumericFieldBuilder<T> DraggableLabel(string text, Color color, bool compact = false)
+    public NumericFieldBuilder<T> DraggableLabel(string text, Color color, int dragDecimalPlaces = 2, bool compact = false)
     {
-        _prefixText = text; _prefixColor = color; _dragLabel = true; _prefixCompact = compact; return this;
+        _prefixText = text;
+        _prefixColor = color;
+        _dragLabel = true;
+        _dragDecimalPlaces = dragDecimalPlaces;
+        _prefixCompact = compact;
+        return this;
     }
 
     // ── Terminator ──────────────────────────────────────────────────
@@ -255,12 +261,20 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private void AddDelta(float dx)
     {
-        float mult = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift) ? 10f
-                   : _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl) ? 0.1f : 1f;
+        // Default adjustment
+        float mult = 1;
+        int decimalPlaces = _dragDecimalPlaces; // snap to this resolution
         double cur = Convert.ToDouble(_value, _culture);
         double stepv = _step is T s ? Convert.ToDouble(s, _culture) : (s_isFloatingPoint ? 0.1 : 1.0);
+
+        // Modifier Keys
+        // Shift - Speed/bigger adjustment (x4) and snap to 1 higher decimal place
+        // Ctrl - Precision adjustment (x0.1) and snap to 1 lower decimal place 
+        if (_paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift)) { mult = 4f; decimalPlaces--; }
+        else if (_paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl)) { mult = 0.1f; decimalPlaces++; }
+
         cur += dx * stepv * 0.5 * mult;
-        if (!s_isFloatingPoint) cur = Math.Round(cur);
+        cur = (s_isFloatingPoint) ? Math.Round(cur, decimalPlaces) : Math.Round(cur);
         if (_min is T mn) cur = Math.Max(cur, Convert.ToDouble(mn, _culture));
         if (_max is T mx) cur = Math.Min(cur, Convert.ToDouble(mx, _culture));
         _setter(T.CreateChecked(cur));
