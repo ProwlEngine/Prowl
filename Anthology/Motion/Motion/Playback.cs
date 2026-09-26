@@ -57,9 +57,7 @@ public struct ClipCursor
 
     /// <summary>
     /// Moves the playhead by <paramref name="deltaSeconds"/> (negative plays backward) and returns the
-    /// step as a span, counting every wrap so root motion and events cover whole skipped loops. A step
-    /// worth more than <see cref="MaxWrapsPerStep"/> loops still lands on the right time, it just stops
-    /// claiming every loop it passed.
+    /// step as a span, counting up to <see cref="MaxWrapsPerStep"/> wraps.
     /// </summary>
     public PlaybackSpan Advance(float deltaSeconds, float durationSeconds, bool loop, bool includeStart)
     {

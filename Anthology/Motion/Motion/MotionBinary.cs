@@ -6,14 +6,9 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// Reads and writes the library's data as a compact binary stream, so a host engine can store
-/// skeletons, clips and humanoid descriptions without knowing how they are laid out. Compressed clips
-/// keep their quantized form, so saving and loading one costs no extra precision.
+/// Reads and writes skeletons, clips and humanoid descriptions as a compact binary stream. Events and
+/// secondary clips are not written, the host stores those itself.
 /// </summary>
-/// <remarks>
-/// Events and secondary clips are not written. They carry host meaning (an id event usually points at
-/// game code), so the host saves them its own way and passes them back when reading a clip.
-/// </remarks>
 public static class MotionBinary
 {
     private const uint SkeletonMagic = 0x4D534B4Cu;  // MSKL
@@ -24,8 +19,6 @@ public static class MotionBinary
     private const int Version = 2;
 
     private enum ClipKind : byte { Uncompressed = 0, Compressed = 1 }
-
-    // ---- skeleton ------------------------------------------------------------------------------
 
     /// <summary>Writes a skeleton: bone names, parents, reference pose, LOD split and float channels.</summary>
     public static void Write(BinaryWriter writer, Skeleton skeleton)
@@ -72,8 +65,6 @@ public static class MotionBinary
 
         return new Skeleton(ids, parents, reference, lowLod, channels);
     }
-
-    // ---- clips ---------------------------------------------------------------------------------
 
     /// <summary>Writes a clip's timing, key frames, root motion and sync track (not its events).</summary>
     public static void Write(BinaryWriter writer, AnimationClipBase clip)
@@ -154,8 +145,6 @@ public static class MotionBinary
 
         return new AnimationClip(skeleton, frames, duration, additive, rootMotion, syncTrack, events, secondaryClips);
     }
-
-    // ---- humanoid ------------------------------------------------------------------------------
 
     /// <summary>Writes a baked muscle space clip (not its events).</summary>
     public static void Write(BinaryWriter writer, HumanoidClip clip)
@@ -314,8 +303,6 @@ public static class MotionBinary
         description.FeetSpacing = reader.ReadSingle();
         return description;
     }
-
-    // ---- shared pieces -------------------------------------------------------------------------
 
     private static int ReadHeader(BinaryReader reader, uint expectedMagic)
     {

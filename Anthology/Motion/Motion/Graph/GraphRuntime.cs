@@ -50,6 +50,9 @@ public sealed class GraphContext
     /// </summary>
     public IGroundProbe? Ground;
 
+    /// <summary>What the host engine hands the nodes it defines itself, such as the character they run on.</summary>
+    public object? Host;
+
     /// <summary>The character's world transform. World space targets are converted to character space with its inverse.</summary>
     public Transform3D WorldTransform = Transform3D.Identity;
 
@@ -140,9 +143,8 @@ public sealed class GraphBindContext
     };
 
     /// <summary>
-    /// Resolves a pose node to read without driving it: no ownership, no lifecycle and no edge, so the
-    /// node stays free to be played by its real parent. What is read is whatever that node last
-    /// produced, which is the previous frame's pose when this node is evaluated first.
+    /// Resolves a pose node to read without driving it, leaving it to its real parent. Reads whatever
+    /// that node last produced.
     /// </summary>
     public PoseNodeInstance ObservePoseNode(int index)
     {
@@ -379,9 +381,8 @@ public abstract class PassthroughPoseNodeInstance : PoseNodeInstance
 }
 
 /// <summary>
-/// A runtime value node. The result is cached per update id so re-reads are free, except that a node
-/// whose answer rests on the sampled events is read again once the events have changed: read before the
-/// clip that fires an event has played, or before a blend weighs it, it would otherwise hold a stale answer all frame.
+/// A runtime value node. The result is cached per update, and read again once the sampled events have
+/// changed for a node that reads them.
 /// </summary>
 public abstract class ValueNodeInstance : GraphNodeInstance
 {
@@ -403,10 +404,8 @@ public abstract class ValueNodeInstance : GraphNodeInstance
     }
 
     /// <summary>
-    /// The node's answer as the frame ended, for inspection. A node reading events may have answered
-    /// before the events it looks for arrived, so it works its answer out again, but only when nothing
-    /// that would run again keeps state, since stepping state outside a tick would change the graph.
-    /// Otherwise it gives its last answer as it stands.
+    /// The node's answer as the frame ended, for inspection. Worked out again only when that changes no
+    /// state.
     /// </summary>
     internal ParameterValue Inspect(GraphContext context)
         => ReadsEventsHere() && SafeToRunAgain() ? GetValue(context) : _cached;

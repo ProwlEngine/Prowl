@@ -2,9 +2,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Motion;
 
-// ---------------------------------------------------------------------------------------------
 // Event condition nodes (read the per-frame sampled-events buffer, produce a bool)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>Which sampled events an event condition considers.</summary>
 internal static class EventConditionFilter

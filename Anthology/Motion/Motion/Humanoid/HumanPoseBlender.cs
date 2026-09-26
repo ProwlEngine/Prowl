@@ -3,12 +3,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-/// <summary>
-/// Muscle space operations on <see cref="HumanPose"/>s. Muscles blend linearly, the body and goal rotations by slerp, and every channel (muscles,
-/// body, goals and look at) is treated the same way, so <c>AddLayer(b, Subtract(a, b), 1)</c> gives back
-/// <c>a</c>. Masks weight muscles by their bone, goals by goal, the body by the root weight and the look at
-/// by the head weight.
-/// </summary>
+/// <summary>Muscle space operations on <see cref="HumanPose"/>s: muscles blend linearly, rotations by slerp.</summary>
 public static class HumanPoseBlender
 {
     /// <summary>result = a blended toward b by weight, on every channel.</summary>

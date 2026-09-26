@@ -30,9 +30,9 @@ public class N_WeightedBlend_Tests
         int wc = graph.AddFloatParameter("C", c);
         graph.SetRoot(graph.AddWeightedBlend(new[]
         {
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 0f)), wa),
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 5f)), wb),
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 10f)), wc),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 0f)), FloatInput.From(wa)),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 5f)), FloatInput.From(wb)),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 10f)), FloatInput.From(wc)),
         }));
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);
 
@@ -49,8 +49,8 @@ public class N_WeightedBlend_Tests
         int zero = graph.AddFloatParameter("Zero");
         graph.SetRoot(graph.AddWeightedBlend(new[]
         {
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 3f)), zero),
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 9f)), zero),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 3f)), FloatInput.From(zero)),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 9f)), FloatInput.From(zero)),
         }));
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);
 
@@ -69,9 +69,9 @@ public class N_WeightedBlend_Tests
         int good = graph.AddFloatParameter("Good", 1f);
         graph.SetRoot(graph.AddWeightedBlend(new[]
         {
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 1f)), bad),
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 2f)), negative),
-            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 8f)), good),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 1f)), FloatInput.From(bad)),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 2f)), FloatInput.From(negative)),
+            new WeightedPose(graph.AddClip(TestClips.Const(skeleton, 8f)), FloatInput.From(good)),
         }));
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);
 
@@ -87,7 +87,7 @@ public class N_WeightedBlend_Tests
         var graph = new AnimationGraph();
         int seen = graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Seen"), 0f, 1f)));
         int hidden = graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Hidden"), 0f, 1f)));
-        graph.SetRoot(graph.AddWeightedBlend(new[] { new WeightedPose(seen, -1, 1f), new WeightedPose(hidden, -1, 0f) }));
+        graph.SetRoot(graph.AddWeightedBlend(new[] { new WeightedPose(seen, 1f), new WeightedPose(hidden, 0f) }));
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);
 
         instance.Update(1f / 60f);

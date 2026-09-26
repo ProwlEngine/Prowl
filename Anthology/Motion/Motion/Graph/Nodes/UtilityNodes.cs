@@ -3,13 +3,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---- Noise -------------------------------------------------------------------------------------
-
-/// <summary>
-/// A smooth wandering value, for the small imperfections that stop a character looking mechanical: an
-/// idle sway, a weapon drifting off aim, a flickering light. It is smooth in time (no jitter between
-/// frames) and repeats exactly for a given seed.
-/// </summary>
+/// <summary>A smooth wandering value that repeats exactly for a given seed.</summary>
 public sealed class NoiseValueDefinition : ValueNodeDefinition
 {
     /// <summary>How many times a second the value wanders to a new place.</summary>
@@ -86,13 +80,7 @@ public sealed class NoiseValueDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Timer -------------------------------------------------------------------------------------
-
-/// <summary>
-/// Seconds since the node became part of the playing graph, so a state can drive something by how long
-/// it has been running. With a loop length it wraps, and it can report its progress through that loop
-/// instead of raw seconds.
-/// </summary>
+/// <summary>Seconds since the node started playing, optionally wrapped to a loop length or normalized over it.</summary>
 public sealed class TimerValueDefinition : ValueNodeDefinition
 {
     /// <summary>Length of one cycle in seconds, or 0 to count up forever.</summary>
@@ -147,13 +135,7 @@ public sealed class TimerValueDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Spring ------------------------------------------------------------------------------------
-
-/// <summary>
-/// Follows another value like a weight on a spring: it overshoots a sudden change and settles, rather
-/// than snapping to it. Good for aim offsets, camera style lag and anything that should feel like it has
-/// mass. Damping at 1 settles without overshooting at all.
-/// </summary>
+/// <summary>Follows another value under a spring. Damping at 1 settles without overshooting.</summary>
 public sealed class FloatSpringDefinition : ValueNodeDefinition
 {
     public FloatSpringDefinition(int inputNodeIndex) => InputNodeIndex = inputNodeIndex;
@@ -217,8 +199,6 @@ public sealed class FloatSpringDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Curve -------------------------------------------------------------------------------------
-
 /// <summary>
 /// Shapes one value with an authored curve, so a designer can decide how an input maps to an output
 /// (how aim offset grows with speed, how a weight fades in) without touching the graph.
@@ -261,13 +241,7 @@ public sealed class CurveValueDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Debug -------------------------------------------------------------------------------------
-
-/// <summary>
-/// Passes a pose through untouched, with two things for finding trouble: it can hand each frame's pose
-/// to an inspector (to draw it, log it or record it), and it can catch a bone that has gone to NaN and
-/// put the reference pose back, so one bad solve does not spread through the rest of the graph.
-/// </summary>
+/// <summary>Passes a pose through to an inspector callback, and puts back the reference pose on any bone gone NaN.</summary>
 public sealed class DebugPoseDefinition : PoseNodeDefinition
 {
     public DebugPoseDefinition(int child) => Child = child;
@@ -324,11 +298,7 @@ public sealed class DebugPoseDefinition : PoseNodeDefinition
     }
 }
 
-/// <summary>
-/// How much graph time has passed since a stateful value node last stepped. It reads the graph's own
-/// clock rather than the delta time of whichever node reads it first, so a node read from inside a
-/// slowed or paused branch still steps once per frame by the real time, whatever order the graph is walked in.
-/// </summary>
+/// <summary>How much graph time has passed since a stateful value node last stepped, on the graph's own clock.</summary>
 internal struct GraphClock
 {
     private double _last;

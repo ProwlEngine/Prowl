@@ -4,11 +4,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-/// <summary>
-/// Mirrors humanoid poses left to right in muscle space. Left and right muscles and goals swap, the muscles whose direction reverses under a
-/// reflection change sign, and the body position and rotation are reflected across the sagittal plane of
-/// the bind body frame, so the result does not depend on how the current pose is twisted.
-/// </summary>
+/// <summary>Mirrors humanoid poses left to right in muscle space, across the bind body frame's sagittal plane.</summary>
 public static class PoseMirror
 {
     [ThreadStatic] private static HumanPose? s_source;
@@ -46,10 +42,8 @@ public static class PoseMirror
     }
 
     /// <summary>
-    /// Writes the mirror of <paramref name="source"/> (a pose of the humanoid avatar) into
-    /// <paramref name="result"/>. Humanoid bones are rebuilt from the mirrored muscle pose. Other bones
-    /// take the reflected local transform of their counterpart on the other side (or their own on the
-    /// midline), and keep the source pose when they have no counterpart. The look at is not mirrored.
+    /// Writes the mirror of <paramref name="source"/> into <paramref name="result"/>. Other bones take
+    /// their counterpart's reflected transform.
     /// </summary>
     public static void Apply(Avatar avatar, Pose source, Pose result)
     {
@@ -206,11 +200,7 @@ public static class PoseMirror
     private static Transform3D[] Buffer(ref Transform3D[]? buffer, int count)
         => buffer is { } existing && existing.Length >= count ? existing : buffer = new Transform3D[count];
 
-    /// <summary>
-    /// Mirrors a model space root motion delta of the humanoid avatar across the sagittal plane of its bind
-    /// body frame, the same plane <see cref="Apply"/> mirrors the pose across. The translation and the turn
-    /// are reflected, so a step and turn to the left becomes a step and turn to the right. The scale is kept.
-    /// </summary>
+    /// <summary>Mirrors a model space root motion delta across the same plane <see cref="Apply"/> uses.</summary>
     public static Transform3D MirrorRootMotion(Avatar avatar, Transform3D delta)
     {
         ArgumentNullException.ThrowIfNull(avatar);

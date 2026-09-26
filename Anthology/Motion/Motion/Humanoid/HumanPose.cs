@@ -4,17 +4,9 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A normalized, skeleton independent humanoid pose in muscle space: the body position and rotation, one value per muscle, four IK goals and the look at.
+/// A skeleton independent humanoid pose in muscle space: the body position and rotation, one value per
+/// muscle mapping -1..1 onto its range, four IK goals and the look at.
 /// </summary>
-/// <remarks>
-/// The body position is the centre of mass divided by the avatar scale and the body rotation is the turn of
-/// the body frame (X right, Y up, Z forward) from the T pose, both in the axes of a character facing +Z, so
-/// the same values mean the same motion on any rig however it faces in model space. Each muscle value maps
-/// -1..1 onto the muscle's min..max angle (see <see cref="HumanTrait.GetMuscleName"/>). All zero muscles give
-/// a relaxed pose midway through each range (arms lowered and forward, elbows and knees bent), not the T pose.
-/// Goal positions are relative to the midpoint of the hip joints in the current body frame in units of leg
-/// length, and the goal rotation is the hand or foot's axis frame in that body frame, so it is rig independent too.
-/// </remarks>
 public sealed class HumanPose
 {
     /// <summary>Number of IK goals (feet and hands).</summary>

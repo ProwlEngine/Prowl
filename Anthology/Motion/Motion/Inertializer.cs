@@ -4,15 +4,9 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// Smooths over a pose discontinuity without playing two animations at once. When a jump happens it
-/// measures the gap between the pose that was showing and the new one, along with how fast that gap was
-/// already moving, then decays the gap to zero over the blend time with a curve that keeps both position
-/// and velocity continuous. The result starts exactly on the old pose and lands exactly on the new one.
+/// Smooths over a pose discontinuity: the gap between the old and new pose, and its velocity, decay to
+/// zero over the blend time. Feed it every frame through <see cref="Apply"/>.
 /// </summary>
-/// <remarks>
-/// Feed it every frame through <see cref="Apply"/>, which also keeps the two frames of history the next
-/// <see cref="Begin"/> needs. It holds no per frame allocations.
-/// </remarks>
 public sealed class Inertializer
 {
     /// <summary>One decaying offset: the quintic that takes it from its starting value and rate to zero.</summary>
@@ -143,10 +137,8 @@ public sealed class Inertializer
     }
 
     /// <summary>
-    /// True if a bone takes a step that looks like a discontinuity rather than motion: bigger than the
-    /// given threshold, and several times bigger than the step it took the frame before. This is how a
-    /// node without an explicit trigger spots a switch, while animation that simply moves fast, or
-    /// speeds up, is left alone.
+    /// True if a bone steps further than the threshold and several times further than the frame before,
+    /// which reads as a discontinuity rather than motion.
     /// </summary>
     public bool DetectJump(Pose target, float radians, float distance)
     {
@@ -182,8 +174,7 @@ public sealed class Inertializer
 
     /// <summary>
     /// Starts a blend: the gap between the last output and <paramref name="target"/> decays to zero over
-    /// <paramref name="blendSeconds"/>. Without two frames of history there is no velocity to preserve, so
-    /// the call does nothing and the target shows through immediately.
+    /// <paramref name="blendSeconds"/>. Needs two frames of history.
     /// </summary>
     public void Begin(Pose target, float blendSeconds)
     {
@@ -227,9 +218,8 @@ public sealed class Inertializer
     }
 
     /// <summary>
-    /// Writes <paramref name="target"/> into <paramref name="result"/> with any running offset still
-    /// added on, and records the frame so a later <see cref="Begin"/> knows where the pose came from.
-    /// The two poses may be the same object.
+    /// Writes <paramref name="target"/> into <paramref name="result"/> with any running offset added,
+    /// and records the frame as history. The two poses may be the same object.
     /// </summary>
     public void Apply(Pose target, Pose result, float deltaTime)
     {

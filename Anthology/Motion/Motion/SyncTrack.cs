@@ -48,10 +48,8 @@ public readonly struct SyncTrackTimeRange
 }
 
 /// <summary>
-/// Maps normalized clip time to "sync event time" (event index + fraction) and back, so two clips
-/// can be blended in phase rather than by raw time. Events
-/// cover the whole track: the last one wraps past the end back to the first. A clip with no sync
-/// events behaves as a single event spanning the whole clip, identical to raw time playback.
+/// Maps normalized clip time to sync event time (event index plus fraction) and back, so two clips
+/// blend in phase. A clip with no sync events is one event spanning the clip.
 /// </summary>
 public sealed class SyncTrack
 {
@@ -234,11 +232,7 @@ public sealed class SyncTrack
         return t;
     }
 
-    /// <summary>
-    /// The sync position of a time that may lie outside [0,1], with the event index counted on across
-    /// loops (it grows by the event count each time playback passes the start event). The difference of
-    /// two such positions is the distance played, in events, including direction and whole loops.
-    /// </summary>
+    /// <summary>The sync position of a time that may lie outside [0,1], with the event index counted on across loops.</summary>
     internal SyncTrackTime GetUnwrappedTime(float time)
     {
         if (!float.IsFinite(time))
@@ -313,11 +307,7 @@ public sealed class SyncTrack
         return 0;
     }
 
-    /// <summary>
-    /// Maps a sync position on this track to a normalized time on <paramref name="other"/>. Matches the
-    /// event by id when possible (the closest matching event), otherwise by index, so the two clips
-    /// stay phase aligned.
-    /// </summary>
+    /// <summary>Maps a sync position on this track to a normalized time on <paramref name="other"/>, matching events by id or else index.</summary>
     public float RemapTo(SyncTrackTime position, SyncTrack other)
     {
         ArgumentNullException.ThrowIfNull(other);

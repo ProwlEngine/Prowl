@@ -1,10 +1,8 @@
 namespace Prowl.Motion;
 
 /// <summary>
-/// The animation profile of a model. Wraps a <see cref="Skeleton"/>
-/// and declares whether it is driven as a <see cref="AvatarType.Generic"/> rig (same-skeleton
-/// playback only) or a <see cref="AvatarType.Humanoid"/> rig (retargetable through muscle space,
-/// exposing a <see cref="HumanoidRig"/>). Built via <see cref="AvatarBuilder"/>.
+/// The animation profile of a model: a <see cref="Skeleton"/>, as a generic rig or a humanoid one
+/// retargetable through muscle space. Built via <see cref="AvatarBuilder"/>.
 /// </summary>
 public sealed class Avatar
 {
@@ -36,10 +34,6 @@ public sealed class Avatar
     /// <summary>The skeleton bone treated as the animation root (the hips for humanoids).</summary>
     public int RootBoneIndex => _rootBoneIndex;
 
-    /// <summary>
-    /// The auto-mapping result, when this avatar was built via <see cref="AvatarBuilder.BuildAutomatic(Skeleton)"/>.
-    /// Holds the unmapped-bone warnings even for generic avatars (so an editor can show what was missing).
-    /// Null for explicitly built avatars.
-    /// </summary>
+    /// <summary>The auto mapping result, with its unmapped bone warnings. Null for explicitly built avatars.</summary>
     public HumanoidMapResult? MappingReport { get; internal set; }
 }

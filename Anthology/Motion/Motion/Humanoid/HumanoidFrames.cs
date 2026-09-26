@@ -462,7 +462,7 @@ internal static class HumanoidFrameBuilder
     {
         int parent = skeleton.SanitizedParentIndices[index];
         Quaternion parentWorld = parent == Skeleton.InvalidIndex ? Quaternion.Identity : world[parent];
-        Quaternion turned = TransformOps.FromToRotation(from, to) * world[index];
+        Quaternion turned = Quaternion.FromToRotation(from, to) * world[index];
         local[index] = Quaternion.Normalize(Quaternion.Inverse(parentWorld) * turned);
     }
 }

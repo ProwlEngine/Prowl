@@ -47,8 +47,8 @@ public class N_ExternalGraphSlot_Tests
         plugged.SetRoot(plugged.AddNode(new FootGroundingDefinition(plugged.AddClip(new AnimationClip(skeleton, new[] { pose, pose }, 1f)))
         {
             ProbeGround = true,
-            ProbeDistance = 2f,
-            ProbeRise = 1f,
+            MaxStepUp = 1f,
+            MaxStepDown = 1f,
         }));
         AnimationGraphInstance pluggedInstance = plugged.CreateInstance(avatar);
         pluggedInstance.Ground = new FlatGround(0.2f);

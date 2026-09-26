@@ -4,8 +4,6 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---- Selector -------------------------------------------------------------------------------
-
 /// <summary>
 /// Outputs one of N child pose nodes chosen by an int value node (clamped to the valid range). When
 /// the choice changes, the old child is shut down and the new one starts from the beginning.
@@ -83,13 +81,7 @@ internal abstract class SwitchingSelectorInstance : PoseNodeInstance
     }
 }
 
-// ---- Blend 2D (two parameter blend space) ---------------------------------------------------
-
-/// <summary>
-/// Blends child pose nodes placed in a 2D parameter space. The samples are triangulated once: a
-/// point inside the triangulation blends its triangle's three corners by barycentric weight, a point
-/// outside is projected onto the nearest hull edge. All active children play phase locked.
-/// </summary>
+/// <summary>Blends child pose nodes placed in a triangulated 2D parameter space, phase locked.</summary>
 public sealed class Blend2DDefinition : PoseNodeDefinition
 {
     public Blend2DDefinition(int xParam, int yParam, (int Child, Float2 Position)[] samples)
@@ -214,30 +206,27 @@ public sealed class Blend2DDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Speed scale ----------------------------------------------------------------------------
-
 /// <summary>
 /// Scales the play rate of a child by a float value node (or a constant), clamped to 0 or more. The
 /// node reports the child duration divided by the speed so synchronized parents play it faster too.
 /// </summary>
 public sealed class SpeedScaleDefinition : PoseNodeDefinition
 {
-    public SpeedScaleDefinition(int child, int speedNodeIndex, float defaultSpeed) { Child = child; SpeedNodeIndex = speedNodeIndex; DefaultSpeed = defaultSpeed; }
+    public SpeedScaleDefinition(int child, FloatInput speed) { Child = child; Speed = speed; }
     public int Child { get; }
-    public int SpeedNodeIndex { get; }
-    public float DefaultSpeed { get; }
+    public FloatInput Speed { get; }
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly SpeedScaleDefinition _def;
-        private ValueNodeInstance? _speed;
+        private BoundFloat _speed;
         public Instance(SpeedScaleDefinition def) => _def = def;
 
         public override void Bind(GraphBindContext context)
         {
             BindChild(context, _def.Child);
-            _speed = context.OptionalValueNode(_def.SpeedNodeIndex, ValueInputKind.Number);
+            _speed = BoundFloat.Bind(context, _def.Speed);
         }
 
         protected override void OnInitialize(GraphContext context, SyncTrackTime? initialTime)
@@ -266,7 +255,7 @@ public sealed class SpeedScaleDefinition : PoseNodeDefinition
 
         private float Speed(GraphContext context)
         {
-            float speed = _speed?.GetValue(context).AsFloat() ?? _def.DefaultSpeed;
+            float speed = _speed.Get(context);
             return float.IsFinite(speed) ? MathF.Max(0f, speed) : 0f;
         }
 
@@ -274,20 +263,17 @@ public sealed class SpeedScaleDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Layers (override / additive) -----------------------------------------------------------
-
 /// <summary>
 /// Blends an overlay onto a base by weight, optionally through a bone mask (override layer). The
 /// base alone drives root motion and timing, the layer is only updated while its weight is above 0.
 /// </summary>
 public sealed class OverrideLayerDefinition : PoseNodeDefinition
 {
-    public OverrideLayerDefinition(int basePose, int layerPose, int weightNodeIndex, float defaultWeight, BoneMask? mask)
-    { Base = basePose; Layer = layerPose; WeightNodeIndex = weightNodeIndex; DefaultWeight = defaultWeight; Mask = mask; }
+    public OverrideLayerDefinition(int basePose, int layerPose, FloatInput weight, BoneMask? mask)
+    { Base = basePose; Layer = layerPose; Weight = weight; Mask = mask; }
     public int Base { get; }
     public int Layer { get; }
-    public int WeightNodeIndex { get; }
-    public float DefaultWeight { get; }
+    public FloatInput Weight { get; }
     public BoneMask? Mask { get; }
     public bool Additive { get; init; }
     public override GraphNodeInstance CreateInstance() => new Instance(this);
@@ -296,14 +282,14 @@ public sealed class OverrideLayerDefinition : PoseNodeDefinition
     {
         private readonly OverrideLayerDefinition _def;
         private PoseNodeInstance _layer = null!;
-        private ValueNodeInstance? _weight;
+        private BoundFloat _weight;
         public Instance(OverrideLayerDefinition def) => _def = def;
 
         public override void Bind(GraphBindContext context)
         {
             BindChild(context, _def.Base);
             _layer = context.PoseNode(_def.Layer);
-            _weight = context.OptionalValueNode(_def.WeightNodeIndex, ValueInputKind.Number);
+            _weight = BoundFloat.Bind(context, _def.Weight);
             if (_def.Mask is not null && _def.Mask.Length != context.Skeleton.BoneCount)
                 throw context.Error("the layer bone mask does not match the skeleton.");
         }
@@ -325,7 +311,7 @@ public sealed class OverrideLayerDefinition : PoseNodeDefinition
             Child.Update(context);
             CopyResultFrom(Child);
 
-            float w = LayerBlending.Weight(_weight?.GetValue(context).AsFloat() ?? _def.DefaultWeight);
+            float w = LayerBlending.Weight(_weight.Get(context));
             if (w <= 0f)
                 return;
 
@@ -360,8 +346,6 @@ internal static class LayerBlending
         }
     }
 }
-
-// ---- Mirror ---------------------------------------------------------------------------------
 
 /// <summary>Mirrors a humanoid child pose left/right (passthrough for non-humanoid avatars).</summary>
 public sealed class MirrorDefinition : PoseNodeDefinition
@@ -402,8 +386,6 @@ public sealed class MirrorDefinition : PoseNodeDefinition
         }
     }
 }
-
-// ---- Root motion override -------------------------------------------------------------------
 
 /// <summary>
 /// Scales/clamps a child's root motion. A <see cref="RootMotionEvent"/> sampled by the child's own
@@ -463,19 +445,16 @@ public sealed class RootMotionOverrideDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Layer blend (N stacked layers over a base) ---------------------------------------------
-
 /// <summary>One layer of a <see cref="LayerBlendDefinition"/>: a pose plus how it is applied.</summary>
 public sealed class LayerInfo
 {
-    public LayerInfo(int pose, int weightNodeIndex = -1, int maskNodeIndex = -1, bool additive = false, float defaultWeight = 1f)
-    { Pose = pose; WeightNodeIndex = weightNodeIndex; MaskNodeIndex = maskNodeIndex; Additive = additive; DefaultWeight = defaultWeight; }
+    public LayerInfo(int pose, FloatInput? weight = null, int maskNodeIndex = -1, bool additive = false)
+    { Pose = pose; Weight = weight ?? 1f; MaskNodeIndex = maskNodeIndex; Additive = additive; }
 
     public int Pose { get; }
-    public int WeightNodeIndex { get; }
+    public FloatInput Weight { get; }
     public int MaskNodeIndex { get; }
     public bool Additive { get; }
-    public float DefaultWeight { get; }
 
     /// <summary>Optional float value node scaling this layer's root motion contribution (-1 = the layer weight alone).</summary>
     public int RootMotionWeightNodeIndex { get; init; } = -1;
@@ -488,9 +467,8 @@ public sealed class LayerInfo
 }
 
 /// <summary>
-/// Blends N layers over a base pose. Each layer has its own weight (value node or constant), an
-/// optional dynamic bone mask (mask value node), and an override/additive mode. A layer only plays
-/// while its weight is above 0. By default only the base contributes root motion.
+/// Blends layers over a base pose, each with its own weight, optional mask and additive flag. By
+/// default only the base contributes root motion.
 /// </summary>
 public sealed class LayerBlendDefinition : PoseNodeDefinition
 {
@@ -512,7 +490,7 @@ public sealed class LayerBlendDefinition : PoseNodeDefinition
     {
         private readonly LayerBlendDefinition _def;
         private PoseNodeInstance[] _layers = null!;
-        private ValueNodeInstance?[] _weights = null!;
+        private BoundFloat[] _weights = null!;
         private ValueNodeInstance?[] _rootMotionWeights = null!;
         private BoneMaskNodeInstance?[] _masks = null!;
 
@@ -523,14 +501,14 @@ public sealed class LayerBlendDefinition : PoseNodeDefinition
             BindChild(context, _def.BasePose);
             int n = _def.Layers.Length;
             _layers = new PoseNodeInstance[n];
-            _weights = new ValueNodeInstance?[n];
+            _weights = new BoundFloat[n];
             _rootMotionWeights = new ValueNodeInstance?[n];
             _masks = new BoneMaskNodeInstance?[n];
             for (int i = 0; i < n; i++)
             {
                 LayerInfo layer = _def.Layers[i];
                 _layers[i] = context.PoseNode(layer.Pose);
-                _weights[i] = context.OptionalValueNode(layer.WeightNodeIndex, ValueInputKind.Number);
+                _weights[i] = BoundFloat.Bind(context, layer.Weight);
                 _rootMotionWeights[i] = context.OptionalValueNode(layer.RootMotionWeightNodeIndex, ValueInputKind.Number);
                 _masks[i] = layer.MaskNodeIndex >= 0 ? context.BoneMaskNode(layer.MaskNodeIndex) : null;
             }
@@ -560,7 +538,7 @@ public sealed class LayerBlendDefinition : PoseNodeDefinition
             for (int i = 0; i < _layers.Length; i++)
             {
                 LayerInfo info = _def.Layers[i];
-                float w = LayerBlending.Weight(_weights[i] is { } weightNode ? weightNode.GetValue(context).AsFloat() : info.DefaultWeight);
+                float w = LayerBlending.Weight(_weights[i].Get(context));
                 if (w <= 0f)
                     continue;
 
@@ -588,8 +566,6 @@ public sealed class LayerBlendDefinition : PoseNodeDefinition
         }
     }
 }
-
-// ---- Condition selector (first true bool picks a child) -------------------------------------
 
 /// <summary>
 /// Selects the child whose bool condition is first true (priority order); a condition index of -1 is

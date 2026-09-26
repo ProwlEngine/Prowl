@@ -29,10 +29,8 @@ public sealed class Skeleton
 
     /// <summary>
     /// Builds a skeleton. <paramref name="parentIndices"/> uses <see cref="InvalidIndex"/> for roots.
-    /// The parent-space reference pose has one transform per bone. If
-    /// <paramref name="numBonesToSampleAtLowLOD"/> is negative, all bones are high LOD.
-    /// <paramref name="floatChannelIds"/> names extra scalar channels carried alongside the bones
-    /// (blend shape weights and the like), which rest at 0 and blend with the pose.
+    /// A negative <paramref name="numBonesToSampleAtLowLOD"/> makes every bone high LOD.
+    /// <paramref name="floatChannelIds"/> names scalar channels such as blend shape weights.
     /// </summary>
     public Skeleton(
         IReadOnlyList<StringID> boneIds,

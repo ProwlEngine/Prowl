@@ -4,18 +4,10 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---- Spring bones ------------------------------------------------------------------------------
-
 /// <summary>
-/// Gives a chain of bones (hair, a tail, a coat, an antenna) secondary motion: each bone lags behind
-/// the animated pose, swings when the character moves and settles back under a spring. The chain is
-/// simulated in world space, so turning or running drags it naturally.
+/// Gives a chain of bones, listed root outward, world space secondary motion: each lags behind the
+/// animated pose and settles back under a spring.
 /// </summary>
-/// <remarks>
-/// Bones are listed from the root of the chain outward. Each one is aimed at the simulated position of
-/// the next, and the last uses <see cref="TipLength"/> along its own direction. Keep the stiffness
-/// moderate: this is a spring, so a very stiff chain with a long frame time will ring.
-/// </remarks>
 public sealed class SpringBonesDefinition : PoseNodeDefinition
 {
     public SpringBonesDefinition(int child, IReadOnlyList<StringID> chain)
@@ -24,11 +16,7 @@ public sealed class SpringBonesDefinition : PoseNodeDefinition
         Chain = new List<StringID>(chain).ToArray();
     }
 
-    /// <summary>
-    /// Takes the chain from the rig itself: <paramref name="root"/> and the bones below it, following
-    /// the first child each step. A hair strand is one node; a strand whose tip should swing more freely
-    /// is two, the second rooted where the first ends.
-    /// </summary>
+    /// <summary>Takes the chain from <paramref name="root"/> down, following the first child each step.</summary>
     public SpringBonesDefinition(int child, StringID root, int boneCount)
     {
         if (boneCount <= 0)
@@ -200,7 +188,7 @@ public sealed class SpringBonesDefinition : PoseNodeDefinition
 
                 if (weight > 0f)
                 {
-                    Quaternion turn = TransformOps.FromToRotation(toModel * animated, toModel * direction);
+                    Quaternion turn = Quaternion.FromToRotation(toModel * animated, toModel * direction);
                     if (weight < 1f)
                         turn = Quaternion.Slerp(Quaternion.Identity, turn, weight);
 

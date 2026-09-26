@@ -120,13 +120,20 @@ public sealed class AnimationGraphInstance
     // the host's when it has none, so a graph plugged into a slot keeps the probe it came with.
     private IGroundProbe? _ground;
 
+    /// <summary>What the host engine hands the nodes it defines itself, such as the character they run on.</summary>
+    public object? Host
+    {
+        get => _host;
+        set => _context.Host = _host = value;
+    }
+
+    private object? _host;
+
     /// <summary>The root pose node (used by hosts to forward its full timing).</summary>
     internal PoseNodeInstance Root => _root;
 
     /// <summary>The external graph slot currently hosting this instance, if any.</summary>
     internal ExternalGraphSlotInstance? HostSlot { get; set; }
-
-    // ---- Parameters ----------------------------------------------------------------------------
 
     /// <summary>The index of a control parameter for the index based setters, or -1.</summary>
     public int GetParameterIndex(string name) => _graph.GetParameterIndex(name);
@@ -189,8 +196,6 @@ public sealed class AnimationGraphInstance
 
     internal ParameterValue GetParameter(int index) => _parameters[index];
 
-    // ---- Evaluation ----------------------------------------------------------------------------
-
     /// <summary>Advances and evaluates the graph by <paramref name="deltaTime"/> seconds with the character at the origin.</summary>
     public void Update(float deltaTime) => Update(deltaTime, Transform3D.Identity);
 
@@ -217,6 +222,7 @@ public sealed class AnimationGraphInstance
     {
         _context.Events = parent.Events;
         _context.Ground = _ground ?? parent.Ground;
+        _context.Host = _host ?? parent.Host;
         BeginTick(parent.DeltaTime, parent.WorldTransform);
         _context.SyncRange = parent.SyncRange;
         _context.BranchState = parent.BranchState;
@@ -232,6 +238,7 @@ public sealed class AnimationGraphInstance
         if (_root.IsInitialized)
             ResetGraphState();
         _context.Ground = _ground ?? parent.Ground;
+        _context.Host = _host ?? parent.Host;
         BeginTick(0f, parent.WorldTransform);
         _root.Initialize(_context, initialTime);
     }
@@ -279,10 +286,8 @@ public sealed class AnimationGraphInstance
         => (uint)index < (uint)_nodes.Length ? _nodes[index] : null;
 
     /// <summary>
-    /// Reads a value node only if it already produced a value this update. A debug view has to leave
-    /// the graph exactly as it found it, and <see cref="EvaluateValueNode"/> will tick a node that has
-    /// not run, which advances edge detectors and cached values as a real tick would. An event reader
-    /// that keeps no state gives its answer as the frame ended rather than as it first read.
+    /// Reads a value node only if it already produced a value this update, without changing any graph
+    /// state. For debug views.
     /// </summary>
     public bool TryReadValueNode(int index, out ParameterValue value)
     {
@@ -303,9 +308,8 @@ public sealed class AnimationGraphInstance
     }
 
     /// <summary>
-    /// Reads a value node for scripting or editor inspection. Without parameter changes since the last
-    /// update it returns the value from that update. After a parameter change it evaluates a zero
-    /// time tick, which advances stateful nodes (edge detectors, cached values) as a real tick would.
+    /// Reads a value node. After a parameter change it evaluates a zero time tick, which advances
+    /// stateful nodes like a real tick.
     /// </summary>
     public ParameterValue EvaluateValueNode(int index)
     {

@@ -54,7 +54,7 @@ public class N_MakeAdditive_Tests
         var graph = new AnimationGraph();
         int weight = graph.AddFloatParameter("Weight", 0.5f);
         int additive = graph.AddMakeAdditive(graph.AddClip(TestClips.Const(skeleton, 3f)));
-        graph.SetRoot(graph.AddLayerBlend(graph.AddClip(TestClips.Const(skeleton, 4f)), new[] { new LayerInfo(additive, weight, additive: true) }));
+        graph.SetRoot(graph.AddLayerBlend(graph.AddClip(TestClips.Const(skeleton, 4f)), new[] { new LayerInfo(additive, FloatInput.From(weight), additive: true) }));
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);
 
         Run(instance, 2);

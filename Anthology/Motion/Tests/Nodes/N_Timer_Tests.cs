@@ -43,7 +43,7 @@ public class N_Timer_Tests
         Skeleton skeleton = ChannelRig();
         var graph = new AnimationGraph();
         // The timer is first read inside a branch playing at speed 0.
-        graph.SetRoot(graph.AddSpeedScale(ShowOnChannel(graph, skeleton, graph.AddTimer()), defaultSpeed: 0f));
+        graph.SetRoot(graph.AddSpeedScale(ShowOnChannel(graph, skeleton, graph.AddTimer()), speed: 0f));
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);
 
         for (int i = 0; i < 60; i++)

@@ -24,14 +24,12 @@ public struct RootMotionOverrideOptions
 }
 
 /// <summary>
-/// Root-motion overriding and warping. These operate on root-motion
-/// deltas/trajectories directly, so a controller or graph can apply them however it drives time.
-/// Trajectories are character space transforms relative to the first frame (Y up).
+/// Root motion overriding and warping. Trajectories are character space transforms relative to the
+/// first frame.
 /// </summary>
 public static class RootMotionWarp
 {
     private const float Epsilon = 1e-5f;
-    private static readonly Float3 Up = new(0f, 1f, 0f);
 
     /// <summary>Scales, clamps, and optionally re-headings a single per-frame root-motion delta.</summary>
     public static Transform3D Override(Transform3D delta, float deltaTime, RootMotionOverrideOptions options)
@@ -67,12 +65,9 @@ public static class RootMotionWarp
     }
 
     /// <summary>
-    /// Orientation warp: rewrites the trajectory so the travel after the warp window heads along
-    /// <paramref name="targetDirection"/> (character space, horizontal part used). The turn is spread
-    /// over the window frames and the frames after it replay the original deltas from the turned
-    /// facing. The window (normalized times) starts no earlier than <paramref name="startTime"/>. A
-    /// window of zero length turns the whole remaining path at the start time. Returns null when there
-    /// is nothing to warp or the window has already passed.
+    /// Rewrites the trajectory so the travel after the warp window heads along
+    /// <paramref name="targetDirection"/>, spreading the turn over the window. Null when there is
+    /// nothing to warp.
     /// </summary>
     public static Transform3D[]? WarpOrientation(RootMotion rootMotion, Float3 targetDirection, float windowStart, float windowEnd, float startTime = 0f)
     {
@@ -105,13 +100,9 @@ public static class RootMotionWarp
         => WarpTrajectory(rootMotion, desiredTotalDelta, 0f, 1f, 0f);
 
     /// <summary>
-    /// Target warp: rewrites the trajectory so the total displacement from the first frame becomes
-    /// <paramref name="desiredTotalDelta"/>. Only frames inside the window (normalized times, clipped to
-    /// start no earlier than <paramref name="startTime"/>) are warped. Frames before it are untouched and
-    /// frames after it replay the original deltas. Inside the window the horizontal path is turned about
-    /// up and scaled, frame rotations turn with it, and the vertical gets a linear offset so arcs such as
-    /// a jump keep their shape. A clip with no horizontal travel in the window gets the horizontal
-    /// displacement spread over the window.
+    /// Rewrites the trajectory so the total displacement becomes <paramref name="desiredTotalDelta"/>,
+    /// warping only the frames inside the window. The horizontal path is turned and scaled, the vertical
+    /// offset linearly.
     /// </summary>
     public static Transform3D[] WarpTrajectory(RootMotion rootMotion, Float3 desiredTotalDelta, float windowStart, float windowEnd, float startTime)
     {
@@ -168,7 +159,7 @@ public static class RootMotionWarp
     }
 
     /// <summary>The rotation about up that turns the horizontal part of <paramref name="from"/> onto that of <paramref name="to"/>.</summary>
-    internal static Quaternion YawBetween(Float3 from, Float3 to) => Quaternion.AxisAngle(Up, YawAngle(from, to));
+    internal static Quaternion YawBetween(Float3 from, Float3 to) => Quaternion.AxisAngle(Float3.UnitY, YawAngle(from, to));
 
     /// <summary>The signed angle in radians about up from the horizontal part of <paramref name="from"/> to that of <paramref name="to"/>.</summary>
     internal static float YawAngle(Float3 from, Float3 to)
@@ -202,7 +193,7 @@ public static class RootMotionWarp
 
         if (e == s)
         {
-            Quaternion turn = Quaternion.AxisAngle(Up, yawRadians);
+            Quaternion turn = Quaternion.AxisAngle(Float3.UnitY, yawRadians);
             Float3 pivot = frames[s].position;
             for (int i = s + 1; i <= last; i++)
                 output[i] = new Transform3D(pivot + turn * (frames[i].position - pivot), turn * frames[i].rotation, frames[i].scale);
@@ -211,7 +202,7 @@ public static class RootMotionWarp
 
         for (int i = s + 1; i <= e; i++)
         {
-            Quaternion ramp = Quaternion.AxisAngle(Up, yawRadians * (i - s) / (e - s));
+            Quaternion ramp = Quaternion.AxisAngle(Float3.UnitY, yawRadians * (i - s) / (e - s));
             output[i] = new Transform3D(frames[i].position, ramp * frames[i].rotation, frames[i].scale);
         }
         for (int i = e + 1; i <= last; i++)

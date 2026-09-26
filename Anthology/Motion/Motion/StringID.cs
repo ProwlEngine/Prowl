@@ -1,10 +1,6 @@
 namespace Prowl.Motion;
 
-/// <summary>
-/// A hashed string identifier used for bone names, event IDs, and parameter names.
-/// Cheap value type with fast equality; retains the original string (used by avatar auto-mapping
-/// and debugging).
-/// </summary>
+/// <summary>A hashed string identifier for bone, event and parameter names, which keeps the original string.</summary>
 public readonly struct StringID : IEquatable<StringID>
 {
     /// <summary>The invalid / unset id (hash 0).</summary>

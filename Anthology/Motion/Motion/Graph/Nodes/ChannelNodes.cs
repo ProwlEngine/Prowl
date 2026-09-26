@@ -15,8 +15,6 @@ public enum ChannelBlendMode : byte
     Max,
 }
 
-// ---- Reading a channel -------------------------------------------------------------------------
-
 /// <summary>
 /// Reads one float channel off a pose node as a graph value, so a weight or a speed authored into a
 /// clip can drive the rest of the graph. It only watches that node, it does not play it.
@@ -59,8 +57,6 @@ public sealed class PoseChannelDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Writing channels --------------------------------------------------------------------------
-
 /// <summary>One channel driven by a <see cref="FloatChannelLayerDefinition"/>.</summary>
 public readonly struct ChannelDriver
 {
@@ -79,11 +75,7 @@ public readonly struct ChannelDriver
     public ChannelBlendMode Mode { get; }
 }
 
-/// <summary>
-/// Writes float channels onto its child's pose from graph values, leaving the bones alone. This is how
-/// an expression, a viseme or any other scalar gets layered over body animation without a clip for it.
-/// Channels the skeleton does not have are ignored.
-/// </summary>
+/// <summary>Writes float channels onto its child's pose from graph values, leaving the bones alone.</summary>
 public sealed class FloatChannelLayerDefinition : PoseNodeDefinition
 {
     public FloatChannelLayerDefinition(int child, IReadOnlyList<ChannelDriver> drivers)
@@ -143,12 +135,9 @@ public sealed class FloatChannelLayerDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Channels driven by a joint ----------------------------------------------------------------
-
 /// <summary>
-/// Drives a float channel from how far a bone has turned away from its reference pose, which is how a
-/// corrective shape (a bicep bulge, a shoulder crease) follows the joint that causes it. The angle is
-/// measured about a chosen axis in the bone's own space, or as the total turn when no axis is given.
+/// Drives a float channel from how far a bone has turned from its reference pose, about an axis or in
+/// total. For corrective shapes.
 /// </summary>
 public sealed class DrivenChannelDefinition : PoseNodeDefinition
 {

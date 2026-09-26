@@ -4,13 +4,9 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---- Inertialization ---------------------------------------------------------------------------
-
 /// <summary>
-/// Absorbs a pose discontinuity instead of cross fading through it. On a trigger it remembers how far
-/// the previous output sits from the new one, and how fast that gap was moving, then decays the gap to
-/// zero over the blend time. Nothing plays twice and no two clips are sampled at once, so it costs one
-/// child and a fixed amount of work per bone.
+/// Absorbs a pose discontinuity instead of cross fading through it: on a trigger, the gap to the new
+/// pose decays to zero over the blend time.
 /// </summary>
 public sealed class InertializeDefinition : PoseNodeDefinition
 {
@@ -89,13 +85,7 @@ public sealed class InertializeDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Pose snapshot -----------------------------------------------------------------------------
-
-/// <summary>
-/// Passes a child through until its hold input turns true, then keeps outputting the pose captured at
-/// that moment. Useful to freeze a branch that is about to stop updating, so a transition out of it has
-/// something stable to blend from.
-/// </summary>
+/// <summary>Passes a child through until its hold input turns true, then keeps the pose captured at that moment.</summary>
 public sealed class PoseSnapshotDefinition : PoseNodeDefinition
 {
     public PoseSnapshotDefinition(int child, int holdNodeIndex)
@@ -147,13 +137,7 @@ public sealed class PoseSnapshotDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Make additive -----------------------------------------------------------------------------
-
-/// <summary>
-/// Turns a pose into an additive one by measuring it against a reference: the skeleton's own reference
-/// pose, or another child's pose. Lets a plain clip be layered additively without authoring an additive
-/// clip offline.
-/// </summary>
+/// <summary>Turns a pose into an additive one, measured against the reference pose or another child's pose.</summary>
 public sealed class MakeAdditiveDefinition : PoseNodeDefinition
 {
     public MakeAdditiveDefinition(int child, int referenceChild = -1)
@@ -210,31 +194,20 @@ public sealed class MakeAdditiveDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Weighted blend ----------------------------------------------------------------------------
-
 /// <summary>One input of a <see cref="WeightedBlendDefinition"/>: a pose and the value node weighting it.</summary>
 public readonly struct WeightedPose
 {
-    public WeightedPose(int pose, int weightNodeIndex = -1, float defaultWeight = 1f)
+    public WeightedPose(int pose, FloatInput? weight = null)
     {
         Pose = pose;
-        WeightNodeIndex = weightNodeIndex;
-        DefaultWeight = defaultWeight;
+        Weight = weight ?? 1f;
     }
 
     public int Pose { get; }
-
-    /// <summary>Float value node giving this input's weight, or -1 to use <see cref="DefaultWeight"/>.</summary>
-    public int WeightNodeIndex { get; }
-
-    public float DefaultWeight { get; }
+    public FloatInput Weight { get; }
 }
 
-/// <summary>
-/// Blends any number of poses by their own weights at once, rather than nesting two way blends. Weights
-/// are normalized, so they express proportions. Inputs at zero weight still update, since they are all
-/// sampled every frame.
-/// </summary>
+/// <summary>Blends any number of poses by normalized weights. Every input updates each frame.</summary>
 public sealed class WeightedBlendDefinition : PoseNodeDefinition
 {
     public WeightedBlendDefinition(IReadOnlyList<WeightedPose> inputs) => Inputs = new List<WeightedPose>(inputs).ToArray();
@@ -247,7 +220,7 @@ public sealed class WeightedBlendDefinition : PoseNodeDefinition
     {
         private readonly WeightedBlendDefinition _def;
         private PoseNodeInstance[] _inputs = null!;
-        private ValueNodeInstance?[] _weights = null!;
+        private BoundFloat[] _weights = null!;
         private float[] _values = null!;
 
         public Instance(WeightedBlendDefinition def) => _def = def;
@@ -261,12 +234,12 @@ public sealed class WeightedBlendDefinition : PoseNodeDefinition
 
             Pose = new Pose(context.Skeleton);
             _inputs = new PoseNodeInstance[_def.Inputs.Length];
-            _weights = new ValueNodeInstance?[_def.Inputs.Length];
+            _weights = new BoundFloat[_def.Inputs.Length];
             _values = new float[_def.Inputs.Length];
             for (int i = 0; i < _inputs.Length; i++)
             {
                 _inputs[i] = context.PoseNode(_def.Inputs[i].Pose);
-                _weights[i] = context.OptionalValueNode(_def.Inputs[i].WeightNodeIndex, ValueInputKind.Number);
+                _weights[i] = BoundFloat.Bind(context, _def.Inputs[i].Weight);
             }
         }
 
@@ -289,7 +262,7 @@ public sealed class WeightedBlendDefinition : PoseNodeDefinition
             for (int i = 0; i < _inputs.Length; i++)
             {
                 _inputs[i].Update(context);
-                float weight = _weights[i] is { } node ? node.GetValue(context).AsFloat() : _def.Inputs[i].DefaultWeight;
+                float weight = _weights[i].Get(context);
                 _values[i] = float.IsFinite(weight) && weight > 0f ? weight : 0f;
                 total += _values[i];
             }
@@ -322,13 +295,7 @@ public sealed class WeightedBlendDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Pose smoothing ----------------------------------------------------------------------------
-
-/// <summary>
-/// Eases the output toward its child instead of following it exactly, by a half life in seconds (the
-/// time to close half the remaining gap). Independent of frame rate. Good for cleaning up a pose that
-/// arrives in steps, such as one from the network or a low update rate branch.
-/// </summary>
+/// <summary>Eases the output toward its child by a half life in seconds, independent of frame rate.</summary>
 public sealed class PoseSmoothingDefinition : PoseNodeDefinition
 {
     public PoseSmoothingDefinition(int child, FloatInput halfLifeSeconds)
@@ -377,7 +344,7 @@ public sealed class PoseSmoothingDefinition : PoseNodeDefinition
                 return;
             }
 
-            float weight = 1f - MathF.Pow(0.5f, MathF.Abs(context.DeltaTime) / halfLife);
+            float weight = Maths.HalfLifeFactor(context.DeltaTime, halfLife);
             Blender.Blend(Pose, Pose, Child.Pose, Math.Clamp(weight, 0f, 1f));
         }
     }

@@ -15,19 +15,11 @@ public enum PoseTransferMode : byte
     Humanoid,
 }
 
-// ---- Pose from outside the graph ---------------------------------------------------------------
-
 /// <summary>
-/// A pose the host writes in each frame rather than one the graph plays: a ragdoll settling, a hit
-/// reaction solved by physics, a pose arriving over the network, or a performer's tracked pose. The
-/// pose may belong to another rig, in which case it is matched by bone name or retargeted through
-/// muscle space on the way in.
+/// A pose the host writes in each frame through <see cref="ExternalPoseInstance.Source"/> and
+/// <see cref="ExternalPoseInstance.HasPose"/>. A pose from another rig is matched by bone name or
+/// retargeted.
 /// </summary>
-/// <remarks>
-/// Get the instance with <see cref="AnimationGraphInstance.GetNodeInstance(int)"/>, write into its
-/// <see cref="ExternalPoseInstance.Source"/> pose and set <see cref="ExternalPoseInstance.HasPose"/>.
-/// Until then the node outputs the reference pose.
-/// </remarks>
 public sealed class ExternalPoseDefinition : PoseNodeDefinition
 {
     public ExternalPoseDefinition(Skeleton sourceSkeleton)
@@ -160,30 +152,21 @@ public sealed class ExternalPoseInstance : PoseNodeInstance
     }
 }
 
-// ---- Muscle space layering ---------------------------------------------------------------------
-
-/// <summary>
-/// Blends two poses in muscle space rather than bone by bone, optionally through a humanoid mask. Body
-/// parts keep their meaning, so an upper body layer stays anatomically sensible even when the two poses
-/// disagree strongly, where a bone blend would pass through poses the body cannot hold.
-/// </summary>
+/// <summary>Blends two poses in muscle space rather than bone by bone, optionally through a humanoid mask.</summary>
 public sealed class MuscleLayerDefinition : PoseNodeDefinition
 {
-    public MuscleLayerDefinition(int basePose, int layerPose, int weightNodeIndex = -1)
+    public MuscleLayerDefinition(int basePose, int layerPose, FloatInput? weight = null)
     {
         BasePose = basePose;
         LayerPose = layerPose;
-        WeightNodeIndex = weightNodeIndex;
+        Weight = weight ?? 1f;
     }
 
     public int BasePose { get; }
 
     public int LayerPose { get; }
 
-    /// <summary>Float value node giving the layer's weight, or -1 for <see cref="Weight"/>.</summary>
-    public int WeightNodeIndex { get; }
-
-    public float Weight { get; set; } = 1f;
+    public FloatInput Weight { get; }
 
     /// <summary>Which parts of the body the layer may drive. Null means all of it.</summary>
     public HumanPoseMask? Mask { get; set; }
@@ -208,7 +191,7 @@ public sealed class MuscleLayerDefinition : PoseNodeDefinition
         private PoseNodeInstance _base = null!;
         private PoseNodeInstance _layer = null!;
         private PoseNodeInstance? _reference;
-        private ValueNodeInstance? _weight;
+        private BoundFloat _weight;
         private Avatar _avatar = null!;
 
         public Instance(MuscleLayerDefinition def) => _def = def;
@@ -224,7 +207,7 @@ public sealed class MuscleLayerDefinition : PoseNodeDefinition
             Pose = new Pose(context.Skeleton);
             _base = context.PoseNode(_def.BasePose);
             _layer = context.PoseNode(_def.LayerPose);
-            _weight = context.OptionalValueNode(_def.WeightNodeIndex, ValueInputKind.Number);
+            _weight = BoundFloat.Bind(context, _def.Weight);
 
             // Both are resolved up front, so turning the layer additive later still measures against
             // something real.
@@ -265,7 +248,7 @@ public sealed class MuscleLayerDefinition : PoseNodeDefinition
             CopyTimingFrom(_base);
             RootMotionDelta = _base.RootMotionDelta;
 
-            float weight = Math.Clamp(_weight?.GetValue(context).AsFloat() ?? _def.Weight, 0f, 1f);
+            float weight = Math.Clamp(_weight.Get(context), 0f, 1f);
             context.Events.UpdateWeights(_layer.SampledEventRange, weight);
             if (!(weight > 0f))
             {

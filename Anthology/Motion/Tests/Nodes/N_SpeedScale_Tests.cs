@@ -12,7 +12,7 @@ public class N_SpeedScale_Tests
         Skeleton skeleton = TestSkeletons.MakeChain();
         var g = new AnimationGraph();
         int p = g.AddFloatParameter("P", 0f);
-        int scaled = g.AddSpeedScale(g.AddClip(TestClips.Ramp(skeleton)), defaultSpeed: 2f);
+        int scaled = g.AddSpeedScale(g.AddClip(TestClips.Ramp(skeleton)), speed: 2f);
         g.SetRoot(g.AddBlend1D(p, new[] { (scaled, 0f), (g.AddClip(TestClips.Ramp(skeleton)), 1f) }));
         AnimationGraphInstance instance = g.CreateInstance(skeleton);
 
@@ -29,7 +29,7 @@ public class N_SpeedScale_Tests
         Skeleton skeleton = TestSkeletons.MakeChain();
         var g = new AnimationGraph();
         int speed = g.AddFloatParameter("Speed", -1f);
-        g.SetRoot(g.AddSpeedScale(g.AddClip(TestClips.Ramp(skeleton), loop: false), speed));
+        g.SetRoot(g.AddSpeedScale(g.AddClip(TestClips.Ramp(skeleton), loop: false), FloatInput.From(speed)));
         AnimationGraphInstance instance = g.CreateInstance(skeleton);
 
         for (int i = 0; i < 5; i++)

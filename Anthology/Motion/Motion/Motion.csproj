@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Motion.Tests" />
+    <InternalsVisibleTo Include="Motion.Benchmarks" />
   </ItemGroup>
 
 </Project>

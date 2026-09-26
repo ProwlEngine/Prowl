@@ -43,17 +43,11 @@ internal static class WarpedTrajectory
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Orientation warp (re-heads a clip's root motion toward a desired direction / by an angle)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>
-/// Wraps a clip and rewrites its root motion so the travel after the warp window heads toward a
-/// target (a character space Float3 direction, or a float angle offset in degrees about up that
-/// turns the clip's own travel) while leaving the pose untouched. The turn is spread over the first
-/// <see cref="OrientationWarpEvent"/> on the clip. With no such event the whole path turns at the
-/// start. The warp is computed on the first update, and again after a reseek from where the clip lands.
-/// It covers the pass it was computed for: once a looping clip wraps, its own root motion plays.
+/// Rewrites a clip's root motion so its travel heads toward a direction, or turns by an angle in
+/// degrees, spread over the clip's first <see cref="OrientationWarpEvent"/>. Covers one pass of the clip.
 /// </summary>
 public sealed class OrientationWarpDefinition : PoseNodeDefinition
 {
@@ -155,16 +149,11 @@ public sealed class OrientationWarpDefinition : PoseNodeDefinition
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Turn warp (scales a turning clip's root rotation to turn by a chosen angle)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>
-/// Wraps a clip that turns on the spot and scales the turn in its root motion so the whole clip turns
-/// by an angle a value node asks for, in degrees. One turn clip can then cover any turn, rather than
-/// only the angle it was authored for. The angle is read once, when the node starts, so a caller that
-/// keeps reporting the turn still left to make does not shrink the turn while it plays. The clip's own
-/// direction of turn is kept: only the size is taken from the angle.
+/// Scales a turn on the spot clip's root rotation so it turns by an angle in degrees, read when the node
+/// starts. The clip's own direction of turn is kept.
 /// </summary>
 public sealed class TurnWarpDefinition : PoseNodeDefinition
 {
@@ -255,21 +244,11 @@ public sealed class TurnWarpDefinition : PoseNodeDefinition
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Target warp (rewrites a clip's root motion so the character reaches a desired displacement)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>
-/// Wraps a clip and rewrites its root motion so the total travel matches a desired displacement by
-/// the end of the clip. The goal is a Float3 displacement in character space measured from the clip's
-/// first frame, or a world Target (converted with the character's world transform) that the character
-/// should end on. Bone targets and unset targets disable the warp. The first
-/// <see cref="TargetWarpEvent"/> limits warping to its time window and its rule picks the axes: WarpXY
-/// warps the horizontal XZ plane, WarpZ the vertical Y, WarpXYZ both, RotationOnly disables translation
-/// warping. Without an event the whole clip warps on all axes. A Vector goal is solved again when it
-/// changes. A Target goal is solved once, on the first update it is set or after a reseek. The warp
-/// covers the pass it started in: once a looping clip wraps, its own root motion plays until the node
-/// starts again.
+/// Rewrites a clip's root motion so it ends on a character space displacement or a world Target. The
+/// clip's first <see cref="TargetWarpEvent"/> sets the window and axes. Covers one pass of the clip.
 /// </summary>
 public sealed class TargetWarpDefinition : PoseNodeDefinition
 {

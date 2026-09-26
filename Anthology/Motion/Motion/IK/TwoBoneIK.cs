@@ -4,24 +4,16 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// Analytic two bone inverse kinematics (the leg or arm case). Given an upper, mid, and end bone
-/// (each an ancestor of the next, usually a direct parent chain), it rotates the upper and mid bones
-/// so the end bone reaches a model space target, keeping bone lengths fixed.
+/// Analytic two bone IK: turns the upper and mid bones so the end reaches a model space target, bending
+/// in the plane the input pose already bends in unless a pole is given.
 /// </summary>
-/// <remarks>
-/// The bend plane comes from the chain's own bend in the input pose, so the knee or elbow stays on
-/// the same side however the target moves. A straight input chain falls back to the reference pose
-/// bend, then to a fixed axis of the upper bone. A pole overrides all of these.
-/// </remarks>
 public static class TwoBoneIK
 {
     private const float Epsilon = 1e-5f;
 
     /// <summary>
-    /// Solves so <paramref name="end"/> reaches <paramref name="target"/> (model space).
-    /// <paramref name="weight"/> blends the result, stretch included, with the input pose.
-    /// <paramref name="pole"/> is a model space point the joint bends toward. Invalid chains, degenerate
-    /// bones and non finite targets leave the pose untouched.
+    /// Solves so <paramref name="end"/> reaches <paramref name="target"/>, blended by
+    /// <paramref name="weight"/>. <paramref name="pole"/> is a point the joint bends toward.
     /// </summary>
     public static void Solve(Pose pose, int upper, int mid, int end, Float3 target, float weight = 1f, Float3? pole = null, float stretch = 0f)
     {
@@ -65,9 +57,9 @@ public static class TwoBoneIK
         Float3 bendDir = BendDirection(pose, upper, mid, end, upperW.rotation, a, b, c, axis, pole);
         Float3 knee = a + axis * d + bendDir * h;
 
-        Quaternion qUpper = TransformOps.FromToRotation(b - a, knee - a);
+        Quaternion qUpper = Quaternion.FromToRotation(b - a, knee - a);
         Float3 endAfterUpper = knee + qUpper * (c - b);
-        Quaternion qMid = TransformOps.FromToRotation(endAfterUpper - knee, target - knee);
+        Quaternion qMid = Quaternion.FromToRotation(endAfterUpper - knee, target - knee);
 
         Quaternion newUpperW = Quaternion.Slerp(upperW.rotation, qUpper * upperW.rotation, weight);
         Quaternion newMidW = Quaternion.Slerp(midW.rotation, qMid * qUpper * midW.rotation, weight);

@@ -115,7 +115,7 @@ public class GraphRuntime_Tests
         int fired = graph.AddIdEventCondition(new StringID("Go"));
         // The speed is read before the clip under it samples its event, which is what used to cache false.
         int speed = graph.AddFloatSwitch(fired, graph.AddConstFloat(1f), graph.AddConstFloat(1f));
-        int step = graph.AddSpeedScale(graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Go"), 0.5f))), speed);
+        int step = graph.AddSpeedScale(graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Go"), 0.5f))), FloatInput.From(speed));
 
         int machine = graph.AddStateMachine();
         int a = graph.AddState(machine, step, "A");
@@ -141,8 +141,8 @@ public class GraphRuntime_Tests
         // The second input reads the condition after the first has sampled its event, but before the
         // blend turns that event down to nothing.
         int reader = graph.AddSpeedScale(graph.AddClip(TestClips.Const(skeleton, 0f)),
-            graph.AddFloatSwitch(fired, graph.AddConstFloat(1f), graph.AddConstFloat(1f)));
-        int blend = graph.AddWeightedBlend(new[] { new WeightedPose(loud, -1, 0f), new WeightedPose(reader, -1, 1f) });
+            FloatInput.From(graph.AddFloatSwitch(fired, graph.AddConstFloat(1f), graph.AddConstFloat(1f))));
+        int blend = graph.AddWeightedBlend(new[] { new WeightedPose(loud, 0f), new WeightedPose(reader, 1f) });
 
         int machine = graph.AddStateMachine();
         int a = graph.AddState(machine, blend, "A");
@@ -170,7 +170,7 @@ public class GraphRuntime_Tests
             // Holds the timer on a rising edge of the event, and is read before the clip samples it each frame.
             int held = graph.AddCachedValue(graph.AddTimer(), fired);
             int speed = graph.AddFloatMath(held, graph.AddConstFloat(1f), FloatMathOp.Max);
-            graph.SetRoot(graph.AddSpeedScale(graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Go"), 0.5f))), speed));
+            graph.SetRoot(graph.AddSpeedScale(graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Go"), 0.5f))), FloatInput.From(speed)));
             return (graph.CreateInstance(skeleton), held);
         }
 
@@ -197,7 +197,7 @@ public class GraphRuntime_Tests
         int fired = graph.AddIdEventCondition(new StringID("Go"));
         // Read before the clip samples its event, so its first answer each frame is false.
         int speed = graph.AddFloatSwitch(fired, graph.AddConstFloat(1f), graph.AddConstFloat(1f));
-        graph.SetRoot(graph.AddSpeedScale(graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Go"), 0f, 1f))), speed));
+        graph.SetRoot(graph.AddSpeedScale(graph.AddClip(TestClips.Const(skeleton, 0f, new IdEvent(new StringID("Go"), 0f, 1f))), FloatInput.From(speed)));
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);
 
         instance.Update(1f / 60f);

@@ -57,7 +57,7 @@ public class SyncTrack_Tests
         SyncTrack footsteps = TestClips.Track(0f, 0.5f);
         var g = new AnimationGraph();
         int clip = g.AddClip(TestClips.Ramp(skeleton, syncTrack: footsteps));
-        int speed = g.AddSpeedScale(clip, defaultSpeed: 1.5f);
+        int speed = g.AddSpeedScale(clip, speed: 1.5f);
         int mirror = g.AddMirror(speed);
         int overrideRm = g.AddRootMotionOverride(mirror);
         int selector = g.AddSelector(g.AddIntParameter("Which"), new[] { overrideRm });

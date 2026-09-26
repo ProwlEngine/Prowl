@@ -4,9 +4,8 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A skeletal animation clip storing one uncompressed transform per bone per key frame, plus
-/// optional root motion, sync track and events. Sampling interpolates between key frames to produce
-/// a <see cref="Pose"/>. See <see cref="CompressedAnimationClip"/> for the quantized storage format.
+/// A skeletal animation clip storing one uncompressed transform per bone per key frame. See
+/// <see cref="CompressedAnimationClip"/> for the quantized format.
 /// </summary>
 public sealed class AnimationClip : AnimationClipBase
 {
@@ -16,9 +15,8 @@ public sealed class AnimationClip : AnimationClipBase
     private readonly int _channelCount;
 
     /// <summary>
-    /// Builds a clip from key-frame poses (at least one), all for the given skeleton, with the clip
-    /// length in seconds. Set <paramref name="isAdditive"/> if the poses store deltas rather than
-    /// full poses. The key-frame poses are snapshotted; the caller may reuse them afterwards.
+    /// Builds a clip from at least one key frame pose. Set <paramref name="isAdditive"/> if the poses
+    /// store deltas. The poses are copied.
     /// </summary>
     public AnimationClip(
         Skeleton skeleton,

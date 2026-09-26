@@ -4,9 +4,8 @@ using Prowl.Vector;
 namespace Prowl.Motion;
 
 /// <summary>
-/// An animation graph definition: a flat list of node definitions, named control parameters, and a
-/// root pose node. This is the asset/editor-authored data and is also built fluently from code for
-/// NuGet users with no editor. Create an <see cref="AnimationGraphInstance"/> to play it.
+/// An animation graph definition: node definitions, named control parameters and a root pose node.
+/// Create an <see cref="AnimationGraphInstance"/> to play it.
 /// </summary>
 public sealed class AnimationGraph
 {
@@ -152,10 +151,10 @@ public sealed class AnimationGraph
     public int AddBlend2D(int xParam, int yParam, (int Child, Float2 Position)[] samples, bool loop = true)
         => AddNode(new Blend2DDefinition(xParam, yParam, samples) { Loop = loop });
 
-    public int AddSpeedScale(int child, int speedNodeIndex = -1, float defaultSpeed = 1f) => AddNode(new SpeedScaleDefinition(child, speedNodeIndex, defaultSpeed));
+    public int AddSpeedScale(int child, FloatInput? speed = null) => AddNode(new SpeedScaleDefinition(child, speed ?? 1f));
 
-    public int AddOverrideLayer(int basePose, int layerPose, int weightNodeIndex = -1, float defaultWeight = 1f, BoneMask? mask = null)
-        => AddNode(new OverrideLayerDefinition(basePose, layerPose, weightNodeIndex, defaultWeight, mask));
+    public int AddOverrideLayer(int basePose, int layerPose, FloatInput? weight = null, BoneMask? mask = null)
+        => AddNode(new OverrideLayerDefinition(basePose, layerPose, weight ?? 1f, mask));
 
     /// <summary>
     /// Blends N layers over a base pose, each with its own weight, dynamic bone mask, and additive flag.
@@ -164,8 +163,8 @@ public sealed class AnimationGraph
     public int AddLayerBlend(int basePose, IReadOnlyList<LayerInfo> layers, bool onlySampleBaseRootMotion = true)
         => AddNode(new LayerBlendDefinition(basePose, layers) { OnlySampleBaseRootMotion = onlySampleBaseRootMotion });
 
-    public int AddAdditiveLayer(int basePose, int layerPose, int weightNodeIndex = -1, float defaultWeight = 1f, BoneMask? mask = null)
-        => AddNode(new OverrideLayerDefinition(basePose, layerPose, weightNodeIndex, defaultWeight, mask) { Additive = true });
+    public int AddAdditiveLayer(int basePose, int layerPose, FloatInput? weight = null, BoneMask? mask = null)
+        => AddNode(new OverrideLayerDefinition(basePose, layerPose, weight ?? 1f, mask) { Additive = true });
 
     /// <summary>
     /// Adds a node that absorbs pose jumps in its child by decaying the gap over
@@ -235,12 +234,11 @@ public sealed class AnimationGraph
     /// character and settles back under a spring. The chain is listed from its root outward.
     /// </summary>
     public int AddSpringBones(int child, IReadOnlyList<StringID> chain, float stiffness = 40f, float damping = 6f, Float3 gravity = default)
-        => AddNode(new SpringBonesDefinition(child, chain) { Stiffness = stiffness, Damping = damping, Gravity = gravity });
-
+        => AddNode(new SpringBonesDefinition(child, chain) { Stiffness = stiffness, Damping = damping, Gravity = gravity });
+
     /// <summary>
     /// Adds spring motion to <paramref name="boneCount"/> bones starting at <paramref name="root"/>,
-    /// following the first child each step. Stack two nodes to give a chain's tip its own feel: the
-    /// second is rooted where the first ends.
+    /// following the first child each step.
     /// </summary>
     public int AddSpringBones(int child, StringID root, int boneCount, float stiffness = 40f, float damping = 6f, Float3 gravity = default)
         => AddNode(new SpringBonesDefinition(child, root, boneCount) { Stiffness = stiffness, Damping = damping, Gravity = gravity });
@@ -278,17 +276,20 @@ public sealed class AnimationGraph
     /// Adds a node blending two poses in muscle space, optionally masked to parts of the body. Needs a
     /// humanoid avatar.
     /// </summary>
-    public int AddMuscleLayer(int basePose, int layerPose, int weightNodeIndex = -1, HumanPoseMask? mask = null, bool additive = false, int referenceNodeIndex = -1)
-        => AddNode(new MuscleLayerDefinition(basePose, layerPose, weightNodeIndex) { Mask = mask, Additive = additive, ReferenceNodeIndex = referenceNodeIndex });
+    public int AddMuscleLayer(int basePose, int layerPose, FloatInput? weight = null, HumanPoseMask? mask = null, bool additive = false, int referenceNodeIndex = -1)
+        => AddNode(new MuscleLayerDefinition(basePose, layerPose, weight) { Mask = mask, Additive = additive, ReferenceNodeIndex = referenceNodeIndex });
 
     public int AddMirror(int child, int enabledNodeIndex = -1) => AddNode(new MirrorDefinition(child) { EnabledNodeIndex = enabledNodeIndex });
 
     /// <summary>
-    /// Plants the humanoid feet on world space ground heights (and optional world space ground normal
-    /// vectors) via IK. Requires a humanoid avatar instance.
+    /// Plants the humanoid feet on the ground via IK: the wired world heights and optional normals, or
+    /// the graph's ground probe when no heights are wired. Requires a humanoid avatar instance.
     /// </summary>
     public int AddFootGrounding(int child, int leftGroundYNodeIndex = -1, int rightGroundYNodeIndex = -1, int weightNodeIndex = -1, int leftNormalNodeIndex = -1, int rightNormalNodeIndex = -1)
-        => AddNode(new FootGroundingDefinition(child, leftGroundYNodeIndex, rightGroundYNodeIndex, weightNodeIndex, leftNormalNodeIndex, rightNormalNodeIndex));
+        => AddNode(new FootGroundingDefinition(child, leftGroundYNodeIndex, rightGroundYNodeIndex, weightNodeIndex, leftNormalNodeIndex, rightNormalNodeIndex)
+        {
+            ProbeGround = leftGroundYNodeIndex < 0 && rightGroundYNodeIndex < 0,
+        });
 
     /// <summary>Re-heads a clip's root motion toward a Float3 direction value node.</summary>
     public int AddOrientationWarp(int clipChild, int directionNodeIndex)
@@ -309,8 +310,8 @@ public sealed class AnimationGraph
     /// <summary>Solves a multi-effector IK rig over a child pose, each effector driven by a target value node.</summary>
     public int AddIKRig(int child, IReadOnlyList<IKEffectorInfo> effectors) => AddNode(new IKRigDefinition(child, effectors));
 
-    public int AddTwoBoneIK(int child, int targetNodeIndex, int upper, int mid, int end, int weightNodeIndex = -1, float defaultWeight = 1f)
-        => AddNode(new TwoBoneIKDefinition(child, targetNodeIndex, upper, mid, end, weightNodeIndex, defaultWeight));
+    public int AddTwoBoneIK(int child, int targetNodeIndex, int upper, int mid, int end, FloatInput? weight = null)
+        => AddNode(new TwoBoneIKDefinition(child, targetNodeIndex, upper, mid, end, weight ?? 1f));
 
     public int AddLookAt(int child, int targetNodeIndex, FloatInput? clamp = null, FloatInput? body = null,
         FloatInput? head = null, FloatInput? eyes = null, FloatInput? weight = null)
@@ -327,13 +328,11 @@ public sealed class AnimationGraph
         return AddNode(new Blend1DDefinition(parameterNodeIndex, entries) { Loop = loop });
     }
 
-    // ---- Value nodes ----------------------------------------------------------------------------
-
     /// <summary>A 1D blend across clip nodes parameterized by each clip's average speed, driven by a desired speed.</summary>
     public int AddVelocityBlend(int speedParameterNodeIndex, IReadOnlyList<int> clipNodeIndices, bool loop = true)
         => AddNode(new VelocityBlendDefinition(speedParameterNodeIndex, clipNodeIndices) { Loop = loop });
 
-    public int AddConstId(StringID value) => AddNode(new ConstIdDefinition(value));
+    public int AddConstId(StringID value) => AddNode(new ConstValueDefinition(ParameterValue.FromId(value)));
     public int AddIdParameter(string name, StringID defaultValue = default) => AddControlParameter(name, AnimationValueType.Id, ParameterValue.FromId(defaultValue));
     public int AddIdComparison(int input, IdComparison comparison, IReadOnlyList<StringID> ids) => AddNode(new IdComparisonDefinition(input, comparison, ids));
     public int AddIdToFloat(int input, IReadOnlyList<StringID> ids, IReadOnlyList<float> values, float defaultValue) => AddNode(new IdToFloatDefinition(input, ids, values, defaultValue));
@@ -382,7 +381,7 @@ public sealed class AnimationGraph
     public int AddFloatRemap(int input, float inMin, float inMax, float outMin, float outMax)
         => AddNode(new FloatRemapDefinition(input, inMin, inMax, outMin, outMax));
     public int AddFloatClamp(int input, float min, float max) => AddNode(new FloatClampDefinition(input, min, max));
-    public int AddFloatAbs(int input) => AddNode(new FloatAbsDefinition(input));
+    public int AddFloatAbs(int input) => AddNode(new FloatMathDefinition(input, -1, FloatMathOp.Absolute));
     public int AddFloatSwitch(int selector, int trueValue, int falseValue) => AddNode(new FloatSwitchDefinition(selector, trueValue, falseValue));
     public int AddFloatRangeComparison(int input, float min, float max, bool inclusive = true) => AddNode(new FloatRangeComparisonDefinition(input, min, max, inclusive));
     public int AddFloatAngleMath(int input, AngleOp op) => AddNode(new FloatAngleMathDefinition(input, op));

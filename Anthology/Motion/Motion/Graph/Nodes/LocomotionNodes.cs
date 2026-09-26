@@ -3,12 +3,9 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---- Foot lock ---------------------------------------------------------------------------------
-
 /// <summary>
-/// Pins a foot in world space while it is planted, so it stops sliding when the character's speed and
-/// the clip's stride disagree. Drive the lock from a foot event condition on the playing clip, or from
-/// any other bool. When the lock ends the leg eases back onto the animation over a short release.
+/// Pins a foot in world space while the lock input reads true, so it stops sliding. The leg eases back
+/// onto the animation when the lock ends.
 /// </summary>
 public sealed class FootLockDefinition : PoseNodeDefinition
 {
@@ -125,17 +122,10 @@ public sealed class FootLockDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Stride warp -------------------------------------------------------------------------------
-
 /// <summary>
-/// Matches a clip's travel to the speed the game actually wants, by bending the clip's playback rate
-/// and its root motion together. A walk played 20 percent faster covers 20 percent more ground per
-/// second, so the feet keep up with the character instead of skating.
+/// Matches a clip's travel to a desired speed by scaling its playback rate. The clip's own speed is
+/// measured from its root motion, or given through <see cref="NaturalSpeed"/>.
 /// </summary>
-/// <remarks>
-/// The clip's own speed is measured from its root motion, or given through <see cref="NaturalSpeed"/>
-/// when the clip has none. A clip that does not travel cannot be warped, so it plays untouched.
-/// </remarks>
 public sealed class StrideWarpDefinition : PoseNodeDefinition
 {
     public StrideWarpDefinition(int child, int desiredSpeedNodeIndex)
@@ -219,8 +209,6 @@ public sealed class StrideWarpDefinition : PoseNodeDefinition
         private float NaturalFromChild() => Child is ClipNodeInstance clip ? clip.Clip.AverageLinearSpeed : 0f;
     }
 }
-
-// ---- Root motion filter ------------------------------------------------------------------------
 
 /// <summary>Which parts of a root motion delta survive a <see cref="RootMotionFilterDefinition"/>.</summary>
 [Flags]

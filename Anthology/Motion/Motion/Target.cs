@@ -3,11 +3,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-/// <summary>
-/// A flag-tagged target: either a literal world transform or a named bone with an optional
-/// bone-space offset. Resolved against a <see cref="Pose"/>. Targets carry rotation and translation
-/// only (scale is ignored).
-/// </summary>
+/// <summary>A target: a world transform, or a named bone with an optional offset. Scale is ignored.</summary>
 public readonly struct Target
 {
     private readonly bool _isSet;

@@ -5,10 +5,8 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A lightweight animator that plays clips with optional cross fades, without the graph/state machine
-/// machinery (the engine equivalent of a simple clip player). Cross fades stack: fading to a new clip
-/// while a fade is running blends from the current mix. Subclass it and implement the
-/// <see cref="AnimatorBase"/> hooks to bind it to an engine.
+/// A lightweight animator that plays clips with cross fades, without a graph. Fading while a fade runs
+/// blends from the current mix.
 /// </summary>
 public abstract class SimpleAnimator : AnimatorBase
 {

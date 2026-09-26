@@ -2,9 +2,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Motion;
 
-// ---------------------------------------------------------------------------------------------
 // Bone mask value nodes (produce a per-bone weight mask for masked / layered blending)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>
 /// Builds a bone mask by feathering authored seed weights (by bone id) down the hierarchy. The mask is

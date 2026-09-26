@@ -3,11 +3,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-/// <summary>
-/// Resolves an IK goal value to a model space point. A Vector is taken as a model space point. A
-/// Target resolves bone targets against the pose and converts world targets with the character's
-/// inverse world transform. Unset or unresolvable targets report false so the solve is skipped.
-/// </summary>
+/// <summary>Resolves an IK goal value, a model space Vector or a Target, to a model space point.</summary>
 internal static class IKGoalResolver
 {
     public static bool TryResolve(in ParameterValue value, Pose pose, GraphContext context, out Float3 position)
@@ -30,50 +26,45 @@ internal static class IKGoalResolver
     }
 }
 
-// ---- Two bone IK ----------------------------------------------------------------------------
-
 /// <summary>
 /// Applies two bone IK on top of a child pose, driving the end bone to a goal value (a model space
 /// Vector or a Target). An unset target skips the solve.
 /// </summary>
 public sealed class TwoBoneIKDefinition : PoseNodeDefinition
 {
-    public TwoBoneIKDefinition(int child, int targetNodeIndex, int upper, int mid, int end, int weightNodeIndex, float defaultWeight)
-    { Child = child; TargetNodeIndex = targetNodeIndex; Upper = upper; Mid = mid; End = end; WeightNodeIndex = weightNodeIndex; DefaultWeight = defaultWeight; }
+    public TwoBoneIKDefinition(int child, int targetNodeIndex, int upper, int mid, int end, FloatInput weight)
+    { Child = child; TargetNodeIndex = targetNodeIndex; Upper = upper; Mid = mid; End = end; Weight = weight; }
     public int Child { get; }
     public int TargetNodeIndex { get; }
     public int Upper { get; }
     public int Mid { get; }
     public int End { get; }
-    public int WeightNodeIndex { get; }
-    public float DefaultWeight { get; }
+    public FloatInput Weight { get; }
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
         private readonly TwoBoneIKDefinition _def;
         private ValueNodeInstance _target = null!;
-        private ValueNodeInstance? _weight;
+        private BoundFloat _weight;
         public Instance(TwoBoneIKDefinition def) => _def = def;
 
         public override void Bind(GraphBindContext context)
         {
             BindChild(context, _def.Child);
             _target = context.ValueNode(_def.TargetNodeIndex, ValueInputKind.Vector | ValueInputKind.Target);
-            _weight = context.OptionalValueNode(_def.WeightNodeIndex, ValueInputKind.Number);
+            _weight = BoundFloat.Bind(context, _def.Weight);
         }
 
         protected override void OnUpdate(GraphContext context)
         {
             base.OnUpdate(context);
-            float w = _weight?.GetValue(context).AsFloat() ?? _def.DefaultWeight;
+            float w = _weight.Get(context);
             if (w > 0f && IKGoalResolver.TryResolve(_target.GetValue(context), Pose, context, out Float3 goal))
                 TwoBoneIK.Solve(Pose, _def.Upper, _def.Mid, _def.End, goal, w);
         }
     }
 }
-
-// ---- Look at --------------------------------------------------------------------------------
 
 /// <summary>
 /// Applies a humanoid look at on top of a child pose (requires an avatar). The goal is a model space
@@ -123,13 +114,11 @@ public sealed class LookAtDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Foot grounding (humanoid foot lock IK) -------------------------------------------------
-
 /// <summary>
-/// Plants the humanoid feet on the ground via two bone IK, blended by a weight. Ground heights and
-/// optional ground normals are world space (as returned by physics raycasts) and are converted with
-/// the character's world transform. Heights default to 0 and normals to up. Requires the graph
-/// instance to be created with a humanoid avatar.
+/// Places the humanoid feet on the ground under them with <see cref="FootPlacement"/>: each foot moves by
+/// the ground's height rather than being pinned to it, the hips drop so both legs reach, and planted
+/// feet tilt onto slopes. The ground comes from the graph's probe, or from world heights and normals
+/// wired in. Needs a humanoid avatar.
 /// </summary>
 public sealed class FootGroundingDefinition : PoseNodeDefinition
 {
@@ -153,28 +142,51 @@ public sealed class FootGroundingDefinition : PoseNodeDefinition
     public int LeftNormalNodeIndex { get; }
     public int RightNormalNodeIndex { get; }
 
-    /// <summary>
-    /// Finds the ground under each foot with the graph's own ground probe, rather than being told where
-    /// it is. Without a probe the node falls back to the heights wired into it.
-    /// </summary>
-    public bool ProbeGround { get; set; }
+    /// <summary>Finds the ground with the graph's own probe instead of the wired heights.</summary>
+    public bool ProbeGround { get; set; } = true;
 
-    /// <summary>How far the probe looks below a foot, in world units.</summary>
-    public float ProbeDistance { get; set; } = 1f;
+    /// <summary>How far above the character's floor a foot may step up, in world units.</summary>
+    public float MaxStepUp { get; set; } = 0.5f;
 
-    /// <summary>How far above a foot the probe starts, so ground it is already standing in is still found.</summary>
-    public float ProbeRise { get; set; } = 0.5f;
+    /// <summary>How far below the character's floor a foot may reach down, in world units.</summary>
+    public float MaxStepDown { get; set; } = 0.5f;
+
+    /// <inheritdoc cref="FootPlacement.AdjustHips"/>
+    public bool AdjustHips { get; set; } = true;
+
+    /// <inheritdoc cref="FootPlacement.FootSmoothing"/>
+    public float FootSmoothing { get; set; } = 0.04f;
+
+    /// <inheritdoc cref="FootPlacement.HipsSmoothing"/>
+    public float HipsSmoothing { get; set; } = 0.08f;
+
+    /// <inheritdoc cref="FootPlacement.MaxFootAngle"/>
+    public float MaxFootAngle { get; set; } = 45f;
+
+    /// <inheritdoc cref="FootPlacement.FootLiftHeight"/>
+    public float FootLiftHeight { get; set; } = 0.1f;
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 
     private sealed class Instance : PassthroughPoseNodeInstance
     {
-        private static readonly Float3 Up = new(0f, 1f, 0f);
 
         private readonly FootGroundingDefinition _def;
+        private readonly FootPlacement _placement;
         private ValueNodeInstance? _leftY, _rightY, _weight, _leftNormal, _rightNormal;
 
-        public Instance(FootGroundingDefinition def) => _def = def;
+        public Instance(FootGroundingDefinition def)
+        {
+            _def = def;
+            _placement = new FootPlacement
+            {
+                AdjustHips = def.AdjustHips,
+                FootSmoothing = def.FootSmoothing,
+                HipsSmoothing = def.HipsSmoothing,
+                MaxFootAngle = def.MaxFootAngle,
+                FootLiftHeight = def.FootLiftHeight,
+            };
+        }
 
         public override void Bind(GraphBindContext context)
         {
@@ -186,64 +198,62 @@ public sealed class FootGroundingDefinition : PoseNodeDefinition
             _rightNormal = context.OptionalValueNode(_def.RightNormalNodeIndex, ValueInputKind.Vector);
         }
 
+        protected override void OnInitialize(GraphContext context, SyncTrackTime? initialTime)
+        {
+            base.OnInitialize(context, initialTime);
+            _placement.Reset();
+        }
+
         protected override void OnUpdate(GraphContext context)
         {
             base.OnUpdate(context);
 
             HumanoidRig? rig = context.Avatar?.Humanoid;
-            if (rig is null)
+            if (rig is null || !rig.HasBone(HumanBodyBone.LeftFoot) || !rig.HasBone(HumanBodyBone.RightFoot))
                 return;
 
             float weight = _weight is not null ? _weight.GetValue(context).AsFloat() : 1f;
-            if (!(weight > 0f))
-                return;
-
-            GroundFoot(context, rig, HumanGoal.LeftFoot, _leftY, _leftNormal, weight);
-            GroundFoot(context, rig, HumanGoal.RightFoot, _rightY, _rightNormal, weight);
+            FootGround left = FindGround(context, rig, HumanBodyBone.LeftFoot, _leftY, _leftNormal);
+            FootGround right = FindGround(context, rig, HumanBodyBone.RightFoot, _rightY, _rightNormal);
+            _placement.Solve(Pose, rig, left, right, weight, context.FrameTime);
         }
 
-        private void GroundFoot(GraphContext context, HumanoidRig rig, HumanGoal goal, ValueNodeInstance? height, ValueNodeInstance? normal, float weight)
+        private FootGround FindGround(GraphContext context, HumanoidRig rig, HumanBodyBone footBone, ValueNodeInstance? height, ValueNodeInstance? normal)
         {
-            HumanBodyBone footBone = goal == HumanGoal.LeftFoot ? HumanBodyBone.LeftFoot : HumanBodyBone.RightFoot;
-            if (!rig.HasBone(footBone))
-                return;
+            Float3 foot = Pose.GetModelSpaceTransform(rig.GetSkeletonBoneIndex(footBone)).position;
+            Float3 floor = context.WorldTransform.TransformPoint(new Float3(foot.X, 0f, foot.Z));
 
-            float groundY = height is not null ? height.GetValue(context).AsFloat() : 0f;
-            Float3 worldNormal = normal is not null ? normal.GetValue(context).Vector : Up;
-
-            Float3 footWorld = context.WorldTransform.TransformPoint(Pose.GetModelSpaceTransform(rig.GetSkeletonBoneIndex(footBone)).position);
-
+            Float3 hit, hitNormal;
             if (_def.ProbeGround && context.Ground is { } ground)
             {
-                Float3 from = new(footWorld.X, footWorld.Y + _def.ProbeRise, footWorld.Z);
-                // Nothing underfoot means nothing to stand on, so the foot is left where the pose puts it.
-                if (!ground.Raycast(from, -Up, _def.ProbeRise + _def.ProbeDistance, out Float3 hit, out Float3 hitNormal))
-                    return;
-
-                groundY = hit.Y;
-                worldNormal = hitNormal;
+                Float3 from = floor + Float3.UnitY * _def.MaxStepUp;
+                if (!ground.Raycast(from, -Float3.UnitY, _def.MaxStepUp + _def.MaxStepDown, out hit, out hitNormal))
+                    return FootGround.None;
+            }
+            else
+            {
+                hit = new Float3(floor.X, height is not null ? height.GetValue(context).AsFloat() : floor.Y, floor.Z);
+                hitNormal = normal is not null ? normal.GetValue(context).Vector : Float3.UnitY;
+                float step = hit.Y - floor.Y;
+                if (step > _def.MaxStepUp || step < -_def.MaxStepDown)
+                    return FootGround.None;
             }
 
-            Float3 groundPoint = context.WorldToCharacter(new Float3(footWorld.X, groundY, footWorld.Z));
-            Float3 groundNormal = context.WorldNormalToCharacter(worldNormal);
-            FootGrounding.Ground(Pose, rig, goal, groundPoint, groundNormal, weight);
+            return new FootGround(context.WorldToCharacter(hit).Y, context.WorldNormalToCharacter(hitNormal));
         }
     }
 }
 
-// ---- IK rig (multi effector IK) -------------------------------------------------------------
-
 /// <summary>One effector of an <see cref="IKRigDefinition"/>: a bone chain driven to a target value node.</summary>
 public sealed class IKEffectorInfo
 {
-    public IKEffectorInfo(string name, int[] chain, int targetNodeIndex, int weightNodeIndex = -1, float defaultWeight = 1f)
-    { Name = name; Chain = chain; TargetNodeIndex = targetNodeIndex; WeightNodeIndex = weightNodeIndex; DefaultWeight = defaultWeight; }
+    public IKEffectorInfo(string name, int[] chain, int targetNodeIndex, FloatInput? weight = null)
+    { Name = name; Chain = chain; TargetNodeIndex = targetNodeIndex; Weight = weight ?? 1f; }
 
     public string Name { get; }
     public int[] Chain { get; }
     public int TargetNodeIndex { get; }
-    public int WeightNodeIndex { get; }
-    public float DefaultWeight { get; }
+    public FloatInput Weight { get; }
 }
 
 /// <summary>
@@ -269,7 +279,7 @@ public sealed class IKRigDefinition : PoseNodeDefinition
         private IKRig _rig = null!;
         private IKEffector[] _effectors = null!;
         private ValueNodeInstance[] _targets = null!;
-        private ValueNodeInstance?[] _weights = null!;
+        private BoundFloat[] _weights = null!;
 
         public Instance(IKRigDefinition def) => _def = def;
 
@@ -281,13 +291,13 @@ public sealed class IKRigDefinition : PoseNodeDefinition
             int n = _def.Effectors.Length;
             _effectors = new IKEffector[n];
             _targets = new ValueNodeInstance[n];
-            _weights = new ValueNodeInstance?[n];
+            _weights = new BoundFloat[n];
             for (int i = 0; i < n; i++)
             {
                 IKEffectorInfo info = _def.Effectors[i];
                 _effectors[i] = _rig.AddEffector(info.Name, info.Chain);
                 _targets[i] = context.ValueNode(info.TargetNodeIndex, ValueInputKind.Vector | ValueInputKind.Target);
-                _weights[i] = context.OptionalValueNode(info.WeightNodeIndex, ValueInputKind.Number);
+                _weights[i] = BoundFloat.Bind(context, info.Weight);
             }
         }
 
@@ -299,7 +309,7 @@ public sealed class IKRigDefinition : PoseNodeDefinition
             {
                 bool resolved = IKGoalResolver.TryResolve(_targets[i].GetValue(context), Pose, context, out Float3 goal);
                 _effectors[i].Target = goal;
-                _effectors[i].Weight = !resolved ? 0f : _weights[i] is not null ? _weights[i]!.GetValue(context).AsFloat() : _def.Effectors[i].DefaultWeight;
+                _effectors[i].Weight = resolved ? _weights[i].Get(context) : 0f;
             }
             _rig.Solve(Pose);
         }

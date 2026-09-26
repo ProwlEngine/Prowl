@@ -18,11 +18,7 @@ internal static class BoneWriter
     public static void SetModelRotation(Pose pose, int bone, Quaternion model)
         => SetModelRotation(pose, bone, ParentModel(pose, bone).rotation, model);
 
-    /// <summary>
-    /// The same write for a caller that already knows the parent's model rotation. Writing a bone drops
-    /// the pose's model space cache, so a chain that looked the parent up would rebuild the whole
-    /// skeleton once per bone.
-    /// </summary>
+    /// <summary>The same write for a caller that already knows the parent's model rotation.</summary>
     public static void SetModelRotation(Pose pose, int bone, Quaternion parentModelRotation, Quaternion model)
     {
         Transform3D local = pose.GetTransform(bone);
@@ -30,18 +26,10 @@ internal static class BoneWriter
     }
 }
 
-// ---- Aim constraint ----------------------------------------------------------------------------
-
 /// <summary>
-/// Turns one bone so a chosen axis of it points at a target: a turret, a head on a creature with no
-/// humanoid rig, a weapon following a crosshair. The turn can be limited to a cone around where the
-/// bone already points, and weighted in.
+/// Turns one bone by the shortest turn so a chosen axis of it points at a target, optionally limited
+/// to a cone and weighted in.
 /// </summary>
-/// <remarks>
-/// The bone takes the shortest turn onto the target, so whatever roll the animation gave it about the
-/// aim axis is kept. A constraint that instead rebuilt the orientation from an up vector would throw
-/// that roll away.
-/// </remarks>
 public sealed class AimConstraintDefinition : PoseNodeDefinition
 {
     public AimConstraintDefinition(int child, StringID bone, int targetNodeIndex)
@@ -103,7 +91,7 @@ public sealed class AimConstraintDefinition : PoseNodeDefinition
             if (Float3.LengthSquared(toGoal) < 1e-10f)
                 return;
 
-            Quaternion aimed = Quaternion.Normalize(TransformOps.FromToRotation(model.rotation * _def.AimAxis, Float3.Normalize(toGoal)) * model.rotation);
+            Quaternion aimed = Quaternion.Normalize(Quaternion.FromToRotation(model.rotation * _def.AimAxis, Float3.Normalize(toGoal)) * model.rotation);
             if (_def.MaxAngleDegrees > 0f)
                 aimed = Limit(model.rotation, aimed, _def.MaxAngleDegrees * MathF.PI / 180f);
 
@@ -119,8 +107,6 @@ public sealed class AimConstraintDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Copy constraint ---------------------------------------------------------------------------
-
 /// <summary>Which parts of a source transform a <see cref="CopyConstraintDefinition"/> takes.</summary>
 [Flags]
 public enum TransformChannels : byte
@@ -133,11 +119,7 @@ public enum TransformChannels : byte
     All = Position | Rotation | Scale,
 }
 
-/// <summary>
-/// Copies another bone's model space transform onto a bone, optionally with an offset: a prop held in
-/// a hand, a hand pinned to a weapon's grip, a part that has to track another. The source may also be a
-/// target value, so it can come from outside the skeleton.
-/// </summary>
+/// <summary>Copies another bone's or a target's model space transform onto a bone, optionally with an offset.</summary>
 public sealed class CopyConstraintDefinition : PoseNodeDefinition
 {
     public CopyConstraintDefinition(int child, StringID bone, StringID sourceBone, TransformChannels channels = TransformChannels.PositionAndRotation)
@@ -243,13 +225,7 @@ public sealed class CopyConstraintDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Twist distribution ------------------------------------------------------------------------
-
-/// <summary>
-/// Spreads a joint's roll onto the twist bones many rigs carry along the forearm or thigh, so the mesh
-/// does not pinch at the wrist or knee. It reads how far the driver bone (the hand, say) has rolled
-/// about the limb axis and gives each twist bone its share of that roll.
-/// </summary>
+/// <summary>Spreads a driver bone's roll about the limb axis across twist bones, each by its share.</summary>
 public sealed class TwistDistributionDefinition : PoseNodeDefinition
 {
     public TwistDistributionDefinition(int child, StringID driver, IReadOnlyList<(StringID Bone, float Share)> twistBones)
@@ -301,11 +277,7 @@ public sealed class TwistDistributionDefinition : PoseNodeDefinition
             BuildBoneAxes(context.Skeleton);
         }
 
-        /// <summary>
-        /// The axis is given in the driver's own reference space, which is where the roll is measured. A
-        /// twist bone is turned about its own axes, so the same direction is carried into each bone's
-        /// space through the reference pose.
-        /// </summary>
+        /// <summary>Carries the axis from the driver's reference space into each twist bone's space.</summary>
         private void BuildBoneAxes(Skeleton skeleton)
         {
             _boneAxes = new Float3[_bones.Length];

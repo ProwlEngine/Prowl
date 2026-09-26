@@ -4,10 +4,8 @@ using Prowl.Vector;
 namespace Prowl.Motion;
 
 /// <summary>
-/// The runtime humanoid rig: the resolved binding of the standard humanoid bones onto a concrete
-/// skeleton, plus the data retargeting needs (scale for proportion normalization, the bind body frame,
-/// the per bone axis frames measured on the T pose and the muscle ranges). Built by <see cref="AvatarBuilder"/>
-/// from a <see cref="HumanDescription"/>, which is copied so later edits to it do not affect the rig.
+/// The humanoid bones bound onto a skeleton, plus what retargeting needs: scale, the bind body frame,
+/// axis frames and muscle ranges.
 /// </summary>
 public sealed class HumanoidRig
 {

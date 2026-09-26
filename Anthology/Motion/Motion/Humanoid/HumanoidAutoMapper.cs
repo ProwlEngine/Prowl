@@ -4,11 +4,7 @@ using Prowl.Vector;
 
 namespace Prowl.Motion;
 
-/// <summary>
-/// The outcome of a humanoid auto-mapping attempt: the resolved mapping, whether it qualifies as a
-/// humanoid, and a concise (non-recursive) list of humanoid bones that could not be found so an
-/// editor can show "couldn't find X" without flooding with every descendant.
-/// </summary>
+/// <summary>The outcome of a humanoid auto mapping: the mapping, whether it is humanoid, and the bones it could not find.</summary>
 public sealed class HumanoidMapResult
 {
     public required HumanDescription Description { get; init; }
@@ -18,33 +14,16 @@ public sealed class HumanoidMapResult
     /// <summary>True if this skeleton is a usable humanoid (all required bones found, valid hierarchy).</summary>
     public bool IsHumanoid => HasAllRequiredBones && HierarchyValid;
 
-    /// <summary>
-    /// True if the rest pose looks like a T-pose (arms roughly horizontal). Retargeting assumes a
-    /// canonical T-pose rest; an A-pose or other rest still maps and animates but its retargeted poses
-    /// (arm reach, hand orientation) will be offset. This is a warning signal, not a humanoid blocker.
-    /// </summary>
+    /// <summary>True if the rest pose looks like a T pose. Other rests still map but retarget with an offset.</summary>
     public required bool IsRestPoseTPose { get; init; }
 
-    /// <summary>
-    /// Humanoid bones that were not mapped but whose humanoid-space parent WAS mapped (or which are
-    /// the root). This is the "frontier" of what is missing: if a hand is missing the fingers below
-    /// it are not also reported. Filter by <see cref="HumanTrait.IsRequired"/> for the ones that
-    /// actually block humanoid classification.
-    /// </summary>
+    /// <summary>The topmost unmapped bone of each missing chain, so a missing hand does not also list its fingers.</summary>
     public required IReadOnlyList<HumanBodyBone> UnmappedBones { get; init; }
 }
 
 /// <summary>
-/// Automatically recognises a humanoid rig in an arbitrary skeleton and assigns the standard
-/// humanoid bones (the "auto-find").
-///
-/// Names are normalized (drop any namespace prefix up to ':', lowercase, split on separators, peel a
-/// left/right/centre side token written as a prefix or suffix - words like "Left"/"Right", or short
-/// tokens like "l"/"r"/"lf"/"rt"/"cn", or a camelCase "Left"/"Right" at the start of any token, then
-/// rejoin and strip non alphanumerics) and matched against
-/// <see cref="HumanTrait.GetNameAliases"/> for bones on the matching side. A camelCase "LeftUpLeg"
-/// style (no separators) is handled too, even after a prefix token like "Character1_". Then topology is validated: every mapped bone must be a
-/// skeleton descendant of its nearest mapped humanoid ancestor.
+/// Recognises a humanoid rig in a skeleton: bone names are normalized, split into a side and a name,
+/// matched against <see cref="HumanTrait.GetNameAliases"/>, then the topology is validated.
 /// </summary>
 public static class HumanoidAutoMapper
 {
@@ -84,10 +63,7 @@ public static class HumanoidAutoMapper
             info[b] = string.IsNullOrEmpty(raw) ? (BoneSide.Center, new List<string>(), string.Empty) : Normalize(raw);
         }
 
-        // Find the hips first so other bones can PREFER its skeleton subtree. This is how off-hierarchy
-        // look-alikes (e.g. IK target bones named "foot_l" hanging off a control root) lose to the real
-        // bone when both exist - but it is only a preference, so a lone legit bone on a separate branch
-        // (some rigs parent the neck/head under the root, not the spine) still maps.
+        // Other bones prefer the hips' subtree, so look alikes elsewhere lose to the real bone.
         int hipsIndex = FindHips(info);
 
         bool TryAssign(BoneSide side, string candidate, int boneIndex, bool requireUnderHips)
@@ -238,11 +214,7 @@ public static class HumanoidAutoMapper
             if (description.HasBone(bone))
                 skelToHuman[description.GetSkeletonBoneIndex(bone)] = bone;
 
-        // Walking up the skeleton from each mapped bone, the FIRST other mapped humanoid bone we meet
-        // must be that bone's expected humanoid parent. Hitting a different humanoid bone means the
-        // rig is mis-structured (e.g. a hand parented straight under the hips, skipping the arm).
-        // Hitting only non-humanoid control nodes (no mapped humanoid ancestor) is tolerated - some
-        // rigs hang the neck/head off the root rather than the spine.
+        // The first mapped ancestor of each mapped bone must be its humanoid parent, or there must be none.
         foreach (HumanBodyBone bone in HumanTrait.AllBones)
         {
             if (!description.HasBone(bone))

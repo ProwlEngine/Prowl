@@ -4,9 +4,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---------------------------------------------------------------------------------------------
 // Control parameter (external input)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>A graph input set from gameplay/script. Its value lives in the instance parameter store.</summary>
 public sealed class ControlParameterDefinition : ValueNodeDefinition
@@ -70,9 +68,7 @@ internal sealed class ControlParameterInstance : ValueNodeInstance
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Reference pose / zero pose / static clip pose
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>Outputs the skeleton's reference (bind) pose.</summary>
 public sealed class ReferencePoseDefinition : PoseNodeDefinition
@@ -162,9 +158,7 @@ public sealed class PassthroughDefinition : PoseNodeDefinition
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Clip
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>Plays a clip, looping or clamping, sampling events and root motion.</summary>
 public sealed class ClipNodeDefinition : PoseNodeDefinition
@@ -335,9 +329,7 @@ internal sealed class ClipNodeInstance : PoseNodeInstance
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Blend 1D (parameter-driven blend across sorted sources)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>Blends across N child pose nodes by a float parameter, picking the bracketing pair.</summary>
 public sealed class Blend1DDefinition : PoseNodeDefinition
@@ -360,9 +352,8 @@ public sealed class Blend1DDefinition : PoseNodeDefinition
 }
 
 /// <summary>
-/// Shared runtime for parameter driven 1D blends: brackets the sorted sources by the parameter,
-/// builds the blended sync track of the pair, and plays both over the same sync range so they stay
-/// phase locked. Only the one or two sources in use are updated.
+/// Shared runtime for parameter driven 1D blends: plays the one or two sources around the parameter
+/// phase locked over the same sync range.
 /// </summary>
 internal abstract class ParameterizedBlend1DInstance : PoseNodeInstance, IBlendWeights
 {
@@ -479,9 +470,7 @@ internal sealed class Blend1DInstance : ParameterizedBlend1DInstance
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Velocity blend (1D blend parameterized by each child clip's average speed)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>
 /// A 1D blend whose thresholds are derived from each child clip's average linear root speed, driven

@@ -6,9 +6,7 @@ namespace Prowl.Motion;
 
 /// <summary>
 /// The playable part of a clip shared by every storage format: timing, root motion, sync track,
-/// events and secondary clips. Derived types only decide how key frames are stored and sampled, so
-/// the graph and animators play an <see cref="AnimationClip"/> and a
-/// <see cref="CompressedAnimationClip"/> the same way.
+/// events and secondary clips. Derived types decide how key frames are stored and sampled.
 /// </summary>
 public abstract class AnimationClipBase
 {
@@ -143,11 +141,9 @@ public abstract class AnimationClipBase
     }
 
     /// <summary>
-    /// Adds every event triggered while advancing forward from <paramref name="fromNormalized"/> to
-    /// <paramref name="toNormalized"/> (both in [0,1]) into <paramref name="buffer"/>. The window
-    /// wraps past the end when <paramref name="toNormalized"/> is before <paramref name="fromNormalized"/>
-    /// or <paramref name="looped"/> is set. Immediate events fire when their time is crossed, duration
-    /// events are included while they overlap the window.
+    /// Adds every event triggered advancing from <paramref name="fromNormalized"/> to
+    /// <paramref name="toNormalized"/> into <paramref name="buffer"/>, wrapping past the end when
+    /// <paramref name="toNormalized"/> is earlier or <paramref name="looped"/> is set.
     /// </summary>
     public void SampleEvents(float fromNormalized, float toNormalized, SampledEventsBuffer buffer, bool looped = false)
     {

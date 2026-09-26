@@ -1,10 +1,6 @@
 namespace Prowl.Motion;
 
-/// <summary>
-/// The standard humanoid bones used for retargeting.
-/// Body bones come first (their indices are stable), then
-/// the per-hand fingers (three phalanges each). Fingers are optional and retarget by rotation only.
-/// </summary>
+/// <summary>The standard humanoid bones: body bones first, then three phalanges per finger.</summary>
 public enum HumanBodyBone
 {
     Hips,

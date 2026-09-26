@@ -207,9 +207,8 @@ public readonly struct SampledEventRange
 }
 
 /// <summary>
-/// Collects the events sampled over a single update window and answers simple queries. Reusable
-/// without the animation graph (foot events for grounding, id events for gameplay hooks). Graph
-/// nodes record the range of events each subtree produced so blends can weight them.
+/// Collects the events sampled over one update and answers simple queries. Graph nodes record the
+/// range each subtree produced so blends can weight them.
 /// </summary>
 public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
 {

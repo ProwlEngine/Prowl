@@ -49,10 +49,8 @@ public sealed class StateInfo
 }
 
 /// <summary>
-/// A state machine pose node: a set of states (each wrapping a content pose node) and transitions
-/// between them. Transitions cross-fade from the current state to the target over a duration when
-/// their condition becomes true. A transition may start while
-/// another is running, the running blend then becomes its source.
+/// A state machine: states and the transitions that cross fade between them when their condition is
+/// true. A transition started during another blends from the running blend.
 /// </summary>
 public sealed class StateMachineDefinition : PoseNodeDefinition
 {

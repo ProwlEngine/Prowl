@@ -110,7 +110,7 @@ public class CustomNodes_Tests
         int custom = graph.AddNode(new PlayOnceDefinition(TestClips.Const(s_skeleton, 8f)));
         int other = graph.AddClip(TestClips.Const(s_skeleton, 0f));
         int weight = graph.AddFloatParameter("Weight", 0.5f);
-        graph.SetRoot(graph.AddWeightedBlend(new[] { new WeightedPose(other, -1, 1f), new WeightedPose(custom, weight) }));
+        graph.SetRoot(graph.AddWeightedBlend(new[] { new WeightedPose(other, 1f), new WeightedPose(custom, FloatInput.From(weight)) }));
         AnimationGraphInstance instance = graph.CreateInstance(s_skeleton);
 
         instance.Update(1f / 60f, Transform3D.Identity);

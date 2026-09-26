@@ -79,8 +79,8 @@ public class N_SubGraph_Tests
         child.SetRoot(child.AddNode(new FootGroundingDefinition(child.AddClip(new AnimationClip(skeleton, new[] { pose, pose }, 1f)))
         {
             ProbeGround = true,
-            ProbeDistance = 2f,
-            ProbeRise = 1f,
+            MaxStepUp = 1f,
+            MaxStepDown = 1f,
         }));
 
         var parent = new AnimationGraph();

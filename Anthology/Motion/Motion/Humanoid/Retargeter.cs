@@ -3,16 +3,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-/// <summary>
-/// Converts between a concrete skeleton <see cref="Pose"/> and the muscle space <see cref="HumanPose"/>
-/// for humanoid avatars.
-///
-/// Encoding measures the body (the centre of mass and the frame of the hip and shoulder lines, relative
-/// to the T pose), turns every mapped bone into muscles and stores the four goals relative to the body
-/// frame and scale normalized. Decoding rebuilds every bone from the muscles (bones the target lacks are
-/// skipped, bones the source lacked come out at zero), turns and moves the hips so the body lands where
-/// the pose says, then solves the goals with two bone IK and applies the look at.
-/// </summary>
+/// <summary>Converts between a skeleton <see cref="Pose"/> and the muscle space <see cref="HumanPose"/>.</summary>
 public static class Retargeter
 {
     private static readonly HumanGoal[] s_goals =
@@ -147,10 +138,7 @@ public static class Retargeter
         return Quaternion.Normalize(rotation);
     }
 
-    // Some rigs parent a humanoid bone off a control node instead of its anatomical parent (e.g. the
-    // neck/head under the root rather than the spine). Such bones do not inherit the body's motion, so
-    // the head stays put while the body bobs and the neck stretches. For each bone whose nearest mapped
-    // humanoid SKELETON ancestor is not its humanoid parent, re-seat it to rigidly follow that parent.
+    // Re-seats humanoid bones parented off a control node so they rigidly follow their humanoid parent.
     internal static void RepositionDisconnectedBones(Avatar avatar, Pose result)
     {
         HumanoidRig rig = avatar.Humanoid!;

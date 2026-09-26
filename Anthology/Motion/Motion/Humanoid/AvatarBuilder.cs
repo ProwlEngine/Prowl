@@ -3,11 +3,7 @@ using System.Linq;
 
 namespace Prowl.Motion;
 
-/// <summary>
-/// Builds <see cref="Avatar"/> instances from a skeleton. The recommended on-load entry point is
-/// <see cref="BuildAutomatic(Skeleton)"/>, which auto-detects whether the skeleton is humanoid and assigns
-/// bones accordingly, falling back to a generic avatar.
-/// </summary>
+/// <summary>Builds <see cref="Avatar"/> instances from a skeleton.</summary>
 public static class AvatarBuilder
 {
     /// <summary>Builds a generic avatar that plays back only on its own skeleton.</summary>
@@ -73,11 +69,7 @@ public static class AvatarBuilder
         return false;
     }
 
-    /// <summary>
-    /// The on-load entry point: detects humanoid vs generic and returns the appropriate avatar.
-    /// Humanoid if <see cref="HumanoidAutoMapper"/> succeeds, otherwise a generic avatar. The
-    /// resulting avatar's <see cref="Avatar.MappingReport"/> holds the unmapped-bone warnings.
-    /// </summary>
+    /// <summary>A humanoid avatar if <see cref="HumanoidAutoMapper"/> succeeds, otherwise a generic one.</summary>
     public static Avatar BuildAutomatic(Skeleton skeleton) => BuildAutomatic(skeleton, out _);
 
     /// <summary>As <see cref="BuildAutomatic(Skeleton)"/>, also returning the mapping report.</summary>

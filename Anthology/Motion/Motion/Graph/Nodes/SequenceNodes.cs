@@ -3,13 +3,9 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---- Random selector ---------------------------------------------------------------------------
-
 /// <summary>
-/// Plays one of its children, picked at random, and picks again every time the chosen child finishes
-/// (or whenever the node is re entered). Each child may carry a weight, and by default the same child
-/// is not chosen twice in a row. The usual way to vary idles and reactions without authoring a state
-/// machine for them.
+/// Plays a child picked at random by weight, and picks again each time it finishes. By default the same
+/// child is not chosen twice in a row.
 /// </summary>
 public sealed class RandomSelectorDefinition : PoseNodeDefinition
 {
@@ -134,13 +130,7 @@ public sealed class RandomSelectorDefinition : PoseNodeDefinition
     }
 }
 
-// ---- Sequence ----------------------------------------------------------------------------------
-
-/// <summary>
-/// Plays its children one after another, moving on when the current one reaches its end. It can loop
-/// back to the first child or hold the last one. Handy for a scripted chain (get up, dust off, look
-/// around) without a state machine and its transitions.
-/// </summary>
+/// <summary>Plays its children one after another, then loops or holds the last one.</summary>
 public sealed class SequenceDefinition : PoseNodeDefinition
 {
     public SequenceDefinition(IReadOnlyList<int> children) => Children = new List<int>(children).ToArray();

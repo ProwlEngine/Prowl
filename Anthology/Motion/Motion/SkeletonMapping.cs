@@ -3,9 +3,8 @@ using System.Collections.Generic;
 namespace Prowl.Motion;
 
 /// <summary>
-/// Matches the bones and float channels of two skeletons by id, so a clip authored for one skeleton
-/// plays on another rig that names its bones the same way. Target bones the source does not have keep
-/// their reference pose. Build it once and reuse it: it holds no per frame state.
+/// Matches the bones and float channels of two skeletons by id, so a clip plays on another rig that
+/// shares its bone names.
 /// </summary>
 public sealed class SkeletonMapping
 {

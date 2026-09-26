@@ -4,10 +4,8 @@ using System.Linq;
 namespace Prowl.Motion;
 
 /// <summary>
-/// The authorable definition of a humanoid mapping for a specific skeleton: which skeleton bone
-/// plays each <see cref="HumanBodyBone"/>, per muscle range overrides, plus the tuning knobs (twist
-/// distribution, IK stretch, feet spacing). Produced by the auto mapper or authored by hand, then consumed by
-/// <see cref="AvatarBuilder"/>.
+/// A humanoid mapping for one skeleton: which bone plays each <see cref="HumanBodyBone"/>, muscle range
+/// overrides and tuning values.
 /// </summary>
 public sealed class HumanDescription
 {

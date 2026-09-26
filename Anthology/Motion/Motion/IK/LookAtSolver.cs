@@ -4,17 +4,9 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A weighted multi segment humanoid look at: turns the spine, neck and head (then the eyes) so the
-/// head's forward ends up facing a model space target, split into yaw about the body up and pitch
-/// about the body right so the head never rolls over.
+/// A humanoid look at: turns the spine, neck, head and eyes toward a model space target by yaw and
+/// pitch, so the head never rolls.
 /// </summary>
-/// <remarks>
-/// <para>The body frame comes from the shoulders and hips. Each bone's forward axis is calibrated from
-/// the reference pose, where the head and eyes are assumed to face the body forward.</para>
-/// <para>Weights: <c>weight</c> scales everything. <c>bodyWeight</c> is how much of the look the
-/// spine takes, <c>headWeight</c> how much the head reaches in total (neck and head add what the body
-/// did not), and <c>eyesWeight</c> how far the eyes turn the rest of the way.</para>
-/// </remarks>
 public static class LookAtSolver
 {
     private const float Epsilon = 1e-5f;

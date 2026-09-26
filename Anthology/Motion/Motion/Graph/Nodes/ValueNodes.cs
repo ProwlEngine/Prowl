@@ -44,9 +44,8 @@ internal static class Easing
 }
 
 /// <summary>
-/// Eases a value toward a target over a fixed time. Every change of the target becomes its own eased
-/// step that plays over the ease time, and the output is the sum of those steps. A single jump eases
-/// exactly along the curve, and a continuously moving target gives the same result at any frame rate.
+/// Eases a value toward a target over a fixed time. Each change of the target is its own eased step,
+/// and the output is their sum.
 /// </summary>
 internal struct EasedFloat
 {
@@ -138,8 +137,6 @@ public enum StateQuery : byte
     NormalizedTime,
 }
 
-// ---- Constant -------------------------------------------------------------------------------
-
 /// <summary>A constant value.</summary>
 public sealed class ConstValueDefinition : ValueNodeDefinition
 {
@@ -156,8 +153,6 @@ public sealed class ConstValueDefinition : ValueNodeDefinition
         protected override ParameterValue Compute(GraphContext context) => _def.Value;
     }
 }
-
-// ---- Float math -----------------------------------------------------------------------------
 
 /// <summary>Combines two float values with an arithmetic operation.</summary>
 public sealed class FloatMathDefinition : ValueNodeDefinition
@@ -206,8 +201,6 @@ public sealed class FloatMathDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Float comparison (-> bool) -------------------------------------------------------------
-
 /// <summary>Compares two float values, producing a bool.</summary>
 public sealed class FloatCompareDefinition : ValueNodeDefinition
 {
@@ -244,8 +237,6 @@ public sealed class FloatCompareDefinition : ValueNodeDefinition
         }
     }
 }
-
-// ---- Float remap / clamp --------------------------------------------------------------------
 
 /// <summary>Remaps a float from one range to another (extrapolating outside the input range).</summary>
 public sealed class FloatRemapDefinition : ValueNodeDefinition
@@ -306,25 +297,6 @@ public sealed class FloatClampDefinition : ValueNodeDefinition
         public override void Bind(GraphBindContext context) => _input = context.ValueNode(_def.Input, ValueInputKind.Number);
         protected override ParameterValue Compute(GraphContext context)
             => ParameterValue.FromFloat(Math.Clamp(_input.GetValue(context).AsFloat(), _def.Min, _def.Max));
-    }
-}
-
-/// <summary>Absolute value of a float.</summary>
-public sealed class FloatAbsDefinition : ValueNodeDefinition
-{
-    public FloatAbsDefinition(int input) => Input = input;
-    public int Input { get; }
-    public override AnimationValueType ValueType => AnimationValueType.Float;
-    public override GraphNodeInstance CreateInstance() => new Instance(this);
-
-    private sealed class Instance : ValueNodeInstance
-    {
-        private readonly FloatAbsDefinition _def;
-        private ValueNodeInstance _input = null!;
-        public Instance(FloatAbsDefinition def) => _def = def;
-        public override void Bind(GraphBindContext context) => _input = context.ValueNode(_def.Input, ValueInputKind.Number);
-        protected override ParameterValue Compute(GraphContext context)
-            => ParameterValue.FromFloat(MathF.Abs(_input.GetValue(context).AsFloat()));
     }
 }
 
@@ -548,8 +520,6 @@ public sealed class FloatSelectorDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Bool logic -----------------------------------------------------------------------------
-
 /// <summary>And/Or of two bools, or Not of one (B unused for Not).</summary>
 public sealed class BoolLogicDefinition : ValueNodeDefinition
 {
@@ -609,25 +579,7 @@ public sealed class VectorNegateDefinition : ValueNodeDefinition
     }
 }
 
-// ---- ID value nodes -------------------------------------------------------------------------
-
 public enum IdComparison : byte { Matches, DoesntMatch }
-
-/// <summary>A constant id value.</summary>
-public sealed class ConstIdDefinition : ValueNodeDefinition
-{
-    public ConstIdDefinition(StringID value) => Value = value;
-    public StringID Value { get; }
-    public override AnimationValueType ValueType => AnimationValueType.Id;
-    public override GraphNodeInstance CreateInstance() => new Instance(this);
-
-    private sealed class Instance : ValueNodeInstance
-    {
-        private readonly ConstIdDefinition _def;
-        public Instance(ConstIdDefinition def) => _def = def;
-        protected override ParameterValue Compute(GraphContext context) => ParameterValue.FromId(_def.Value);
-    }
-}
 
 /// <summary>True when an input id matches (or does not match) a set of ids.</summary>
 public sealed class IdComparisonDefinition : ValueNodeDefinition
@@ -703,8 +655,6 @@ public sealed class IdToFloatDefinition : ValueNodeDefinition
     }
 }
 
-// ---- Cached value (sample and hold) ---------------------------------------------------------
-
 /// <summary>When a <see cref="CachedValueDefinition"/> takes its sample.</summary>
 public enum CachedValueMode : byte
 {
@@ -715,10 +665,8 @@ public enum CachedValueMode : byte
 }
 
 /// <summary>
-/// Caches its input value. In <see cref="CachedValueMode.OnEntry"/> mode it latches when first read
-/// after its branch starts, with a bool sample driver it also latches again on each rising edge (sample
-/// and hold). In <see cref="CachedValueMode.OnExit"/> mode it follows the input until its branch
-/// becomes the losing side of a transition.
+/// Caches its input: on entry and on each rising edge of the sample input, or following it until its
+/// branch starts losing a transition.
 /// </summary>
 public sealed class CachedValueDefinition : ValueNodeDefinition
 {
@@ -783,8 +731,6 @@ public sealed class CachedValueDefinition : ValueNodeDefinition
         }
     }
 }
-
-// ---- Target value nodes ---------------------------------------------------------------------
 
 /// <summary>The scalar a <see cref="TargetInfoDefinition"/> extracts from a target.</summary>
 public enum TargetInfo : byte
@@ -947,13 +893,7 @@ public sealed class TargetOffsetDefinition : ValueNodeDefinition
     }
 }
 
-// ---- State machine query --------------------------------------------------------------------
-
-/// <summary>
-/// Reads timing from a state machine node's active state (time-in-state or normalized progress),
-/// producing a float. Combine with a <see cref="FloatCompareDefinition"/> to build "state finished"
-/// or "after N seconds" transition conditions.
-/// </summary>
+/// <summary>Reads a state machine's time in state or normalized progress.</summary>
 public sealed class StateQueryDefinition : ValueNodeDefinition
 {
     public StateQueryDefinition(int stateMachineNodeIndex, StateQuery query)
@@ -987,8 +927,6 @@ public sealed class StateQueryDefinition : ValueNodeDefinition
         }
     }
 }
-
-// ---- Vector create / info -------------------------------------------------------------------
 
 /// <summary>Builds a vector from three float values.</summary>
 public sealed class VectorCreateDefinition : ValueNodeDefinition

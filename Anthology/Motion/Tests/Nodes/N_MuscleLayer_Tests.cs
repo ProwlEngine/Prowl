@@ -55,7 +55,7 @@ public class N_MuscleLayer_Tests
         int basePose = graph.AddClip(PoseClip(avatar, ArmRaised(avatar, 0f)));
         int layerPose = graph.AddClip(PoseClip(avatar, ArmRaised(avatar, 60f)));
         int value = graph.AddFloatParameter("Weight", weight);
-        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, value, mask, additive));
+        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, FloatInput.From(value), mask, additive));
         return (graph.CreateInstance(avatar), avatar);
     }
 
@@ -73,7 +73,7 @@ public class N_MuscleLayer_Tests
         var graph = new AnimationGraph();
         int basePose = graph.AddClip(Clip(avatar, Frame(avatar, 10f)));
         int layerPose = graph.AddClip(Clip(avatar, Frame(avatar, 70f)));
-        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, graph.AddFloatParameter("Weight", weight)));
+        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, FloatInput.From(graph.AddFloatParameter("Weight", weight))));
         AnimationGraphInstance instance = graph.CreateInstance(avatar);
 
         Run(instance);
@@ -88,7 +88,7 @@ public class N_MuscleLayer_Tests
         var graph = new AnimationGraph();
         int basePose = graph.AddClip(Clip(avatar, Frame(avatar, 10f)));
         int layerPose = graph.AddClip(Clip(avatar, Frame(avatar, 25f)));
-        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, graph.AddFloatParameter("Weight", 1f), additive: true));
+        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, FloatInput.From(graph.AddFloatParameter("Weight", 1f)), additive: true));
         AnimationGraphInstance instance = graph.CreateInstance(avatar);
 
         Run(instance);
@@ -105,7 +105,7 @@ public class N_MuscleLayer_Tests
         int basePose = graph.AddClip(Clip(avatar, Frame(avatar, 10f)));
         int layerPose = graph.AddClip(Clip(avatar, Frame(avatar, 25f)));
         int reference = graph.AddClip(Clip(avatar, Frame(avatar, 20f)));
-        var definition = new MuscleLayerDefinition(basePose, layerPose, graph.AddFloatParameter("Weight", 1f))
+        var definition = new MuscleLayerDefinition(basePose, layerPose, FloatInput.From(graph.AddFloatParameter("Weight", 1f)))
         {
             Additive = true,
             ReferenceNodeIndex = reference,
@@ -126,7 +126,7 @@ public class N_MuscleLayer_Tests
         var graph = new AnimationGraph();
         int basePose = graph.AddClip(Clip(avatar, Frame(avatar, 10f)));
         int layerPose = graph.AddClip(Clip(avatar, Frame(avatar, 25f)));
-        var definition = new MuscleLayerDefinition(basePose, layerPose, graph.AddFloatParameter("Weight", 1f));
+        var definition = new MuscleLayerDefinition(basePose, layerPose, FloatInput.From(graph.AddFloatParameter("Weight", 1f)));
         graph.SetRoot(graph.AddNode(definition));
         AnimationGraphInstance instance = graph.CreateInstance(avatar);
 
@@ -193,7 +193,7 @@ public class N_MuscleLayer_Tests
         int basePose = graph.AddClip(PoseClip(avatar, ArmRaised(avatar, 20f)));
         int layerPose = graph.AddClip(PoseClip(avatar, ArmRaised(avatar, 30f)));
         int value = graph.AddFloatParameter("Weight", 1f);
-        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, value, additive: true));
+        graph.SetRoot(graph.AddMuscleLayer(basePose, layerPose, FloatInput.From(value), additive: true));
         AnimationGraphInstance instance = graph.CreateInstance(avatar);
 
         Run(instance);
@@ -216,7 +216,7 @@ public class N_MuscleLayer_Tests
         var graph = new AnimationGraph();
         int basePose = graph.AddClip(new AnimationClip(skeleton, new[] { pose, pose }, 1f));
         int layer = graph.AddClip(new AnimationClip(skeleton, new[] { pose, pose }, 1f, events: new AnimationEvent[] { new IdEvent(new StringID("Layer"), 0f, 1f) }));
-        graph.SetRoot(graph.AddMuscleLayer(basePose, layer, graph.AddConstFloat(0f)));
+        graph.SetRoot(graph.AddMuscleLayer(basePose, layer, FloatInput.From(graph.AddConstFloat(0f))));
         AnimationGraphInstance instance = graph.CreateInstance(avatar);
         instance.Update(1f / 60f);
 

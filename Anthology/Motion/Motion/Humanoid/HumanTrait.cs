@@ -6,11 +6,7 @@ namespace Prowl.Motion;
 /// <summary>Which side of the body a humanoid bone is on.</summary>
 internal enum BoneSide : byte { Center, Left, Right }
 
-/// <summary>
-/// Static reference data about the standard humanoid rig: which bones are required vs optional,
-/// the humanoid-space parent of each bone, canonical names, and the lowercase name aliases the
-/// auto-mapper matches against.
-/// </summary>
+/// <summary>Reference data about the humanoid rig: required bones, parents, names and the auto mapper's aliases.</summary>
 public static partial class HumanTrait
 {
     private static readonly HumanBodyBone[] s_all =

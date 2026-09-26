@@ -14,7 +14,7 @@ public class N_LayerBlend_Tests
         int basePose = g.AddClip(TestClips.Const(skeleton, 0f));
         int layerPose = g.AddClip(TestClips.Const(skeleton, 10f));
         int w = g.AddFloatParameter("W", 1f);
-        int layers = g.AddLayerBlend(basePose, new[] { new LayerInfo(layerPose, w) });
+        int layers = g.AddLayerBlend(basePose, new[] { new LayerInfo(layerPose, FloatInput.From(w)) });
         g.SetRoot(layers);
 
         AnimationGraphInstance i = g.CreateInstance(skeleton);
@@ -34,7 +34,7 @@ public class N_LayerBlend_Tests
         int basePose = g.AddClip(TestClips.Const(skeleton, 0f));
         int layerPose = g.AddClip(TestClips.Const(skeleton, 10f));
         int zeroMask = g.AddFixedWeightBoneMask(0f); // mask fully zero -> layer contributes nothing
-        int layers = g.AddLayerBlend(basePose, new[] { new LayerInfo(layerPose, weightNodeIndex: -1, maskNodeIndex: zeroMask, additive: false, defaultWeight: 1f) });
+        int layers = g.AddLayerBlend(basePose, new[] { new LayerInfo(layerPose, maskNodeIndex: zeroMask) });
         g.SetRoot(layers);
 
         AnimationGraphInstance i = g.CreateInstance(skeleton);

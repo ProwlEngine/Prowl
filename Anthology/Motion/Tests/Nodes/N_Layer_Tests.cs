@@ -22,7 +22,7 @@ public class N_Layer_Tests
         int w = graph.AddFloatParameter("W");
         int basePose = graph.AddClip(ConstClip(skeleton, 0, 0f));
         int layer = graph.AddClip(ConstClip(skeleton, 0, 8f));
-        int layered = graph.AddOverrideLayer(basePose, layer, w);
+        int layered = graph.AddOverrideLayer(basePose, layer, FloatInput.From(w));
         graph.SetRoot(layered);
 
         AnimationGraphInstance instance = graph.CreateInstance(skeleton);

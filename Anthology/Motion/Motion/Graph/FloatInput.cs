@@ -1,13 +1,9 @@
 namespace Prowl.Motion;
 
-/// <summary>
-/// A number a node is built with: a fixed value, or a value node read every update. Settings that take
-/// one can be tuned in the graph and driven from the game without the node knowing the difference.
-/// </summary>
+/// <summary>A number a node is built with: a fixed value, or a value node read every update.</summary>
 public readonly struct FloatInput
 {
-    // Held one past the node index so the default of this struct is an undriven zero rather than a
-    // value driven by node 0.
+    // One past the node index, so the default struct is an undriven zero.
     private readonly int _node;
 
     private FloatInput(float constant, int nodeIndex)

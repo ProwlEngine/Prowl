@@ -12,29 +12,21 @@ public abstract class GraphAnimator : AnimatorBase
 {
     private readonly AnimationGraphInstance _instance;
 
-    /// <summary>Creates an animator from a graph bound to a plain skeleton.</summary>
-    protected GraphAnimator(AnimationGraph graph, Skeleton skeleton) : base(skeleton, null)
+    /// <summary>Creates an animator from a graph bound to a skeleton. A humanoid avatar enables the humanoid nodes.</summary>
+    protected GraphAnimator(AnimationGraph graph, Skeleton skeleton, Avatar? avatar = null) : base(skeleton, avatar)
     {
         ArgumentNullException.ThrowIfNull(graph);
-        _instance = graph.CreateInstance(skeleton);
-    }
-
-    /// <summary>Creates an animator from a graph bound to an avatar (enables humanoid nodes and foot IK).</summary>
-    protected GraphAnimator(AnimationGraph graph, Avatar avatar) : base(avatar?.Skeleton!, avatar)
-    {
-        ArgumentNullException.ThrowIfNull(graph);
-        ArgumentNullException.ThrowIfNull(avatar);
-        _instance = graph.CreateInstance(avatar);
+        _instance = graph.CreateInstance(skeleton, avatar);
     }
 
     /// <summary>The underlying graph instance (for advanced access / inspection).</summary>
     public AnimationGraphInstance Graph => _instance;
 
-    /// <summary>
-    /// Lets the graph's own nodes ask the engine where the ground is, through this animator's
-    /// <see cref="AnimatorBase.RaycastGround"/>.
-    /// </summary>
+    /// <summary>Lets the graph's own nodes ask the engine where the ground is.</summary>
     protected void ProbeGroundWith(IGroundProbe probe) => _instance.Ground = probe;
+
+    /// <summary>Hands the graph's host defined nodes what they run on, see <see cref="GraphContext.Host"/>.</summary>
+    protected void SetHost(object? host) => _instance.Host = host;
 
     /// <summary>Events sampled during the most recent update.</summary>
     public SampledEventsBuffer Events => _instance.Events;

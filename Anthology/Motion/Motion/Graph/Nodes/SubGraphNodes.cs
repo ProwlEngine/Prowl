@@ -3,15 +3,11 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
 
-// ---------------------------------------------------------------------------------------------
 // Referenced graph (compiled-in sub-graph)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>
-/// Embeds another <see cref="AnimationGraph"/> as a child, forwarding parent value nodes into the
-/// child's named control parameters. Output is the child's root pose. The child shares the parent's
-/// event buffer and sync range. Lets a graph asset reference other graph assets (e.g. a shared
-/// locomotion graph reused inside several character graphs).
+/// Plays another <see cref="AnimationGraph"/> as a child, forwarding parent value nodes into its named
+/// control parameters.
 /// </summary>
 public sealed class ReferencedGraphDefinition : PoseNodeDefinition
 {
@@ -76,11 +72,7 @@ public sealed class ReferencedGraphDefinition : PoseNodeDefinition
             SpendTriggers(context);
         }
 
-        /// <summary>
-        /// A value handed down is a copy, so when the child's transition spends a trigger it was given,
-        /// the parent's triggers behind that value have to go too, however the value was worked out, or
-        /// they hand it down again next frame and it never runs out.
-        /// </summary>
+        /// <summary>Spends the parent triggers behind a value whose copy the child spent.</summary>
         private void SpendTriggers(GraphContext context)
         {
             for (int i = 0; i < _links.Length; i++)
@@ -105,14 +97,11 @@ public sealed class ReferencedGraphDefinition : PoseNodeDefinition
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // External graph slot (runtime-swappable sub-graph)
-// ---------------------------------------------------------------------------------------------
 
 /// <summary>
-/// A pose slot whose source graph is plugged in at runtime via
-/// <see cref="AnimationGraphInstance.SetExternalGraph"/>. While empty it outputs a fallback content
-/// node (or the reference pose). Used for gameplay-injected graphs (interactions, mounted poses).
+/// A slot a graph is plugged into at runtime via <see cref="AnimationGraphInstance.SetExternalGraph"/>,
+/// playing its fallback while empty.
 /// </summary>
 public sealed class ExternalGraphSlotDefinition : PoseNodeDefinition
 {

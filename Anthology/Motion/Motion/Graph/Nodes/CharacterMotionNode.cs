@@ -73,7 +73,7 @@ public sealed class CharacterMotionDefinition : ValueNodeDefinition
                 Float3 velocity = Quaternion.Inverse(now.rotation) * travel;
                 float turn = Maths.Rad2Deg * WrapRadians(Yaw(now.rotation) - Yaw(_last.rotation)) / elapsed;
 
-                float follow = _def.HalfLife > 0f ? 1f - MathF.Pow(0.5f, elapsed / _def.HalfLife) : 1f;
+                float follow = Maths.HalfLifeFactor(elapsed, _def.HalfLife);
                 _velocity += (velocity - _velocity) * follow;
                 _turnRate += (turn - _turnRate) * follow;
 

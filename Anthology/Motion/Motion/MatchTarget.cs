@@ -4,12 +4,9 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// Steers root motion so a chosen body part reaches a target by a given point in the animation,
-/// ramped over a window. Each update the
-/// caller samples where the body part will be at the target time (in the same space as the target),
-/// asks for the correction for the step from the previous to the current ramp weight, and folds it into
-/// the root delta with <see cref="CorrectRootDelta"/>. The correction closes the remaining error in
-/// proportion to the ramp advance, so it completes exactly at the target time whatever the frame rate.
+/// Steers root motion so a body part reaches a target by a point in the animation. Each update, ask
+/// for the correction for the ramp's advance and fold it into the root delta with
+/// <see cref="CorrectRootDelta"/>.
 /// </summary>
 public static class MatchTarget
 {
@@ -37,10 +34,8 @@ public static class MatchTarget
     }
 
     /// <summary>
-    /// A correction that moves <paramref name="bodyPart"/> the given <paramref name="fraction"/> of the
-    /// way to <paramref name="matchTarget"/>, masked by the per axis position weight and the rotation
-    /// weight. It is a transform in the target's space, pre applied to the character: the rotation
-    /// pivots about the body part, so the part turns in place and moves only by the translation.
+    /// A correction moving <paramref name="bodyPart"/> the given <paramref name="fraction"/> of the way to
+    /// <paramref name="matchTarget"/>, pivoting about the body part, in the target's space.
     /// </summary>
     public static Transform3D ComputeCorrection(Transform3D bodyPart, Transform3D matchTarget, Float3 positionWeight, float rotationWeight, float fraction)
     {

@@ -27,11 +27,7 @@ public sealed class IKEffector
     public int Iterations { get; set; } = 12;
 }
 
-/// <summary>
-/// A reusable multi-effector IK rig over a skeleton. Add effectors (arms, legs, spine, tail, etc.),
-/// set their targets, and solve them all in one pass. General-purpose;
-/// the humanoid foot/hand goal IK is a specialized use of the same two-bone solver.
-/// </summary>
+/// <summary>A multi effector IK rig: add effectors, set their targets, and solve them all in one pass.</summary>
 public sealed class IKRig
 {
     private readonly List<IKEffector> _effectors = new();

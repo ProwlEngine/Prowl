@@ -6,11 +6,8 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A clip whose per bone tracks are quantized: channels that do not change across the clip are stored
-/// once (static), and changing channels are range quantized per frame (16 bit translation/scale,
-/// 48 bit smallest three rotation). Sampling decompresses and interpolates, matching
-/// <see cref="AnimationClip"/>'s behaviour at a fraction of the memory. It carries the same root
-/// motion, sync track, events and secondary clips, so the graph and animators play it directly.
+/// A clip whose per bone tracks are quantized: constant channels are stored once, changing ones are
+/// range quantized per frame. Plays like an <see cref="AnimationClip"/> at a fraction of the memory.
 /// </summary>
 public sealed class CompressedAnimationClip : AnimationClipBase
 {

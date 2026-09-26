@@ -3,9 +3,8 @@ using Prowl.Vector;
 namespace Prowl.Motion;
 
 /// <summary>
-/// Animation track quantization: range-based 16-bit encoding for translation
-/// and scale components, and a "smallest three" 48-bit encoding for rotations (2-bit largest-component
-/// index packed into spare bits, plus three 15-bit components in [-1/sqrt2, 1/sqrt2]).
+/// Track quantization: 16 bit range encoding for translation and scale, and 48 bit smallest three
+/// encoding for rotations.
 /// </summary>
 public static class Quantization
 {

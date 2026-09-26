@@ -16,10 +16,8 @@ public static class ChainIK
     private const int MaxStackPath = 64;
 
     /// <summary>
-    /// Solves the chain (ordered root..end, each a direct or indirect ancestor of the next) so the
-    /// last bone reaches the model space <paramref name="target"/>. Stops early once within
-    /// <paramref name="tolerance"/>. The full solve is blended from the input pose by
-    /// <paramref name="weight"/>. Invalid chains leave the pose untouched.
+    /// Solves the chain, ordered root to end, so the last bone reaches the model space
+    /// <paramref name="target"/>, blended by <paramref name="weight"/>.
     /// </summary>
     public static void Solve(Pose pose, IReadOnlyList<int> chain, Float3 target, int iterations = 10, float tolerance = 1e-3f, float weight = 1f)
     {
@@ -72,7 +70,7 @@ public static class ChainIK
                 if (Float3.Length(toEnd) < Epsilon || Float3.Length(toTarget) < Epsilon)
                     continue;
 
-                Quaternion newWorld = TransformOps.FromToRotation(toEnd, toTarget) * jointWorld.rotation;
+                Quaternion newWorld = Quaternion.FromToRotation(toEnd, toTarget) * jointWorld.rotation;
                 Quaternion parentWorld = at == 0 ? Quaternion.Identity : model[at - 1].rotation;
 
                 Transform3D local = pose.GetTransform(path[at]);

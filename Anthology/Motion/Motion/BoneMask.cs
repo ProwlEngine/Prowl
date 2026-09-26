@@ -3,9 +3,8 @@ using Prowl.Vector;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A per-bone weight array in [0,1] used to restrict blends to part of the skeleton, with a weight per
-/// float channel alongside. Channels start at 1, fully affected, since a channel belongs to no bone.
-/// Combine is element-wise multiply; blend is a per-weight lerp.
+/// A weight in [0,1] per bone and per float channel, restricting blends to part of the skeleton.
+/// Channels start at 1.
 /// </summary>
 public sealed class BoneMask
 {
@@ -86,10 +85,8 @@ public sealed class BoneMask
     }
 
     /// <summary>
-    /// Builds a mask by feathering authored seed weights down the hierarchy: each bone inherits the
-    /// weight of its nearest seeded ancestor (or itself), and bones with no seeded ancestor take the
-    /// rest weight.
-    /// This turns sparse region authoring (e.g. "spine = 1") into a full per-bone mask.
+    /// Builds a mask from seed weights: each bone takes the weight of its nearest seeded ancestor or
+    /// itself, and bones with none take the rest weight.
     /// </summary>
     public static BoneMask CreateHierarchical(Skeleton skeleton, IReadOnlyList<(int Bone, float Weight)> seeds, float restWeight = 0f)
     {

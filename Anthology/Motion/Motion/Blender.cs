@@ -18,9 +18,8 @@ public enum RootMotionBlendMode : byte
 }
 
 /// <summary>
-/// Static pose blending operations: interpolative blends, masked blends, and additive blends, plus
-/// root-motion delta blending.
-/// A blend result is additive only when every input is additive.
+/// Pose blending: interpolative, masked and additive blends, plus root motion delta blending. A blend
+/// result is additive only when every input is additive.
 /// </summary>
 public static class Blender
 {
@@ -138,12 +137,9 @@ public static class Blender
     }
 
     /// <summary>
-    /// Synchronized blend: <paramref name="source"/> plays at <paramref name="referencePhase"/> (its
-    /// own normalized time), and <paramref name="target"/> is time-warped to the same sync-event phase
-    /// via its sync track so the two clips stay aligned (e.g. footfalls match). When the source has
-    /// fewer sync events than the target it loops several times per target cycle;
-    /// <paramref name="sourceLoop"/> says which of those loops is playing. The two scratch poses must
-    /// match the result skeleton.
+    /// Synchronized blend: <paramref name="source"/> plays at <paramref name="referencePhase"/> and
+    /// <paramref name="target"/> is warped to the same sync event phase. <paramref name="sourceLoop"/>
+    /// says which loop plays when the source has fewer sync events than the target.
     /// </summary>
     public static void BlendSynchronized(Pose result, AnimationClipBase source, AnimationClipBase target, float referencePhase, float weight, Pose scratchSource, Pose scratchTarget, int sourceLoop = 0)
     {

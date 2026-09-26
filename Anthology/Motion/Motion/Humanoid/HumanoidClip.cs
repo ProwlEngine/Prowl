@@ -5,10 +5,8 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Motion;
 
 /// <summary>
-/// A clip baked into muscle space: one <see cref="HumanPose"/> per frame instead of one skeleton pose,
-/// so it plays on any humanoid avatar whatever its proportions or bind pose.
-/// <see cref="Bind"/> turns it into an ordinary clip for one avatar, which the graph and the animators
-/// play like any other. Baking costs a retarget per frame, playback costs one per sample.
+/// A clip baked into muscle space, one <see cref="HumanPose"/> per frame, so it plays on any humanoid.
+/// <see cref="Bind"/> turns it into an ordinary clip for one avatar.
 /// </summary>
 public sealed class HumanoidClip
 {
@@ -62,11 +60,7 @@ public sealed class HumanoidClip
 
     public IReadOnlyList<AnimationEvent> Events { get; }
 
-    /// <summary>
-    /// The scalar channels baked alongside the muscles, by the name they had on the source rig. Muscle
-    /// space says nothing about blend shapes or visemes, so they travel beside it and are matched by name
-    /// when the clip is bound.
-    /// </summary>
+    /// <summary>The float channels baked alongside the muscles, matched by name when the clip is bound.</summary>
     public IReadOnlyList<StringID> FloatChannelIds => _channelIds;
 
     /// <summary>Samples one stored channel, interpolating between frames.</summary>
