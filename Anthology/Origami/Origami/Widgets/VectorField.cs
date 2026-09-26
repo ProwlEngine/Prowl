@@ -26,7 +26,8 @@ internal static class VectorFieldInternal
     private static void Cell<T>(Paper paper, string id, string label, T v, SysColor c, Action<T> set, float h)
         where T : struct, INumber<T>
         => Origami.NumericField<T>(paper, id, v, set)
-            .DraggableLabel(label, c, compact: true).Height(h).Width(UnitValue.Stretch()).Show();
+            .Format("0.######;0.######;0")
+            .DraggableLabel(label, c, dragDecimalPlaces: 1, compact: true).Height(h).Width(UnitValue.Stretch()).Show();
 
     internal static void Draw2<T>(Paper paper, string id, OrigamiTheme theme,
         string l0, T v0, SysColor c0, Action<T> s0,

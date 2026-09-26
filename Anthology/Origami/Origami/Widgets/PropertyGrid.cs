@@ -70,7 +70,8 @@ public abstract class AttributeHandler
     public virtual bool OnDraw(Paper paper, string id, string label, Attribute attr,
         FieldInfo field, object target, Action<object?> onChange, int depth) => false;
 
-    /// <summary>Called after the field is drawn.</summary>
+    /// <summary>Called after the field is drawn. Pairs with every <see cref="OnBeforeDraw"/> that returned
+    /// true, even when a later handler skips the field, so a scope opened there can always be closed.</summary>
     public virtual void OnAfterDraw(Paper paper, string id, Attribute attr,
         FieldInfo field, object target, int depth)
     { }
@@ -323,54 +324,50 @@ public static class PropertyGridRenderer
 
                 var meta = GetFieldMeta(field);
                 var attrs = meta.Attributes;
-                bool skip = false;
                 bool handled = false;
 
                 // Pre-draw attribute handlers (operate on the representative)
-                foreach (var attr in attrs)
+                int begun = 0;
+                for (; begun < attrs.Length; begun++)
                 {
-                    var handler = config.Handlers.GetHandler(attr.GetType());
-                    if (handler != null && !handler.OnBeforeDraw(paper, fieldId, attr, field, representative, depth))
-                    {
-                        skip = true;
+                    var handler = config.Handlers.GetHandler(attrs[begun].GetType());
+                    if (handler != null && !handler.OnBeforeDraw(paper, fieldId, attrs[begun], field, representative, depth))
                         break;
-                    }
                 }
-                if (skip) continue;
 
-                bool isMixed = multi && IsFieldMixed(targets, field);
-                Action<object?> applyAll = v => SetFieldOnAllAndNotify(config, field, targets, v, onChange);
-
-                // Attribute-driven draw replacement
-                foreach (var attr in attrs)
+                if (begun == attrs.Length) // no handler hid the field
                 {
-                    var handler = config.Handlers.GetHandler(attr.GetType());
-                    if (handler != null)
+                    bool isMixed = multi && IsFieldMixed(targets, field);
+                    Action<object?> applyAll = v => SetFieldOnAllAndNotify(config, field, targets, v, onChange);
+
+                    // Attribute-driven draw replacement
+                    foreach (var attr in attrs)
                     {
+                        var handler = config.Handlers.GetHandler(attr.GetType());
+                        if (handler != null)
+                        {
+                            string label = meta.Label;
+                            IsMixedField = isMixed;
+                            bool h = handler.OnDraw(paper, fieldId, label, attr, field, representative, applyAll, depth);
+                            IsMixedField = false;
+                            if (h) { handled = true; break; }
+                        }
+                    }
+
+                    if (!handled)
+                    {
+                        var value = field.GetValue(representative);
+                        var fieldType = field.FieldType;
                         string label = meta.Label;
-                        IsMixedField = isMixed;
-                        bool h = handler.OnDraw(paper, fieldId, label, attr, field, representative, applyAll, depth);
-                        IsMixedField = false;
-                        if (h) { handled = true; break; }
+                        bool isOverridden = overrides?.Contains(field.Name) ?? false;
+
+                        DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isOverridden, isMixed);
                     }
                 }
 
-                if (!handled)
-                {
-                    var value = field.GetValue(representative);
-                    var fieldType = field.FieldType;
-                    string label = meta.Label;
-                    bool isOverridden = overrides?.Contains(field.Name) ?? false;
-
-                    DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isOverridden, isMixed);
-                }
-
-                // Post-draw attribute handlers
-                foreach (var attr in attrs)
-                {
-                    var handler = config.Handlers.GetHandler(attr.GetType());
-                    handler?.OnAfterDraw(paper, fieldId, attr, field, representative, depth);
-                }
+                // Post-draw attribute handlers: exactly the ones that began, so a hidden field still closes their scopes
+                for (int a = 0; a < begun; a++)
+                    config.Handlers.GetHandler(attrs[a].GetType())?.OnAfterDraw(paper, fieldId, attrs[a], field, representative, depth);
             }
 
             // [Button] methods (invoked on every target)
