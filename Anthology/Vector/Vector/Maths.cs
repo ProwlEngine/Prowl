@@ -1565,4 +1565,10 @@ public static partial class Maths
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Double4 ToRadians(Double4 degrees) => new Double4(ToRadians(degrees.X), ToRadians(degrees.Y), ToRadians(degrees.Z), ToRadians(degrees.W));
 
+    /// <summary>
+    /// The share of the remaining gap closed over <paramref name="deltaTime"/> by something that halves
+    /// it every <paramref name="halfLife"/> seconds. 1 when the half life is zero.
+    /// </summary>
+    public static float HalfLifeFactor(float deltaTime, float halfLife) => halfLife > 0f ? 1f - MathF.Pow(0.5f, MathF.Abs(deltaTime) / halfLife) : 1f;
+
 }
