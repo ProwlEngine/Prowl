@@ -5,4 +5,30 @@
     <ProwlPackageVersion>3.5.6</ProwlPackageVersion>
   </PropertyGroup>
 
+  <!-- Prowl's own version. Unrelated to ProwlPackageVersion above, which pins the Anthology
+       libraries this repo consumes. Conditional so CI can override it from the release tag
+       and the two can't drift. -->
+  <PropertyGroup>
+    <ProwlVersion Condition="'$(ProwlVersion)' == ''">1.0.0-preview.1</ProwlVersion>
+  </PropertyGroup>
+
+  <!-- Packing is opt-in, so `dotnet pack Prowl.sln` ships only what's meant to ship. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>Michael Sakharov and the Prowl contributors</Authors>
+    <Company>ProwlEngine</Company>
+    <Copyright>Copyright (c) 2023 Michael Sakharov</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>prowl;game-engine;gamedev;engine;3d;silk.net;unity-like</PackageTags>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
 </Project>
