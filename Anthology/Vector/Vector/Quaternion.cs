@@ -475,6 +475,44 @@ public struct Quaternion : IEquatable<Quaternion>, IFormattable
         return Maths.Acos(Maths.Min(Maths.Abs(dot), 1.0f)) * 2.0f;
     }
 
+    /// <summary>
+    /// The shortest rotation that takes the <paramref name="from"/> direction onto <paramref name="to"/>.
+    /// Identity when either is zero, and a half turn about any perpendicular when they point apart.
+    /// </summary>
+    public static Quaternion FromToRotation(Float3 from, Float3 to)
+    {
+        float fromLength = Float3.Length(from), toLength = Float3.Length(to);
+        if (fromLength < 1e-8f || toLength < 1e-8f) return Identity;
+
+        Float3 a = from / fromLength, b = to / toLength;
+        float dot = Float3.Dot(a, b);
+        if (dot >= 1f - 1e-6f) return Identity;
+        if (dot <= -1f + 1e-6f)
+        {
+            Float3 reference = Maths.Abs(a.X) < 0.9f ? Float3.UnitX : Float3.UnitY;
+            return AxisAngle(Float3.Normalize(Float3.Cross(a, reference)), Maths.PI);
+        }
+        return AxisAngle(Float3.Normalize(Float3.Cross(a, b)), Maths.Acos(Maths.Clamp(dot, -1f, 1f)));
+    }
+
+    /// <summary>A rotation as its axis scaled by its angle in radians, taking the short way round.</summary>
+    public static Float3 ToRotationVector(Quaternion q)
+    {
+        q = Normalize(q);
+        if (q.W < 0f) q = new Quaternion(-q.X, -q.Y, -q.Z, -q.W);
+
+        var axis = new Float3(q.X, q.Y, q.Z);
+        float sin = Float3.Length(axis);
+        return sin < 1e-6f ? axis * 2f : axis * (2f * Maths.Atan2(sin, q.W) / sin);
+    }
+
+    /// <summary>The rotation about <paramref name="rotation"/>'s direction by its length in radians.</summary>
+    public static Quaternion FromRotationVector(Float3 rotation)
+    {
+        float angle = Float3.Length(rotation);
+        return angle < 1e-6f ? Identity : AxisAngle(rotation / angle, angle);
+    }
+
     /// <summary>The "forward" vector of a rotation (0,0,1) rotated by the quaternion.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Float3 Forward(Quaternion q) => q * new Float3(0, 0, 1);
