@@ -463,22 +463,19 @@ public static class PropertyGridRenderer
                 if (isNumeric && !Origami.IsReadOnly)
                 {
                     // Draggable label for numeric fields - horizontal drag adjusts value
-                    // Ctrl = x10, Shift = x0.01, default = x0.1
-                    lbl.OnDragStart(e =>
+                    // Default (1 pixel movement = 0.01)
+                    // Shift (Speed/Bigger Step) = x10
+                    // Ctrl (Precision) = x0.1
+                    lbl.OnDragging(e =>
                         {
-                            // Store initial value at drag start
-                            paper.SetElementStorage(paper.CurrentParent, "drag_start", ConvertToDouble(value));
-                        })
-                        .OnDragging(e =>
-                        {
-                            float multiplier = 0.1f;
-                            if (paper.IsKeyDown(PaperUI.PaperKey.LeftControl) || paper.IsKeyDown(PaperUI.PaperKey.RightControl))
-                                multiplier *= 10f;
-                            else if (paper.IsKeyDown(PaperUI.PaperKey.LeftShift) || paper.IsKeyDown(PaperUI.PaperKey.RightShift))
-                                multiplier *= 0.01f;
+                            float multiplier = 0.01f;
+                            int decimalPlaces = 2;
+                            if (paper.IsKeyDown(PaperUI.PaperKey.LeftShift) || paper.IsKeyDown(PaperUI.PaperKey.RightShift)) { multiplier *=  10f; decimalPlaces--; }
+                            else if (paper.IsKeyDown(PaperUI.PaperKey.LeftControl) || paper.IsKeyDown(PaperUI.PaperKey.RightControl)) { multiplier *= 0.1f; decimalPlaces++; }
 
-                            double startVal = paper.GetElementStorage(paper.CurrentParent, "drag_start", ConvertToDouble(value));
-                            double newVal = startVal + (double)e.TotalDelta.X * multiplier;
+
+                            double newVal = ConvertToDouble(value) + (double)e.ScreenDelta.X * multiplier;
+                            newVal = Math.Round(newVal, decimalPlaces); //set resolution to match shift amount
                             object? converted = ConvertFromDouble(newVal, fieldType);
                             if (converted != null) onChange(converted);
                         })
