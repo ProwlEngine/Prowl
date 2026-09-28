@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
@@ -78,21 +77,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
     {
         if (asset is not AudioMixer mixer || mixer.IsNotValid()) return false;
-        if (Project.Current == null) return false;
-
-        try
-        {
-            string absolute = Path.Combine(Project.Current.AssetsPath, entry.Path);
-            File.WriteAllText(absolute, SerializePersisted(mixer).WriteToString());
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to save audio mixer '{entry.Path}': {ex.Message}");
-            return false;
-        }
-
-        EditorAssetBackend.Instance?.Reimport(entry.Guid);
-        return true;
+        return EditorAssetBackend.Instance?.SaveAsset(entry.Guid, SerializePersisted(mixer)) ?? false;
     }
 
     protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
@@ -473,7 +458,7 @@ public class AudioMixerAssetEditor : AssetImporterEditor
         float h = (float)rect.Size.Y;
 
         float round = Origami.Current.Metrics.SmallRounding;
-        canvas.RoundedRectFilled(x, y, w, h, round, ToCanvas(EditorTheme.Neutral200));
+        canvas.RoundedRectFilled(x, y, w, h, round, EditorTheme.ToColor32(EditorTheme.Neutral200));
 
         if (silenced || peak <= 0.0f) return;
 
@@ -484,8 +469,8 @@ public class AudioMixerAssetEditor : AssetImporterEditor
 
         float barHeight = h * filled;
 
-        Color32 low = ToCanvas(EditorTheme.Green400);
-        Color32 high = decibels > -3.0f ? ToCanvas(EditorTheme.Red400) : ToCanvas(EditorTheme.Amber400);
+        Color32 low = EditorTheme.ToColor32(EditorTheme.Green400);
+        Color32 high = decibels > -3.0f ? EditorTheme.ToColor32(EditorTheme.Red400) : EditorTheme.ToColor32(EditorTheme.Amber400);
 
         canvas.SetLinearBrush(x, y + h, x, y, low, high);
         canvas.RoundedRectFilled(x, y + h - barHeight, w, barHeight, round, Color32.FromArgb(255, 255, 255, 255));
@@ -546,7 +531,6 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     private static string FormatDecibels(float decibels)
         => decibels <= AudioMixerGroup.MinVolumeDB ? "-inf" : $"{decibels:+0.0;-0.0;0.0} dB";
 
-    private static Color32 ToCanvas(Color color) => Color32.FromArgb(color.A, color.R, color.G, color.B);
 
     private static string UniqueGroupName(AudioMixer mixer, string baseName)
     {

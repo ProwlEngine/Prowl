@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
@@ -750,22 +749,7 @@ public class InputActionMapEditor : AssetImporterEditor
     }
 
     private static bool SaveMap(InputActionMap map, AssetEntry entry)
-    {
-        if (Project.Current == null) return false;
-
-        try
-        {
-            string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
-            File.WriteAllText(absolutePath, Serialize(map).WriteToString());
-            EditorAssetBackend.Instance?.Reimport(entry.Guid);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to save input actions '{entry.Path}': {ex.Message}");
-            return false;
-        }
-    }
+        => EditorAssetBackend.Instance?.SaveAsset(entry.Guid, Serialize(map)) ?? false;
 
     private static string FindUniqueName(InputActionMap map, string baseName)
         => Utils.UniqueNames.MakeUnique(baseName, n => map.FindAction(n) != null,

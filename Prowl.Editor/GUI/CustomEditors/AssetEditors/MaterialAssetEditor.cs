@@ -64,10 +64,10 @@ public class MaterialAssetEditor : AssetImporterEditor
     protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
     {
         if (asset is not Material material || material.IsNotValid()) return false;
-        if (!Write(material, entry)) return false; // a failed write was logged and stays pending
+        // A failed write was logged and stays pending.
+        if (EditorAssetBackend.Instance?.SaveAsset(entry.Guid, SerializePersisted(material)) != true) return false;
 
         _pending.Remove(entry.Guid);
-        EditorAssetBackend.Instance?.Reimport(entry.Guid);
         return true;
     }
 
@@ -275,20 +275,4 @@ public class MaterialAssetEditor : AssetImporterEditor
         return label;
     }
 
-    /// <summary>Serialize one material over its .mat file. Returns false (and logs) on failure.</summary>
-    private static bool Write(Material material, AssetEntry entry)
-    {
-        string absolutePath = Path.Combine(Project.Current!.AssetsPath, entry.Path);
-        try
-        {
-            EchoObject echo = SerializePersisted(material);
-            File.WriteAllText(absolutePath, echo.WriteToString());
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to save material '{entry.Path}': {ex.Message}");
-            return false;
-        }
-    }
 }
