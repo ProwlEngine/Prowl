@@ -43,10 +43,16 @@ public class PhysicsWorld
     /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
     /// pair is scoped to this world and is dropped when the world is cleared.
     /// </summary>
-    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.IgnoreCollisionBetween(bodyA, bodyB);
+    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.SetCollisionsBetween([(bodyA, bodyB)], false);
 
     /// <summary>Undoes <see cref="IgnoreCollisionBetween"/> for a pair.</summary>
-    public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.EnableCollisionBetween(bodyA, bodyB);
+    public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.SetCollisionsBetween([(bodyA, bodyB)], true);
+
+    /// <summary><see cref="IgnoreCollisionBetween"/> for many pairs at once.</summary>
+    public void IgnoreCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs) => _layerFilter.SetCollisionsBetween(pairs, false);
+
+    /// <summary><see cref="EnableCollisionBetween"/> for many pairs at once.</summary>
+    public void EnableCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs) => _layerFilter.SetCollisionsBetween(pairs, true);
 
     /// <summary>Lets the two bodies of a constraint collide with each other, or keeps them apart.</summary>
     internal void SetCollidesConnected(Jitter2.Dynamics.Constraints.Constraint constraint, bool collides)
@@ -273,8 +279,7 @@ public class PhysicsWorld
         }
     }
 
-    // How far a move is tried along its direction to tell whether it presses into a surface it starts
-    // exactly touching, which has no gap to measure and no depth to resolve.
+    // How far a move is tried ahead to tell whether it presses into a surface it starts exactly touching.
     private const float ContactProbe = 1e-3f;
 
     // Below this, a move is taken to run along a surface rather than into it.
@@ -1213,37 +1218,6 @@ public class PhysicsWorld
     }
 
     /// <summary>
-    /// Helper method to calculate the orientation needed to align a capsule (Y-axis aligned) with a given axis.
-    /// </summary>
-    private static Quaternion CalculateCapsuleOrientation(Float3 capsuleAxis, float capsuleLength)
-    {
-        if (capsuleLength <= 1e-6)
-            return Quaternion.Identity;
-
-        Float3 normalizedAxis = capsuleAxis / capsuleLength;
-        Float3 yAxis = new(0, 1, 0);
-
-        // If axis is aligned with Y, no rotation needed
-        if (Maths.Abs(Float3.Dot(normalizedAxis, yAxis) - 1.0) < 1e-6)
-        {
-            return Quaternion.Identity;
-        }
-        // If axis is opposite to Y, rotate 180 degrees around X
-        else if (Maths.Abs(Float3.Dot(normalizedAxis, yAxis) + 1.0) < 1e-6)
-        {
-            return Quaternion.AxisAngle(new Float3(1, 0, 0), Maths.PI);
-        }
-        // Calculate rotation from Y-axis to the capsule axis
-        else
-        {
-            Float3 rotAxis = Float3.Cross(yAxis, normalizedAxis);
-            rotAxis = Float3.Normalize(rotAxis);
-            float angle = Maths.Acos(Float3.Dot(yAxis, normalizedAxis));
-            return Quaternion.AxisAngle(new Float3(rotAxis.X, rotAxis.Y, rotAxis.Z), angle);
-        }
-    }
-
-    /// <summary>
     /// Casts a box along a direction and returns the closest hit.
     /// </summary>
     /// <param name="origin">Starting position of the box center.</param>
@@ -1487,7 +1461,7 @@ public class PhysicsWorld
         var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
-        Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
+        Quaternion capsuleOrientation = Quaternion.FromToRotation(Float3.UnitY, capsuleAxis);
 
         return Overlap(capsule, capsuleOrientation, capsuleCenter, hits, filter);
     }

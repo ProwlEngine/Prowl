@@ -56,7 +56,7 @@ public class HingeJoint : PhysicsJoint
     /// <summary>
     /// Minimum angle limit in degrees.
     /// </summary>
-    public float MinAngleDegrees
+    public float MinAngle
     {
         get => minAngleDegrees;
         set
@@ -69,7 +69,7 @@ public class HingeJoint : PhysicsJoint
     /// <summary>
     /// Maximum angle limit in degrees.
     /// </summary>
-    public float MaxAngleDegrees
+    public float MaxAngle
     {
         get => maxAngleDegrees;
         set

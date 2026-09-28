@@ -152,7 +152,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
         DestroyConstraint();
 
         Rigidbody3D body1 = Body1;
-        if (body1.IsNotValid() || body1._body?.IsValid != true)
+        if (body1.IsNotValid() || !body1.IsSimulated)
             return;
 
         // Reached from property setters as well as the lifecycle, so the scene can be mid-teardown
@@ -164,11 +164,11 @@ public abstract class PhysicsConstraint : MonoBehaviour
         // No connected body means "anchor to the world". Jitter keeps a pinned static NullBody for
         // exactly that; creating a fresh static body here would leak one into the world on every
         // recreate, and this runs from OnEnable, OnValidate and every property setter.
-        RigidBody body2 = connectedBody.IsNotValid() || connectedBody._body?.IsValid != true
+        RigidBody body2 = connectedBody.IsNotValid() || !connectedBody.IsSimulated
             ? world.NullBody
-            : connectedBody._body;
+            : connectedBody.Native;
 
-        CreateConstraint(world, body1._body, body2);
+        CreateConstraint(world, body1.Native, body2);
 
         // Set initial enabled state. Through Active so a joint's constraints all get it, not just the
         // single one GetConstraint can name.

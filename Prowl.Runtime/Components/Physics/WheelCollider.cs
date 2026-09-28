@@ -192,13 +192,13 @@ public sealed class WheelCollider : MonoBehaviour
 
     private void OnPreStep(float timeStep)
     {
-        if (rb.IsNotValid() || rb._body == null || timeStep <= 0.0f) return;
+        if (rb.IsNotValid() || rb.Native == null || timeStep <= 0.0f) return;
 
         // Wheels enable one at a time; recount once on the first step so auto sprung-mass divides
         // by the full wheel count rather than however many existed when this wheel first enabled.
         if (!counted) { Recalculate(); counted = true; }
 
-        RigidBody car = rb._body;
+        RigidBody car = rb.Native;
         World world = car.World;
 
         // Wheel frame: suspension axis (up), steered forward, axle (left).
@@ -277,9 +277,9 @@ public sealed class WheelCollider : MonoBehaviour
     // against the body's re-integrated velocity.
     private void OnPreSubStep(float dt)
     {
-        if (rb.IsNotValid() || rb._body == null || dt <= 0.0f) return;
+        if (rb.IsNotValid() || rb.Native == null || dt <= 0.0f) return;
 
-        RigidBody car = rb._body;
+        RigidBody car = rb.Native;
         float inertia = 0.5f * wheelMass * radius * radius;
         if (inertia <= 1e-6f) inertia = 1e-6f;
 
@@ -371,8 +371,8 @@ public sealed class WheelCollider : MonoBehaviour
     {
         // Terrain is not a RigidBodyShape, so let it through - otherwise wheels find no ground on a heightmap.
         if (proxy is not RigidBodyShape rbs) return true;
-        if (rb.IsNotValid() || rb._body == null) return false;
-        return rbs.RigidBody != rb._body; // ignore the vehicle's own body
+        if (rb.IsNotValid() || rb.Native == null) return false;
+        return rbs.RigidBody != rb.Native; // ignore the vehicle's own body
     }
 
     private float CamberRadians() => camber * (Maths.PI / 180.0f) * _side;

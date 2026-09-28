@@ -42,21 +42,17 @@ public class LayerFilter : IBroadPhaseFilter
 
     private HashSet<Pair> _ignore = [];
 
-    internal void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB)
+    // The set is replaced whole rather than edited, so each batch copies it once.
+    internal void SetCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs, bool collide)
     {
-        if (!TryOrderPair(ref bodyA, ref bodyB)) return;
-
         HashSet<Pair> next = LiveCopy();
-        next.Add(new Pair(bodyA, bodyB));
-        Volatile.Write(ref _ignore, next);
-    }
-
-    internal void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB)
-    {
-        if (!TryOrderPair(ref bodyA, ref bodyB)) return;
-
-        HashSet<Pair> next = LiveCopy();
-        next.Remove(new Pair(bodyA, bodyB));
+        foreach ((Rigidbody3D a, Rigidbody3D b) in pairs)
+        {
+            Rigidbody3D first = a, second = b;
+            if (!TryOrderPair(ref first, ref second)) continue;
+            if (collide) next.Remove(new Pair(first, second));
+            else next.Add(new Pair(first, second));
+        }
         Volatile.Write(ref _ignore, next);
     }
 

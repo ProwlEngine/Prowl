@@ -18,7 +18,8 @@ namespace Prowl.Runtime;
 public class ConeLimitConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 axis = Float3.UnitY;
-    [SerializeField] private Float3 connectedAxis = Float3.Zero;
+    [SerializeField] private bool hasConnectedAxis;
+    [SerializeField] private Float3 connectedAxis = Float3.UnitY;
     [SerializeField] private float minAngle = 0.0f;
     [SerializeField] private float maxAngle = 45.0f;
     [SerializeField] private float softness = 0.001f;
@@ -40,15 +41,16 @@ public class ConeLimitConstraint : PhysicsConstraint
     }
 
     /// <summary>
-    /// The cone's centre in local space of the connected body, or zero for wherever <see cref="Axis"/>
-    /// points when the joint is made.
+    /// The cone's centre in local space of the connected body, or world space when there is none. Null
+    /// centres the cone on wherever <see cref="Axis"/> points when the joint is made.
     /// </summary>
-    public Float3 ConnectedAxis
+    public Float3? ConnectedAxis
     {
-        get => connectedAxis;
+        get => hasConnectedAxis ? connectedAxis : null;
         set
         {
-            connectedAxis = value;
+            hasConnectedAxis = value.HasValue;
+            if (value is { } axis) connectedAxis = axis;
             RecreateConstraint();
         }
     }
@@ -123,9 +125,7 @@ public class ConeLimitConstraint : PhysicsConstraint
     /// </summary>
     public float Impulse => constraint?.Impulse ?? 0.0f;
 
-    // ConeLimit measures Acos(dot(axis1, axis2)), so a tilt only ever spans 0 to 180 degrees, and Jitter
-    // throws on anything outside that or on an inverted range. Clamping keeps a stray inspector value
-    // from taking the constraint out entirely.
+    // Jitter only takes a range within 0 to 180 degrees, so a stray inspector value is clamped into it.
     private float ClampedMinAngle => Maths.Clamp(minAngle, 0.0f, 180.0f);
     private float ClampedMaxAngle => Maths.Clamp(maxAngle, ClampedMinAngle, 180.0f);
 
@@ -134,9 +134,7 @@ public class ConeLimitConstraint : PhysicsConstraint
     protected override void CreateConstraint(World world, RigidBody body1, RigidBody body2)
     {
         Jitter2.LinearMath.JVector worldAxis = LocalDirToWorld(axis, Body1.Transform);
-        Jitter2.LinearMath.JVector worldConnectedAxis = connectedAxis != Float3.Zero && connectedBody.IsValid()
-            ? LocalDirToWorld(connectedAxis, connectedBody.Transform)
-            : worldAxis;
+        Jitter2.LinearMath.JVector worldConnectedAxis = WorldCentre().ToJitter();
 
         constraint = world.CreateConstraint<ConeLimit>(body1, body2);
 
@@ -146,6 +144,8 @@ public class ConeLimitConstraint : PhysicsConstraint
         constraint.Softness = softness;
         constraint.Bias = biasFactor;
     }
+
+    private Float3 WorldCentre() => hasConnectedAxis ? WorldConnectedAxis(connectedAxis) : WorldAxis(axis);
 
     protected override void DestroyConstraint()
     {
@@ -162,7 +162,7 @@ public class ConeLimitConstraint : PhysicsConstraint
         float scale = GizmoScale;
         float length = scale * 1.3f;
         Float3 apex = WorldPivot;
-        Float3 dir = connectedAxis != Float3.Zero ? WorldConnectedAxis(connectedAxis) : WorldAxis(axis);
+        Float3 dir = WorldCentre();
 
         DrawJointMarker(apex);
         Debug.DrawAxisLine(apex, dir, scale * 1.5f, AxisColor);

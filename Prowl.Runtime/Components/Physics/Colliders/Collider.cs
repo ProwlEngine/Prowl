@@ -101,7 +101,7 @@ public abstract class Collider : MonoBehaviour
 
         // Attach to the new rigidbody
         _attachedRigidbody3D = rigidbody;
-        _attachedBody = rigidbody._body;
+        _attachedBody = rigidbody.Native;
         RegisterShapes();
         return true;
     }

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 using Jitter2;
@@ -308,7 +309,17 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     [SerializeIgnore]
-    internal RigidBody _body;
+    private RigidBody? _body;
+
+    /// <summary>The physics engine's body, or null while there is none.</summary>
+    internal RigidBody? Native => _body;
+
+    /// <summary>Whether this rigidbody has a body in the physics world right now.</summary>
+    [MemberNotNullWhen(true, nameof(_body), nameof(Native))]
+    internal bool IsSimulated => _body?.IsValid == true;
+
+    /// <summary>The body's inertia about its origin, in world space.</summary>
+    internal JMatrix WorldInertia => IsSimulated && JMatrix.Inverse(_body.Data.InverseInertiaWorld, out JMatrix inertia) ? inertia : default;
 
     /// <summary>
     /// Ensures the underlying Jitter body exists. Body creation normally happens in OnEnable, but
@@ -317,7 +328,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void EnsureBody()
     {
-        if (_body?.IsValid == true) return;
+        if (IsSimulated) return;
         var scene = GameObject.IsValid() ? GameObject.Scene : null;
         World? world = scene.IsValid() ? scene.Physics?.World : null;
         if (world != null) CreateBody(world);
@@ -403,7 +414,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         // Route through CreateBody so a body created here is wired up the same as one from OnEnable.
         // A raw CreateRigidBody would leave the collision events unhooked and the body out of the
         // transform-sync set, and OnEnable would then skip creation because a body already exists.
-        if (_body?.IsValid != true)
+        if (!IsSimulated)
         {
             CreateBody(world);
             return;
@@ -416,7 +427,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void Update()
     {
-        if (_body?.IsValid != true) return;
+        if (!IsSimulated) return;
 
         // Dynamic AND kinematic bodies move within the simulation (kinematic via LinearVelocity /
         // MovePosition), so the transform must follow the body. Only static bodies don't move - writing
@@ -442,7 +453,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             // Render between the last two steps. The visual trails the simulation by up to one fixed
             // step, which is the price of never overshooting into geometry the solver has not seen.
-            float t = Time.FixedDeltaTime > 0.0f ? Maths.Clamp(Time.FixedAccumulator / Time.FixedDeltaTime, 0.0f, 1.0f) : 1.0f;
+            float t = Time.FixedAlpha;
             position = Maths.Lerp(_previousPosition, _currentPosition, t);
             rotation = Quaternion.Slerp(_previousRotation, _currentRotation, t);
         }
@@ -461,7 +472,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void ApplyConstraints()
     {
-        if (constraints == RigidbodyConstraints.None || _body?.IsValid != true) return;
+        if (constraints == RigidbodyConstraints.None || !IsSimulated) return;
         if (!_hasLockedPose) { CaptureLockedPose(); return; }
 
         JVector velocity = _body.Velocity;
@@ -489,7 +500,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     private void CaptureLockedPose()
     {
-        if (_body?.IsValid != true) return;
+        if (!IsSimulated) return;
 
         _lockedPosition = _body.Position;
         _lockedOrientation = _body.Orientation;
@@ -504,7 +515,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         ApplyConstraints();
 
-        if (_body?.IsValid != true) return;
+        if (!IsSimulated) return;
 
         _previousPosition = _currentPosition;
         _previousRotation = _currentRotation;
@@ -524,7 +535,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void ResetPose()
     {
-        if (_body?.IsValid != true) { _hasPose = false; return; }
+        if (!IsSimulated) { _hasPose = false; return; }
 
         _currentPosition = _previousPosition = _body.Position.ToProwl();
         _currentRotation = _previousRotation = _body.Orientation.ToProwl();
@@ -532,12 +543,10 @@ public sealed class Rigidbody3D : MonoBehaviour
         CaptureLockedPose();
     }
 
-    private static Float3 ToFloat3(JVector v) => new(v.X, v.Y, v.Z);
-    private static Quaternion ToQuaternion(JQuaternion q) => new(q.X, q.Y, q.Z, q.W);
 
     public override void OnEnable()
     {
-        if (_body?.IsValid != true)
+        if (!IsSimulated)
         {
             CreateBody(GameObject.Scene.Physics.World);
         }
@@ -551,7 +560,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     private void ClaimChildColliders()
     {
-        if (_body?.IsValid != true)
+        if (!IsSimulated)
             return;
 
         // Get all colliders in this GameObject and its children
@@ -565,7 +574,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnDisable()
     {
-        if (_body?.IsValid != true) return;
+        if (!IsSimulated) return;
 
         // Take the colliders off while the body is still alive, so their shapes are removed cleanly.
         Collider[] colliders = GetComponentsInChildren<Collider>().ToArray();
@@ -616,7 +625,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     internal void ApplyMassInertia()
     {
-        if (_body?.IsValid != true) return;
+        if (!IsSimulated) return;
 
         try
         {
@@ -697,7 +706,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     internal void SyncTransformToBody()
     {
-        if (_body?.IsValid != true) return;
+        if (!IsSimulated) return;
         if (Transform.Version == _lastSyncedTransformVersion) return;
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version;
@@ -842,7 +851,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         get
         {
-            if (_body?.IsValid != true) return Transform.Position;
+            if (!IsSimulated) return Transform.Position;
 
             JVector weighted = JVector.Zero;
             float totalMass = 0.0f;
