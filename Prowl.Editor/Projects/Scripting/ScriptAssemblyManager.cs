@@ -242,18 +242,8 @@ public static class ScriptAssemblyManager
     public static IEnumerable<Type> GetAllTypes()
     {
         foreach (var assembly in GetAllRelevantAssemblies())
-        {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch (ReflectionTypeLoadException ex)
-            {
-                types = ex.Types.Where(t => t != null).ToArray()!;
-            }
-            catch { continue; }
-
-            foreach (var type in types)
+            foreach (var type in RuntimeUtils.GetLoadableTypes(assembly))
                 yield return type;
-        }
     }
 
     // ================================================================
