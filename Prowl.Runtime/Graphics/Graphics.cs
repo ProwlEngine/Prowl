@@ -66,6 +66,8 @@ public static unsafe class Graphics
 
     private static readonly System.Collections.Concurrent.BlockingCollection<CBJob> s_renderQueue = new();
     private static System.Threading.Thread? s_renderThread;
+
+    internal static bool IsRenderThread => s_renderThread != null && System.Threading.Thread.CurrentThread == s_renderThread;
     private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
 
     private static int s_wantedSwapInterval = -1;
