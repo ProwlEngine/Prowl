@@ -345,6 +345,23 @@ public static class EditorGUI
             .OnClick(0, (_, _) => onClick());
     }
 
+    /// <summary>A small pill that toggles, lit with the accent while on.</summary>
+    public static void Chip(Paper paper, string id, string label, bool on, Action toggle, float height = 20f)
+    {
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        var m = Origami.Current.Metrics;
+        paper.Box(id).Width(UnitValue.Auto).Height(height).Margin(0, 6, 0, 0).Padding(8, 8, 0, 0)
+            .Rounded(m.SmallRounding)
+            .BackgroundColor(on ? EditorTheme.WithAlpha(EditorTheme.Accent, 60) : EditorTheme.WithAlpha(EditorTheme.Ink300, 22))
+            .Hovered.BackgroundColor(on ? EditorTheme.WithAlpha(EditorTheme.Accent, 90) : EditorTheme.WithAlpha(EditorTheme.Ink300, 40)).End()
+            .Text(label, font).TextColor(on ? EditorTheme.AccentBright : EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSizeSmall * 0.95f).Alignment(TextAlignment.MiddleCenter)
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(0, (_, _) => toggle());
+    }
+
     /// <summary>A colored call-to-action button. Pass <paramref name="grow"/> = true to stretch width.</summary>
     public static void CtaButton(Paper paper, string id, string label, Color bg, Action onClick, bool grow = false, float height = 28f)
     {
