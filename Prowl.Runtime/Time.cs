@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Stopwatch = System.Diagnostics.Stopwatch;
@@ -73,6 +74,9 @@ public static class Time
     /// Owned by the game loop - read it, do not write it.
     /// </summary>
     public static float FixedAccumulator;
+
+    /// <summary>How far drawing is from the last fixed step toward the next, 0 to 1.</summary>
+    public static float FixedAlpha => FixedDeltaTime > 0f ? Math.Clamp(FixedAccumulator / FixedDeltaTime, 0f, 1f) : 1f;
     public static float TimeSinceStartup => CurrentTime.Time;
 
     public static float SmoothUnscaledDeltaTime => CurrentTime.SmoothUnscaledDeltaTime;
