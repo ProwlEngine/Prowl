@@ -203,10 +203,10 @@ public sealed class WheelCollider : MonoBehaviour
 
         // Wheel frame: suspension axis (up), steered forward, axle (left).
         Float3 upF = Transform.Up;
-        JVector up = ToJ(upF);
+        JVector up = upF.ToJitter();
         JVector.NormalizeInPlace(ref up);
 
-        JVector fwd = JVector.Transform(ToJ(Transform.Forward), JMatrix.CreateRotationMatrix(up, SteerAngle));
+        JVector fwd = JVector.Transform(Transform.Forward.ToJitter(), JMatrix.CreateRotationMatrix(up, SteerAngle));
 
         // NormalizeSafe: a wheel transform whose forward has been steered onto its own up axis gives a
         // zero cross product, and plain Normalize turns that into NaN rather than zero.
@@ -224,7 +224,7 @@ public sealed class WheelCollider : MonoBehaviour
         // Ground detection: a stable grid of rays across the wheel face. Reports a raw compression (which
         // can exceed the travel when the wheel is jammed into something, driving depenetration) plus a
         // processed contact normal and point.
-        JVector mount = ToJ(Transform.Position);
+        JVector mount = Transform.Position.ToJitter();
 
         bool grounded = CastRaycastGrid(world, mount, up, upF, fwd, axle,
             out float rawCompression, out Float3 outNormal, out Float3 outPoint, out RigidBody gb);
@@ -243,7 +243,7 @@ public sealed class WheelCollider : MonoBehaviour
         float penetration = Maths.Max(0.0f, rawCompression - suspensionDistance);
         contactNormal = outNormal;
         contactPoint = outPoint;
-        JVector contact = ToJ(contactPoint);
+        JVector contact = contactPoint.ToJitter();
 
         // Suspension constants. The spring/damper forces themselves are evaluated per-substep in
         // OnPreSubStep (not here) so the suspension is integrated at the same rate as the body.
@@ -255,7 +255,7 @@ public sealed class WheelCollider : MonoBehaviour
         _damperCap = _springK * suspensionDistance;
 
         // Friction-plane basis (perpendicular to the contact normal).
-        JVector cn = ToJ(contactNormal);
+        JVector cn = contactNormal.ToJitter();
         JVector planeFwd = fwd - cn * JVector.Dot(fwd, cn);
         if (planeFwd.LengthSquared() < 1e-8f) planeFwd = fwd;
         JVector.NormalizeInPlace(ref planeFwd);
@@ -270,7 +270,7 @@ public sealed class WheelCollider : MonoBehaviour
 
         // Suspension bottomed out and the wheel is inside the surface: push it back out.
         if (depenetrate && penetration > 0.0f)
-            ApplyDepenetration(car, penetration, ToJ(contactNormal), contact, timeStep);
+            ApplyDepenetration(car, penetration, contactNormal.ToJitter(), contact, timeStep);
     }
 
     // Suspension, tyre friction and wheel spin, applied each physics substep as impulses (force * dt)
@@ -301,7 +301,7 @@ public sealed class WheelCollider : MonoBehaviour
                 groundBody.ApplyImpulse(-suspImpulse, _contactJ);
 
             // ---- Tyre friction at the COM-height point (measured there too, so it's dissipative) ----
-            JVector cn = ToJ(contactNormal);
+            JVector cn = contactNormal.ToJitter();
             double ah = Double3.Dot(D(car.Position) - D(_contactJ), D(cn));
             if (ah < 0.0) ah = 0.0;
             JVector forcePoint = _contactJ + cn * (float)ah;
@@ -322,7 +322,7 @@ public sealed class WheelCollider : MonoBehaviour
             // Cancel the slope's sideways pull on this wheel's mass share so a parked car holds instead of
             // creeping sideways. Clamped to the friction ellipse below, so on a slope too steep for the grip
             // it still slides.
-            float gLat = JVector.Dot(ToJ(GameObject.Scene.Physics.Gravity), _planeLeft);
+            float gLat = JVector.Dot(GameObject.Scene.Physics.Gravity.ToJitter(), _planeLeft);
             fLat += -_sprungMass * gLat;
 
             float ex = maxLong > 0.0f ? fLong / maxLong : 0.0f;
@@ -386,7 +386,6 @@ public sealed class WheelCollider : MonoBehaviour
         return tilted;
     }
 
-    private static JVector ToJ(Float3 v) => new(v.X, v.Y, v.Z);
     private static Float3 ToF(JVector v) => new(v.X, v.Y, v.Z);
     private static Double3 D(JVector v) => new(v.X, v.Y, v.Z);
 
@@ -505,8 +504,8 @@ public sealed class WheelCollider : MonoBehaviour
         Float3 up = Transform.Up;
 
         // Wheel frame: steered forward + axle, and a radial basis (r1, r2) in the roll plane.
-        JVector fwdJ = JVector.Transform(ToJ(Transform.Forward), JMatrix.CreateRotationMatrix(ToJ(up), SteerAngle));
-        JVector axleJ = JVector.Cross(ToJ(up), fwdJ);
+        JVector fwdJ = JVector.Transform(Transform.Forward.ToJitter(), JMatrix.CreateRotationMatrix(up.ToJitter(), SteerAngle));
+        JVector axleJ = JVector.Cross(up.ToJitter(), fwdJ);
         JVector.NormalizeInPlace(ref axleJ);
         axleJ = ApplyCamber(axleJ, fwdJ);
 

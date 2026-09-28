@@ -262,9 +262,9 @@ public class PhysicsWorld
                 Fraction = lambda,
                 Distance = lambda * _maxDistance,
                 Penetration = penetration,
-                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Normal = -(normal.ToProwl()),
+                Point = pointA.ToProwl(),
+                HitPoint = pointB.ToProwl(),
                 Rigidbody = userData.Rigidbody,
                 Shape = targetShape,
                 Collider = owner,
@@ -379,9 +379,9 @@ public class PhysicsWorld
                 Hit = true,
                 Fraction = 0,
                 Penetration = penetration,
-                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Normal = -(normal.ToProwl()),
+                Point = pointA.ToProwl(),
+                HitPoint = pointB.ToProwl(),
                 Rigidbody = userData.Rigidbody,
                 Shape = targetShape,
                 Collider = owner,
@@ -665,7 +665,7 @@ public class PhysicsWorld
         World.SubstepCount = Substep;
         World.SolverIterations = (SolverIterations, RelaxIterations);
 
-        World.Gravity = new JVector(Gravity.X, Gravity.Y, Gravity.Z);
+        World.Gravity = Gravity.ToJitter();
 
         World.SolveMode = EnhancedDeterminism ? SolveMode.Deterministic : SolveMode.Regular;
         World.ThreadModel = ThreadModel == PhysicsThreadModel.Persistent
@@ -704,7 +704,7 @@ public class PhysicsWorld
     {
         if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(Raycast))) return false;
 
-        return World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+        return World.DynamicTree.RayCast(origin.ToJitter(), direction.ToJitter(), maxDistance,
             _acceptProxyDelegate, PostFilter, out _, out _, out _);
     }
 
@@ -726,7 +726,7 @@ public class PhysicsWorld
         hitInfo = new RaycastHit();
         if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(Raycast))) return false;
 
-        bool hit = World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+        bool hit = World.DynamicTree.RayCast(origin.ToJitter(), direction.ToJitter(), maxDistance,
             _acceptProxyDelegate, PostFilter,
             out IDynamicTreeProxy shape, out JVector normal, out float lambda);
 
@@ -758,7 +758,7 @@ public class PhysicsWorld
         _rayDirection = direction;
         try
         {
-            World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+            World.DynamicTree.RayCast(origin.ToJitter(), direction.ToJitter(), maxDistance,
                 _acceptProxyDelegate, _collectRayHitDelegate, out _, out _, out _);
         }
         finally
@@ -811,7 +811,6 @@ public class PhysicsWorld
         return true;
     }
 
-    private static JVector ToJ(Float3 v) => new(v.X, v.Y, v.Z);
 
 
     // The tree's filter callbacks are delegates, so binding a filter per call would allocate a closure
@@ -935,13 +934,13 @@ public class PhysicsWorld
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
 
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
+        var jOrigin = origin.ToJitter();
+        var jDirection = direction.ToJitter();
         JVector sweep = jDirection * maxDistance;
 
         // Create a bounding box that encompasses the entire sweep
         JBoundingBox sweepBox = new();
-        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
+        var jOrientation = orientation.ToJitter();
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jOrigin, out JBoundingBox startBox);
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jOrigin + sweep, out JBoundingBox endBox);
 
@@ -1034,9 +1033,9 @@ public class PhysicsWorld
                 Hit = true,
                 Fraction = bestLambda,
                 Distance = bestLambda * sweepDistance,
-                Normal = -(new Float3(bestNormal.X, bestNormal.Y, bestNormal.Z)),
-                Point = new Float3(bestPointA.X, bestPointA.Y, bestPointA.Z),
-                HitPoint = new Float3(bestPointB.X, bestPointB.Y, bestPointB.Z),
+                Normal = -(bestNormal.ToProwl()),
+                Point = bestPointA.ToProwl(),
+                HitPoint = bestPointB.ToProwl(),
                 Rigidbody = null,
                 Shape = null,
                 Collider = null,
@@ -1175,7 +1174,7 @@ public class PhysicsWorld
         var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
-        Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
+        Quaternion capsuleOrientation = Quaternion.FromToRotation(Float3.UnitY, capsuleAxis);
 
         return ShapeCast(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, out hitInfo, filter);
     }
@@ -1208,7 +1207,7 @@ public class PhysicsWorld
         var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
-        Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
+        Quaternion capsuleOrientation = Quaternion.FromToRotation(Float3.UnitY, capsuleAxis);
 
         return ShapeCastAll(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, hits, filter);
     }
@@ -1264,7 +1263,7 @@ public class PhysicsWorld
     /// </summary>
     public bool BoxCast(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        var halfExtents = size.ToJitter() * 0.5f;
         return ShapeCast(SupportPrimitives.CreateBox(halfExtents), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
@@ -1288,7 +1287,7 @@ public class PhysicsWorld
     /// </summary>
     public int BoxCastAll(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        var halfExtents = size.ToJitter() * 0.5f;
         return ShapeCastAll(SupportPrimitives.CreateBox(halfExtents), orientation, origin, direction, maxDistance, hits, filter);
     }
 
@@ -1423,10 +1422,10 @@ public class PhysicsWorld
         if (!ValidateQuery(position, nameof(Overlap))) return 0;
 
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
-        var jPosition = new JVector(position.X, position.Y, position.Z);
+        var jPosition = position.ToJitter();
 
         // Create a bounding box for the shape
-        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
+        var jOrientation = orientation.ToJitter();
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jPosition, out JBoundingBox shapeBounds);
         var sink = new OverlapSink<TShape>(this, shape, jOrientation, jPosition, hits, filter);
         World.DynamicTree.Query(ref sink, in shapeBounds);
@@ -1511,7 +1510,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapBox(Float3 position, Float3 size, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        var halfExtents = size.ToJitter() * 0.5f;
         return Overlap(SupportPrimitives.CreateBox(halfExtents), orientation, position, hits, filter);
     }
 

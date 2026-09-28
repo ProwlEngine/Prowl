@@ -127,7 +127,7 @@ public class UniversalJoint : PhysicsJoint
         JVector worldAxis1 = LocalDirToWorld(axis1, Body1.Transform);
         JVector worldAxis2 = connectedBody.IsValid()
             ? LocalDirToWorld(axis2, connectedBody.Transform)
-            : new JVector(axis2.X, axis2.Y, axis2.Z);
+            : axis2.ToJitter();
 
         universalJoint = new Jitter2.Dynamics.Constraints.UniversalJoint(
             world, body1, body2, worldAnchor, worldAxis1, worldAxis2, hasMotor);

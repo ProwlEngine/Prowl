@@ -86,8 +86,8 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         }
 
         _worldBounds = new JBoundingBox(
-            new JVector(worldMin.X, worldMin.Y, worldMin.Z),
-            new JVector(worldMax.X, worldMax.Y, worldMax.Z));
+            worldMin.ToJitter(),
+            worldMax.ToJitter());
     }
 
     /// <summary>Height in terrain-local units. Placement and scale come from <see cref="LocalToWorld"/>.</summary>

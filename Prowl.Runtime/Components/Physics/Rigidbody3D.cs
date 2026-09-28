@@ -285,7 +285,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public Float3 LinearVelocity
     {
-        get => _body == null ? Float3.Zero : new(_body.Velocity.X, _body.Velocity.Y, _body.Velocity.Z);
+        get => _body == null ? Float3.Zero : _body.Velocity.ToProwl();
         set { EnsureBody(); if (_body != null) _body.Velocity = new(value.X, value.Y, value.Z); }
     }
 
@@ -294,7 +294,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public Float3 AngularVelocity
     {
-        get => _body == null ? Float3.Zero : new(_body.AngularVelocity.X, _body.AngularVelocity.Y, _body.AngularVelocity.Z);
+        get => _body == null ? Float3.Zero : _body.AngularVelocity.ToProwl();
         set { EnsureBody(); if (_body != null) _body.AngularVelocity = new(value.X, value.Y, value.Z); }
     }
 
@@ -303,8 +303,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public Float3 Torque
     {
-        get => _body == null ? Float3.Zero : new(_body.Torque.X, _body.Torque.Y, _body.Torque.Z);
-        set { EnsureBody(); if (_body != null) _body.Torque = new JVector(value.X, value.Y, value.Z); }
+        get => _body == null ? Float3.Zero : _body.Torque.ToProwl();
+        set { EnsureBody(); if (_body != null) _body.Torque = value.ToJitter(); }
     }
 
     [SerializeIgnore]
@@ -354,8 +354,8 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         SceneDispatcher.CollisionBegin(GameObject, new Collision(
             userData?.Rigidbody, collider,
-            new Float3(worldPos.X, worldPos.Y, worldPos.Z),
-            new Float3(normal.X, normal.Y, normal.Z),
+            worldPos.ToProwl(),
+            normal.ToProwl(),
             data.Contact0.Impulse));
     }
 
@@ -429,14 +429,14 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         if (interpolation == RigidbodyInterpolation.None || !_hasPose)
         {
-            position = ToFloat3(_body.Position);
-            rotation = ToQuaternion(_body.Orientation);
+            position = _body.Position.ToProwl();
+            rotation = _body.Orientation.ToProwl();
         }
         else if (interpolation == RigidbodyInterpolation.Extrapolate)
         {
             _body.PredictPose(Time.FixedAccumulator, out JVector predicted, out JQuaternion predictedOrientation);
-            position = ToFloat3(predicted);
-            rotation = ToQuaternion(predictedOrientation);
+            position = predicted.ToProwl();
+            rotation = predictedOrientation.ToProwl();
         }
         else
         {
@@ -508,8 +508,8 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         _previousPosition = _currentPosition;
         _previousRotation = _currentRotation;
-        _currentPosition = ToFloat3(_body.Position);
-        _currentRotation = ToQuaternion(_body.Orientation);
+        _currentPosition = _body.Position.ToProwl();
+        _currentRotation = _body.Orientation.ToProwl();
 
         if (!_hasPose)
         {
@@ -526,8 +526,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (_body?.IsValid != true) { _hasPose = false; return; }
 
-        _currentPosition = _previousPosition = ToFloat3(_body.Position);
-        _currentRotation = _previousRotation = ToQuaternion(_body.Orientation);
+        _currentPosition = _previousPosition = _body.Position.ToProwl();
+        _currentRotation = _previousRotation = _body.Orientation.ToProwl();
         _hasPose = true;
         CaptureLockedPose();
     }
@@ -685,8 +685,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// by the caller (initial creation, the pre-step sync, or an auto-synced query).</summary>
     internal void UpdateTransform(RigidBody rb)
     {
-        rb.Position = new JVector(Transform.Position.X, Transform.Position.Y, Transform.Position.Z);
-        rb.Orientation = new JQuaternion(Transform.Rotation.X, Transform.Rotation.Y, Transform.Rotation.Z, Transform.Rotation.W);
+        rb.Position = Transform.Position.ToJitter();
+        rb.Orientation = Transform.Rotation.ToJitter();
         ResetPose();
     }
 
@@ -710,7 +710,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        var jForce = new JVector(force.X, force.Y, force.Z);
+        var jForce = force.ToJitter();
         float inverseMass = body.Data.InverseMass;
 
         switch (mode)
@@ -745,8 +745,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        var jForce = new JVector(force.X, force.Y, force.Z);
-        var jPosition = new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z);
+        var jForce = force.ToJitter();
+        var jPosition = worldPosition.ToJitter();
 
         if (mode == ForceMode.Impulse)
         {
@@ -771,7 +771,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        var jTorque = new JVector(torque.X, torque.Y, torque.Z);
+        var jTorque = torque.ToJitter();
 
         switch (mode)
         {
@@ -823,11 +823,11 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (_body == null) return Float3.Zero;
 
-        var point = new JVector(worldPoint.X, worldPoint.Y, worldPoint.Z);
+        var point = worldPoint.ToJitter();
         JVector r = point - _body.Position;
         JVector velocity = _body.Velocity + JVector.Cross(_body.AngularVelocity, r);
 
-        return new Float3(velocity.X, velocity.Y, velocity.Z);
+        return velocity.ToProwl();
     }
 
     /// <summary>
@@ -864,7 +864,7 @@ public sealed class Rigidbody3D : MonoBehaviour
             // Body-local, because the shape offsets are; fall back to the origin when nothing weighed in.
             JVector local = totalMass > 0.0f ? weighted * (1.0f / totalMass) : JVector.Zero;
             JVector world = _body.Position + JVector.Transform(local, _body.Orientation);
-            return new Float3(world.X, world.Y, world.Z);
+            return world.ToProwl();
         }
     }
 
@@ -893,8 +893,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        var jImpulse = new JVector(impulse.X, impulse.Y, impulse.Z);
-        var jPosition = new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z);
+        var jImpulse = impulse.ToJitter();
+        var jPosition = worldPosition.ToJitter();
 
         JVector r = jPosition - body.Position;
         body.Velocity += jImpulse * body.Data.InverseMass;
@@ -910,7 +910,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        var jImpulse = new JVector(impulse.X, impulse.Y, impulse.Z);
+        var jImpulse = impulse.ToJitter();
         body.Velocity += jImpulse * body.Data.InverseMass;
 
         SetActive(true);
@@ -923,7 +923,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        var jImpulse = new JVector(angularImpulse.X, angularImpulse.Y, angularImpulse.Z);
+        var jImpulse = angularImpulse.ToJitter();
         body.AngularVelocity += JVector.Transform(jImpulse, body.Data.InverseInertiaWorld);
 
         SetActive(true);
@@ -936,7 +936,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        body.Position = new JVector(position.X, position.Y, position.Z);
+        body.Position = position.ToJitter();
         body.SetActivationState(true);
 
         // Static bodies never read their pose back, so the Transform has to be taken along explicitly.
@@ -952,7 +952,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!TryGetBody(out RigidBody body)) return;
 
-        body.Orientation = new JQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
+        body.Orientation = rotation.ToJitter();
         body.SetActivationState(true);
 
         Transform.Rotation = rotation;

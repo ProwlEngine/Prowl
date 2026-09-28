@@ -274,7 +274,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected Jitter2.LinearMath.JVector LocalToWorld(Float3 localPos, Transform transform)
     {
         Float3 worldPos = transform.TransformPoint(localPos);
-        return new Jitter2.LinearMath.JVector(worldPos.X, worldPos.Y, worldPos.Z);
+        return worldPos.ToJitter();
     }
 
     /// <summary>
@@ -283,6 +283,6 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected Jitter2.LinearMath.JVector LocalDirToWorld(Float3 localDir, Transform transform)
     {
         Float3 worldDir = transform.TransformDirection(localDir);
-        return new Jitter2.LinearMath.JVector(worldDir.X, worldDir.Y, worldDir.Z);
+        return worldDir.ToJitter();
     }
 }

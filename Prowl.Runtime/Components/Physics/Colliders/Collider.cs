@@ -327,7 +327,7 @@ public abstract class Collider : MonoBehaviour
             return shapes;
 
         Float4x4 linear = Float4x4.CreateTRS(Float3.Zero, rotation, scale);
-        var jTranslation = new JVector(translation.X, translation.Y, translation.Z);
+        var jTranslation = translation.ToJitter();
         var jLinear = new JMatrix(
             linear[0, 0], linear[0, 1], linear[0, 2],
             linear[1, 0], linear[1, 1], linear[1, 2],

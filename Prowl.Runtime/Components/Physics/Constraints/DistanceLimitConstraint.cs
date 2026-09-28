@@ -136,7 +136,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
         JVector worldAnchor1 = LocalToWorld(anchor, Body1.Transform);
         JVector worldAnchor2 = connectedBody.IsValid()
             ? LocalToWorld(connectedAnchor, connectedBody.Transform)
-            : new JVector(connectedAnchor.X, connectedAnchor.Y, connectedAnchor.Z);
+            : connectedAnchor.ToJitter();
 
         constraint = world.CreateConstraint<DistanceLimit>(body1, body2);
 
@@ -160,7 +160,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
             JVector worldAnchor1 = LocalToWorld(anchor, Body1.Transform);
             JVector worldAnchor2 = connectedBody.IsValid()
                 ? LocalToWorld(connectedAnchor, connectedBody.Transform)
-                : new JVector(connectedAnchor.X, connectedAnchor.Y, connectedAnchor.Z);
+                : connectedAnchor.ToJitter();
 
             constraint.Anchor1 = worldAnchor1;
             constraint.Anchor2 = worldAnchor2;

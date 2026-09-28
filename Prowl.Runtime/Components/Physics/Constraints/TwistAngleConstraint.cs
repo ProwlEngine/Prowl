@@ -130,7 +130,7 @@ public class TwistAngleConstraint : PhysicsConstraint
         JVector worldAxis1 = LocalDirToWorld(axis1, Body1.Transform);
         JVector worldAxis2 = connectedBody.IsValid()
             ? LocalDirToWorld(axis2, connectedBody.Transform)
-            : new JVector(axis2.X, axis2.Y, axis2.Z);
+            : axis2.ToJitter();
 
         constraint = world.CreateConstraint<TwistAngle>(body1, body2);
 

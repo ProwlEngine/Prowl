@@ -88,7 +88,7 @@ public class AngularMotorConstraint : PhysicsConstraint
         {
             if (constraint == null) return axis1;
             JVector jaxis = constraint.LocalAxis1;
-            return new Float3(jaxis.X, jaxis.Y, jaxis.Z);
+            return jaxis.ToProwl();
         }
     }
 
@@ -101,7 +101,7 @@ public class AngularMotorConstraint : PhysicsConstraint
         {
             if (constraint == null) return axis2;
             JVector jaxis = constraint.LocalAxis2;
-            return new Float3(jaxis.X, jaxis.Y, jaxis.Z);
+            return jaxis.ToProwl();
         }
     }
 
@@ -112,7 +112,7 @@ public class AngularMotorConstraint : PhysicsConstraint
         JVector worldAxis1 = LocalDirToWorld(axis1, Body1.Transform);
         JVector worldAxis2 = connectedBody.IsValid()
             ? LocalDirToWorld(axis2, connectedBody.Transform)
-            : new JVector(axis2.X, axis2.Y, axis2.Z);
+            : axis2.ToJitter();
 
         constraint = world.CreateConstraint<AngularMotor>(body1, body2);
         constraint.Initialize(worldAxis1, worldAxis2);

@@ -116,8 +116,8 @@ public sealed class MeshCollider : Collider
         var vertices = new JVector[sourceVertices.Length];
         for (int i = 0; i < sourceVertices.Length; i++)
         {
-            Float3 v = Float4x4.TransformPoint(new Float3(sourceVertices[i].X, sourceVertices[i].Y, sourceVertices[i].Z), transform);
-            vertices[i] = new JVector(v.X, v.Y, v.Z);
+            Float3 v = Float4x4.TransformPoint(sourceVertices[i].ToProwl(), transform);
+            vertices[i] = v.ToJitter();
         }
 
         // A mirrored transform reverses winding, which would flip every triangle normal and make the

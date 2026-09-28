@@ -162,7 +162,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         {
             if (constraint == null) return Float3.Zero;
             JVector impulse = constraint.Impulse;
-            return new Float3(impulse.X, impulse.Y, impulse.Z);
+            return impulse.ToProwl();
         }
     }
 
@@ -174,7 +174,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         JVector worldAnchor1 = LocalToWorld(anchor1, Body1.Transform);
         JVector worldAnchor2 = connectedBody.IsValid()
             ? LocalToWorld(anchor2, connectedBody.Transform)
-            : new JVector(anchor2.X, anchor2.Y, anchor2.Z);
+            : anchor2.ToJitter();
 
         constraint = world.CreateConstraint<PointOnLine>(body1, body2);
 
