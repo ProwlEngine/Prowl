@@ -1505,27 +1505,29 @@ public class EditorAssetBackend : AssetBackendBase
             return;
         }
 
-        string absolutePath = Path.Combine(_project.AssetsPath, obj.AssetPath);
-        var echo = Serializer.Serialize(typeof(object), obj);
-        if (echo != null)
-            File.WriteAllText(absolutePath, echo.WriteToString());
+        if (Serializer.Serialize(typeof(object), obj) is { } echo) SaveAsset(obj.AssetID, echo);
+    }
 
-        // Reimport to update cache. Dispose the previous main + sub-asset instances
-        // first so any holding AssetRef sees them as invalid and re-resolves to the
-        // freshly-imported instance. Without this, downstream refs (e.g. a Material
-        // pointing at a shader sub-asset that was just regenerated) keep the stale
-        // instance until the user manually reimports the dependent asset.
-        if (_guidToEntry.TryGetValue(obj.AssetID, out var entry))
+    /// <summary>
+    /// Writes an asset's serialized form over its source file and reimports it, which disposes the loaded
+    /// instance so every AssetRef picks up the new one. False, and logged, when the write fails.
+    /// </summary>
+    public bool SaveAsset(Guid guid, EchoObject serialized)
+    {
+        if (!_guidToEntry.TryGetValue(guid, out var entry)) return false;
+
+        try
         {
-            DisposeAndRemove(obj.AssetID);
-            if (entry.SubAssets != null)
-                foreach (var sub in entry.SubAssets)
-                    DisposeAndRemove(sub.Guid);
-
-            entry.NeedsReimport = true;
-            RunImport(entry);
-            MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            File.WriteAllText(Path.Combine(_project.AssetsPath, entry.Path), serialized.WriteToString());
         }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to save '{entry.Path}': {ex.Message}");
+            return false;
+        }
+
+        Reimport(guid);
+        return true;
     }
 
     /// <summary>
