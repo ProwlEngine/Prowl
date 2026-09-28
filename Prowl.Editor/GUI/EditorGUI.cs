@@ -375,6 +375,19 @@ public static class EditorGUI
             .OnClick(0, (_, _) => onClick());
     }
 
+    /// <summary>A quiet explanatory line, for the places an inspector has something to say.</summary>
+    public static void Note(Paper paper, string id, string text)
+    {
+        var m = Origami.Current.Metrics;
+        paper.Box(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.Spacing)
+            .Padding(m.Padding, m.Padding, m.SpacingMedium, m.SpacingMedium)
+            .Rounded(m.SmallRounding).BackgroundColor(EditorTheme.Neutral300).IsNotInteractable()
+            .Text(text, EditorTheme.DefaultFont!).TextColor(EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSizeSmall).Wrap(Scribe.TextWrapMode.Wrap)
+            .Alignment(TextAlignment.MiddleLeft);
+    }
+
     /// <summary>A colored call-to-action button. Pass <paramref name="grow"/> = true to stretch width.</summary>
     public static void CtaButton(Paper paper, string id, string label, Color bg, Action onClick, bool grow = false, float height = 28f)
     {
