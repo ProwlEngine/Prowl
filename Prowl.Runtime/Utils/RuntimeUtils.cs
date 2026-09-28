@@ -112,7 +112,7 @@ public static class RuntimeUtils
                     continue;
 
                 t = asm.GetType(typeNameOnly)
-                    ?? SafeGetTypes(asm).FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
+                    ?? GetLoadableTypes(asm).FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
                 if (t != null)
                     return t;
             }
@@ -133,7 +133,7 @@ public static class RuntimeUtils
             }
 
             // If not found, try to find by name without namespace
-            t = SafeGetTypes(asm).FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
+            t = GetLoadableTypes(asm).FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
             if (t != null)
                 return t;
         }
@@ -141,10 +141,11 @@ public static class RuntimeUtils
     }
 
     /// <summary>Returns an assembly's loadable types, tolerating partially-loadable assemblies.</summary>
-    private static IEnumerable<Type> SafeGetTypes(Assembly asm)
+    public static IEnumerable<Type> GetLoadableTypes(Assembly asm)
     {
         try { return asm.GetTypes(); }
         catch (ReflectionTypeLoadException ex) { return ex.Types.Where(t => t != null)!; }
+        catch { return Array.Empty<Type>(); }
     }
 
     /// <summary>
@@ -412,7 +413,7 @@ public static class RuntimeUtils
     {
         var assemblies = AssemblySource();
         foreach (Assembly assembly in assemblies)
-            foreach (Type type in assembly.GetTypes())
+            foreach (Type type in GetLoadableTypes(assembly))
                 if (type.GetCustomAttributes(typeof(T), true).Length > 0)
                     yield return type;
     }
@@ -422,7 +423,7 @@ public static class RuntimeUtils
         List<Type> types = [];
         foreach (Assembly asm in AssemblySource())
         {
-            foreach (Type type in asm.GetTypes())
+            foreach (Type type in GetLoadableTypes(asm))
             {
                 if (!propertyType.IsAssignableFrom(type) || type.IsAbstract || type.IsInterface)
                     continue;
