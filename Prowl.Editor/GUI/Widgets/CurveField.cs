@@ -71,8 +71,8 @@ public sealed class CurveFieldBuilder
             var id = _id;
             swatch.OnClick(e =>
             {
-                float anchorX = (float)e.ElementRect.Min.X;
-                float anchorY = (float)e.ElementRect.Max.Y + 2;
+                float anchorX = (float)e.ScreenRect.Min.X;
+                float anchorY = (float)e.ScreenRect.Max.Y + 2;
                 Modal.Push(new CurveEditorModal(id, curve, setter, anchorX, anchorY));
             });
         }
