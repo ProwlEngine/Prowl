@@ -278,17 +278,24 @@ public class InspectorPanel : DockPanel
             }
             else
             {
-                DrawSelectionHeader(paper, font, active);
-                Origami.Separator(paper, "insp_sep_header").Show();
-
                 if (active is ContentItem contentItem)
+                {
+                    DrawAssetHeader(paper, font, contentItem);
+                    Origami.Separator(paper, "insp_sep_header").Show();
                     DrawAssetInspector(paper, font, contentItem);
-                else if (active is ConsoleLogSelection logEntry)
-                    DrawConsoleLogInspector(paper, font, logEntry);
-                else if (active is EngineObject engineObj)
-                    DrawEngineObjectInspector(paper, font, engineObj);
+                }
                 else
-                    DrawGenericInspector(paper, font, active);
+                {
+                    // In place of a header, the gap the theme puts between sections.
+                    paper.Box("insp_top").Height(Origami.Current.Metrics.SpacingLarge).IsNotInteractable();
+
+                    if (active is ConsoleLogSelection logEntry)
+                        DrawConsoleLogInspector(paper, font, logEntry);
+                    else if (active is EngineObject engineObj)
+                        DrawEngineObjectInspector(paper, font, engineObj);
+                    else
+                        DrawGenericInspector(paper, font, active);
+                }
             }
 
             // Multi-selection summary (GameObjects already get a full multi-object inspector above)
@@ -372,30 +379,11 @@ public class InspectorPanel : DockPanel
             .Alignment(TextAlignment.MiddleCenter);
     }
 
-    private void DrawSelectionHeader(Paper paper, Scribe.FontFile font, object active)
+    private void DrawAssetHeader(Paper paper, Scribe.FontFile font, ContentItem ci)
     {
-        string icon;
-        string name;
-        string typeName;
-
-        if (active is ContentItem ci)
-        {
-            icon = ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant());
-            name = ci.Name;
-            typeName = ci.IsFolder ? Loc.Get("inspector.folder") : ci.TypeLabel;
-        }
-        else if (active is EngineObject eo)
-        {
-            icon = EditorIcons.Cube;
-            name = eo.Name;
-            typeName = eo.GetType().Name;
-        }
-        else
-        {
-            icon = EditorIcons.CircleInfo;
-            name = active.ToString() ?? Loc.Get("inspector.unknown");
-            typeName = active.GetType().Name;
-        }
+        string icon = ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant());
+        string name = ci.Name;
+        string typeName = ci.IsFolder ? Loc.Get("inspector.folder") : ci.TypeLabel;
 
         using (paper.Row("insp_header")
             .Height(40).Padding(4, 0, 4, 4).Gap(8)
