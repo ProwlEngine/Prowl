@@ -53,6 +53,7 @@ public class CharacterController : MonoBehaviour
     // just to rediscover a body that does not change is pure overhead.
     private Rigidbody3D _selfBody;
     private bool _selfBodyResolved;
+    private readonly HashSet<Rigidbody3D> _ignoredBodies = new();
 
     /// <summary>
     /// The filter every internal cast uses: the collision mask, minus anything belonging to a
@@ -66,9 +67,16 @@ public class CharacterController : MonoBehaviour
             if (!_selfBodyResolved) ResolveSelfBody();
 
             var filter = new QueryFilter(CollisionMask);
+            if (_ignoredBodies.Count > 0) filter = filter.Ignoring(_ignoredBodies);
             return _selfBody.IsValid() ? filter.Ignoring(_selfBody) : filter;
         }
     }
+
+    /// <summary>Stops the controller colliding with a body that moves with it, such as a part of its ragdoll.</summary>
+    public void IgnoreCollisionWith(Rigidbody3D body) => _ignoredBodies.Add(body);
+
+    /// <summary>Undoes <see cref="IgnoreCollisionWith"/>.</summary>
+    public void EnableCollisionWith(Rigidbody3D body) => _ignoredBodies.Remove(body);
 
     /// <summary>
     /// Re-resolves the rigidbody the controller must not collide with. Call after re-parenting, or after
@@ -188,8 +196,9 @@ public class CharacterController : MonoBehaviour
         // frame's step-up and snap decisions, since we haven't moved yet.
         bool wasGrounded = IsGrounded;
 
-        // Perform movement with collision
-        Float3 finalPosition = CollideAndSlide(position, motion, 0, wasGrounded);
+        // Across the ground first, then up or down, so a move angled into the floor still slides along it.
+        Float3 finalPosition = CollideAndSlide(position, new Float3(motion.X, 0f, motion.Z), 0, wasGrounded);
+        finalPosition = CollideAndSlide(finalPosition, new Float3(0f, motion.Y, 0f), 0, false);
 
         // Snap down to ground if moving horizontally on slopes
         if (wasGrounded && motion.Y <= 0)
@@ -509,12 +518,12 @@ public class CharacterController : MonoBehaviour
         float remainingDistance = moveDistance - safeDistance;
         Float3 remainingMove = moveDirection * remainingDistance;
 
-        // Check if this is a step we can climb
-        // Only attempt step-up if we're grounded and moving mostly horizontally
+        // A step is a face too steep to walk up, and only the horizontal part of what is left carries over it.
         float horizontalSpeed = Maths.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
-        if (grounded && horizontalSpeed > 0.0001 && StepSize > 0)
+        if (grounded && horizontalSpeed > 0.0001 && StepSize > 0 && GetSlopeAngle(hitInfo.Normal) > MaxSlopeAngle)
         {
-            if (TryStepUp(position, moveDirection, remainingDistance, out Float3 steppedPosition))
+            float horizontalRemaining = Maths.Sqrt(remainingMove.X * remainingMove.X + remainingMove.Z * remainingMove.Z);
+            if (TryStepUp(position, moveDirection, horizontalRemaining, out Float3 steppedPosition))
             {
                 return steppedPosition;
             }

@@ -207,4 +207,58 @@ public class CharacterControllerTests : RuntimeTestBase
         Assert.True(cc.GameObject.Transform.Position.X < 2.0f,
                     "the controller went through the wall");
     }
+
+    /// <summary>
+    /// A move angled down into flat ground, which is what walking under gravity asks for every frame,
+    /// covers exactly its horizontal part. The floor is ground to slide along, not a step to climb,
+    /// and climbing it used to turn the downward part into extra forward speed.
+    /// </summary>
+    [Fact]
+    public void WalkingUnderGravityCoversExactlyTheDistanceAsked()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(40, 1, 40));
+        var cc = AddController(scene, new Float3(0, 0.1f, 0));
+        for (int i = 0; i < 10; i++) cc.Move(new Float3(0, -0.05f, 0));
+        Assert.True(cc.IsGrounded);
+
+        float start = cc.GameObject.Transform.Position.Z;
+        for (int i = 0; i < 60; i++) cc.Move(new Float3(0, -0.033f, 0.028f));
+
+        Assert.Equal(60 * 0.028f, cc.GameObject.Transform.Position.Z - start, 2);
+    }
+
+    /// <summary>
+    /// Walking one way and then back the other, as a character turning round does, keeps moving. A
+    /// controller that has settled a little closer to the floor than its skin used to read the floor
+    /// as a wall on the way back and stop dead.
+    /// </summary>
+    [Fact]
+    public void AControllerThatHasBeenWalkingCanWalkBack()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(80, 1, 80));
+        var cc = AddController(scene, new Float3(0, 0.05f, 0));
+
+        for (int i = 0; i < 200; i++) cc.Move(new Float3(0, -0.033f, 0.06f));
+        float turnedAt = cc.GameObject.Transform.Position.Z;
+        for (int i = 0; i < 60; i++) cc.Move(new Float3(0, -0.033f, -0.028f));
+
+        Assert.Equal(-60 * 0.028f, cc.GameObject.Transform.Position.Z - turnedAt, 2);
+        Assert.True(cc.GameObject.Transform.Position.Y > 0f, $"sank into the floor to {cc.GameObject.Transform.Position.Y}");
+    }
+
+    /// <summary>A controller placed exactly on the floor, as a scene built by hand puts it, can walk away.</summary>
+    [Fact]
+    public void AControllerPlacedExactlyOnTheFloorCanWalk()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(40, 1, 40));
+        var cc = AddController(scene, Float3.Zero);
+
+        for (int i = 0; i < 30; i++) cc.Move(new Float3(0.05f, -0.033f, 0));
+
+        Assert.Equal(1.5, cc.GameObject.Transform.Position.X, 2);
+        Assert.True(cc.GameObject.Transform.Position.Y >= 0f);
+    }
 }
