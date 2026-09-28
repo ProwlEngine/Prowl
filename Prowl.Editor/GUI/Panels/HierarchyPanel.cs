@@ -366,8 +366,8 @@ public class HierarchyPanel : DockPanel
                         var (goIcon, goColor) = GetGoStyle(go);
                         if (!go.EnabledInHierarchy) goColor = Color.FromArgb(120, goColor);
                         paper.Box($"hier_ico_{goId}")
-                            .Width(18).Height(EditorTheme.RowHeight).IsNotInteractable()
-                            .Icon(paper, goIcon, goColor, size: 14f);
+                            .Width(24).Height(EditorTheme.RowHeight).IsNotInteractable()
+                            .Icon(paper, goIcon, goColor, size: 19f);
 
                         // Name or rename field
                         if (RenameOverlay.IsRenaming(goId))
@@ -393,9 +393,10 @@ public class HierarchyPanel : DockPanel
                         // Visibility eye
                         paper.Box($"hier_vis_{goId}")
                             .Width(18).Height(EditorTheme.RowHeight)
-                            .Text(node.TrailingIcon ?? "", font)
+                            /*.Text(node.TrailingIcon ?? "", font)
                             .TextColor(node.TrailingIconColor ?? EditorTheme.Ink400)
-                            .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
+                            .FontSize(9f).Alignment(TextAlignment.MiddleCenter)*/
+                            .Icon(paper, new EditorGlyphIcon(node.TrailingIcon ?? ""), node.TrailingIconColor ?? EditorTheme.Ink400, size: 19f)
                             .StopEventPropagation()
                             .OnClick(go, (g, _) =>
                             {
