@@ -816,7 +816,7 @@ public class SpriteEditorWindow : DockPanel
 
         Float2 tl = ScreenOf(new Float2(dx, dy));
         float sw = dw * _view.Zoom, sh = dh * _view.Zoom;
-        var accent = ToC32(EditorTheme.Purple400);
+        var accent = EditorTheme.ToColor32(EditorTheme.Purple400);
         canvas.RectFilled(tl.X, tl.Y, sw, sh, new Color32(accent.R, accent.G, accent.B, 48));
         StrokeRectShadowed(canvas, tl.X, tl.Y, sw, sh);
     }
@@ -826,7 +826,7 @@ public class SpriteEditorWindow : DockPanel
         var white = new Color32(255, 255, 255, 255);
         var shadow = new Color32(0, 0, 0, 180);
         var green = new Color32(90, 220, 130, 255);
-        var accent = ToC32(EditorTheme.Purple400);
+        var accent = EditorTheme.ToColor32(EditorTheme.Purple400);
 
         Float4 dr = DisplayRect(s.Rect, texH);
 
@@ -900,7 +900,6 @@ public class SpriteEditorWindow : DockPanel
             }
     }
 
-    private static Color32 ToC32(System.Drawing.Color c) => new(c.R, c.G, c.B, c.A);
 
     // --- Sidebar ---------------------------------------------------------------------
 
