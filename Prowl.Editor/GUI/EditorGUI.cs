@@ -362,6 +362,19 @@ public static class EditorGUI
             .OnClick(0, (_, _) => toggle());
     }
 
+    /// <summary>A small panel button, filled with the accent while <paramref name="active"/>.</summary>
+    public static ElementBuilder PillButton(Paper paper, string id, string label, bool active, Action onClick)
+    {
+        var m = Origami.Current.Metrics;
+        return paper.Box(id).Width(UnitValue.Auto).Height(26).Padding(12, 12, 0, 0).Rounded(m.SmallRounding)
+            .BackgroundColor(active ? EditorTheme.Accent : EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Hovered.BackgroundColor(active ? EditorTheme.AccentBright : EditorTheme.Neutral400).End()
+            .Text(label, EditorTheme.DefaultFont!).TextColor(active ? Color.White : EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
+    }
+
     /// <summary>A colored call-to-action button. Pass <paramref name="grow"/> = true to stretch width.</summary>
     public static void CtaButton(Paper paper, string id, string label, Color bg, Action onClick, bool grow = false, float height = 28f)
     {
