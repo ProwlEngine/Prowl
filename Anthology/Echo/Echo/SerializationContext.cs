@@ -50,7 +50,29 @@ public class SerializationContext
 
     private List<Action>? _deferredActions;
     private int _deserializeDepth;
+    private int _serializeDepth;
     private bool _runningDeferred;
+
+    /// <summary>The value given to the outermost Serialize call, which the reference rule always writes in full.</summary>
+    public object? Root { get; private set; }
+
+    /// <summary>Writes every reference by value, for exports that must not depend on the reference rule's store.</summary>
+    public bool IgnoreReferenceRule { get; set; }
+
+    /// <summary>Asks the reference rule about the root too, for writing a single value that is a reference, not an object being saved.</summary>
+    public bool RootByReference { get; set; }
+
+    internal bool IsOutermostSerialize => _serializeDepth == 1;
+
+    internal void EnterSerialize(object value)
+    {
+        if (_serializeDepth++ == 0) Root = value;
+    }
+
+    internal void ExitSerialize()
+    {
+        if (--_serializeDepth == 0) Root = null;
+    }
 
     /// <summary>
     /// Queues work to run after the whole object graph has finished deserializing (once every reference

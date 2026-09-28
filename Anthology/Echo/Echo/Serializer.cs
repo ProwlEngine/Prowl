@@ -24,6 +24,9 @@ public static class Serializer
     // Reserved key marking an external-reference stub (see IExternalReferenceResolver).
     private const string ExternalRefKey = "$extern";
 
+    /// <summary>Consulted by every context. Null writes every object by value.</summary>
+    public static IReferenceRule? ReferenceRule { get; set; }
+
     private static readonly ConcurrentDictionary<Type, ISerializationFormat> _formatCache = new();
     private static IReadOnlyList<ISerializationFormat> _formats;
 
@@ -132,9 +135,23 @@ public static class Serializer
         }
 
         var actualType = value.GetType();
+        context.EnterSerialize(value);
+        try
+        {
+            return actualType.IsValueType
+                ? SerializeValue(targetType, actualType, value, context)
+                : SerializeReference(targetType, actualType, value, context);
+        }
+        finally
+        {
+            context.ExitSerialize();
+        }
+    }
 
+    private static EchoObject SerializeReference(Type? targetType, Type actualType, object value, SerializationContext context)
+    {
         // Link out-of-graph references by key instead of inlining/deep-copying them.
-        if (context.ExternalReferences != null && !actualType.IsValueType)
+        if (context.ExternalReferences != null)
         {
             object? key = context.ExternalReferences.GetReferenceKey(value);
             if (key != null)
@@ -146,6 +163,21 @@ public static class Serializer
             }
         }
 
+        IReferenceRule? rule = ReferenceRule;
+        if (rule != null && !context.IgnoreReferenceRule && (context.RootByReference || !context.IsOutermostSerialize) &&
+            rule.TryGetReference(value, context, out string reference))
+        {
+            var stub = EchoObject.NewCompound();
+            stub[rule.Key] = new EchoObject(reference);
+            bool needsType = ShouldPreserveType(targetType, actualType, context);
+            return WrapWithTypeEnvelope(stub, needsType ? actualType : null, context);
+        }
+
+        return SerializeValue(targetType, actualType, value, context);
+    }
+
+    private static EchoObject SerializeValue(Type? targetType, Type actualType, object value, SerializationContext context)
+    {
         // Check for serialization override (e.g. external asset references)
         if (context.OnSerialize != null)
         {
@@ -264,6 +296,10 @@ public static class Serializer
             object? key = Deserialize(keyData, typeof(object), context);
             return key == null ? null : context.ExternalReferences.ResolveReference(key, actualType);
         }
+
+        IReferenceRule? rule = ReferenceRule;
+        if (rule != null && envelope.Data.TagType == EchoType.Compound && envelope.Data.TryGet(rule.Key, out var reference))
+            return rule.Resolve(reference.StringValue ?? "", actualType, context);
 
         // Check for deserialization override (e.g. external asset references)
         if (context.OnDeserialize != null)
