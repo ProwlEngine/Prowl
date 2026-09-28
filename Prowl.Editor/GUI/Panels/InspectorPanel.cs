@@ -911,6 +911,13 @@ public class InspectorPanel : DockPanel
 
     private void DrawGenericInspector(Paper paper, Scribe.FontFile font, object obj)
     {
+        // An editor registered for the type draws it, the same as it would for a component.
+        if (EditorRegistries.GetCustomEditor(obj.GetType()) is { } editor)
+        {
+            editor.OnGUI(paper, "insp_custom", obj);
+            return;
+        }
+
         Origami.Header(paper, "insp_h_generic", obj.GetType().Name).Show();
         Origami.Label(paper, "insp_generic_str", obj.ToString() ?? "null").Show();
 
