@@ -45,6 +45,11 @@ public static class Window
     public static event Action<Vector2D<int>>? FramebufferResize;
     public static event Action? Closing;
 
+    /// <summary>Asked when the window is about to close. Returning false keeps it open.</summary>
+    public static Func<bool>? CloseRequested;
+
+    private static bool s_closeConfirmed;
+
     public static event Action<Vector2D<int>>? Move;
     public static event Action<WindowState>? StateChanged;
     public static event Action<string[]>? FileDrop;
@@ -196,7 +201,7 @@ public static class Window
     {
         long lastTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         long freq = System.Diagnostics.Stopwatch.Frequency;
-        while (!InternalWindow.IsClosing)
+        while (!ShouldExit())
         {
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
             float delta = (float)((now - lastTicks) / (double)freq);
@@ -219,7 +224,29 @@ public static class Window
         }
     }
 
-    public static void Stop() => InternalWindow.Close();
+    /// <summary>Closes the window. A forced stop skips <see cref="CloseRequested"/>.</summary>
+    public static void Stop(bool force = false)
+    {
+        s_closeConfirmed |= force;
+        InternalWindow.Close();
+    }
+
+    private static bool ShouldExit()
+    {
+        if (!InternalWindow.IsClosing) return false;
+        if (s_closeConfirmed || CloseRequested == null) return true;
+
+        bool close;
+        try { close = CloseRequested(); }
+        catch (Exception ex)
+        {
+            Debug.LogError($"A close handler threw, so the window closes anyway: {ex}");
+            close = true;
+        }
+
+        if (!close) InternalWindow.IsClosing = false;
+        return close;
+    }
 
     public static void OnLoad()
     {
