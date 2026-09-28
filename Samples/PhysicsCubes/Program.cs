@@ -270,8 +270,8 @@ public sealed class PhysicsDemo : Game
         hinge.ConnectedBody = frameRb;
         hinge.Anchor = new Float3(-1.5f, 0, 0);
         hinge.Axis = new Float3(0, 1, 0);
-        hinge.MinAngleDegrees = -90;
-        hinge.MaxAngleDegrees = 90;
+        hinge.MinAngle = -90;
+        hinge.MaxAngle = 90;
 
         scene.Add(door);
     }
