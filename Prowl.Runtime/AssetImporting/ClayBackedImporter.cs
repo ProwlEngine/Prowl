@@ -737,6 +737,7 @@ internal static class ClayBackedImporter
 
         clip.Loop = overrides.Loop ?? settings.LoopAnimations;
         clip.SourceName = sourceName;
+        clip.TakeStart = start;
         return clip;
     }
 }

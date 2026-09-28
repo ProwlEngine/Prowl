@@ -36,20 +36,43 @@ internal sealed class AnimatorBinding
         byPath.TryAdd(string.Empty, root);
         Collect(root, byName, byPath);
 
+        var bound = new bool[_bones.Length];
         int unbound = 0;
         for (int b = 0; b < _bones.Length; b++)
-        {
-            string? name = skeleton.GetBoneID(b).DebugName;
-            Transform? bone = null;
-            if (name != null && !byName.TryGetValue(name, out bone))
-                byPath.TryGetValue(name, out bone);
-
-            _bones[b] = bone;
-            if (bone == null) unbound++;
-        }
+            if (Bind(skeleton, b, bound, byName, byPath) == null) unbound++;
         UnboundBones = unbound;
 
         BindChannels(skeleton);
+    }
+
+    // A bone is looked for under its parent bone first, so an object elsewhere that shares its name is never taken for it.
+    private Transform? Bind(MotionSkeleton skeleton, int bone, bool[] bound, Dictionary<string, Transform> byName, Dictionary<string, Transform> byPath)
+    {
+        if (bound[bone]) return _bones[bone];
+        bound[bone] = true;
+
+        string? name = skeleton.GetBoneID(bone).DebugName;
+        if (name == null) return null;
+
+        int parent = skeleton.GetParentBoneIndex(bone);
+        Transform? under = parent >= 0 && parent < _bones.Length ? Bind(skeleton, parent, bound, byName, byPath) : null;
+        Transform? found = under != null ? FindUnder(under, name) : null;
+        if (found == null && !byName.TryGetValue(name, out found)) byPath.TryGetValue(name, out found);
+        return _bones[bone] = found;
+    }
+
+    // Nearest first, so a direct child wins over a deeper one of the same name.
+    private static Transform? FindUnder(Transform parent, string name)
+    {
+        var queue = new Queue<Transform>();
+        queue.Enqueue(parent);
+        while (queue.Count > 0)
+            foreach (GameObject child in queue.Dequeue().GameObject.Children)
+            {
+                if (child.Name == name) return child.Transform;
+                queue.Enqueue(child.Transform);
+            }
+        return null;
     }
 
     private void Collect(Transform parent, Dictionary<string, Transform> byName, Dictionary<string, Transform> byPath)

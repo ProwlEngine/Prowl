@@ -480,7 +480,7 @@ public class ModelAssetEditor : ImportSettingsEditor
         // Markers the graph and gameplay read: footsteps, named moments, windows for warps and transitions.
         EditorGUI.SectionHeader(paper, $"{id}_h_clipEvents", "Events");
         view.Events.Draw(paper, $"{id}_clipEvents", font, settings, sourceName,
-            Float(block, Importers.ModelImportKeys.ClipTrimStart, 0f), clip.Duration, view.Time, t =>
+            clip.TakeStart, clip.Duration, view.Time, t =>
             {
                 view.Time = Math.Clamp(t, 0f, 1f);
                 view.Playing = false;

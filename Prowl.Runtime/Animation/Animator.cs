@@ -49,22 +49,22 @@ public class Animator : MonoBehaviour
     internal AnimatorRagdoll? Ragdoll => _ragdoll;
     [NonSerialized] private AnimationClip? _pending;
     [NonSerialized] private bool _autoPlayPending;
-    [NonSerialized] private readonly Dictionary<string, NodeValue> _pendingParameters = new();
+    [NonSerialized] private readonly Dictionary<string, ParameterValue> _pendingParameters = new();
     [NonSerialized] private readonly Dictionary<string, PluggedGraph> _slots = new();
+    [NonSerialized] private readonly Dictionary<string, Pose> _externalPoses = new();
     [NonSerialized] private AnimationGraph? _boundGraph;
     [NonSerialized] private int _boundVersion;
+    [NonSerialized] private int _seenEdits = -1;
 
     // The graph version that failed to bind, so it is not retried until it changes.
     [NonSerialized] private AnimationGraph? _failedGraph;
     [NonSerialized] private int _failedVersion;
 
-    [NonSerialized] private long _waitingSince = -1;
+    // An avatar that could not be loaded, so binding does not block on it again every frame.
+    [NonSerialized] private Guid _missingAvatar;
 
     /// <summary>How long a graph has to stop changing before a running animator picks the edit up.</summary>
     private const long SettleMilliseconds = 150;
-
-    /// <summary>How long binding waits on a missing graph or clip before saying so.</summary>
-    private const long WaitWarnMilliseconds = 5000;
 
     /// <summary>The clip playing now, or the one being faded to.</summary>
     public AnimationClip? CurrentClip { get; private set; }
@@ -104,16 +104,17 @@ public class Animator : MonoBehaviour
         _clips = null;
         _graph = null;
         _boundAvatar = null;
+        _missingAvatar = Guid.Empty;
         _ragdoll?.Release();
         _ragdoll = null;
     }
 
     /// <summary>Sets a graph parameter. A write made before the graph is bound is applied once it is.</summary>
-    public void SetFloat(string name, float value) => SetParameter(name, NodeValue.FromNumber(value));
+    public void SetFloat(string name, float value) => SetParameter(name, ParameterValue.FromFloat(value));
 
-    public void SetBool(string name, bool value) => SetParameter(name, NodeValue.FromFlag(value));
+    public void SetBool(string name, bool value) => SetParameter(name, ParameterValue.FromBool(value));
 
-    public void SetInt(string name, int value) => SetParameter(name, NodeValue.FromInteger(value));
+    public void SetInt(string name, int value) => SetParameter(name, ParameterValue.FromInt(value));
 
     /// <summary>Sets a trigger, which stays set until a state machine transition fires on it.</summary>
     public void SetTrigger(string name) => SetBool(name, true);
@@ -121,15 +122,36 @@ public class Animator : MonoBehaviour
     /// <summary>Clears a trigger no transition has used yet.</summary>
     public void ResetTrigger(string name) => SetBool(name, false);
 
-    public void SetVector(string name, Float3 value) => SetParameter(name, NodeValue.FromVector(value));
+    public void SetVector(string name, Float3 value) => SetParameter(name, ParameterValue.FromVector(value));
 
-    public float GetFloat(string name) => _graph?.GetFloat(name) ?? 0f;
+    public void SetTarget(string name, Target value) => SetParameter(name, ParameterValue.FromTarget(value));
 
-    public bool GetBool(string name) => _graph?.GetBool(name) ?? false;
+    public void SetId(string name, StringID value) => SetParameter(name, ParameterValue.FromId(value));
 
-    public int GetInt(string name) => _graph?.GetInt(name) ?? 0;
+    /// <summary>Reads a graph parameter. Before the graph is bound it reads what was set, and an unknown name reads as zero.</summary>
+    public float GetFloat(string name) => GetParameter(name).AsFloat();
 
-    private void SetParameter(string name, NodeValue value)
+    public bool GetBool(string name) => GetParameter(name).AsBool();
+
+    public int GetInt(string name) => GetParameter(name).AsInt();
+
+    public Float3 GetVector(string name) => GetParameter(name).Vector;
+
+    public Target GetTarget(string name) => GetParameter(name).Target;
+
+    public StringID GetId(string name) => GetParameter(name).AsId();
+
+    private ParameterValue GetParameter(string name)
+    {
+        if (_graph == null) return _pendingParameters.TryGetValue(name, out ParameterValue pending) ? pending : default;
+        if (_graph.Graph.GetParameterIndex(name) >= 0) return Read(_graph.Graph, name);
+
+        Debug.LogWarningOnce($"Animator.Parameter.{GameObject.Name}.{name}",
+            $"[Animator] '{GameObject.Name}' read the parameter '{name}', which its graph does not have.");
+        return default;
+    }
+
+    private void SetParameter(string name, ParameterValue value)
     {
         if (_graph != null)
         {
@@ -142,27 +164,16 @@ public class Animator : MonoBehaviour
     }
 
     /// <summary>Writes a parameter, warning once instead of throwing when the graph cannot take it.</summary>
-    private void TryWrite(string name, NodeValue value)
+    private void TryWrite(string name, ParameterValue value)
     {
         try
         {
-            Write(_graph!, name, value);
+            _graph!.Graph.SetParameterValue(name, value);
         }
         catch (Exception ex)
         {
             Debug.LogWarningOnce($"Animator.Parameter.{GameObject.Name}.{name}",
                 $"[Animator] '{GameObject.Name}' set the parameter '{name}', which its graph cannot take: {ex.Message}");
-        }
-    }
-
-    private static void Write(ProwlGraphAnimator graph, string name, NodeValue value)
-    {
-        switch (value.Kind)
-        {
-            case NodeValueKind.Flag: graph.SetBool(name, value.Flag); break;
-            case NodeValueKind.Integer: graph.SetInt(name, value.Integer); break;
-            case NodeValueKind.Vector: graph.SetVector(name, value.Vector); break;
-            default: graph.SetFloat(name, value.Number); break;
         }
     }
 
@@ -176,13 +187,31 @@ public class Animator : MonoBehaviour
     {
         if (FindExternalPose(name) is not { } node) return null;
         node.HasPose = true;
+        _externalPoses[name] = node.Source;
         return node.Source;
     }
 
     /// <summary>Puts the External Pose node of this name back on the reference pose.</summary>
     public void ClearExternalPose(string name)
     {
+        _externalPoses.Remove(name);
         if (FindExternalPose(name) is { } node) node.HasPose = false;
+    }
+
+    // A rebind makes new nodes, which carry on from the poses the old ones were showing.
+    private void KeepExternalPoses()
+    {
+        foreach ((string name, Pose old) in new List<KeyValuePair<string, Pose>>(_externalPoses))
+        {
+            if (FindExternalPose(name) is not { } node || !ReferenceEquals(node.Source.Skeleton, old.Skeleton))
+            {
+                _externalPoses.Remove(name);
+                continue;
+            }
+            node.Source.CopyFrom(old);
+            node.HasPose = true;
+            _externalPoses[name] = node.Source;
+        }
     }
 
     /// <summary>
@@ -204,6 +233,7 @@ public class Animator : MonoBehaviour
         public AssetRef<AnimationGraph> Graph = graph;
         public AnimationGraph? Bound;
         public int Version;
+        public int SeenEdits = -1;
 
         public bool OutOfDate
         {
@@ -211,7 +241,14 @@ public class Animator : MonoBehaviour
             {
                 AnimationGraph? asset = Graph.Res;
                 if (!ReferenceEquals(asset, Bound)) return true;
-                return asset.IsValid() && asset!.DeepVersion != Version && asset.SinceChanged >= SettleMilliseconds;
+                if (asset.IsNotValid() || SeenEdits == AnimationGraph.Edits) return false;
+
+                if (asset!.DeepVersion == Version)
+                {
+                    SeenEdits = AnimationGraph.Edits;
+                    return false;
+                }
+                return asset.SinceChanged >= SettleMilliseconds;
             }
         }
     }
@@ -254,6 +291,9 @@ public class Animator : MonoBehaviour
     public void Play(AnimationClip clip)
     {
         ArgumentNullException.ThrowIfNull(clip);
+        if (_graph != null)
+            Debug.LogWarningOnce($"Animator.PlayWithGraph.{GameObject.Name}",
+                $"[Animator] '{GameObject.Name}' runs a graph, so Play only takes effect if the graph is removed.");
         CurrentClip = clip;
         _pending = clip;
         _autoPlayPending = false;
@@ -292,7 +332,7 @@ public class Animator : MonoBehaviour
     {
         if (_animator != null && GraphOutOfDate(out AnimationGraph? edited))
         {
-            KeepParameters(edited);
+            KeepParameters();
             Rebind();
         }
 
@@ -309,22 +349,33 @@ public class Animator : MonoBehaviour
         _animator.Update(deltaTime);
     }
 
-    // Binding waits for the rig, the graph and its clips to finish loading.
+    // Binding loads the rig, the graph and everything the graph reads, so an animator starts on its first update.
+    // Whatever still fails to load is missing, and the graph plays without it.
     private bool EnsureBound()
     {
         if (_animator != null) return true;
 
+        if (Avatar.AssetID != _missingAvatar) Avatar.EnsureLoaded();
         Avatar? avatar = Avatar.Res;
-        if (avatar.IsNotValid() || avatar!.Skeleton == null) return false;
+        if (avatar.IsNotValid())
+        {
+            if (Avatar.AssetID != Guid.Empty && Avatar.AssetID != _missingAvatar)
+            {
+                _missingAvatar = Avatar.AssetID;
+                Debug.LogWarning($"[Animator] '{GameObject.Name}' could not load its avatar, so it does not animate.");
+            }
+            return false;
+        }
+        if (avatar!.Skeleton == null) return false;
 
         MotionAvatar? runtime = avatar.Runtime;
         if (runtime == null) return false;
 
+        Graph.EnsureLoaded();
         AnimationGraph? graphAsset = Graph.Res;
-        if (!Graph.IsExplicitNull && graphAsset.IsNotValid()) return Wait("its graph");
-        if (graphAsset.IsValid() && !graphAsset!.DependenciesLoaded(out string? waitingFor) && !WaitedLongEnough())
-            return Wait($"a {waitingFor} its graph uses");
-        _waitingSince = -1;
+        if (graphAsset.IsValid()) graphAsset!.LoadDependencies();
+        else if (!Graph.IsExplicitNull)
+            Debug.LogWarning($"[Animator] '{GameObject.Name}' could not load its graph, so it plays its clips.");
 
         var binding = new AnimatorBinding(Transform, avatar.Skeleton);
         if (binding.UnboundBones > 0)
@@ -340,6 +391,7 @@ public class Animator : MonoBehaviour
         if (graphAsset.IsValid() && TryBindGraph(graphAsset!, binding, avatar.Skeleton, runtime))
         {
             ReplayPending();
+            KeepExternalPoses();
             foreach ((string slot, PluggedGraph plugged) in _slots) Plug(slot, plugged);
             return true;
         }
@@ -378,21 +430,9 @@ public class Animator : MonoBehaviour
 
     private void ReplayPending()
     {
-        foreach ((string name, NodeValue value) in _pendingParameters) TryWrite(name, value);
+        foreach ((string name, ParameterValue value) in _pendingParameters) TryWrite(name, value);
         _pendingParameters.Clear();
     }
-
-    /// <summary>Waits on something still loading, warning once if the wait runs long.</summary>
-    private bool Wait(string what)
-    {
-        if (_waitingSince < 0) _waitingSince = Environment.TickCount64;
-        else if (WaitedLongEnough())
-            Debug.LogWarningOnce($"Animator.Waiting.{GameObject.Name}",
-                $"[Animator] '{GameObject.Name}' is still waiting for {what} to load. If it is missing, the animator will not start.");
-        return false;
-    }
-
-    private bool WaitedLongEnough() => _waitingSince >= 0 && Environment.TickCount64 - _waitingSince >= WaitWarnMilliseconds;
 
     private void StartPending()
     {
@@ -420,30 +460,35 @@ public class Animator : MonoBehaviour
         asset = Graph.Res;
         if (asset.IsNotValid()) return _boundGraph != null && Graph.IsExplicitNull;
         if (!ReferenceEquals(asset, _boundGraph)) return true;
-        return asset!.DeepVersion != _boundVersion && asset.SinceChanged >= SettleMilliseconds;
+        if (_seenEdits == AnimationGraph.Edits) return false;
+
+        if (asset!.DeepVersion == _boundVersion)
+        {
+            _seenEdits = AnimationGraph.Edits;
+            return false;
+        }
+        return asset.SinceChanged >= SettleMilliseconds;
     }
 
     /// <summary>Carries the running parameter values across a rebind.</summary>
-    private void KeepParameters(AnimationGraph? asset)
+    private void KeepParameters()
     {
         AnimationGraphInstance? running = _graph?.Graph;
-        if (running == null || asset.IsNotValid()) return;
+        if (running == null) return;
 
-        foreach (GraphParameterRecord parameter in asset!.Parameters)
-        {
-            if (parameter.Name.Length == 0 || running.GetParameterIndex(parameter.Name) < 0) continue;
-
-            NodeValue? value = parameter.Kind switch
-            {
-                NodeValueKind.Flag => NodeValue.FromFlag(running.GetBool(parameter.Name)),
-                NodeValueKind.Integer => NodeValue.FromInteger(running.GetInt(parameter.Name)),
-                NodeValueKind.Vector => NodeValue.FromVector(running.GetVector(parameter.Name)),
-                NodeValueKind.Number => NodeValue.FromNumber(running.GetFloat(parameter.Name)),
-                _ => null,
-            };
-            if (value != null) _pendingParameters[parameter.Name] = value;
-        }
+        foreach (ControlParameterDefinition parameter in running.Graph.Parameters)
+            _pendingParameters[parameter.Name] = Read(running, parameter.Name);
     }
+
+    private static ParameterValue Read(AnimationGraphInstance graph, string name) => graph.GetParameterType(graph.GetParameterIndex(name)) switch
+    {
+        AnimationValueType.Bool => ParameterValue.FromBool(graph.GetBool(name)),
+        AnimationValueType.Int => ParameterValue.FromInt(graph.GetInt(name)),
+        AnimationValueType.Vector => ParameterValue.FromVector(graph.GetVector(name)),
+        AnimationValueType.Target => ParameterValue.FromTarget(graph.GetTarget(name)),
+        AnimationValueType.Id => ParameterValue.FromId(graph.GetId(name)),
+        _ => ParameterValue.FromFloat(graph.GetFloat(name)),
+    };
 
     /// <summary>Rebuilds the graph and rebinds. Call after editing the graph asset.</summary>
     public void RecompileGraph()
@@ -453,7 +498,7 @@ public class Animator : MonoBehaviour
         Rebind();
     }
 
-    internal Transform3D RootWorld => new(Transform.Position, Transform.Rotation, Transform.LocalScale);
+    internal Transform3D RootWorld => new(Transform.Position, Transform.Rotation, Transform.LossyScale);
 
     internal void ApplyRootMotionDelta(in Transform3D delta)
     {

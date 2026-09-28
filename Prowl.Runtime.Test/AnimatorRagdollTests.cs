@@ -18,9 +18,9 @@ namespace Prowl.Runtime.Test;
 /// <summary>The Ragdoll node's puppet: how it is made, how closely what it shows follows the animation, and how it stays whole.</summary>
 public class AnimatorRagdollTests : RuntimeTestBase
 {
-    private (Scene Scene, Animator Animator, GameObject Root) SetupRagdoll(bool controller = false, float active = 1f)
+    private (Scene Scene, Animator Animator, GameObject Root) SetupRagdoll(bool controller = false, float active = 1f, bool chest = true)
     {
-        (MotionSkeleton skeleton, GameObject root) = TestHumanoid.Build();
+        (MotionSkeleton skeleton, GameObject root) = TestHumanoid.Build(chest);
         Avatar avatar = Avatar.CreateAutomatic(skeleton, out _, "Character");
 
         Scene scene = CreateScene();
@@ -60,6 +60,18 @@ public class AnimatorRagdollTests : RuntimeTestBase
         Assert.Equal(16, bodies.Count);
         Assert.Equal(60f, bodies.Sum(b => b.Mass), 2);
         Assert.All(bodies, b => Assert.Equal(Jitter2.Dynamics.MotionType.Dynamic, b.MotionType));
+    }
+
+    // Chest is an optional humanoid bone, and without one the chest's body sits on the spine.
+    [Fact]
+    public void ARigWithoutAChest_GetsItsRagdoll()
+    {
+        (Scene scene, Animator animator, _) = SetupRagdoll(chest: false);
+        Assert.False(animator.Avatar.Res!.Runtime!.Humanoid!.HasBone(HumanBodyBone.Chest));
+
+        Tick(scene, 3);
+
+        Assert.NotEmpty(animator.Ragdoll!.Bodies);
     }
 
     // The puppet stands inside the controller's capsule, so a controller that could hit it would push itself away.

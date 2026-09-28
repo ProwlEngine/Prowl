@@ -33,6 +33,7 @@ public sealed class Avatar : EngineObject, ISerializable
     private int _rootBoneIndex;
 
     [NonSerialized] private MotionAvatar? _runtime;
+    [NonSerialized] private bool _buildFailed;
 
     public Avatar() : base("Avatar") { }
 
@@ -50,32 +51,43 @@ public sealed class Avatar : EngineObject, ISerializable
     /// <summary>True once a humanoid rig has mapped successfully.</summary>
     public bool IsHuman => Runtime is { IsHuman: true };
 
-    /// <summary>The Motion avatar, built on first use. Null without a skeleton, or when the humanoid mapping failed.</summary>
+    /// <summary>The Motion avatar, built on first use. A humanoid whose mapping fails is built as a generic rig. Null without a skeleton.</summary>
     public MotionAvatar? Runtime
     {
         get
         {
             EnsureNotDisposed();
-            if (_runtime != null || _skeleton == null)
+            if (_runtime != null || _skeleton == null || _buildFailed)
                 return _runtime;
+
+            if (_rigType == AvatarRigType.Humanoid && _description != null)
+            {
+                try
+                {
+                    _runtime = AvatarBuilder.BuildHumanoid(_skeleton, _description);
+                    return _runtime;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[Avatar] '{Name}' has a humanoid mapping that does not work, so it plays as a generic rig: {ex.Message}");
+                }
+            }
 
             try
             {
-                _runtime = _rigType == AvatarRigType.Humanoid && _description != null
-                    ? AvatarBuilder.BuildHumanoid(_skeleton, _description)
-                    : AvatarBuilder.BuildGeneric(_skeleton, _rootBoneIndex);
+                _runtime = AvatarBuilder.BuildGeneric(_skeleton, _rootBoneIndex);
             }
             catch (Exception ex)
             {
                 Debug.LogError($"[Avatar] '{Name}' could not be built: {ex.Message}");
-                _runtime = null;
+                _buildFailed = true;
             }
             return _runtime;
         }
     }
 
     /// <summary>Drops the built avatar so the next use rebuilds it from the current description.</summary>
-    public void Invalidate() { EnsureNotDisposed(); _runtime = null; }
+    public void Invalidate() { EnsureNotDisposed(); _runtime = null; _buildFailed = false; }
 
     public static Avatar CreateGeneric(MotionSkeleton skeleton, int rootBoneIndex = 0, string? name = null)
     {

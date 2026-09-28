@@ -18,9 +18,9 @@ namespace Prowl.Runtime.Test;
 internal static class TestHumanoid
 {
     // A standing humanoid rig and the hierarchy it binds to, built from one list of bones.
-    public static (MotionSkeleton Skeleton, GameObject Root) Build()
+    public static (MotionSkeleton Skeleton, GameObject Root) Build(bool chest = true)
     {
-        var defs = new (string Name, string? Parent, Float3 Local)[]
+        var all = new (string Name, string? Parent, Float3 Local)[]
         {
             ("Hips", null, new Float3(0f, 1f, 0f)),
             ("Spine", "Hips", new Float3(0f, 0.15f, 0f)),
@@ -43,6 +43,10 @@ internal static class TestHumanoid
             ("RightLowerLeg", "RightUpperLeg", new Float3(0f, -0.45f, 0f)),
             ("RightFoot", "RightLowerLeg", new Float3(0f, -0.45f, 0f)),
         };
+
+        // Without a chest the neck and shoulders hang off the spine.
+        var defs = chest ? all : Array.ConvertAll(Array.FindAll(all, d => d.Name is not ("Chest" or "UpperChest")),
+            d => d.Parent is "Chest" or "UpperChest" ? (d.Name, "Spine", d.Local) : d);
 
         var root = new GameObject("Character");
         var objects = new Dictionary<string, GameObject>();

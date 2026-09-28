@@ -64,6 +64,8 @@ internal sealed class AnimatorRagdoll
     private readonly HashSet<Rigidbody3D> _bodies = new();
     private Part[] _parts = Array.Empty<Part>();
     private int[] _parentsFirst = Array.Empty<int>();
+    private float _builtMass;
+    private bool _builtHandsAndFeet;
     private Transform3D[] _shown = Array.Empty<Transform3D>();
     private bool[,] _pairCollides = new bool[0, 0];
     private GameObject? _puppet;
@@ -94,7 +96,13 @@ internal sealed class AnimatorRagdoll
 
     public bool EnsureBodies(float totalMass, bool handsAndFeet)
     {
-        if (_puppet.IsValid()) return _parts.Length > 0;
+        if (_puppet.IsValid())
+        {
+            if (totalMass != _builtMass || handsAndFeet != _builtHandsAndFeet)
+                Debug.LogWarningOnce($"Animator.Ragdolls.{_animator.GameObject.Name}",
+                    $"[Animator] '{_animator.GameObject.Name}' has Ragdoll nodes with different bodies, but a character has one ragdoll, made as the first asked.");
+            return _parts.Length > 0;
+        }
         if (_rig == null || _animator.Scene.IsNotValid()) return false;
 
         Dictionary<HumanBodyBone, Transform>? bones = RagdollBuilder.FindBones(_rig, _binding, out string problem);
@@ -104,6 +112,23 @@ internal sealed class AnimatorRagdoll
             return false;
         }
 
+        _builtMass = totalMass;
+        _builtHandsAndFeet = handsAndFeet;
+        try
+        {
+            Make(bones, totalMass, handsAndFeet);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Animator] '{_animator.GameObject.Name}' could not make its ragdoll: {ex.Message}");
+            Release();
+            return false;
+        }
+        return _parts.Length > 0;
+    }
+
+    private void Make(Dictionary<HumanBodyBone, Transform> bones, float totalMass, bool handsAndFeet)
+    {
         // Flat, so no body is ever moved by another body's transform.
         _puppet = new GameObject($"{_animator.GameObject.Name} Ragdoll") { HideFlags = HideFlags.HideAndDontSave };
         _animator.Scene!.Add(_puppet);
@@ -122,7 +147,7 @@ internal sealed class AnimatorRagdoll
         var parts = new List<Part>(bodies.Count);
         foreach ((HumanBodyBone bone, Rigidbody3D body) in bodies)
         {
-            int index = _rig.GetSkeletonBoneIndex(bone);
+            int index = SkeletonIndexOf(bones[bone]);
             _partOfBone[index] = parts.Count;
             parts.Add(new Part { Body = body, Bone = bones[bone], BoneIndex = index });
         }
@@ -152,7 +177,14 @@ internal sealed class AnimatorRagdoll
         }
         _physics.IgnoreCollisionsBetween(ignored);
         _pairCollides = new bool[_parts.Length, _parts.Length];
-        return _parts.Length > 0;
+    }
+
+    // The skeleton bone a Transform shows, so a part standing in for a bone the rig lacks sits on the bone it stands on.
+    private int SkeletonIndexOf(Transform transform)
+    {
+        for (int i = 0; i < _skeleton.BoneCount; i++)
+            if (ReferenceEquals(_binding.BoneTransform(i), transform)) return i;
+        throw new InvalidOperationException($"'{transform.GameObject.Name}' is not one of the rig's bones.");
     }
 
     /// <summary>Takes the puppet out of the world.</summary>

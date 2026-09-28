@@ -90,7 +90,8 @@ public sealed class ExternalGraphSlotNode : AnimationGraphNode
     public override int Build(GraphCompileContext ctx, GraphNodeRecord r)
     {
         string name = r.Get(Slot);
-        return name.Length == 0 ? ctx.Graph.AddPassthrough(ctx.Input(r, _fallback)) : ctx.Graph.AddExternalGraphSlot(name, ctx.Input(r, _fallback));
+        int fallback = ctx.Input(r, _fallback);
+        return name.Length > 0 && ctx.ClaimName(r, name) ? ctx.Graph.AddExternalGraphSlot(name, fallback) : ctx.Graph.AddPassthrough(fallback);
     }
 }
 

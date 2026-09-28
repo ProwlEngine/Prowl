@@ -206,20 +206,29 @@ internal static class ModelRigBuilder
 
     /// <summary>
     /// The bone a clip moves the character by when nothing says otherwise: the highest one in the
-    /// hierarchy whose position the clip animates, which is the hips on most rigs.
+    /// hierarchy whose position the clip moves, which is the hips on most rigs. A file that keys every
+    /// bone keys the ones that stand still too, so a track that never moves counts only when none do.
     /// </summary>
     public static int AnimatedRootBone(ClayAnim source, MotionSkeleton skeleton)
     {
-        int best = -1, bestDepth = int.MaxValue;
+        int moving = -1, movingDepth = int.MaxValue, keyed = -1, keyedDepth = int.MaxValue;
         foreach (AnimationBinding binding in source.Bindings)
         {
             if (binding.Property != AnimatedProperty.Position || binding.NodeIndex < 0 || binding.NodeIndex >= skeleton.BoneCount) continue;
 
             int depth = 0;
             for (int b = skeleton.GetParentBoneIndex(binding.NodeIndex); b >= 0; b = skeleton.GetParentBoneIndex(b)) depth++;
-            if (depth < bestDepth) { best = binding.NodeIndex; bestDepth = depth; }
+            if (depth < keyedDepth) { keyed = binding.NodeIndex; keyedDepth = depth; }
+            if (depth < movingDepth && Moves(binding.Curve)) { moving = binding.NodeIndex; movingDepth = depth; }
         }
-        return best;
+        return moving >= 0 ? moving : keyed;
+    }
+
+    private static bool Moves(Prowl.Vector.AnimationCurve curve)
+    {
+        for (int i = 1; i < curve.Count; i++)
+            if (Float3.LengthSquared(curve[i].Value3 - curve[0].Value3) > 1e-10f) return true;
+        return false;
     }
 
     /// <summary>

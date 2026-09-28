@@ -53,6 +53,7 @@ public static class AnimationNodeRegistry
         s_scanned = false;
         s_nodes.Clear();
         s_ordered.Clear();
+        AnimationGraph.NodeTypesChanged();
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
@@ -106,6 +107,9 @@ public sealed class GraphCompileContext
     private readonly HashSet<string> _compiling = new();
     private readonly HashSet<AnimationGraph> _visiting;
 
+    // Names slots and virtual parameters are found by, which a node's own name never takes.
+    private readonly HashSet<string> _lookupNames = new();
+
     internal GraphCompileContext(AnimationGraph asset, MotionGraph graph, MotionSkeleton skeleton, MotionAvatar? avatar, HashSet<AnimationGraph> visiting)
     {
         _asset = asset;
@@ -116,7 +120,27 @@ public sealed class GraphCompileContext
 
         _records = new Dictionary<string, GraphNodeRecord>(asset.Nodes.Count);
         foreach (GraphNodeRecord node in asset.Nodes)
+        {
             _records.TryAdd(node.Id, node);
+            string lookup = node.Type switch
+            {
+                AnimationNodeIds.ExternalGraphSlot => node.Get(ExternalGraphSlotNode.Slot),
+                AnimationNodeIds.VirtualParameter => node.Get(ParameterNode.NameSetting),
+                _ => string.Empty,
+            };
+            if (lookup.Length > 0) _lookupNames.Add(lookup);
+        }
+    }
+
+    /// <summary>
+    /// Whether a name a node is looked up by is still free. A second slot or virtual parameter of the
+    /// same name is reported and left without one.
+    /// </summary>
+    public bool ClaimName(GraphNodeRecord record, string name)
+    {
+        if (Graph.GetNodeIndex(name) < 0) return true;
+        Debug.LogWarning($"[AnimationGraph] '{_asset.Name}' has more than one node looked up as '{name}', so a {record.Type} node is left out.");
+        return false;
     }
 
     /// <summary>A context for a state's graph asset compiled into the same Motion graph.</summary>
@@ -275,7 +299,7 @@ public sealed class GraphCompileContext
             index = type.Build(this, record);
 
             // Names are unique, so a second node wanting a taken name goes without.
-            if (index >= 0 && record.Name.Length > 0)
+            if (index >= 0 && record.Name.Length > 0 && !_lookupNames.Contains(record.Name))
             {
                 int owner = Graph.GetNodeIndex(record.Name);
                 if (owner < 0 || owner == index) Graph.NameNode(index, record.Name);

@@ -244,6 +244,95 @@ public class AnimationGraphTests : RuntimeTestBase
         return (scene, animator, root);
     }
 
+    // A node's own name is only a label, so it never takes the name a slot is found by.
+    [Fact]
+    public void ASlotNamedLikeAnotherNode_StillCompiles_AndTakesAGraph()
+    {
+        MotionSkeleton skeleton = BuildSkeleton();
+        Avatar avatar = Avatar.CreateGeneric(skeleton, 0, "Rig");
+
+        var host = new AnimationGraph { Name = "Host" };
+        HeldClipNode(host, skeleton, avatar, "fallback", 1f).Name = "Upper";
+        GraphNodeRecord slot = host.AddNode(AnimationNodeIds.ExternalGraphSlot, "slot");
+        slot.Wire("fallback");
+        slot.Properties["Slot"] = NodeValue.FromText("Upper");
+        GraphNodeRecord twin = host.AddNode(AnimationNodeIds.ExternalGraphSlot, "twin");
+        twin.Wire("slot");
+        twin.Properties["Slot"] = NodeValue.FromText("Upper");
+        host.RootNode = twin.Id;
+
+        var plugged = new AnimationGraph { Name = "Plugged" };
+        HeldClipNode(plugged, skeleton, avatar, "held", 3f);
+        plugged.RootNode = "held";
+
+        (Scene scene, Animator animator, GameObject root) = Rigged(host, avatar);
+        animator.SetGraphSlot("Upper", plugged);
+        Update(scene, 2);
+
+        Assert.True(animator.IsGraph);
+        Assert.Equal(3f, Spine(root).LocalPosition.Y, 1);
+    }
+
+    [Fact]
+    public void EveryKindOfParameter_IsReadBeforeBinding_AndCarriedAcrossARebind()
+    {
+        (Scene scene, Animator animator, _) = BlendGraph(0f);
+        AnimationGraph asset = animator.Graph.Res!;
+        asset.Parameters.Add(new GraphParameterRecord { Name = "Aim", Kind = NodeValueKind.Target });
+        asset.Parameters.Add(new GraphParameterRecord { Name = "Tag", Kind = NodeValueKind.Id });
+        asset.Invalidate();
+
+        var aim = Target.FromWorld(new Transform3D(new Float3(1f, 2f, 3f), Quaternion.Identity, Float3.One));
+        animator.SetTarget("Aim", aim);
+        animator.SetId("Tag", new StringID("Hit"));
+        animator.SetFloat("Speed", 0.5f);
+        Assert.Equal(0.5f, animator.GetFloat("Speed"));
+
+        Update(scene, 1);
+        asset.Invalidate();
+        System.Threading.Thread.Sleep(200);
+        Update(scene, 1);
+
+        Assert.True(animator.GetTarget("Aim").IsSet);
+        Assert.Equal(new StringID("Hit"), animator.GetId("Tag"));
+        Assert.Equal(0.5f, animator.GetFloat("Speed"), 3);
+        Assert.Equal(0f, animator.GetFloat("Missing"));
+    }
+
+    // What cannot be loaded is missing, so the graph starts at once without it.
+    [Fact]
+    public void AGraphReadingAMissingClip_StartsOnTheFirstUpdate()
+    {
+        MotionSkeleton skeleton = BuildSkeleton();
+        Avatar avatar = Avatar.CreateGeneric(skeleton, 0, "Rig");
+
+        var asset = new AnimationGraph { Name = "Missing" };
+        GraphNodeRecord clip = asset.AddNode(AnimationNodeIds.Clip, "clip");
+        clip.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(Guid.NewGuid()));
+        asset.RootNode = clip.Id;
+
+        (Scene scene, Animator animator, _) = Rigged(asset, avatar);
+        Update(scene, 1);
+
+        Assert.True(animator.IsGraph);
+    }
+
+    [Fact]
+    public void AHumanoidMappingThatDoesNotWork_PlaysAsAGenericRig()
+    {
+        (MotionSkeleton skeleton, _) = TestHumanoid.Build();
+        var description = new HumanDescription();
+        foreach (HumanBodyBone bone in Enum.GetValues<HumanBodyBone>())
+            if (skeleton.GetBoneIndex(new StringID(bone.ToString())) is int index and >= 0)
+                description.SetSkeletonBoneIndex(bone, index);
+        description.SetSkeletonBoneIndex(HumanBodyBone.Chest, description.GetSkeletonBoneIndex(HumanBodyBone.UpperChest));
+
+        Avatar avatar = Avatar.CreateHumanoid(skeleton, description, "Broken");
+
+        Assert.NotNull(avatar.Runtime);
+        Assert.False(avatar.IsHuman);
+    }
+
     [Fact]
     public void AGraphPluggedIntoASlot_PlaysInPlaceOfTheFallback_AndSurvivesUntilTakenOut()
     {
@@ -300,6 +389,11 @@ public class AnimationGraphTests : RuntimeTestBase
 
         Pose pose = animator.GetExternalPose("Hit")!;
         pose.SetTransform(2, new Transform3D(new Float3(0f, 4f, 0f), Quaternion.Identity, Float3.One));
+        Update(scene, 1);
+        Assert.Equal(4f, Spine(root).LocalPosition.Y, 3);
+
+        // A rebind keeps showing what the game last wrote.
+        animator.Rebind();
         Update(scene, 1);
         Assert.Equal(4f, Spine(root).LocalPosition.Y, 3);
 

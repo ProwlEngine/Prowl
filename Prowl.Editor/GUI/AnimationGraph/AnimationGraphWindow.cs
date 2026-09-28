@@ -188,7 +188,7 @@ public class AnimationGraphWindow : DockPanel
         _view.Graph = _graph.IsValid() ? _graph : null;
         ClearSelection();
 
-        if (_graph.IsValid() && _dirty && _unsaved != null) CopyRecords(_unsaved, _graph!);
+        if (_graph.IsValid() && _dirty && _unsaved != null) CopyRecords(_unsaved, _graph!, compiles: true);
         Reattach(machine);
         Reselect(selected);
     }
@@ -287,17 +287,20 @@ public class AnimationGraphWindow : DockPanel
     }
 
     /// <summary>Runs one edit and makes it undoable by snapshotting the whole graph.</summary>
-    private void Edit(string description, Action change, bool rebuild = true)
+    private void Edit(string description, Action change, bool rebuild = true, bool compiles = true)
     {
         if (_graph.IsNotValid()) return;
 
         EchoObject before = Snapshot();
         change();
-        EditDone(description, before, coalesce: false, rebuild);
+        EditDone(description, before, coalesce: false, rebuild, compiles);
     }
 
+    // Where things sit, groups and notes: nothing the graph compiles, so running animators keep going.
+    private void EditLayout(string description, Action change) => Edit(description, change, compiles: false);
+
     /// <summary>Records an edit already made. A coalescing edit folds into the one before it.</summary>
-    private void EditDone(string description, EchoObject before, bool coalesce, bool rebuild = true)
+    private void EditDone(string description, EchoObject before, bool coalesce, bool rebuild = true, bool compiles = true)
     {
         if (_graph.IsNotValid()) return;
 
@@ -306,17 +309,17 @@ public class AnimationGraphWindow : DockPanel
 
         // Tied to the asset the edit was made on, which may no longer be the one showing.
         Guid asset = _assetGuid;
-        Action undo = () => Restore(asset, before);
-        Action redo = () => Restore(asset, after);
+        Action undo = () => Restore(asset, before, compiles);
+        Action redo = () => Restore(asset, after, compiles);
 
         if (coalesce) Undo.RegisterCoalescableAction(description, undo, redo);
         else Undo.RegisterAction(description, undo, redo);
-        Touch(rebuild);
+        Touch(rebuild, compiles);
     }
 
     private EchoObject Snapshot() => Serializer.Serialize(typeof(object), _graph!);
 
-    private void Restore(Guid asset, EchoObject snapshot)
+    private void Restore(Guid asset, EchoObject snapshot, bool compiles)
     {
         // The undo goes to whichever open window shows that graph, which need not be this one.
         AnimationGraphWindow? showing = s_open.Contains(this) && asset == _assetGuid ? this
@@ -326,12 +329,12 @@ public class AnimationGraphWindow : DockPanel
         {
             // Nothing shows the graph any more, and it was saved when it was left, so the undo is saved too.
             AnimationGraph? other = new AssetRef<AnimationGraph>(asset).Res;
-            if (other.IsValid()) CopyRecords(snapshot, other!);
+            if (other.IsValid()) CopyRecords(snapshot, other!, compiles);
             WriteToDisk(asset, snapshot);
             return;
         }
 
-        if (!showing.Apply(snapshot)) return;
+        if (!showing.Apply(snapshot, compiles)) return;
 
         showing._unsaved = snapshot;
         showing._dirty = true;
@@ -339,13 +342,13 @@ public class AnimationGraphWindow : DockPanel
     }
 
     /// <summary>Writes a snapshot's records onto the live asset, leaving the asset itself in place.</summary>
-    private bool Apply(EchoObject snapshot)
+    private bool Apply(EchoObject snapshot, bool compiles)
     {
         if (_graph.IsNotValid()) return false;
 
         string? machine = _insideMachine?.Id;
         var selected = new List<string>(_controller.SelectedNodes);
-        if (!CopyRecords(snapshot, _graph!)) return false;
+        if (!CopyRecords(snapshot, _graph!, compiles)) return false;
 
         ClearSelection();
         Reattach(machine);
@@ -354,7 +357,7 @@ public class AnimationGraphWindow : DockPanel
     }
 
     /// <summary>Copies a snapshot's records into a graph asset, keeping the asset itself.</summary>
-    private static bool CopyRecords(EchoObject snapshot, AnimationGraph target)
+    private static bool CopyRecords(EchoObject snapshot, AnimationGraph target, bool compiles)
     {
         var restored = Serializer.Deserialize<AnimationGraph>(snapshot.Clone());
         if (restored == null) return false;
@@ -364,15 +367,15 @@ public class AnimationGraphWindow : DockPanel
         target.RootNode = restored.RootNode;
         target.Groups = restored.Groups;
         target.Notes = restored.Notes;
-        target.Invalidate();
+        if (compiles) target.Invalidate();
         return true;
     }
 
-    /// <summary>After any edit: drops the compiled graph so running animators pick the edit up.</summary>
-    private void Touch(bool rebuild = true)
+    /// <summary>After any edit: drops the compiled graph, when the edit changes it, so running animators pick it up.</summary>
+    private void Touch(bool rebuild = true, bool compiles = true)
     {
         _dirty = true;
-        if (_graph.IsValid()) _graph!.Invalidate();
+        if (compiles && _graph.IsValid()) _graph!.Invalidate();
         if (!rebuild) return;
 
         _view.Invalidate();
@@ -666,12 +669,12 @@ public class AnimationGraphWindow : DockPanel
             .SnapToGrid(12f)
             .HostShortcuts()
             .OnSelectionChanged(PublishNodes)
-            .OnNodesMoved((nodes, delta) => Edit("Move Nodes", () => _view.Move(nodes, delta)))
+            .OnNodesMoved((nodes, delta) => EditLayout("Move Nodes", () => _view.Move(nodes, delta)))
             .OnValidateConnection(_view.Validate)
             .OnConnect(request => Edit("Connect Node", () => _view.Connect(request)))
             .OnDisconnect(wire => Edit("Disconnect Node", () => _view.Disconnect(wire)))
             .OnDeleteSelection(sel => Edit("Delete", () => DeleteSelection(sel)))
-            .OnNodeToggleCollapsed(node => Edit("Collapse Node", () => _view.ToggleCollapsed(node)))
+            .OnNodeToggleCollapsed(node => EditLayout("Collapse Node", () => _view.ToggleCollapsed(node)))
             .OnNodeDoubleClick(node =>
             {
                 if (_view.RecordOf(node.Id) is { } record && AnimationNodeRegistry.Get(record.Type) is { } type)
@@ -765,37 +768,37 @@ public class AnimationGraphWindow : DockPanel
     }
 
     private void MoveGroup(GraphGroup group, IReadOnlyList<GraphNode> members, Float2 delta, Action<IReadOnlyList<GraphNode>, Float2> moveMembers)
-        => Edit("Move Group", () =>
+        => EditLayout("Move Group", () =>
         {
             if (AnimationGraphView.GroupOf(group) is { } record) record.Position += delta;
             moveMembers(members, delta);
         });
 
-    private void ResizeGroup(GraphGroup group, Float2 position, Float2 size) => Edit("Resize Group", () =>
+    private void ResizeGroup(GraphGroup group, Float2 position, Float2 size) => EditLayout("Resize Group", () =>
     {
         if (AnimationGraphView.GroupOf(group) is not { } record) return;
         record.Position = position;
         record.Size = size;
     });
 
-    private void RenameGroup(GraphGroup group, string title) => Edit("Rename Group", () =>
+    private void RenameGroup(GraphGroup group, string title) => EditLayout("Rename Group", () =>
     {
         if (AnimationGraphView.GroupOf(group) is { } record) record.Title = title;
     });
 
-    private void MoveNote(GraphSticky note, Float2 delta) => Edit("Move Note", () =>
+    private void MoveNote(GraphSticky note, Float2 delta) => EditLayout("Move Note", () =>
     {
         if (AnimationGraphView.NoteOf(note) is { } record) record.Position += delta;
     });
 
-    private void ResizeNote(GraphSticky note, Float2 position, Float2 size) => Edit("Resize Note", () =>
+    private void ResizeNote(GraphSticky note, Float2 position, Float2 size) => EditLayout("Resize Note", () =>
     {
         if (AnimationGraphView.NoteOf(note) is not { } record) return;
         record.Position = position;
         record.Size = size;
     });
 
-    private void EditNote(GraphSticky note, string text) => Edit("Edit Note", () =>
+    private void EditNote(GraphSticky note, string text) => EditLayout("Edit Note", () =>
     {
         if (AnimationGraphView.NoteOf(note) is { } record) record.Text = text;
     });
@@ -804,7 +807,7 @@ public class AnimationGraphWindow : DockPanel
     {
         Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b => b
             .Header(group.Title)
-            .Item("Delete Group", () => Edit("Delete Group", () =>
+            .Item("Delete Group", () => EditLayout("Delete Group", () =>
             {
                 if (AnimationGraphView.GroupOf(group) is { } record) _graph!.Groups.Remove(record);
             }), danger: true));
@@ -814,7 +817,7 @@ public class AnimationGraphWindow : DockPanel
     {
         Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b => b
             .Header("Note")
-            .Item("Delete Note", () => Edit("Delete Note", () =>
+            .Item("Delete Note", () => EditLayout("Delete Note", () =>
             {
                 if (AnimationGraphView.NoteOf(note) is { } record) _graph!.Notes.Remove(record);
             }), danger: true));
@@ -838,7 +841,7 @@ public class AnimationGraphWindow : DockPanel
                 if (any != null) _controller.SelectNodes(new[] { AnimationGraphStateView.StateId(any.Name) });
             }, enabled: !_stateView.HasAny)
             .Separator()
-            .Item("Add Note", () => Edit("Add Note", () => _view.AddNote(at, owner)))
+            .Item("Add Note", () => EditLayout("Add Note", () => _view.AddNote(at, owner)))
             .Item("Add Group", () => Edit("Add Group", () => _view.AddGroup(SelectedNodes(), at, owner)),
                 shortcut: Keys("GraphEditor/GroupSelection")));
     }
@@ -903,7 +906,7 @@ public class AnimationGraphWindow : DockPanel
     {
         Float2 at = nodes.Count > 0 ? nodes[0].Position : NextFreeSpot();
         string owner = _insideMachine?.Id ?? _scope;
-        Edit("Group Nodes", () => _view.AddGroup(nodes, at, owner));
+        EditLayout("Group Nodes", () => _view.AddGroup(nodes, at, owner));
     }
 
     private void SelectCopies(List<GraphNodeRecord> copies, bool frame)
@@ -1024,7 +1027,7 @@ public class AnimationGraphWindow : DockPanel
             .HostShortcuts()
             .Arrows()
             .OnSelectionChanged(PublishStates)
-            .OnNodesMoved((nodes, delta) => Edit("Move States", () => _stateView.Move(nodes, delta)))
+            .OnNodesMoved((nodes, delta) => EditLayout("Move States", () => _stateView.Move(nodes, delta)))
             .OnValidateConnection(_stateView.CanConnect)
             .OnConnect(request => Edit("Add Transition", () => _stateView.Connect(request)))
             .OnDisconnect(wire => Edit("Remove Transition", () => _stateView.Disconnect(wire)))
@@ -1181,7 +1184,7 @@ public class AnimationGraphWindow : DockPanel
 
         Float2 at = _pickerGraph;
         if (Wanted("Note"))
-            extras.Add(("Note", "A note left on the canvas", () => Edit("Add Note", () => _view.AddNote(at, _scope))));
+            extras.Add(("Note", "A note left on the canvas", () => EditLayout("Add Note", () => _view.AddNote(at, _scope))));
         if (Wanted("Group"))
             extras.Add(("Group", "A box around the selected nodes, or an empty one here",
                 () => Edit("Add Group", () => _view.AddGroup(SelectedNodes(), at, _scope))));

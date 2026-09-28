@@ -227,6 +227,7 @@ public class ModelRigImportTests
 
         AnimationClip clip = Assert.Single(result.Animations);
         Assert.Equal(0.5, clip.Duration, 2);
+        Assert.Equal(0.5, clip.TakeStart, 2);
 
         Skeleton skeleton = result.Avatar!.Skeleton!;
         var pose = new Pose(skeleton);
@@ -234,6 +235,32 @@ public class ModelRigImportTests
 
         // Half way along a slide from 1 to 3.
         Assert.Equal(2.0, pose.GetTransform(skeleton.GetBoneIndex(new StringID("Bone"))).position.Y, 1);
+    }
+
+    // Some files key every bone, so a root that stands still has a position track too. The hips moving under it are the body.
+    [Fact]
+    public void RootMotionComesFromTheHighestBoneThatMoves_NotOneThatIsOnlyKeyed()
+    {
+        var skeleton = new Skeleton(
+            new[] { new StringID("Root"), new StringID("Hips") },
+            new[] { Skeleton.InvalidIndex, 0 },
+            new[] { Transform3D.Identity, Transform3D.Identity });
+
+        static Prowl.Clay.AnimationBinding Track(int node, Float3 from, Float3 to) => new()
+        {
+            NodeIndex = node,
+            Property = Prowl.Clay.AnimatedProperty.Position,
+            Curve = new Prowl.Vector.AnimationCurve(3, new Keyframe(0f, from), new Keyframe(1f, to)),
+        };
+
+        var take = new Prowl.Clay.AnimationClip
+        {
+            Name = "Walk",
+            EndTime = 1f,
+            Bindings = new[] { Track(0, Float3.Zero, Float3.Zero), Track(1, Float3.Zero, new Float3(0f, 0f, 2f)) },
+        };
+
+        Assert.Equal(1, ModelRigBuilder.AnimatedRootBone(take, skeleton));
     }
 
     [Fact]

@@ -89,6 +89,26 @@ public class AnimatorTests : RuntimeTestBase
         Assert.NotNull(animator.Pose);
     }
 
+    // An object named like a bone but outside the rig's chain, found first in the hierarchy, is not the bone.
+    [Fact]
+    public void ABoneIsFoundUnderItsParent_NotByAnObjectSharingItsName()
+    {
+        (Scene scene, Animator animator, GameObject root) = Setup();
+        Transform spine = Spine(root);
+        var props = new GameObject("Props");
+        var decoy = new GameObject("Spine");
+        props.SetParent(root, false);
+        decoy.SetParent(props, false);
+        props.SetSiblingIndex(0);
+        animator.Rebind();
+        animator.Speed = 0f;
+
+        Update(scene);
+
+        Assert.Equal(1.0, spine.LocalPosition.Y, 2);
+        Assert.Equal(0.0, decoy.Transform.LocalPosition.Y, 3);
+    }
+
     [Fact]
     public void ItPlaysTheFirstClipAndDrivesTheBones()
     {
@@ -134,6 +154,23 @@ public class AnimatorTests : RuntimeTestBase
         Update(scene, 61);
 
         Assert.InRange(root.Transform.Position.Z, 3.5, 4.5);
+    }
+
+    // Root motion is in the character's own units, so a scaled parent scales how far it goes.
+    [Fact]
+    public void RootMotionUnderAScaledParent_TravelsTheScaledDistance()
+    {
+        Transform3D end = new(new Float3(0f, 0f, 4f), Quaternion.Identity, Float3.One);
+        (Scene scene, Animator animator, GameObject root) = Setup(rootMotionEnd: end);
+        GameObject parent = CreateGameObject("Scaled");
+        parent.Transform.LocalScale = new Float3(2f, 2f, 2f);
+        scene.Add(parent);
+        root.SetParent(parent, false);
+        animator.ApplyRootMotion = true;
+
+        Update(scene, 61);
+
+        Assert.InRange(root.Transform.Position.Z, 7f, 9f);
     }
 
     [Fact]

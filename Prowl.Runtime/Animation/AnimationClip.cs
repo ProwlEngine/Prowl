@@ -37,6 +37,9 @@ public sealed class AnimationClip : EngineObject, ISerializable
     /// <summary>The clip's markers, handed to Motion when the clip is decoded.</summary>
     public List<ClipEvent> Events = new();
 
+    /// <summary>Where in the take the clip starts, in seconds, as the import cut it.</summary>
+    public float TakeStart;
+
     private AnimationClipKind _kind;
     private float _duration;
     private int _frameCount;
@@ -184,6 +187,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
         value.Add("FrameCount", new EchoObject(_frameCount));
         value.Add("Avatar", Serializer.Serialize(Avatar, ctx));
         value.Add("Events", Serializer.Serialize(Events, ctx));
+        value.Add("TakeStart", new EchoObject(TakeStart));
         value.Add("Clip", new EchoObject(_payload ?? Array.Empty<byte>()));
     }
 
@@ -197,6 +201,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
         _frameCount = value.Get("FrameCount")?.IntValue ?? 0;
         Avatar = Serializer.Deserialize<AssetRef<Avatar>>(value.Get("Avatar"), ctx);
         Events = value.Get("Events") is { } events ? Serializer.Deserialize<List<ClipEvent>>(events, ctx) ?? new() : new();
+        TakeStart = value.Get("TakeStart")?.FloatValue ?? 0f;
 
         byte[]? payload = value.Get("Clip")?.ByteArrayValue;
         _payload = payload is { Length: > 0 } ? payload : null;

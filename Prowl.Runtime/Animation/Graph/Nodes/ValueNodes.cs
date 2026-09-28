@@ -693,6 +693,7 @@ public sealed class VirtualParameterNode : AnimationGraphNode
     public override int Build(GraphCompileContext ctx, GraphNodeRecord r)
     {
         string name = r.Get(ParameterNode.NameSetting);
-        return name.Length == 0 ? ctx.Input(r, _value) : ctx.Graph.AddVirtualParameter(name, ctx.Input(r, _value));
+        int value = ctx.Input(r, _value);
+        return name.Length > 0 && ctx.ClaimName(r, name) ? ctx.Graph.AddVirtualParameter(name, value) : value;
     }
 }

@@ -42,13 +42,27 @@ public sealed class AnimationGraph : EngineObject
     // One compile per rig, so characters on different skeletons can share the graph.
     [NonSerialized] private Dictionary<MotionSkeleton, RigCompile>? _compiles;
     [NonSerialized] private int _version;
+
+    /// <summary>Goes up with every edit to any graph, so a check for edits can skip the walk when nothing changed.</summary>
+    internal static int Edits { get; private set; }
+
+    // Goes up when the node types reload, which every compile is built from.
+    private static int s_nodeTypes;
+
+    /// <summary>Marks every graph out of date after the node types reload, so each compiles again with the new ones.</summary>
+    internal static void NodeTypesChanged()
+    {
+        s_nodeTypes++;
+        Edits++;
+    }
+
     [NonSerialized] private long _changedAt;
 
     /// <summary>Goes up with every edit, so anything running this graph can tell it is out of date.</summary>
     public int Version => _version;
 
     /// <summary>This graph's version combined with every sub graph it runs.</summary>
-    public int DeepVersion => DeepVersionOf(new HashSet<AnimationGraph>());
+    public int DeepVersion => unchecked(DeepVersionOf(new HashSet<AnimationGraph>()) * 31 + s_nodeTypes);
 
     /// <summary>Milliseconds since the last edit to this graph or any sub graph it runs, for letting a drag settle.</summary>
     public long SinceChanged => Environment.TickCount64 - LatestChange(new HashSet<AnimationGraph>());
@@ -72,51 +86,36 @@ public sealed class AnimationGraph : EngineObject
         return false;
     }
 
-    /// <summary>Whether every asset the graph reads, its clips, masks, avatars and sub graphs, has loaded.</summary>
-    public bool DependenciesLoaded(out string? waitingFor) => DependenciesLoaded(new HashSet<AnimationGraph>(), out waitingFor);
+    /// <summary>Loads every asset the graph reads, its clips, masks, avatars and sub graphs, blocking until each is in.</summary>
+    public void LoadDependencies() => LoadDependencies(new HashSet<AnimationGraph>());
 
-    private bool DependenciesLoaded(HashSet<AnimationGraph> visiting, out string? waitingFor)
+    private void LoadDependencies(HashSet<AnimationGraph> visiting)
     {
-        waitingFor = null;
-        if (!visiting.Add(this)) return true;
+        if (!visiting.Add(this)) return;
 
         foreach (GraphNodeRecord record in Nodes)
         {
             foreach (NodeValue value in record.Properties.Values)
             {
-                if (!Loaded(value, out waitingFor)) return false;
-                if (value.Kind == NodeValueKind.Graph && value.Graph.Res is { } inner && inner.IsValid()
-                    && !inner.DependenciesLoaded(visiting, out waitingFor))
-                    return false;
+                switch (value.Kind)
+                {
+                    case NodeValueKind.Clip: value.Clip.EnsureLoaded(); break;
+                    case NodeValueKind.Mask: value.Mask.EnsureLoaded(); break;
+                    case NodeValueKind.Avatar: value.Avatar.EnsureLoaded(); break;
+                    case NodeValueKind.Graph:
+                        value.Graph.EnsureLoaded();
+                        if (value.Graph.Res is { } inner && inner.IsValid()) inner.LoadDependencies(visiting);
+                        break;
+                }
             }
 
             foreach (GraphStateRecord state in record.States)
             {
                 if (!state.UsesAsset) continue;
-                if (state.Graph.Res is not { } inner || inner.IsNotValid())
-                {
-                    waitingFor = "Graph";
-                    return false;
-                }
-                if (!inner.DependenciesLoaded(visiting, out waitingFor)) return false;
+                state.Graph.EnsureLoaded();
+                if (state.Graph.Res is { } inner && inner.IsValid()) inner.LoadDependencies(visiting);
             }
         }
-        return true;
-    }
-
-    private static bool Loaded(NodeValue value, out string? waitingFor)
-    {
-        waitingFor = null;
-        bool loaded = value.Kind switch
-        {
-            NodeValueKind.Clip => value.Clip.AssetID == Guid.Empty || value.Clip.Res.IsValid(),
-            NodeValueKind.Mask => value.Mask.AssetID == Guid.Empty || value.Mask.Res.IsValid(),
-            NodeValueKind.Avatar => value.Avatar.AssetID == Guid.Empty || value.Avatar.Res.IsValid(),
-            NodeValueKind.Graph => value.Graph.AssetID == Guid.Empty || value.Graph.Res.IsValid(),
-            _ => true,
-        };
-        if (!loaded) waitingFor = value.Kind.ToString();
-        return loaded;
     }
 
     private int DeepVersionOf(HashSet<AnimationGraph> visiting)
@@ -219,6 +218,7 @@ public sealed class AnimationGraph : EngineObject
         EnsureNotDisposed();
         _compiles = null;
         _version++;
+        Edits++;
         _changedAt = Environment.TickCount64;
     }
 
