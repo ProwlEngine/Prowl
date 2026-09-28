@@ -1,0 +1,93 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Runtime;
+
+/// <summary>The type ids of the built in graph nodes, as saved in graph assets.</summary>
+public static class AnimationNodeIds
+{
+    public const string StateOutput = "motion.stateOutput";
+    public const string GraphOutput = "motion.graphOutput";
+    public const string Clip = "motion.clip";
+    public const string AnimationPose = "motion.animationPose";
+    public const string ReferencePose = "motion.referencePose";
+    public const string ZeroPose = "motion.zeroPose";
+    public const string ExternalPose = "motion.externalPose";
+    public const string SubGraph = "motion.subGraph";
+    public const string ExternalGraphSlot = "motion.externalGraphSlot";
+    public const string Mirror = "motion.mirror";
+    public const string SpeedScale = "motion.speedScale";
+    public const string PoseSnapshot = "motion.poseSnapshot";
+    public const string PoseSmoothing = "motion.poseSmoothing";
+    public const string InertialBlend = "motion.inertialBlend";
+    public const string Passthrough = "motion.passthrough";
+    public const string Blend1D = "motion.blend1d";
+    public const string Blend2D = "motion.blend2d";
+    public const string VelocityBlend = "motion.velocityBlend";
+    public const string WeightedBlend = "motion.weightedBlend";
+    public const string Layer = "motion.layer";
+    public const string LayerBlend = "motion.layerBlend";
+    public const string MuscleLayer = "motion.muscleLayer";
+    public const string MakeAdditive = "motion.makeAdditive";
+    public const string Crossfade = "motion.crossfade";
+    public const string Selector = "motion.selector";
+    public const string ConditionSelector = "motion.conditionSelector";
+    public const string Sequence = "motion.sequence";
+    public const string RandomSelector = "motion.randomSelector";
+    public const string StateMachine = "motion.stateMachine";
+    public const string StateQuery = "motion.stateQuery";
+    public const string StateFinished = "motion.stateFinished";
+    public const string OrientationWarp = "motion.orientationWarp";
+    public const string TurnWarp = "motion.turnWarp";
+    public const string TargetWarp = "motion.targetWarp";
+    public const string StrideWarp = "motion.strideWarp";
+    public const string RootMotionFilter = "motion.rootMotionFilter";
+    public const string FootGrounding = "motion.footGrounding";
+    public const string FootLock = "motion.footLock";
+    public const string CharacterMotion = "motion.characterMotion";
+    public const string TwoBoneIK = "motion.twoBoneIK";
+    public const string IKRig = "motion.ikRig";
+    public const string LookAt = "motion.lookAt";
+    public const string AimConstraint = "motion.aimConstraint";
+    public const string CopyConstraint = "motion.copyConstraint";
+    public const string TwistDistribution = "motion.twistDistribution";
+    public const string SpringBones = "motion.springBones";
+    public const string Ragdoll = "motion.ragdoll";
+    public const string PoseChannel = "motion.poseChannel";
+    public const string ChannelLayer = "motion.channelLayer";
+    public const string DrivenChannel = "motion.drivenChannel";
+    public const string BoneMask = "motion.boneMask";
+    public const string MaskAsset = "motion.maskAsset";
+    public const string MaskBlend = "motion.maskBlend";
+    public const string MaskSelector = "motion.maskSelector";
+    public const string Parameter = "motion.parameter";
+    public const string VirtualParameter = "motion.virtualParameter";
+    public const string ConstFloat = "motion.constFloat";
+    public const string ConstInt = "motion.constInt";
+    public const string ConstBool = "motion.constBool";
+    public const string ConstVector = "motion.constVector";
+    public const string ConstId = "motion.constId";
+    public const string FloatMath = "motion.floatMath";
+    public const string FloatCompare = "motion.floatCompare";
+    public const string FloatRange = "motion.floatRange";
+    public const string FloatRemap = "motion.floatRemap";
+    public const string FloatAngle = "motion.floatAngle";
+    public const string FloatEase = "motion.floatEase";
+    public const string PickNumber = "motion.pickNumber";
+    public const string Curve = "motion.curve";
+    public const string CachedValue = "motion.cachedValue";
+    public const string Logic = "motion.logic";
+    public const string Timer = "motion.timer";
+    public const string Noise = "motion.noise";
+    public const string FloatSpring = "motion.floatSpring";
+    public const string VectorCreate = "motion.vectorCreate";
+    public const string VectorInfo = "motion.vectorInfo";
+    public const string VectorNegate = "motion.vectorNegate";
+    public const string TargetInfo = "motion.targetInfo";
+    public const string TargetOffset = "motion.targetOffset";
+    public const string IdComparison = "motion.idComparison";
+    public const string IdToFloat = "motion.idToFloat";
+    public const string IdEvent = "motion.idEvent";
+    public const string FootEvent = "motion.footEvent";
+    public const string TransitionEvent = "motion.transitionEvent";
+}

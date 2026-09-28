@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Vector;
@@ -280,27 +280,90 @@ public class SerializationTests : RuntimeTestBase
     }
 
     // ---------------------------------------------------------------------
-    // AnimationClip (custom ISerializable: rebuilds its bone map on deserialize)
+    // Rigs and clips (the payload is Motion's own binary, carried as bytes)
     // ---------------------------------------------------------------------
 
-    [Fact]
-    public void AnimationClip_RoundTrip_RebuildsBoneMap()
-    {
-        var clip = new AnimationClip { Name = "Walk", Duration = 2f, Wrap = AnimationWrapMode.Loop };
-        clip.AddBone(new AnimationClip.AnimBone
+    private static Motion.Skeleton TwoBoneSkeleton() => new(
+        new[] { new Motion.StringID("Root"), new Motion.StringID("Child") },
+        new[] { Motion.Skeleton.InvalidIndex, 0 },
+        new[]
         {
-            BoneName = "Root",
-            Position = new Vector.AnimationCurve(3,
-                new Keyframe(0f, new Float3(5f, 0f, 0f)),
-                new Keyframe(1f, new Float3(5f, 0f, 0f))),
+            Vector.Spatial.Transform3D.Identity,
+            new Vector.Spatial.Transform3D(new Float3(0f, 1f, 0f), Quaternion.Identity, Float3.One),
         });
 
-        var clone = RoundTrip(clip);
+    [Fact]
+    public void Avatar_RoundTrip_KeepsItsSkeleton()
+    {
+        Avatar avatar = Avatar.CreateGeneric(TwoBoneSkeleton(), 0, "Rig");
 
-        Assert.Equal(AnimationWrapMode.Loop, clone.Wrap);
-        // GetBone reads _boneMap, which AnimationClip.Deserialize rebuilds from the bone list.
-        var bone = clone.GetBone("Root");
-        Assert.NotNull(bone);
-        Assert.Equal(5.0, bone!.EvaluatePositionAt(0.5f).X, 3);
+        Avatar clone = RoundTrip(avatar);
+
+        Assert.NotNull(clone.Skeleton);
+        Assert.Equal(2, clone.Skeleton!.BoneCount);
+        Assert.Equal("Child", clone.Skeleton.GetBoneID(1).DebugName);
+        Assert.NotNull(clone.Runtime);
+    }
+
+    [Fact]
+    public void AnimationClip_RoundTrip_SamplesTheSamePose()
+    {
+        Motion.Skeleton skeleton = TwoBoneSkeleton();
+        Avatar avatar = Avatar.CreateGeneric(skeleton, 0, "Rig");
+
+        var first = new Motion.Pose(skeleton);
+        first.SetToReferencePose();
+        var last = new Motion.Pose(skeleton);
+        last.SetToReferencePose();
+        last.SetTransform(1, new Vector.Spatial.Transform3D(new Float3(0f, 3f, 0f), Quaternion.Identity, Float3.One));
+
+        var source = new Motion.AnimationClip(skeleton, new[] { first, last }, 1f);
+        AnimationClip clip = AnimationClip.FromSkeletal(source, new AssetRef<Avatar>(avatar), "Walk");
+
+        AnimationClip clone = RoundTrip(clip);
+        clone.Avatar = new AssetRef<Avatar>(avatar);
+
+        Assert.Equal(AnimationClipKind.Skeletal, clone.Kind);
+        Assert.Equal(1f, clone.Duration, 3);
+
+        Motion.AnimationClipBase? decoded = clone.GetClip(avatar.Runtime);
+        Assert.NotNull(decoded);
+        var sampled = new Motion.Pose(skeleton);
+        decoded!.GetPose(1f, sampled);
+        Assert.Equal(3.0, sampled.GetTransform(1).position.Y, 2);
+    }
+
+    /// <summary>
+    /// A clip's events are not part of the frames Motion stores, so the asset keeps them itself and hands
+    /// them back when the clip is decoded, in the clip's normalized time.
+    /// </summary>
+    [Fact]
+    public void AnimationClip_RoundTrip_KeepsItsEvents()
+    {
+        Motion.Skeleton skeleton = TwoBoneSkeleton();
+        Avatar avatar = Avatar.CreateGeneric(skeleton, 0, "Rig");
+        var pose = new Motion.Pose(skeleton);
+        pose.SetToReferencePose();
+
+        var source = new Motion.AnimationClip(skeleton, new[] { pose, pose }, 2f);
+        AnimationClip clip = AnimationClip.FromSkeletal(source, new AssetRef<Avatar>(avatar), "Walk", new[]
+        {
+            new ClipEvent { Kind = ClipEventKind.Foot, Time = 0.5f, Option = (int)Motion.FootPhase.RightFootDown },
+            new ClipEvent { Kind = ClipEventKind.Named, Time = 1f, Length = 0.5f, Name = "Swing" },
+        });
+
+        AnimationClip clone = RoundTrip(clip);
+        clone.Avatar = new AssetRef<Avatar>(avatar);
+        var events = clone.GetClip(avatar.Runtime)!.Events;
+
+        Assert.Equal(2, events.Count);
+        var foot = Assert.IsType<Motion.FootEvent>(events[0]);
+        Assert.Equal(Motion.FootPhase.RightFootDown, foot.Phase);
+        Assert.Equal(0.25f, foot.StartTime, 3);
+
+        var named = Assert.IsType<Motion.IdEvent>(events[1]);
+        Assert.Equal(new Motion.StringID("Swing"), named.Id);
+        Assert.Equal(0.5f, named.StartTime, 3);
+        Assert.Equal(0.25f, named.Duration, 3);
     }
 }

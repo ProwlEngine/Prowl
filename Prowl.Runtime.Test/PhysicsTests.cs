@@ -1027,4 +1027,68 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Equal(0, scene.Physics.OverlapSphere(bad, 0.5f, hits));
         Assert.False(scene.Physics.CheckSphere(bad, 0.5f));
     }
+
+    /// <summary>
+    /// A capsule resting exactly on a box is touching it. Casting along the top of the box does not
+    /// hit it, and casting down into it hits it facing up. Both used to come back as a hit whose normal
+    /// was the cast reversed, which reads a floor underfoot as a wall straight ahead.
+    /// </summary>
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(0.005f)]
+    public void ACastFromRestingOnASurfaceOnlyHitsItWhenMovingIntoIt(float gap)
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+
+        Float3 bottom = new(0, 0.3f + gap, 0), top = new(0, 1.5f + gap, 0);
+        Assert.False(scene.Physics.CapsuleCast(bottom, top, 0.3f, new Float3(1, 0, 0), 0.5f, out _));
+        Assert.False(scene.Physics.CapsuleCast(bottom, top, 0.3f, new Float3(0, 1, 0), 0.5f, out _));
+
+        Assert.True(scene.Physics.CapsuleCast(bottom, top, 0.3f, new Float3(0, -1, 0), 0.5f, out ShapeCastHit down));
+        Assert.True(down.Normal.Y > 0.9f, $"the floor was reported facing {down.Normal}");
+    }
+    // ---------------------------------------------------------------------
+    // Constraints between bodies
+    // ---------------------------------------------------------------------
+
+    // A twist limit leaves translation free, so the only thing that can push the boxes apart is contact.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Constraint_CollideConnected_DecidesWhetherJoinedBodiesCollide(bool collide)
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D a = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        Rigidbody3D b = AddDynamicBox(scene, new Float3(0.5f, 0, 0), gravity: false);
+        var twist = a.GameObject.AddComponent<TwistAngleConstraint>();
+        twist.ConnectedBody = b;
+        twist.CollideConnected = collide;
+        StepPhysics(scene, 30);
+        Update(scene);
+
+        float gap = b.Transform.Position.X - a.Transform.Position.X;
+        Assert.Equal(collide, gap > 0.9f);
+    }
+
+    // Jitter measures a hinge's angle as the connected body's turn relative to this one, so this body
+    // turning positively about the axis reads as a negative angle.
+    [Theory]
+    [InlineData(1f, true)]
+    [InlineData(-1f, false)]
+    public void HingeJoint_APositiveTurnOfItsBody_IsANegativeAngle(float spin, bool allowed)
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D body = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        var hinge = body.GameObject.AddComponent<HingeJoint>();
+        hinge.Axis = Float3.UnitX;
+        hinge.MinAngle = -90f;
+        hinge.MaxAngle = 0f;
+        StepPhysics(scene, 1);
+
+        body.AngularVelocity = new Float3(spin * 2f, 0f, 0f);
+        StepPhysics(scene, 20);
+
+        Assert.Equal(allowed, hinge.CurrentAngleDegrees < -10f);
+    }
 }

@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -84,15 +84,45 @@ public struct ModelImporterSettings
     public bool ImportLights = true;
 
     /// <summary>
-    /// Wrap mode given to every imported clip. Model formats carry no looping flag of their own, so
-    /// this is a choice the importer has to make rather than read. Loop suits the cycles most
-    /// character animation ships as; a one-shot clip (a door, a chest, an emote) wants Once.
+    /// Whether imported clips loop. Model formats carry no looping flag of their own, so this is a
+    /// choice the importer has to make rather than read. Looping suits the cycles most character
+    /// animation ships as; a one-shot clip (a door, a chest, an emote) does not.
     /// </summary>
-    public AnimationWrapMode AnimationWrapMode = AnimationWrapMode.Loop;
+    public bool LoopAnimations = true;
+
+    /// <summary>
+    /// How the rig is built. Generic drives the bones as the file names them; Humanoid also maps them
+    /// to the human body, so clips retarget onto any humanoid rig whatever its proportions.
+    /// </summary>
+    public ModelRigType RigType = ModelRigType.Generic;
+
+    /// <summary>
+    /// Frames per second clips are sampled at. Curves are resampled on import because a shipped game
+    /// only ever samples, and frames compress and blend where curves do neither.
+    /// </summary>
+    public float AnimationSampleRate = 30f;
 
     /// <summary>Generate a lightmap UV set (UV2) for every mesh via Prowl.Unwrapper. Off by default
     /// (it's slow and some models ship their own UV2); the built-in default models force it on.</summary>
     public bool GenerateLightmapUVs = false;
+
+    /// <summary>
+    /// Per clip overrides, keyed by the name the clip has in the file. A clip with no entry takes the
+    /// settings above.
+    /// </summary>
+    public Dictionary<string, ModelClipSettings>? ClipOverrides;
+
+    /// <summary>
+    /// Where a material comes from. Null builds every material the file describes; an implementation
+    /// can point a slot at an asset that was extracted out of the model instead.
+    /// </summary>
+    public IModelMaterialResolver? MaterialResolver;
+
+    /// <summary>
+    /// Humanoid bone name to the skeleton bone playing it, applied over whatever the auto mapper found.
+    /// An empty value clears a bone the auto mapper got wrong. Only read for a humanoid rig.
+    /// </summary>
+    public Dictionary<string, string>? HumanoidBoneMap;
 
     /// <summary>Strategy for turning a model's texture references into AssetRefs. Null (the default)
     /// uses <see cref="DefaultModelTextureResolver"/>, which decodes/GPU-uploads immediately - correct
@@ -104,14 +134,85 @@ public struct ModelImporterSettings
 }
 
 /// <summary>
+/// What one clip of a model should become, for the clips that want something other than the defaults.
+/// </summary>
+public struct ModelClipSettings
+{
+    /// <summary>A new name for the clip, or null to keep the one in the file.</summary>
+    public string? Name;
+
+    /// <summary>Whether this clip loops, or null to take the import's setting.</summary>
+    public bool? Loop;
+
+    /// <summary>Seconds trimmed from the start of the clip.</summary>
+    public float TrimStart;
+
+    /// <summary>The clip's new end, in seconds from its original start. Zero keeps the original end.</summary>
+    public float TrimEnd;
+
+    /// <summary>
+    /// Whether the body's travel across the ground moves the character instead of staying in the pose,
+    /// or null for the default, which is on.
+    /// </summary>
+    public bool? RootTravel;
+
+    /// <summary>Whether the body's turn moves the character, or null for the default, which is on.</summary>
+    public bool? RootTurn;
+
+    /// <summary>
+    /// The clip's markers, timed in seconds of the take as the file holds it rather than of the trimmed
+    /// clip, so changing the trim leaves each one on the moment it marks. Any the trim cuts away are dropped.
+    /// </summary>
+    public List<ClipEvent>? Events;
+
+    /// <summary>
+    /// Whether the body's rise and fall moves the character, or null for the default, which is off: a
+    /// jump usually wants its height in the pose, over a controller that stays on the ground.
+    /// </summary>
+    public bool? RootHeight;
+
+    public ModelClipSettings() { }
+}
+
+/// <summary>
+/// Decides where a material comes from. The editor points a slot at an asset the user extracted out of
+/// the model, so edits to it survive a reimport; anything it does not claim is built and owned by the
+/// import as before.
+/// </summary>
+public interface IModelMaterialResolver
+{
+    /// <summary>
+    /// The asset standing in for a material the file defines, or <see langword="default"/> to have the
+    /// import build it. Returning default for a reference that has gone missing is what lets a model
+    /// heal itself on the next reimport.
+    /// </summary>
+    AssetRef<Material> Resolve(string materialName);
+}
+
+/// <summary>
 /// Result of a model import live objects ready for the asset database to process.
 /// </summary>
 public class ModelImportResult
 {
     public GameObject? RootGO;
     public List<Mesh> Meshes = [];
+    /// <summary>The materials this import built and owns. Extracted ones are referenced, not listed.</summary>
     public List<Material> Materials = [];
     public List<AnimationClip> Animations = [];
+
+    /// <summary>The rig the model's clips play on, or null when it has no bones and no animation.</summary>
+    public Avatar? Avatar;
+}
+
+/// <summary>How a model's rig is built on import.</summary>
+public enum ModelRigType
+{
+    /// <summary>No skeleton and no clips, for a model that is only geometry.</summary>
+    None,
+    /// <summary>Bones as the file names them.</summary>
+    Generic,
+    /// <summary>Bones mapped to the human body, so clips retarget across rigs.</summary>
+    Humanoid,
 }
 
 /// <summary>

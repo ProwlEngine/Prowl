@@ -71,6 +71,7 @@ public static class EditorRegistries
     private static readonly Dictionary<Type, PropertyEditor> _propertyEditorCache = new();
     private static readonly Dictionary<Type, Type> _assetEditorTypes = new();
     private static readonly Dictionary<Type, AssetImporterEditor> _assetEditorCache = new();
+    private static readonly Dictionary<Type, Type> _animationNodeEditorTypes = new();
 
     // Keyed by importer type name, matching AssetEntry.ImporterType.
     private static readonly Dictionary<string, Type> _assetEditorTypesByImporter = new();
@@ -119,6 +120,7 @@ public static class EditorRegistries
         _customEditorTypes.Clear(); _customEditorCache.Clear();
         _propertyEditorTypes.Clear(); _propertyEditorCache.Clear();
         _assetEditorTypes.Clear(); _assetEditorCache.Clear();
+        _animationNodeEditorTypes.Clear(); AnimationNodeEditor.ClearCache();
         _assetEditorTypesByImporter.Clear(); _assetEditorByImporterCache.Clear();
 
         _importersByExt.Clear();
@@ -170,6 +172,7 @@ public static class EditorRegistries
                 ScanCustomEditor(type);
                 ScanPropertyEditor(type);
                 ScanAssetEditor(type);
+                ScanAnimationNodeEditor(type);
                 ScanImporter(type);
                 ScanComponentIcon(type);
                 ScanThumbnailGenerator(type);
@@ -230,6 +233,13 @@ public static class EditorRegistries
         if (!typeof(CustomEditor).IsAssignableFrom(type) || type.IsAbstract) return;
         var target = type.GetCustomAttribute<CustomEditorAttribute>()?.TargetType;
         if (target != null) _customEditorTypes[target] = type;
+    }
+
+    private static void ScanAnimationNodeEditor(Type type)
+    {
+        if (!typeof(AnimationNodeEditor).IsAssignableFrom(type) || type.IsAbstract) return;
+        foreach (var attr in type.GetCustomAttributes<AnimationNodeEditorAttribute>())
+            _animationNodeEditorTypes[attr.NodeType] = type;
     }
 
     private static void ScanPropertyEditor(Type type)
@@ -485,6 +495,15 @@ public static class EditorRegistries
     public static CustomEditor? GetCustomEditor(Type type) => LookupEditor(type, _customEditorTypes, _customEditorCache);
     public static PropertyEditor? GetPropertyEditor(Type type) => LookupEditor(type, _propertyEditorTypes, _propertyEditorCache, checkInterfaces: true);
     public static AssetImporterEditor? GetAssetEditor(Type type) => LookupEditor(type, _assetEditorTypes, _assetEditorCache);
+
+    /// <summary>A new instance of the editor registered for an animation graph node type or one it derives from, or null for none.</summary>
+    public static AnimationNodeEditor? CreateAnimationNodeEditor(Type nodeType)
+    {
+        for (var t = nodeType; t != null; t = t.BaseType)
+            if (_animationNodeEditorTypes.TryGetValue(t, out var editorType))
+                return TryCreate(editorType, out AnimationNodeEditor? editor) ? editor : null;
+        return null;
+    }
 
     /// <summary>
     /// Creates a registered editor or importer, containing anything its constructor throws. These are

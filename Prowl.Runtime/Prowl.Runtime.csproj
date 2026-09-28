@@ -27,7 +27,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
     <PackageReference Include="Jitter2" Version="2.8.13" />
 
     <!-- <ProjectReference Include="..\..\Anthology\Aperture\Aperture\Aperture.csproj" /> -->
@@ -35,17 +34,18 @@
     <!-- <ProjectReference Include="..\..\Anthology\Echo\Echo\Echo.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Paper\Paper\Paper.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Recast\Recast\Prowl.Recast.csproj" /> -->
+    <!-- <ProjectReference Include="..\..\Anthology\Motion\Motion\Motion.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
     <PackageReference Include="Prowl.Aperture" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Motion" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
     
     <PackageReference Include="Silk.NET" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
-    <!-- <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" /> -->
     <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
     <!-- EngineObject null-safety analyzer (?./??/??= on EngineObject). Analyzes this project's own source. -->
     <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

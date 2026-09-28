@@ -1459,6 +1459,7 @@ public class EditorApplication : Game
         // re-scan the new assemblies (picking up newly-compiled types and dropping removed ones). Runs on
         // both the migrate and initial-load paths.
         Prowl.Runtime.MeshFeatures.MeshFeatureRegistry.ClearCache();
+        AnimationNodeRegistry.Reset();
         EditorRegistries.Reinitialize();
         Inspector.GameObjectInspector.ClearAddComponentCache();
         MenuRegistry.Clear();

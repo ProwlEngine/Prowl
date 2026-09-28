@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -19,7 +19,7 @@ public class EditorModelImporter : AssetImporter
     // 8: normals now come from Clay, which splits vertices on hard edges.
     // 12: Clay negates X instead of Z, so models face +Z as authored, and cameras and lights sit on a child.
     // 13: only cameras and spot lights sit on a turned child, directional and point lights stay on the node.
-    private const int BaseVersion = 13;
+    private const int BaseVersion = 14;
     /// <summary> Combined version: the importer's own base version plus the aggregate version from MeshFeatureRegistry, so any change to mesh feature generation invalidates the cache. </summary>
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
@@ -58,7 +58,12 @@ public class EditorModelImporter : AssetImporter
                 importSettings.SceneIndex = s.TryGet("sceneIndex", out var si) ? si.IntValue : -1;
                 importSettings.ImportCameras = !s.TryGet("importCameras", out var ic) || ic.BoolValue;
                 importSettings.ImportLights = !s.TryGet("importLights", out var il) || il.BoolValue;
-                importSettings.AnimationWrapMode = (AnimationWrapMode)(s.TryGet("animationWrapMode", out var awm) ? awm.IntValue : (int)AnimationWrapMode.Loop);
+                importSettings.LoopAnimations = !s.TryGet("loopAnimations", out var la) || la.BoolValue;
+                importSettings.RigType = (ModelRigType)(s.TryGet("rigType", out var rt) ? rt.IntValue : (int)ModelRigType.Generic);
+                importSettings.AnimationSampleRate = s.TryGet("animationSampleRate", out var asr) ? asr.FloatValue : 30f;
+                importSettings.ClipOverrides = ModelImportOverrides.ReadClips(s);
+                importSettings.MaterialResolver = new ExtractedMaterialResolver(s);
+                importSettings.HumanoidBoneMap = ModelImportOverrides.ReadHumanoidMap(s);
                 // Off by default (slow; some models ship their own UV2). The importer runs the
                 // unwrap in its post-process so the baked UV2 is captured before serialization.
                 importSettings.GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
@@ -76,6 +81,9 @@ public class EditorModelImporter : AssetImporter
 
             for (int i = 0; i < data.Materials.Count; i++)
                 ctx.AddSubAsset(data.Materials[i].Name ?? $"Material_{i}", data.Materials[i], SubAssetIdentity.Order);
+
+            if (data.Avatar != null)
+                ctx.AddSubAsset(data.Avatar.Name ?? "Avatar", data.Avatar, SubAssetIdentity.Order);
 
             for (int i = 0; i < data.Animations.Count; i++)
                 ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i], SubAssetIdentity.Order);
@@ -161,7 +169,11 @@ public class EditorModelImporter : AssetImporter
         s["unitScale"] = new EchoObject(1.0f);
         s["importCameras"] = new EchoObject(true);
         s["importLights"] = new EchoObject(true);
-        s["animationWrapMode"] = new EchoObject((int)AnimationWrapMode.Loop);
+        s["loopAnimations"] = new EchoObject(true);
+        s["rigType"] = new EchoObject((int)ModelRigType.Generic);
+        s["animationSampleRate"] = new EchoObject(30.0f);
+        s[ModelImportKeys.Clips] = EchoObject.NewCompound();
+        s[ModelImportKeys.MaterialRemap] = EchoObject.NewCompound();
         s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;

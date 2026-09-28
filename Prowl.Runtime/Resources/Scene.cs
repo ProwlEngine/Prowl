@@ -212,9 +212,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     [SerializeIgnore]
     private readonly NavMeshWorld _navigation = new();
+    private readonly SceneAnimation _animation = new();
 
     /// <summary>This scene's navigation state (registered navmeshes, queries, crowd).</summary>
     public NavMeshWorld Navigation { get { EnsureNotDisposed(); return _navigation; } }
+
+    /// <summary>Every animator in the scene, advanced once per frame in its own phase.</summary>
+    public SceneAnimation Animation { get { EnsureNotDisposed(); return _animation; } }
 
     [SerializeIgnore]
     private readonly SceneDispatcher _dispatcher = new();
@@ -817,6 +821,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         // Clear the navigation world (waits out in-flight queries)
         _navigation.Clear();
+        _animation.Clear();
 
         // Dispose all GameObjects which will also remove them from the scene. Dispose() (not the raw
         // OnDispose() body) sets IsDisposed and is idempotent, so the flat list's double-hits on
@@ -877,6 +882,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         catch (Exception ex) { Debug.LogErrorOnce("Navigation.UpdateThrew", $"[Navigation] Update threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
 
         _dispatcher.RunUpdate();
+
+        // Animation sits between the two so gameplay code reaching in to override a bone in
+        // LateUpdate finds the pose already written. An animator that blows up must not take the
+        // frame with it, and the manager reports each one rather than rethrowing.
+        _animation.Update(Time.DeltaTime);
+
         _dispatcher.RunLateUpdate();
 
         Flush();
