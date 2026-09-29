@@ -2559,6 +2559,110 @@ namespace Prowl.Quill
         }
 
         /// <summary>
+        /// Fills the band between two rounded rectangles sharing the same corner radii, straight from
+        /// vertices instead of tessellating a path. Meant for shadows and outlines, where the inner
+        /// rectangle is punched out of the outer one. The edges are not anti-aliased, matching
+        /// <see cref="FillComplex"/>.
+        /// This does not modify or use the current path.
+        /// </summary>
+        /// <returns>
+        /// False, drawing nothing, when the inner rectangle is not fully inside the outer one, since
+        /// the band is then not a ring. Callers fall back to an even-odd path fill for that case.
+        /// </returns>
+        public bool RoundedRectRingFilled(float outerX, float outerY, float outerWidth, float outerHeight,
+                                          float innerX, float innerY, float innerWidth, float innerHeight,
+                                          float tlRadii, float trRadii, float brRadii, float blRadii,
+                                          Color32 color)
+        {
+            if (outerWidth <= 0 || outerHeight <= 0 || innerWidth <= 0 || innerHeight <= 0)
+                return false;
+
+            float outerMax = Maths.Min(outerWidth, outerHeight) / 2;
+            float innerMax = Maths.Min(innerWidth, innerHeight) / 2;
+
+            // Both outlines take the same number of points per corner so they pair up into quads.
+            int Segments(float r) => r > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * r / 2 / _state.roundingMinDistance)) : 0;
+            float tlO = Maths.Min(tlRadii, outerMax), tlI = Maths.Min(tlRadii, innerMax);
+            float trO = Maths.Min(trRadii, outerMax), trI = Maths.Min(trRadii, innerMax);
+            float brO = Maths.Min(brRadii, outerMax), brI = Maths.Min(brRadii, innerMax);
+            float blO = Maths.Min(blRadii, outerMax), blI = Maths.Min(blRadii, innerMax);
+            int tlS = Segments(tlO), trS = Segments(trO), brS = Segments(brO), blS = Segments(blO);
+
+            int count = (tlS + 1) + (trS + 1) + (brS + 1) + (blS + 1);
+            Span<Float2> outer = count <= 256 ? stackalloc Float2[count] : new Float2[count];
+            Span<Float2> inner = count <= 256 ? stackalloc Float2[count] : new Float2[count];
+
+            int n = 0;
+            void Corner(Span<Float2> points, float cx, float cy, float r, float startAngle, int segs)
+            {
+                if (segs == 0)
+                {
+                    points[n] = new Float2(cx, cy);
+                    return;
+                }
+
+                float step = Maths.PI / 2 / segs;
+                for (int j = 0; j <= segs; j++)
+                {
+                    float angle = startAngle + j * step;
+                    points[n + j] = new Float2(cx + r * MathF.Cos(angle), cy + r * MathF.Sin(angle));
+                }
+            }
+
+            // Ring order TL, TR, BR, BL, each arc sweeping +90 degrees. A square corner is one point.
+            void Outline(Span<Float2> points, float x, float y, float w, float h, float tl, float tr, float br, float bl)
+            {
+                n = 0;
+                Corner(points, x + tl, y + tl, tl, Maths.PI, tlS); n += tlS + 1;
+                Corner(points, x + w - tr, y + tr, tr, Maths.PI * 1.5f, trS); n += trS + 1;
+                Corner(points, x + w - br, y + h - br, br, 0f, brS); n += brS + 1;
+                Corner(points, x + bl, y + h - bl, bl, Maths.PI * 0.5f, blS); n += blS + 1;
+            }
+
+            Outline(outer, outerX, outerY, outerWidth, outerHeight, tlO, trO, brO, blO);
+            Outline(inner, innerX, innerY, innerWidth, innerHeight, tlI, trI, brI, blI);
+
+            // With every triangle wound the same way the strip covers exactly the outer shape minus the
+            // inner one. An inner rectangle reaching outside the outer one always flips at least one.
+            float ox = outerX + outerWidth / 2, oy = outerY + outerHeight / 2;
+            for (int k = 0; k < count; k++)
+            {
+                int next = (k + 1) % count;
+                if (Cross(inner[k], outer[next], outer[k]) > 1e-4 || Cross(inner[k], inner[next], outer[next]) > 1e-4)
+                    return false;
+            }
+
+            // Measured about the outer centre so large canvas coordinates do not swamp the sign.
+            double Cross(Float2 a, Float2 b, Float2 c)
+            {
+                double ax = a.X - ox, ay = a.Y - oy;
+                return ((double)b.X - ox - ax) * ((double)c.Y - oy - ay) - ((double)b.Y - oy - ay) * ((double)c.X - ox - ax);
+            }
+
+            uint b = (uint)_vertices.Count;
+            Float2 uv = new Float2(1f, 1f);
+            _vertices.Reserve(count * 2);
+            for (int k = 0; k < count; k++)
+            {
+                AddVertex(new Vertex(TransformPoint(inner[k]), uv, color));
+                AddVertex(new Vertex(TransformPoint(outer[k]), uv, color));
+            }
+
+            _indices.Reserve(count * 6);
+            for (int k = 0; k < count; k++)
+            {
+                int next = (k + 1) % count;
+                uint inner0 = b + (uint)(k * 2), outer0 = inner0 + 1;
+                uint inner1 = b + (uint)(next * 2), outer1 = inner1 + 1;
+                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(outer0);
+                _indices.Add(inner0); _indices.Add(inner1); _indices.Add(outer1);
+            }
+
+            AddTriangleCount(count * 2);
+            return true;
+        }
+
+        /// <summary>
         /// Paints a circle on the canvas.
         /// This does not modify or use the current path.
         /// </summary>
