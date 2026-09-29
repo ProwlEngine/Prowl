@@ -2,8 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Vector;
@@ -563,9 +565,8 @@ public class Mesh : Asset, ISerializable
             return;
         }
 
-        byte[] vertexBlob = MakeVertexDataBlob(layout);
-        if (vertexBlob == null)
-            return;
+        byte[] vertexBlob = MakeVertexDataBlob(layout, out int vertexBlobLength);
+        ReadOnlySpan<byte> vertexData = vertexBlob.AsSpan(0, vertexBlobLength);
 
         // Check if we can reuse existing buffers
         bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && VertexLayoutMatches(lastVertexLayout, layout);
@@ -579,15 +580,18 @@ public class Mesh : Asset, ISerializable
 
         if (canReuseVertexBuffer)
         {
-            cmd.UpdateBuffer<byte>(vertexBuffer, vertexBlob);
+            cmd.UpdateBuffer<byte>(vertexBuffer, vertexData);
         }
         else
         {
             vertexBuffer?.Dispose();
-            vertexBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, vertexBlob, true);
+            vertexBuffer = new GraphicsBuffer(BufferType.VertexBuffer, vertexData, true);
             lastVertexCount = vertices.Length;
             lastVertexLayout = layout;
         }
+
+        // Both paths above copy the data, so the pooled blob can go back straight away.
+        ArrayPool<byte>.Shared.Return(vertexBlob);
 
         if (indexFormat == IndexFormat.UInt16)
         {
@@ -1503,95 +1507,71 @@ public class Mesh : Asset, ISerializable
         return new VertexFormat([.. elements]);
     }
 
-    internal byte[] MakeVertexDataBlob(VertexFormat layout)
+    // Interleaves the vertex attributes into a buffer rented from ArrayPool<byte>.Shared, which the
+    // caller returns once the data has been handed to the GPU.
+    internal byte[] MakeVertexDataBlob(VertexFormat layout, out int length)
     {
-        byte[] buffer = new byte[layout.Size * vertices.Length];
+        length = layout.Size * vertices.Length;
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(length);
+        Span<float> dst = MemoryMarshal.Cast<byte, float>(buffer.AsSpan(0, length));
 
-        void Copy(byte[] source, ref int index)
-        {
-            if (index + source.Length > buffer.Length)
-            {
-                throw new InvalidOperationException($"[Mesh] Buffer Overrun while generating vertex data blob: {index} -> {index + source.Length} "
-                    + $"is larger than buffer {buffer.Length}");
-            }
+        bool hasUV = HasUV, hasUV2 = HasUV2, hasNormals = HasNormals, hasTangents = HasTangents;
+        bool hasColors = HasColors, hasColors32 = !hasColors && HasColors32;
+        bool hasBoneIndices = HasBoneIndices, hasBoneWeights = HasBoneWeights;
 
-            System.Buffer.BlockCopy(source, 0, buffer, index, source.Length);
-
-            index += source.Length;
-        }
-
-        int index = 0;
+        int k = 0;
         for (int i = 0; i < vertices.Length; i++)
         {
-            if (index % layout.Size != 0)
-                throw new InvalidOperationException("[Mesh] Exceeded expected byte count while generating vertex data blob");
+            Float3 p = vertices[i];
+            dst[k++] = p.X; dst[k++] = p.Y; dst[k++] = p.Z;
 
-            //Copy position
-            Copy(BitConverter.GetBytes(vertices[i].X), ref index);
-            Copy(BitConverter.GetBytes(vertices[i].Y), ref index);
-            Copy(BitConverter.GetBytes(vertices[i].Z), ref index);
-
-            if (HasUV)
+            if (hasUV)
             {
-                Copy(BitConverter.GetBytes(uv[i].X), ref index);
-                Copy(BitConverter.GetBytes(uv[i].Y), ref index);
+                Float2 t = uv[i];
+                dst[k++] = t.X; dst[k++] = t.Y;
             }
 
-            if (HasUV2)
+            if (hasUV2)
             {
-                Copy(BitConverter.GetBytes(uv2[i].X), ref index);
-                Copy(BitConverter.GetBytes(uv2[i].Y), ref index);
+                Float2 t = uv2[i];
+                dst[k++] = t.X; dst[k++] = t.Y;
             }
 
-            //Copy normals
-            if (HasNormals)
+            if (hasNormals)
             {
-                Copy(BitConverter.GetBytes(normals[i].X), ref index);
-                Copy(BitConverter.GetBytes(normals[i].Y), ref index);
-                Copy(BitConverter.GetBytes(normals[i].Z), ref index);
+                Float3 n = normals[i];
+                dst[k++] = n.X; dst[k++] = n.Y; dst[k++] = n.Z;
             }
 
-            if (HasColors)
+            if (hasColors || hasColors32)
             {
-                Copy(BitConverter.GetBytes((float)colors[i].R), ref index);
-                Copy(BitConverter.GetBytes((float)colors[i].G), ref index);
-                Copy(BitConverter.GetBytes((float)colors[i].B), ref index);
-                Copy(BitConverter.GetBytes((float)colors[i].A), ref index);
-            }
-            else if (HasColors32)
-            {
-                var c = (Color)colors32[i];
-
-                Copy(BitConverter.GetBytes(c.R), ref index);
-                Copy(BitConverter.GetBytes(c.G), ref index);
-                Copy(BitConverter.GetBytes(c.B), ref index);
-                Copy(BitConverter.GetBytes(c.A), ref index);
+                Color c = hasColors ? colors[i] : (Color)colors32[i];
+                dst[k++] = c.R; dst[k++] = c.G; dst[k++] = c.B; dst[k++] = c.A;
             }
 
-            if (HasTangents)
+            if (hasTangents)
             {
-                Copy(BitConverter.GetBytes(tangents[i].X), ref index);
-                Copy(BitConverter.GetBytes(tangents[i].Y), ref index);
-                Copy(BitConverter.GetBytes(tangents[i].Z), ref index);
-                Copy(BitConverter.GetBytes(tangents[i].W), ref index);
+                Float4 t = tangents[i];
+                dst[k++] = t.X; dst[k++] = t.Y; dst[k++] = t.Z; dst[k++] = t.W;
             }
 
-            if (HasBoneIndices)
+            if (hasBoneIndices)
             {
-                //Copy(new byte[] { boneIndices[i].red, boneIndices[i].green, boneIndices[i].blue, boneIndices[i].alpha }, ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].X), ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].Y), ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].Z), ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].W), ref index);
+                Float4 b = boneIndices[i];
+                dst[k++] = b.X; dst[k++] = b.Y; dst[k++] = b.Z; dst[k++] = b.W;
             }
 
-            if (HasBoneWeights)
+            if (hasBoneWeights)
             {
-                Copy(BitConverter.GetBytes(boneWeights[i].X), ref index);
-                Copy(BitConverter.GetBytes(boneWeights[i].Y), ref index);
-                Copy(BitConverter.GetBytes(boneWeights[i].Z), ref index);
-                Copy(BitConverter.GetBytes(boneWeights[i].W), ref index);
+                Float4 w = boneWeights[i];
+                dst[k++] = w.X; dst[k++] = w.Y; dst[k++] = w.Z; dst[k++] = w.W;
             }
+        }
+
+        if (k != dst.Length)
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+            throw new InvalidOperationException($"[Mesh] Vertex data blob wrote {k * sizeof(float)} bytes but the layout expects {length}");
         }
 
         return buffer;
