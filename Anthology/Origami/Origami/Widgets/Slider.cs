@@ -444,16 +444,14 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         var customThumb = _customThumb;
 
         bool showTooltip = _showTooltip && (isDragging || isHovered) && font != null;
-        // Always compute the formatted value when we have a font, so the fade-out animation
-        // keeps showing the last value rather than emptying the bubble mid-fade.
-        string tooltipText = (font != null) ? FormatValue(valueT) : string.Empty;
         float fontSize = metrics.FontSize;
         Color tooltipBg = _theme.Neutral.C500;
         Color tooltipFg = ink.C500;
 
-        // Animation hooks for hover/active.
-        float hoverAnim = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
-        float activeAnim = _paper.AnimateBool(isDragging, 0.10f, id: $"{_id}_act");
+        // Animation hooks for hover/active. This runs inside the track element, which owns the
+        // animation state, so the per line keys Paper caches are enough.
+        float hoverAnim = _paper.AnimateBool(isHovered && interactive, 0.12f);
+        float activeAnim = _paper.AnimateBool(isDragging, 0.10f);
 
         _paper.Draw((canvas, rect) =>
         {
@@ -599,14 +597,12 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         if (font != null)
         {
             var thandle = _paper.CurrentParent;
-            string tt = tooltipText;
             bool wantTooltip = _showTooltip && (isDragging || isHovered);
             bool vert = vertical;
             double t = valueT;
             float thumbBaseRLocal = thumbBaseR;
-            string ttId = _id;
 
-            using (_paper.Box($"{_id}_tt")
+            using (_paper.Box("tt")
                 .PositionType(PositionType.SelfDirected)
                 .Position(0, 0)
                 .Width(1).Height(1)
@@ -616,10 +612,12 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 .Enter())
             {
                 // 0 > 1 fade. Pinned to this element so it persists across visibility flips.
-                float ttAnim = _paper.AnimateBool(wantTooltip, 0.14f, id: $"{ttId}_ttf");
+                float ttAnim = _paper.AnimateBool(wantTooltip, 0.14f);
 
                 if (ttAnim > 0.01f)
                 {
+                    // Formatted only while the bubble shows, still from the current value so a fade out keeps it.
+                    string tt = FormatValue(t);
                     _paper.Draw((canvas, _) =>
                     {
                         var tr = thandle.Data.LayoutRect;
