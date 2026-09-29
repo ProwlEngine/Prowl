@@ -54,6 +54,7 @@ public class ConsolePanel : DockPanel
     private bool _lastCollapseState;
     private readonly List<int> _filteredIndices = new();
     private int _selectedFilteredIndex = -1;
+    private TextLayout? _ellipsis;
 
     internal struct LogEntry
     {
@@ -71,6 +72,12 @@ public class ConsolePanel : DockPanel
         public TextLayout? CountLayout;
         public TextLayout? SourceLayout;
         public TextLayout? StackLayout;
+
+        // Truncated copies for when the full line does not fit, with the width they were cut for.
+        public TextLayout? MessageCut;
+        public float MessageCutWidth;
+        public TextLayout? StackCut;
+        public float StackCutWidth;
     }
 
     public ConsolePanel() => EnsureSubscribed();
@@ -305,6 +312,22 @@ public class ConsolePanel : DockPanel
         TextLayout Make(string text, FontFile f, float size) =>
             canvas.CreateLayout(text, new TextLayoutSettings { Font = f, PixelSize = size, LineHeight = 1f, Quality = FontQuality.Normal });
 
+        // The full layout when it fits, otherwise a copy cut before the first character that would
+        // overflow, ending in an ellipsis. The cut is found from the glyph positions the layout already
+        // holds and is only rebuilt when the width changes.
+        TextLayout Fit(TextLayout full, ref TextLayout? cut, ref float cutWidth, float maxWidth, FontFile f)
+        {
+            if (LW(full) <= maxWidth) return full;
+            if (cut != null && cutWidth == maxWidth) return cut;
+
+            float room = canvas.LogicalToPixel(maxWidth - LW(_ellipsis!));
+            int index = Math.Max(0, full.GetCursorIndex(new Float2(room, 0)));
+            while (index > 0 && full.GetCursorPosition(index).X > room) index--;
+            cut = Make(full.Text[..index] + "...", f, EditorTheme.FontSizeSmall);
+            cutWidth = maxWidth;
+            return cut;
+        }
+
         for (int vi = first; vi <= last; vi++)
         {
             // first/last were captured at layout time; a mid-frame Clear can shrink the list before
@@ -366,17 +389,18 @@ public class ConsolePanel : DockPanel
                 rightCursor -= badgeW + gap;
             }
 
-            float msgLimit = Math.Max(cursorX, rightCursor);
-            canvas.SaveState();
-            canvas.IntersectScissor(cursorX, rowY, msgLimit - cursorX, rowH);
-            msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
-            DrawMid(msg.MessageLayout, cursorX, line1, EditorTheme.Ink400);
-            if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
+            float msgWidth = rightCursor - cursorX;
+            if (msgWidth > 0f)
             {
-                msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
-                DrawMid(msg.StackLayout, cursorX, line2, EditorTheme.InkDim);
+                _ellipsis ??= Make("...", mono, EditorTheme.FontSizeSmall);
+                msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
+                DrawMid(Fit(msg.MessageLayout, ref msg.MessageCut, ref msg.MessageCutWidth, msgWidth, mono), cursorX, line1, EditorTheme.Ink400);
+                if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
+                {
+                    msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
+                    DrawMid(Fit(msg.StackLayout, ref msg.StackCut, ref msg.StackCutWidth, msgWidth, mono), cursorX, line2, EditorTheme.InkDim);
+                }
             }
-            canvas.RestoreState();
 
             canvas.RectFilled(left, rowY + rowH - 1f, w, 1f, EditorTheme.BorderSoft);
 
