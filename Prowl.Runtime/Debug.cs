@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 using Prowl.Runtime.Resources;
@@ -1016,43 +1017,45 @@ public class GizmoBuilder
     {
         bool hasWire = _wireData.Vertices.Count > 0;
         if (hasWire)
-        {
-            if (_wire.IsNotValid())
-                _wire = new()
-                {
-                    MeshTopology = Topology.Lines,
-                    IndexFormat = IndexFormat.UInt32,
-                };
-
-            _wire.Vertices = [.. _wireData.Vertices.Select(v => (Float3)v)];
-            _wire.Colors = [.. _wireData.Colors];
-            _wire.Indices = [.. _wireData.Indices.Select(i => (uint)i)];
-
-            _wire.Vertices = [.. _wireData.Vertices.Select(v => (Float3)v)];
-        }
+            _wire = Refresh(_wire, Topology.Lines, in _wireData, false);
 
         bool hasSolid = _solidData.Vertices.Count > 0;
         if (hasSolid)
-        {
-            if (_solid.IsNotValid())
-                _solid = new()
-                {
-                    MeshTopology = Topology.Triangles,
-                    IndexFormat = IndexFormat.UInt32,
-                };
-
-            _solid.Vertices = [.. _solidData.Vertices.Select(v => (Float3)v)];
-
-            _solid.Colors = [.. _solidData.Colors];
-            _solid.UV = [.. _solidData.Uvs.Select(v => (Float2)v)];
-            _solid.Indices = [.. _solidData.Indices.Select(i => (uint)i)];
-        }
+            _solid = Refresh(_solid, Topology.Triangles, in _solidData, true);
 
         return (
             hasWire ? _wire : null,
             hasSolid ? _solid : null
             );
     }
+
+    // Gizmos are redrawn every frame but rarely change, so the mesh is only rebuilt and uploaded again when they do.
+    private static Mesh Refresh(Mesh? mesh, Topology topology, in MeshData data, bool withUV)
+    {
+        if (mesh.IsNotValid())
+        {
+            mesh = new()
+            {
+                MeshTopology = topology,
+                IndexFormat = IndexFormat.UInt32,
+            };
+        }
+        else if (Same(data.Vertices, mesh.Vertices) && Same(data.Colors, mesh.Colors32)
+            && Same(data.Indices, mesh.Indices) && (!withUV || Same(data.Uvs, mesh.UV)))
+        {
+            return mesh;
+        }
+
+        mesh.Vertices = CollectionsMarshal.AsSpan(data.Vertices).ToArray();
+        mesh.Colors32 = CollectionsMarshal.AsSpan(data.Colors).ToArray();
+        if (withUV)
+            mesh.UV = CollectionsMarshal.AsSpan(data.Uvs).ToArray();
+        mesh.Indices = MemoryMarshal.Cast<int, uint>(CollectionsMarshal.AsSpan(data.Indices)).ToArray();
+        return mesh;
+    }
+
+    private static bool Same<TList, TArray>(List<TList> list, TArray[] array) where TList : unmanaged where TArray : unmanaged
+        => MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(list)).SequenceEqual(MemoryMarshal.AsBytes(array.AsSpan()));
 
     public List<IconDrawCall> GetIcons()
     {
