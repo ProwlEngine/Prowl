@@ -1577,23 +1577,22 @@ public class AnimationGraphWindow : DockPanel
     /// <summary>One parameter row. Clicking selects it, dragging it onto the graph makes a node that reads it.</summary>
     private void DrawParameterRow(Paper paper, Scribe.FontFile font, OrigamiMetrics m, GraphParameterRecord parameter, int index)
     {
-        string id = $"ag_param_{index}";
         bool selected = Selection.IsSelected(new AnimationGraphSelection(this, parameter: parameter));
         string live = _probe.ReadParameter(parameter);
 
-        var row = ParameterRow(paper, m, id, parameter.Name, selected)
+        var row = ParameterRow(paper, m, "ag_param", index, parameter.Name, selected)
             .OnClick(0, (_, _) => Publish(new List<AnimationGraphSelection> { new(this, parameter: parameter) }));
 
         using (row.Enter())
         {
-            ParameterRowName(paper, font, m, id, parameter.Name, AnimationGraphNode.PinKindOf(parameter.Kind), EditorTheme.Ink700);
+            ParameterRowName(paper, font, m, parameter.Name, AnimationGraphNode.PinKindOf(parameter.Kind), EditorTheme.Ink700);
 
-            paper.Box($"{id}_value").Width(UnitValue.Auto).Height(m.RowHeight).IsNotInteractable()
+            paper.Box("value").Width(UnitValue.Auto).Height(m.RowHeight).IsNotInteractable()
                 .Text(live.Length > 0 ? live : DefaultText(parameter), font)
                 .TextColor(live.Length > 0 ? EditorTheme.Green400 : EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
 
-            paper.Box($"{id}_del").Width(20).Height(m.RowHeight).Rounded(m.SmallRounding)
+            paper.Box("del").Width(20).Height(m.RowHeight).Rounded(m.SmallRounding)
                 .Hovered.BackgroundColor(EditorTheme.Neutral400).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
@@ -1606,17 +1605,17 @@ public class AnimationGraphWindow : DockPanel
     /// <summary>A Virtual Parameter's name, which drags onto the graph like a parameter.</summary>
     private void DrawVirtualParameterRow(Paper paper, Scribe.FontFile font, OrigamiMetrics m, string name, int index)
     {
-        string id = $"ag_virtual_{index}";
-        var row = ParameterRow(paper, m, id, name, selected: false)
+        var row = ParameterRow(paper, m, "ag_virtual", index, name, selected: false)
             .Tooltip("Set by the Virtual Parameter node of this name. Drag it onto the graph to read it.");
 
         using (row.Enter())
-            ParameterRowName(paper, font, m, id, name, NodePinKind.Number, EditorTheme.Ink600);
+            ParameterRowName(paper, font, m, name, NodePinKind.Number, EditorTheme.Ink600);
     }
 
-    // A row that drags a parameter's name onto the graph, where it becomes a node reading it.
-    private static ElementBuilder ParameterRow(Paper paper, OrigamiMetrics m, string id, string name, bool selected)
-        => paper.Row(id).Width(UnitValue.Stretch()).Height(m.RowHeight + 4)
+    // A row that drags a parameter's name onto the graph, where it becomes a node reading it. Its
+    // children are scoped to the row, so they use constant ids.
+    private static ElementBuilder ParameterRow(Paper paper, OrigamiMetrics m, string key, int index, string name, bool selected)
+        => paper.Row(key, index).Width(UnitValue.Stretch()).Height(m.RowHeight + 4)
             .Margin(m.Padding, m.Padding, 1, 1).Padding(m.Padding, 4, 0, 0).Gap(m.SpacingMedium)
             .Rounded(m.SmallRounding)
             .BackgroundColor(selected ? EditorTheme.WithAlpha(EditorTheme.Accent, 50) : Color.Transparent)
@@ -1625,10 +1624,10 @@ public class AnimationGraphWindow : DockPanel
             .Cursor(PaperCursor.Grab)
             .OnDragStart(_ => DragDrop.StartDrag(new AnimationParameterDrag(name)));
 
-    private static void ParameterRowName(Paper paper, Scribe.FontFile font, OrigamiMetrics m, string id, string name, NodePinKind kind, Color ink)
+    private static void ParameterRowName(Paper paper, Scribe.FontFile font, OrigamiMetrics m, string name, NodePinKind kind, Color ink)
     {
-        paper.Box($"{id}_kind").Width(8).Height(8).Rounded(4).BackgroundColor(AnimationGraphView.KindColor(kind)).IsNotInteractable();
-        paper.Box($"{id}_name").Width(UnitValue.Stretch()).Height(m.RowHeight).IsNotInteractable()
+        paper.Box("kind").Width(8).Height(8).Rounded(4).BackgroundColor(AnimationGraphView.KindColor(kind)).IsNotInteractable();
+        paper.Box("name").Width(UnitValue.Stretch()).Height(m.RowHeight).IsNotInteractable()
             .Text(name, font).TextColor(ink)
             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
     }

@@ -96,18 +96,35 @@ public sealed class ShaderPass
 
     public bool TryGetVariantProgram(Dictionary<string, bool>? keywordID, out GraphicsProgram variant)
     {
-        string keywords = string.Empty;
+        // The key is every enabled keyword followed by ';'. It is built on the stack and looked up as a
+        // span, so finding a variant that is already compiled, which is nearly every draw, allocates nothing.
+        int length = 0;
         if (keywordID != null)
         {
             foreach (KeyValuePair<string, bool> kvp in keywordID)
             {
                 if (kvp.Value)
-                    keywords += $"{kvp.Key};";
+                    length += kvp.Key.Length + 1;
             }
         }
 
-        if (_variants.TryGetValue(keywords, out variant))
+        Span<char> key = length <= 512 ? stackalloc char[length] : new char[length];
+        if (keywordID != null)
+        {
+            int pos = 0;
+            foreach (KeyValuePair<string, bool> kvp in keywordID)
+            {
+                if (!kvp.Value) continue;
+                kvp.Key.CopyTo(key[pos..]);
+                pos += kvp.Key.Length;
+                key[pos++] = ';';
+            }
+        }
+
+        if (_variants.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(key, out variant))
             return true;
+
+        string keywords = key.ToString();
 
         string frag = _fragmentSource;
         string vert = _vertexSource;

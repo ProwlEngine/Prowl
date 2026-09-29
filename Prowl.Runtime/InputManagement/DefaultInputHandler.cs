@@ -18,6 +18,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     public IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
     public IReadOnlyList<IMouse> Mice => Context.Mice;
+
+    // Enum.GetValues builds a new array on every call, and these are walked every frame.
+    private static readonly KeyCode[] s_keyCodes = Enum.GetValues<KeyCode>();
+    private static readonly MouseButton[] s_mouseButtons = Enum.GetValues<MouseButton>();
+    private static readonly GamepadButton[] s_gamepadButtons = Enum.GetValues<GamepadButton>();
     public IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
     /// <summary>
@@ -98,7 +103,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
 
         // initialize key states
-        foreach (KeyCode key in Enum.GetValues<KeyCode>())
+        foreach (KeyCode key in s_keyCodes)
         {
             if (key != KeyCode.Unknown)
             {
@@ -107,7 +112,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             }
         }
 
-        foreach (MouseButton button in Enum.GetValues<MouseButton>())
+        foreach (MouseButton button in s_mouseButtons)
         {
             if (button != MouseButton.Unknown)
             {
@@ -133,7 +138,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         wasGamepadButtonPressed[gamepadIndex] = [];
         isGamepadButtonPressed[gamepadIndex] = [];
 
-        foreach (GamepadButton button in Enum.GetValues<GamepadButton>())
+        foreach (GamepadButton button in s_gamepadButtons)
         {
             if (button != GamepadButton.Unknown)
             {
@@ -179,14 +184,15 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     // Update the state of each key
     private void UpdateKeyStates()
     {
-        foreach (KeyCode key in Enum.GetValues<KeyCode>())
+        foreach (KeyCode key in s_keyCodes)
         {
             if (key != KeyCode.Unknown)
             {
                 wasKeyPressed[key] = isKeyPressed[key];
                 isKeyPressed[key] = false;
-                foreach (IKeyboard keyboard in Keyboards)
-                    if (keyboard.IsKeyPressed((Silk.NET.Input.Key)key))
+                var keyboards = Keyboards;
+                for (int k = 0; k < keyboards.Count; k++)
+                    if (keyboards[k].IsKeyPressed((Silk.NET.Input.Key)key))
                     {
                         isKeyPressed[key] = true;
                         break;
@@ -197,14 +203,15 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             }
         }
 
-        foreach (MouseButton button in Enum.GetValues<MouseButton>())
+        foreach (MouseButton button in s_mouseButtons)
         {
             if (button != MouseButton.Unknown)
             {
                 wasMousePressed[button] = isMousePressed[button];
                 isMousePressed[button] = false;
-                foreach (IMouse mouse in Mice)
-                    if (mouse.IsButtonPressed((Silk.NET.Input.MouseButton)button))
+                var mice = Mice;
+                for (int m = 0; m < mice.Count; m++)
+                    if (mice[m].IsButtonPressed((Silk.NET.Input.MouseButton)button))
                     {
                         isMousePressed[button] = true;
                         break;
@@ -225,7 +232,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
                 InitializeGamepadState(gamepadIndex);
 
             IGamepad gamepad = Context.Gamepads[gamepadIndex];
-            foreach (GamepadButton button in Enum.GetValues<GamepadButton>())
+            foreach (GamepadButton button in s_gamepadButtons)
             {
                 if (button != GamepadButton.Unknown)
                 {

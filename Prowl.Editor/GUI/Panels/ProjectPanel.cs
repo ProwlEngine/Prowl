@@ -67,6 +67,8 @@ public class ProjectPanel : DockPanel
     // (Paper element storage and Selection), so they survive the nodes being reused.
     private List<OrigamiUI.TreeNode>? _folderTreeNodes;
     private List<object>? _folderTreeItems;
+    private readonly Dictionary<string, ContentItem> _folderTreeItemsByPath = new();
+    private readonly HashSet<string> _selectedFolderPaths = new();
     private int _folderTreeVersion = -1;
 
     public string CurrentFolder => _currentFolder;
@@ -555,17 +557,20 @@ public class ProjectPanel : DockPanel
                 BuildFolderNodes(builtNodes, "", "Assets", 0);
 
                 var builtItems = new List<object>(builtNodes.Count);
+                _folderTreeItemsByPath.Clear();
                 foreach (var n in builtNodes)
                 {
                     string relPath = (string)n.UserData!;
-                    builtItems.Add(new ContentItem
+                    var folderItem = new ContentItem
                     {
                         Name = n.Label,
                         RelativePath = relPath,
                         IsFolder = true,
                         Icon = EditorIcons.Folder,
                         TypeLabel = "Folder"
-                    });
+                    };
+                    builtItems.Add(folderItem);
+                    _folderTreeItemsByPath[relPath] = folderItem;
                 }
 
                 _folderTreeNodes = builtNodes;
@@ -576,16 +581,17 @@ public class ProjectPanel : DockPanel
             var nodes = _folderTreeNodes;
             var folderItems = _folderTreeItems!;
 
+            _selectedFolderPaths.Clear();
+            foreach (var sel in Selection.GetSelected<ContentItem>())
+                if (sel.IsFolder) _selectedFolderPaths.Add(sel.RelativePath);
+
             Origami.Tree(paper, "proj_tree", FolderTreeWidth, height)
                 .Nodes(nodes)
                 .MultiSelect()
                 .IsSelected(n =>
                 {
                     string relPath = (string)n.UserData!;
-                    // Check if any selected ContentItem matches this folder
-                    foreach (var sel in Selection.GetSelected<ContentItem>())
-                        if (sel.IsFolder && sel.RelativePath == relPath) return true;
-                    return _currentFolder == relPath;
+                    return _selectedFolderPaths.Contains(relPath) || _currentFolder == relPath;
                 })
                 .OnSelectModified((e, ctrl, shift) =>
                 {
@@ -608,21 +614,22 @@ public class ProjectPanel : DockPanel
                 {
                     string relativePath = (string)node.UserData!;
 
+                    // Rows are their own elements, so these ids only need to be unique within the row.
                     // Folder icon
-                    p.Box($"proj_fi_{node.Id.GetHashCode()}")
+                    p.Box("proj_fi")
                         .Width(18).Height(22)
                         .Text(EditorIcons.Folder, font)
                         .TextColor(EditorTheme.Amber400)
                         .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
                     // Name (inline rename or label)
-                    if (RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
+                    if (RenameOverlay.IsActive && RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
                     {
                         RenameOverlay.Draw(p, $"proj_ft_rename_{node.Id.GetHashCode()}");
                     }
                     else
                     {
-                        p.Box($"proj_fl_{node.Id.GetHashCode()}")
+                        p.Box("proj_fl")
                             .Height(22)
                             .Margin(4, 0, 0, 0)
                             .Text(node.Label, font)
@@ -632,14 +639,14 @@ public class ProjectPanel : DockPanel
                     }
 
                     // Right-click context menu on folder tree
-                    BuildFolderTreeContextMenu(p, $"proj_ft_ctx_{node.Id.GetHashCode()}", relativePath);
+                    BuildItemContextMenu(p, "proj_ft_ctx", _folderTreeItemsByPath[relativePath], inTree: true);
 
                     // Drop-target highlight
                     if (_dragHoverFolder == relativePath
                         && (DragDrop.IsDraggingType<GameObjectDragPayload>()
                             || (DragDrop.IsDraggingType<AssetDragPayload>() && CanAcceptAssetDropInto(relativePath))))
                     {
-                        p.Box($"proj_fn_drop_{node.Id.GetHashCode()}")
+                        p.Box("proj_fn_drop")
                             .PositionType(PositionType.SelfDirected)
                             .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
                             .Rounded(EditorTheme.Roundness).IsNotInteractable()
@@ -1004,19 +1011,6 @@ public class ProjectPanel : DockPanel
 
     private void paper_SetClipboard(string text) => _paper?.SetClipboard(text);
 
-    private void BuildFolderTreeContextMenu(Paper paper, string id, string relativePath)
-    {
-        var item = new ContentItem
-        {
-            Name = string.IsNullOrEmpty(relativePath) ? "Assets" : Path.GetFileName(relativePath),
-            RelativePath = relativePath,
-            IsFolder = true,
-            Icon = EditorIcons.Folder,
-            TypeLabel = "Folder"
-        };
-        BuildItemContextMenu(paper, id, item, inTree: true);
-    }
-
     private void BuildBackgroundContextMenu(Paper paper, string id)
     {
         Origami.RightClickMenu(paper, id, builder =>
@@ -1211,7 +1205,7 @@ public class ProjectPanel : DockPanel
         {
             for (int i = 0; i < entries.Count; i++)
             {
-                DrawGridItem(paper, font, $"proj_gc_{i}", entries[i], i, itemObjects, cellSize);
+                DrawGridItem(paper, font, entries[i], i, itemObjects, cellSize);
                 if (entries[i].Subs.Count > 0 && _expandedAssets.Contains(entries[i].Guid))
                     DrawSubDrawer(paper, font, entries[i], width);
             }
@@ -1306,7 +1300,7 @@ public class ProjectPanel : DockPanel
         }
     }
 
-    private void DrawGridItem(Paper paper, Scribe.FontFile font, string id, ContentItem item,
+    private void DrawGridItem(Paper paper, Scribe.FontFile font, ContentItem item,
         int idx, List<object> itemObjects, float cellSize)
     {
         bool isSelected = Selection.IsSelected(item);
@@ -1314,7 +1308,8 @@ public class ProjectPanel : DockPanel
         bool isPinged = item.Guid != Guid.Empty && item.Guid == Selection.PingedGuid;
         float cellRound = Origami.Current.Metrics.ContainerRounding;
 
-        using (paper.Column(id)
+        // Everything below is scoped to the cell, so its element ids are constants.
+        using (paper.Column("proj_gc", idx)
             .Width(cellSize).Height(UnitValue.Auto)
             .BackgroundColor(isSelected ? EditorTheme.Selected : (isSubAsset ? Color.FromArgb(20, EditorTheme.Accent) : Color.Transparent))
             .BorderColor(isSelected ? Color.FromArgb(102, EditorTheme.Purple400) : Color.Transparent).BorderWidth(1)
@@ -1386,9 +1381,9 @@ public class ProjectPanel : DockPanel
             if (hasSubs)
             {
                 float ts = cellSize - 8;
-                paper.Box($"{id}_stk2").PositionType(PositionType.SelfDirected).Position(10, 10).Size(ts, ts)
+                paper.Box("stk2").PositionType(PositionType.SelfDirected).Position(10, 10).Size(ts, ts)
                     .Rounded(cellRound).BackgroundColor(Color.FromArgb(130, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
-                paper.Box($"{id}_stk1").PositionType(PositionType.SelfDirected).Position(7, 7).Size(ts, ts)
+                paper.Box("stk1").PositionType(PositionType.SelfDirected).Position(7, 7).Size(ts, ts)
                     .Rounded(cellRound).BackgroundColor(Color.FromArgb(235, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
             }
 
@@ -1397,7 +1392,7 @@ public class ProjectPanel : DockPanel
             if (thumbTex != null)
             {
                 // Rounded image tile (texture-brushed rounded rect) + a matching rounded border.
-                paper.Box($"{id}_t")
+                paper.Box("t")
                     .Width(cellSize - 8).Height(cellSize - 8)
                     .Margin(4, 4, 4, 0)
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
@@ -1421,7 +1416,7 @@ public class ProjectPanel : DockPanel
                     : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 
                 float tileSz = cellSize - 8;
-                var tile = paper.Box($"{id}_t").Width(tileSz).Height(tileSz).Margin(4, 4, 4, 0).Rounded(cellRound);
+                var tile = paper.Box("t").Width(tileSz).Height(tileSz).Margin(4, 4, 4, 0).Rounded(cellRound);
 
                 if (style.Bare)
                 {
@@ -1446,7 +1441,7 @@ public class ProjectPanel : DockPanel
             if (hasSubs)
             {
                 bool expanded = _expandedAssets.Contains(item.Guid);
-                using (paper.Row($"{id}_sb").PositionType(PositionType.SelfDirected).Position(cellSize - 34, -2)
+                using (paper.Row("sb").PositionType(PositionType.SelfDirected).Position(cellSize - 34, -2)
                     .Width(UnitValue.Auto).Height(17).Rounded(EditorTheme.Roundness > 0f ? 9 : 0).Padding(6, 6, 0, 0).Gap(3)
                     .BackgroundColor(EditorTheme.Accent).DropShadow(0, 2, 8, 0, Color.FromArgb(128, 0, 0, 0))
                     .StopEventPropagation()
@@ -1457,22 +1452,22 @@ public class ProjectPanel : DockPanel
                     })
                     .Enter())
                 {
-                    paper.Box($"{id}_sbico").Width(11).Height(17).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                    paper.Box("sbico").Width(11).Height(17).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Icon(paper, expanded ? EditorIcons.ChevronDown_I : EditorIcons.LayerGroup_I, Color.White, size: 10f);
-                    paper.Box($"{id}_sbn").Width(UnitValue.Auto).Height(17).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                    paper.Box("sbn").Width(UnitValue.Auto).Height(17).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Text(item.Subs.Count.ToString(), EditorTheme.FontBold ?? font).TextColor(Color.White)
                         .FontSize(9.5f).Alignment(TextAlignment.MiddleCenter);
                 }
             }
 
             // Label - a flow child that WRAPS and grows the card's height (no clipping/truncation).
-            if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
+            if (RenameOverlay.IsActive && RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
             {
-                RenameOverlay.Draw(paper, $"{id}_rename", RenameOverlay.Position.Bottom);
+                RenameOverlay.Draw(paper, "rename", RenameOverlay.Position.Bottom);
             }
             else
             {
-                paper.Box($"{id}_l")
+                paper.Box("l")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                     .Margin(3, 3, 4, 6)
                     .Wrap(Prowl.Scribe.TextWrapMode.Wrap)
@@ -1481,7 +1476,7 @@ public class ProjectPanel : DockPanel
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.Center);
             }
 
-            BuildItemContextMenu(paper, $"{id}_ctx", item);
+            BuildItemContextMenu(paper, "ctx", item);
 
             // Folder grid items are drop targets highlight overlay painted when the cursor
             // is over this item during a valid drag. Central dispatch in OnGUI.
@@ -1489,7 +1484,7 @@ public class ProjectPanel : DockPanel
                 && (DragDrop.IsDraggingType<GameObjectDragPayload>()
                     || (DragDrop.IsDraggingType<AssetDragPayload>() && CanAcceptAssetDropInto(item.RelativePath))))
             {
-                paper.Box($"{id}_drop")
+                paper.Box("drop")
                     .PositionType(PositionType.SelfDirected)
                     .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
                     .Rounded(cellRound).IsNotInteractable()
