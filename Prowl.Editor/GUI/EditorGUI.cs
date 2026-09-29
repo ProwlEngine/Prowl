@@ -249,7 +249,7 @@ public static class EditorGUI
         if (font == null) return width;
 
         using (paper.Column(id).Width(width).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
-        using (paper.Column($"{id}_grp").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        using (paper.Column($"{id}_grp").Height(UnitValue.Auto).Margin(0, 0, 0, UnitValue.StretchOne)
             .Padding(8, 8, 10, 10).Gap(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         {
             foreach (var (cid, label, icon) in cats)
