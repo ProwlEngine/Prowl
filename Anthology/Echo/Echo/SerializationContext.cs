@@ -36,6 +36,13 @@ public class SerializationContext
     public int nextId = 1;
 
     /// <summary>
+    /// Reads the definition with this reference id into <paramref name="target"/> instead of a new object, and
+    /// resolves every reference to that id to it. Call before deserializing, with ids taken from the write's
+    /// <see cref="objectToId"/>, to copy a graph onto objects that already exist.
+    /// </summary>
+    public void ReadInto(int id, object target) => idToObject[id] = target;
+
+    /// <summary>
     /// Reference ids whose full definition has already been deserialized. Lets the deserializer tell a
     /// forward-reference placeholder (still awaiting its definition) apart from an already-populated
     /// instance, and detect a duplicate definition for the same id.
