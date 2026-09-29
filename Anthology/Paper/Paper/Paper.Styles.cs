@@ -636,8 +636,18 @@ namespace Prowl.PaperUI
 
             public void BeginFrame() => _frameConfigs.Clear();
 
+            // One config per property, refilled each frame, since the builder declares them all again every frame.
+            private readonly Dictionary<GuiProp, TransitionConfig> _configCache = new();
+
             public void Configure(GuiProp property, float duration, Func<float, float>? easing)
-                => _frameConfigs[property] = new TransitionConfig { Duration = duration, EasingFunction = easing };
+            {
+                if (!_configCache.TryGetValue(property, out var config))
+                    _configCache[property] = config = new TransitionConfig();
+
+                config.Duration = duration;
+                config.EasingFunction = easing;
+                _frameConfigs[property] = config;
+            }
 
             public void Remove(GuiProp property)
             {

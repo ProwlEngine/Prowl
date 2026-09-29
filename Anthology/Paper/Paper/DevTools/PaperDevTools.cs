@@ -95,7 +95,10 @@ public sealed partial class PaperDevTools
             _statDrawCalls = dcs.Count;
             _statVerts = canvas.VertexCount;
             _statTris = canvas.IndexCount / 3;
-            CaptureDrawCalls(dcs);
+
+            // Only the Render panel reads the list, so a closed panel skips building it.
+            if (_open)
+                CaptureDrawCalls(dcs);
         }
 
         // Publish this frame's phase timings for the profiler to display next frame.
