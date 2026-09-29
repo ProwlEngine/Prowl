@@ -337,9 +337,6 @@ public sealed class TreeBuilder
         if (_rowHeight <= 0)
             _rowHeight = metrics.RowHeight;
 
-        // Expand state storage key prefix
-        string expandPrefix = $"{_id}_exp_";
-
         // Capture a stable handle for expand state storage. We use a hidden box
         // that lives outside the scroll so its handle doesn't shift with scroll content.
         var stateBox = _paper.Box($"{_id}_state").Height(0).Width(0);
@@ -380,17 +377,17 @@ public sealed class TreeBuilder
                     }
 
                     bool isExpandable = node.HasChildren && !node.IsLeaf;
-                    string expKey = expandPrefix + node.Id;
+                    // Expand state lives on the tree's own state element, so the node id alone is a unique key.
                     bool isExpanded;
                     if (node.OverrideExpanded.HasValue)
                     {
                         isExpanded = isExpandable && node.OverrideExpanded.Value;
-                        _paper.SetElementStorage(stateHandle, expKey, node.OverrideExpanded.Value);
+                        _paper.SetElementStorage(stateHandle, node.Id, node.OverrideExpanded.Value);
                     }
                     else
                     {
                         isExpanded = isExpandable && _paper.GetElementStorage(
-                            stateHandle, expKey, node.DefaultExpanded);
+                            stateHandle, node.Id, node.DefaultExpanded);
                     }
 
                     if (_expandStateSink != null)
@@ -399,14 +396,13 @@ public sealed class TreeBuilder
                     bool isSelected = _isSelected?.Invoke(node) ?? false;
                     bool isPinged = _isPinged?.Invoke(node) ?? false;
 
-                    DrawNode(font, ink, metrics, rounding, stateHandle, expandPrefix, nodes,
+                    DrawNode(font, ink, metrics, rounding, stateHandle, nodes,
                         node, i, isSelected, isExpanded, isExpandable, isPinged);
 
                     // If this node is expandable, open an animated wrapper for its children
                     if (isExpandable)
                     {
-                        string animId = $"{_id}_anim_{node.Id}";
-                        float anim = _paper.AnimateBool(isExpanded, 0.15f, id: animId);
+                        float anim = _paper.AnimateBool(isExpanded, 0.15f, id: node.Id);
 
                         if (!isExpanded && anim <= float.Epsilon)
                         {
@@ -418,7 +414,7 @@ public sealed class TreeBuilder
                         else
                         {
                             // Animating or expanded - wrap children in a height-lerped container
-                            var wrapper = _paper.Column($"{_id}_cw_{node.Id}")
+                            var wrapper = _paper.Column(node.Id, 1)
                                 .Width(UnitValue.Stretch())
                                 .Height(UnitValue.Lerp(0, UnitValue.Auto, anim));
 
@@ -442,14 +438,12 @@ public sealed class TreeBuilder
     }
 
     private void DrawNode(Prowl.Scribe.FontFile? font, OrigamiRamp ink, OrigamiMetrics metrics,
-        float rounding, ElementHandle stateHandle, string expandPrefix, List<TreeNode> allNodes,
+        float rounding, ElementHandle stateHandle, List<TreeNode> allNodes,
         TreeNode node, int index, bool isSelected, bool isExpanded,
         bool isExpandable, bool isPinged)
     {
         // Indentation: 6px base left padding + 14px per depth level (prototype .w2trow).
         float indent = _baseIndent + node.Depth * _indentSize;
-        string rowId = $"{_id}_r_{node.Id}";
-        string expKey = $"{_id}_exp_{node.Id}";
         int capturedIndex = index;
         var capturedNode = node;
         bool disabled = node.Disabled;
@@ -469,7 +463,9 @@ public sealed class TreeBuilder
             : Color.Transparent;
 
         // Build the row element
-        var row = _paper.Row(rowId)
+        // Node ids are unique within the tree, and everything below is scoped to the row, so none
+        // of these element ids need building per node.
+        var row = _paper.Row(node.Id)
             .Height(_rowHeight)
             .BackgroundColor(rowBg)
             .Hovered.BackgroundColor(hoverBg).End()
@@ -599,10 +595,10 @@ public sealed class TreeBuilder
             // pointing-right (collapsed) to pointing-down (expanded). Leaves reserve the gap.
             if (isExpandable)
             {
-                float caretT = _paper.AnimateBool(isExpanded, 0.15f, id: $"{rowId}_caret");
+                float caretT = _paper.AnimateBool(isExpanded, 0.15f);
                 Color caretCol = isSelected ? ink.C600 : ink.C200;
 
-                var caret = _paper.Box($"{rowId}_arr")
+                var caret = _paper.Box("arr")
                     .Width(_arrowWidth).Height(_rowHeight)
                     .OnClick(e =>
                     {
@@ -613,7 +609,7 @@ public sealed class TreeBuilder
                         bool newState = !isExpanded;
                         bool alt = _paper.IsKeyDown(PaperKey.LeftAlt) || _paper.IsKeyDown(PaperKey.RightAlt);
 
-                        _paper.SetElementStorage(stateHandle, expKey, newState);
+                        _paper.SetElementStorage(stateHandle, capturedNode.Id, newState);
                         _onExpandChanged?.Invoke(capturedNode, newState);
 
                         // Alt+Click: recursively expand/collapse all descendants
@@ -626,8 +622,7 @@ public sealed class TreeBuilder
                                 if (desc.Depth <= parentDepth) break;
                                 if (desc.HasChildren && !desc.IsLeaf)
                                 {
-                                    string descKey = expandPrefix + desc.Id;
-                                    _paper.SetElementStorage(stateHandle, descKey, newState);
+                                    _paper.SetElementStorage(stateHandle, desc.Id, newState);
                                     _onExpandChanged?.Invoke(desc, newState);
                                 }
                             }
@@ -641,20 +636,20 @@ public sealed class TreeBuilder
             }
             else
             {
-                _paper.Box($"{rowId}_arr").Width(_arrowWidth).Height(_rowHeight);
+                _paper.Box("arr").Width(_arrowWidth).Height(_rowHeight);
             }
 
             // ---- Checkbox ----
             if (_checkboxes && !disabled)
             {
-                Origami.Checkbox(_paper, $"{rowId}_chk", node.Checked, v =>
+                Origami.Checkbox(_paper, "chk", node.Checked, v =>
                 {
                     _onCheckedChanged?.Invoke(capturedNode, v);
                 }).Show();
             }
             else if (_checkboxes && disabled)
             {
-                Origami.Checkbox(_paper, $"{rowId}_chk", node.Checked, _ => { }).Disabled().Show();
+                Origami.Checkbox(_paper, "chk", node.Checked, _ => { }).Disabled().Show();
             }
 
             // ---- Custom or default content ----
@@ -664,7 +659,7 @@ public sealed class TreeBuilder
             }
             else
             {
-                DrawDefaultContent(font, ink, metrics, node, rowId, isSelected, disabled);
+                DrawDefaultContent(font, ink, metrics, node, isSelected, disabled);
             }
         }
 
@@ -695,14 +690,14 @@ public sealed class TreeBuilder
     }
 
     private void DrawDefaultContent(Prowl.Scribe.FontFile? font, OrigamiRamp ink,
-        OrigamiMetrics metrics, TreeNode node, string rowId, bool isSelected, bool disabled)
+        OrigamiMetrics metrics, TreeNode node, bool isSelected, bool disabled)
     {
         // ---- Node type icon (~13px). Vector hook preferred; glyph is a legacy fallback. ----
         if (node.IconDraw != null)
         {
             var icon = node.IconDraw;
             Color iconCol = node.IconColor ?? (isSelected ? ink.C600 : (disabled ? ink.C200 : ink.C400));
-            using (_paper.Box($"{rowId}_ico")
+            using (_paper.Box("ico")
                 .Width(13).Height(_rowHeight)
                 .Margin(6, 0, 0, 0)
                 .IsNotInteractable()
@@ -722,7 +717,7 @@ public sealed class TreeBuilder
         else if (font != null && !string.IsNullOrEmpty(node.Icon))
         {
             Color iconColor = node.IconColor ?? (isSelected ? ink.C600 : (disabled ? ink.C200 : ink.C400));
-            _paper.Box($"{rowId}_ico")
+            _paper.Box("ico")
                 .Width(13).Height(_rowHeight)
                 .Margin(6, 0, 0, 0)
                 .IsNotInteractable()
@@ -739,7 +734,7 @@ public sealed class TreeBuilder
             string renameKey = $"{_id}_rename_{node.Id}";
             string currentName = _paper.GetElementStorage(_paper.CurrentParent, renameKey, node.Label);
 
-            Origami.TextField(_paper, $"{rowId}_rename", currentName, v =>
+            Origami.TextField(_paper, "rename", currentName, v =>
             {
                 _paper.SetElementStorage(_paper.CurrentParent, renameKey, v);
             }).Show();
@@ -755,7 +750,7 @@ public sealed class TreeBuilder
         {
             // Row text is `t` (#c0bbd2); a selected row flips to white.
             Color labelColor = node.LabelColor ?? (isSelected ? ink.C600 : (disabled ? ink.C200 : ink.C400));
-            _paper.Box($"{rowId}_lbl")
+            _paper.Box("lbl")
                 .Width(UnitValue.Stretch()).Height(_rowHeight)
                 .Margin(6, 0, 0, 0)
                 .IsNotInteractable()
@@ -768,7 +763,7 @@ public sealed class TreeBuilder
         // Badge
         if (!string.IsNullOrEmpty(node.Badge))
         {
-            _paper.Box($"{rowId}_badge")
+            _paper.Box("badge")
                 .Width(UnitValue.Auto).Height(_rowHeight)
                 .Margin(6, 0, 0, 0)
                 .IsNotInteractable()
@@ -782,7 +777,7 @@ public sealed class TreeBuilder
         if (!string.IsNullOrEmpty(node.TrailingIcon))
         {
             Color trailColor = node.TrailingIconColor ?? (isSelected ? ink.C600 : ink.C400);
-            var trailBox = _paper.Box($"{rowId}_trail")
+            var trailBox = _paper.Box("trail")
                 .Width(18).Height(_rowHeight)
                 .Margin(6, 0, 0, 0)
                 .Text(node.TrailingIcon, font)
