@@ -11,7 +11,7 @@ using Xunit;
 namespace Prowl.Editor.Test;
 
 /// <summary>A simple component with undoable fields.</summary>
-public sealed class UndoComp : MonoBehaviour
+public sealed class UndoComp : Component
 {
     public int Value;
     public string Label = "";
@@ -51,7 +51,7 @@ public class UndoTests : EditorTestHarness
 
     /// <summary>A component that applies its fields to live state, as the physics and navigation
     /// components do.</summary>
-    public sealed class AppliedComp : MonoBehaviour
+    public sealed class AppliedComp : Component
     {
         public int Value;
 
@@ -267,7 +267,7 @@ public class UndoTests : EditorTestHarness
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static void GiveRuntimeMaterial(GameObject go) => go.AddComponent<MeshRenderer>().Material = new Material { Name = "Runtime" };
 
-    public sealed class UndoLinkComp : MonoBehaviour
+    public sealed class UndoLinkComp : Component
     {
         public GameObject? Target;
         public int Value;

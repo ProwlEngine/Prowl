@@ -17,7 +17,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Modifier")]
 [ComponentIcon("\uf5ae")] // pen ruler
-public class NavMeshModifier : MonoBehaviour
+public class NavMeshModifier : Component
 {
     [Tooltip("Exclude this object's geometry from navmesh bakes entirely.")]
     [SerializeField] private bool ignoreFromBuild;

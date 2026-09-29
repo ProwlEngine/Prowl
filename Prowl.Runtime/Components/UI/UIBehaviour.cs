@@ -22,7 +22,7 @@ namespace Prowl.Runtime.UI;
 /// then bakes the result into <see cref="CachedMesh"/> for the pipeline to consume.
 /// </remarks>
 [RequireComponent(typeof(RectTransform))]
-public abstract class UIBehaviour : MonoBehaviour
+public abstract class UIBehaviour : Component
 {
     [SerializeIgnore] internal Mesh? CachedMesh;
     [SerializeIgnore] internal UIDirtyFlags DirtyFlags = UIDirtyFlags.All;

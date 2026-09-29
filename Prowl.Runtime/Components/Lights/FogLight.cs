@@ -14,7 +14,7 @@ namespace Prowl.Runtime;
 [AddComponentMenu("Rendering/Fog Light")]
 [RequireComponent(typeof(Light))]
 [ComponentIcon("\uf6c3")] // CloudMoon
-public sealed class FogLight : MonoBehaviour
+public sealed class FogLight : Component
 {
     /// <summary>How much this light contributes to volumetric scattering.</summary>
     [SerializeField] public float IntensityMultiplier = 1.0f;

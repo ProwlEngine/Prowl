@@ -339,7 +339,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             if (go is null || go.IsDisposed) continue;
 
-            foreach (MonoBehaviour comp in go._components)
+            foreach (Component comp in go._components)
                 if (comp is not null && !comp.IsDisposed && comp.EnabledInHierarchy)
                     _dispatcher.Register(comp);
         }
@@ -583,8 +583,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             if (go.EnabledInHierarchy)
             {
-                var components = go.GetComponents<MonoBehaviour>();
-                foreach (MonoBehaviour component in components)
+                var components = go.GetComponents<Component>();
+                foreach (Component component in components)
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
@@ -613,8 +613,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             if (go.EnabledInHierarchy)
             {
-                var components = go.GetComponents<MonoBehaviour>();
-                foreach (MonoBehaviour component in components)
+                var components = go.GetComponents<Component>();
+                foreach (Component component in components)
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
@@ -729,7 +729,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         _allObj.Remove(obj);
 
-        foreach (MonoBehaviour component in obj._components)
+        foreach (Component component in obj._components)
             if (!component.IsDisposed)
                 _dispatcher.Unregister(component);
 
@@ -745,7 +745,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             obj.Scene = this;
 
             if (IsActive && obj.EnabledInHierarchy)
-                foreach (MonoBehaviour component in obj._components)
+                foreach (Component component in obj._components)
                     if (!component.IsDisposed && component.Enabled && component.EnabledInHierarchy)
                         _dispatcher.Register(component);
         }
@@ -761,10 +761,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             _allObj.Add(obj);
             obj.Scene = this;
 
-            var components = obj.GetComponents<MonoBehaviour>();
+            var components = obj.GetComponents<Component>();
 
             // Call OnAddedToScene for all components
-            foreach (MonoBehaviour component in components)
+            foreach (Component component in components)
             {
                 if (component.IsDisposed) continue;
                 try { component.OnAddedToScene(); }
@@ -774,7 +774,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             // Call OnEnable for enabled components, but only if the scene is active
             if (IsActive && obj.EnabledInHierarchy)
             {
-                foreach (MonoBehaviour component in components)
+                foreach (Component component in components)
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
@@ -799,12 +799,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (_allObjSet.Remove(obj))
         {
             _allObj.Remove(obj);
-            var components = obj.GetComponents<MonoBehaviour>();
+            var components = obj.GetComponents<Component>();
 
             // Call OnDisable for currently enabled components (only if scene is active)
             if (IsActive && obj.EnabledInHierarchy)
             {
-                foreach (MonoBehaviour component in components)
+                foreach (Component component in components)
                 {
                     if (component.IsDisposed) continue;
                     if (component.Enabled && component.EnabledInHierarchy)
@@ -813,7 +813,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             }
 
             // Call OnRemovedFromScene for all components
-            foreach (MonoBehaviour component in components)
+            foreach (Component component in components)
             {
                 if (component.IsDisposed) continue;
                 try { component.OnRemovedFromScene(); }
@@ -833,7 +833,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (go is T t)
                 objects.Add(t);
 
-            foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+            foreach (Component comp in go.GetComponents<Component>())
                 if (comp is T t2)
                     objects.Add(t2);
         }
@@ -847,7 +847,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             if (go.InstanceID == id)
                 return go as T;
-            foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+            foreach (Component comp in go.GetComponents<Component>())
                 if (comp.InstanceID == id)
                     return comp as T;
         }
@@ -861,7 +861,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             if (go.Identifier == identifier)
                 return go as T;
-            foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+            foreach (Component comp in go.GetComponents<Component>())
                 if (comp.Identifier == identifier)
                     return comp as T;
         }
@@ -949,7 +949,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (obj.LoadedIdentifier != Guid.Empty)
                 obj.SetIdentifier(obj.LoadedIdentifier);
 
-            foreach (MonoBehaviour comp in obj.GetComponents<MonoBehaviour>())
+            foreach (Component comp in obj.GetComponents<Component>())
                 if (comp.LoadedIdentifier != Guid.Empty)
                     comp.Identifier = comp.LoadedIdentifier;
         }
@@ -1059,7 +1059,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (go.IsDisposed || !go.EnabledInHierarchy) continue;
             if ((go.HideFlags & HideFlags.HideAndDontSave) != 0) continue; // not HasFlag: it boxes in unoptimized builds
 
-            foreach (MonoBehaviour component in go._components)
+            foreach (Component component in go._components)
             {
                 if (component is Camera camera)
                 {

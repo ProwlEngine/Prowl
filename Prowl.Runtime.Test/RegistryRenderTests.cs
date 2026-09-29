@@ -9,14 +9,14 @@ namespace Prowl.Runtime.Test;
 
 /// <summary>Records OnRenderCollect invocations (the collect phase is pure CPU - it just appends to
 /// the provided lists - so it's headless-testable).</summary>
-public sealed class RenderCollectProbe : MonoBehaviour
+public sealed class RenderCollectProbe : Component
 {
     public int Calls;
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights) => Calls++;
 }
 
 /// <summary>Records DrawGizmos invocations.</summary>
-public sealed class GizmoProbe : MonoBehaviour
+public sealed class GizmoProbe : Component
 {
     public int Calls;
     public override void DrawGizmos() => Calls++;

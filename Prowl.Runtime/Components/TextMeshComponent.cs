@@ -27,7 +27,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Text Mesh")]
 [ComponentIcon("T")] // Text
-public class TextMeshComponent : MonoBehaviour
+public class TextMeshComponent : Component
 {
     [SerializeField] private FontAsset? _font;
     public FontAsset? Font { get => _font; set => SetField(ref _font, value); }

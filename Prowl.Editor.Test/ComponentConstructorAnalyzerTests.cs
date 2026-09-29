@@ -13,17 +13,17 @@ namespace Prowl.Editor.Test;
 /// the engine could never construct at all.
 /// </summary>
 [Trait("Category", "Build")]
-public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
+public class ComponentConstructorAnalyzerTests : EditorTestHarness
 {
     [Fact]
     public void WarnsOnAParameterlessConstructor()
     {
-        WriteScript("Ctor.cs", "public class Ctor : Prowl.Runtime.MonoBehaviour { public Ctor() { } }");
+        WriteScript("Ctor.cs", "public class Ctor : Prowl.Runtime.Component { public Ctor() { } }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
         Assert.True(result.Success, result.Errors); // a warning, so the compile still succeeds
-        Assert.Contains(MonoBehaviourConstructorAnalyzer.DeclaredConstructorId, result.Output);
+        Assert.Contains(ComponentConstructorAnalyzer.DeclaredConstructorId, result.Output);
     }
 
     /// <summary>
@@ -33,21 +33,21 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
     [Fact]
     public void ErrorsWhenNothingCanConstructIt()
     {
-        WriteScript("NeedsArgs.cs", "public class NeedsArgs : Prowl.Runtime.MonoBehaviour { public NeedsArgs(int x) { } }");
+        WriteScript("NeedsArgs.cs", "public class NeedsArgs : Prowl.Runtime.Component { public NeedsArgs(int x) { } }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
-        Assert.Contains(MonoBehaviourConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
+        Assert.Contains(ComponentConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
     }
 
     [Fact]
     public void APrivateParameterlessConstructorStillCannotBeConstructed()
     {
-        WriteScript("Hidden.cs", "public class Hidden : Prowl.Runtime.MonoBehaviour { private Hidden() { } }");
+        WriteScript("Hidden.cs", "public class Hidden : Prowl.Runtime.Component { private Hidden() { } }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
-        Assert.Contains(MonoBehaviourConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
+        Assert.Contains(ComponentConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
     }
 
     /// <summary>An overload the engine can reach is enough, even though the pair is still discouraged.</summary>
@@ -55,13 +55,13 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
     public void APublicParameterlessOverloadIsConstructableButStillWarns()
     {
         WriteScript("Both.cs",
-            "public class Both : Prowl.Runtime.MonoBehaviour { public Both() { } public Both(int x) { } }");
+            "public class Both : Prowl.Runtime.Component { public Both() { } public Both(int x) { } }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
         Assert.True(result.Success, result.Errors);
-        Assert.Contains(MonoBehaviourConstructorAnalyzer.DeclaredConstructorId, result.Output);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
+        Assert.Contains(ComponentConstructorAnalyzer.DeclaredConstructorId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
     }
 
     /// <summary>An abstract component is never constructed directly, so only the warning applies.</summary>
@@ -69,12 +69,12 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
     public void AnAbstractComponentIsNotAskedToBeConstructable()
     {
         WriteScript("Base.cs",
-            "public abstract class BaseThing : Prowl.Runtime.MonoBehaviour { protected BaseThing(int x) { } }");
+            "public abstract class BaseThing : Prowl.Runtime.Component { protected BaseThing(int x) { } }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
-        Assert.Contains(MonoBehaviourConstructorAnalyzer.DeclaredConstructorId, result.Output);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
+        Assert.Contains(ComponentConstructorAnalyzer.DeclaredConstructorId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
     }
 
     /// <summary>
@@ -85,13 +85,13 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
     public void WarnsOnAFieldInitializerThatCallsSomething()
     {
         WriteScript("Reg.cs", "public static class Reg { public static System.Func<int> Get; }");
-        WriteScript("Init.cs", "public class Init : Prowl.Runtime.MonoBehaviour { private int _v = Reg.Get(); }");
+        WriteScript("Init.cs", "public class Init : Prowl.Runtime.Component { private int _v = Reg.Get(); }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
         // A null delegate cannot be defended, so this refuses to compile rather than warning.
         Assert.False(result.Success);
-        Assert.Contains(MonoBehaviourConstructorAnalyzer.InvokesDelegateId, result.Output);
+        Assert.Contains(ComponentConstructorAnalyzer.InvokesDelegateId, result.Output);
     }
 
     /// <summary>
@@ -102,12 +102,12 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
     public void WarnsButCompilesWhenAnInitializerCallsOwnCode()
     {
         WriteScript("Pure.cs", "public static class Pure { public static int Twice(int x) => x * 2; }");
-        WriteScript("Uses.cs", "public class Uses : Prowl.Runtime.MonoBehaviour { private int _v = Pure.Twice(2); }");
+        WriteScript("Uses.cs", "public class Uses : Prowl.Runtime.Component { private int _v = Pure.Twice(2); }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
         Assert.True(result.Success, result.Errors);
-        Assert.Contains(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+        Assert.Contains(ComponentConstructorAnalyzer.RunsBeforeAttachId, result.Output);
     }
 
     /// <summary>A framework helper does not care how far through loading a scene is.</summary>
@@ -115,13 +115,13 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
     public void SaysNothingAboutAFrameworkCall()
     {
         WriteScript("Fw.cs",
-            "public class Fw : Prowl.Runtime.MonoBehaviour { private string _id = System.Guid.NewGuid().ToString(); }");
+            "public class Fw : Prowl.Runtime.Component { private string _id = System.Guid.NewGuid().ToString(); }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
         Assert.True(result.Success, result.Errors);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.InvokesDelegateId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.InvokesDelegateId, result.Output);
     }
 
     /// <summary>A constant or a plain object is not reaching for anything, so it stays quiet.</summary>
@@ -129,27 +129,27 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
     public void SaysNothingAboutAPlainFieldInitializer()
     {
         WriteScript("Defaults.cs",
-            "public class Defaults : Prowl.Runtime.MonoBehaviour " +
+            "public class Defaults : Prowl.Runtime.Component " +
             "{ public int Speed = 5; public string Name = \"hi\"; " +
             "public System.Collections.Generic.List<int> Items = new(); }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
         Assert.True(result.Success, result.Errors);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.RunsBeforeAttachId, result.Output);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.InvokesDelegateId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.RunsBeforeAttachId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.InvokesDelegateId, result.Output);
     }
 
     [Fact]
     public void SaysNothingAboutAComponentWithNoConstructor()
     {
-        WriteScript("Plain.cs", "public class Plain : Prowl.Runtime.MonoBehaviour { public int Speed = 5; }");
+        WriteScript("Plain.cs", "public class Plain : Prowl.Runtime.Component { public int Speed = 5; }");
 
         var result = ScriptCompiler.CompileAll(Project);
 
         Assert.True(result.Success, result.Errors);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.DeclaredConstructorId, result.Output);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.DeclaredConstructorId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
     }
 
     /// <summary>A plain class is nothing to do with the engine's construction, so it is left alone.</summary>
@@ -161,7 +161,7 @@ public class MonoBehaviourConstructorAnalyzerTests : EditorTestHarness
         var result = ScriptCompiler.CompileAll(Project);
 
         Assert.True(result.Success, result.Errors);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.DeclaredConstructorId, result.Output);
-        Assert.DoesNotContain(MonoBehaviourConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.DeclaredConstructorId, result.Output);
+        Assert.DoesNotContain(ComponentConstructorAnalyzer.NoParameterlessConstructorId, result.Output);
     }
 }

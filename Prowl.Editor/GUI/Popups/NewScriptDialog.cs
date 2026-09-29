@@ -330,12 +330,12 @@ public static class NewScriptDialog
     //   public static string Generate(string className) => $"public class {className} {{}}";
     // on any static method returning string and taking a single string (className).
 
-    [ScriptTemplate("MonoBehaviour",
+    [ScriptTemplate("Component",
         "A basic component with Start and Update lifecycle hooks. Start where most scripts begin.",
         EditorIcons.FileCode, Order = 0)]
-    private static string BasicMonoBehaviour(string className)
+    private static string BasicComponent(string className)
     {
-        return EditorApplication.GetEmbeddedResourceText("NewMonoBehaviour.cstemplate")
+        return EditorApplication.GetEmbeddedResourceText("NewComponent.cstemplate")
             .Replace("{[className]}", className);
     }
 
@@ -452,7 +452,7 @@ public static class NewScriptDialog
     }
 
     [ScriptTemplate("Plain C# Class",
-        "A regular C# class not a MonoBehaviour. Useful for pure-data types, services, and helpers.",
+        "A regular C# class not a Component. Useful for pure-data types, services, and helpers.",
         EditorIcons.File, Order = 130)]
     private static string PlainClassTemplate(string className)
     {

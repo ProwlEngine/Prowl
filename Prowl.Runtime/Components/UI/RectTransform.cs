@@ -34,7 +34,7 @@ namespace Prowl.Vector;
 /// (1,1) is top-right, (0.5, 0.5) is center.
 /// </para>
 /// </remarks>
-public sealed class RectTransform : MonoBehaviour
+public sealed class RectTransform : Component
 {
     /// <summary>
     /// The minimum anchor point (lower-left corner of the anchor rectangle).

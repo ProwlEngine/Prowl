@@ -10,68 +10,68 @@ namespace Prowl.Runtime.Test;
 
 #region Test components
 
-public sealed class PlainComponent : MonoBehaviour { }
+public sealed class PlainComponent : Component { }
 
-public sealed class SecondComponent : MonoBehaviour { }
+public sealed class SecondComponent : Component { }
 
-public class BaseTestComponent : MonoBehaviour { }
+public class BaseTestComponent : Component { }
 
 public sealed class DerivedTestComponent : BaseTestComponent { }
 
 [RequireComponent(typeof(PlainComponent))]
-public sealed class NeedsPlain : MonoBehaviour { }
+public sealed class NeedsPlain : Component { }
 
 // Chains through NeedsPlain, which itself requires PlainComponent.
 [RequireComponent(typeof(NeedsPlain))]
-public sealed class NeedsChain : MonoBehaviour { }
+public sealed class NeedsChain : Component { }
 
 [RequireComponent(typeof(PlainComponent), typeof(SecondComponent))]
-public sealed class NeedsTwo : MonoBehaviour { }
+public sealed class NeedsTwo : Component { }
 
 [ExecutionOrder(-100)]
-public sealed class EarlyComponent : MonoBehaviour { }
+public sealed class EarlyComponent : Component { }
 
 [ExecutionOrder(100)]
-public sealed class LateComponent : MonoBehaviour { }
+public sealed class LateComponent : Component { }
 
-// A non-MonoBehaviour type, used to verify AddComponent(Type) rejects it.
+// A non-Component type, used to verify AddComponent(Type) rejects it.
 public sealed class NotAComponent { }
 
 // Requires itself. The requirement is satisfied by the very component being added.
 [RequireComponent(typeof(SelfRequiring))]
-public sealed class SelfRequiring : MonoBehaviour { }
+public sealed class SelfRequiring : Component { }
 
 // Two components that require each other, which is a cycle no walk can bottom out on.
 [RequireComponent(typeof(MutualB))]
-public sealed class MutualA : MonoBehaviour { }
+public sealed class MutualA : Component { }
 
 [RequireComponent(typeof(MutualA))]
-public sealed class MutualB : MonoBehaviour { }
+public sealed class MutualB : Component { }
 
 // A three step cycle, to check the guard is not just a one level lookback.
 [RequireComponent(typeof(RingB))]
-public sealed class RingA : MonoBehaviour { }
+public sealed class RingA : Component { }
 
 [RequireComponent(typeof(RingC))]
-public sealed class RingB : MonoBehaviour { }
+public sealed class RingB : Component { }
 
 [RequireComponent(typeof(RingA))]
-public sealed class RingC : MonoBehaviour { }
+public sealed class RingC : Component { }
 
 // A component that cannot be constructed without arguments.
-public sealed class NoDefaultConstructor : MonoBehaviour
+public sealed class NoDefaultConstructor : Component
 {
     public NoDefaultConstructor(int _) { }
 }
 
 // Throws from its constructor, the way a field initializer calling a null delegate does.
-public sealed class ThrowsWhenConstructed : MonoBehaviour
+public sealed class ThrowsWhenConstructed : Component
 {
     public ThrowsWhenConstructed() => throw new InvalidOperationException("no");
 }
 
 // Throws only while armed, so an object holding one can be built and then copied.
-public sealed class ThrowsWhenArmed : MonoBehaviour
+public sealed class ThrowsWhenArmed : Component
 {
     public static bool Armed;
 
@@ -215,11 +215,11 @@ public class ComponentTests : RuntimeTestBase
     }
 
     [Fact]
-    public void AddComponent_NonMonoBehaviourType_ReturnsNull()
+    public void AddComponent_NonComponentType_ReturnsNull()
     {
         var go = CreateGameObject();
 
-        MonoBehaviour? result = go.AddComponent(typeof(NotAComponent));
+        Component? result = go.AddComponent(typeof(NotAComponent));
 
         Assert.Null(result);
         Assert.Empty(go.GetComponents());

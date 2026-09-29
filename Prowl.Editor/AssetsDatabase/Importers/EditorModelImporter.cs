@@ -135,7 +135,7 @@ public class EditorModelImporter : AssetImporter
         go.SetIdentifier(BuiltInAssets.DeterministicGuid($"$GeneratedPrefab/{path}"));
 
         var perType = new Dictionary<string, int>();
-        foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
+        foreach (Component component in go.GetComponents<Component>())
         {
             string type = component.GetType().FullName ?? component.GetType().Name;
             perType.TryGetValue(type, out int ordinal);

@@ -9,7 +9,7 @@ namespace LifecycleTest;
 /// A test component that logs all lifecycle events.
 /// Used to verify that OnEnable, OnDisable, OnDispose and other lifecycle methods are called correctly.
 /// </summary>
-public class LifecycleComponent : MonoBehaviour
+public class LifecycleComponent : Component
 {
     public string ComponentName { get; set; } = "LifecycleComponent";
 

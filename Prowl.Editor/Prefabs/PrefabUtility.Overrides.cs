@@ -108,7 +108,7 @@ public static partial class PrefabUtility
 
         if (!Guid.TryParse(parts[1], out Guid componentSourceId)) return;
 
-        foreach (MonoBehaviour component in go.GetComponents<MonoBehaviour>())
+        foreach (Component component in go.GetComponents<Component>())
         {
             if (go.GetComponentSourceIdentifier(component) != componentSourceId) continue;
 
@@ -159,7 +159,7 @@ public static partial class PrefabUtility
 
         // Component enabled state is a serialized field, so an override writes it directly and skips
         // the Enabled setter. Re-derive so dispatch registration matches what was just written.
-        if (parent is MonoBehaviour behaviour)
+        if (parent is Component behaviour)
             behaviour.HierarchyStateChanged();
     }
 
@@ -168,7 +168,7 @@ public static partial class PrefabUtility
     {
         // Collected rather than validated per member, so a component with several overridden members
         // rebuilds its derived state once, after all of them have been written.
-        var touched = new HashSet<MonoBehaviour>();
+        var touched = new HashSet<Component>();
 
         // Not Scene.Current: a build brings a scene it read off disk up to date, and that is not the
         // scene that happens to be open.
@@ -197,7 +197,7 @@ public static partial class PrefabUtility
                 }
 
                 ApplyFieldValue(target, memberPath, ov.Value, resolveIn);
-                if (target is MonoBehaviour behaviour)
+                if (target is Component behaviour)
                     touched.Add(behaviour);
             }
             catch (Exception ex)
@@ -208,7 +208,7 @@ public static partial class PrefabUtility
 
         // An override writes fields directly, so components deriving state from them would otherwise
         // keep whatever the prefab source had until something else happened to touch them.
-        foreach (MonoBehaviour behaviour in touched)
+        foreach (Component behaviour in touched)
         {
             try
             {

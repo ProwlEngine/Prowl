@@ -70,7 +70,7 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
             using Prowl.Runtime;
             using Prowl.Runtime.Resources;
 
-            public class PersistCheckComponent : MonoBehaviour
+            public class PersistCheckComponent : Component
             {
                 public Sprite? MySprite;
 

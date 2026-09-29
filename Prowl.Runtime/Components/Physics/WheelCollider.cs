@@ -24,7 +24,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Physics/Wheel Collider")]
 [ComponentIcon("")] // CarSide
-public sealed class WheelCollider : MonoBehaviour
+public sealed class WheelCollider : Component
 {
     // Geometry
     [SerializeField] private float radius = 0.35f;

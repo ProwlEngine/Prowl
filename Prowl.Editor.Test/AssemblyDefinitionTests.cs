@@ -83,7 +83,7 @@ public class AssemblyDefinitionTests : EditorTestHarness
         WriteScript("Main.cs", """
             using Prowl.Runtime;
             using Acme.Gameplay;
-            public class Main : MonoBehaviour
+            public class Main : Component
             {
                 public override void Start() => System.Console.WriteLine("ASMDEF_OK:" + Calculator.DoubleSum(1, 3));
             }

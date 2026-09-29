@@ -17,9 +17,20 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
-/// MonoBehaviour provides lifecycle methods for game object behaviors.
+/// Component provides lifecycle methods for game object behaviors.
+/// This class is deprecated and will be removed in a future version. Use Component instead.
 /// </summary>
-public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiver
+[Obsolete("MonoBehaviour is deprecated. Use Component instead.")]
+public abstract class MonoBehaviour : Component
+{
+
+}
+
+/// <summary>
+/// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
+/// Component provides lifecycle methods for game object behaviors.
+/// </summary>
+public abstract class Component : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
     private Guid _identifier = Guid.NewGuid();
@@ -45,7 +56,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     private GameObject _go;
 
     /// <summary>
-    /// Gets or sets the hide flags for this MonoBehaviour.
+    /// Gets or sets the hide flags for this Component.
     /// </summary>
     [HideInInspector]
     public HideFlags HideFlags;
@@ -93,7 +104,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     }
 
     /// <summary>
-    /// Gets the identifier for this MonoBehaviour.
+    /// Gets the identifier for this Component.
     /// Generally shouldnt be set manually
     /// </summary>
     public Guid Identifier { get => _identifier; set => _identifier = value; }
@@ -109,12 +120,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     }
 
     /// <summary>
-    /// Gets the GameObject this MonoBehaviour is attached to.
+    /// Gets the GameObject this Component is attached to.
     /// </summary>
     public GameObject GameObject => _go;
 
     /// <summary>
-    /// Gets the Transform component of the GameObject this MonoBehaviour is attached to.
+    /// Gets the Transform component of the GameObject this Component is attached to.
     /// </summary>
     public Transform Transform => _go.Transform;
 
@@ -130,12 +141,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public bool HasBeenEnabled { get => _hasBeenEnabled; internal set => _hasBeenEnabled = value; }
 
     /// <summary>
-    /// Gets the tag of the GameObject this MonoBehaviour is attached to.
+    /// Gets the tag of the GameObject this Component is attached to.
     /// </summary>
     public string Tag => _go.Tag;
 
     /// <summary>
-    /// Gets or sets whether the MonoBehaviour is enabled.
+    /// Gets or sets whether the Component is enabled.
     /// </summary>
     public bool Enabled
     {
@@ -151,15 +162,15 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     }
 
     /// <summary>
-    /// Gets whether the MonoBehaviour is enabled in the hierarchy (considering parent objects).
+    /// Gets whether the Component is enabled in the hierarchy (considering parent objects).
     /// </summary>
     public bool EnabledInHierarchy => _enabledInHierarchy;
 
     /// <summary>
-    /// The parent <see cref="Prowl.Runtime.Resources.Scene"/> to which this <see cref="Prowl.Runtime.MonoBehaviour"/> belongs.
+    /// The parent <see cref="Prowl.Runtime.Resources.Scene"/> to which this <see cref="Component"/> belongs.
     ///
     /// Note that this property is derived from the components <see cref="GameObject"/>, as a
-    /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Resources.Scene"/> without a
+    /// <see cref="Component"/> itself cannot be part of a <see cref="Prowl.Runtime.Resources.Scene"/> without a
     /// <see cref="GameObject"/>.
     /// </summary>
     public Scene? Scene
@@ -172,10 +183,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         }
     }
 
-    public MonoBehaviour() : base() { }
+    public Component() : base() { }
 
     /// <summary>
-    /// Compares the tag of the GameObject this MonoBehaviour is attached to with the specified tag.
+    /// Compares the tag of the GameObject this Component is attached to with the specified tag.
     /// </summary>
     /// <param name="otherTag">The tag to compare against.</param>
     /// <returns>True if the tags match, false otherwise.</returns>
@@ -184,43 +195,43 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     #region Component API
     // Convenience component-access API mirrored onto the behaviour; it's generally recommended to use the GameObject instead
     /// <inheritdoc cref="GameObject.AddComponent{T}"/>"
-    public T AddComponent<T>() where T : MonoBehaviour, new() => (T)AddComponent(typeof(T));
+    public T AddComponent<T>() where T : Component, new() => (T)AddComponent(typeof(T));
     /// <inheritdoc cref="GameObject.AddComponent(Type)"/>"
-    public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type) => GameObject.AddComponent(type);
+    public Component AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type) => GameObject.AddComponent(type);
     /// <inheritdoc cref="GameObject.RemoveComponent{T}"/>"
-    public void RemoveComponent<T>(T component) where T : MonoBehaviour => GameObject.RemoveComponent(component);
-    /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"
-    public void RemoveComponent(MonoBehaviour component) => GameObject.RemoveComponent(component);
-    /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"
+    public void RemoveComponent<T>(T component) where T : Component => GameObject.RemoveComponent(component);
+    /// <inheritdoc cref="GameObject.RemoveComponent(Component)"/>"
+    public void RemoveComponent(Component component) => GameObject.RemoveComponent(component);
+    /// <inheritdoc cref="GameObject.RemoveComponent(Component)"/>"
     public void RemoveSelf() => GameObject.RemoveComponent(this);
     /// <inheritdoc cref="GameObject.GetComponent{T}"/>"
-    public T? GetComponent<T>() where T : MonoBehaviour => GameObject.GetComponent<T>();
+    public T? GetComponent<T>() where T : Component => GameObject.GetComponent<T>();
     /// <inheritdoc cref="GameObject.GetComponent(Type)"/>"
-    public MonoBehaviour? GetComponent(Type type) => GameObject.GetComponent(type);
+    public Component? GetComponent(Type type) => GameObject.GetComponent(type);
     /// <inheritdoc cref="GameObject.GetComponentByIdentifier(Guid)"/>"
-    public MonoBehaviour? GetComponentByIdentifier(Guid identifier) => GameObject.GetComponentByIdentifier(identifier);
+    public Component? GetComponentByIdentifier(Guid identifier) => GameObject.GetComponentByIdentifier(identifier);
     /// <inheritdoc cref="GameObject.TryGetComponent{T}(out T)"/>"
-    public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()).IsValid();
+    public bool TryGetComponent<T>(out T component) where T : Component => (component = GetComponent<T>()).IsValid();
     /// <inheritdoc cref="GameObject.GetComponents{T}"/>"
-    public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GameObject.GetComponents<T>();
+    public IEnumerable<T> GetComponents<T>() where T : Component => GameObject.GetComponents<T>();
     /// <inheritdoc cref="GameObject.GetComponents(Type)"/>"
-    public IEnumerable<MonoBehaviour> GetComponents(Type type) => GameObject.GetComponents(type);
+    public IEnumerable<Component> GetComponents(Type type) => GameObject.GetComponents(type);
     /// <inheritdoc cref="GameObject.GetComponentInParent{T}"/>"
-    public T? GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInParent<T>(includeSelf);
+    public T? GetComponentInParent<T>(bool includeSelf = true) where T : Component => GameObject.GetComponentInParent<T>(includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentInParent(Type, bool, bool)"/>"
-    public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true) => GameObject.GetComponentInParent(componentType, includeSelf);
+    public Component? GetComponentInParent(Type componentType, bool includeSelf = true) => GameObject.GetComponentInParent(componentType, includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentsInParent{T}"/>"
-    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInParent<T>(includeSelf);
+    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : Component => GameObject.GetComponentsInParent<T>(includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentsInParent(Type, bool, bool)"/>"
-    public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true) => GameObject.GetComponentsInParent(type, includeSelf);
+    public IEnumerable<Component> GetComponentsInParent(Type type, bool includeSelf = true) => GameObject.GetComponentsInParent(type, includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentInChildren{T}"/>"
-    public T? GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInChildren<T>(includeSelf);
+    public T? GetComponentInChildren<T>(bool includeSelf = true) where T : Component => GameObject.GetComponentInChildren<T>(includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentInChildren(Type, bool, bool)"/>"
-    public MonoBehaviour? GetComponentInChildren(Type componentType, bool includeSelf = true) => GameObject.GetComponentInChildren(componentType, includeSelf);
+    public Component? GetComponentInChildren(Type componentType, bool includeSelf = true) => GameObject.GetComponentInChildren(componentType, includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentsInChildren{T}"/>"
-    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>(includeSelf);
+    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : Component => GameObject.GetComponentsInChildren<T>(includeSelf);
     /// <inheritdoc cref="GameObject.GetComponentsInChildren(Type, bool, bool)"/>"
-    public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true) => GameObject.GetComponentsInChildren(type, includeSelf);
+    public IEnumerable<Component> GetComponentsInChildren(Type type, bool includeSelf = true) => GameObject.GetComponentsInChildren(type, includeSelf);
 
 
     /// <summary>
@@ -259,7 +270,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     #endregion
 
     /// <summary>
-    /// Attaches this MonoBehaviour to the specified GameObject.
+    /// Attaches this Component to the specified GameObject.
     /// </summary>
     /// <param name="go">The GameObject to attach to.</param>
     internal void AttachToGameObject(GameObject go)
@@ -303,9 +314,9 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     }
 
     /// <summary>
-    /// Checks if this MonoBehaviour can be destroyed.
+    /// Checks if this Component can be destroyed.
     /// </summary>
-    /// <returns>True if the MonoBehaviour can be destroyed, false otherwise.</returns>
+    /// <returns>True if the Component can be destroyed, false otherwise.</returns>
     internal bool CanDestroy()
     {
         // Skip dependency check if the entire GameObject is being disposed
@@ -536,7 +547,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public virtual void OnAfterDeserialize() { }
 
     /// <summary>
-    /// Called when the MonoBehaviour will be destroyed.
+    /// Called when the Component will be destroyed.
     /// This is an override of EngineObject.OnDispose() and is also exposed as a virtual lifecycle method.
     /// </summary>
     protected override void OnDispose()

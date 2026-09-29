@@ -3,7 +3,7 @@ using System;
 using Prowl.Runtime;
 using Prowl.Vector;
 
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public float Sensitivity = 0.15f;
     public float MinPitch = -89f;

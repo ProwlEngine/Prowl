@@ -10,12 +10,12 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-public sealed class CollisionProbeComponent : MonoBehaviour
+public sealed class CollisionProbeComponent : Component
 {
     public int Marker;
 }
 
-// A component whose type name resolves to a non-MonoBehaviour (a user script "World" binding to
+// A component whose type name resolves to a non-Component (a user script "World" binding to
 // Jitter2.World) used to throw out of the flat GameObject array and wipe the whole scene to zero objects.
 public class TypeCollisionSceneLoadTests : RuntimeTestBase
 {
@@ -28,7 +28,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Scene_WithComponentTypeResolvingToNonMonoBehaviour_StillLoadsEveryObject()
+    public void Scene_WithComponentTypeResolvingToNonComponent_StillLoadsEveryObject()
     {
         var scene = CreateScene();
 
@@ -44,7 +44,7 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
 
         var echo = Serializer.Serialize(scene);
 
-        // Give one object a component whose $type resolves to a non-MonoBehaviour (Jitter2.World).
+        // Give one object a component whose $type resolves to a non-Component (Jitter2.World).
         InjectBadComponent(echo, "HasBadComponent", JitterWorldName);
 
         var clone = Serializer.Deserialize<Scene>(echo);
@@ -60,9 +60,9 @@ public class TypeCollisionSceneLoadTests : RuntimeTestBase
         var healthy = objs.First(g => g.Name == "Healthy");
         Assert.Equal(7, healthy.GetComponent<CollisionProbeComponent>()!.Marker);
 
-        // The bad component is kept as a MissingMonobehaviour so its data survives a re-save.
+        // The bad component is kept as a MissingComponent so its data survives a re-save.
         var bad = objs.First(g => g.Name == "HasBadComponent");
-        Assert.Contains(bad.GetComponents<MonoBehaviour>(), c => c is MissingMonobehaviour);
+        Assert.Contains(bad.GetComponents<Component>(), c => c is MissingComponent);
     }
 
     private static void InjectBadComponent(EchoObject sceneEcho, string goName, string typeName)

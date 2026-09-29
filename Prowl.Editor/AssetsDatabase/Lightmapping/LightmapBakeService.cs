@@ -293,7 +293,7 @@ public sealed class LightmapBakeService
         scene.BakedLighting.Placements.Clear();
         for (int i = 0; i < _renderers.Count && i < atlas.Instances.Length; i++)
         {
-            if (_renderers[i] is not MonoBehaviour renderer || renderer.IsNotValid()) continue;
+            if (_renderers[i] is not Component renderer || renderer.IsNotValid()) continue;
 
             GameObject owner = renderer.GameObject;
             if (owner.IsNotValid()) continue;

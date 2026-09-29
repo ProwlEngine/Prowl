@@ -62,7 +62,7 @@ public enum CameraClearFlags
 
 [AddComponentMenu("Rendering/Camera")]
 [ComponentIcon("\uf030")] // Camera
-public class Camera : MonoBehaviour
+public class Camera : Component
 {
     public List<ImageEffect> Effects = [];
 

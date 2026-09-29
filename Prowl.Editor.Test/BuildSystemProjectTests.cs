@@ -153,7 +153,7 @@ public class BuildSystemProjectTests : EditorTestHarness
             using Prowl.Runtime;
             using Prowl.Runtime.Resources;
 
-            public class ParentRefComponent : MonoBehaviour
+            public class ParentRefComponent : Component
             {
                 public Texture2D? MyTexture;
             }
@@ -219,7 +219,7 @@ public class BuildSystemProjectTests : EditorTestHarness
             using Prowl.Runtime;
             using Prowl.Runtime.Resources;
 
-            public class EditorTexRefComponent : MonoBehaviour
+            public class EditorTexRefComponent : Component
             {
                 public Texture2D? MyTexture;
             }
@@ -395,7 +395,7 @@ public class BuildSystemProjectTests : EditorTestHarness
             using Prowl.Runtime;
             using Prowl.Runtime.Resources;
 
-            public class BuildLogComponent : MonoBehaviour
+            public class BuildLogComponent : Component
             {
                 public Texture2D? MyTexture;
                 public Sprite? MySprite;
@@ -513,7 +513,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         File.WriteAllText(AssetAbsolutePath("AsyncVoidComponent.cs"), """
             using Prowl.Runtime;
 
-            public class AsyncVoidComponent : MonoBehaviour
+            public class AsyncVoidComponent : Component
             {
                 private static volatile bool s_finished;
                 private static bool s_reported;

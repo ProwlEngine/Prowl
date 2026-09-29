@@ -28,7 +28,7 @@ public enum TriggerShape
 /// </summary>
 [AddComponentMenu("Physics/Trigger Volume")]
 [ComponentIcon("")] // Square (region)
-public sealed class TriggerVolume : MonoBehaviour
+public sealed class TriggerVolume : Component
 {
     [SerializeField] private TriggerShape shape = TriggerShape.Box;
 

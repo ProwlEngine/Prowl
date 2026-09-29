@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Test;
 /// </summary>
 public class ProwlActionTests : RuntimeTestBase
 {
-    private sealed class CallTarget : MonoBehaviour
+    private sealed class CallTarget : Component
     {
         public int Calls;
         public int LastInt;
@@ -123,8 +123,8 @@ public class ProwlActionTests : RuntimeTestBase
     public void Invoke_OnADetachedTarget_SaysTheTargetIsDetached()
     {
         var target = MakeTarget();
-        var detached = (CallTarget)Prowl.Echo.Serializer.Deserialize<MonoBehaviour>(
-            Prowl.Echo.Serializer.Serialize(typeof(MonoBehaviour), target))!;
+        var detached = (CallTarget)Prowl.Echo.Serializer.Deserialize<Component>(
+            Prowl.Echo.Serializer.Serialize(typeof(Component), target))!;
 
         Assert.True(detached.GameObject.IsNotValid(), "Precondition: an out-of-graph reference loads back detached.");
 

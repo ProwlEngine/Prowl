@@ -14,7 +14,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Physics/Character Controller")]
 [ComponentIcon("\uf70c")] // PersonRunning
-public class CharacterController : MonoBehaviour
+public class CharacterController : Component
 {
     /// <summary>
     /// The shape type used for the character controller collision detection.

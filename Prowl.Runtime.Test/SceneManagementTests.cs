@@ -433,7 +433,7 @@ public class SceneManagementTests : RuntimeTestBase
 
     // ---- Surviving a scene load ----
 
-    private sealed class TickCounter : MonoBehaviour
+    private sealed class TickCounter : Component
     {
         public int Enables, Disables, Updates;
         public override void OnEnable() => Enables++;

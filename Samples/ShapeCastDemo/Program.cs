@@ -226,7 +226,7 @@ public sealed class ShapeCastDemoGame : Game
 /// Handles player movement, gravity, jumping, crouching, and input.
 /// Uses the CharacterController for collision detection and movement.
 /// </summary>
-public class PlayerController : MonoBehaviour
+public class PlayerController : Component
 {
     public float MoveSpeed = 5.0f;
     public float CrouchMoveSpeed = 2.5f;

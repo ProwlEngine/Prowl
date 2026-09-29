@@ -120,7 +120,7 @@ public sealed class VoxelGame : Game
     }
 }
 
-public class VoxelWorld : MonoBehaviour
+public class VoxelWorld : Component
 {
     private const int ChunkWidth = 16;
     private const int ChunkHeight = 256;
@@ -298,7 +298,7 @@ public class VoxelWorld : MonoBehaviour
     }
 }
 
-public class VoxelChunk : MonoBehaviour
+public class VoxelChunk : Component
 {
     private const int ChunkWidth = 16;
     private const int ChunkHeight = 256;

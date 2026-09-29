@@ -26,7 +26,7 @@ namespace Prowl.Runtime;
 [ExecuteAlways]
 [AddComponentMenu("Navigation/NavMesh Surface")]
 [ComponentIcon("\uf279")] // map icon
-public class NavMeshSurface : MonoBehaviour
+public class NavMeshSurface : Component
 {
     [Header("Bake")]
     [Tooltip("The agent type this navmesh is built for (radius, height, slope, climb come from the project's agent table). Agents only use navmeshes of their own type. One surface per agent type per scene.")]

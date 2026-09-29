@@ -19,7 +19,7 @@ namespace Prowl.Runtime.Terrain;
 [ExecuteAlways]
 [AddComponentMenu("Terrain/Terrain")]
 [ComponentIcon("\uf6fc")] // Mountain
-public class TerrainComponent : MonoBehaviour
+public class TerrainComponent : Component
 {
     #region Configuration
 

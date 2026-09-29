@@ -16,7 +16,7 @@ namespace Prowl.Runtime;
 /// path, read through the properties on <see cref="GameObject"/>.
 /// <para/>
 /// Only what belongs to the object as a whole. Which component of the prefab a component came from is on
-/// <see cref="MonoBehaviour.SourceIdentifier"/>.
+/// <see cref="Component.SourceIdentifier"/>.
 /// </summary>
 internal sealed class PrefabLink
 {

@@ -8,17 +8,17 @@ using Xunit;
 
 namespace Prowl.Runtime.Test;
 
-public sealed class ResilienceMarker : MonoBehaviour
+public sealed class ResilienceMarker : Component
 {
     public int Value = 1;
     [SerializeIgnore] public bool AddedToScene;
     public override void OnAddedToScene() => AddedToScene = true;
 }
 
-public sealed class ResilienceLinker : MonoBehaviour
+public sealed class ResilienceLinker : Component
 {
     public GameObject? Target;
-    public MonoBehaviour? Other;
+    public Component? Other;
     public ResilienceOwned? Owned;
     public float Value;
 }
@@ -29,19 +29,19 @@ public sealed class ResilienceOwned
     public ResilienceOwned? Self;
 }
 
-public sealed class ResiliencePointer : MonoBehaviour
+public sealed class ResiliencePointer : Component
 {
-    public MonoBehaviour? Other;
+    public Component? Other;
 }
 
-public sealed class ResilienceEmpty : MonoBehaviour { }
+public sealed class ResilienceEmpty : Component { }
 
-public sealed class ResilienceThrowsOnSave : MonoBehaviour
+public sealed class ResilienceThrowsOnSave : Component
 {
     public override void OnBeforeSerialize() => throw new InvalidOperationException("save bug");
 }
 
-public sealed class ResilienceThrowsOnLoad : MonoBehaviour
+public sealed class ResilienceThrowsOnLoad : Component
 {
     public override void OnAfterDeserialize() => throw new InvalidOperationException("load bug");
 }
@@ -125,7 +125,7 @@ public class SceneLoadResilienceTests : RuntimeTestBase
         var stillMissing = Load(savedTwice);
         var restored = Load(Save(stillMissing).Replace(Ghost, nameof(ResilienceLinker)));
 
-        Assert.IsType<MissingMonobehaviour>(Find(stillMissing, "A").GetComponents<MonoBehaviour>().First());
+        Assert.IsType<MissingComponent>(Find(stillMissing, "A").GetComponents<Component>().First());
         Assert.Equal(marker.Identifier, Find(stillMissing, "A").GetComponent<ResilienceMarker>()!.Identifier);
         Assert.Equal(42, Find(restored, "A").GetComponent<ResilienceLinker>()!.Value);
     }
@@ -199,10 +199,10 @@ public class SceneLoadResilienceTests : RuntimeTestBase
     public void MissingScript_WritesEveryFieldAPlainComponentWrites()
     {
         var plain = CreateGameObject("Plain").AddComponent<ResilienceEmpty>();
-        var missing = new MissingMonobehaviour { ComponentData = EchoObject.NewCompound() };
+        var missing = new MissingComponent { ComponentData = EchoObject.NewCompound() };
 
-        var plainKeys = Serializer.Serialize(typeof(MonoBehaviour), plain).GetNames().Where(k => k != "$type");
-        var missingKeys = Serializer.Serialize(typeof(MonoBehaviour), missing).GetNames();
+        var plainKeys = Serializer.Serialize(typeof(Component), plain).GetNames().Where(k => k != "$type");
+        var missingKeys = Serializer.Serialize(typeof(Component), missing).GetNames();
 
         Assert.Empty(plainKeys.Except(missingKeys));
     }

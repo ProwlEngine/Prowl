@@ -2,7 +2,7 @@ using System;
 
 using Prowl.Runtime;
 
-public class {[className]} : MonoBehaviour
+public class {[className]} : Component
 {
     public float MaxHealth = 100f;
 

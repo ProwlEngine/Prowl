@@ -111,7 +111,7 @@ public static partial class PrefabUtility
     }
 
     /// <inheritdoc cref="GetCorrespondingObjectFromSource(GameObject)"/>
-    public static MonoBehaviour? GetCorrespondingObjectFromSource(MonoBehaviour component)
+    public static Component? GetCorrespondingObjectFromSource(Component component)
     {
         if (component.IsNotValid()) return null;
 
@@ -124,7 +124,7 @@ public static partial class PrefabUtility
         GameObject? sourceObject = GetCorrespondingObjectFromSource(owner);
         if (sourceObject == null) return null;
 
-        return sourceObject.GetComponents<MonoBehaviour>()
+        return sourceObject.GetComponents<Component>()
             .FirstOrDefault(c => sourceObject.GetComponentSourceIdentifier(c) == sourceId);
     }
 
@@ -205,7 +205,7 @@ public static partial class PrefabUtility
         => targets.Any(go => go.IsValid() && IsProvidedByPrefab(go));
 
     /// <summary>Whether this component is one its prefab provides.</summary>
-    public static bool NeedsBreaking(MonoBehaviour component)
+    public static bool NeedsBreaking(Component component)
         => component.IsValid() && component.GameObject.IsValid()
            && component.GameObject.IsPrefabInstance && component.SourceIdentifier != Guid.Empty;
 
@@ -332,8 +332,8 @@ public static partial class PrefabUtility
         link.AssetId = prefabGuid;
         link.SourceIdentifier = source.SourceIdentifier;
 
-        var components = go.GetComponents<MonoBehaviour>().ToList();
-        var sourceComponents = source.GetComponents<MonoBehaviour>().ToList();
+        var components = go.GetComponents<Component>().ToList();
+        var sourceComponents = source.GetComponents<Component>().ToList();
 
         for (int i = 0; i < components.Count; i++)
         {

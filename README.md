@@ -48,7 +48,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - Cross-Platform! Windows, Linux & Mac, for both the Editor and exported builds
     - Unity-like Editor & Scripting API
     - C# Scripting with .NET 10
-    - GameObject & MonoBehaviour Component Architecture
+    - GameObject & Component Component Architecture
     - **Prowl.Runtime works fully standalone from the Editor** - reference it directly and ship a game with zero Editor dependency
     - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Anthology)), Editor built on top of [Origami](https://github.com/ProwlEngine/Anthology)
     - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Anthology)
@@ -129,7 +129,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
         - Bloom (dual-filter downsample/upsample)
         - FXAA (Fast Approximate Anti-Aliasing)
 		- TAA (Temporal Anti-Aliasing)
-        - SMAA 
+        - SMAA
         - Ground-Truth Ambient Occlusion (GTAO)
 		- Stochastic Screen Space Reflections (SSR)
         - Bokeh Depth of Field
