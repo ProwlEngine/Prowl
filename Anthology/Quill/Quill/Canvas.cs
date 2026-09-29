@@ -579,6 +579,9 @@ namespace Prowl.Quill
         internal GeometryBuffer<Vertex> _vertices = new GeometryBuffer<Vertex>();
 
         private readonly List<SubPath> _subPaths = new List<SubPath>();
+
+        // Sub paths from finished paths, reused so building a path does not allocate.
+        private readonly Stack<SubPath> _freeSubPaths = new Stack<SubPath>();
         private SubPath? _currentSubPath = null;
         private bool _isPathReady = false;
 
@@ -732,7 +735,7 @@ namespace Prowl.Quill
             _state = new ProwlCanvasState();
             _state.Reset();
 
-            _subPaths.Clear();
+            ReleaseSubPaths();
             _currentSubPath = null;
             _isPathReady = true;
 
@@ -1469,9 +1472,19 @@ namespace Prowl.Quill
         /// </remarks>
         public void BeginPath()
         {
-            _subPaths.Clear();
+            ReleaseSubPaths();
             _currentSubPath = null;
             _isPathReady = true;
+        }
+
+        private void ReleaseSubPaths()
+        {
+            for (int i = 0; i < _subPaths.Count; i++)
+            {
+                _subPaths[i].Points.Clear();
+                _freeSubPaths.Push(_subPaths[i]);
+            }
+            _subPaths.Clear();
         }
 
         /// <summary>
@@ -1489,7 +1502,7 @@ namespace Prowl.Quill
             if (!_isPathReady)
                 BeginPath();
 
-            _currentSubPath = new SubPath(new List<Float2>());
+            _currentSubPath = _freeSubPaths.Count > 0 ? _freeSubPaths.Pop() : new SubPath(new List<Float2>());
             _currentSubPath.Points.Add(new Float2(x, y));
             _subPaths.Add(_currentSubPath);
         }
