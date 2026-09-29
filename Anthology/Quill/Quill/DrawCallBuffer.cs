@@ -50,6 +50,14 @@ namespace Prowl.Quill
             Count = 0;
         }
 
+        /// <summary>Drops every draw call past <paramref name="count"/>.</summary>
+        public void Truncate(int count)
+        {
+            if (count >= Count) return;
+            Array.Clear(_items, count, Count - count);
+            Count = count;
+        }
+
         public IEnumerator<DrawCall> GetEnumerator()
         {
             for (int i = 0; i < Count; i++)
