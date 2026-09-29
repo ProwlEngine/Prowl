@@ -402,11 +402,18 @@ namespace Prowl.Quill
                 && DrawCall.SameTransform(in Transform, in other.Transform);
         }
 
+        // Compared value by value, since two different sets can share a hash and would then batch as one.
         private static bool SameUniforms(ShaderUniforms? a, ShaderUniforms? b)
         {
             if (ReferenceEquals(a, b)) return true;
             if (a == null || b == null) return false;
-            return a.ComputeHash() == b.ComputeHash();
+            if (a.Values.Count != b.Values.Count) return false;
+            foreach (var kvp in a.Values)
+            {
+                if (!b.Values.TryGetValue(kvp.Key, out var other) || !Equals(kvp.Value, other))
+                    return false;
+            }
+            return true;
         }
 
         internal int ComputeHash()
@@ -641,6 +648,9 @@ namespace Prowl.Quill
 
             _renderer = renderer;
             _scribeRenderer = new TextRenderer(this, fontAtlasSettings);
+
+            // Bound up front so shapes drawn before the first text already batch with it.
+            _currentFontAtlas = _scribeRenderer.FontEngine.Texture;
             UpdatePixelCalculations();
             Clear();
         }
@@ -1965,6 +1975,7 @@ namespace Prowl.Quill
             if (_subPaths.Count == 0)
                 return;
 
+            _tessellations++;
             var tess = new Tess();
             foreach (var path in _subPaths)
             {

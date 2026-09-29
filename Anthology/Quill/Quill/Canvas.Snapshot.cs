@@ -21,11 +21,13 @@ namespace Prowl.Quill
         private ProwlCanvasState _captureState;
         private int _captureAnchorVersion;
         private int _captureTextDraws;
+        private int _captureTessellations;
         private int _captureNewDrawCallRequests;
 
         private int _anchorVersion;
         private int _newDrawCallRequests;
         internal int _textDraws;
+        private int _tessellations;
 
         /// <summary>True between <see cref="BeginSnapshot"/> and <see cref="EndSnapshot"/>.</summary>
         public bool IsCapturing => _capture != null;
@@ -52,6 +54,7 @@ namespace Prowl.Quill
             _captureState = _state;
             _captureAnchorVersion = _anchorVersion;
             _captureTextDraws = _textDraws;
+            _captureTessellations = _tessellations;
             _captureNewDrawCallRequests = _newDrawCallRequests;
 
             ref readonly Transform2D t = ref _state.transform;
@@ -141,6 +144,7 @@ namespace Prowl.Quill
             s.VertexCountInternal = vertexCount;
             s.IndexCountInternal = indexCount;
             s.HasText = _textDraws != _captureTextDraws;
+            s.HasTessellation = _tessellations != _captureTessellations;
             s.EndFontAtlas = _currentFontAtlas;
             s.Pinned = _anchorVersion != _captureAnchorVersion;
             s.EndsWithNewDrawCallRequest = _isNewDrawCallRequested && _newDrawCallRequests != _captureNewDrawCallRequests;
