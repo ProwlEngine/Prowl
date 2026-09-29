@@ -437,14 +437,20 @@ namespace Prowl.PaperUI
                 // Paint the halo as a ring: the shadow geometry with the element's own rounded rect
                 // punched out (even-odd hole). Without this the shadow is painted under the element too,
                 // which shows through any translucent fill (a glass window/card revealing its own shadow).
-                _canvas.SaveState();
-                _canvas.SetFillColor(Prowl.Vector.Color.White);
-                _canvas.SetSolidity(WindingMode.OddEven);
-                _canvas.BeginPath();
-                AddRoundedContour(_canvas, sx, sy, sw, sh, rounded);
-                AddRoundedContour(_canvas, (float)rect.Min.X, (float)rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y, rounded);
-                _canvas.FillComplex();
-                _canvas.RestoreState();
+                // The ring is built directly, and only a shadow offset past the element's edge needs the
+                // tessellated even-odd path.
+                if (!_canvas.RoundedRectRingFilled(sx, sy, sw, sh, rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y,
+                        rounded.X, rounded.Y, rounded.Z, rounded.W, Prowl.Vector.Color.White))
+                {
+                    _canvas.SaveState();
+                    _canvas.SetFillColor(Prowl.Vector.Color.White);
+                    _canvas.SetSolidity(WindingMode.OddEven);
+                    _canvas.BeginPath();
+                    AddRoundedContour(_canvas, sx, sy, sw, sh, rounded);
+                    AddRoundedContour(_canvas, (float)rect.Min.X, (float)rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y, rounded);
+                    _canvas.FillComplex();
+                    _canvas.RestoreState();
+                }
 
                 _canvas.ClearBrush();
             }
