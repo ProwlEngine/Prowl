@@ -289,20 +289,21 @@ public class DockSpace
 
         float winBlur = fw != null || m.BlurDockedWindows ? m.WindowBackdropBlur : 0f;
 
-        using (paper.Box($"leaf_{id}")
+        // Everything below is scoped to the leaf element, so its ids are constants or the tab index.
+        using (paper.Box("leaf", id)
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
             .Enter())
         {
             // Frosted-glass window: body fill + tab-bar strip drawn as two non-overlapping
             // translucent fills, so the alpha never doubles up where they meet. Each blurs the
             // content behind it (backdrop blur), so the translucent fill reads as a tint over frost.
-            paper.Box($"leaf_body_{id}")
+            paper.Box("leaf_body")
                 .PositionType(PositionType.SelfDirected).Position(0, tabH).Size(w, h - tabH)
                 .IsNotInteractable()
                 .BackdropBlur(winBlur)
                 .BackgroundColor(bodyColor).RoundedBottom(cr);
 
-            var tabbar = paper.Box($"leaf_tabbar_{id}")
+            var tabbar = paper.Box("leaf_tabbar")
                 .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, tabH)
                 .BackdropBlur(winBlur)
                 .BackgroundColor(tabBarColor).RoundedTop(cr);
@@ -317,7 +318,7 @@ public class DockSpace
             float iconW = 15f;              // icon slot
             float iconGap = 6f;             // gap between the icon and the label
             float tabIconSize = m.FontSize * 0.85f;   // glyph a touch smaller than the label text
-            float[] tabWidths = new float[node.Tabs.Count];
+            Span<float> tabWidths = stackalloc float[node.Tabs.Count];
             for (int i = 0; i < node.Tabs.Count; i++)
             {
                 float textW = 60;
@@ -327,7 +328,7 @@ public class DockSpace
                 bool showsClose = i == node.ActiveTabIndex;  // active tab expands to fit its close button
                 tabWidths[i] = m.TabPadding * 2 + (hasIco ? iconW + iconGap : 0) + textW + (showsClose ? m.TabCloseSize + 4 : 0);
             }
-            float[] tabPositions = new float[node.Tabs.Count];
+            Span<float> tabPositions = stackalloc float[node.Tabs.Count];
             float acc = 0;
             for (int i = 0; i < node.Tabs.Count; i++) { tabPositions[i] = acc; acc += tabWidths[i] + m.TabGap; }
 
@@ -348,7 +349,7 @@ public class DockSpace
                 float tw = tabWidths[i];
                 float tx = tabPositions[i];
 
-                var tabEl = paper.Box($"t_{id}_{i}")
+                var tabEl = paper.Box("t", i)
                     .PositionType(PositionType.SelfDirected)
                     .Position(tx, 0).Size(tw, tabH)
                     .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
@@ -390,7 +391,7 @@ public class DockSpace
 
                 // Full-height separator on the left edge of every tab after the first.
                 if (i > 0)
-                    paper.Box($"t_div_{id}_{i}")
+                    paper.Box("t_div", i)
                         .PositionType(PositionType.SelfDirected).Position(tx, 0).Size(1, tabH)
                         .IsNotInteractable().BackgroundColor(borderColor);
 
@@ -399,7 +400,7 @@ public class DockSpace
 
                 if (hasIcon && font != null)
                 {
-                    paper.Box($"t_ico_{id}_{i}")
+                    paper.Box("t_ico", i)
                         .PositionType(PositionType.SelfDirected)
                         .Position(contentX, 0).Size(iconW, tabH)
                         .IsNotInteractable()
@@ -414,7 +415,7 @@ public class DockSpace
                 if (font != null)
                 {
                     float lblW = tw - (contentX - tx) - m.TabPadding - (showClose ? m.TabCloseSize + 4 : 0);
-                    paper.Box($"t_lbl_{id}_{i}")
+                    paper.Box("t_lbl", i)
                         .PositionType(PositionType.SelfDirected)
                         .Position(contentX, 0).Height(tabH).Width(lblW)
                         .IsNotInteractable()
@@ -429,7 +430,7 @@ public class DockSpace
                     // The icon font's glyphs are empty, so stroke the "x" onto the canvas.
                     var closeCol = theme.Ink.C400;
                     float closeSz = m.TabCloseSize;
-                    paper.Box($"t_close_{id}_{i}")
+                    paper.Box("t_close", i)
                         .PositionType(PositionType.SelfDirected)
                         .Position(tx + tw - closeSz - m.TabPadding + 2, (tabH - closeSz) / 2)
                         .Size(closeSz, closeSz)
@@ -456,7 +457,7 @@ public class DockSpace
                 }
 
                 if (isActive)
-                    paper.Box($"t_ul_{id}")
+                    paper.Box("t_ul")
                         .PositionType(PositionType.SelfDirected).Position(tx, tabH - 2).Size(tw, 2)
                         .IsNotInteractable()
                         .BackgroundColor(theme.Primary.C500);
@@ -467,7 +468,7 @@ public class DockSpace
             {
                 int last = node.Tabs.Count - 1;
                 float rx = tabPositions[last] + tabWidths[last];
-                paper.Box($"t_div_{id}_end")
+                paper.Box("t_div_end")
                     .PositionType(PositionType.SelfDirected).Position(rx, 0).Size(1, tabH)
                     .IsNotInteractable().BackgroundColor(borderColor);
             }
@@ -477,14 +478,14 @@ public class DockSpace
             float hdrW = activePanel?.HeaderWidth ?? 0f;
             if (activePanel != null && hdrW > 0f)
             {
-                using (paper.Row($"leaf_hdr_{id}")
+                using (paper.Row("leaf_hdr")
                     .PositionType(PositionType.SelfDirected).Position(w - hdrW - 4, 0).Size(hdrW, tabH)
                     .Enter())
                     activePanel.OnHeaderContent(paper, hdrW, tabH);
             }
 
             // Hairline under the tab bar.
-            paper.Box($"leaf_tabdiv_{id}")
+            paper.Box("leaf_tabdiv")
                 .PositionType(PositionType.SelfDirected).Position(0, tabH).Size(w, 1)
                 .IsNotInteractable().BackgroundColor(borderColor);
 
@@ -492,7 +493,7 @@ public class DockSpace
             float ch = h - tabH;
             if (ch > 0)
             {
-                using (paper.Box($"c_{id}")
+                using (paper.Box("c")
                     .PositionType(PositionType.SelfDirected).Position(0, tabH).Size(w, ch)
                     .RoundedBottom(cr).Clip() // round the content to the window's bottom corners
                     .Enter())
@@ -503,7 +504,7 @@ public class DockSpace
             }
 
             // Outer glass border, drawn last so it sits above the body and content edges.
-            paper.Box($"leaf_border_{id}")
+            paper.Box("leaf_border")
                 .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
                 .IsNotInteractable()
                 .BorderColor(borderColor).BorderWidth(1).Rounded(cr);
