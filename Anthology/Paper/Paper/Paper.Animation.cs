@@ -12,6 +12,9 @@ public partial class Paper
 {
     #region Animation Primitives
 
+    // How close an Animate helper has to get before it lands on its target, so a settled value stops changing.
+    private const float SettledEpsilon = 1e-3f;
+
     // Storage key prefixes are short on purpose > one hashtable lookup per call adds up.
     private const string AnimateBoolKey = "_pp_ab_";
     private const string AnimateFloatKey = "_pp_af_";
@@ -109,6 +112,7 @@ public partial class Paper
         {
             float t = 1f - Maths.Exp(-speed * DeltaTime);
             current += (target - current) * t;
+            if (MathF.Abs(target - current) <= SettledEpsilon) current = target;
         }
         SetElementStorage(key, current);
         return current;
@@ -138,6 +142,8 @@ public partial class Paper
             float a = -omega * omega * (state.pos - target) - 2f * damping * omega * state.vel;
             state.vel += a * DeltaTime;
             state.pos += state.vel * DeltaTime;
+            if (MathF.Abs(state.pos - target) <= SettledEpsilon && MathF.Abs(state.vel) <= SettledEpsilon)
+                state = (target, 0f);
         }
 
         SetElementStorage(key, state);
@@ -194,6 +200,9 @@ public partial class Paper
                 current.G + (target.G - current.G) * t,
                 current.B + (target.B - current.B) * t,
                 current.A + (target.A - current.A) * t);
+            if (MathF.Abs(target.R - current.R) <= SettledEpsilon && MathF.Abs(target.G - current.G) <= SettledEpsilon
+                && MathF.Abs(target.B - current.B) <= SettledEpsilon && MathF.Abs(target.A - current.A) <= SettledEpsilon)
+                current = target;
         }
         SetElementStorage(key, current);
         return current;
@@ -215,6 +224,8 @@ public partial class Paper
         {
             float t = 1f - Maths.Exp(-speed * DeltaTime);
             current += (target - current) * t;
+            if (MathF.Abs(target.X - current.X) <= SettledEpsilon && MathF.Abs(target.Y - current.Y) <= SettledEpsilon)
+                current = target;
         }
         SetElementStorage(key, current);
         return current;
@@ -234,7 +245,8 @@ public partial class Paper
             // Shortest angular distance: wrap diff into [-180, 180].
             float diff = ((targetDegrees - current) % 360f + 540f) % 360f - 180f;
             float t = 1f - Maths.Exp(-speed * DeltaTime);
-            current += diff * t;
+            if (MathF.Abs(diff) > SettledEpsilon)
+                current += diff * t;
         }
         SetElementStorage(key, current);
         return current;
