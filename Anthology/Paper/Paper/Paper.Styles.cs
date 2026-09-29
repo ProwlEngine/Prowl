@@ -293,6 +293,9 @@ namespace Prowl.PaperUI
         // elements carry none of the transition machinery.
         private Transitions? _transitions;
 
+        // Lives on the style because it is the one per element object that persists across frames.
+        internal RenderSnapshot? RenderSnapshot;
+
         // Inheritance (opt-in via InheritStyle; usually null).
         private ElementStyle? _parent;
         private StyleValues _layoutSnapshot;

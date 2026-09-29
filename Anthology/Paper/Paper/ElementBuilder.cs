@@ -1059,6 +1059,13 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <inheritdoc cref="Paper.CacheRender(ref ElementHandle, long)"/>
+        public ElementBuilder CacheRender(long key)
+        {
+            _handle.Data._renderCacheKey = key;
+            return this;
+        }
+
         /// <summary>Enables content clipping to the element's bounds.</summary>
         public ElementBuilder Clip()
         {

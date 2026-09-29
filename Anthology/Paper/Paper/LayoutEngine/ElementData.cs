@@ -124,6 +124,7 @@ public struct ElementData
     internal List<ElementRenderCommand> _foregroundRenderCommands;
     internal ElementStyle _elementStyle;
     internal bool _scissorEnabled;
+    internal long? _renderCacheKey;
     internal bool _clampToScreen;
 
     // Transforms, computed once per frame after layout by Paper.ComputeTransforms. Rendering and
