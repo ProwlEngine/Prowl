@@ -243,11 +243,11 @@ public readonly record struct EngineVersion : IComparable<EngineVersion>
     public static EngineVersion Parse(string text)
         => TryParse(text, out EngineVersion version) ? version : throw new FormatException($"'{text}' is not an engine version.");
 
-    /// <summary> Empty text is the unknown version. The old "preview-5" style reads as "1.0-preview.5". </summary>
+    /// <summary> Empty text and the "0.0.1" older editors always wrote are the unknown version. The old "preview-5" style reads as "1.0-preview.5". </summary>
     public static bool TryParse(string? text, out EngineVersion version)
     {
         version = default;
-        if (string.IsNullOrEmpty(text)) return true;
+        if (string.IsNullOrEmpty(text) || text == "0.0.1") return true;
 
         if (s_legacyPreview.Match(text) is { Success: true } legacy)
         {
