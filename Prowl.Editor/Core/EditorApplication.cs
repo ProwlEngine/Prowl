@@ -39,8 +39,10 @@ public class EditorApplication : Game
     private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
-    private const double IntroOpenDuration = 3.0;  // bars open revealing editor
-    private const double IntroDuration = 5.0;      // total
+    private const double IntroBrandStart = 0.5;    // logo starts spinning in while the bars close
+    private const double IntroOpenStart = 4.5;     // bars open once the logo animation has played
+    private const double IntroOpenDuration = 2.5;  // bars open revealing editor
+    private const double IntroDuration = IntroOpenStart + IntroOpenDuration;
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
     private bool _wasFocused = true;
@@ -742,11 +744,10 @@ public class EditorApplication : Game
             // as "past the open phase" and zero the tip out on the launcher.
             if (_introTime < IntroDuration)
             {
-                const double openStart = IntroCloseDuration + 0.5;
                 const double fadeOutDuration = 0.8;
-                if (_introTime >= openStart)
+                if (_introTime >= IntroOpenStart)
                 {
-                    float t = (float)((_introTime - openStart) / fadeOutDuration);
+                    float t = (float)((_introTime - IntroOpenStart) / fadeOutDuration);
                     tipAlpha = 1f - Math.Clamp(t, 0f, 1f);
                 }
             }
@@ -1078,87 +1079,65 @@ public class EditorApplication : Game
             .IsNotInteractable()
             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
-                float cx = w / 2f;
-                float cy = h / 2f;
                 var font = EditorTheme.FontLogo ?? EditorTheme.DefaultBoldFont;
                 var black = Prowl.Vector.Color32.FromArgb(255, 8, 8, 10);
                 float barH = (float)h / BarCount;
                 double time = _introTime;
+                float brandFade = 1f;
 
-                // -- CLOSE PHASE (0 -> IntroCloseDuration): Bars slide IN, text fades in --
+                // -- CLOSE PHASE: Bars slide IN --
                 if (time < IntroCloseDuration)
                 {
-                    float t = (float)(time / IntroCloseDuration); // 0->1
-
-                    // Bars slide in from off-screen
+                    float t = (float)(time / IntroCloseDuration);
                     for (int i = 0; i < BarCount; i++)
                     {
-                        float delay = i * 0.04f;
-                        float slideDuration = 0.5f;
-                        float barPhase = Math.Clamp((t - delay) / slideDuration, 0f, 1f);
+                        float barPhase = Math.Clamp((t - i * 0.04f) / 0.5f, 0f, 1f);
                         float eased = EaseInOutQuart(barPhase);
-
-                        // Slide from off-screen to on-screen (reverse of open)
                         float slideX = (i % 2 == 0) ? -(1f - eased) * w : (1f - eased) * w;
-
-                        float barY = i * barH;
-                        canvas.RectFilled(slideX, barY, w, barH + 1, black);
-                    }
-
-                    // Logo + wordmark fade in during second half
-                    if (t > 0.5f)
-                    {
-                        float textPhase = (t - 0.5f) / 0.5f;
-                        float eased = EaseOutQuart(textPhase);
-                        DrawIntroBrand(canvas, cx, cy, (byte)(eased * 255), font);
+                        canvas.RectFilled(slideX, i * barH, w, barH + 1, black);
                     }
                 }
-                // -- HOLD PHASE: brief pause with text visible --
-                else if (time < IntroCloseDuration + 0.5)
+                // -- HOLD PHASE: the logo animation plays out --
+                else if (time < IntroOpenStart)
                 {
                     canvas.RectFilled(0, 0, w, h, black);
-
-                    DrawIntroBrand(canvas, cx, cy, 255, font);
                 }
-                // -- OPEN PHASE: Bars slide OUT, text fades out --
+                // -- OPEN PHASE: Bars slide OUT, brand fades out --
                 else
                 {
-                    float openStart = (float)(IntroCloseDuration + 0.5);
-                    float openDuration = (float)(IntroDuration - openStart);
-                    float t = Math.Clamp((float)(time - openStart) / openDuration, 0f, 1f);
-
-                    // Bars slide off screen
+                    float t = Math.Clamp((float)((time - IntroOpenStart) / IntroOpenDuration), 0f, 1f);
                     for (int i = 0; i < BarCount; i++)
                     {
-                        float delay = i * 0.05f;
-                        float slideDuration = 0.5f;
-                        float barPhase = Math.Clamp((t - delay) / slideDuration, 0f, 1f);
+                        float barPhase = Math.Clamp((t - i * 0.05f) / 0.5f, 0f, 1f);
                         float eased = EaseInOutQuart(barPhase);
-
                         float slideX = (i % 2 == 0) ? -eased * w : eased * w;
-
-                        float barY = i * barH;
-                        canvas.RectFilled(slideX, barY, w, barH + 1, black);
+                        canvas.RectFilled(slideX, i * barH, w, barH + 1, black);
                     }
-
-                    // Logo + wordmark fade out quickly
-                    if (t < 0.3f)
-                    {
-                        float textFade = 1f - (t / 0.3f);
-                        byte alpha = (byte)(EaseOutQuart(textFade) * 255);
-                        DrawIntroBrand(canvas, cx, cy, alpha, font);
-                    }
+                    brandFade = EaseOutQuart(1f - Math.Clamp(t / 0.3f, 0f, 1f));
                 }
+
+                if (time >= IntroBrandStart && brandFade > 0f)
+                    DrawIntroBrand(canvas, w / 2f, h / 2f, (float)(time - IntroBrandStart), brandFade, font);
             }));
     }
 
-    // The intro brand lockup: the Prowl logo to the LEFT of the PROWL wordmark, the pair centered on
-    // (cx, cy) as one unit, both at the given fade alpha.
-    private static void DrawIntroBrand(Prowl.Quill.Canvas canvas, float cx, float cy, byte alpha, Scribe.FontFile? font)
+    // Brand animation timeline, in seconds from IntroBrandStart.
+    private const float SpinInEnd = 1.1f;      // edge on to facing, slowing but never stopping
+    private const float SpinOutEnd = 2.5f;     // one more full turn while shrinking, settling facing
+    private const float MoveStart = 2.15f;     // logo slides aside into the lockup
+    private const float MoveEnd = 3.05f;
+    private const float TextStart = 2.45f;     // wordmark fades in and unblurs
+    private const float TextEnd = 3.55f;
+    private const float SpinStartScale = 1.8f; // logo size while spinning, relative to its lockup size
+    private const float TextStartBlur = 18f;
+
+    // The intro brand lockup: the Prowl logo to the LEFT of the PROWL wordmark, the pair centered on (cx, cy).
+    // The logo spins in about its vertical axis at the screen center, shrinks, then slides aside while the
+    // wordmark fades in under a clearing blur that sits between the text and the logo.
+    private static void DrawIntroBrand(Prowl.Quill.Canvas canvas, float cx, float cy, float time, float fade, Scribe.FontFile? font)
     {
         const string word = "PROWL";
         const float letterSpacing = 10f, gap = 8f;
-        var tint = System.Drawing.Color.FromArgb(alpha, 230, 230, 230);
 
         // Size the logo to the wordmark's height and measure the text (with its spacing) so the
         // [logo | gap | text] lockup can be centered horizontally as a whole.
@@ -1173,18 +1152,71 @@ public class EditorApplication : Game
         float logoW = logoH * (282f / 264f);   // logo viewBox aspect
         float totalW = logoW + (textW > 0f ? gap + textW : 0f);
         float left = cx - totalW / 2f;
+        float textX = left + logoW + gap;
 
-        EditorIcons.ProwlLogo.Draw(canvas,
-            new Rect(left, cy - logoH / 2f, left + logoW, cy + logoH / 2f), tint, 1f);
-
-        if (font != null)
+        if (font != null && time > TextStart)
         {
-            var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
-            canvas.DrawText(word, left + logoW + gap, cy, textColor, EditorTheme.FontSizeLogo, font,
+            float t = EaseOutCubic(Math.Clamp((time - TextStart) / (TextEnd - TextStart), 0f, 1f));
+            float drift = (1f - t) * 16f;
+            var textColor = Prowl.Vector.Color32.FromArgb((byte)(t * fade * 255), 230, 230, 230);
+            canvas.DrawText(word, textX + drift, cy, textColor, EditorTheme.FontSizeLogo, font,
                 letterSpacing, new Float2(0f, 0.5f), quality: Scribe.FontQuality.Ultra);
+
+            float blur = TextStartBlur * MathF.Pow(1f - t, 1.5f);
+            if (blur > 0.5f)
+            {
+                float pad = blur * 2f + 4f;
+                canvas.SetBackdropBlur(blur);
+                canvas.RectFilled(textX - pad, cy - lockupH / 2f - pad, textW + drift + pad * 2f, lockupH + pad * 2f,
+                    Prowl.Vector.Color32.FromArgb(0, 0, 0, 0));
+                canvas.ClearBackdropBlur();
+            }
         }
+
+        float angle = SpinAngle(time);
+        float facing = MathF.Cos(angle * MathF.PI / 180f);
+        float width = MathF.Abs(facing);
+        if (width < 0.01f) return;
+
+        float shrink = SmoothStep(Math.Clamp((time - SpinInEnd) / (SpinOutEnd - SpinInEnd), 0f, 1f));
+        float scale = SpinStartScale + (1f - SpinStartScale) * shrink;
+        float move = EaseInOutCubic(Math.Clamp((time - MoveStart) / (MoveEnd - MoveStart), 0f, 1f));
+        float logoX = cx + (left + logoW / 2f - cx) * move;
+
+        // The back face reads darker, and both faces dim as they turn edge on.
+        float shade = (facing >= 0f ? 230f : 120f) * (0.55f + 0.45f * width);
+        float appear = Math.Clamp(time / 0.2f, 0f, 1f);
+        var tint = System.Drawing.Color.FromArgb((byte)(appear * fade * 255), (byte)shade, (byte)shade, (byte)shade);
+
+        canvas.SaveState();
+        canvas.TransformBy(Prowl.Vector.Spatial.Transform2D.CreateTranslation(logoX, cy));
+        canvas.TransformBy(Prowl.Vector.Spatial.Transform2D.CreateScale(scale * width, scale));
+        EditorIcons.ProwlLogo.Draw(canvas, new Rect(-logoW / 2f, -logoH / 2f, logoW / 2f, logoH / 2f), tint, 1f);
+        canvas.RestoreState();
     }
 
+    // Degrees about the vertical axis, 90 is edge on and multiples of 360 face the viewer. Two hermite
+    // segments: fast in from edge on and slow through facing, then a faster full turn that settles facing.
+    private static float SpinAngle(float time)
+    {
+        if (time < SpinInEnd)
+            return Hermite(90f, 600f, 360f, 45f, SpinInEnd, time / SpinInEnd);
+        if (time < SpinOutEnd)
+            return Hermite(360f, 45f, 720f, 0f, SpinOutEnd - SpinInEnd, (time - SpinInEnd) / (SpinOutEnd - SpinInEnd));
+        return 720f;
+    }
+
+    // Cubic hermite from p0 to p1 over duration seconds, with start and end speeds m0 and m1 per second.
+    private static float Hermite(float p0, float m0, float p1, float m1, float duration, float s)
+    {
+        float s2 = s * s, s3 = s2 * s;
+        return (2f * s3 - 3f * s2 + 1f) * p0 + (s3 - 2f * s2 + s) * duration * m0
+            + (-2f * s3 + 3f * s2) * p1 + (s3 - s2) * duration * m1;
+    }
+
+    private static float SmoothStep(float x) => x * x * (3f - 2f * x);
+    private static float EaseOutCubic(float x) => 1f - MathF.Pow(1f - x, 3f);
+    private static float EaseInOutCubic(float x) => x < 0.5f ? 4f * x * x * x : 1f - MathF.Pow(-2f * x + 2f, 3f) / 2f;
     private static float EaseOutQuart(float x) => 1f - MathF.Pow(1f - x, 4f);
     private static float EaseInOutQuart(float x) => x < 0.5f ? 8f * x * x * x * x : 1f - MathF.Pow(-2f * x + 2f, 4f) / 2f;
 
