@@ -560,7 +560,7 @@ namespace Prowl.Quill
         internal ICanvasRenderer _renderer;
 
         internal bool _isNewDrawCallRequested = false;
-        internal List<DrawCall> _drawCalls = new List<DrawCall>();
+        internal DrawCallBuffer _drawCalls = new DrawCallBuffer();
         internal Stack<object> _textureStack = new Stack<object>();
 
         private int _currentDrawStateHash;
@@ -722,6 +722,8 @@ namespace Prowl.Quill
             _drawCalls.Clear();
             _verifiedDrawCall = -1;
             _textureStack.Clear();
+            _capture = null;
+            _captureStateDepth = -1;
 
             _indices.Clear();
             _vertices.Clear();
@@ -748,17 +750,22 @@ namespace Prowl.Quill
             if (!_drawStateDirty)
                 return _currentDrawStateHash;
 
+            _currentDrawStateHash = ComputeStateHash(in _state.scissorExtent, in _state.scissor, in _state.brush, _currentFontAtlas);
+            _drawStateDirty = false;
+            return _currentDrawStateHash;
+        }
+
+        private static int ComputeStateHash(in Float2 scissorExtent, in Transform2D scissor, in Brush brush, object? fontAtlas)
+        {
             unchecked
             {
                 int hash = 17;
-                hash = hash * 31 + _state.scissorExtent.GetHashCode();
-                hash = hash * 31 + _state.scissor.GetHashCode();
-                hash = hash * 31 + _state.brush.ComputeHash();
-                hash = hash * 31 + (_currentFontAtlas?.GetHashCode() ?? 0);
-                _currentDrawStateHash = hash;
+                hash = hash * 31 + scissorExtent.GetHashCode();
+                hash = hash * 31 + scissor.GetHashCode();
+                hash = hash * 31 + brush.ComputeHash();
+                hash = hash * 31 + (fontAtlas?.GetHashCode() ?? 0);
+                return hash;
             }
-            _drawStateDirty = false;
-            return _currentDrawStateHash;
         }
 
         /// <summary>
@@ -774,6 +781,8 @@ namespace Prowl.Quill
         {
             if (_savedStates.Count == 0)
                 return;
+            if (_savedStates.Count <= _captureStateDepth)
+                _captureBroken = true;
             _state = _savedStates.Pop();
             InvalidateDrawState();
         }
@@ -781,7 +790,7 @@ namespace Prowl.Quill
         /// <summary>
         /// Resets the canvas state to default values without clearing the state stack.
         /// </summary>
-        public void ResetState() { _state.Reset(); InvalidateDrawState(); }
+        public void ResetState() { _state.Reset(); _anchorVersion++; InvalidateDrawState(); }
 
         /// <summary>
         /// Sets the color used for stroking paths.
@@ -862,6 +871,7 @@ namespace Prowl.Quill
             {
                 var size = _renderer.GetTextureSize(texture);
                 _state.brush.TextureTransform = Transform2D.CreateScale(1.0f / size.X, 1.0f / size.Y);
+                _anchorVersion++;
             }
             InvalidateDrawState();
         }
@@ -1105,6 +1115,7 @@ namespace Prowl.Quill
             _state.scissor = _state.transform * Transform2D.CreateTranslation(x + w * 0.5f, y + h * 0.5f);
             _state.scissorExtent.X = (w * 0.5f) * _framebufferScale;
             _state.scissorExtent.Y = (h * 0.5f) * _framebufferScale;
+            _anchorVersion++;
             InvalidateDrawState();
         }
 
@@ -1202,6 +1213,7 @@ namespace Prowl.Quill
             _state.scissor = Transform2D.Identity;
             _state.scissorExtent.X = -1.0f;
             _state.scissorExtent.Y = -1.0f;
+            _anchorVersion++;
             InvalidateDrawState();
         }
         #endregion
@@ -1236,13 +1248,13 @@ namespace Prowl.Quill
         /// <summary>
         /// Resets the current transformation to the identity matrix.
         /// </summary>
-        public void ResetTransform() => _state.SetTransform(Transform2D.Identity);
+        public void ResetTransform() { _state.SetTransform(Transform2D.Identity); _anchorVersion++; }
 
         /// <summary>
         /// Sets the current transformation matrix directly.
         /// </summary>
         /// <param name="xform">The transformation matrix to set.</param>
-        public void CurrentTransform(Transform2D xform) => _state.SetTransform(xform);
+        public void CurrentTransform(Transform2D xform) { _state.SetTransform(xform); _anchorVersion++; }
 
         /// <summary>
         /// Transforms a point from logical units to pixel coordinates, applying the current transformation.
@@ -1278,6 +1290,7 @@ namespace Prowl.Quill
         public void RequestNewDrawCall()
         {
             _isNewDrawCallRequested = true;
+            _newDrawCallRequests++;
         }
 
         /// <summary>
@@ -1389,20 +1402,16 @@ namespace Prowl.Quill
             // comparison is needed. This is what the overwhelming majority of shapes hit.
             if (!_drawStateDirty && !_isNewDrawCallRequested && _verifiedDrawCall == _drawCalls.Count - 1)
             {
-                DrawCall current = _drawCalls[_verifiedDrawCall];
-                current.ElementCount += count * 3;
-                _drawCalls[_verifiedDrawCall] = current;
+                _drawCalls[_verifiedDrawCall].ElementCount += count * 3;
                 return;
             }
 
             int currentHash = ComputeDrawStateHash();
 
             if (_drawCalls.Count == 0)
-            {
-                _drawCalls.Add(new DrawCall());
-            }
+                _drawCalls.Add();
 
-            DrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
+            ref DrawCall lastDrawCall = ref _drawCalls.Last;
 
             // The hash is the cheap rejection; the field comparison is what makes the merge correct.
             // On a collision the old code would silently fold two different brushes into one batch.
@@ -1413,9 +1422,8 @@ namespace Prowl.Quill
             {
                 // If draw state has changed and the last draw call has already been used, add a new draw call
                 if (lastDrawCall.ElementCount != 0)
-                    _drawCalls.Add(new DrawCall());
+                    lastDrawCall = ref _drawCalls.Add();
 
-                lastDrawCall = _drawCalls[_drawCalls.Count - 1];
                 lastDrawCall.scissor = _state.scissor;
                 lastDrawCall.scissorExtent = _state.scissorExtent;
                 lastDrawCall.Brush = _state.brush;
@@ -1434,7 +1442,6 @@ namespace Prowl.Quill
             }
 
             lastDrawCall.ElementCount += count * 3;
-            _drawCalls[_drawCalls.Count - 1] = lastDrawCall;
 
             // This draw call now provably carries the current state, so the fast path above can take
             // over until something invalidates it.

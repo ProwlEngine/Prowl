@@ -101,6 +101,7 @@ namespace Prowl.Quill
             // Bind the font atlas as dedicated canvas state (a separate sampler unit) rather than the
             // brush texture, so this text batches into the same draw call as surrounding shapes.
             _canvas.SetFontAtlas(texture);
+            _canvas._textDraws++;
 
             // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
             var uvOffset = new Float2(2.0f, 2.0f);
