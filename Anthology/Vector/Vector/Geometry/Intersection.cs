@@ -1039,9 +1039,9 @@ namespace Prowl.Vector.Geometry
         /// <param name="planeDs">Array of 6 plane D values.</param>
         /// <param name="point">The point to test.</param>
         /// <returns>True if the point is inside or on all planes (on the positive/normal side), false otherwise.</returns>
-        public static bool FrustumContainsPoint(Float3[] planeNormals, float[] planeDs, Float3 point)
+        public static bool FrustumContainsPoint(ReadOnlySpan<Float3> planeNormals, ReadOnlySpan<float> planeDs, Float3 point)
         {
-            if (planeNormals == null || planeNormals.Length < 6 || planeDs == null || planeDs.Length < 6)
+            if (planeNormals.Length < 6 || planeDs.Length < 6)
                 throw new ArgumentException("Frustum planes must be provided as 6 normals and 6 D values.");
         
             for (int i = 0; i < 6; i++)
@@ -1058,9 +1058,9 @@ namespace Prowl.Vector.Geometry
         /// Checks if a sphere intersects or is contained within a frustum.
         /// </summary>
         /// <returns>True if the sphere intersects the frustum, false if it's completely outside.</returns>
-        public static bool FrustumIntersectsSphere(Float3[] planeNormals, float[] planeDs, Float3 sphereCenter, float sphereRadius)
+        public static bool FrustumIntersectsSphere(ReadOnlySpan<Float3> planeNormals, ReadOnlySpan<float> planeDs, Float3 sphereCenter, float sphereRadius)
         {
-            if (planeNormals == null || planeNormals.Length < 6 || planeDs == null || planeDs.Length < 6)
+            if (planeNormals.Length < 6 || planeDs.Length < 6)
                 throw new ArgumentException("Frustum planes must be provided as 6 normals and 6 D values.");
         
             for (int i = 0; i < 6; i++)
@@ -1079,9 +1079,9 @@ namespace Prowl.Vector.Geometry
         /// Checks if an AABB intersects or is contained within a frustum.
         /// </summary>
         /// <returns>True if the AABB intersects the frustum, false if it's completely outside.</returns>
-        public static bool FrustumIntersectsAABB(Float3[] planeNormals, float[] planeDs, Float3 boxMin, Float3 boxMax)
+        public static bool FrustumIntersectsAABB(ReadOnlySpan<Float3> planeNormals, ReadOnlySpan<float> planeDs, Float3 boxMin, Float3 boxMax)
         {
-            if (planeNormals == null || planeNormals.Length < 6 || planeDs == null || planeDs.Length < 6)
+            if (planeNormals.Length < 6 || planeDs.Length < 6)
                 throw new ArgumentException("Frustum planes must be provided as 6 normals and 6 D values.");
         
             for (int i = 0; i < 6; i++)

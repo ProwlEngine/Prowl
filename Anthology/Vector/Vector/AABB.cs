@@ -366,14 +366,15 @@ namespace Prowl.Vector
        [MethodImpl(MethodImplOptions.AggressiveInlining)]
        public AABB TransformBy(Float4x4 matrix)
        {
-           // Transform all 8 corners and find the new AABB
-           Float3[] corners = GetCorners();
-           Float3 newMin = Float4x4.TransformPoint(corners[0], matrix);
+           // Transform all 8 corners and find the new AABB. The corners are generated in place, in
+           // GetCorners order, since culling calls this for every renderable every frame.
+           Float3 newMin = Float4x4.TransformPoint(Min, matrix);
            Float3 newMax = newMin;
 
            for (int i = 1; i < 8; i++)
            {
-               Float3 transformedCorner = Float4x4.TransformPoint(corners[i], matrix);
+               var corner = new Float3((i & 1) == 0 ? Min.X : Max.X, (i & 2) == 0 ? Min.Y : Max.Y, (i & 4) == 0 ? Min.Z : Max.Z);
+               Float3 transformedCorner = Float4x4.TransformPoint(corner, matrix);
                newMin = new Float3(
                    Maths.Min(newMin.X, transformedCorner.X),
                    Maths.Min(newMin.Y, transformedCorner.Y),

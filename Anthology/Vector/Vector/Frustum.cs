@@ -199,8 +199,8 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(Float3 point)
         {
-            Float3[] normals = new Float3[6];
-            float[] ds = new float[6];
+            Span<Float3> normals = stackalloc Float3[6];
+            Span<float> ds = stackalloc float[6];
 
             for (int i = 0; i < 6; i++)
             {
@@ -219,8 +219,8 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Intersects(Sphere sphere)
         {
-            Float3[] normals = new Float3[6];
-            float[] ds = new float[6];
+            Span<Float3> normals = stackalloc Float3[6];
+            Span<float> ds = stackalloc float[6];
             
             for (int i = 0; i < 6; i++)
             {
@@ -239,8 +239,8 @@ namespace Prowl.Vector
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Intersects(AABB aabb)
         {
-            Float3[] normals = new Float3[6];
-            float[] ds = new float[6];
+            Span<Float3> normals = stackalloc Float3[6];
+            Span<float> ds = stackalloc float[6];
             
             for (int i = 0; i < 6; i++)
             {
