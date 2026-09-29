@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -23,7 +22,6 @@ namespace Prowl.Runtime;
 public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
-    [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
     // The identifier stored in the data this component was last loaded from. A scene load restores it.

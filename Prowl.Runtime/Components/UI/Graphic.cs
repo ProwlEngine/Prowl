@@ -30,8 +30,8 @@ public abstract class Graphic : UIBehaviour
     }
 
     /// <summary>Material override. When unset the graphic draws with <see cref="DefaultMaterial"/>.</summary>
-    [SerializeField] private AssetRef<Material> _material;
-    public AssetRef<Material> Material
+    [SerializeField] private Material? _material;
+    public Material? Material
     {
         get => _material;
         set => SetField(ref _material, value, UIDirtyFlags.Material);
@@ -51,7 +51,7 @@ public abstract class Graphic : UIBehaviour
 
     public override Material GetMaterial()
     {
-        Material? m = _material.Res;
+        Material? m = _material;
         return m.IsValid() ? m : DefaultMaterial;
     }
 }

@@ -26,7 +26,7 @@ public static class MeshFeatureImporter
     {
         foreach (var spec in MeshFeatureRegistry.Specs)
         {
-            EngineObject? feature;
+            Asset? feature;
             try
             {
                 feature = spec.TryGenerate(mesh, settings);

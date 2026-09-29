@@ -37,20 +37,12 @@ public static class LightmapBinding
 
         // 1) Baked lightmap (static, lightmapped). A renderer with a valid index IS lightmapped, so it
         // commits to baked GI here and never falls through to probe SH below: probes would light it
-        // with a completely different (wrong) result, and on reload the lightmap pages stream in async,
-        // so a lightmapped surface would flash probe-lit until its page arrived. Bind the page once it
-        // has loaded; while it's still streaming use plain ambient (reading .Res queued the load, so a
-        // later frame picks up the real lightmap). Note: binding an unloaded page would fall back to the
-        // shared white texture, which RGBM-decodes to a blown-out (8,8,8) - hence the explicit ambient.
+        // with a completely different (wrong) result. A page still loading gets plain ambient, since
+        // binding it would fall back to the shared white texture, which RGBM-decodes to a blown-out (8,8,8).
         if (scene != null && lightmapIndex >= 0 && lightmapIndex < scene.BakedLighting.Lightmaps.Count)
         {
-            // AssetRef<T> caches its resolved instance as a side effect of .Res - List<T>'s indexer
-            // returns value-type elements by copy, so Lightmaps[i].Res would resolve into a throwaway
-            // copy and never cache anything, forcing a real disk reload on every single call once the
-            // weak-ref cache lets the previous copy's instance be collected. CollectionsMarshal.AsSpan
-            // gives a ref to the real backing element so the resolved instance actually sticks.
-            ref var lightmap = ref CollectionsMarshal.AsSpan(scene.BakedLighting.Lightmaps)[lightmapIndex];
-            if (lightmap.Res.IsValid())
+            Texture2D? lightmap = scene.BakedLighting.Lightmaps[lightmapIndex];
+            if (lightmap is { IsLoaded: true })
             {
                 props.SetInt("_GIMode", 1);
                 props.SetInt("_LightmapUV", meshHasUV2 ? 1 : 0);

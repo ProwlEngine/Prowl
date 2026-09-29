@@ -20,10 +20,10 @@ namespace Prowl.Runtime;
 [ComponentIcon("\uf1b3")] // Cubes
 public sealed class MeshCollider : Collider
 {
-    [SerializeField] private AssetRef<Mesh> mesh;
+    [SerializeField] private Mesh? mesh;
     [SerializeField] private bool convex = false;
 
-    public AssetRef<Mesh> Mesh
+    public Mesh? Mesh
     {
         get => mesh;
         set
@@ -137,21 +137,33 @@ public sealed class MeshCollider : Collider
     }
 
     /// <summary>
-    /// The mesh to build collision from: the assigned one, else a sibling MeshRenderer's. Physics needs
-    /// it present now (a collider is built once, so a transient streaming null would leave it
-    /// permanently missing), so the load is blocking and prioritized.
+    /// The mesh to build collision from: the assigned one, else a sibling MeshRenderer's. Loaded now, since
+    /// the shapes are built once.
     /// </summary>
-    internal Mesh ResolveMesh()
+    internal Mesh? ResolveMesh()
     {
-        mesh.EnsureLoaded();
-        if (mesh.Res != null) return mesh.Res;
+        Mesh? resolved = SourceMesh();
+        if (resolved is not null) resolved.Load();
+        return resolved;
+    }
 
-        var mr = GetComponent<MeshRenderer>();
-        if (mr.IsNotValid()) return null;
+    private Mesh? SourceMesh()
+    {
+        if (mesh is not null) return mesh;
+        MeshRenderer? mr = GetComponent<MeshRenderer>();
+        return mr.IsValid() ? mr.Mesh : null;
+    }
 
-        AssetRef<Mesh> rendererMesh = mr.Mesh;
-        rendererMesh.EnsureLoaded();
-        return rendererMesh.Res;
+    // A reimported mesh is the same object with new triangles, so the shapes are built again.
+    private void OnAssetReloaded(Asset asset, ReloadReason reason)
+    {
+        if (ReferenceEquals(asset, SourceMesh())) Rebuild();
+    }
+
+    public override void OnDisable()
+    {
+        AssetDatabase.Reloaded -= OnAssetReloaded;
+        base.OnDisable();
     }
 
     protected override void OnAutoRebuild()
@@ -173,7 +185,7 @@ public sealed class MeshCollider : Collider
 
     public override void OnEnable()
     {
-        if (mesh.Res == null)
+        if (mesh == null)
         {
             var mr = GetComponent<MeshRenderer>();
             if (mr.IsValid())
@@ -182,16 +194,17 @@ public sealed class MeshCollider : Collider
                 Debug.LogWarning("MeshCollider could not find a MeshRenderer to get the mesh from.");
         }
 
+        AssetDatabase.Reloaded += OnAssetReloaded;
         base.OnEnable();
     }
 
     public override void DrawGizmos()
     {
-        var m = mesh.Res;
+        var m = mesh;
         if (m == null)
         {
             var mr = GetComponent<MeshRenderer>();
-            if (mr != null) m = mr.Mesh.Res;
+            if (mr != null) m = mr.Mesh;
         }
         if (m == null) return;
 

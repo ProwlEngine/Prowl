@@ -219,12 +219,12 @@ internal class TerrainDetailRenderer
     {
         // Clone per prototype: material state is read at draw time, so prototypes sharing one
         // material would otherwise all render with the last one's texture and parameters.
-        var protoMat = proto.GrassMaterial.Res;
+        var protoMat = proto.GrassMaterial;
         Material material = (protoMat.IsValid() ? protoMat : baseMaterial).Clone();
         terrain.ApplyDetailUniforms(material);
 
         if (s_defaultWhite.IsNotValid()) s_defaultWhite = Texture2D.LoadDefault(DefaultTexture.White);
-        var texRes = proto.Texture.Res;
+        var texRes = proto.Texture;
         material.SetTexture("_MainTex", texRes.IsValid() ? texRes : s_defaultWhite);
 
         material.SetKeyword("TERRAIN_BICUBIC", data.Interpolation == TerrainInterpolation.Bicubic);

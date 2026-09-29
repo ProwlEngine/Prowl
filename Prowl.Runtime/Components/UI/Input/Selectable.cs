@@ -183,7 +183,7 @@ public class Selectable : UIBehaviour,
     [SerializeIgnore] private Color _fromColor = Color.White;
     [SerializeIgnore] private Color _toColor = Color.White;
     [SerializeIgnore] private float _transitionElapsed;
-    [SerializeIgnore] private AssetRef<Sprite> _authoredSprite;
+    [SerializeIgnore] private Sprite? _authoredSprite;
     [SerializeIgnore] private bool _authoredSpriteCaptured;
 
     /// <summary>The current high-level state. Read-only for derived classes.</summary>
@@ -323,7 +323,7 @@ public class Selectable : UIBehaviour,
             _authoredSpriteCaptured = true;
         }
 
-        AssetRef<Sprite> next = state switch
+        Sprite? next = state switch
         {
             SelectionState.Disabled    => _spriteState.DisabledSprite,
             SelectionState.Pressed     => _spriteState.PressedSprite,
@@ -332,7 +332,7 @@ public class Selectable : UIBehaviour,
             _                          => _authoredSprite,
         };
 
-        image.Sprite = next.IsExplicitNull ? _authoredSprite : next;
+        image.Sprite = next is null ? _authoredSprite : next;
     }
 
     private SelectionState ComputeState()

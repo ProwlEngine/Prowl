@@ -79,6 +79,13 @@ public static class Undo
             var target = ResolveTarget();
             if (target == null) return;
 
+            // An asset is refilled whole, so everything derived from it sees the change.
+            if (target is Asset { IsFromDatabase: true } asset)
+            {
+                AssetDatabase.Refill(asset, state, ReloadReason.Undo);
+                return;
+            }
+
             CopyFieldsFromEcho(target, TargetType, state);
 
             // Restoring writes fields directly, exactly as the property grid does, so the object
@@ -350,7 +357,7 @@ public static class Undo
         // The tree by value, anything it references outside itself linked by identifier: without a resolver
         // Echo would deep copy those scene objects into the snapshot, and undo would restore the object
         // pointing at orphan clones of whatever it referenced.
-        var serialized = Serializer.Serialize(typeof(object), go, SceneReferenceResolver.ContextForTree(go));
+        var copy = SceneReferenceResolver.WriteMemoryCopy(go);
         var goId = go.Identifier;
         var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
@@ -376,7 +383,7 @@ public static class Undo
 
                 // Preserving identifiers: what comes back has to be the object that went away, or
                 // every other record addressing it stops resolving.
-                var restored = GameObject.DeserializePreservingIdentifiers(serialized, SceneReferenceResolver.ContextForLinking());
+                var restored = GameObject.DeserializePreservingIdentifiers(copy.Data, SceneReferenceResolver.ContextForLinking());
                 if (restored == null) return;
 
                 scene.Add(restored);
@@ -408,7 +415,7 @@ public static class Undo
 
         // Serialize the entire GO tree before destruction
         // Linked, not copied: see CaptureCreatedObject.
-        var serialized = Serializer.Serialize(typeof(object), go, SceneReferenceResolver.ContextForTree(go));
+        var copy = SceneReferenceResolver.WriteMemoryCopy(go);
         var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
         var goId = go.Identifier;
@@ -421,7 +428,7 @@ public static class Undo
 
                 // Preserving identifiers: what comes back has to be the object that went away, or
                 // every other record addressing it stops resolving.
-                var restored = GameObject.DeserializePreservingIdentifiers(serialized, SceneReferenceResolver.ContextForLinking());
+                var restored = GameObject.DeserializePreservingIdentifiers(copy.Data, SceneReferenceResolver.ContextForLinking());
                 if (restored == null) return;
 
                 scene.Add(restored);
@@ -875,8 +882,6 @@ public static class Undo
         "_hasStarted",        // Lifecycle flags
         "_hasBeenEnabled",
         "_executeAlwaysCached",
-        "AssetID",            // Asset identity
-        "AssetPath",          // Asset path
         "<IsDisposed>k__BackingField", // Disposed state
     };
 

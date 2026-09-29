@@ -24,10 +24,10 @@ public class TerrainComponent : MonoBehaviour
     #region Configuration
 
     /// <summary>The terrain data asset containing heightmap, splatmap, and layer configuration.</summary>
-    public AssetRef<TerrainData> Data;
+    public TerrainData? Data;
 
     /// <summary>Base material. Terrain clones this internally to set its own properties.</summary>
-    public AssetRef<Material> Material;
+    public Material? Material;
 
     /// <summary>Maximum LOD subdivision levels for the quadtree.</summary>
     public int MaxLODLevel = 4;
@@ -42,7 +42,7 @@ public class TerrainComponent : MonoBehaviour
     public float LODQuality = 1f;
 
     /// <summary>Detail material override. If null, uses the built-in Grass material.</summary>
-    public AssetRef<Material> DetailMaterial;
+    public Material? DetailMaterial;
 
     /// <summary>How far details are drawn, in world units.</summary>
     public float DetailDistance = 150f;
@@ -112,7 +112,7 @@ public class TerrainComponent : MonoBehaviour
     /// <summary>Push terrain transform, heightmap and wind state onto a grass material.</summary>
     internal void ApplyDetailUniforms(Material material)
     {
-        var data = Data.Res;
+        var data = Data;
         if (data == null) return;
 
         Float4x4 terrainToWorld = Transform.LocalToWorldMatrix;
@@ -130,10 +130,10 @@ public class TerrainComponent : MonoBehaviour
     }
 
     /// <summary>Shortcut to terrain size from the data asset.</summary>
-    public float TerrainSize { get { var d = Data.Res; return d.IsValid() ? d.Size : 1024f; } }
+    public float TerrainSize { get { var d = Data; return d.IsValid() ? d.Size : 1024f; } }
 
     /// <summary>Shortcut to terrain height from the data asset.</summary>
-    public float TerrainHeight { get { var d = Data.Res; return d.IsValid() ? d.Height : 100f; } }
+    public float TerrainHeight { get { var d = Data; return d.IsValid() ? d.Height : 100f; } }
 
     #endregion
 
@@ -177,7 +177,7 @@ public class TerrainComponent : MonoBehaviour
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        var terrainData = Data.Res;
+        var terrainData = Data;
         if (terrainData == null) return;
 
         float terrainSize = terrainData.Size;
@@ -229,9 +229,9 @@ public class TerrainComponent : MonoBehaviour
 
             if (s_defaultWhite.IsNotValid()) s_defaultWhite = Texture2D.LoadDefault(DefaultTexture.White);
             if (s_defaultNormal.IsNotValid()) s_defaultNormal = Texture2D.LoadDefault(DefaultTexture.Normal);
-            var albedoTex = layer.Albedo.Res;
+            var albedoTex = layer.Albedo;
             _properties.SetTexture(prefix, albedoTex.IsValid() ? albedoTex : s_defaultWhite);
-            var normalTex = layer.NormalMap.Res;
+            var normalTex = layer.NormalMap;
             _properties.SetTexture(prefix + "Normal", normalTex.IsValid() ? normalTex : s_defaultNormal);
 
             _properties.SetFloat(prefix + "Tiling", layer.Tiling);
@@ -289,7 +289,7 @@ public class TerrainComponent : MonoBehaviour
 
     private Material? GetMaterialInstance()
     {
-        var sourceMat = Material.Res;
+        var sourceMat = Material;
         if (sourceMat == null)
         {
             if (s_defaultTerrainMat.IsNotValid()) s_defaultTerrainMat = Resources.Material.LoadDefault(DefaultMaterial.Terrain);
@@ -305,7 +305,7 @@ public class TerrainComponent : MonoBehaviour
 
     private Material? GetDetailMaterialInstance()
     {
-        var sourceMat = DetailMaterial.Res;
+        var sourceMat = DetailMaterial;
         if (sourceMat == null)
         {
             if (s_defaultDetailMat.IsNotValid()) s_defaultDetailMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
@@ -332,7 +332,7 @@ public class TerrainComponent : MonoBehaviour
         hitPoint = Float3.Zero;
         terrainUV = Float2.Zero;
 
-        var terrainData = Data.Res;
+        var terrainData = Data;
         if (terrainData == null || terrainData.Heights == null) return false;
 
         float size = terrainData.Size;

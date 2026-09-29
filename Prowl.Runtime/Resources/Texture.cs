@@ -8,40 +8,55 @@ namespace Prowl.Runtime.Resources;
 /// <summary>
 /// This is the base class for all texture types and manages some of their internal workings.
 /// </summary>
-public abstract class Texture : EngineObject
+public abstract class Texture : Asset
 {
 
     private protected const TextureMin DefaultMinFilter = TextureMin.Nearest, DefaultMipmapMinFilter = TextureMin.NearestMipmapLinear;
     private protected const TextureMag DefaultMagFilter = TextureMag.Nearest;
 
-    private GraphicsTexture _handle;
-    /// <summary>The handle for the GL Texture Object.</summary>
-    public GraphicsTexture Handle { get { EnsureNotDisposed(); return _handle; } }
+    private GraphicsTexture? _handle;
+    /// <summary>The handle for the GL Texture Object, created on first use.</summary>
+    public GraphicsTexture Handle { get { EnsureLoaded(); return _handle ??= CreateHandle(); } }
+
+    private protected TextureImageFormat ImageFormatUnchecked => _imageFormat;
+    private protected bool IsMipmappedUnchecked => _isMipmapped;
+
+    /// <summary>The handle if one exists, without loading or creating anything. For the render thread's bindings.</summary>
+    internal GraphicsTexture? HandleIfLoaded => IsLoaded ? _handle : null;
+
+    private GraphicsTexture CreateHandle()
+    {
+        GraphicsTexture handle = Graphics.CreateTexture(_type, _imageFormat);
+        Graphics.SetWrapS(handle, _wrapMode);
+        Graphics.SetWrapT(handle, _wrapMode);
+        Graphics.SetTextureFilters(handle, _minFilter, _magFilter);
+        return handle;
+    }
 
     private readonly TextureType _type;
     /// <summary>The type of this <see cref="Texture"/>, such as 1D, 2D, Multisampled 2D, Array 2D, CubeMap, etc.</summary>
-    public TextureType Type { get { EnsureNotDisposed(); return _type; } }
+    public TextureType Type { get { EnsureLoaded(); return _type; } }
 
     private TextureMin _minFilter;
     private TextureMag _magFilter;
     private TextureWrap _wrapMode;
-    public TextureMin MinFilter { get { EnsureNotDisposed(); return _minFilter; } protected set => _minFilter = value; }
-    public TextureMag MagFilter { get { EnsureNotDisposed(); return _magFilter; } protected set => _magFilter = value; }
-    public TextureWrap WrapMode { get { EnsureNotDisposed(); return _wrapMode; } protected set => _wrapMode = value; }
+    public TextureMin MinFilter { get { EnsureLoaded(); return _minFilter; } protected set => _minFilter = value; }
+    public TextureMag MagFilter { get { EnsureLoaded(); return _magFilter; } protected set => _magFilter = value; }
+    public TextureWrap WrapMode { get { EnsureLoaded(); return _wrapMode; } protected set => _wrapMode = value; }
 
     private TextureImageFormat _imageFormat;
     /// <summary>The format for this <see cref="Texture"/>'s image.</summary>
-    public TextureImageFormat ImageFormat { get { EnsureNotDisposed(); return _imageFormat; } }
+    public TextureImageFormat ImageFormat { get { EnsureLoaded(); return _imageFormat; } }
 
     private bool _isMipmapped;
     /// <summary>Gets whether this <see cref="Texture"/> is mipmapped.</summary>
-    public bool IsMipmapped { get { EnsureNotDisposed(); return _isMipmapped; } private set => _isMipmapped = value; }
+    public bool IsMipmapped { get { EnsureLoaded(); return _isMipmapped; } private set => _isMipmapped = value; }
 
     /// <summary>False if this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
     private readonly bool isNotMipmappable;
 
     /// <summary>Gets whether this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
-    public bool IsMipmappable { get { EnsureNotDisposed(); return !isNotMipmappable; } }
+    public bool IsMipmappable { get { EnsureLoaded(); return !isNotMipmappable; } }
 
     /// <summary>
     /// Creates a <see cref="Texture"/> with specified <see cref="TextureType"/> and <see cref="TextureImageFormat"/>.
@@ -60,10 +75,6 @@ public abstract class Texture : EngineObject
         _imageFormat = imageFormat;
         _isMipmapped = false;
         isNotMipmappable = !IsTextureTypeMipmappable(type);
-        _handle = Graphics.CreateTexture(type, imageFormat);
-        Graphics.SetWrapS(_handle, TextureWrap.Repeat);
-        Graphics.SetWrapT(_handle, TextureWrap.Repeat);
-        Graphics.SetTextureFilters(_handle, DefaultMinFilter, DefaultMagFilter);
         _minFilter = DefaultMinFilter;
         _magFilter = DefaultMagFilter;
         _wrapMode = TextureWrap.Repeat;
@@ -71,20 +82,17 @@ public abstract class Texture : EngineObject
 
     private protected void AdoptImageFormat(TextureImageFormat imageFormat)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         if (!Enum.IsDefined(typeof(TextureImageFormat), imageFormat))
             throw new FormatException("Invalid texture image format");
 
         if (_imageFormat == imageFormat) return;
 
-        _handle.Dispose();
+        _handle?.Dispose();
+        _handle = null;
         _imageFormat = imageFormat;
         _isMipmapped = false;
-        _handle = Graphics.CreateTexture(_type, imageFormat);
-        Graphics.SetWrapS(_handle, _wrapMode);
-        Graphics.SetWrapT(_handle, _wrapMode);
-        Graphics.SetTextureFilters(_handle, _minFilter, _magFilter);
     }
 
     /// <summary>
@@ -94,8 +102,8 @@ public abstract class Texture : EngineObject
     /// <param name="magFilter">The desired magnifying filter for the <see cref="Texture"/>.</param>
     public void SetTextureFilters(TextureMin minFilter, TextureMag magFilter)
     {
-        EnsureNotDisposed();
-        Graphics.SetTextureFilters(_handle, minFilter, magFilter);
+        EnsureLoaded();
+        Graphics.SetTextureFilters(Handle, minFilter, magFilter);
         _minFilter = minFilter;
         _magFilter = magFilter;
     }
@@ -106,26 +114,30 @@ public abstract class Texture : EngineObject
     /// <exception cref="InvalidOperationException"/>
     public void GenerateMipmaps()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         if (isNotMipmappable)
             throw new InvalidOperationException(string.Concat("This texture type is not mipmappable! Type: ", _type.ToString()));
 
-        Graphics.GenerateMipmap(_handle);
+        Graphics.GenerateMipmap(Handle);
         _isMipmapped = true;
-        Graphics.SetTextureFilters(_handle, _isMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
+        Graphics.SetTextureFilters(Handle, _isMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
     }
 
-    protected override void OnDispose()
+    protected override void OnUnload()
     {
-        _handle.Dispose();
+        _handle?.Dispose();
+        _handle = null;
     }
 
-    // Safety net: once nothing references this Texture, the idle-timeout sweep in
-    // EditorAssetBackend/PlayerAssetBackend no longer keeps it alive either, so something must
-    // still free the GPU handle. Handle.Dispose() only enqueues a thread-safe render-thread command
-    // (see GraphicsTexture.Dispose), so calling it from the finalizer thread is safe.
-    ~Texture() => Dispose();
+    // A runtime texture nothing references still has to free its GPU handle. Handle.Dispose only enqueues a
+    // render thread command, so it is safe from the finalizer thread. Database textures are never collected.
+    ~Texture()
+    {
+        if (!Registered) Dispose();
+    }
+
+    protected internal override long EstimateBytes() => 0;
 
     /// <summary>
     /// Gets whether the specified <see cref="TextureType"/> type is mipmappable.

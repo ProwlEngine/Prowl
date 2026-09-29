@@ -26,9 +26,12 @@ public partial class PropertyState
     [SerializeField] internal Dictionary<string, int> _ints = [];
     [SerializeField] internal Dictionary<string, Float4x4> _matrices = [];
     [SerializeField] internal Dictionary<string, Float4x4[]> _matrixArr = [];
-    [SerializeField] internal Dictionary<string, AssetRef<Texture2D>> _textures = [];
-    [SerializeField] internal Dictionary<string, AssetRef<Texture3D>> _textures3D = [];
-    [SerializeField] internal Dictionary<string, AssetRef<Cubemap>> _texturesCube = [];
+    [SerializeField] internal Dictionary<string, Texture2D> _textures = [];
+    [SerializeField] internal Dictionary<string, Texture3D> _textures3D = [];
+    [SerializeField] internal Dictionary<string, Cubemap> _texturesCube = [];
+
+    // What a draw snapshot binds, resolved on the main thread so the render thread never touches an asset.
+    [SerializeIgnore] internal Dictionary<string, GraphicsTexture> _boundTextures = [];
     [SerializeField] internal Dictionary<string, GraphicsBuffer> _buffers = [];
     [SerializeField] internal Dictionary<string, uint> _bufferBindings = [];
 
@@ -99,12 +102,9 @@ public partial class PropertyState
     public void SetInt(string name, int value) => _ints[name] = value;
     public void SetMatrix(string name, Float4x4 value) => _matrices[name] = (Float4x4)value;
     public void SetMatrices(string name, Float4x4[] value) => _matrixArr[name] = [.. value.Select(x => (Float4x4)x)];
-    public void SetTexture(string name, Texture2D value) => _textures[name] = new AssetRef<Texture2D>(value);
-    public void SetTexture(string name, AssetRef<Texture2D> value) => _textures[name] = value;
-    public void SetTexture3D(string name, Texture3D value) => _textures3D[name] = new AssetRef<Texture3D>(value);
-    public void SetTexture3D(string name, AssetRef<Texture3D> value) => _textures3D[name] = value;
-    public void SetTextureCube(string name, Cubemap value) => _texturesCube[name] = new AssetRef<Cubemap>(value);
-    public void SetTextureCube(string name, AssetRef<Cubemap> value) => _texturesCube[name] = value;
+    public void SetTexture(string name, Texture2D value) => _textures[name] = value;
+    public void SetTexture3D(string name, Texture3D value) => _textures3D[name] = value;
+    public void SetTextureCube(string name, Cubemap value) => _texturesCube[name] = value;
     public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
         _buffers[name] = value;
@@ -170,14 +170,9 @@ public partial class PropertyState
     public float GetFloat(string name) => _floats.TryGetValue(name, out float value) ? value : 0;
     public int GetInt(string name) => _ints.TryGetValue(name, out int value) ? value : 0;
     public Float4x4 GetMatrix(string name) => _matrices.TryGetValue(name, out Float4x4 value) ? (Float4x4)value : Float4x4.Identity;
-    // GetValueRefOrNullRef (not TryGetValue): TryGetValue's out param is a copy of the AssetRef, so
-    // .Res on it would cache into a throwaway struct instead of the dictionary's own slot.
-    public Texture2D? GetTexture(string name) => _textures.ContainsKey(name) ? CollectionsMarshal.GetValueRefOrNullRef(_textures, name).Res : null;
-    public AssetRef<Texture2D> GetTextureRef(string name) => _textures.TryGetValue(name, out var value) ? value : default;
-    public Texture3D? GetTexture3D(string name) => _textures3D.ContainsKey(name) ? CollectionsMarshal.GetValueRefOrNullRef(_textures3D, name).Res : null;
-    public AssetRef<Texture3D> GetTexture3DRef(string name) => _textures3D.TryGetValue(name, out var value) ? value : default;
-    public Cubemap? GetTextureCube(string name) => _texturesCube.ContainsKey(name) ? CollectionsMarshal.GetValueRefOrNullRef(_texturesCube, name).Res : null;
-    public AssetRef<Cubemap> GetTextureCubeRef(string name) => _texturesCube.TryGetValue(name, out var value) ? value : default;
+    public Texture2D? GetTexture(string name) => _textures.TryGetValue(name, out Texture2D? value) ? value : null;
+    public Texture3D? GetTexture3D(string name) => _textures3D.TryGetValue(name, out Texture3D? value) ? value : null;
+    public Cubemap? GetTextureCube(string name) => _texturesCube.TryGetValue(name, out Cubemap? value) ? value : null;
     public GraphicsBuffer GetBuffer(string name) => _buffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
     public uint GetBufferBinding(string name) => _bufferBindings.TryGetValue(name, out uint value) ? value : 0;
 
@@ -187,6 +182,7 @@ public partial class PropertyState
         _textures.Clear();
         _textures3D.Clear();
         _texturesCube.Clear();
+        _boundTextures.Clear();
         _matrices.Clear();
         _matrixArr.Clear();
         _ints.Clear();
@@ -217,14 +213,12 @@ public partial class PropertyState
             _matrices[item.Key] = item.Value;
         foreach (KeyValuePair<string, Float4x4[]> item in properties._matrixArr)
             _matrixArr[item.Key] = item.Value;
-        // Resolve into the SOURCE before copying. An AssetRef caches its resolved instance in the
-        // struct it is read from, and a snapshot rented from PropertyStatePool is cleared on return -
-        // so resolving in the copy throws the work away and leaves every draw call re-resolving its
-        // textures through the asset database. Resolving here caches on the material itself, and the
-        // copy carries an already-resolved ref.
-        ResolveAndCopy(properties._textures, _textures);
-        ResolveAndCopy(properties._textures3D, _textures3D);
-        ResolveAndCopy(properties._texturesCube, _texturesCube);
+        foreach (KeyValuePair<string, Texture2D> item in properties._textures)
+            _textures[item.Key] = item.Value;
+        foreach (KeyValuePair<string, Texture3D> item in properties._textures3D)
+            _textures3D[item.Key] = item.Value;
+        foreach (KeyValuePair<string, Cubemap> item in properties._texturesCube)
+            _texturesCube[item.Key] = item.Value;
         foreach (KeyValuePair<string, GraphicsBuffer> item in properties._buffers)
             _buffers[item.Key] = item.Value;
         foreach (KeyValuePair<string, uint> item in properties._bufferBindings)
@@ -232,18 +226,30 @@ public partial class PropertyState
 
     }
 
-    // GetValueRefOrNullRef so .Res writes its cache back into the source dictionary's slot rather
-    // than a copy. Reading .Res only assigns the ref's instance field, so a concurrent read of the
-    // same material sees either the old or the new reference, never a torn one.
-    private static void ResolveAndCopy<T>(Dictionary<string, AssetRef<T>> source, Dictionary<string, AssetRef<T>> dest)
-        where T : EngineObject
+    /// <summary>
+    /// Resolves every texture to the GPU handle a draw binds. Main thread, when a draw is encoded. A texture still
+    /// loading binds white this frame, and one that is missing binds nothing.
+    /// </summary>
+    internal void ResolveHandles()
     {
-        foreach (string key in source.Keys)
+        _boundTextures.Clear();
+        foreach (KeyValuePair<string, Texture2D> item in _textures)
         {
-            ref AssetRef<T> src = ref CollectionsMarshal.GetValueRefOrNullRef(source, key);
-            _ = src.Res;
-            dest[key] = src;
+            if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
+            else if (item.Value is { IsMissing: false }) _boundTextures[item.Key] = Texture2D.LoadDefault(DefaultTexture.White).Handle;
         }
+        foreach (KeyValuePair<string, Texture3D> item in _textures3D)
+            if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
+        foreach (KeyValuePair<string, Cubemap> item in _texturesCube)
+            if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
+    }
+
+    private static GraphicsTexture? Bindable(Texture? texture)
+    {
+        if (texture is null || texture.IsDisposed) return null;
+        if (texture.IsLoaded) return texture.Handle;
+        if (texture.State == AssetState.Unloaded) AssetLoader.Request(texture);
+        return null;
     }
 }
 

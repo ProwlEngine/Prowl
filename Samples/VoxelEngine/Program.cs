@@ -437,7 +437,7 @@ public class VoxelChunk : MonoBehaviour
         if (vertices.Count == 0)
         {
             // Clear mesh if empty
-            if (meshRenderer?.Mesh.Res != null)
+            if (meshRenderer.IsValid() && meshRenderer!.Mesh.IsValid())
             {
                 meshRenderer.Mesh = null!;
             }

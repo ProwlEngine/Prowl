@@ -36,7 +36,7 @@ public class SpriteAssetEditor : AssetImporterEditor
     {
         var m = Origami.Current.Metrics;
 
-        Texture2D? tex = sprite.Texture.Res;
+        Texture2D? tex = sprite.Texture;
 
         paper.Box($"{id}_preview")
             .Height(200).Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)

@@ -11,6 +11,9 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+/// <summary>A tree written for an in-memory copy, and the runtime assets it links, which it keeps alive.</summary>
+public sealed record MemoryCopy(EchoObject Data, IReadOnlyList<Asset> LinkedAssets);
+
 /// <summary>
 /// Echo external-reference resolver for scene objects. The objects passed to the constructor - the
 /// copy selection, or the tree being written to an asset - serialize by value; every other
@@ -55,6 +58,20 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// <summary>Context for writing a tree out by value, linking everything it references beyond itself.</summary>
     public static SerializationContext ContextForTree(GameObject root)
         => new() { ExternalReferences = ForTree(root) };
+
+    /// <summary>
+    /// As <see cref="ContextForTree"/>, for a copy that never leaves memory: runtime assets are linked for the
+    /// session too, so pasting or undoing shares a runtime material instead of making a second one.
+    /// </summary>
+    internal static DependencySerializationContext ContextForMemoryCopy(GameObject root)
+        => new() { ExternalReferences = ForTree(root), LinkRuntimeAssets = true };
+
+    /// <summary>Writes a tree for an in-memory copy, holding the runtime assets it links so they live as long as the copy.</summary>
+    public static MemoryCopy WriteMemoryCopy(GameObject root)
+    {
+        DependencySerializationContext context = ContextForMemoryCopy(root);
+        return new MemoryCopy(Serializer.Serialize(typeof(object), root, context), context.LinkedAssets);
+    }
 
     /// <summary>
     /// Context for reading data back, binding every link to the live object it names.

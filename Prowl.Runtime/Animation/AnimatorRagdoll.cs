@@ -141,7 +141,7 @@ internal sealed class AnimatorRagdoll
             go.Transform.Rotation = source.Rotation;
             puppetBones[bone] = go.Transform;
         }
-        var settings = new RagdollBuilder.Settings { TotalMass = totalMass, HandsAndFeet = handsAndFeet, Avatar = _animator.Avatar.Res };
+        var settings = new RagdollBuilder.Settings { TotalMass = totalMass, HandsAndFeet = handsAndFeet, Avatar = _animator.Avatar };
         Dictionary<HumanBodyBone, Rigidbody3D> bodies = RagdollBuilder.Build(_animator.Transform, puppetBones, settings);
 
         var parts = new List<Part>(bodies.Count);

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
@@ -12,12 +13,38 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
 
-[CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
+/// <summary>
+/// A live world of GameObjects. Its stored form is a <see cref="SceneAsset"/>, and any number of scenes can be
+/// instantiated from one, like the editor's edit copy and play copy.
+/// </summary>
 public class Scene : EngineObject, ISerializationCallbackReceiver
 {
     #region Scene Manager
 
     private static Scene? _current;
+
+    // Weak, so a scene dropped without being disposed goes away with whatever it used rather than being walked forever.
+    private static readonly List<WeakReference<Scene>> s_live = [];
+
+    /// <summary>Every scene not yet disposed: the current one, one waiting to load, previews and prefab editing.</summary>
+    internal static Scene[] Live
+    {
+        get
+        {
+            lock (s_live)
+            {
+                var live = new List<Scene>(s_live.Count);
+                for (int i = s_live.Count - 1; i >= 0; i--)
+                {
+                    if (s_live[i].TryGetTarget(out Scene? scene)) live.Add(scene);
+                    else s_live.RemoveAt(i);
+                }
+                return [.. live];
+            }
+        }
+    }
+
+    internal static IReadOnlyList<GameObject> Preserved => _preserved;
 
     /// <summary>
     /// The currently active scene. There is always one: reading this before anything has been loaded
@@ -56,8 +83,56 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (scene == null)
             throw new ArgumentNullException(nameof(scene));
 
+        _pendingLoad?.Cancel();
+        _pendingLoad = null;
+        DropPendingScene(except: scene);
         _pendingScene = scene;
     }
+
+    // A scene queued and then replaced before it became current belongs to nobody, and would stay live.
+    private static void DropPendingScene(Scene? except)
+    {
+        Scene? dropped = _pendingScene;
+        _pendingScene = null;
+        if (dropped.IsValid() && !ReferenceEquals(dropped, except) && !ReferenceEquals(dropped, _current))
+            dropped!.Dispose();
+    }
+
+    /// <summary>Loads a stored scene and everything it uses, blocking, and makes it current at the end of the frame.</summary>
+    public static void Load(SceneAsset asset)
+    {
+        using AssetGroup preload = AssetDatabase.Preload(asset);
+        preload.Wait();
+        Load(Instantiate(asset));
+    }
+
+    /// <summary>
+    /// Loads a stored scene and everything it uses in the background while the current scene keeps running, and
+    /// makes it current at the end of the frame the loading finishes on. A second load cancels this one.
+    /// </summary>
+    public static SceneLoad LoadAsync(SceneAsset asset)
+    {
+        _pendingLoad?.Cancel();
+        DropPendingScene(except: null);
+        _pendingLoad = new SceneLoad(asset);
+        return _pendingLoad;
+    }
+
+    private static SceneLoad? _pendingLoad;
+
+    /// <summary>Builds a live scene from a stored one, without making it current.</summary>
+    public static Scene Instantiate(SceneAsset asset)
+    {
+        asset.Load();
+        Scene? scene = asset.Data is { } data ? Serializer.Deserialize<Scene>(data) : null;
+        if (scene is null) scene = new Scene();
+        scene.Name = asset.Name;
+        scene.Source = asset;
+        return scene;
+    }
+
+    /// <summary>The stored scene this one was instantiated from, if any. Not held, since a live scene no longer needs its stored form.</summary>
+    [NonSerialized, NotHeld] public SceneAsset? Source;
 
     private static readonly List<GameObject> _preserved = [];
 
@@ -137,6 +212,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static void ProcessPendingLoad()
     {
+        if (_pendingLoad is { IsReady: true } ready)
+        {
+            _pendingLoad = null;
+            _pendingScene = ready.Activate();
+        }
         if (_pendingScene is null) return;
 
         Scene next = _pendingScene;
@@ -158,6 +238,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (ReferenceEquals(go.Scene, _current))
                 _current!.Detach(go);
 
+        // Everything the incoming scene uses is loaded before any of it enables, so OnEnable never sees an asset still loading.
+        AssetDatabase.LoadEverythingReached();
+
         if (_current is not null && !_current.IsDisposed)
         {
             if (_current.IsActive)
@@ -171,6 +254,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         foreach (GameObject go in _preserved)
             _current.Attach(go);
 
+        // Assets only the outgoing scene used are unreached from here, and go once the grace period is over.
+        AssetDatabase.Walk();
+
         OnSceneLoaded?.Invoke();
     }
 
@@ -181,6 +267,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     internal static void Shutdown()
     {
         _pendingScene = null;
+        _pendingLoad?.Cancel();
+        _pendingLoad = null;
 
         DestroyPreserved(immediate: true);
 
@@ -198,7 +286,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     #endregion
 
-    [SerializeField]
+    // Staging for a save or load only. The live objects are in _allObj.
+    [SerializeField, NotHeld]
     private GameObject[] serializeObj = null;
 
     [SerializeIgnore]
@@ -206,12 +295,15 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore]
     private HashSet<GameObject> _allObjSet = new(ReferenceEqualityComparer.Instance);
 
+    // The worlds below only index the scene's own components, which the walk reaches through _allObj.
+    [NotHeld]
     private PhysicsWorld _physics = new();
 
     public PhysicsWorld Physics { get { EnsureNotDisposed(); return _physics; } }
 
-    [SerializeIgnore]
+    [SerializeIgnore, NotHeld]
     private readonly NavMeshWorld _navigation = new();
+    [NotHeld]
     private readonly SceneAnimation _animation = new();
 
     /// <summary>This scene's navigation state (registered navmeshes, queries, crowd).</summary>
@@ -220,7 +312,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>Every animator in the scene, advanced once per frame in its own phase.</summary>
     public SceneAnimation Animation { get { EnsureNotDisposed(); return _animation; } }
 
-    [SerializeIgnore]
+    // Rebuilds lazily, so it can still list removed components.
+    [SerializeIgnore, NotHeld]
     private readonly SceneDispatcher _dispatcher = new();
 
     /// <summary>The scene's dispatch point for per-frame component callbacks and physics events.</summary>
@@ -322,7 +415,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public Color GradientTop = new(0.4f, 0.6f, 0.9f, 1f);
         public Color GradientBottom = new(0.8f, 0.8f, 0.7f, 1f);
         public float GradientExponent = 1f;
-        public AssetRef<Resources.Material> CustomMaterial;
+        public Resources.Material? CustomMaterial;
 
         public SkyboxParams() { }
     }
@@ -342,7 +435,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public sealed class BakedLightingData
     {
         /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
-        public List<AssetRef<Texture2D>> Lightmaps = new();
+        public List<Texture2D> Lightmaps = new();
 
         /// <summary>
         /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
@@ -466,6 +559,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public Scene()
     {
+        lock (s_live) s_live.Add(new WeakReference<Scene>(this));
     }
 
     /// <summary>
@@ -813,8 +907,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (ReferenceEquals(_current, this))
             _current = null;
 
-        // Scene-scoped locks auto-expire with the scene rather than leaking forever.
-        AssetDatabase.ReleaseSceneLocks(this);
+        lock (s_live) s_live.RemoveAll(entry => !entry.TryGetTarget(out Scene? scene) || ReferenceEquals(scene, this));
 
         // Clear the physics world
         _physics.Clear();
@@ -863,6 +956,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         foreach (GameObject obj in serializeObj)
             if (obj != null) Add(obj);
+        serializeObj = null;
     }
 
     /// <summary>
@@ -1016,4 +1110,74 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         return true;
     }
 
+}
+
+/// <summary>
+/// A scene as stored in a .scene file. Holding one keeps only its stored data loaded, not what the scene uses:
+/// <see cref="Scene.Load(SceneAsset)"/> and <see cref="AssetDatabase.Preload"/> load that.
+/// </summary>
+public sealed class SceneAsset : Asset
+{
+    [SerializeField] private EchoObject? _data;
+
+    /// <summary>The stored scene, a serialized <see cref="Scene"/>.</summary>
+    public EchoObject? Data
+    {
+        get { EnsureLoaded(); return _data; }
+        set { EnsureLoaded(); _data = value; }
+    }
+
+    /// <summary>Every asset the stored scene names, loaded or not.</summary>
+    public IReadOnlyList<Asset> ReferencedAssets
+    {
+        get { EnsureLoaded(); return StoredTree.ReferencedAssets(_data); }
+    }
+
+    // A stored scene is an Echo tree, which in memory takes several times what its file does.
+    protected internal override long EstimateBytes() => Math.Max(256 * 1024, (AssetDatabase.Backend?.GetEstimatedSize(AssetID) ?? 0) * 4);
+}
+
+/// <summary>A stored scene loading in the background, made current at the end of the frame it finishes on.</summary>
+public sealed class SceneLoad
+{
+    private readonly SceneAsset _asset;
+    private readonly AssetGroup _group;
+    private readonly TaskCompletionSource<Scene?> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private bool _allowed = true;
+
+    internal SceneLoad(SceneAsset asset)
+    {
+        _asset = asset;
+        _group = AssetDatabase.Preload(asset);
+    }
+
+    public float Progress => _group.Progress;
+    public bool IsDone => _completion.Task.IsCompleted;
+    public Scene? Scene { get; private set; }
+    public System.Runtime.CompilerServices.TaskAwaiter<Scene?> GetAwaiter() => _completion.Task.GetAwaiter();
+
+    /// <summary>Keeps a finished load waiting until <see cref="Allow"/>, for a "press any key" screen.</summary>
+    public bool WaitForActivation
+    {
+        get => !_allowed;
+        set => _allowed = !value;
+    }
+
+    public void Allow() => _allowed = true;
+
+    internal bool IsReady => _allowed && _group.IsDone;
+
+    internal Scene Activate()
+    {
+        Scene = Scene.Instantiate(_asset);
+        _group.Dispose();
+        _completion.TrySetResult(Scene);
+        return Scene;
+    }
+
+    internal void Cancel()
+    {
+        _group.Dispose();
+        _completion.TrySetResult(null);
+    }
 }

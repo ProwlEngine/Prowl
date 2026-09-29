@@ -47,8 +47,6 @@ public static class DefaultModels
         if (importResult.RootGO != null)
             result.GameObjectData = Serializer.Serialize(typeof(object), importResult.RootGO);
 
-        result.AssetPath = $"$Default:{model}";
-        result.AssetID = BuiltInAssets.GuidFor(model);
         return result;
     }
 }

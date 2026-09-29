@@ -25,7 +25,7 @@ public enum AvatarRigType
 /// A rig: the skeleton a model was authored with, plus an optional humanoid mapping. The Motion avatar
 /// is built from them on first use.
 /// </summary>
-public sealed class Avatar : EngineObject, ISerializable
+public sealed class Avatar : Asset, ISerializable
 {
     private MotionSkeleton? _skeleton;
     private HumanDescription? _description;
@@ -38,15 +38,15 @@ public sealed class Avatar : EngineObject, ISerializable
     public Avatar() : base("Avatar") { }
 
     /// <summary>The skeleton the rig describes.</summary>
-    public MotionSkeleton? Skeleton { get { EnsureNotDisposed(); return _skeleton; } }
+    public MotionSkeleton? Skeleton { get { EnsureLoaded(); return _skeleton; } }
 
-    public AvatarRigType RigType { get { EnsureNotDisposed(); return _rigType; } }
+    public AvatarRigType RigType { get { EnsureLoaded(); return _rigType; } }
 
     /// <summary>The bone the rig hangs from, which root motion is measured against.</summary>
-    public int RootBoneIndex { get { EnsureNotDisposed(); return _rootBoneIndex; } }
+    public int RootBoneIndex { get { EnsureLoaded(); return _rootBoneIndex; } }
 
     /// <summary>The human body mapping, or null on a generic rig. Call <see cref="Invalidate"/> after editing it.</summary>
-    public HumanDescription? Description { get { EnsureNotDisposed(); return _description; } }
+    public HumanDescription? Description { get { EnsureLoaded(); return _description; } }
 
     /// <summary>True once a humanoid rig has mapped successfully.</summary>
     public bool IsHuman => Runtime is { IsHuman: true };
@@ -56,7 +56,7 @@ public sealed class Avatar : EngineObject, ISerializable
     {
         get
         {
-            EnsureNotDisposed();
+            EnsureLoaded();
             if (_runtime != null || _skeleton == null || _buildFailed)
                 return _runtime;
 
@@ -87,7 +87,7 @@ public sealed class Avatar : EngineObject, ISerializable
     }
 
     /// <summary>Drops the built avatar so the next use rebuilds it from the current description.</summary>
-    public void Invalidate() { EnsureNotDisposed(); _runtime = null; _buildFailed = false; }
+    public void Invalidate() { EnsureLoaded(); _runtime = null; _buildFailed = false; }
 
     public static Avatar CreateGeneric(MotionSkeleton skeleton, int rootBoneIndex = 0, string? name = null)
     {

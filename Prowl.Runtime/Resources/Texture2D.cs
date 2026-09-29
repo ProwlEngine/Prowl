@@ -19,10 +19,10 @@ public sealed class Texture2D : Texture, ISerializable
     private uint _height;
 
     /// <summary>The width of this <see cref="Texture2D"/>.</summary>
-    public uint Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
+    public uint Width { get { EnsureLoaded(); return _width; } private set => _width = value; }
 
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
-    public uint Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
+    public uint Height { get { EnsureLoaded(); return _height; } private set => _height = value; }
 
     public Texture2D() : base(TextureType.Texture2D, TextureImageFormat.Color4b) { }
 
@@ -56,7 +56,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
     public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
         Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
@@ -73,7 +73,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
     public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
         ValidateByteCapacity(data.Length * sizeof(T), (long)rectWidth * rectHeight * GetBytesPerPixel(ImageFormat), nameof(data));
 
@@ -88,7 +88,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         SetData(data, 0, 0, Width, Height);
     }
 
@@ -98,7 +98,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="ptr">The pointer to which the pixel data will be written.</param>
     public unsafe void GetDataPtr(void* ptr)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         Graphics.GetTexImage(Handle, 0, ptr);
     }
 
@@ -109,7 +109,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
 
         fixed (void* ptr = data.Span)
@@ -119,7 +119,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>Bytes needed to hold this texture's full image, and so the size of a readback buffer.</summary>
     public int GetSize()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         return (int)Width * (int)Height * GetBytesPerPixel(ImageFormat);
     }
 
@@ -130,7 +130,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
     public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         Graphics.SetWrapS(Handle, sWrapMode);
         Graphics.SetWrapT(Handle, tWrapMode);
         // One field tracks both axes (every caller passes the same mode for each). Without this the
@@ -143,7 +143,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <c>sampler2DShadow</c> uniform performs the depth test in fixed-function hardware.
     /// Pair with LINEAR filtering for free 2x2 PCF.
     /// </summary>
-    public void SetDepthCompareMode(bool enabled) { EnsureNotDisposed(); Graphics.SetTextureCompareMode(Handle, enabled); }
+    public void SetDepthCompareMode(bool enabled) { EnsureLoaded(); Graphics.SetTextureCompareMode(Handle, enabled); }
 
     /// <summary>
     /// Recreates this <see cref="Texture2D"/>'s image with a new size,
@@ -153,7 +153,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="height">The new height for the <see cref="Texture2D"/>.</param>
     public unsafe void RecreateImage(uint width, uint height)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateTextureSize(width, height);
 
         Width = width;
@@ -201,6 +201,9 @@ public sealed class Texture2D : Texture, ISerializable
             throw new ArgumentOutOfRangeException("Specified area is outside of the texture's storage");
     }
 
+    protected internal override long EstimateBytes()
+        => (long)(_width * _height * (ulong)GetBytesPerPixel(ImageFormatUnchecked) * (IsMipmappedUnchecked ? 4.0 / 3.0 : 1.0));
+
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
         SerializeHeader(compoundTag);
@@ -226,8 +229,6 @@ public sealed class Texture2D : Texture, ISerializable
         var magFilter = (TextureMag)value["MagFilter"].IntValue;
         var wrap = (TextureWrap)value["Wrap"].IntValue;
 
-        // Take on the stored format and size in place. The serializer already ran a constructor to make
-        // this instance, so running another one over it would leak that constructor's GPU handle.
         AdoptImageFormat(imageFormat);
         RecreateImage(width, height);
 
@@ -324,9 +325,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public static Texture2D LoadFromFile(string filePath, bool generateMipmaps = false)
     {
-        Texture2D texture = FromFile(filePath, generateMipmaps);
-        texture.AssetPath = filePath;
-        return texture;
+        return FromFile(filePath, generateMipmaps);
     }
 
     /// <summary>
@@ -342,12 +341,10 @@ public sealed class Texture2D : Texture, ISerializable
     /// texture across the whole app callers that need a unique mutable copy should
     /// call <see cref="FromImage"/>/<see cref="FromStream"/> directly.
     /// </summary>
-    public static Texture2D LoadDefault(DefaultTexture texture)
-    {
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(texture)) is Texture2D cached)
-            return cached;
-        return ParseDefault(texture);
-    }
+    public static Texture2D LoadDefault(DefaultTexture texture) => BuiltInAssets.Load<Texture2D>(BuiltInAssets.GuidFor(texture));
+
+    /// <summary>The built-in texture without loading it, for code that runs while another asset loads.</summary>
+    internal static Texture2D GetDefault(DefaultTexture texture) => AssetDatabase.Get<Texture2D>(BuiltInAssets.GuidFor(texture))!;
 
     /// <summary>
     /// Raw load of a default embedded texture invoked by <see cref="BuiltInAssets"/>
@@ -374,7 +371,6 @@ public sealed class Texture2D : Texture, ISerializable
         string resourcePath = $"Assets/Defaults/{fileName}";
         using Stream stream = EmbeddedResources.GetStream(resourcePath);
         return FromStream(stream, true);
-        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
     }
 
     internal const string ImageNotContiguousError = "To load/save an image, it's backing memory must be contiguous. Consider using smaller image sizes or changing your ImageSharp memory allocation settings to allow larger buffers.";

@@ -24,10 +24,10 @@ public static class ThumbnailGenerator
     private static readonly Queue<ThumbnailJob> _queue = new();
     private static readonly HashSet<Guid> _queued = new();
 
-    private struct ThumbnailJob
+    private sealed class ThumbnailJob
     {
         public Guid Guid;
-        public EngineObject Asset;
+        public Asset Asset;
         public string? SourceFilePath;
         // Stopwatch timestamp when this job first started waiting on dependencies (0 = not waiting yet).
         public long FirstWaitTimestamp;
@@ -40,7 +40,7 @@ public static class ThumbnailGenerator
     private const double MaxDependencyWaitSeconds = 10.0;
 
     /// <summary> Queues a thumbnail generation job for the given asset. No-op if the guid is empty, the asset is null, the guid is already queued, or a thumbnail file already exists on disk. </summary>
-    public static void Enqueue(Guid guid, EngineObject asset, string? sourceFilePath = null)
+    public static void Enqueue(Guid guid, Asset asset, string? sourceFilePath = null)
     {
         if (guid == Guid.Empty || asset == null) return;
         if (_queued.Contains(guid)) return;
@@ -50,8 +50,11 @@ public static class ThumbnailGenerator
 
         if (File.Exists(GetThumbnailPath(guid, db.ThumbnailsPath))) return;
 
+        // The job holds what it renders until it is done, since nothing else may.
+        var job = new ThumbnailJob { Guid = guid, Asset = asset, SourceFilePath = sourceFilePath };
+        AssetDatabase.Hold(asset, job);
         _queued.Add(guid);
-        _queue.Enqueue(new ThumbnailJob { Guid = guid, Asset = asset, SourceFilePath = sourceFilePath });
+        _queue.Enqueue(job);
     }
 
     /// <summary> Processes one queued thumbnail job. Waits for asset dependencies to load (up to a time budget), generates the thumbnail via the appropriate generator, and writes it to disk. Call once per frame. </summary>
@@ -65,8 +68,11 @@ public static class ThumbnailGenerator
         var job = _queue.Dequeue();
         _queued.Remove(job.Guid);
 
-        if (job.Asset.IsDisposed) return;
-        if (File.Exists(GetThumbnailPath(job.Guid, db.ThumbnailsPath))) return;
+        if (job.Asset.IsDisposed || File.Exists(GetThumbnailPath(job.Guid, db.ThumbnailsPath)))
+        {
+            AssetDatabase.ReleaseAll(job);
+            return;
+        }
 
         // A thumbnail is a one-shot render + readback. With async asset loading on, the asset's
         // dependencies (a material's shader/textures, a model's materials, etc.) may not be loaded
@@ -74,7 +80,7 @@ public static class ThumbnailGenerator
         // request the missing ones in the background and re-queue this job for a later frame; only
         // render once everything is cached (its GPU create/upload commands are then already queued
         // ahead of the preview draw). Give up after a time budget so a broken dependency can't loop forever.
-        if (!RequestDependencies(db, job.Guid))
+        if (!RequestDependencies(db, job))
         {
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
             if (job.FirstWaitTimestamp == 0) job.FirstWaitTimestamp = now;
@@ -99,6 +105,7 @@ public static class ThumbnailGenerator
         {
             Debug.LogWarning($"Thumbnail generation failed for {job.Guid}: {ex.Message}");
         }
+        AssetDatabase.ReleaseAll(job);
 
         if (pixels != null && pixels.Length > 0)
         {
@@ -123,23 +130,21 @@ public static class ThumbnailGenerator
     /// Returns true when every asset in the thumbnail subject's forward dependency closure is
     /// already loaded. For any that aren't, kicks off a background load. Non-blocking.
     /// </summary>
-    private static bool RequestDependencies(EditorAssetBackend db, Guid guid)
+    private static bool RequestDependencies(EditorAssetBackend db, ThumbnailJob job)
     {
         bool ready = true;
         try
         {
-            foreach (var dep in db.Dependencies.GetTransitiveDependencies(new[] { guid }))
+            foreach (var dep in db.Dependencies.GetTransitiveDependencies(new[] { job.Guid }))
             {
-                if (AssetDatabase.GetCached(dep) == null)
-                {
-                    AssetLoader.Request(dep);
-                    ready = false;
-                }
+                if (AssetDatabase.Get(dep) is not { } asset) continue;
+                AssetDatabase.Hold(asset, job);
+                if (asset.State is AssetState.Unloaded or AssetState.Loading) ready = false;
             }
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"Thumbnail dependency check failed for {guid}: {ex.Message}");
+            Debug.LogWarning($"Thumbnail dependency check failed for {job.Guid}: {ex.Message}");
         }
         return ready;
     }
@@ -264,7 +269,7 @@ public static class ThumbnailGenerator
     {
         try
         {
-            var tex = sprite.Texture.Res;
+            var tex = sprite.Texture;
             if (tex == null) return null;
             int tw = (int)tex.Width, th = (int)tex.Height;
             if (tw <= 0 || th <= 0) return null;

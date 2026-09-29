@@ -13,7 +13,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Resources;
 
 [CreateAssetMenu("Material", Extension = ".mat", Order = 1)]
-public sealed class Material : EngineObject, ISerializationCallbackReceiver
+public sealed class Material : Asset, ISerializationCallbackReceiver
 {
     private static Shader s_defaultShader;
 
@@ -39,16 +39,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// is only deserialized once, but the returned instance is always yours to own.
     /// </summary>
     public static Material LoadDefault(DefaultMaterial material)
-    {
-        // Pull the shared template from the cache, then clone. Clone is a cheap deep-copy
-        // of the property dictionaries + a shared shader reference materials are
-        // configuration objects, not heavy resources.
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(material)) is Material template)
-            return new Material(template);
-        // Fallback if BuiltInAssets isn't initialized ParseDefault already returns a
-        // fresh instance, no clone needed.
-        return ParseDefault(material);
-    }
+        => new(BuiltInAssets.Load<Material>(BuiltInAssets.GuidFor(material)));
 
     /// <summary>
     /// Raw deserialize of a default embedded material invoked by <see cref="BuiltInAssets"/>
@@ -70,26 +61,21 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         using var reader = new StreamReader(stream);
         string text = reader.ReadToEnd();
         var echo = EchoObject.ReadFromString(text);
-        var mat = Serializer.Deserialize<Material>(echo);
-        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
-        return mat;
+        return Serializer.Deserialize<Material>(echo);
     }
 
     [SerializeField]
-    private AssetRef<Shader> _shader;
+    private Shader? _shader;
 
+    /// <summary>The material's shader. One that was never set, or is missing or failed to load, is the built-in Standard shader.</summary>
     public Shader? Shader
     {
-        get { EnsureNotDisposed(); return _shader.Res; }
-        set { EnsureNotDisposed(); SetShader(value); }
-    }
-
-    /// <summary>The shader as an <see cref="AssetRef{Shader}"/>, for asset-reference editing.
-    /// A material must always have a shader, so assigning an empty ref is ignored.</summary>
-    public AssetRef<Shader> ShaderRef
-    {
-        get { EnsureNotDisposed(); return _shader; }
-        set { EnsureNotDisposed(); if (value.Res != null) SetShader(value.Res); }
+        get
+        {
+            EnsureLoaded();
+            return _shader is { State: not (AssetState.Missing or AssetState.Failed) } shader ? shader : Shader.LoadDefault(DefaultShader.Standard);
+        }
+        set { EnsureLoaded(); SetShader(value); }
     }
 
     [SerializeField]
@@ -119,10 +105,6 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         _properties = new();
         _localKeywords = [];
-        // Default to Standard shader so new materials are immediately usable
-        var standard = Shader.LoadDefault(DefaultShader.Standard);
-        if (standard != null)
-            SetShader(standard);
     }
 
     public Material(Shader shader, PropertyState? properties = null, Dictionary<string, bool>? keywords = null) : base("New Material")
@@ -146,6 +128,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public Material(Material source) : base(source.IsValid() ? source.Name : "New Material")
     {
         ArgumentNullException.ThrowIfNull(source);
+        source.EnsureLoaded();
 
         _shader = source._shader;
         _properties = new PropertyState(source._properties);
@@ -153,25 +136,22 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
-    public Material Clone() { EnsureNotDisposed(); return new Material(this); }
+    public Material Clone() { EnsureLoaded(); return new Material(this); }
 
-    public void SetKeyword(string keyword, bool value) { EnsureNotDisposed(); _localKeywords[keyword] = value; }
+    public void SetKeyword(string keyword, bool value) { EnsureLoaded(); _localKeywords[keyword] = value; }
 
     // Every public Set marks the property as user-overridden so subsequent shader
     // default-refreshes won't stomp the user's value.
-    public void SetColor(string name, Color value)        { EnsureNotDisposed(); _overrides.Add(name); _properties.SetColor(name, value); MarkDirty(); }
-    public void SetVector(string name, Float2 value)      { EnsureNotDisposed(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float3 value)      { EnsureNotDisposed(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float4 value)      { EnsureNotDisposed(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetFloat(string name, float value)        { EnsureNotDisposed(); _overrides.Add(name); _properties.SetFloat(name, value); MarkDirty(); }
-    public void SetInt(string name, int value)            { EnsureNotDisposed(); _overrides.Add(name); _properties.SetInt(name, value); MarkDirty(); }
-    public void SetMatrix(string name, Float4x4 value)    { EnsureNotDisposed(); _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
-    public void SetTexture(string name, Texture2D value)  { EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture(string name, AssetRef<Texture2D> value) { EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture3D(string name, Texture3D value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
-    public void SetTexture3D(string name, AssetRef<Texture3D> value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
-    public void SetTextureCube(string name, Cubemap value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
-    public void SetTextureCube(string name, AssetRef<Cubemap> value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
+    public void SetColor(string name, Color value)        { EnsureLoaded(); _overrides.Add(name); _properties.SetColor(name, value); MarkDirty(); }
+    public void SetVector(string name, Float2 value)      { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetVector(string name, Float3 value)      { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetVector(string name, Float4 value)      { EnsureLoaded(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetFloat(string name, float value)        { EnsureLoaded(); _overrides.Add(name); _properties.SetFloat(name, value); MarkDirty(); }
+    public void SetInt(string name, int value)            { EnsureLoaded(); _overrides.Add(name); _properties.SetInt(name, value); MarkDirty(); }
+    public void SetMatrix(string name, Float4x4 value)    { EnsureLoaded(); _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
+    public void SetTexture(string name, Texture2D value)  { EnsureLoaded(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
+    public void SetTexture3D(string name, Texture3D value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+    public void SetTextureCube(string name, Cubemap value){ EnsureLoaded(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
 
     /// <summary>Forget the user override for <paramref name="name"/> next sync
     /// will refill it from the shader's current default. Useful for an inspector
@@ -185,7 +165,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// </remarks>
     public void RevertProperty(string name)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         _overrides.Remove(name);
         _properties?.RemoveProperty(name);
         MarkDirty();
@@ -193,7 +173,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     /// <summary>True if the user has explicitly set this property (vs holding the
     /// shader's default value). Inspector uses this to highlight overridden fields.</summary>
-    public bool IsOverridden(string name) { EnsureNotDisposed(); return _overrides.Contains(name); }
+    public bool IsOverridden(string name) { EnsureLoaded(); return _overrides.Contains(name); }
 
     #region Global Properties
 
@@ -256,10 +236,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         ArgumentNullException.ThrowIfNull(shader);
 
-        if (shader == _shader.Res)
+        if (shader == _shader)
             return;
 
-        _shader = new AssetRef<Shader>(shader);
+        _shader = shader;
         // Intentionally do NOT pre-fill _properties with shader defaults defaults
         // are read live from the shader at access time (see DrawShaderProperty
         // fallback + ApplyMaterialUniformsWithDefaults). Pre-filling would mark
@@ -275,7 +255,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// <returns>A 64-bit hash of all material uniform values</returns>
     public ulong GetStateHash()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (_isDirty)
         {
             _stateHash = _properties.ComputeHash();
@@ -321,8 +301,8 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void SyncShaderDefaults()
     {
-        EnsureNotDisposed();
-        var shader = _shader.Res;
+        EnsureLoaded();
+        var shader = Shader;
         if (shader == null) return;
 
         foreach (ShaderProperty prop in shader.Properties)

@@ -69,9 +69,9 @@ public static class EditorSceneManager
         var scene = new Scene();
         scene.Name = "Untitled Scene";
 
-        var defaultMat = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
-        var cubeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Cube));
-        var planeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Plane));
+        var defaultMat = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
+        var cubeMesh = AssetDatabase.Get<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Cube));
+        var planeMesh = AssetDatabase.Get<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Plane));
 
         var camGo = new GameObject("Main Camera");
         camGo.Tag = "Main Camera";
@@ -123,6 +123,12 @@ public static class EditorSceneManager
         Debug.Log("Created default scene.");
     }
 
+    private static SceneAsset? SceneAssetAt(string relativePath)
+    {
+        Guid guid = EditorAssetBackend.Instance?.PathToGuid(relativePath) ?? Guid.Empty;
+        return guid == Guid.Empty ? null : AssetDatabase.Get<SceneAsset>(guid);
+    }
+
     /// <summary>
     /// Open a scene from a project-relative path.
     /// </summary>
@@ -154,6 +160,7 @@ public static class EditorSceneManager
             }
 
             scene.Name = Path.GetFileNameWithoutExtension(relativePath);
+            scene.Source = SceneAssetAt(relativePath);
             Scene.Load(scene);
             CurrentScenePath = relativePath;
             IsDirty = false;
@@ -265,8 +272,9 @@ public static class EditorSceneManager
 
             File.WriteAllText(absolutePath, echo.WriteToString());
 
-            // Ensure .meta exists
-            MetaFile.EnsureMeta(absolutePath, "SceneImporter");
+            // The stored scene takes what was written, so a build or a Scene.Load of it sees this save.
+            Guid guid = EditorAssetBackend.Instance?.ImportFile(relativePath) ?? Guid.Empty;
+            if (guid != Guid.Empty) Scene.Current.Source = AssetDatabase.Get<SceneAsset>(guid);
 
             Scene.Current.Name = Path.GetFileNameWithoutExtension(relativePath);
             IsDirty = false;

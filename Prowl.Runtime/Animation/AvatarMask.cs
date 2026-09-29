@@ -15,7 +15,7 @@ namespace Prowl.Runtime;
 /// every rig that shares those names.
 /// </summary>
 [CreateAssetMenu("Avatar Mask", Extension = ".mask", Order = 1200)]
-public sealed class AvatarMask : EngineObject
+public sealed class AvatarMask : Asset
 {
     /// <summary>One bone and how much of the layer reaches it.</summary>
     [Serializable]
@@ -58,7 +58,7 @@ public sealed class AvatarMask : EngineObject
     public BoneMask GetBoneMask(MotionSkeleton skeleton)
     {
         ArgumentNullException.ThrowIfNull(skeleton);
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (_cached != null && ReferenceEquals(_cachedFor, skeleton))
             return _cached;
 
@@ -87,7 +87,7 @@ public sealed class AvatarMask : EngineObject
     /// <summary>The muscle space mask this describes, for a layer that blends through the human body.</summary>
     public HumanPoseMask GetHumanMask()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (_cachedHuman != null)
             return _cachedHuman;
 
@@ -108,7 +108,7 @@ public sealed class AvatarMask : EngineObject
     }
 
     /// <summary>Drops the built masks so the next use rebuilds them.</summary>
-    public void Invalidate() { EnsureNotDisposed(); _cached = null; _cachedFor = null; _cachedHuman = null; }
+    public void Invalidate() { EnsureLoaded(); _cached = null; _cachedFor = null; _cachedHuman = null; }
 
     private static void WeighDescendants(MotionSkeleton skeleton, BoneMask mask, int bone, float weight)
     {

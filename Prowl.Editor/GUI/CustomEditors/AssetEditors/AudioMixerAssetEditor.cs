@@ -64,30 +64,22 @@ public class AudioMixerAssetEditor : AssetImporterEditor
     protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
         => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
 
-    /// <summary>Serializes the mixer the way its file is written: AssetID cleared, so the whole object
-    /// is emitted rather than an $assetId reference back to itself.</summary>
-    private static EchoObject SerializePersisted(AudioMixer mixer)
-    {
-        Guid savedId = mixer.AssetID;
-        mixer.AssetID = Guid.Empty;
-        try { return Serializer.Serialize(typeof(object), mixer); }
-        finally { mixer.AssetID = savedId; }
-    }
+    /// <summary>Serializes the mixer the way its import cache holds it, its groups by reference, so it compares against the cache.</summary>
+    private static EchoObject SerializePersisted(AudioMixer mixer) => Serializer.Serialize(typeof(object), mixer);
 
     protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
     {
         if (asset is not AudioMixer mixer || mixer.IsNotValid()) return false;
-        return EditorAssetBackend.Instance?.SaveAsset(entry.Guid, SerializePersisted(mixer)) ?? false;
+        var db = EditorAssetBackend.Instance;
+        return db != null && db.SerializeForSave(mixer) is { } serialized && db.SaveAsset(entry.Guid, serialized);
     }
 
     protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
     {
         if (asset is not AudioMixer mixer || mixer.IsNotValid()) return;
 
-        // Restored onto the live instance, so every source already pointing at one of its groups keeps
-        // pointing at the same object and hears the revert immediately.
-        mixer.ReleaseNative();
-        Serializer.DeserializeInto(baseline, mixer);
+        // Refilled in place, groups too, so every source already routed to one hears the revert immediately.
+        EditorAssetBackend.Instance?.RevertToSaved(mixer);
     }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)

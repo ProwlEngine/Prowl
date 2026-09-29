@@ -33,7 +33,7 @@ internal class TerrainTreeRenderer
         for (int protoIdx = 0; protoIdx < data.TreePrototypes.Count; protoIdx++)
         {
             var proto = data.TreePrototypes[protoIdx];
-            var mesh = proto.Mesh.Res;
+            var mesh = proto.Mesh;
             if (mesh == null) continue;
 
             if (s_defaultStandardMat.IsNotValid()) s_defaultStandardMat = Material.LoadDefault(DefaultMaterial.Standard);
@@ -91,7 +91,7 @@ internal class TerrainTreeRenderer
             for (int sub = 0; sub < subMeshCount; sub++)
             {
                 Material? mat = null;
-                if (sub < proto.Materials.Count) mat = CollectionsMarshal.AsSpan(proto.Materials)[sub].Res;
+                if (sub < proto.Materials.Count) mat = proto.Materials[sub];
                 if (mat.IsNotValid()) mat = s_defaultStandardMat;
                 if (mat == null) continue;
 

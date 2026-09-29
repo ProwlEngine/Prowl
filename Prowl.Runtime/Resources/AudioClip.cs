@@ -16,7 +16,7 @@ namespace Prowl.Runtime.Resources;
 /// <summary>
 /// Represents audio data that can be played back or streamed by an AudioSource. Supported file types are WAV/MP3/FlAC/OGG.
 /// </summary>
-public sealed class AudioClip : EngineObject, ISerializable
+public sealed class AudioClip : Asset, ISerializable
 {
     private string filePath;
     private string clipName;
@@ -39,7 +39,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public string FilePath
     {
-        get { EnsureNotDisposed(); return filePath; }
+        get { EnsureLoaded(); return filePath; }
     }
 
     /// <summary>
@@ -48,8 +48,8 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public string ClipName
     {
-        get { EnsureNotDisposed(); return clipName; }
-        set { EnsureNotDisposed(); clipName = value; }
+        get { EnsureLoaded(); return clipName; }
+        set { EnsureLoaded(); clipName = value; }
     }
 
     /// <summary>
@@ -58,7 +58,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public bool StreamFromDisk
     {
-        get { EnsureNotDisposed(); return streamFromDisk; }
+        get { EnsureLoaded(); return streamFromDisk; }
     }
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public IntPtr Handle
     {
-        get { EnsureNotDisposed(); return handle; }
+        get { EnsureLoaded(); return handle; }
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public UInt64 Hash
     {
-        get { EnsureNotDisposed(); return hashCode; }
+        get { EnsureLoaded(); return hashCode; }
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     {
         get
         {
-            EnsureNotDisposed();
+            EnsureLoaded();
             if(handle != IntPtr.Zero)
             {
                 return dataSize;
@@ -116,8 +116,6 @@ public sealed class AudioClip : EngineObject, ISerializable
     {
         if(!System.IO.File.Exists(filePath))
             throw new System.IO.FileNotFoundException("Can't create AudioClip because the file does not exist: " + filePath);
-
-        this.AssetPath = filePath;
 
         this.filePath = filePath;
         this.clipName = filePath;
@@ -202,19 +200,19 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <summary>Channel count of the decoded audio, 0 if it cannot be decoded.</summary>
     public int Channels
     {
-        get { EnsureNotDisposed(); EnsureInfo(); return channels; }
+        get { EnsureLoaded(); EnsureInfo(); return channels; }
     }
 
     /// <summary>Sample rate of the decoded audio in hertz, 0 if it cannot be decoded.</summary>
     public int SampleRate
     {
-        get { EnsureNotDisposed(); EnsureInfo(); return sampleRate; }
+        get { EnsureLoaded(); EnsureInfo(); return sampleRate; }
     }
 
     /// <summary>Length in sample frames. One frame holds one sample for each channel.</summary>
     public UInt64 SampleCount
     {
-        get { EnsureNotDisposed(); EnsureInfo(); return frameCount; }
+        get { EnsureLoaded(); EnsureInfo(); return frameCount; }
     }
 
     /// <summary>Length in seconds, 0 if the clip cannot be decoded.</summary>
@@ -222,7 +220,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     {
         get
         {
-            EnsureNotDisposed();
+            EnsureLoaded();
             EnsureInfo();
             return sampleRate > 0 ? (float)(frameCount / (double)sampleRate) : 0.0f;
         }
@@ -238,7 +236,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// </remarks>
     public float[] GetSampleData()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         IntPtr decoded = Decode(out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate);
 
@@ -385,7 +383,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <summary>The encoded bytes this clip plays from, as they are stored. Empty for a file backed clip.</summary>
     public byte[] GetEncodedData()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         if (handle == IntPtr.Zero || dataSize == 0)
             return [];
@@ -407,7 +405,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// </remarks>
     internal unsafe byte[] DecodeToWave(uint targetChannels, uint targetSampleRate)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         IntPtr decoded = Decode(targetChannels, targetSampleRate, out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate);
 
@@ -440,7 +438,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// </summary>
     internal void EnsureFormatLoaded()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         EnsureInfo();
     }
 
@@ -537,12 +535,17 @@ public sealed class AudioClip : EngineObject, ISerializable
 
     #endregion
 
-    protected override void OnDispose()
+    protected override void OnUnload()
     {
         ReleaseHandle();
     }
 
-    ~AudioClip() => Dispose();
+    protected internal override long EstimateBytes() => (long)DataSize;
+
+    ~AudioClip()
+    {
+        if (!Registered) Dispose();
+    }
 
     /// <summary>
     /// The key a shared buffer holding <paramref name="data"/> is held under.

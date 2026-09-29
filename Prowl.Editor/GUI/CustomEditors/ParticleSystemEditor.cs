@@ -50,8 +50,8 @@ public class ParticleSystemComponentEditor : CustomEditor
             .FontSize(EditorTheme.FontSize)
             .Alignment(TextAlignment.MiddleLeft);
 
-        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), ps.Material,
-            v => ps.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Runtime.Resources.Material), ps.Material,
+            v => ps.Material = v as Runtime.Resources.Material, 0);
 
         IntRow(paper, $"{id}_maxp", "Max Particles", ps.MaxParticles, v => ps.MaxParticles = Math.Max(1, v));
         FloatRow(paper, $"{id}_dur", "Duration", ps.Duration, v => ps.Duration = MathF.Max(0.1f, v));

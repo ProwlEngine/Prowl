@@ -2,173 +2,334 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Single dedicated background thread that deserializes assets off the main/render thread,
-/// so a scene can appear immediately while its meshes/textures stream in.
-///
-/// <para>Mirrors the render-thread design: one long-lived background thread draining a queue.
-/// Requests are de-duplicated and split into a High-priority queue (blocking
-/// <see cref="AssetRef{T}.EnsureLoaded"/> calls) drained before the Normal queue
-/// (fire-and-forget <see cref="AssetRef{T}.Res"/> resolves).</para>
-///
-/// <para>The actual deserialize runs via <see cref="AssetDatabase.Get"/> on this thread.
-/// GPU resources created during load are safe because <c>Graphics.Submit</c> is thread-safe
-/// and the render thread drains continuously.</para>
+/// Reads assets on one background thread into staging copies, and moves each copy into its stable object on the
+/// main thread at the start of a frame, so nothing ever sees an asset half filled. A blocking load reads on the
+/// calling thread instead and publishes at once.
 /// </summary>
-public static class AssetLoader
+internal static class AssetLoader
 {
-    private static readonly object _lock = new();
-    private static readonly Queue<Guid> _high = new();
-    private static readonly Queue<Guid> _normal = new();
-
-    // Ids currently queued or in-flight (dedup so an asset is only loaded once at a time).
-    private static readonly HashSet<Guid> _queued = new();
-
-    // Completion events for callers blocked in LoadBlocking, keyed by asset id.
-    private static readonly Dictionary<Guid, ManualResetEventSlim> _waiters = new();
-
-    // Counts pending items so the loop sleeps when idle instead of spinning.
-    private static readonly SemaphoreSlim _signal = new(0);
-
-    private static readonly object _startLock = new();
-    private static Thread? _thread;
-    private static volatile bool _running;
-
-    // True only on the loader thread itself. Lets LoadBlocking detect a re-entrant blocking
-    // load (e.g. a deserialize that calls EnsureLoaded on a dependency) and load it inline
-    // instead of enqueueing and waiting on the single loader thread which would deadlock.
-    [ThreadStatic] private static bool _isLoaderThread;
-
-    /// <summary>Queue a non-blocking background load. No-op if already cached/queued/in-flight.</summary>
-    public static void Request(Guid id)
+    internal sealed class Job
     {
-        if (id == Guid.Empty) return;
-        EnsureStarted();
-
-        lock (_lock)
-        {
-            if (!_queued.Add(id)) return; // already queued or in-flight
-            _normal.Enqueue(id);
-        }
-        _signal.Release();
+        public required Asset Asset;
+        public required int Generation;
+        public bool High;
+        public bool Started;
+        public bool Read;
+        public bool NeedsMainThread;
+        public bool Published;
+        public Asset? Staging;
+        public readonly ManualResetEventSlim ReadDone = new(false);
+        public readonly TaskCompletionSource Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    /// <summary>
-    /// Load <paramref name="id"/> with priority and block until it finishes, returning the
-    /// instance (or null if it couldn't be loaded). Used by <see cref="AssetRef{T}.EnsureLoaded"/>.
-    /// </summary>
-    public static EngineObject? LoadBlocking(Guid id)
+    private static readonly object s_lock = new();
+    private static readonly Dictionary<Asset, Job> s_jobs = new(ReferenceEqualityComparer.Instance);
+    private static readonly Queue<Job> s_high = new();
+    private static readonly Queue<Job> s_normal = new();
+    private static readonly ConcurrentQueue<Job> s_completed = new();
+    private static readonly ConcurrentQueue<Job> s_mainThread = new();
+    private static readonly SemaphoreSlim s_signal = new(0);
+
+    private static readonly object s_startLock = new();
+    private static Thread? s_thread;
+    private static volatile bool s_running;
+
+    [ThreadStatic] private static bool t_isLoaderThread;
+    private static int s_mainThreadId;
+
+    public static bool IsLoaderThread => t_isLoaderThread;
+
+    /// <summary>The main thread publishes loads. Until one is set every thread publishes its own.</summary>
+    public static void SetMainThread() => s_mainThreadId = Environment.CurrentManagedThreadId;
+
+    public static bool IsMainThread => s_mainThreadId == 0 || Environment.CurrentManagedThreadId == s_mainThreadId;
+
+    /// <summary>True while any load is queued, reading or waiting to publish.</summary>
+    public static bool IsBusy
     {
-        if (id == Guid.Empty) return null;
+        get { lock (s_lock) return s_jobs.Count > 0; }
+    }
 
-        // Fast path: already loaded.
-        var cached = AssetDatabase.GetCached(id);
-        if (cached != null) return cached;
+    public static bool IsInFlight(Asset asset)
+    {
+        lock (s_lock) return s_jobs.ContainsKey(asset);
+    }
 
-        // Re-entrant from the loader thread (a deserialize asked to block on a dependency):
-        // load inline on this thread. Enqueueing would wait on the only thread that drains.
-        if (_isLoaderThread)
-            return AssetDatabase.Get(id);
+    /// <summary>Queues a background load. Returns the job, or null when there is nothing to load.</summary>
+    public static Job? Request(Asset asset, bool high = false)
+    {
+        if (!NeedsLoading(asset, retryFailed: false)) return null;
+
+        Job job;
+        lock (s_lock)
+        {
+            if (!s_jobs.TryGetValue(asset, out job!))
+            {
+                job = new Job { Asset = asset, Generation = asset.ReadGeneration, High = high };
+                s_jobs[asset] = job;
+                asset.SetState(AssetState.Loading);
+                (high ? s_high : s_normal).Enqueue(job);
+            }
+            else if (high && !job.High && !job.Started)
+            {
+                job.High = true;
+                s_high.Enqueue(job);
+            }
+            else return job;
+        }
 
         EnsureStarted();
+        s_signal.Release();
+        return job;
+    }
 
-        ManualResetEventSlim ev;
-        bool enqueued = false;
-        lock (_lock)
+    /// <summary>Loads now: reads on this thread unless the loader already is, then publishes.</summary>
+    public static void LoadBlocking(Asset asset)
+    {
+        if (!NeedsLoading(asset, retryFailed: true)) return;
+        if (t_isLoaderThread)
         {
-            if (!_waiters.TryGetValue(id, out ev!))
+            Debug.LogError($"{asset.GetType().Name} '{asset.Name}' was loaded from inside another load. Loading never waits on other assets.");
+            return;
+        }
+        if (Graphics.IsRenderThread)
+        {
+            Debug.LogErrorOnce($"RenderThreadLoad.{asset.AssetID}", $"{asset.GetType().Name} '{asset.Name}' was loaded from the render thread, which only binds what is already loaded.");
+            Request(asset, high: true);
+            return;
+        }
+
+        Job job;
+        bool readHere;
+        lock (s_lock)
+        {
+            if (!s_jobs.TryGetValue(asset, out job!))
             {
-                ev = new ManualResetEventSlim(false);
-                _waiters[id] = ev;
+                job = new Job { Asset = asset, Generation = asset.ReadGeneration, High = true };
+                s_jobs[asset] = job;
             }
-            // Enqueue at high priority only if not already queued/in-flight. If it's already
-            // queued at normal priority we still wait on the same completion event.
-            if (_queued.Add(id))
+            asset.SetState(AssetState.Loading);
+            readHere = !job.Started;
+            job.Started = true;
+        }
+
+        if (readHere) Read(job);
+        else
+        {
+            job.ReadDone.Wait();
+            if (job.NeedsMainThread && IsMainThread)
             {
-                _high.Enqueue(id);
-                enqueued = true;
+                lock (job)
+                {
+                    if (!job.Read)
+                    {
+                        job.NeedsMainThread = false;
+                        Read(job);
+                    }
+                }
             }
         }
-        if (enqueued) _signal.Release();
 
-        ev.Wait();
-        return AssetDatabase.GetCached(id);
+        if (IsMainThread) Publish(job);
+        else
+        {
+            // Only the main thread publishes, so a read done here waits for the next Pump like the loader's do.
+            if (readHere && !job.NeedsMainThread) s_completed.Enqueue(job);
+            job.Completion.Task.Wait();
+        }
+    }
+
+    public static Task LoadAsync(Asset asset, CancellationToken cancel)
+    {
+        Job? job = Request(asset);
+        if (job == null) return Task.CompletedTask;
+        return cancel.CanBeCanceled ? job.Completion.Task.WaitAsync(cancel) : job.Completion.Task;
+    }
+
+    /// <summary>Drops a queued load nothing has started. A started load finishes and publishes as usual.</summary>
+    public static void Cancel(Asset asset)
+    {
+        lock (s_lock)
+        {
+            if (!s_jobs.TryGetValue(asset, out Job? job) || job.Started) return;
+            job.Started = true;
+            job.Published = true;
+            s_jobs.Remove(asset);
+            asset.SetState(AssetState.Unloaded);
+            job.Completion.TrySetCanceled();
+        }
+    }
+
+    /// <summary>Publishes every finished background load. Main thread, once at the start of each frame.</summary>
+    public static void Pump()
+    {
+        while (s_mainThread.TryDequeue(out Job? job))
+        {
+            lock (job)
+            {
+                if (!job.Read)
+                {
+                    job.NeedsMainThread = false;
+                    Read(job);
+                }
+            }
+            Publish(job);
+        }
+
+        while (s_completed.TryDequeue(out Job? job))
+            Publish(job);
+    }
+
+    private static bool NeedsLoading(Asset asset, bool retryFailed)
+        => asset.IsFromDatabase && !asset.IsDisposed
+           && (asset.State is AssetState.Unloaded or AssetState.Loading || (retryFailed && asset.State == AssetState.Failed));
+
+    private static void Read(Job job)
+    {
+        Asset asset = job.Asset;
+        try
+        {
+            bool onMain = !t_isLoaderThread && IsMainThread;
+            if (!onMain && AssetDatabase.NeedsMainThread(asset.AssetID))
+            {
+                job.NeedsMainThread = true;
+                s_mainThread.Enqueue(job);
+                return;
+            }
+
+            // Only the main thread imports. A cache that went stale since the check above is read as it is, and the
+            // reimport that follows reads it again.
+            Asset staging = AssetDatabase.CreateShell(asset.GetType());
+            if (AssetDatabase.ReadContent(asset.AssetID, staging, mayImport: onMain))
+                job.Staging = staging;
+
+            // An import on this thread happens before the read, so the read is current whatever the import refilled.
+            if (onMain) job.Generation = asset.ReadGeneration;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to load {asset.GetType().Name} '{asset.Name}' ({asset.AssetID}): {ex}");
+        }
+        finally
+        {
+            if (!job.NeedsMainThread) job.Read = true;
+            job.ReadDone.Set();
+        }
+    }
+
+    private static void Publish(Job job)
+    {
+        lock (job)
+        {
+            if (job.Published) return;
+            job.Published = true;
+        }
+
+        lock (s_lock) s_jobs.Remove(job.Asset);
+
+        // Filled another way, marked missing or retired while this read was in flight, so what it read is out of date.
+        if (job.Asset.State is AssetState.Loaded or AssetState.Missing)
+        {
+            job.Completion.TrySetResult();
+            return;
+        }
+
+        // Its source changed after the read, so read it again.
+        if (job.Generation != job.Asset.ReadGeneration)
+        {
+            job.Staging = null;
+            Asset staging = AssetDatabase.CreateShell(job.Asset.GetType());
+            if (AssetDatabase.ReadContent(job.Asset.AssetID, staging)) job.Staging = staging;
+        }
+
+        if (job.Staging != null) AssetDatabase.Publish(job.Asset, job.Staging, ReloadReason.Load);
+        else AssetDatabase.PublishFailed(job.Asset);
+
+        job.Completion.TrySetResult();
     }
 
     private static void EnsureStarted()
     {
-        if (_running) return;
-        lock (_startLock)
+        if (s_running) return;
+        lock (s_startLock)
         {
-            if (_running) return;
-            _running = true;
-            _thread = new Thread(Loop)
-            {
-                IsBackground = true,
-                Name = "Prowl Asset Loader",
-            };
-            _thread.Start();
+            if (s_running) return;
+            s_running = true;
+            int generation = s_generation;
+            s_thread = new Thread(() => Loop(generation)) { IsBackground = true, Name = "Prowl Asset Loader" };
+            s_thread.Start();
         }
     }
 
-    private static void Loop()
+    // A loop from before a Stop that outlived its join exits on its own rather than running beside the new one.
+    private static volatile int s_generation;
+
+    private static void Loop(int generation)
     {
-        _isLoaderThread = true;
-        while (_running)
+        t_isLoaderThread = true;
+        while (s_running && generation == s_generation)
         {
-            _signal.Wait();
-            if (!_running) break;
-
-            Guid id;
-            lock (_lock)
+            s_signal.Wait();
+            if (generation != s_generation)
             {
-                if (_high.Count > 0) id = _high.Dequeue();
-                else if (_normal.Count > 0) id = _normal.Dequeue();
-                else continue; // spurious wake (e.g. Stop), nothing to do
+                if (s_running) s_signal.Release(); // the wake was meant for the loop that replaced this one
+                break;
             }
+            if (!s_running) break;
 
-            EngineObject? result = null;
-            try { result = AssetDatabase.Get(id); }
-            catch (Exception ex) { Debug.LogError($"[AssetLoader] Failed to load asset {id}: {ex}"); }
-
-            // result is unused directly: AssetDatabase.Get caches it; waiters re-peek the cache.
-            _ = result;
-
-            ManualResetEventSlim? ev;
-            lock (_lock)
+            Job? job = null;
+            lock (s_lock)
             {
-                _queued.Remove(id);
-                if (_waiters.TryGetValue(id, out ev))
-                    _waiters.Remove(id);
+                while (job == null && (s_high.Count > 0 || s_normal.Count > 0))
+                {
+                    Job next = s_high.Count > 0 ? s_high.Dequeue() : s_normal.Dequeue();
+                    if (next.Started) continue;
+                    next.Started = true;
+                    job = next;
+                }
             }
-            ev?.Set();
+            if (job == null) continue;
+
+            Read(job);
+            if (!job.NeedsMainThread) s_completed.Enqueue(job);
         }
     }
 
-    /// <summary>Stop the loader thread and release any blocked callers. Called at shutdown.</summary>
+    /// <summary>Stops the loader thread, dropping queued loads and releasing anyone waiting on one.</summary>
     public static void Stop()
     {
-        if (!_running) return;
-        _running = false;
-        _signal.Release(); // wake the loop so it observes _running == false
-
-        var t = _thread;
-        _thread = null;
-        try { t?.Join(2000); } catch { }
-
-        // Release anyone still blocked so they don't hang; clear pending work.
-        lock (_lock)
+        if (s_running)
         {
-            _high.Clear();
-            _normal.Clear();
-            _queued.Clear();
-            foreach (var ev in _waiters.Values) ev.Set();
-            _waiters.Clear();
+            s_running = false;
+            s_generation++;
+            s_signal.Release();
+            Thread? thread = s_thread;
+            s_thread = null;
+            try { thread?.Join(2000); } catch { }
         }
+
+        lock (s_lock)
+        {
+            foreach (Job job in s_jobs.Values)
+            {
+                if (job.Asset.State == AssetState.Loading) job.Asset.SetState(AssetState.Unloaded);
+                job.ReadDone.Set();
+                job.Completion.TrySetCanceled();
+            }
+            s_jobs.Clear();
+            s_high.Clear();
+            s_normal.Clear();
+        }
+        s_completed.Clear();
+        s_mainThread.Clear();
+        s_mainThreadId = 0;
     }
 }

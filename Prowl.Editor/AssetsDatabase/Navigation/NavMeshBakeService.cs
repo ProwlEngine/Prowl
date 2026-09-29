@@ -102,7 +102,7 @@ public sealed class NavMeshBakeService
     /// <summary>Unregister and drop the surface's baked data reference. The .navmesh file is left on disk.</summary>
     public static void Clear(NavMeshSurface surface)
     {
-        surface.NavMeshData = default;
+        surface.NavMeshData = null;
         surface.RefreshRegistration();
         EditorSceneManager.MarkDirty();
     }
@@ -128,7 +128,7 @@ public sealed class NavMeshBakeService
                 return false;
             }
 
-            surface.NavMeshData = new AssetRef<NavMeshData>(guid);
+            surface.NavMeshData = AssetDatabase.Get<NavMeshData>(guid);
             surface.RefreshRegistration();
             EditorSceneManager.MarkDirty();
             Runtime.Debug.Log($"[Navigation] Baked navmesh saved to {fileRel} ({data.CacheLayers.Count} cache layers).");
@@ -149,7 +149,7 @@ public sealed class NavMeshBakeService
         var db = EditorAssetBackend.Instance;
         HashSet<Guid> othersAssets = OtherSurfaceAssets(surface);
 
-        Guid assignedGuid = surface.NavMeshData.AssetID;
+        Guid assignedGuid = surface.NavMeshData is { } assignedData ? assignedData.AssetID : Guid.Empty;
         string? assigned = db.GuidToPath(assignedGuid);
         if (!string.IsNullOrEmpty(assigned) && !othersAssets.Contains(assignedGuid))
             return assigned;
@@ -171,8 +171,8 @@ public sealed class NavMeshBakeService
 
         foreach (GameObject go in scene.AllObjects)
             foreach (NavMeshSurface other in go.GetComponents<NavMeshSurface>())
-                if (!ReferenceEquals(other, surface) && other.NavMeshData.AssetID != Guid.Empty)
-                    assets.Add(other.NavMeshData.AssetID);
+                if (!ReferenceEquals(other, surface) && other.NavMeshData is { IsFromDatabase: true } shared)
+                    assets.Add(shared.AssetID);
         return assets;
     }
 
@@ -181,7 +181,7 @@ public sealed class NavMeshBakeService
     private static (string Folder, string Name) DefaultBakeName(NavMeshSurface surface)
     {
         var scene = surface.GameObject.Scene;
-        string sceneRel = scene.IsValid() && !string.IsNullOrEmpty(scene!.AssetPath) ? scene.AssetPath : "";
+        string sceneRel = scene.IsValid() && scene!.Source is { } source ? source.AssetPath : "";
         string sceneDir = string.IsNullOrEmpty(sceneRel) ? "" : (Path.GetDirectoryName(sceneRel) ?? "").Replace('\\', '/');
         string sceneName = string.IsNullOrEmpty(sceneRel) ? "Scene" : Path.GetFileNameWithoutExtension(sceneRel);
         string folderRel = (string.IsNullOrEmpty(sceneDir) ? "" : sceneDir + "/") + sceneName + "_navmesh";

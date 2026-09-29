@@ -658,17 +658,17 @@ public class EditorCamera
     private static void AccumulateRendererBounds(GameObject go, ref Float3 min, ref Float3 max, ref bool any)
     {
         var mr = go.GetComponent<MeshRenderer>();
-        if (mr != null && mr.Mesh.Res != null)
+        if (mr != null && mr.Mesh != null)
         {
-            var wb = mr.Mesh.Res.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
+            var wb = mr.Mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
             min = new Float3(MathF.Min(min.X, wb.Min.X), MathF.Min(min.Y, wb.Min.Y), MathF.Min(min.Z, wb.Min.Z));
             max = new Float3(MathF.Max(max.X, wb.Max.X), MathF.Max(max.Y, wb.Max.Y), MathF.Max(max.Z, wb.Max.Z));
             any = true;
         }
         var smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null && smr.SharedMesh.Res != null)
+        if (smr != null && smr.SharedMesh != null)
         {
-            var wb = smr.SharedMesh.Res.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
+            var wb = smr.SharedMesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
             min = new Float3(MathF.Min(min.X, wb.Min.X), MathF.Min(min.Y, wb.Min.Y), MathF.Min(min.Z, wb.Min.Z));
             max = new Float3(MathF.Max(max.X, wb.Max.X), MathF.Max(max.Y, wb.Max.Y), MathF.Max(max.Z, wb.Max.Z));
             any = true;

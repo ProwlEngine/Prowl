@@ -1,7 +1,6 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Echo.Cloning;
 using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
@@ -62,13 +61,6 @@ public sealed class LooseEquality
 public sealed class LooseComp : MonoBehaviour
 {
     public LooseEquality Held = new();
-}
-
-/// <summary>Holds one value a tool bakes per object and one the user authors.</summary>
-public sealed class BakedComp : MonoBehaviour
-{
-    [CloneField(CloneFieldFlags.Skip)] public int BakedValue;
-    public int AuthoredValue;
 }
 
 /// <summary>State derived in OnValidate, for checking a refresh re-derives it.</summary>
@@ -821,7 +813,7 @@ public class PrefabTests : EditorTestHarness
         SetSceneCurrent();
         EditPrefabSource(prefabGuid, path, s => s.GetComponent<OverrideComp>()!.A = newValue);
 
-        Scene.Load((Scene)AssetDatabase.Get(sceneGuid)!);
+        Scene.Load(Scene.Instantiate(AssetDatabase.Load<SceneAsset>(sceneGuid)!));
         Scene.ProcessPendingLoad();
         return Scene.Current!.RootObjects.First();
     }
@@ -874,7 +866,7 @@ public class PrefabTests : EditorTestHarness
         SetSceneCurrent();
         EditPrefabSource(g, "ClosedKeep.prefab", s => s.GetComponent<OverrideComp>()!.A = 77);
 
-        Scene.Load((Scene)AssetDatabase.Get(sceneGuid)!);
+        Scene.Load(Scene.Instantiate(AssetDatabase.Load<SceneAsset>(sceneGuid)!));
         Scene.ProcessPendingLoad();
 
         var live = Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!;
@@ -1062,9 +1054,9 @@ public class PrefabTests : EditorTestHarness
         }
         finally
         {
-            // What the editor does on both play transitions. It reaches the loaded asset, not the
-            // tree the prefab system compares instances against.
-            Assets.UnloadAll();
+            // What leaving play does to an asset play changed: refill it in place. It reaches the loaded
+            // asset, not the tree the prefab system compares instances against.
+            Assets.RevertToSaved(GetPrefab(g)!);
             Application.IsPlaying = false;
         }
 
@@ -1099,7 +1091,7 @@ public class PrefabTests : EditorTestHarness
         string metaText = File.ReadAllText(MetaFile.GetMetaPath(absolute));
 
         Assets.DeleteAsset("Gone.prefab");
-        Assert.Null(AssetDatabase.Get(g));
+        Assert.True(AssetDatabase.Get(g) is { IsMissing: true });
 
         // The edit the user makes while it is away.
         comp.A = 77;
@@ -1111,7 +1103,7 @@ public class PrefabTests : EditorTestHarness
         File.WriteAllText(absolute, prefabText);
         File.WriteAllText(MetaFile.GetMetaPath(absolute), metaText);
         Assets.Refresh();
-        Assert.NotNull(AssetDatabase.Get(g));
+        Assert.NotNull(AssetDatabase.Load<PrefabAsset>(g));
 
         PrefabUtility.RefreshAllInstances(g);
         Assert.Equal(77, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
@@ -3438,7 +3430,7 @@ public class PrefabTests : EditorTestHarness
         Guid objectId = instance.Identifier;
         Guid componentId = instance.GetComponent<OverrideComp>()!.Identifier;
 
-        Cloner.Clone(instance);
+        ObjectCopy.Clone(instance);
 
         Assert.Equal(objectId, instance.Identifier);
         Assert.Equal(componentId, instance.GetComponent<OverrideComp>()!.Identifier);
@@ -5238,33 +5230,6 @@ public class PrefabTests : EditorTestHarness
             Assert.Equal(1, afterUndo.B);
         }
         finally { PrefabUtility.OnPrefabSaved -= Count; }
-    }
-
-    #endregion
-
-    #region Values that belong to the object, not to the prefab
-
-    [Fact]
-    public void FieldsTheCloneNeverCopies_AreNeverRecordedAsOverrides()
-    {
-        var root = new GameObject("Root");
-        root.AddComponent<BakedComp>();
-        Guid guid = CreatePrefabAsset(root, "PerInstance.prefab");
-
-        GameObject instance = Inst(guid);
-        LoadSceneWith(instance);
-
-        BakedComp baked = instance.GetComponent<BakedComp>()!;
-        baked.BakedValue = 7;    // what a bake writes
-        baked.AuthoredValue = 3; // what a user edits
-        PrefabUtility.ReconcileInstance(instance);
-
-        PropertyOverride ov = Assert.Single(instance.PrefabOverrides);
-        Assert.EndsWith(nameof(BakedComp.AuthoredValue), ov.Path);
-
-        // And a refresh leaves the baked value alone rather than restoring the prefab's.
-        PrefabUtility.RefreshAllInstances(guid);
-        Assert.Equal(7, instance.GetComponent<BakedComp>()!.BakedValue);
     }
 
     #endregion

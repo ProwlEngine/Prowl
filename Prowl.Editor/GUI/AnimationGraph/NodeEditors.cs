@@ -301,7 +301,7 @@ internal sealed class SubGraphNodeEditor : AnimationNodeEditor
 
         if (record.Get(SubGraphNode.GraphAssetSetting) is not { } value || value.Graph.AssetID == Guid.Empty)
             problems.Unfinished("No graph is set, so this plays the reference pose.");
-        else if (value.Graph.Res is { } inner && inner.IsValid() && AnimationGraphView.LeadsBack(graph, inner))
+        else if (value.Graph is { } inner && inner.IsValid() && AnimationGraphView.LeadsBack(graph, inner))
             problems.Blocking($"'{inner.Name}' leads back to this graph, so it would never end.");
     }
 
@@ -343,7 +343,7 @@ internal sealed class SubGraphNodeEditor : AnimationNodeEditor
     {
         bool embedded = record.Get(SubGraphNode.Embedded);
         AnimationGraph? inner = embedded ? editing.Graph
-            : record.Get(SubGraphNode.GraphAssetSetting)?.Graph.Res;
+            : record.Get(SubGraphNode.GraphAssetSetting)?.Graph;
 
         using (paper.Box(id).Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Rounded(8)
             .BackgroundColor(EditorTheme.Neutral300).IsNotInteractable().Enter())

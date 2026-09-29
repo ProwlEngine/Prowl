@@ -38,8 +38,8 @@ public class UIImageEditor : CustomEditor
             Origami.ColorField(paper, $"{id}_color_v", img.Color, v => img.Color = v).Show());
 
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material",
-            typeof(AssetRef<Material>), img.Material,
-            v => img.Material = (AssetRef<Material>)v!, 0);
+            typeof(Material), img.Material,
+            v => img.Material = v as Material, 0);
 
         BoolRow(paper, $"{id}_ray", "Raycast Target", img.RaycastTarget, v => img.RaycastTarget = v);
 
@@ -77,7 +77,7 @@ public class UIImageEditor : CustomEditor
     /// </summary>
     private static void InferTypeFromSprite(UIImage img)
     {
-        if (img.Sprite.Res is not Sprite s) return;
+        if (img.Sprite is not Sprite s) return;
         img.Type = s.HasBorder ? ImageType.Sliced : ImageType.Simple;
     }
 
@@ -88,10 +88,10 @@ public class UIImageEditor : CustomEditor
         using (paper.Column($"{id}_left").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
         {
             PropertyGridUtils.DrawField(paper, $"{id}_sprite", "Sprite",
-                typeof(AssetRef<Sprite>), img.Sprite,
+                typeof(Sprite), img.Sprite,
                 v =>
                 {
-                    img.Sprite = (AssetRef<Sprite>)v!;
+                    img.Sprite = v as Sprite;
                     InferTypeFromSprite(img);
                 }, 0);
         }
@@ -100,8 +100,8 @@ public class UIImageEditor : CustomEditor
     private static void DrawPreview(Paper paper, string id, UIImage img)
     {
         const float size = 128f;
-        var sprite = img.Sprite.Res;
-        Texture2D spriteTex = sprite.IsValid() ? sprite.Texture.Res : null;
+        var sprite = img.Sprite;
+        Texture2D spriteTex = sprite.IsValid() ? sprite.Texture : null;
         var tex = spriteTex.IsValid() ? spriteTex : UIImage.defaultTexture;
         var color = img.Color;
 
@@ -223,7 +223,7 @@ public class UIImageEditor : CustomEditor
 
     private static void DrawSetNativeSizeButton(Paper paper, string id, UIImage img)
     {
-        if (img.Sprite.Res is not Sprite s) return;
+        if (img.Sprite is not Sprite s) return;
 
         EditorGUI.Row(paper, id, string.Empty, () =>
             Origami.Button(paper, $"{id}_b", "Set Native Size", () =>

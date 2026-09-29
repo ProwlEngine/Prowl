@@ -250,10 +250,10 @@ public class PaperRenderer : ICanvasRenderer
 
             // Texture. The brush/shape texture goes on texture0; the font atlas is bound separately
             // as a persistent sampler so text batches into the same draw call as surrounding shapes.
-            Texture2D? texture = new AssetRef<Texture2D>(drawCall.Texture as Texture2D).Res;
+            Texture2D? texture = drawCall.Texture as Texture2D;
             cmd.SetTexture("texture0", texture.IsValid() ? texture : _defaultTexture);
 
-            Texture2D? fontTexture = new AssetRef<Texture2D>(drawCall.FontAtlas as Texture2D).Res;
+            Texture2D? fontTexture = drawCall.FontAtlas as Texture2D;
             cmd.SetTexture("fontTexture", fontTexture.IsValid() ? fontTexture : _defaultTexture);
 
             // Font atlas metrics, so the text distance field resolves at any zoom.

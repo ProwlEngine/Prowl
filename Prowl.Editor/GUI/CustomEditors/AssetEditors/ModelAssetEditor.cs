@@ -50,7 +50,8 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         // Reimporting rebuilds every mesh this model owns, so the cached previews are stale.
         PreviewWidget.For(entry.Guid, showGrid: true).Invalidate();
-        MeshAssetEditor.InvalidateCachedPreviews();
+        foreach (SubAssetEntry sub in entry.SubAssets)
+            PreviewWidget.Invalidate(sub.Guid);
         s_views.Remove(entry.Guid);
         return true;
     }
@@ -380,7 +381,7 @@ public class ModelAssetEditor : ImportSettingsEditor
         foreach (var sub in entry.SubAssets)
         {
             if (sub.Type == null || !typeof(Avatar).IsAssignableFrom(sub.Type)) continue;
-            Avatar? avatar = new AssetRef<Avatar>(sub.Guid).Res;
+            Avatar? avatar = AssetDatabase.Get<Avatar>(sub.Guid);
             if (avatar.IsValid()) return avatar;
         }
         return null;
@@ -685,7 +686,7 @@ public class ModelAssetEditor : ImportSettingsEditor
             return;
         }
 
-        Material? material = new AssetRef<Material>(source).Res;
+        Material? material = AssetDatabase.Get<Material>(source);
         if (material.IsNotValid())
         {
             Debug.LogWarning($"[Model] '{slot.Name}' could not be loaded, so there is nothing to extract.");

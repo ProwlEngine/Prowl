@@ -67,7 +67,7 @@ public static class RagdollBuilder
     /// </summary>
     public static Dictionary<HumanBodyBone, Transform>? FindBones(Animator animator, out string problem)
     {
-        Avatar? avatar = animator.Avatar.Res;
+        Avatar? avatar = animator.Avatar;
         HumanoidRig? rig = avatar.IsValid() ? avatar!.Runtime?.Humanoid : null;
         if (rig == null || avatar!.Skeleton == null)
         {

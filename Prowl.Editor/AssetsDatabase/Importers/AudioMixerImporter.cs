@@ -15,6 +15,8 @@ public class AudioMixerImporter : AssetImporter
 {
     public override int Version => 1;
 
+    public override EchoSource Source => EchoSource.Text;
+
     /// <summary> Imports an Echo-serialized AudioMixer and registers each of its groups as a sub-asset keyed on the group's persistent identity. </summary>
     public override bool Import(ImportContext ctx)
     {
@@ -32,7 +34,7 @@ public class AudioMixerImporter : AssetImporter
 
             // Recorded before the sub-asset is registered, so it is part of what gets cached for the
             // group. Without it a group loaded on its own cannot tell what it feeds into.
-            group.SetOwningMixer(ctx.AssetGuid);
+            group.Bind(mixer);
             ctx.AddSubAsset(group.GroupName, group, SubAssetIdentity.Key(group.Identity));
         }
 

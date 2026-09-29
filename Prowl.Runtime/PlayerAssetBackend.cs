@@ -6,34 +6,49 @@ using System.Reflection;
 
 using Prowl.Echo;
 
-using Scene = Prowl.Runtime.Resources.Scene;
-
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Asset database for built standalone players.
-/// Loads binary Echo cache files from loose files, ProwlPak archives, or embedded resources.
+/// Asset content for built standalone players, from loose files, ProwlPak archives or embedded resources. The
+/// manifest names every shipped asset's file, type, size and dependencies, so nothing is opened until it loads.
 /// </summary>
-public class PlayerAssetBackend : AssetBackendBase
+public class PlayerAssetBackend : AssetBackend, IDisposable
 {
+    /// <summary>The manifest layout this build writes and reads.</summary>
+    public const int ManifestFormat = 2;
+
+    private sealed class Entry
+    {
+        public string File = "";
+        public string Path = "";
+        public string TypeName = "";
+        public long Size;
+        public Guid[] Hard = [];
+        public Guid[] Soft = [];
+        public Type? Type;
+    }
+
     private readonly AssetPackagingMode _mode;
     private readonly string _basePath;
-    private readonly Dictionary<Guid, string> _guidToPath = new();
+    private readonly Dictionary<Guid, Entry> _entries = new();
     private readonly List<ZipArchive> _pakArchives = new();
+    private readonly object _pakLock = new();
+    private readonly List<ResourceEntry> _resources = new();
 
-    public List<ResourceEntry> ResourceEntries { get; } = new();
     public Guid DefaultSceneGuid { get; private set; }
+
+    public override IReadOnlyList<ResourceEntry> Resources => _resources;
 
     public PlayerAssetBackend(AssetPackagingMode mode, string basePath = "Content")
     {
         _mode = mode;
-        _basePath = Path.Combine(Application.DataPath, basePath);
+        _basePath = System.IO.Path.Combine(Application.DataPath, basePath);
 
         switch (mode)
         {
             case AssetPackagingMode.LooseFiles:
             case AssetPackagingMode.ProwlPak:
-                LoadManifestFromFile(Path.Combine(_basePath, "asset_manifest.bin"));
+                LoadManifestFromFile(System.IO.Path.Combine(_basePath, "asset_manifest.bin"));
                 if (mode == AssetPackagingMode.ProwlPak) LoadPakArchives();
                 break;
             case AssetPackagingMode.Embedded:
@@ -42,100 +57,56 @@ public class PlayerAssetBackend : AssetBackendBase
         }
     }
 
-    protected override EngineObject? LoadFresh(Guid assetId)
+    public override Type? GetAssetType(Guid assetId)
     {
-        try
-        {
-            byte[]? data = LoadRawAsset(assetId);
-            if (data == null) return null;
-
-            var echo = ReadEchoBinary(data);
-            if (echo == null) return null;
-
-            var obj = Serializer.Deserialize<EngineObject>(echo);
-            if (obj != null)
-            {
-                obj.AssetID = assetId;
-                SetLoaded(assetId, obj);
-            }
-            return obj;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[PlayerAssetBackend] Failed to load asset {assetId}: {ex.Message}");
-            return null;
-        }
+        if (!_entries.TryGetValue(assetId, out Entry? entry)) return null;
+        return entry.Type ??= RuntimeUtils.ResolveType(entry.TypeName);
     }
 
-    /// <summary>Load a scene by GUID.</summary>
-    public Scene? LoadScene(Guid sceneGuid)
+    public override string? GetAssetPath(Guid assetId) => _entries.TryGetValue(assetId, out Entry? entry) ? entry.Path : null;
+
+    public override IReadOnlyList<Guid> GetHardDependencies(Guid assetId) => _entries.TryGetValue(assetId, out Entry? entry) ? entry.Hard : [];
+
+    public override long GetEstimatedSize(Guid assetId) => _entries.TryGetValue(assetId, out Entry? entry) ? entry.Size : 0;
+
+    protected internal override bool ReadContent(Guid assetId, Asset staging, SerializationContext context)
     {
-        byte[]? data = LoadRawAsset(sceneGuid);
-        if (data == null) { Debug.LogError($"[PlayerAssetBackend] Scene not found: {sceneGuid}"); return null; }
-
-        try
+        if (!_entries.TryGetValue(assetId, out Entry? entry))
         {
-            var echo = ReadEchoBinary(data);
-            if (echo == null) return null;
-
-            return Serializer.Deserialize<Scene>(echo);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[PlayerAssetBackend] Failed to load scene {sceneGuid}: {ex.Message}");
-            return null;
-        }
-    }
-
-    // ================================================================
-    //  Raw asset loading
-    // ================================================================
-
-    /// <summary>
-    /// The bytes for one asset, named by the manifest.
-    /// </summary>
-    /// <remarks>
-    /// An asset the manifest does not list was not shipped, and saying so is worth more than letting the
-    /// lookup fail as a missing file. The name still falls back to the convention, so an asset the engine
-    /// itself provides outside the manifest keeps loading.
-    /// </remarks>
-    private byte[]? LoadRawAsset(Guid guid)
-    {
-        if (!_guidToPath.TryGetValue(guid, out string? fileName))
-        {
-            Debug.LogWarning($"[PlayerAssetBackend] {guid} is not in the asset manifest. It may not have shipped.");
-            fileName = $"{guid}.asset";
+            Debug.LogWarning($"[PlayerAssetBackend] {assetId} is not in the asset manifest. It may not have shipped.");
+            return false;
         }
 
-        return _mode switch
+        byte[]? data = _mode switch
         {
-            AssetPackagingMode.LooseFiles => LoadFromFile(Path.Combine(_basePath, fileName)),
-            AssetPackagingMode.ProwlPak => LoadFromPak(fileName),
-            AssetPackagingMode.Embedded => LoadFromEmbedded($"Assets.{fileName}"),
+            AssetPackagingMode.LooseFiles => LoadFromFile(System.IO.Path.Combine(_basePath, entry.File)),
+            AssetPackagingMode.ProwlPak => LoadFromPak(entry.File),
+            AssetPackagingMode.Embedded => LoadFromEmbedded($"Assets.{entry.File}"),
             _ => null,
         };
+        if (data == null) return false;
+
+        using var stream = new MemoryStream(data);
+        using var reader = new BinaryReader(stream);
+        return ReadInto(EchoObject.ReadFromBinary(reader), staging, context);
     }
 
-    private static byte[]? LoadFromFile(string path)
-        => File.Exists(path) ? File.ReadAllBytes(path) : null;
+    private static byte[]? LoadFromFile(string path) => File.Exists(path) ? File.ReadAllBytes(path) : null;
 
+    // ZipArchive is not thread safe, so every read of a pak takes the same lock.
     private byte[]? LoadFromPak(string entryName)
     {
-        // ZipArchive is not thread-safe. Serialize all pak reads on the same lock Get() uses (it is
-        // re-entrant, so Get -> LoadRawAsset -> LoadFromPak is fine) so a background Get and a
-        // main-thread LoadScene can't read the shared archive/stream concurrently.
-        lock (_loadLock)
+        lock (_pakLock)
         {
             foreach (var pak in _pakArchives)
             {
                 var entry = pak.GetEntry(entryName);
-                if (entry != null)
-                {
-                    using var stream = entry.Open();
-                    using var ms = new MemoryStream();
-                    stream.CopyTo(ms);
-                    return ms.ToArray();
-                }
+                if (entry == null) continue;
+
+                using var stream = entry.Open();
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                return ms.ToArray();
             }
             return null;
         }
@@ -151,10 +122,6 @@ public class PlayerAssetBackend : AssetBackendBase
         return ms.ToArray();
     }
 
-    // ================================================================
-    //  Manifest loading
-    // ================================================================
-
     private void LoadManifestFromFile(string manifestPath)
     {
         if (!File.Exists(manifestPath))
@@ -165,8 +132,7 @@ public class PlayerAssetBackend : AssetBackendBase
 
         try
         {
-            var echo = EchoObject.ReadFromBinary(new FileInfo(manifestPath));
-            ParseManifest(echo);
+            ParseManifest(EchoObject.ReadFromBinary(new FileInfo(manifestPath)));
         }
         catch (Exception ex)
         {
@@ -180,14 +146,8 @@ public class PlayerAssetBackend : AssetBackendBase
 
         foreach (var pakFile in Directory.GetFiles(_basePath, "*.prowlpak"))
         {
-            try
-            {
-                _pakArchives.Add(ZipFile.OpenRead(pakFile));
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[PlayerAssetBackend] Failed to open pak {pakFile}: {ex.Message}");
-            }
+            try { _pakArchives.Add(ZipFile.OpenRead(pakFile)); }
+            catch (Exception ex) { Debug.LogError($"[PlayerAssetBackend] Failed to open pak {pakFile}: {ex.Message}"); }
         }
     }
 
@@ -197,41 +157,56 @@ public class PlayerAssetBackend : AssetBackendBase
         using var stream = assembly.GetManifestResourceStream("Assets._manifest.bin");
         if (stream == null) { Debug.LogError("[PlayerAssetBackend] Embedded manifest not found."); return; }
 
-        using var ms = new MemoryStream();
-        stream.CopyTo(ms);
-        ParseManifest(ReadEchoBinary(ms.ToArray()));
+        using var reader = new BinaryReader(stream);
+        ParseManifest(EchoObject.ReadFromBinary(reader));
     }
 
-    private void ParseManifest(EchoObject? echo)
+    private void ParseManifest(EchoObject echo)
     {
-        if (echo == null) return;
+        int format = echo.Get("format")?.IntValue ?? 1;
+        if (format != ManifestFormat)
+        {
+            Debug.LogError($"[PlayerAssetBackend] The asset manifest is format {format}, this player reads format {ManifestFormat}. Rebuild the game.");
+            return;
+        }
 
-        if (echo.TryGet("defaultScene", out var dsTag) && Guid.TryParse(dsTag.StringValue, out var ds))
+        if (echo.TryGet("defaultScene", out var dsTag) && Guid.TryParse(dsTag!.StringValue, out var ds))
             DefaultSceneGuid = ds;
 
-        if (echo.TryGet("assets", out var assetsTag) && assetsTag.TagType == EchoType.Compound)
-            foreach (var kvp in assetsTag.Tags)
-                if (Guid.TryParse(kvp.Key, out var guid))
-                    _guidToPath[guid] = kvp.Value.StringValue;
+        if (echo.TryGet("assets", out var assetsTag) && assetsTag!.TagType == EchoType.Compound)
+            foreach (var (key, tag) in assetsTag.Tags)
+                if (Guid.TryParse(key, out var guid) && tag.TagType == EchoType.Compound)
+                    _entries[guid] = new Entry
+                    {
+                        File = tag.Get("file")?.StringValue ?? $"{guid}.asset",
+                        Path = tag.Get("path")?.StringValue ?? "",
+                        TypeName = tag.Get("type")?.StringValue ?? "",
+                        Size = tag.Get("size")?.LongValue ?? 0,
+                        Hard = ReadGuids(tag.Get("hard")),
+                        Soft = ReadGuids(tag.Get("soft")),
+                    };
 
-        if (echo.TryGet("resources", out var resTag) && resTag.TagType == EchoType.List)
+        if (echo.TryGet("resources", out var resTag) && resTag!.TagType == EchoType.List)
             foreach (var item in resTag.List)
-                if (item.TryGet("path", out var path) && item.TryGet("guid", out var guidTag) && Guid.TryParse(guidTag.StringValue, out var guid))
-                    ResourceEntries.Add(new ResourceEntry(path.StringValue, guid, item.TryGet("type", out var type) ? type.StringValue : ""));
+                if (item.TryGet("path", out var path) && item.TryGet("guid", out var guidTag) && Guid.TryParse(guidTag!.StringValue, out var guid))
+                    _resources.Add(new ResourceEntry(path!.StringValue, guid, item.TryGet("type", out var type) ? type!.StringValue : ""));
     }
 
-    /// <summary>Read Echo binary from byte array.</summary>
-    private static EchoObject? ReadEchoBinary(byte[] data)
+    private static Guid[] ReadGuids(EchoObject? list)
     {
-        using var ms = new MemoryStream(data);
-        using var reader = new BinaryReader(ms);
-        return EchoObject.ReadFromBinary(reader);
+        if (list is not { TagType: EchoType.List }) return [];
+        var guids = new List<Guid>(list.List.Count);
+        foreach (EchoObject item in list.List)
+            if (Guid.TryParse(item.StringValue, out Guid guid)) guids.Add(guid);
+        return guids.ToArray();
     }
 
     public void Dispose()
     {
-        foreach (var pak in _pakArchives) pak.Dispose();
-        _pakArchives.Clear();
-        _loadedAssets.Clear();
+        lock (_pakLock)
+        {
+            foreach (var pak in _pakArchives) pak.Dispose();
+            _pakArchives.Clear();
+        }
     }
 }

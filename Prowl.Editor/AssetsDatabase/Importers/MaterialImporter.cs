@@ -9,5 +9,7 @@ namespace Prowl.Editor.Importers;
 public class MaterialImporter : AssetImporter
 {
     public override int Version => 1;
+    public override EchoSource Source => EchoSource.Text;
+
     public override bool Import(ImportContext ctx) => ImportHelper.ImportEcho<Material>(ctx, "material");
 }

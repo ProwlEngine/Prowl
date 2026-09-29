@@ -2,7 +2,7 @@
   "$id": 1,
   "$type": "Prowl.Runtime.Resources.Material, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
   "_shader": {
-    "AssetID": "a95b73d2-d6fb-b25b-8918-a1ad5616656c"
+    "$asset": "a95b73d2-d6fb-b25b-8918-a1ad5616656c"
   },
   "_properties": {
     "$id": 2,
@@ -45,7 +45,5 @@
 
     }
   },
-  "AssetPath": "Grass.mat",
-  "AssetID": "00000000-0000-0000-0000-000000000000",
   "Name": "Grass"
 }

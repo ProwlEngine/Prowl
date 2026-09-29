@@ -16,7 +16,7 @@ namespace Prowl.Runtime;
 
 /// <summary>A graph of animation nodes, stored as records and compiled into a Motion graph.</summary>
 [CreateAssetMenu("Animation Graph", Extension = ".animgraph", Order = 1150)]
-public sealed class AnimationGraph : EngineObject
+public sealed class AnimationGraph : Asset
 {
     public List<GraphNodeRecord> Nodes = new();
     public List<GraphParameterRecord> Parameters = new();
@@ -24,7 +24,7 @@ public sealed class AnimationGraph : EngineObject
     public string RootNode = string.Empty;
 
     /// <summary>The rig the editor offers bones from. The graph plays on whatever rig the animator has.</summary>
-    public AssetRef<Avatar> Rig;
+    public Avatar? Rig;
 
     /// <summary>Boxes and notes for keeping a large graph readable. The compiler ignores both.</summary>
     public List<GraphGroupRecord> Groups = new();
@@ -92,6 +92,7 @@ public sealed class AnimationGraph : EngineObject
     private void LoadDependencies(HashSet<AnimationGraph> visiting)
     {
         if (!visiting.Add(this)) return;
+        Load();
 
         foreach (GraphNodeRecord record in Nodes)
         {
@@ -99,30 +100,24 @@ public sealed class AnimationGraph : EngineObject
             {
                 switch (value.Kind)
                 {
-                    case NodeValueKind.Clip: value.Clip.EnsureLoaded(); break;
-                    case NodeValueKind.Mask: value.Mask.EnsureLoaded(); break;
-                    case NodeValueKind.Avatar: value.Avatar.EnsureLoaded(); break;
-                    case NodeValueKind.Graph:
-                        value.Graph.EnsureLoaded();
-                        if (value.Graph.Res is { } inner && inner.IsValid()) inner.LoadDependencies(visiting);
-                        break;
+                    case NodeValueKind.Clip when value.Clip is { } clip: clip.Load(); break;
+                    case NodeValueKind.Mask when value.Mask is { } mask: mask.Load(); break;
+                    case NodeValueKind.Avatar when value.Avatar is { } avatar: avatar.Load(); break;
+                    case NodeValueKind.Graph when value.Graph is { } graph: graph.LoadDependencies(visiting); break;
                 }
             }
 
             foreach (GraphStateRecord state in record.States)
-            {
-                if (!state.UsesAsset) continue;
-                state.Graph.EnsureLoaded();
-                if (state.Graph.Res is { } inner && inner.IsValid()) inner.LoadDependencies(visiting);
-            }
+                if (state.Graph is { } played) played.LoadDependencies(visiting);
         }
     }
 
+    // Takes in the content version too, so a refill that brings back an older edit count still reads as a change.
     private int DeepVersionOf(HashSet<AnimationGraph> visiting)
     {
         if (!visiting.Add(this)) return 0;
 
-        int version = _version;
+        int version = unchecked(_version * 31 + ContentVersion);
         foreach (AnimationGraph inner in SubGraphs())
             version = unchecked(version * 31 + inner.DeepVersionOf(visiting));
         return version;
@@ -156,11 +151,11 @@ public sealed class AnimationGraph : EngineObject
         {
             if (!record.Get(SubGraphNode.Embedded))
                 foreach (NodeValue value in record.Properties.Values)
-                    if (value.Kind == NodeValueKind.Graph && value.Graph.Res is { } inner && inner.IsValid())
+                    if (value.Kind == NodeValueKind.Graph && value.Graph is { } inner)
                         yield return inner;
 
             foreach (GraphStateRecord state in record.States)
-                if (state.UsesAsset && state.Graph.Res is { } played && played.IsValid())
+                if (state.UsesAsset && state.Graph is { } played)
                     yield return played;
         }
     }
@@ -173,7 +168,7 @@ public sealed class AnimationGraph : EngineObject
     internal MotionGraph? Compile(MotionSkeleton skeleton, MotionAvatar? avatar, HashSet<AnimationGraph> visiting)
     {
         ArgumentNullException.ThrowIfNull(skeleton);
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         int deepVersion = DeepVersion;
         _compiles ??= new Dictionary<MotionSkeleton, RigCompile>();
@@ -215,7 +210,7 @@ public sealed class AnimationGraph : EngineObject
     /// <summary>Drops the compiled graphs so the next use rebuilds them. Call after editing the records.</summary>
     public void Invalidate()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         _compiles = null;
         _version++;
         Edits++;
@@ -245,5 +240,14 @@ public sealed class AnimationGraph : EngineObject
         return null;
     }
 
-    protected override void OnDispose() => _compiles = null;
+    protected override void OnUnload() => _compiles = null;
+
+    // The edit count keeps moving forward across a refill, so an animator running the old content rebinds.
+    protected override void TakeContent(Asset staging)
+    {
+        int version = _version;
+        base.TakeContent(staging);
+        _version = Math.Max(version, _version) + 1;
+        Edits++;
+    }
 }

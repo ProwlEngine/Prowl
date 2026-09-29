@@ -134,9 +134,9 @@ internal static class ClayBackedImporter
 
         // 1. Textures - resolve once, share by Clay texture index. Resolution (not necessarily
         // decoding - see IModelTextureResolver) happens through the resolver, so the editor can
-        // supply one that only ever produces AssetRefs and never touches pixel data itself.
+        // supply one that only ever produces references to database textures and never touches pixel data itself.
         var resolver = settings.TextureResolver ?? DefaultModelTextureResolver.Instance;
-        var textureCache = new AssetRef<Texture2D>[clayModel.Textures.Count];
+        var textureCache = new Texture2D?[clayModel.Textures.Count];
         // Skipped wholesale when materials are off, so an import that wants no materials also does
         // not decode or register the textures only those materials would have referenced.
         if (settings.ImportMaterials)
@@ -147,18 +147,18 @@ internal static class ClayBackedImporter
         // fall back to the default material rather than to a material built from the file.
         // One ref per material the file defines. An extracted material is referenced where it lives, so
         // edits to it survive a reimport; everything else is built here and handed back as a sub asset.
-        var materialRefs = new List<AssetRef<PMaterial>>(clayModel.Materials.Count);
+        var materialRefs = new List<PMaterial?>(clayModel.Materials.Count);
         var materials = new List<PMaterial>();
         if (settings.ImportMaterials)
             for (int i = 0; i < clayModel.Materials.Count; i++)
             {
-                AssetRef<PMaterial> extracted = settings.MaterialResolver?.Resolve(MaterialName(clayModel, i)) ?? default;
-                if (!extracted.IsExplicitNull) { materialRefs.Add(extracted); continue; }
+                PMaterial? extracted = settings.MaterialResolver is { } materialResolver ? materialResolver.Resolve(MaterialName(clayModel, i)) : null;
+                if (extracted is not null) { materialRefs.Add(extracted); continue; }
 
                 PMaterial built = BuildMaterial(clayModel.Materials[i], textureCache);
                 built.Name = MaterialName(clayModel, i);
                 materials.Add(built);
-                materialRefs.Add(new AssetRef<PMaterial>(built));
+                materialRefs.Add(built);
             }
 
         // 3. Meshes (with per-submesh material index propagated).
@@ -234,7 +234,7 @@ internal static class ClayBackedImporter
                 }
 
                 var smr = go.AddComponent<SkinnedMeshRenderer>();
-                smr.SharedMesh = new AssetRef<PMesh>(mesh);
+                smr.SharedMesh = mesh;
                 smr.Materials = matRefs;
                 Transform? rootBoneTransform = clayskin.RootNodeIndex >= 0
                     ? nodeGOs[clayskin.RootNodeIndex].Transform
@@ -246,13 +246,13 @@ internal static class ClayBackedImporter
                 // Morph-only mesh (no skin): a SkinnedMeshRenderer still owns the blend-shape
                 // weights. No bones to wire skinning stays disabled in-shader.
                 var smr = go.AddComponent<SkinnedMeshRenderer>();
-                smr.SharedMesh = new AssetRef<PMesh>(mesh);
+                smr.SharedMesh = mesh;
                 smr.Materials = matRefs;
             }
             else
             {
                 var mr = go.AddComponent<MeshRenderer>();
-                mr.Mesh = new AssetRef<PMesh>(mesh);
+                mr.Mesh = mesh;
                 mr.Materials = matRefs;
             }
         }
@@ -282,15 +282,13 @@ internal static class ClayBackedImporter
         {
             ModelRigBuilder.Rig rig = ModelRigBuilder.BuildRig(clayModel, nodeGOs, rootGO);
             avatar = BuildAvatar(rig, settings, modelName);
-            var avatarRef = new AssetRef<Avatar>(avatar);
-
             if (settings.ImportAnimations)
                 foreach (ClayAnim clip in clayModel.AnimationClips)
-                    animations.Add(BuildClip(clip, clayModel, rig, avatar, avatarRef, settings));
+                    animations.Add(BuildClip(clip, clayModel, rig, avatar, settings));
 
             var animator = rootGO.AddComponent<Animator>();
-            animator.Avatar = avatarRef;
-            animator.Clips = animations.Select(c => new AssetRef<PAnim>(c)).ToList();
+            animator.Avatar = avatar;
+            animator.Clips = [.. animations];
         }
 
         return new ModelImportResult
@@ -313,13 +311,13 @@ internal static class ClayBackedImporter
         return string.IsNullOrEmpty(name) ? $"Material_{index}" : name;
     }
 
-    private static List<AssetRef<PMaterial>> BuildMatRefs(int[] submeshMatIndices, List<AssetRef<PMaterial>> materialRefs)
+    private static List<PMaterial> BuildMatRefs(int[] submeshMatIndices, List<PMaterial?> materialRefs)
     {
-        var matRefs = new List<AssetRef<PMaterial>>(submeshMatIndices.Length);
+        var matRefs = new List<PMaterial>(submeshMatIndices.Length);
         for (int s = 0; s < submeshMatIndices.Length; s++)
         {
             int idx = submeshMatIndices[s];
-            matRefs.Add(idx >= 0 && idx < materialRefs.Count ? materialRefs[idx] : default);
+            matRefs.Add(idx >= 0 && idx < materialRefs.Count ? materialRefs[idx]! : null!);
         }
         return matRefs;
     }
@@ -532,9 +530,10 @@ internal static class ClayBackedImporter
         };
     }
 
-    private static PMaterial BuildMaterial(ClayMaterial src, AssetRef<Texture2D>[] textureCache)
+    private static PMaterial BuildMaterial(ClayMaterial src, Texture2D?[] textureCache)
     {
-        var mat = new PMaterial(Shader.LoadDefault(SelectShader(src)))
+        // Models also import on the loader thread, which never loads other assets, so built-ins are referenced.
+        var mat = new PMaterial(Shader.GetDefault(SelectShader(src)))
         {
             Name = string.IsNullOrEmpty(src.Name) ? "Material" : src.Name,
         };
@@ -636,21 +635,20 @@ internal static class ClayBackedImporter
         yield return src.EmissiveTexture;
     }
 
-    private static AssetRef<Texture2D> ResolveTexture(MaterialTextureSlot? slot, AssetRef<Texture2D>[] cache)
+    private static Texture2D? ResolveTexture(MaterialTextureSlot? slot, Texture2D?[] cache)
     {
-        if (slot is null) return default;
+        if (slot is null) return null;
         int idx = slot.TextureIndex;
-        if ((uint)idx >= (uint)cache.Length) return default;
+        if ((uint)idx >= (uint)cache.Length) return null;
         return cache[idx];
     }
 
     // "No texture in this slot" is never resolved through IModelTextureResolver - it isn't a texture
     // reference to look up, it's the absence of one. Falls back to the shared, GUID-tagged default
     // texture singletons (same as always).
-    private static AssetRef<Texture2D> OrDefault(AssetRef<Texture2D> tex, DefaultTexture fallback) =>
-        tex.IsExplicitNull ? new AssetRef<Texture2D>(Texture2D.LoadDefault(fallback)) : tex;
+    private static Texture2D OrDefault(Texture2D? tex, DefaultTexture fallback) => tex is not null ? tex : Texture2D.GetDefault(fallback);
 
-    private static AssetRef<Texture2D> ResolveModelTexture(ClayTexture src, IModelTextureResolver resolver)
+    private static Texture2D? ResolveModelTexture(ClayTexture src, IModelTextureResolver resolver)
     {
         try
         {
@@ -709,7 +707,7 @@ internal static class ClayBackedImporter
         return Avatar.CreateHumanoid(skeleton, description, name);
     }
 
-    private static PAnim BuildClip(ClayAnim source, Clay.Model clayModel, ModelRigBuilder.Rig rig, Avatar avatar, AssetRef<Avatar> avatarRef, ModelImporterSettings settings)
+    private static PAnim BuildClip(ClayAnim source, Clay.Model clayModel, ModelRigBuilder.Rig rig, Avatar avatar, ModelImporterSettings settings)
     {
         string sourceName = string.IsNullOrEmpty(source.Name) ? "Animation" : source.Name;
         ModelClipSettings overrides = default;
@@ -732,8 +730,8 @@ internal static class ClayBackedImporter
 
         // A humanoid rig bakes into muscle space, which is what lets the clip play on another rig at all.
         PAnim clip = settings.RigType == ModelRigType.Humanoid && avatar.Runtime is { IsHuman: true } human
-            ? PAnim.FromHumanoid(Motion.HumanoidClip.Bake(human, sampled), avatarRef, name, events)
-            : PAnim.FromSkeletal(sampled, avatarRef, name, events);
+            ? PAnim.FromHumanoid(Motion.HumanoidClip.Bake(human, sampled), avatar, name, events)
+            : PAnim.FromSkeletal(sampled, avatar, name, events);
 
         clip.Loop = overrides.Loop ?? settings.LoopAnimations;
         clip.SourceName = sourceName;

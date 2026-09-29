@@ -39,8 +39,6 @@ public class MissingMonobehaviour : MonoBehaviour, ISerializable
         }
 
         compound["Name"] = Serializer.Serialize(typeof(string), Name, ctx);
-        compound["AssetPath"] = Serializer.Serialize(typeof(string), AssetPath, ctx);
-        compound["AssetID"] = Serializer.Serialize(typeof(Guid), AssetID, ctx);
         compound["_identifier"] = Serializer.Serialize(typeof(Guid), Identifier, ctx);
         compound["_enabled"] = new EchoObject(_enabled);
         compound["_enabledInHierarchy"] = new EchoObject(_enabledInHierarchy);
@@ -87,8 +85,6 @@ public class MissingMonobehaviour : MonoBehaviour, ISerializable
     {
         ComponentData = data is { TagType: not EchoType.Null } ? data.Clone() : null!;
         Name = Read(fields, "Name", Name, ctx);
-        AssetPath = Read(fields, "AssetPath", string.Empty, ctx);
-        AssetID = Read(fields, "AssetID", Guid.Empty, ctx);
         Identifier = Read(fields, "_identifier", Guid.Empty, ctx);
         _enabled = Read(fields, "_enabled", true, ctx);
         _enabledInHierarchy = Read(fields, "_enabledInHierarchy", true, ctx);

@@ -165,7 +165,7 @@ public class TerrainSceneEditor : SceneTool
         }
 
         // Update brush preview
-        var terrainData = _terrain.Data.Res;
+        var terrainData = _terrain.Data;
         if (terrainData == null)
         {
             _terrain.BrushVisible = false;

@@ -1264,31 +1264,21 @@ public class HierarchyPanel : DockPanel
 
             foreach (var comp in go.GetComponents<MonoBehaviour>())
             {
-                if (comp.AssetID == guid)
-                {
-                    results.Add(go);
-                    break;
-                }
-
-                // Search fields for AssetRef<T> that reference this GUID
+                // A field holding the asset, or naming it through an AssetRef.
                 bool found = false;
-                var type = comp.GetType();
-                foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
+                foreach (var field in comp.GetType().GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
                 {
-                    var fieldType = field.FieldType;
-                    if (!fieldType.IsGenericType) continue;
-                    if (fieldType.GetGenericTypeDefinition() != typeof(AssetRef<>)) continue;
-
-                    var assetRef = field.GetValue(comp);
-                    if (assetRef == null) continue;
-
-                    var assetIdProp = fieldType.GetProperty("AssetID");
-                    if (assetIdProp?.GetValue(assetRef) is Guid refGuid && refGuid == guid)
+                    Guid referenced = field.GetValue(comp) switch
                     {
-                        results.Add(go);
-                        found = true;
-                        break;
-                    }
+                        Asset asset => asset.AssetID,
+                        IAssetRef assetRef => assetRef.AssetID,
+                        _ => Guid.Empty,
+                    };
+                    if (referenced != guid) continue;
+
+                    results.Add(go);
+                    found = true;
+                    break;
                 }
                 if (found) break;
             }

@@ -608,7 +608,7 @@ public class InspectorPanel : DockPanel
 
     private static (int Files, int Folders)? GetFolderCounts(string relativePath, string absPath)
     {
-        int version = EditorAssetBackend.Instance?.ContentVersion ?? -1;
+        int version = EditorAssetBackend.Instance?.IndexVersion ?? -1;
         if (_folderCountsVersion != version)
         {
             _folderCounts.Clear();
@@ -734,9 +734,9 @@ public class InspectorPanel : DockPanel
         Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  {Loc.Get("inspector.extract_as_asset")}", () => ExtractSubAsset(item, parentEntry, subEntry, asset)).Show();
     }
 
-    private void ExtractSubAsset(ContentItem item, AssetEntry? parentEntry, SubAssetEntry? subEntry, EngineObject? asset)
+    private void ExtractSubAsset(ContentItem item, AssetEntry? parentEntry, SubAssetEntry? subEntry, EngineObject? obj)
     {
-        if (asset == null || parentEntry == null || Project.Current == null) return;
+        if (obj is not Asset asset || parentEntry == null || Project.Current == null) return;
 
         var db = EditorAssetBackend.Instance;
         if (db == null) return;
@@ -755,10 +755,8 @@ public class InspectorPanel : DockPanel
         string fileName = $"{item.Name}{ext}";
         string relativePath = string.IsNullOrEmpty(parentDir) ? fileName : $"{parentDir}/{fileName}";
 
-        // Serialize the asset to the file
-        // Clear the sub-asset's AssetID so it serializes as a full object, not a reference
-        var originalId = asset.AssetID;
-        asset.AssetID = Guid.Empty;
+        // Written as the root, so in full, with whatever it references kept as references.
+        asset.Load();
         try
         {
             var echo = Echo.Serializer.Serialize(typeof(object), asset);
@@ -775,27 +773,21 @@ public class InspectorPanel : DockPanel
         {
             Runtime.Debug.LogError($"Failed to extract sub-asset: {ex.Message}");
         }
-        finally
-        {
-            asset.AssetID = originalId; // Restore
-        }
     }
-
-    /// <summary>Assets with edits not yet written, so moving away and back keeps the Save button up.</summary>
-    private readonly HashSet<Guid> _unsavedAssets = [];
 
     /// <summary>
     /// Draws an asset's own serialized fields for types that have no editor of their own, which is
     /// what makes a custom <see cref="EngineObject"/> asset editable without writing one.
     /// </summary>
+    private readonly HashSet<Guid> _unsavedAssets = [];
+
     private void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
     {
         if (entry?.MainAssetType == null) return;
         if (!typeof(EngineObject).IsAssignableFrom(entry.MainAssetType)) return;
 
         Guid guid = item.Guid != Guid.Empty ? item.Guid : entry.Guid;
-        EngineObject? asset = Runtime.AssetDatabase.Get(guid);
-        if (asset.IsNotValid()) return;
+        if (Runtime.AssetDatabase.Load<Asset>(guid) is not { IsLoaded: true } asset) return;
 
         Origami.Header(paper, "insp_h_fields", Loc.Get("inspector.properties")).Underline().Show();
         PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid));
@@ -812,14 +804,13 @@ public class InspectorPanel : DockPanel
             Origami.Button(paper, "insp_asset_fields_save",
                 $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
                 {
-                    db.SaveAsset(asset);
-                    _unsavedAssets.Remove(guid);
+                    if (db.SaveAsset(asset)) _unsavedAssets.Remove(guid);
                 }).Show();
 
             Origami.Button(paper, "insp_asset_fields_revert",
                 $"{EditorIcons.ArrowsRotate}  {Loc.Get("dialog.revert")}", () =>
                 {
-                    db.Reimport(guid);
+                    Runtime.AssetDatabase.Refill(asset, ReloadReason.Revert);
                     _unsavedAssets.Remove(guid);
                 }).Show();
         }
@@ -832,10 +823,11 @@ public class InspectorPanel : DockPanel
         Origami.Label(paper, "insp_eo_name", $"{Loc.Get("inspector.name")}: {obj.Name}").Show();
         Origami.Label(paper, "insp_eo_id", $"{Loc.Get("inspector.instance_id")}: {obj.InstanceID}").Show();
 
-        if (obj.AssetID != Guid.Empty)
-            Origami.Label(paper, "insp_eo_assetid", $"{Loc.Get("inspector.asset_id")}: {obj.AssetID}").Show();
-        if (!string.IsNullOrEmpty(obj.AssetPath))
-            Origami.Label(paper, "insp_eo_assetpath", $"{Loc.Get("inspector.asset_path")}: {obj.AssetPath}").Show();
+        if (obj is Asset { IsFromDatabase: true } asset)
+        {
+            Origami.Label(paper, "insp_eo_assetid", $"{Loc.Get("inspector.asset_id")}: {asset.AssetID}").Show();
+            Origami.Label(paper, "insp_eo_assetpath", $"{Loc.Get("inspector.asset_path")}: {asset.AssetPath}").Show();
+        }
 
         // Use PropertyGrid for reflection-based editing
         Origami.Header(paper, "insp_h_props", Loc.Get("inspector.properties")).Underline().Show();

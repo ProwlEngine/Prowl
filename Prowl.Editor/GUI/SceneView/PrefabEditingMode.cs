@@ -96,7 +96,7 @@ public static class PrefabEditingMode
             return;
         }
 
-        var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
+        var prefab = PrefabUtility.LoadPrefab(prefabGuid);
         if (prefab == null)
         {
             Debug.LogWarning("[Prefab] Cannot edit prefab asset not found.");

@@ -101,7 +101,7 @@ public sealed class PluginInfo
 /// normal type-keyed inspector. The plugin's settings live in its .meta (a binary DLL can't carry
 /// them like a text .asmdef does). Editor-only; never shipped as a runtime asset.
 /// </summary>
-public sealed class PluginAsset : Prowl.Runtime.EngineObject { }
+public sealed class PluginAsset : Prowl.Runtime.Asset { }
 
 /// <summary>Scans a project for plugins and applies the Plugins-folder convention.</summary>
 public static class PluginScanner

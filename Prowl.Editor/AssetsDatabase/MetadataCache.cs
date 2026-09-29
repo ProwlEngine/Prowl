@@ -12,7 +12,7 @@ namespace Prowl.Editor;
 /// </summary>
 public static class MetadataCache
 {
-    private const int CurrentVersion = 2; // Bump when format changes
+    private const int CurrentVersion = 3; // Bump when format changes
 
     /// <summary> Loads the metadata cache from disk. Returns an empty dictionary if the file does not exist, the version is incompatible, or deserialization fails. </summary>
     public static Dictionary<Guid, AssetEntry> Load(string metadataDbPath)

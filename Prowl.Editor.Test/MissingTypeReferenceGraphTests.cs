@@ -78,7 +78,7 @@ public class MissingTypeReferenceGraphTests
         var guid = Guid.NewGuid();
         var root = new GameObject("Root");
         var holder = root.AddComponent<AssetHolderComp>();
-        holder.Tex = new AssetRef<Texture2D>(guid);
+        holder.Tex = AssetDatabase.Get<Texture2D>(guid);
         root.AddComponent<MissRefComp>(); // no targets
 
         var loaded = RoundTripWithMissing(root, nameof(MissRefComp));
@@ -98,7 +98,7 @@ public class MissingTypeReferenceGraphTests
         var root = new GameObject("Root");
         var misser = root.AddComponent<MissRefComp>();     // added FIRST
         var holder = root.AddComponent<AssetHolderComp>();
-        holder.Tex = new AssetRef<Texture2D>(guid);
+        holder.Tex = AssetDatabase.Get<Texture2D>(guid);
         misser.Target = holder;                            // holder defined inline here
 
         var loaded = RoundTripWithMissing(root, nameof(MissRefComp));

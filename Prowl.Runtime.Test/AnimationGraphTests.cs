@@ -39,7 +39,7 @@ public class AnimationGraphTests : RuntimeTestBase
         pose.SetTransform(2, new Transform3D(new Float3(0f, height, 0f), Quaternion.Identity, Float3.One));
 
         var clip = new Motion.AnimationClip(skeleton, new[] { pose, pose }, 1f);
-        return AnimationClip.FromSkeletal(clip, new AssetRef<Avatar>(avatar), name);
+        return AnimationClip.FromSkeletal(clip, avatar, name);
     }
 
     // ---- the registry ---------------------------------------------------------------------------
@@ -209,10 +209,10 @@ public class AnimationGraphTests : RuntimeTestBase
         asset.Parameters.Add(new GraphParameterRecord { Name = "Speed", Kind = NodeValueKind.Number, Number = parameter });
 
         GraphNodeRecord low = asset.AddNode(AnimationNodeIds.Clip, "low");
-        low.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, 1f, "Low")));
+        low.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 1f, "Low"));
 
         GraphNodeRecord high = asset.AddNode(AnimationNodeIds.Clip, "high");
-        high.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, 3f, "High")));
+        high.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 3f, "High"));
 
         GraphNodeRecord speed = asset.AddNode(AnimationNodeIds.Parameter, "speed");
         speed.Properties["Name"] = NodeValue.FromText("Speed");
@@ -237,8 +237,8 @@ public class AnimationGraphTests : RuntimeTestBase
         scene.Add(root);
 
         var animator = root.AddComponent<Animator>();
-        animator.Avatar = new AssetRef<Avatar>(avatar);
-        animator.Graph = new AssetRef<AnimationGraph>(asset);
+        animator.Avatar = avatar;
+        animator.Graph = asset;
 
         scene.Enable();
         return (scene, animator, root);
@@ -277,7 +277,7 @@ public class AnimationGraphTests : RuntimeTestBase
     public void EveryKindOfParameter_IsReadBeforeBinding_AndCarriedAcrossARebind()
     {
         (Scene scene, Animator animator, _) = BlendGraph(0f);
-        AnimationGraph asset = animator.Graph.Res!;
+        AnimationGraph asset = animator.Graph;
         asset.Parameters.Add(new GraphParameterRecord { Name = "Aim", Kind = NodeValueKind.Target });
         asset.Parameters.Add(new GraphParameterRecord { Name = "Tag", Kind = NodeValueKind.Id });
         asset.Invalidate();
@@ -308,7 +308,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         var asset = new AnimationGraph { Name = "Missing" };
         GraphNodeRecord clip = asset.AddNode(AnimationNodeIds.Clip, "clip");
-        clip.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(Guid.NewGuid()));
+        clip.Properties["Clip"] = NodeValue.FromClip(AssetDatabase.Get<AnimationClip>(Guid.NewGuid()));
         asset.RootNode = clip.Id;
 
         (Scene scene, Animator animator, _) = Rigged(asset, avatar);
@@ -443,7 +443,7 @@ public class AnimationGraphTests : RuntimeTestBase
         Assert.Equal(3.0, Spine(root).LocalPosition.Y, 1);
 
         // The high clip's threshold moves from 1 to 2, so a parameter of 1 now sits halfway between.
-        AnimationGraph asset = animator.Graph.Res!;
+        AnimationGraph asset = animator.Graph;
         asset.Find("blend")!.Inputs[2].Value = 2f;
         asset.Invalidate();
 
@@ -465,7 +465,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         // An edit that changes nothing about the blend, so all that could move the spine is the rebind
         // dropping the parameter back to its authored default of 1.
-        AnimationGraph asset = animator.Graph.Res!;
+        AnimationGraph asset = animator.Graph;
         asset.Invalidate();
         System.Threading.Thread.Sleep(200);
         Update(scene, 2);
@@ -484,10 +484,10 @@ public class AnimationGraphTests : RuntimeTestBase
         (Scene scene, Animator animator, GameObject root) = BlendGraph(1f);
         Update(scene, 2);
 
-        AnimationGraph old = animator.Graph.Res!;
+        AnimationGraph old = animator.Graph;
         var saved = Serializer.Deserialize<AnimationGraph>(Serializer.Serialize(typeof(object), old))!;
         saved.Find("blend")!.Inputs[2].Value = 2f;
-        animator.Graph = new AssetRef<AnimationGraph>(saved);
+        animator.Graph = saved;
 
         Update(scene, 2);
 
@@ -501,7 +501,7 @@ public class AnimationGraphTests : RuntimeTestBase
         Update(scene, 2);
         var before = animator.GraphInstance;
 
-        animator.Graph.Res!.Invalidate();
+        animator.Graph.Invalidate();
         Update(scene, 1);
 
         Assert.Same(before, animator.GraphInstance);
@@ -543,9 +543,9 @@ public class AnimationGraphTests : RuntimeTestBase
 
         var asset = new AnimationGraph { Name = "States" };
         GraphNodeRecord idle = asset.AddNode(AnimationNodeIds.Clip, "idle");
-        idle.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, 1f, "Idle")));
+        idle.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 1f, "Idle"));
         GraphNodeRecord run = asset.AddNode(AnimationNodeIds.Clip, "run");
-        run.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, 3f, "Run")));
+        run.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 3f, "Run"));
 
         GraphNodeRecord machine = asset.AddNode(AnimationNodeIds.StateMachine, "sm");
         // Run wants in the moment it can be reached, so staying in Idle proves the default took and the
@@ -574,7 +574,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         var asset = new AnimationGraph { Name = "Mapped" };
         GraphNodeRecord clip = asset.AddNode(AnimationNodeIds.Clip, "clip");
-        clip.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, 2f, "Hold")));
+        clip.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 2f, "Hold"));
         asset.RootNode = clip.Id;
 
         MotionGraph? compiled = asset.Compile(skeleton, avatar.Runtime);
@@ -602,7 +602,7 @@ public class AnimationGraphTests : RuntimeTestBase
         (Scene scene, Animator animator, GameObject _) = BlendGraph(0.5f);
         Update(scene, 2);
 
-        AnimationGraph asset = animator.Graph.Res!;
+        AnimationGraph asset = animator.Graph;
         AnimationGraphInstance instance = animator.GraphInstance!;
 
         IReadOnlyDictionary<string, int> nodes = NodesOf(asset, instance);
@@ -625,9 +625,9 @@ public class AnimationGraphTests : RuntimeTestBase
 
         var asset = new AnimationGraph { Name = "States" };
         GraphNodeRecord idle = asset.AddNode(AnimationNodeIds.Clip, "idle");
-        idle.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, 1f, "Idle")));
+        idle.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 1f, "Idle"));
         GraphNodeRecord run = asset.AddNode(AnimationNodeIds.Clip, "run");
-        run.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, 3f, "Run")));
+        run.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, 3f, "Run"));
 
         GraphNodeRecord condition = asset.AddNode(AnimationNodeIds.ConstBool, "condition");
         condition.Properties["Value"] = NodeValue.FromFlag(takeTheTransition);
@@ -667,7 +667,7 @@ public class AnimationGraphTests : RuntimeTestBase
     private static GraphNodeRecord HeldClipNode(AnimationGraph asset, MotionSkeleton skeleton, Avatar avatar, string id, float height)
     {
         GraphNodeRecord node = asset.AddNode(AnimationNodeIds.Clip, id);
-        node.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldClip(skeleton, avatar, height, id)));
+        node.Properties["Clip"] = NodeValue.FromClip(HeldClip(skeleton, avatar, height, id));
         return node;
     }
 
@@ -834,7 +834,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         GraphNodeRecord machine = asset.AddNode(AnimationNodeIds.StateMachine, "sm");
         machine.States.Add(State(asset, "Idle", "idle", isDefault: true));
-        machine.States.Add(new GraphStateRecord { Id = "runState", Name = "Run", Graph = new AssetRef<AnimationGraph>(run) });
+        machine.States.Add(new GraphStateRecord { Id = "runState", Name = "Run", Graph = run });
         machine.States[0].Transitions.Add(new GraphTransitionRecord { To = "Run", Duration = 0.05f });
         asset.RootNode = machine.Id;
 
@@ -852,7 +852,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         var outer = new AnimationGraph { Name = "Outer" };
         GraphNodeRecord sub = outer.AddNode(AnimationNodeIds.SubGraph, "sub");
-        sub.Properties["Graph"] = NodeValue.FromGraph(new AssetRef<AnimationGraph>(inner));
+        sub.Properties["Graph"] = NodeValue.FromGraph(inner);
         outer.RootNode = sub.Id;
 
         MotionGraph? before = outer.Compile(skeleton, avatar.Runtime);
@@ -903,7 +903,7 @@ public class AnimationGraphTests : RuntimeTestBase
         (Scene scene, Animator animator, GameObject _) = BlendGraph(0.25f);
         Update(scene, 2);
 
-        AnimationGraph asset = animator.Graph.Res!;
+        AnimationGraph asset = animator.Graph;
         AnimationGraphInstance instance = animator.GraphInstance!;
         Assert.True(asset.TryGetCompiledMaps(instance.Graph, out var nodes, out _));
 
@@ -923,11 +923,11 @@ public class AnimationGraphTests : RuntimeTestBase
         pose.SetToReferencePose();
 
         AnimationClip clip = AnimationClip.FromSkeletal(new Motion.AnimationClip(skeleton, new[] { pose, pose }, 1f),
-            new AssetRef<Avatar>(avatar), "Step", new[] { new ClipEvent { Kind = ClipEventKind.Named, Time = 0.5f, Name = "Footstep" } });
+            avatar, "Step", new[] { new ClipEvent { Kind = ClipEventKind.Named, Time = 0.5f, Name = "Footstep" } });
 
         var asset = new AnimationGraph { Name = "Events" };
         asset.RootNode = asset.AddNode(AnimationNodeIds.Clip, "clip").Id;
-        asset.Find("clip")!.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(clip));
+        asset.Find("clip")!.Properties["Clip"] = NodeValue.FromClip(clip);
 
         AnimationGraphInstance instance = asset.Compile(skeleton, avatar.Runtime)!.CreateInstance(skeleton);
         var firedAt = new List<int>();
@@ -952,7 +952,7 @@ public class AnimationGraphTests : RuntimeTestBase
         high.SetTransform(2, new Transform3D(new Float3(0f, 1f, 0f), Quaternion.Identity, Float3.One));
 
         return AnimationClip.FromSkeletal(new Motion.AnimationClip(skeleton, new[] { low, high }, 1f),
-            new AssetRef<Avatar>(avatar), name);
+            avatar, name);
     }
 
     private static float SpineHeight(AnimationGraphInstance instance) => (float)instance.Pose.GetTransform(2).position.Y;
@@ -966,7 +966,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         var asset = new AnimationGraph { Name = "Offset" };
         GraphNodeRecord clip = asset.AddNode(AnimationNodeIds.Clip, "clip");
-        clip.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(RampClip(skeleton, avatar, "Ramp")));
+        clip.Properties["Clip"] = NodeValue.FromClip(RampClip(skeleton, avatar, "Ramp"));
         clip.Properties["Start"] = NodeValue.FromNumber(0.5f);
         asset.RootNode = clip.Id;
 
@@ -990,7 +990,7 @@ public class AnimationGraphTests : RuntimeTestBase
 
         var asset = new AnimationGraph { Name = "Looping" };
         GraphNodeRecord clip = asset.AddNode(AnimationNodeIds.Clip, "clip");
-        clip.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(source));
+        clip.Properties["Clip"] = NodeValue.FromClip(source);
         clip.Properties["Looping"] = NodeValue.FromText(looping);
         asset.RootNode = clip.Id;
 
@@ -1016,7 +1016,7 @@ public class AnimationGraphTests : RuntimeTestBase
         {
             var asset = new AnimationGraph { Name = "Driven" };
             GraphNodeRecord clip = asset.AddNode(AnimationNodeIds.Clip, "clip");
-            clip.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(ramp));
+            clip.Properties["Clip"] = NodeValue.FromClip(ramp);
 
             GraphNodeRecord half = asset.AddNode(AnimationNodeIds.ConstFloat, "half");
             half.Properties["Value"] = NodeValue.FromNumber(0.5f);
@@ -1088,7 +1088,7 @@ public class AnimationGraphTests : RuntimeTestBase
         pose.SetTransform(bone, new Transform3D(new Float3(0f, height, 0f), Quaternion.Identity, Float3.One));
 
         return AnimationClip.FromSkeletal(new Motion.AnimationClip(skeleton, new[] { pose, pose }, 1f),
-            new AssetRef<Avatar>(avatar), name);
+            avatar, name);
     }
 
     /// <summary>
@@ -1110,10 +1110,10 @@ public class AnimationGraphTests : RuntimeTestBase
         mask.Properties["Bones"] = NodeValue.FromText(bone);
 
         GraphNodeRecord low = asset.AddNode(AnimationNodeIds.Clip, "low");
-        low.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldAt(skeleton, avatar, spine, 1f, "Low")));
+        low.Properties["Clip"] = NodeValue.FromClip(HeldAt(skeleton, avatar, spine, 1f, "Low"));
 
         GraphNodeRecord high = asset.AddNode(AnimationNodeIds.Clip, "high");
-        high.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(HeldAt(skeleton, avatar, spine, 2f, "High")));
+        high.Properties["Clip"] = NodeValue.FromClip(HeldAt(skeleton, avatar, spine, 2f, "High"));
 
         GraphNodeRecord layers = asset.AddNode(AnimationNodeIds.LayerBlend, "layers");
         layers.Inputs.Add(new GraphInputRecord { Node = low.Id });
@@ -1319,7 +1319,7 @@ public class AnimationGraphTests : RuntimeTestBase
         var outer = new AnimationGraph { Name = "Outer" };
         outer.AddNode(AnimationNodeIds.ConstFloat, "one").Properties["Value"] = NodeValue.FromNumber(1f);
         GraphNodeRecord sub = outer.AddNode(AnimationNodeIds.SubGraph, "sub");
-        sub.Properties["Graph"] = NodeValue.FromGraph(new AssetRef<AnimationGraph>(inner));
+        sub.Properties["Graph"] = NodeValue.FromGraph(inner);
         if (wired) sub.PropertyInputs["Blend"] = "one";
         outer.RootNode = sub.Id;
 

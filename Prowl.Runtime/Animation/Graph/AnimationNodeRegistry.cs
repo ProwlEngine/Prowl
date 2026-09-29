@@ -202,7 +202,7 @@ public sealed class GraphCompileContext
             if (!state.UsesAsset)
                 return Ends(_asset.OwnedNode(state.Id, AnimationNodeIds.StateOutput));
 
-            AnimationGraph? asset = state.Graph.Res;
+            AnimationGraph? asset = state.Graph;
             if (asset.IsNotValid()) return StateEnds.Empty;
             if (_visiting.Contains(asset!))
             {
@@ -490,19 +490,19 @@ public sealed class GraphCompileContext
 
     public AnimationClip? ClipAsset(GraphNodeRecord record, AssetSetting setting)
     {
-        AnimationClip? asset = record.Get(setting)?.Clip.Res;
+        AnimationClip? asset = record.Get(setting)?.Clip;
         return asset.IsValid() ? asset : null;
     }
 
     public Motion.BoneMask? Mask(GraphNodeRecord record, AssetSetting setting)
-        => record.Get(setting)?.Mask.Res is { } mask && mask.IsValid() ? mask.GetBoneMask(Skeleton) : null;
+        => record.Get(setting)?.Mask is { } mask && mask.IsValid() ? mask.GetBoneMask(Skeleton) : null;
 
     public Motion.HumanPoseMask? HumanMask(GraphNodeRecord record, AssetSetting setting)
-        => record.Get(setting)?.Mask.Res is { } mask && mask.IsValid() ? mask.GetHumanMask() : null;
+        => record.Get(setting)?.Mask is { } mask && mask.IsValid() ? mask.GetHumanMask() : null;
 
     public Avatar? AvatarAsset(GraphNodeRecord record, AssetSetting setting)
     {
-        Avatar? asset = record.Get(setting)?.Avatar.Res;
+        Avatar? asset = record.Get(setting)?.Avatar;
         return asset.IsValid() ? asset : null;
     }
 
@@ -511,7 +511,7 @@ public sealed class GraphCompileContext
     /// <summary>Compiles a referenced graph for the same rig. Null when missing or when it leads back to itself.</summary>
     public MotionGraph? SubGraph(GraphNodeRecord record, AssetSetting setting)
     {
-        AnimationGraph? asset = record.Get(setting)?.Graph.Res;
+        AnimationGraph? asset = record.Get(setting)?.Graph;
         if (asset.IsNotValid()) return null;
 
         if (_visiting.Contains(asset!))

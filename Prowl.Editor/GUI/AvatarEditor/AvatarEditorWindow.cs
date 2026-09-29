@@ -106,7 +106,7 @@ public class AvatarEditorWindow : DockPanel
         if (entry == null) return;
 
         // The preview owns the instantiated hierarchy the gizmos are drawn from.
-        PrefabAsset? model = new AssetRef<PrefabAsset>(modelGuid).Res;
+        PrefabAsset? model = AssetDatabase.Get<PrefabAsset>(modelGuid);
         if (model.IsValid())
         {
             _preview = new PreviewRenderer(512, 512) { ShowGrid = true };
@@ -150,7 +150,7 @@ public class AvatarEditorWindow : DockPanel
         foreach (var sub in entry.SubAssets)
         {
             if (sub.Type == null || !typeof(Runtime.Avatar).IsAssignableFrom(sub.Type)) continue;
-            Runtime.Avatar? avatar = new AssetRef<Runtime.Avatar>(sub.Guid).Res;
+            Runtime.Avatar? avatar = AssetDatabase.Get<Runtime.Avatar>(sub.Guid);
             if (avatar.IsValid()) return avatar;
         }
         return null;

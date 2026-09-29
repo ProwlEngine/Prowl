@@ -15,15 +15,15 @@ namespace Prowl.Runtime;
 /// Extends EngineObject so it can be saved as an asset (.inputactions).
 /// </summary>
 [CreateAssetMenu("Input Actions", Extension = ".inputactions", Order = 2)]
-public class InputActionMap : EngineObject, ISerializable
+public class InputActionMap : Asset, ISerializable
 {
     private readonly Dictionary<string, InputAction> _actions = [];
 
     /// <summary>All actions in this map.</summary>
-    public IReadOnlyCollection<InputAction> Actions => _actions.Values;
+    public IReadOnlyCollection<InputAction> Actions { get { EnsureLoaded(); return _actions.Values; } }
 
     /// <summary>Whether any action in this map is enabled.</summary>
-    public bool Enabled => _actions.Values.Any(a => a.Enabled);
+    public bool Enabled { get { EnsureLoaded(); return _actions.Values.Any(a => a.Enabled); } }
 
     public InputActionMap() : base("New InputActionMap") { }
 
@@ -32,6 +32,7 @@ public class InputActionMap : EngineObject, ISerializable
     /// <summary>Adds a new action to this map.</summary>
     public InputAction AddAction(string name, InputActionType type = InputActionType.Button)
     {
+        EnsureLoaded();
         if (_actions.ContainsKey(name))
             throw new ArgumentException($"Action '{name}' already exists in map '{Name}'");
 
@@ -43,6 +44,7 @@ public class InputActionMap : EngineObject, ISerializable
     /// <summary>Adds an existing action to this map.</summary>
     public void AddAction(InputAction action)
     {
+        EnsureLoaded();
         if (_actions.ContainsKey(action.Name))
             throw new ArgumentException($"Action '{action.Name}' already exists in map '{Name}'");
 
@@ -53,6 +55,7 @@ public class InputActionMap : EngineObject, ISerializable
     /// <summary>Finds an action by name.</summary>
     public InputAction? FindAction(string name)
     {
+        EnsureLoaded();
         _actions.TryGetValue(name, out InputAction? action);
         return action;
     }
@@ -60,6 +63,7 @@ public class InputActionMap : EngineObject, ISerializable
     /// <summary>Gets an action by name, throws if not found.</summary>
     public InputAction GetAction(string name)
     {
+        EnsureLoaded();
         if (!_actions.TryGetValue(name, out InputAction? action))
             throw new KeyNotFoundException($"Action '{name}' not found in map '{Name}'");
         return action;
@@ -68,6 +72,7 @@ public class InputActionMap : EngineObject, ISerializable
     /// <summary>Removes an action from this map.</summary>
     public bool RemoveAction(string name)
     {
+        EnsureLoaded();
         if (_actions.TryGetValue(name, out InputAction? action))
         {
             action.Disable();
@@ -80,6 +85,7 @@ public class InputActionMap : EngineObject, ISerializable
     /// <summary>Enables all actions in this map.</summary>
     public void Enable()
     {
+        EnsureLoaded();
         foreach (InputAction action in _actions.Values)
             action.Enable();
     }
@@ -87,6 +93,7 @@ public class InputActionMap : EngineObject, ISerializable
     /// <summary>Disables all actions in this map.</summary>
     public void Disable()
     {
+        EnsureLoaded();
         foreach (InputAction action in _actions.Values)
             action.Disable();
     }
@@ -105,6 +112,40 @@ public class InputActionMap : EngineObject, ISerializable
     public InputAction this[string name] => GetAction(name);
 
     public override string ToString() => $"{Name} ({_actions.Count} actions)";
+
+    // The actions come from the copy that was read, so they point back at it. What was enabled stays enabled.
+    // Read again in place, an action keeps its object, so whatever listens to it or holds it keeps working. After an
+    // unload there is nothing to keep, and the actions read are used as they are.
+    protected override void TakeContent(Asset staging)
+    {
+        Dictionary<string, InputAction>? previous = State == AssetState.Loaded ? new(_actions) : null;
+
+        base.TakeContent(staging);
+
+        foreach (string name in _actions.Keys.ToList())
+        {
+            InputAction read = _actions[name];
+            if (previous == null || !previous.Remove(name, out InputAction? kept))
+            {
+                read.ActionMap = this;
+                continue;
+            }
+
+            bool enabled = kept.Enabled;
+            if (enabled) kept.Disable();
+            kept.TakeConfiguration(read);
+            _actions[name] = kept;
+            if (enabled) kept.Enable();
+        }
+
+        // Actions the map no longer has.
+        if (previous != null)
+            foreach (InputAction removed in previous.Values)
+            {
+                removed.Disable();
+                removed.ActionMap = null;
+            }
+    }
 
     // ================================================================
     //  Serialization save/load the action map structure as an asset

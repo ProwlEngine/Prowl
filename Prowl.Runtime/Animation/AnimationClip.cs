@@ -23,10 +23,10 @@ public enum AnimationClipKind
 }
 
 /// <summary>An animation clip: the encoded Motion clip, the rig it was authored on, and its settings.</summary>
-public sealed class AnimationClip : EngineObject, ISerializable
+public sealed class AnimationClip : Asset, ISerializable
 {
     /// <summary>The rig the clip was authored on. A humanoid clip uses it only to preview.</summary>
-    public AssetRef<Avatar> Avatar;
+    public Avatar? Avatar;
 
     /// <summary>Whether playback wraps or holds the final pose.</summary>
     public bool Loop = true;
@@ -52,12 +52,12 @@ public sealed class AnimationClip : EngineObject, ISerializable
 
     public AnimationClip() : base("Animation") { }
 
-    public AnimationClipKind Kind { get { EnsureNotDisposed(); return _kind; } }
+    public AnimationClipKind Kind { get { EnsureLoaded(); return _kind; } }
 
     /// <summary>Clip length in seconds, readable without decoding the payload.</summary>
-    public float Duration { get { EnsureNotDisposed(); return _duration; } }
+    public float Duration { get { EnsureLoaded(); return _duration; } }
 
-    public int FrameCount { get { EnsureNotDisposed(); return _frameCount; } }
+    public int FrameCount { get { EnsureLoaded(); return _frameCount; } }
 
     /// <summary>
     /// The clip Motion plays, decoded on first use and bound to <paramref name="target"/> when humanoid.
@@ -65,7 +65,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
     /// </summary>
     public MotionClip? GetClip(MotionAvatar? target)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (_payload == null || _decodeFailed)
             return null;
 
@@ -77,8 +77,8 @@ public sealed class AnimationClip : EngineObject, ISerializable
         if (_skeletal != null)
             return _skeletal;
 
-        Avatar avatar = Avatar.Res;
-        if (avatar.IsNotValid() || avatar.Skeleton == null)
+        Avatar? avatar = Avatar;
+        if (avatar is null || avatar.Skeleton == null)
             return null;
 
         Motion.Skeleton skeleton = avatar.Skeleton;
@@ -133,7 +133,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
     }
 
     /// <summary>Builds an asset around a clip authored for one skeleton.</summary>
-    public static AnimationClip FromSkeletal(MotionClip clip, AssetRef<Avatar> avatar, string? name = null, IEnumerable<ClipEvent>? events = null)
+    public static AnimationClip FromSkeletal(MotionClip clip, Avatar? avatar, string? name = null, IEnumerable<ClipEvent>? events = null)
     {
         ArgumentNullException.ThrowIfNull(clip);
         AnimationClip asset = Create(AnimationClipKind.Skeletal, clip.Duration, clip.FrameCount, avatar, name, events, writer => MotionBinary.Write(writer, clip));
@@ -142,7 +142,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
     }
 
     /// <summary>Builds an asset around a clip baked into muscle space.</summary>
-    public static AnimationClip FromHumanoid(HumanoidClip clip, AssetRef<Avatar> avatar, string? name = null, IEnumerable<ClipEvent>? events = null)
+    public static AnimationClip FromHumanoid(HumanoidClip clip, Avatar? avatar, string? name = null, IEnumerable<ClipEvent>? events = null)
     {
         ArgumentNullException.ThrowIfNull(clip);
         AnimationClip asset = Create(AnimationClipKind.Humanoid, clip.Duration, clip.FrameCount, avatar, name, events, writer => MotionBinary.Write(writer, clip));
@@ -150,7 +150,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
         return asset;
     }
 
-    private static AnimationClip Create(AnimationClipKind kind, float duration, int frames, AssetRef<Avatar> avatar, string? name,
+    private static AnimationClip Create(AnimationClipKind kind, float duration, int frames, Avatar? avatar, string? name,
         IEnumerable<ClipEvent>? events, Action<BinaryWriter> write)
     {
         var asset = new AnimationClip
@@ -170,12 +170,14 @@ public sealed class AnimationClip : EngineObject, ISerializable
         return asset;
     }
 
-    protected override void OnDispose()
+    protected override void OnUnload()
     {
         _skeletal = null;
         _humanoid = null;
         _bound = null;
     }
+
+    protected internal override long EstimateBytes() => (_payload?.Length ?? 0) * 3L;
 
     public void Serialize(ref EchoObject value, SerializationContext ctx)
     {
@@ -185,7 +187,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
         value.Add("SourceName", new EchoObject(SourceName));
         value.Add("Duration", new EchoObject(_duration));
         value.Add("FrameCount", new EchoObject(_frameCount));
-        value.Add("Avatar", Serializer.Serialize(Avatar, ctx));
+        value.Add("Avatar", Serializer.Serialize(typeof(Avatar), Avatar, ctx));
         value.Add("Events", Serializer.Serialize(Events, ctx));
         value.Add("TakeStart", new EchoObject(TakeStart));
         value.Add("Clip", new EchoObject(_payload ?? Array.Empty<byte>()));
@@ -199,7 +201,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
         SourceName = value.Get("SourceName")?.StringValue ?? string.Empty;
         _duration = value.Get("Duration")?.FloatValue ?? 0f;
         _frameCount = value.Get("FrameCount")?.IntValue ?? 0;
-        Avatar = Serializer.Deserialize<AssetRef<Avatar>>(value.Get("Avatar"), ctx);
+        Avatar = Serializer.Deserialize<Avatar>(value.Get("Avatar"), ctx);
         Events = value.Get("Events") is { } events ? Serializer.Deserialize<List<ClipEvent>>(events, ctx) ?? new() : new();
         TakeStart = value.Get("TakeStart")?.FloatValue ?? 0f;
 

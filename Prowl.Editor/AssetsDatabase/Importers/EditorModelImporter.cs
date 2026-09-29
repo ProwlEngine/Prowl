@@ -88,16 +88,15 @@ public class EditorModelImporter : AssetImporter
             for (int i = 0; i < data.Animations.Count; i++)
                 ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i], SubAssetIdentity.Order);
 
-            // Note: model-referenced textures (both external and embedded) are already fully
-            // resolved by this point - materials carry AssetRefs, and any embedded texture is
-            // already registered as a sub-asset - both as side effects of EditorModelTextureResolver
-            // running during importer.Import() above.
+            // Model-referenced textures are already resolved by this point: an external one is the database's
+            // texture, and an embedded one is registered as a sub-asset, both by EditorModelTextureResolver
+            // while importer.Import() ran above.
 
             // 2b. Generate mesh features (SDF, BVH, Prism, ...) per mesh, registered as sub-assets.
             for (int i = 0; i < data.Meshes.Count; i++)
                 MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx, meshIdentities[i]);
 
-            // 3. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
+            // 3. Serialize GO hierarchy. Sub-assets have their IDs, so they serialize as references.
             //    Tracked (matching SceneImporter/PrefabImporter) so the prefab's own dependency list
             //    reflects what its GameObject hierarchy actually references.
             //    A model is a prefab: dropping one into a scene produces an instance linked back here,
@@ -206,9 +205,9 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
         _db = EditorAssetBackend.Instance;
     }
 
-    public AssetRef<Texture2D> ResolveExternal(string sourcePath)
+    public Texture2D? ResolveExternal(string sourcePath)
     {
-        if (_db == null || string.IsNullOrEmpty(_assetsRoot)) return default;
+        if (_db == null || string.IsNullOrEmpty(_assetsRoot)) return null;
 
         // sourcePath is always already a resolved, existing, absolute path (guaranteed by Clay's
         // Texture.SourcePath contract) - a plain prefix check + relative-path computation is enough,
@@ -217,7 +216,7 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
         {
             Debug.LogWarning($"[Clay] External texture '{sourcePath}' is not under the project's " +
                 $"Assets folder '{_assetsRoot}' - using the default fallback texture instead.");
-            return default;
+            return null;
         }
 
         string relativePath = Path.GetRelativePath(_assetsRoot, sourcePath).Replace('\\', '/');
@@ -226,27 +225,27 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
         {
             Debug.LogWarning($"[Clay] External texture '{sourcePath}' (resolved to '{relativePath}') has no " +
                 "tracked asset entry - using the default fallback texture instead. Has it been imported yet?");
-            return default;
+            return null;
         }
 
         _ctx.AddDependency(entry.Guid);
-        return new AssetRef<Texture2D>(entry.Guid);
+        return AssetDatabase.Get<Texture2D>(entry.Guid);
     }
 
-    public AssetRef<Texture2D> ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
+    public Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
     {
         try
         {
             using var ms = new MemoryStream(encodedBytes);
             var tex = Texture2D.LoadFromStream(ms, generateMipmaps: true);
             tex.Name = string.IsNullOrEmpty(name) ? "EmbeddedTexture" : name;
-            _ctx.AddSubAsset(tex.Name, tex, SubAssetIdentity.Order); // assigns tex.AssetID
-            return new AssetRef<Texture2D>(tex);
+            _ctx.AddSubAsset(tex.Name, tex, SubAssetIdentity.Order);
+            return tex;
         }
         catch (Exception ex)
         {
             Debug.LogWarning($"[Clay] Failed to load embedded texture '{name ?? "(unnamed)"}': {ex.Message}");
-            return default;
+            return null;
         }
     }
 }

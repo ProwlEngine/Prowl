@@ -40,7 +40,7 @@ public class SpriteEditorWindow : DockPanel
     private const float PivotHit = 9f;
 
     private Guid _textureGuid;
-    private AssetRef<Texture2D> _texture;
+    private Texture2D? _texture;
     private SpriteEditTarget _target = new();
     private SpriteImportSettings _settings => _target.Settings;
 
@@ -66,7 +66,7 @@ public class SpriteEditorWindow : DockPanel
     {
         get
         {
-            var tex = _texture.Res;
+            var tex = _texture;
             return $"Sprite: {(tex.IsValid() ? tex.Name : "?")}";
         }
     }
@@ -102,8 +102,7 @@ public class SpriteEditorWindow : DockPanel
     private void Load(Guid textureGuid)
     {
         _textureGuid = textureGuid;
-        _texture = new AssetRef<Texture2D>(textureGuid);
-        _texture.EnsureLoaded();
+        _texture = AssetDatabase.Load<Texture2D>(textureGuid);
         _target = SpriteEditRegistry.Get(textureGuid);
         _selected = -1;
         _needsFrame = true;
@@ -133,7 +132,7 @@ public class SpriteEditorWindow : DockPanel
     // with no undo, and the importer already reads only the first slice in Single mode.
     private void EnsureSingleSlice()
     {
-        if (!IsSingle || _texture.Res is not Texture2D tex) return;
+        if (!IsSingle || _texture is not Texture2D tex) return;
 
         if (_settings.Slices.Count == 0)
             _settings.Slices.Add(new SpriteSliceData { Id = Guid.NewGuid(), Name = tex.Name });
@@ -355,7 +354,7 @@ public class SpriteEditorWindow : DockPanel
 
     private void RunSliceCore()
     {
-        if (_texture.Res is not Texture2D tex) return;
+        if (_texture is not Texture2D tex) return;
         int texW = (int)tex.Width, texH = (int)tex.Height;
         byte[]? alpha = (_settings.SlicingTool == SpriteSlicingTool.Automatic || !_settings.KeepEmptyRects)
             ? SpriteSlicer.ReadAlpha(tex) : null;
@@ -385,7 +384,7 @@ public class SpriteEditorWindow : DockPanel
                 _cvX = (float)rect.Min.X; _cvY = (float)rect.Min.Y;
                 _cvW = (float)rect.Size.X; _cvH = (float)rect.Size.Y;
 
-                if (_needsFrame && _texture.Res is Texture2D t && _cvW > 1 && _cvH > 1)
+                if (_needsFrame && _texture is Texture2D t && _cvW > 1 && _cvH > 1)
                 {
                     _view.Frame(t.Width, t.Height, new Float2(_cvW, _cvH));
                     ClampPan();
@@ -472,13 +471,13 @@ public class SpriteEditorWindow : DockPanel
     private void ClickSelect(Paper paper)
     {
         if (_drag != DragMode.None || IsSingle) return;
-        if (_texture.Res is not Texture2D tex) return;
+        if (_texture is not Texture2D tex) return;
         _selected = HitBody(ContentAt(paper), (int)tex.Height);
     }
 
     private void DragStart(Paper paper)
     {
-        if (_texture.Res is not Texture2D tex) { _drag = DragMode.None; return; }
+        if (_texture is not Texture2D tex) { _drag = DragMode.None; return; }
         int texW = (int)tex.Width, texH = (int)tex.Height;
         Float2 content = ContentAt(paper);
         Float2 pointer = paper.PointerPos;
@@ -537,7 +536,7 @@ public class SpriteEditorWindow : DockPanel
 
     private void DragUpdate(Paper paper)
     {
-        if (_texture.Res is not Texture2D tex) return;
+        if (_texture is not Texture2D tex) return;
         int texW = (int)tex.Width, texH = (int)tex.Height;
         Float2 content = ContentAt(paper);
 
@@ -610,7 +609,7 @@ public class SpriteEditorWindow : DockPanel
     {
         string? desc = null;
 
-        if (_drag == DragMode.Create && _texture.Res is Texture2D tex)
+        if (_drag == DragMode.Create && _texture is Texture2D tex)
         {
             int texW = (int)tex.Width, texH = (int)tex.Height;
             float dx = MathF.Min(_createStart.X, _createEnd.X), dy = MathF.Min(_createStart.Y, _createEnd.Y);
@@ -710,7 +709,7 @@ public class SpriteEditorWindow : DockPanel
 
     private void ClampPan()
     {
-        if (_texture.Res is not Texture2D tex) return;
+        if (_texture is not Texture2D tex) return;
         float cw = tex.Width * _view.Zoom, ch = tex.Height * _view.Zoom;
         Float2 p = _view.Pan;
         p.X = Math.Clamp(p.X, MathF.Min(0, _cvW - cw), MathF.Max(0, _cvW - cw));
@@ -721,7 +720,7 @@ public class SpriteEditorWindow : DockPanel
     // OS cursor shape for whatever the pointer is over (or the active drag).
     private PaperCursor HoverCursor(Paper paper)
     {
-        if (_texture.Res is not Texture2D tex || !PointerInCanvas(paper)) return PaperCursor.Default;
+        if (_texture is not Texture2D tex || !PointerInCanvas(paper)) return PaperCursor.Default;
         int texH = (int)tex.Height;
         Float2 pointer = paper.PointerPos;
 
@@ -775,7 +774,7 @@ public class SpriteEditorWindow : DockPanel
     {
         DrawCheckerboard(canvas, ox, oy, ow, oh);
 
-        if (_texture.Res is not Texture2D tex)
+        if (_texture is not Texture2D tex)
         {
             canvas.DrawText("Texture not loaded", ox + 12, oy + 12, new Color32(200, 200, 200, 200), 14, EditorTheme.DefaultFont!);
             return;

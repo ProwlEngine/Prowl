@@ -113,8 +113,8 @@ public class EnvironmentPanel : DockPanel
 
             case Scene.SkyboxMode.Material:
                 EditorGUI.SettingsRow(paper, $"{id}_mat", Loc.Get("env.material"), () =>
-                    PropertyGridUtils.DrawField(paper, $"{id}_mat_v", "", typeof(AssetRef<Material>), sky.CustomMaterial,
-                        v => { sky.CustomMaterial = (AssetRef<Material>)v!; Dirty(); }, 0));
+                    PropertyGridUtils.DrawField(paper, $"{id}_mat_v", "", typeof(Material), sky.CustomMaterial,
+                        v => { sky.CustomMaterial = v as Material; Dirty(); }, 0));
                 break;
 
             case Scene.SkyboxMode.Procedural:

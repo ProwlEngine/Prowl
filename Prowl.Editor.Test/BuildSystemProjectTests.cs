@@ -155,7 +155,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
             public class ParentRefComponent : MonoBehaviour
             {
-                public AssetRef<Texture2D> MyTexture;
+                public Texture2D? MyTexture;
             }
             """);
         var compile = ScriptCompiler.CompileAll(Project);
@@ -168,7 +168,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         var scene = new Scene();
         var go = new GameObject("Root");
         var comp = go.AddComponent(compType!);
-        compType!.GetField("MyTexture")!.SetValue(comp, new AssetRef<Texture2D>(texGuidA));
+        compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuidA));
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -205,7 +205,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
     // Editor/-folder assets are excluded from a build by default, but a texture under Editor/ is
     // still a real runtime asset if a scene/component genuinely references it - the dependency must
-    // still ship rather than leaving a silently dangling AssetRef.
+    // still ship rather than leaving a silently dangling reference.
     [Fact]
     public void Collect_IncludesRuntimeDependencyLivingUnderEditorFolder()
     {
@@ -221,7 +221,7 @@ public class BuildSystemProjectTests : EditorTestHarness
 
             public class EditorTexRefComponent : MonoBehaviour
             {
-                public AssetRef<Texture2D> MyTexture;
+                public Texture2D? MyTexture;
             }
             """);
         var compile = ScriptCompiler.CompileAll(Project);
@@ -234,7 +234,7 @@ public class BuildSystemProjectTests : EditorTestHarness
         var scene = new Scene();
         var go = new GameObject("Root");
         var comp = go.AddComponent(compType!);
-        compType!.GetField("MyTexture")!.SetValue(comp, new AssetRef<Texture2D>(texGuid));
+        compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
@@ -397,21 +397,18 @@ public class BuildSystemProjectTests : EditorTestHarness
 
             public class BuildLogComponent : MonoBehaviour
             {
-                public AssetRef<Texture2D> MyTexture;
-                public AssetRef<Sprite> MySprite;
+                public Texture2D? MyTexture;
+                public Sprite? MySprite;
 
                 public override void Start()
                 {
                     System.Console.WriteLine("{{Marker}}");
 
-                    MyTexture.EnsureLoaded();
-                    var tex = MyTexture.Res;
+                    var tex = MyTexture;
                     System.Console.WriteLine($"PROWL_TEXTURE_CHECK|valid={tex.IsValid()}|width={(tex.IsValid() ? tex.Width : 0)}|height={(tex.IsValid() ? tex.Height : 0)}");
 
-                    MySprite.EnsureLoaded();
-                    var sprite = MySprite.Res;
-                    if (sprite.IsValid()) sprite.Texture.EnsureLoaded();
-                    var spriteTex = sprite.IsValid() ? sprite.Texture.Res : null;
+                    var sprite = MySprite;
+                    var spriteTex = sprite.IsValid() ? sprite.Texture : null;
                     System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={spriteTex.IsValid()}|width={(spriteTex.IsValid() ? spriteTex.Width : 0)}|height={(spriteTex.IsValid() ? spriteTex.Height : 0)}");
                 }
             }
@@ -432,8 +429,8 @@ public class BuildSystemProjectTests : EditorTestHarness
         var scene = new Scene();
         var go = new GameObject("Logger");
         var comp = go.AddComponent(compType!);
-        compType!.GetField("MyTexture")!.SetValue(comp, new AssetRef<Texture2D>(texGuid));
-        compType!.GetField("MySprite")!.SetValue(comp, new AssetRef<Sprite>(spriteGuid));
+        compType!.GetField("MyTexture")!.SetValue(comp, AssetDatabase.Get<Texture2D>(texGuid));
+        compType!.GetField("MySprite")!.SetValue(comp, AssetDatabase.Get<Sprite>(spriteGuid));
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
         Assert.NotEqual(Guid.Empty, sceneGuid);

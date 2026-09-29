@@ -134,7 +134,7 @@ public class ModelRigImportTests
         Assert.Equal(AnimationClipKind.Skeletal, clip.Kind);
         Assert.Equal("Slide", clip.Name);
         Assert.Equal(1f, clip.Duration, 2);
-        Assert.Same(result.Avatar, clip.Avatar.Res);
+        Assert.Same(result.Avatar, clip.Avatar);
     }
 
     // A model with no bones and no animation has no rig to build, so it should not grow one.
@@ -340,11 +340,11 @@ public class ModelRigImportTests
     private sealed class FixedMaterialResolver : IModelMaterialResolver
     {
         private readonly string _name;
-        private readonly AssetRef<Material> _result;
+        private readonly Material? _result;
 
-        public FixedMaterialResolver(string name, AssetRef<Material> result) { _name = name; _result = result; }
+        public FixedMaterialResolver(string name, Material? result) { _name = name; _result = result; }
 
-        public AssetRef<Material> Resolve(string materialName) => materialName == _name ? _result : default;
+        public Material? Resolve(string materialName) => materialName == _name ? _result : null;
     }
 
     private static ModelImportResult ImportMaterials(IModelMaterialResolver? resolver)
@@ -366,7 +366,7 @@ public class ModelRigImportTests
     [Fact]
     public void AClaimedMaterialIsReferencedRatherThanBuilt()
     {
-        ModelImportResult result = ImportMaterials(new FixedMaterialResolver("Red", new AssetRef<Material>(Guid.NewGuid())));
+        ModelImportResult result = ImportMaterials(new FixedMaterialResolver("Red", AssetDatabase.Get<Material>(Guid.NewGuid())));
 
         Assert.Empty(result.Materials);
     }

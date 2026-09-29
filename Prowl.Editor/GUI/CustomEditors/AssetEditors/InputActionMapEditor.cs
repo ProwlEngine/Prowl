@@ -44,21 +44,13 @@ public class InputActionMapEditor : AssetImporterEditor
     {
         if (asset is not InputActionMap map || map.IsNotValid()) return;
 
-        // Restored onto the live instance so anything already holding this map sees the revert, rather
-        // than being left pointing at the discarded edits.
-        Serializer.DeserializeInto(baseline, map);
+        // Refilled in place, so anything already holding this map sees the revert.
+        EditorAssetBackend.Instance?.RevertToSaved(map);
         _selectedBindingIdx = -1;
     }
 
-    /// <summary>Serializes the map as its file form - AssetID cleared so the whole object is written
-    /// rather than an $assetId reference back to itself.</summary>
-    private static EchoObject Serialize(InputActionMap map)
-    {
-        Guid savedId = map.AssetID;
-        map.AssetID = Guid.Empty;
-        try { return Serializer.Serialize(typeof(object), map); }
-        finally { map.AssetID = savedId; }
-    }
+    /// <summary>Serializes the map as its file form.</summary>
+    private static EchoObject Serialize(InputActionMap map) => Serializer.Serialize(typeof(object), map);
 
     // Listening state which binding slot we're listening for
     private bool _listeningForBinding;

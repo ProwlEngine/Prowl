@@ -649,17 +649,17 @@ public class SceneViewPanel : DockPanel
     private static bool TryGetSelectionAnchor(GameObject go, out Float3 anchor)
     {
         var mr = go.GetComponent<MeshRenderer>();
-        if (mr != null && mr.EnabledInHierarchy && mr.Mesh.Res != null)
+        if (mr != null && mr.EnabledInHierarchy && mr.Mesh != null)
         {
-            AABB b = mr.Mesh.Res.bounds;
+            AABB b = mr.Mesh.bounds;
             anchor = Float4x4.TransformPoint((b.Min + b.Max) * 0.5f, go.Transform.LocalToWorldMatrix);
             return true;
         }
 
         var smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null && smr.EnabledInHierarchy && smr.SharedMesh.Res != null)
+        if (smr != null && smr.EnabledInHierarchy && smr.SharedMesh != null)
         {
-            AABB b = smr.SharedMesh.Res.bounds;
+            AABB b = smr.SharedMesh.bounds;
             anchor = Float4x4.TransformPoint((b.Min + b.Max) * 0.5f, go.Transform.LocalToWorldMatrix);
             return true;
         }
@@ -826,13 +826,13 @@ public class SceneViewPanel : DockPanel
     {
         // Check MeshRenderer
         var mr = go.GetComponent<MeshRenderer>();
-        if (mr != null && mr.Mesh.Res != null)
-            ExpandBounds(mr.Mesh.Res.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
+        if (mr != null && mr.Mesh != null)
+            ExpandBounds(mr.Mesh.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
 
         // Check SkinnedMeshRenderer
         var smr = go.GetComponent<SkinnedMeshRenderer>();
-        if (smr != null && smr.SharedMesh.Res != null)
-            ExpandBounds(smr.SharedMesh.Res.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
+        if (smr != null && smr.SharedMesh != null)
+            ExpandBounds(smr.SharedMesh.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
 
         // Recurse into children
         foreach (var child in go.Children)

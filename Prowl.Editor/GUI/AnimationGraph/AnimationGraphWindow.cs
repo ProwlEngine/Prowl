@@ -170,22 +170,29 @@ public class AnimationGraphWindow : DockPanel
     {
         _assetGuid = assetGuid;
         _graph = null;
+        _seenContent = -1;
         _dirty = false;
         _unsaved = null;
         _scope = string.Empty;
         Resolve(keepPlace: false);
     }
 
-    /// <summary>Finds the asset again by guid after play mode reloads it, carrying unsaved edits onto it.</summary>
+    // The graph's content when the view was last built from it, so a refill (a reimport, a save, a revert) rebuilds it.
+    private int _seenContent = -1;
+
+    /// <summary>Loads the graph, and rebuilds the view after its content was refilled, carrying unsaved edits onto it.</summary>
     private void Resolve(bool keepPlace = true)
     {
-        if (_graph.IsValid() || _assetGuid == Guid.Empty) return;
+        if (_assetGuid == Guid.Empty) return;
+        if (_graph is { IsLoaded: true } current && current.ContentVersion == _seenContent) return;
 
         string? machine = keepPlace ? _insideMachine?.Id : null;
         List<string> selected = keepPlace ? new List<string>(_controller.SelectedNodes) : new List<string>();
 
-        _graph = new AssetRef<AnimationGraph>(_assetGuid).Res;
-        _view.Graph = _graph.IsValid() ? _graph : null;
+        _graph = AssetDatabase.Load<AnimationGraph>(_assetGuid);
+        if (_graph is not { IsLoaded: true }) _graph = null;
+        _seenContent = _graph is null ? -1 : _graph.ContentVersion;
+        _view.Graph = _graph;
         ClearSelection();
 
         if (_graph.IsValid() && _dirty && _unsaved != null) CopyRecords(_unsaved, _graph!, compiles: true);
@@ -328,7 +335,7 @@ public class AnimationGraphWindow : DockPanel
         if (showing == null)
         {
             // Nothing shows the graph any more, and it was saved when it was left, so the undo is saved too.
-            AnimationGraph? other = new AssetRef<AnimationGraph>(asset).Res;
+            AnimationGraph? other = AssetDatabase.Get<AnimationGraph>(asset);
             if (other.IsValid()) CopyRecords(snapshot, other!, compiles);
             WriteToDisk(asset, snapshot);
             return;
@@ -390,9 +397,6 @@ public class AnimationGraphWindow : DockPanel
         var m = Origami.Current.Metrics;
 
         Resolve();
-
-        // An asset nothing touches is unloaded after a while, and an open window is using it.
-        AssetDatabase.Touch(_assetGuid);
         HandleShortcuts(paper);
 
         if (_graph.IsNotValid())
@@ -501,7 +505,7 @@ public class AnimationGraphWindow : DockPanel
         Guid[] parents = _parents.ToArray();
         for (int i = parents.Length - 1; i >= 0; i--)
         {
-            AnimationGraph? graph = new AssetRef<AnimationGraph>(parents[i]).Res;
+            AnimationGraph? graph = AssetDatabase.Get<AnimationGraph>(parents[i]);
             path.Add(new BreadcrumbItem(graph.IsValid() ? graph!.Name : "Graph", EditorIcons.DiagramProject_I, parents[i]));
         }
 
@@ -620,6 +624,7 @@ public class AnimationGraphWindow : DockPanel
 
         _dirty = false;
         _unsaved = null;
+        _seenContent = _graph!.ContentVersion;
         ShareWithSiblings();
     }
 
@@ -743,7 +748,7 @@ public class AnimationGraphWindow : DockPanel
     }
 
     /// <summary>The rig the editor picks bones and clips from. Nothing the graph compiles reads it.</summary>
-    private Avatar? Rig => _graph.IsValid() ? _graph!.Rig.Res : null;
+    private Avatar? Rig => _graph.IsValid() ? _graph!.Rig : null;
 
     private static bool HasDrivable(AnimationGraphNode type)
     {
@@ -942,7 +947,7 @@ public class AnimationGraphWindow : DockPanel
     }
 
     /// <summary>Saves an embedded graph as its own asset, with the parameters, and points the state or node at it.</summary>
-    private void ExtractToAsset(string owner, string name, Action<AssetRef<AnimationGraph>> use)
+    private void ExtractToAsset(string owner, string name, Action<AnimationGraph> use)
     {
         if (_graph.IsNotValid() || Project.Current == null || EditorAssetBackend.Instance == null) return;
 
@@ -957,7 +962,7 @@ public class AnimationGraphWindow : DockPanel
             {
                 AnimationGraph extracted = Extract(owner, name);
                 EditorAssetBackend.Instance!.CreateAsset(extracted, relative);
-                use(new AssetRef<AnimationGraph>(extracted.AssetID));
+                use(extracted);
                 AnimationGraphView.RemoveInside(_graph!, new[] { owner });
             });
         }, Project.Current.AssetsPath, new[] { "*.animgraph" }, new[] { "Animation Graph" });

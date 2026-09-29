@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Utils;
@@ -23,6 +22,9 @@ public static class GameObjectClipboard
 {
     private const string ClipboardHeader = "ProwlGameObjects:";
 
+    // The runtime assets the copied data links. A link is weak, so the clipboard keeps them.
+    private static IReadOnlyList<Asset> s_linkedAssets = [];
+
     /// <summary>
     /// Deep-copy the given GameObjects to the system clipboard as serialized Echo text.
     /// Filters out children whose ancestors are also in the selection to avoid duplicates.
@@ -35,7 +37,8 @@ public static class GameObjectClipboard
         // One context for the whole selection. A reference from one copied object to another stays
         // inside the data, and a reference to anything else is linked by id so pasting binds it back
         // to that object rather than to a copy of it that belongs to no scene.
-        var context = new SerializationContext { ExternalReferences = SceneReferenceResolver.ForTrees(roots) };
+        // Never leaves memory, so runtime assets are linked rather than copied.
+        var context = new DependencySerializationContext { ExternalReferences = SceneReferenceResolver.ForTrees(roots), LinkRuntimeAssets = true };
 
         var root = EchoObject.NewList();
         foreach (GameObject go in roots)
@@ -47,6 +50,7 @@ public static class GameObjectClipboard
 
         if (root.Count == 0) return;
 
+        s_linkedAssets = context.LinkedAssets;
         Input.Clipboard = ClipboardHeader + root.WriteToString();
     }
 
@@ -130,7 +134,7 @@ public static class GameObjectClipboard
         {
             // Every root in one operation, so a reference from one selected object to another lands on
             // that object's copy rather than staying pointed at the original.
-            clones = Cloner.CloneAll(roots);
+            clones = ObjectCopy.CloneAll(roots);
         }
         catch (Exception ex)
         {

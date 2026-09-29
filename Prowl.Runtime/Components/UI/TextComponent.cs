@@ -26,8 +26,8 @@ namespace Prowl.Runtime;
 [ComponentIcon("T")] // Text
 public class TextComponent : Graphic
 {
-    [SerializeField] private AssetRef<FontAsset> _font;
-    public AssetRef<FontAsset> Font
+    [SerializeField] private FontAsset? _font;
+    public FontAsset? Font
     {
         get => _font;
         set => SetField(ref _font, value, UIDirtyFlags.Vertices | UIDirtyFlags.Material);
@@ -38,14 +38,14 @@ public class TextComponent : Graphic
     {
         get
         {
-            var f = _font.Res;
-            return f.IsValid() ? f : FontAsset.LoadDefault();
+            var f = _font;
+            return f is { IsLoaded: true } ? f : FontAsset.LoadDefault();
         }
     }
 
     /// <summary>A font is assigned but hasn't loaded, so this text is currently laid out with the
     /// built-in fallback and has to be rebuilt once the real one arrives.</summary>
-    public override bool IsContentPending => !_font.IsExplicitNull && _font.Res.IsNotValid();
+    public override bool IsContentPending => _font is { IsLoaded: false };
 
     [SerializeField] private string _text = string.Empty;
     public string Text
@@ -85,7 +85,7 @@ public class TextComponent : Graphic
     /// region. Reporting the atlas version here makes the canvas re-bake this text in both play and
     /// edit mode.
     /// </summary>
-    public override int ContentVersion => UIFontSystem.Default.System.AtlasVersion;
+    public override int ContentVersion => unchecked(UIFontSystem.Default.System.AtlasVersion * 31 + (_font is FontAsset f ? f.ContentVersion : 0));
 
     // ============================================================
     // Mesh generation

@@ -276,7 +276,7 @@ public static partial class PrefabUtility
         if (go.IsNotValid()) return false;
         if (!GuardNotPlaying("connect a prefab")) return false;
 
-        if (AssetDatabase.Get(prefabGuid) is not PrefabAsset)
+        if (LoadPrefab(prefabGuid) is not PrefabAsset)
         {
             Runtime.Debug.LogWarning("[Prefab] Cannot connect there is no prefab with that id.");
             return false;

@@ -56,7 +56,7 @@ public sealed class CinematicEffects : ImageEffect
     // ── LUT Color Grading ────────────────────────────────────
     public bool EnableLUT = false;
     /// <summary>LUT texture (strip format, e.g. 256x16 for a 16x16x16 LUT).</summary>
-    public AssetRef<Texture2D> LUTTexture;
+    public Texture2D? LUTTexture;
     /// <summary>How much of the LUT to apply (0 = original, 1 = full LUT).</summary>
     public float LUTContribution = 1.0f;
 
@@ -103,7 +103,7 @@ public sealed class CinematicEffects : ImageEffect
         _mat.SetKeyword("CHROMATIC_ABERRATION", EnableChromaticAberration);
         _mat.SetKeyword("FILM_GRAIN", EnableFilmGrain);
         _mat.SetKeyword("COLOR_GRADING", EnableColorGrading);
-        _mat.SetKeyword("LUT", EnableLUT && LUTTexture.Res != null);
+        _mat.SetKeyword("LUT", EnableLUT && LUTTexture != null);
         _mat.SetKeyword("SHARPEN", EnableSharpen);
         _mat.SetKeyword("EDGE_DETECTION", EnableEdgeDetection);
         _mat.SetKeyword("PIXELATION", EnablePixelation);
@@ -147,12 +147,12 @@ public sealed class CinematicEffects : ImageEffect
         }
 
         // LUT
-        if (EnableLUT && LUTTexture.Res != null)
+        if (EnableLUT && LUTTexture != null)
         {
-            _mat.SetTexture("_LUTTex", LUTTexture.Res);
+            _mat.SetTexture("_LUTTex", LUTTexture);
             _mat.SetFloat("_LUTContribution", LUTContribution);
             // Derive LUT size from texture dimensions (e.g. 256x16 → size=16)
-            var tex = LUTTexture.Res;
+            var tex = LUTTexture;
             float lutSize = tex.Height;
             _mat.SetFloat("_LUTSize", lutSize);
         }

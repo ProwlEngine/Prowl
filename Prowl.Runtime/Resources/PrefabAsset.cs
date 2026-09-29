@@ -1,6 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Collections.Generic;
+
 using Prowl.Echo;
 
 namespace Prowl.Runtime.Resources;
@@ -20,17 +23,20 @@ public enum PrefabInstanceType
 }
 
 /// <summary>
-/// A prefab asset: a serialized GameObject hierarchy, stored as raw EchoObject data.
+/// A prefab asset: a serialized GameObject hierarchy, stored as raw EchoObject data. Holding a prefab keeps every
+/// asset its hierarchy uses loaded, so spawning it never loads.
 /// <para/>
 /// Instantiating one lives on <see cref="GameObject"/> - see
 /// <see cref="GameObject.Instantiate(PrefabAsset)"/> to spawn into a scene, or
 /// <see cref="GameObject.InstantiateDetached"/> for the hierarchy on its own - so that every way of
 /// building a GameObject from serialized data goes through one place.
 /// </summary>
-public class PrefabAsset : EngineObject
+public class PrefabAsset : Asset, IAssetWalkable
 {
     [SerializeField]
     private EchoObject? _gameObjectData;
+
+    [NonSerialized] private Asset[]? _referencedAssets;
 
     [SerializeField]
     private PrefabInstanceType _instanceType = PrefabInstanceType.Prefab;
@@ -38,8 +44,8 @@ public class PrefabAsset : EngineObject
     /// <summary>Where this prefab's contents come from. Set by whatever produces the asset.</summary>
     public PrefabInstanceType InstanceType
     {
-        get { EnsureNotDisposed(); return _instanceType; }
-        set { EnsureNotDisposed(); _instanceType = value; }
+        get { EnsureLoaded(); return _instanceType; }
+        set { EnsureLoaded(); _instanceType = value; }
     }
 
     /// <summary>
@@ -54,7 +60,58 @@ public class PrefabAsset : EngineObject
     /// </summary>
     public EchoObject? GameObjectData
     {
-        get { EnsureNotDisposed(); return _gameObjectData; }
-        set { EnsureNotDisposed(); _gameObjectData = value?.Clone(); }
+        get { EnsureLoaded(); return _gameObjectData; }
+        set
+        {
+            EnsureLoaded();
+            _gameObjectData = value?.Clone();
+            _referencedAssets = null;
+        }
+    }
+
+    /// <summary>Every asset the stored hierarchy names, loaded or not.</summary>
+    public IReadOnlyList<Asset> ReferencedAssets
+    {
+        get
+        {
+            EnsureLoaded();
+            return _referencedAssets ??= StoredTree.ReferencedAssets(_gameObjectData);
+        }
+    }
+
+    void IAssetWalkable.Walk(AssetWalker walker)
+    {
+        foreach (Asset asset in ReferencedAssets)
+            walker.Visit(asset);
+    }
+}
+
+/// <summary>Reads the asset references out of a stored hierarchy without building it.</summary>
+public static class StoredTree
+{
+    /// <summary>The stable object for every <c>$asset</c> stub in the tree, loaded or not.</summary>
+    public static Asset[] ReferencedAssets(EchoObject? tree)
+    {
+        var found = new List<Asset>();
+        var seen = new HashSet<Guid>();
+        Collect(tree, found, seen);
+        return found.ToArray();
+    }
+
+    private static void Collect(EchoObject? tag, List<Asset> found, HashSet<Guid> seen)
+    {
+        if (tag == null) return;
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List) Collect(item, found, seen);
+            return;
+        }
+        if (tag.TagType != EchoType.Compound) return;
+
+        if (tag.TryGet(AssetReferenceRule.AssetKey, out EchoObject? stub) && Guid.TryParse(stub!.StringValue, out Guid id)
+            && seen.Add(id) && AssetDatabase.Get(id) is { } asset)
+            found.Add(asset);
+
+        foreach (EchoObject child in tag.Tags.Values) Collect(child, found, seen);
     }
 }

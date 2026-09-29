@@ -15,7 +15,7 @@ namespace Prowl.Runtime.Resources;
 /// created and inspected without a graphics context.
 /// </summary>
 [CreateAssetMenu("Render Texture", Extension = ".rendertexture", Order = 1200)]
-public sealed class RenderTexture : EngineObject, ISerializable
+public sealed class RenderTexture : Asset, ISerializable
 {
     public const int DefaultWidth = 1920;
     public const int DefaultHeight = 1080;
@@ -36,10 +36,10 @@ public sealed class RenderTexture : EngineObject, ISerializable
     public Texture2D[] InternalTextures { get { EnsureCreated(); return _internalTextures!; } }
     public Texture2D? InternalDepth { get { EnsureCreated(); return _internalDepth; } }
 
-    public int Width { get { EnsureNotDisposed(); return _width; } }
-    public int Height { get { EnsureNotDisposed(); return _height; } }
-    public bool HasDepthAttachment { get { EnsureNotDisposed(); return _hasDepthAttachment; } }
-    public TextureImageFormat[] TextureFormats { get { EnsureNotDisposed(); return _textureFormats; } }
+    public int Width { get { EnsureLoaded(); return _width; } }
+    public int Height { get { EnsureLoaded(); return _height; } }
+    public bool HasDepthAttachment { get { EnsureLoaded(); return _hasDepthAttachment; } }
+    public TextureImageFormat[] TextureFormats { get { EnsureLoaded(); return _textureFormats; } }
 
     public RenderTexture() : base("RenderTexture")
     {
@@ -62,7 +62,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
     /// </summary>
     public void Configure(int width, int height, bool hasDepthAttachment, TextureImageFormat[] formats)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ArgumentNullException.ThrowIfNull(formats);
 
         if (formats.Length < 0 || formats.Length > Graphics.MaxFramebufferColorAttachments)
@@ -81,7 +81,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
     /// <summary>Allocates the framebuffer and its attachments if they aren't already.</summary>
     private void EnsureCreated()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (_frameBuffer != null) return;
 
         int numTextures = _textureFormats.Length;
@@ -118,9 +118,12 @@ public sealed class RenderTexture : EngineObject, ISerializable
         _frameBuffer = null;
     }
 
-    protected override void OnDispose() => ReleaseResources();
+    protected override void OnUnload() => ReleaseResources();
 
-    ~RenderTexture() => Dispose();
+    ~RenderTexture()
+    {
+        if (!Registered) Dispose();
+    }
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {

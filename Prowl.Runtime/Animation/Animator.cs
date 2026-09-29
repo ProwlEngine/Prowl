@@ -22,13 +22,13 @@ namespace Prowl.Runtime;
 public class Animator : MonoBehaviour
 {
     /// <summary>The rig the clips play on. Usually the avatar the model was imported with.</summary>
-    public AssetRef<Avatar> Avatar;
+    public Avatar? Avatar;
 
     /// <summary>The graph to run. Without one the animator plays <see cref="Clips"/>.</summary>
-    public AssetRef<AnimationGraph> Graph;
+    public AnimationGraph? Graph;
 
     /// <summary>Clips this animator can play by name, and the first of which it plays on enable.</summary>
-    public List<AssetRef<AnimationClip>> Clips = new();
+    public List<AnimationClip> Clips = new();
 
     public bool PlayAutomatically = true;
 
@@ -60,8 +60,9 @@ public class Animator : MonoBehaviour
     [NonSerialized] private AnimationGraph? _failedGraph;
     [NonSerialized] private int _failedVersion;
 
-    // An avatar that could not be loaded, so binding does not block on it again every frame.
-    [NonSerialized] private Guid _missingAvatar;
+    // The avatar content the binding was built from, so a reimported rig rebinds.
+    [NonSerialized] private Avatar? _boundAvatarAsset;
+    [NonSerialized] private int _boundAvatarContent;
 
     /// <summary>How long a graph has to stop changing before a running animator picks the edit up.</summary>
     private const long SettleMilliseconds = 150;
@@ -104,7 +105,7 @@ public class Animator : MonoBehaviour
         _clips = null;
         _graph = null;
         _boundAvatar = null;
-        _missingAvatar = Guid.Empty;
+        _boundAvatarAsset = null;
         _ragdoll?.Release();
         _ragdoll = null;
     }
@@ -159,7 +160,7 @@ public class Animator : MonoBehaviour
             return;
         }
 
-        if (_animator != null && Graph.IsExplicitNull) return;
+        if (_animator != null && Graph is null) return;
         _pendingParameters[name] = value;
     }
 
@@ -220,7 +221,7 @@ public class Animator : MonoBehaviour
     /// </summary>
     public void SetGraphSlot(string slot, AnimationGraph? graph)
     {
-        PluggedGraph? plugged = graph.IsValid() ? new PluggedGraph(new AssetRef<AnimationGraph>(graph!)) : null;
+        PluggedGraph? plugged = graph.IsValid() ? new PluggedGraph(graph!) : null;
         if (plugged != null) _slots[slot] = plugged;
         else _slots.Remove(slot);
 
@@ -228,10 +229,9 @@ public class Animator : MonoBehaviour
     }
 
     // What a slot plays, and the version of it that is plugged in, so an edit to it is picked up like one to the animator's own graph.
-    private sealed class PluggedGraph(AssetRef<AnimationGraph> graph)
+    private sealed class PluggedGraph(AnimationGraph graph)
     {
-        public AssetRef<AnimationGraph> Graph = graph;
-        public AnimationGraph? Bound;
+        public readonly AnimationGraph Graph = graph;
         public int Version;
         public int SeenEdits = -1;
 
@@ -239,27 +239,25 @@ public class Animator : MonoBehaviour
         {
             get
             {
-                AnimationGraph? asset = Graph.Res;
-                if (!ReferenceEquals(asset, Bound)) return true;
-                if (asset.IsNotValid() || SeenEdits == AnimationGraph.Edits) return false;
+                if (SeenEdits == AnimationGraph.Edits) return false;
 
-                if (asset!.DeepVersion == Version)
+                if (Graph.DeepVersion == Version)
                 {
                     SeenEdits = AnimationGraph.Edits;
                     return false;
                 }
-                return asset.SinceChanged >= SettleMilliseconds;
+                return Graph.SinceChanged >= SettleMilliseconds;
             }
         }
     }
 
     private void Plug(string slot, PluggedGraph? plugged)
     {
-        AnimationGraph? graph = plugged?.Graph.Res;
+        AnimationGraph? graph = plugged?.Graph;
         if (plugged != null)
         {
-            plugged.Bound = graph.IsValid() ? graph : null;
-            plugged.Version = graph.IsValid() ? graph!.DeepVersion : 0;
+            graph!.LoadDependencies();
+            plugged.Version = graph.DeepVersion;
         }
 
         try
@@ -278,8 +276,8 @@ public class Animator : MonoBehaviour
 
     private ExternalPoseInstance? FindExternalPose(string name)
     {
-        AnimationGraph? asset = Graph.Res;
-        if (_graph == null || asset.IsNotValid() || !asset!.TryGetCompiledMaps(_graph.Graph.Graph, out var nodes, out _)) return null;
+        AnimationGraph? asset = Graph;
+        if (_graph == null || asset is null || !asset.TryGetCompiledMaps(_graph.Graph.Graph, out var nodes, out _)) return null;
 
         foreach (GraphNodeRecord record in asset.Nodes)
             if (record.Type == AnimationNodeIds.ExternalPose && record.Get(ExternalPoseNode.NameSetting) == name
@@ -306,13 +304,8 @@ public class Animator : MonoBehaviour
 
     public void Play(string clipName)
     {
-        // By span, so AssetRef caches its load on the list's own entry rather than a copy.
-        Span<AssetRef<AnimationClip>> clips = CollectionsMarshal.AsSpan(Clips);
-        for (int i = 0; i < clips.Length; i++)
-        {
-            AnimationClip? clip = clips[i].Res;
-            if (clip.IsValid() && clip!.Name == clipName) { Play(clip); return; }
-        }
+        foreach (AnimationClip clip in Clips)
+            if (clip is not null && clip.Name == clipName) { Play(clip); return; }
         Debug.LogWarning($"[Animator] '{GameObject.Name}' has no clip named '{clipName}'.");
     }
 
@@ -330,7 +323,7 @@ public class Animator : MonoBehaviour
     /// <summary>Advances the animation and pushes the pose onto the hierarchy.</summary>
     internal void Tick(float deltaTime)
     {
-        if (_animator != null && GraphOutOfDate(out AnimationGraph? edited))
+        if (_animator != null && (GraphOutOfDate(out AnimationGraph? edited) || AvatarChanged()))
         {
             KeepParameters();
             Rebind();
@@ -355,27 +348,31 @@ public class Animator : MonoBehaviour
     {
         if (_animator != null) return true;
 
-        if (Avatar.AssetID != _missingAvatar) Avatar.EnsureLoaded();
-        Avatar? avatar = Avatar.Res;
-        if (avatar.IsNotValid())
+        Avatar? avatar = Avatar;
+        if (avatar is null) return false;
+        if (avatar.State is not (AssetState.Missing or AssetState.Failed)) avatar.Load();
+        if (!avatar.IsLoaded)
         {
-            if (Avatar.AssetID != Guid.Empty && Avatar.AssetID != _missingAvatar)
-            {
-                _missingAvatar = Avatar.AssetID;
-                Debug.LogWarning($"[Animator] '{GameObject.Name}' could not load its avatar, so it does not animate.");
-            }
+            Debug.LogWarningOnce($"Animator.Avatar.{GameObject.InstanceID}.{avatar.AssetID}",
+                $"[Animator] '{GameObject.Name}' could not load its avatar, so it does not animate.");
             return false;
         }
-        if (avatar!.Skeleton == null) return false;
+        if (avatar.Skeleton == null) return false;
 
         MotionAvatar? runtime = avatar.Runtime;
         if (runtime == null) return false;
 
-        Graph.EnsureLoaded();
-        AnimationGraph? graphAsset = Graph.Res;
-        if (graphAsset.IsValid()) graphAsset!.LoadDependencies();
-        else if (!Graph.IsExplicitNull)
-            Debug.LogWarning($"[Animator] '{GameObject.Name}' could not load its graph, so it plays its clips.");
+        AnimationGraph? graphAsset = Graph;
+        if (graphAsset is not null)
+        {
+            if (graphAsset.State is not (AssetState.Missing or AssetState.Failed)) graphAsset.LoadDependencies();
+            if (!graphAsset.IsLoaded)
+            {
+                Debug.LogWarningOnce($"Animator.Graph.{GameObject.InstanceID}.{graphAsset.AssetID}",
+                    $"[Animator] '{GameObject.Name}' could not load its graph, so it plays its clips.");
+                graphAsset = null;
+            }
+        }
 
         var binding = new AnimatorBinding(Transform, avatar.Skeleton);
         if (binding.UnboundBones > 0)
@@ -383,10 +380,13 @@ public class Animator : MonoBehaviour
                 $"[Animator] '{GameObject.Name}' could not find {binding.UnboundBones} of the rig's bones in its hierarchy. Those bones will not animate.");
 
         _boundAvatar = runtime;
+        _boundAvatarAsset = avatar;
+        _boundAvatarContent = avatar.ContentVersion;
         _ragdoll = new AnimatorRagdoll(this, binding, avatar.Skeleton, runtime.Humanoid);
 
-        _boundGraph = graphAsset.IsValid() ? graphAsset : null;
-        _boundVersion = graphAsset.IsValid() ? graphAsset!.DeepVersion : 0;
+        // The graph as assigned, even one that failed to load, so the next frames do not keep retrying it.
+        _boundGraph = Graph;
+        _boundVersion = Graph is { } bound ? bound.DeepVersion : 0;
 
         if (graphAsset.IsValid() && TryBindGraph(graphAsset!, binding, avatar.Skeleton, runtime))
         {
@@ -438,8 +438,8 @@ public class Animator : MonoBehaviour
     {
         if (_autoPlayPending)
         {
-            AnimationClip? first = Clips.Count > 0 ? CollectionsMarshal.AsSpan(Clips)[0].Res : null;
-            if (first.IsNotValid()) return;
+            AnimationClip? first = Clips.Count > 0 ? Clips[0] : null;
+            if (first is null) return;
             _autoPlayPending = false;
             Play(first!);
             return;
@@ -457,9 +457,8 @@ public class Animator : MonoBehaviour
     // An edit is picked up once it stops changing, since rebinding restarts every state machine.
     private bool GraphOutOfDate(out AnimationGraph? asset)
     {
-        asset = Graph.Res;
-        if (asset.IsNotValid()) return _boundGraph != null && Graph.IsExplicitNull;
-        if (!ReferenceEquals(asset, _boundGraph)) return true;
+        asset = Graph;
+        if (asset is null || !ReferenceEquals(asset, _boundGraph)) return !ReferenceEquals(asset, _boundGraph);
         if (_seenEdits == AnimationGraph.Edits) return false;
 
         if (asset!.DeepVersion == _boundVersion)
@@ -469,6 +468,9 @@ public class Animator : MonoBehaviour
         }
         return asset.SinceChanged >= SettleMilliseconds;
     }
+
+    private bool AvatarChanged()
+        => !ReferenceEquals(Avatar, _boundAvatarAsset) || (Avatar is { } avatar && avatar.ContentVersion != _boundAvatarContent);
 
     /// <summary>Carries the running parameter values across a rebind.</summary>
     private void KeepParameters()
@@ -493,8 +495,7 @@ public class Animator : MonoBehaviour
     /// <summary>Rebuilds the graph and rebinds. Call after editing the graph asset.</summary>
     public void RecompileGraph()
     {
-        AnimationGraph? asset = Graph.Res;
-        if (asset.IsValid()) asset!.Invalidate();
+        if (Graph is { } asset) asset.Invalidate();
         Rebind();
     }
 

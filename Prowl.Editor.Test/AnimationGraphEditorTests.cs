@@ -258,7 +258,7 @@ public class AnimationGraphEditorTests
         GraphNodeRecord speed = view.Add(AnimationNodeIds.SpeedScale, new Float2(0, 0))!;
 
         var asset = new AnimationClip { Name = "Run Forward" };
-        clip.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(asset));
+        clip.Properties["Clip"] = NodeValue.FromClip(asset);
         parameter.Properties["Name"] = NodeValue.FromText("Speed");
 
         view.Invalidate();

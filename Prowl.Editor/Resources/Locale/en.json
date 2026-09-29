@@ -98,6 +98,10 @@
   "launcher.months_ago": "{{count}}mo ago",
   "launcher.years_ago": "{{count}}y ago",
   "launcher.missing": "Missing",
+  "launcher.version_unknown": "old",
+  "launcher.migrate_title": "Migrate Project",
+  "launcher.migrate_body": "'{{name}}' was saved with {{version}}. Opening it with {{current}} converts its assets to the new format, and the older version can not open it afterwards. Back the project up first if you still need it there. Migrate and open?",
+  "launcher.migrate_failed_title": "Migration Failed",
 
   "launcher.tip_label": "Tip:",
   "launcher.tip.orbit": "Hold Alt and drag with the left mouse button to orbit the Scene camera.",

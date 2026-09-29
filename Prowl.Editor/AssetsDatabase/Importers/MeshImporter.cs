@@ -19,6 +19,8 @@ public class MeshImporter : AssetImporter
 
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
+    public override EchoSource Source => EchoSource.Text;
+
     public override bool Import(ImportContext ctx)
     {
         try

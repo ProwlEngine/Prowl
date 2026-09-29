@@ -97,26 +97,34 @@ public class EditorApplication : Game
         _dockSpace = new DockSpace(CreateDefaultLayout());
         _panelMaximizer = new PanelMaximizer(_dockSpace);
 
+        // Open windows and the selection keep what they show loaded, through their fields like a scene's objects.
+        AssetDatabase.WalkingRoots += WalkEditorRoots;
+
         // If launched with --project arg, open the project and load assemblies
         // BEFORE registries scan so user types are visible to all registries
         bool projectAlreadyInitialized = false;
+        bool outdatedStartupProject = false;
         if (Program.StartupProjectPath != null)
         {
             try
             {
                 var project = Project.Open(Program.StartupProjectPath);
-                project.SetActive();
+                outdatedStartupProject = project.IsOutdated;
+                if (!outdatedStartupProject)
+                {
+                    project.SetActive();
 
-                // Load user script assemblies before registry scanning
-                ScriptAssemblyManager.LoadAssemblies(project);
+                    // Load user script assemblies before registry scanning
+                    ScriptAssemblyManager.LoadAssemblies(project);
 
-                // RequestStartupCompile skips the debounce time entirely and starts the compile process right away.
-                // This is crucial since without assemblies correctly compiled the scene would load in with broken
-                // references, which require correct script data to be in
-                ScriptAssemblyManager.RequestRecompile(true);
+                    // RequestStartupCompile skips the debounce time entirely and starts the compile process right away.
+                    // This is crucial since without assemblies correctly compiled the scene would load in with broken
+                    // references, which require correct script data to be in
+                    ScriptAssemblyManager.RequestRecompile(true);
 
-                projectAlreadyInitialized = true;
-                Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
+                    projectAlreadyInitialized = true;
+                    Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
+                }
             }
             catch (Exception ex)
             {
@@ -169,8 +177,10 @@ public class EditorApplication : Game
         }
         else
         {
-            // Start with the project launcher
+            // Start with the project launcher, which asks before migrating a project from another version
             ProjectLauncher.Initialize();
+            if (outdatedStartupProject)
+                ProjectLauncher.TryOpenProject(Program.StartupProjectPath!);
         }
 
         // Initialize status bar log tracking
@@ -496,11 +506,6 @@ public class EditorApplication : Game
             _sceneLoadPending = false;
             EditorSceneManager.EnsureSceneLoaded();
         }
-
-        // Give idle assets a chance to be evicted. Not gated behind canProcessAssets/window focus -
-        // memory eviction shouldn't depend on file-reimport gating, and this is cheap to call every
-        // frame since the sweep itself is internally rate-limited (see MaybeSweepIdle's own gate).
-        EditorAssetBackend.Instance?.TickIdleSweep();
 
         // Layout auto-save is handled by SaveManager's auto-save timer.
 
@@ -1265,6 +1270,15 @@ public class EditorApplication : Game
         return FindInNode(node.ChildA, panelType) ?? FindInNode(node.ChildB, panelType);
     }
 
+    private void WalkEditorRoots(AssetWalker walker)
+    {
+        foreach (DockPanel panel in EnumerateAllPanels())
+            walker.Visit(panel);
+
+        foreach (object selected in Selection.Selected)
+            walker.Visit(selected is ContentItem { Guid: var guid } && guid != Guid.Empty ? AssetDatabase.Get(guid) : selected);
+    }
+
     /// <summary>Enumerate every open panel across the docked tree and all floating windows.</summary>
     private IEnumerable<DockPanel> EnumerateAllPanels()
     {
@@ -1683,9 +1697,6 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
-        // Before the play copy is built, so it resolves its own instances rather than adopting the ones
-        // the editor scene had.
-        DropLoadedAssets();
 
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
@@ -1748,7 +1759,7 @@ public class EditorApplication : Game
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
         {
-            DropLoadedAssets();
+            RevertAssetsAfterPlay();
 
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
@@ -1782,16 +1793,14 @@ public class EditorApplication : Game
         Runtime.Debug.Log("Exited play mode.");
     }
 
-    /// <summary>
-    /// Drops every loaded asset instance, so the scene about to be built resolves fresh ones and
-    /// nothing a play session did to an asset outlives it.
-    /// </summary>
-    private static void DropLoadedAssets()
+    // Nothing a play session does to a project asset outlives it, so every loaded one is unloaded and read again. Built-in
+    // assets stay, since the editor draws with them.
+    private void RevertAssetsAfterPlay()
     {
-        int dropped = EditorAssetBackend.Instance?.UnloadAll() ?? 0;
-
-        if (dropped > 0)
-            Runtime.Debug.Log($"[Assets] Dropped {dropped} loaded asset instances, so both sides of the play session read from disk.");
+        foreach (Asset asset in AssetDatabase.All.ToList())
+            if (asset.IsLoaded && !AssetDatabase.IsBuiltIn(asset))
+                AssetDatabase.Reload(asset);
+        AssetDatabase.Walk();
     }
 
     private void TogglePause()
@@ -1907,8 +1916,47 @@ public class EditorApplication : Game
     /// <summary>
     /// Editor does NOT auto-update the scene. SceneView handles it.
     /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<(Action Work, System.Threading.Tasks.TaskCompletionSource Done)> s_mainThreadWork = new();
+
+    /// <summary>
+    /// Runs work on the main thread and waits for it, for a background task that has to touch the open scene or the
+    /// asset database. Runs it at once on the main thread, or where no editor frame loop runs, such as a command line
+    /// build or a test.
+    /// </summary>
+    public static void RunOnMainThread(Action work)
+    {
+        if (AssetLoader.IsMainThread || Program.BuildMode || Instance == null)
+        {
+            work();
+            return;
+        }
+
+        var done = new System.Threading.Tasks.TaskCompletionSource(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        s_mainThreadWork.Enqueue((work, done));
+        done.Task.GetAwaiter().GetResult();
+    }
+
+    private static void RunQueuedMainThreadWork()
+    {
+        while (s_mainThreadWork.TryDequeue(out var queued))
+        {
+            try
+            {
+                queued.Work();
+                queued.Done.SetResult();
+            }
+            catch (Exception ex)
+            {
+                queued.Done.SetException(ex);
+            }
+        }
+    }
+
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
+        RunQueuedMainThreadWork();
+        PreviewWidget.ReleaseUndrawn();
+
         // Always update lifecycle gating is per-component via ShouldExecuteGameplay.
         // Components only run Start/Update/LateUpdate if IsPlaying or [ExecuteAlways].
         if (Application.ShouldRunGameplay)

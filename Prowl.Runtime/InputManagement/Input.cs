@@ -17,7 +17,7 @@ namespace Prowl.Runtime;
 public static class Input
 {
     private static Stack<IInputHandler> _handlers = [];
-    private static List<InputActionMap> _actionMaps = [];
+    [HeldStatic] private static List<InputActionMap> _actionMaps = [];
     private static float _currentTime = 0;
 
     public static Stack<IInputHandler> Handlers => _handlers;

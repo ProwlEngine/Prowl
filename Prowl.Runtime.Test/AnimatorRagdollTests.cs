@@ -36,8 +36,8 @@ public class AnimatorRagdollTests : RuntimeTestBase
         graph.RootNode = ragdoll.Id;
 
         var animator = root.AddComponent<Animator>();
-        animator.Avatar = new AssetRef<Avatar>(avatar);
-        animator.Graph = new AssetRef<AnimationGraph>(graph);
+        animator.Avatar = avatar;
+        animator.Graph = graph;
         scene.Enable();
         return (scene, animator, root);
     }
@@ -67,7 +67,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
     public void ARigWithoutAChest_GetsItsRagdoll()
     {
         (Scene scene, Animator animator, _) = SetupRagdoll(chest: false);
-        Assert.False(animator.Avatar.Res!.Runtime!.Humanoid!.HasBone(HumanBodyBone.Chest));
+        Assert.False(animator.Avatar.Runtime!.Humanoid!.HasBone(HumanBodyBone.Chest));
 
         Tick(scene, 3);
 
@@ -142,7 +142,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
             poses[f] = pose;
         }
         var clip = new Motion.AnimationClip(skeleton, poses, (frames - 1) / 60f);
-        return AnimationClip.FromSkeletal(clip, new AssetRef<Avatar>(avatar), "Run");
+        return AnimationClip.FromSkeletal(clip, avatar, "Run");
     }
 
     // Where the floor's top sits, just above the ankles, so Foot Grounding lifts the whole body by it.
@@ -180,8 +180,8 @@ public class AnimatorRagdollTests : RuntimeTestBase
         graph.RootNode = ragdoll.Id;
 
         var animator = root.AddComponent<Animator>();
-        animator.Avatar = new AssetRef<Avatar>(avatar);
-        animator.Graph = new AssetRef<AnimationGraph>(graph);
+        animator.Avatar = avatar;
+        animator.Graph = graph;
         scene.Enable();
         scene.Physics.UseMultithreading = false;
         return (scene, animator, root);
@@ -267,7 +267,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
             poses[f] = pose;
         }
         var clip = new Motion.AnimationClip(skeleton, poses, 1f);
-        return AnimationClip.FromSkeletal(clip, new AssetRef<Avatar>(avatar), "Walk");
+        return AnimationClip.FromSkeletal(clip, avatar, "Walk");
     }
 
     // Two copies of the character play the same clip under a player moved after the animation ticks, in a
@@ -298,7 +298,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
 
             var graph = new AnimationGraph();
             GraphNodeRecord clipNode = graph.AddNode(AnimationNodeIds.Clip);
-            clipNode.Properties["Clip"] = NodeValue.FromClip(new AssetRef<AnimationClip>(clip));
+            clipNode.Properties["Clip"] = NodeValue.FromClip(clip);
             clipNode.Properties["Looping"] = NodeValue.FromText("Loop");
             graph.RootNode = clipNode.Id;
             if (ragdoll)
@@ -312,8 +312,8 @@ public class AnimatorRagdollTests : RuntimeTestBase
             }
 
             var animator = character.AddComponent<Animator>();
-            animator.Avatar = new AssetRef<Avatar>(avatar);
-            animator.Graph = new AssetRef<AnimationGraph>(graph);
+            animator.Avatar = avatar;
+            animator.Graph = graph;
 
             var bones = new Dictionary<string, Transform>();
             void Walk(GameObject go)
@@ -412,7 +412,7 @@ public class AnimatorRagdollTests : RuntimeTestBase
         TestHumanoid.Turn(pose, skeleton, "LeftUpperArm", TestHumanoid.About(0f, 0f, 1f, 90f));
         TestHumanoid.Turn(pose, skeleton, "RightUpperArm", TestHumanoid.About(0f, 0f, 1f, -90f));
         var clip = new Motion.AnimationClip(skeleton, new[] { pose, pose }, 1f);
-        return AnimationClip.FromSkeletal(clip, new AssetRef<Avatar>(avatar), "Arms Down");
+        return AnimationClip.FromSkeletal(clip, avatar, "Arms Down");
     }
 
     [Fact]

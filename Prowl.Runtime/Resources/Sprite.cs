@@ -59,10 +59,10 @@ public struct SpriteRect
 /// a polygon outline). It carries no draw mode consumers (<c>SpriteRenderer</c>, UI) pick Simple / Sliced /
 /// Tiled / Filled per instance, so the same sprite can be drawn several ways.
 /// </summary>
-public sealed class Sprite : EngineObject
+public sealed class Sprite : Asset
 {
     /// <summary>The source texture this sprite is cut from.</summary>
-    public AssetRef<Texture2D> Texture;
+    public Texture2D? Texture;
 
     /// <summary>The pixel rectangle inside <see cref="Texture"/> (bottom-left origin).</summary>
     public SpriteRect Rect;
@@ -80,7 +80,7 @@ public sealed class Sprite : EngineObject
     /// Named secondary maps aligned to the same <see cref="Rect"/> (e.g. "_NormalMap", "_MaskMap").
     /// Sampled by lit / masked sprite shaders.
     /// </summary>
-    public Dictionary<string, AssetRef<Texture2D>> SecondaryTextures = new();
+    public Dictionary<string, Texture2D> SecondaryTextures = new();
 
     /// <summary>Cached mesh positions in local units, pivot-relative (x right, y up, z assumed 0).</summary>
     public Float2[] Vertices = Array.Empty<Float2>();
@@ -100,19 +100,19 @@ public sealed class Sprite : EngineObject
     public Sprite() : base("Sprite") { }
 
     /// <summary>True if any border edge is non-zero (i.e. the sprite can be 9-sliced).</summary>
-    public bool HasBorder { get { EnsureNotDisposed(); return Border.X > 0 || Border.Y > 0 || Border.Z > 0 || Border.W > 0; } }
+    public bool HasBorder { get { EnsureLoaded(); return Border.X > 0 || Border.Y > 0 || Border.Z > 0 || Border.W > 0; } }
 
     /// <summary>The sprite's size in world units (rect size divided by pixels-per-unit).</summary>
-    public Float2 SizeInUnits { get { EnsureNotDisposed(); return new(Rect.Width / PixelsPerUnit, Rect.Height / PixelsPerUnit); } }
+    public Float2 SizeInUnits { get { EnsureLoaded(); return new(Rect.Width / PixelsPerUnit, Rect.Height / PixelsPerUnit); } }
 
     private Float2 _boundsMin;
     private Float2 _boundsMax;
 
     /// <summary>Minimum corner of the local-space geometry bounds (pivot-relative).</summary>
-    public Float2 BoundsMin { get { EnsureNotDisposed(); return _boundsMin; } private set => _boundsMin = value; }
+    public Float2 BoundsMin { get { EnsureLoaded(); return _boundsMin; } private set => _boundsMin = value; }
 
     /// <summary>Maximum corner of the local-space geometry bounds (pivot-relative).</summary>
-    public Float2 BoundsMax { get { EnsureNotDisposed(); return _boundsMax; } private set => _boundsMax = value; }
+    public Float2 BoundsMax { get { EnsureLoaded(); return _boundsMax; } private set => _boundsMax = value; }
 
     /// <summary>
     /// Builds a simple full-rect quad (two triangles) for this sprite, resolving the texture dimensions
@@ -120,8 +120,8 @@ public sealed class Sprite : EngineObject
     /// </summary>
     public void BuildQuadGeometry()
     {
-        EnsureNotDisposed();
-        Texture2D? tex = Texture.Res;
+        EnsureLoaded();
+        Texture2D? tex = Texture;
         int texW = (int)(tex.IsValid() ? tex.Width : (uint)Math.Max(1, Rect.MaxX));
         int texH = (int)(tex.IsValid() ? tex.Height : (uint)Math.Max(1, Rect.MaxY));
         BuildQuadGeometry(texW, texH);
@@ -133,7 +133,7 @@ public sealed class Sprite : EngineObject
     /// </summary>
     public void BuildQuadGeometry(int textureWidth, int textureHeight)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         float w = Rect.Width / PixelsPerUnit;
         float h = Rect.Height / PixelsPerUnit;
 
@@ -181,7 +181,7 @@ public sealed class Sprite : EngineObject
     /// </summary>
     public void BuildTightGeometry(SpriteMeshTracer.TracedMesh traced, int textureWidth, int textureHeight)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (traced.Vertices.Length < 3 || traced.Indices.Length < 3)
         {
             BuildQuadGeometry(textureWidth, textureHeight);
@@ -218,7 +218,7 @@ public sealed class Sprite : EngineObject
     /// <summary>Recomputes <see cref="BoundsMin"/>/<see cref="BoundsMax"/> from the current vertices.</summary>
     public void RecalculateBounds()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Vertices.Length == 0)
         {
             BoundsMin = BoundsMax = default;
@@ -279,6 +279,9 @@ public sealed class Sprite : EngineObject
 
     /// <summary>Builds a quad sprite from a spec against the given texture (no tight-mesh tracing).</summary>
     public static Sprite Build(Texture2D texture, in SpriteDef def, string? name = null)
+        => Build(texture, (int)texture.Width, (int)texture.Height, def, name);
+
+    private static Sprite Build(Texture2D texture, int textureWidth, int textureHeight, in SpriteDef def, string? name)
     {
         var sprite = new Sprite
         {
@@ -290,7 +293,7 @@ public sealed class Sprite : EngineObject
         };
         if (name != null)
             sprite.Name = name;
-        sprite.BuildQuadGeometry((int)texture.Width, (int)texture.Height);
+        sprite.BuildQuadGeometry(textureWidth, textureHeight);
         return sprite;
     }
 
@@ -298,12 +301,7 @@ public sealed class Sprite : EngineObject
     /// Gets the shared instance of a built-in default sprite. Returns the same instance across the app;
     /// callers needing a mutable copy should build their own <see cref="Sprite"/>.
     /// </summary>
-    public static Sprite LoadDefault(DefaultSprite sprite)
-    {
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(sprite)) is Sprite cached)
-            return cached;
-        return ParseDefault(sprite);
-    }
+    public static Sprite LoadDefault(DefaultSprite sprite) => BuiltInAssets.Load<Sprite>(BuiltInAssets.GuidFor(sprite));
 
     /// <summary>
     /// Raw build of a default sprite, invoked by <see cref="BuiltInAssets"/> on first cache miss.
@@ -337,10 +335,14 @@ public sealed class Sprite : EngineObject
         if (!s_defaultSprites.TryGetValue(sprite, out DefaultSpriteDef def))
             throw new ArgumentException($"Unknown default sprite: {sprite}");
 
-        Texture2D tex = Texture2D.LoadDefault(def.Texture);
-        var rect = new SpriteRect(0, 0, (int)tex.Width, (int)tex.Height);
-        return Build(tex, new SpriteDef(rect, PivotFromAlignment(def.Pivot), def.PixelsPerUnit, def.Border), sprite.ToString());
-        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
+        // Built on the loader thread, which never loads other assets, so the texture is referenced and its size read
+        // from a copy decoded here.
+        Texture2D sized = Texture2D.ParseDefault(def.Texture);
+        int width = (int)sized.Width, height = (int)sized.Height;
+        sized.Dispose();
+
+        var rect = new SpriteRect(0, 0, width, height);
+        return Build(Texture2D.GetDefault(def.Texture), width, height, new SpriteDef(rect, PivotFromAlignment(def.Pivot), def.PixelsPerUnit, def.Border), sprite.ToString());
     }
 
     /// <summary>Resolves a named pivot preset to a normalized pivot. <paramref name="custom"/> is returned for <see cref="SpriteAlignment.Custom"/>.</summary>

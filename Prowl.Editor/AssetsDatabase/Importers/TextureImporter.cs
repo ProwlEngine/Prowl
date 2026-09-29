@@ -80,7 +80,7 @@ public class TextureImporter : AssetImporter
         if (spriteSettings.Mode != SpriteMode.None)
         {
             foreach (var kv in spriteSettings.SecondaryTextures)
-                if (!kv.Value.IsExplicitNull) ctx.AddDependency(kv.Value.AssetID);
+                if (kv.Value is not null) ctx.AddDependency(kv.Value.AssetID);
 
             foreach (var (slice, sprite) in SpriteBuilder.Build(texture, spriteSettings))
                 ctx.AddSubAsset(slice.Name, sprite, SpriteBuilder.IdentityOf(spriteSettings, slice));
@@ -184,7 +184,7 @@ public class SpriteImportSettings
     public byte TightMeshAlphaThreshold = 1;
 
     /// <summary>Named secondary maps (e.g. "_NormalMap") applied to every sprite in this texture.</summary>
-    public Dictionary<string, AssetRef<Texture2D>> SecondaryTextures = new();
+    public Dictionary<string, Texture2D> SecondaryTextures = new();
 
     // Slicing-tool state (editor convenience; the importer only reads Slices).
     /// <summary> The auto-slicing tool last used in the Sprite Editor. The importer only reads Slices, not this value. </summary>
@@ -768,12 +768,12 @@ public static class SpriteBuilder
         var sprite = new Sprite
         {
             Name = slice.Name,
-            Texture = tex, // implicit AssetRef<Texture2D>; carries the texture's AssetID
+            Texture = tex,
             Rect = rect,
             Pivot = ResolvePivot(slice, rect),
             PixelsPerUnit = s.PixelsPerUnit,
             Border = slice.Border,
-            SecondaryTextures = new Dictionary<string, AssetRef<Texture2D>>(s.SecondaryTextures),
+            SecondaryTextures = new Dictionary<string, Texture2D>(s.SecondaryTextures),
         };
 
         if (s.GenerateTightMesh && alpha != null && rect.Width > 0 && rect.Height > 0)

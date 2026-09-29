@@ -20,8 +20,8 @@ public enum TerrainInterpolation
 /// <summary>Per-layer texture settings for terrain surface rendering.</summary>
 public class TerrainLayer
 {
-    public AssetRef<Texture2D> Albedo;
-    public AssetRef<Texture2D> NormalMap;
+    public Texture2D? Albedo;
+    public Texture2D? NormalMap;
     public float Tiling = 10f;
     public float Roughness = 1f;
     public float Metallic = 0f;
@@ -40,19 +40,19 @@ public enum DetailRenderMode
 /// <summary>Defines a detail/grass prototype for terrain vegetation.</summary>
 public class DetailPrototype
 {
-    public AssetRef<Texture2D> Texture;       // texture for billboard/non-billboard modes
-    public AssetRef<Mesh> Mesh;               // mesh for Mesh mode
+    public Texture2D? Texture;       // texture for billboard/non-billboard modes
+    public Mesh? Mesh;               // mesh for Mesh mode
     /// <summary>
     /// Materials to use for the Mesh render mode, one per submesh of <see cref="Mesh"/>.
     /// When a slot is null (or the list is shorter than the mesh's submesh count), the
     /// default Standard material is used for that submesh.
     /// </summary>
-    public List<AssetRef<Material>> Materials = [];
+    public List<Material?> Materials = [];
     /// <summary>
     /// Optional grass material override for texture render modes (Billboard / NonBillboard).
     /// When null, the terrain's global GrassMaterial is used.
     /// </summary>
-    public AssetRef<Material> GrassMaterial;
+    public Material? GrassMaterial;
     public DetailRenderMode RenderMode = DetailRenderMode.TextureBillboard;
     public float MinWidth = 1f;
     public float MaxWidth = 2f;
@@ -80,17 +80,17 @@ public struct TreeInstance
 /// <summary>Defines a tree type for terrain vegetation.</summary>
 public class TreePrototype
 {
-    public AssetRef<Mesh> Mesh;
+    public Mesh? Mesh;
 
     /// <summary>
     /// Materials, one per submesh of <see cref="Mesh"/>. When a slot is null or the list is
     /// shorter than the mesh's submesh count, the missing submeshes fall back to the first
     /// non-null material in this list (or Standard if none).
     /// </summary>
-    public List<AssetRef<Material>> Materials = [];
+    public List<Material?> Materials = [];
 
     /// <summary>Legacy single-material accessor reads/writes Materials[0].</summary>
-    public AssetRef<Material> Material
+    public Material? Material
     {
         get => Materials.Count > 0 ? Materials[0] : default;
         set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
@@ -104,7 +104,7 @@ public class TreePrototype
 /// Referenced by TerrainComponent for rendering and TerrainCollider for physics.
 /// </summary>
 [CreateAssetMenu("Terrain Data", Extension = ".terraindata", Order = 3)]
-public sealed class TerrainData : EngineObject, ISerializable
+public sealed class TerrainData : Asset, ISerializable
 {
     // --- Heightmap & Surface ---
 
@@ -131,33 +131,33 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// 512 cells. Vertex grid, use <see cref="HeightmapToUV"/> to convert an index to UV.
     /// Change it with <see cref="ResizeHeightmap"/>, which reallocates to match.
     /// </summary>
-    public int HeightmapResolution { get { EnsureNotDisposed(); return _heightmapResolution; } private set => _heightmapResolution = value; }
+    public int HeightmapResolution { get { EnsureLoaded(); return _heightmapResolution; } private set => _heightmapResolution = value; }
     /// <summary>
     /// Splatmap texels per side. Cell grid, so a texel sits in the middle of a heightmap cell, which
     /// is why it is one less than the heightmap. Use <see cref="SplatmapToUV"/> to convert an index
     /// to UV, and <see cref="ResizeSplatmap"/> to change it.
     /// </summary>
-    public int SplatmapResolution { get { EnsureNotDisposed(); return _splatmapResolution; } private set => _splatmapResolution = value; }
-    public float Size { get { EnsureNotDisposed(); return _size; } set { EnsureNotDisposed(); _size = value; } }
-    public float Height { get { EnsureNotDisposed(); return _height; } set { EnsureNotDisposed(); _height = value; } }
+    public int SplatmapResolution { get { EnsureLoaded(); return _splatmapResolution; } private set => _splatmapResolution = value; }
+    public float Size { get { EnsureLoaded(); return _size; } set { EnsureLoaded(); _size = value; } }
+    public float Height { get { EnsureLoaded(); return _height; } set { EnsureLoaded(); _height = value; } }
 
     /// <summary>Height interpolation mode for both CPU sampling and GPU shader.</summary>
-    public TerrainInterpolation Interpolation { get { EnsureNotDisposed(); return _interpolation; } set { EnsureNotDisposed(); _interpolation = value; } }
+    public TerrainInterpolation Interpolation { get { EnsureLoaded(); return _interpolation; } set { EnsureLoaded(); _interpolation = value; } }
 
     /// <summary>
     /// Raw 16-bit heightmap. Values 0..kMaxHeight map to normalized 0..1.
     /// Use GetHeight/SetHeight for float access. Halves memory vs float[].
     /// </summary>
-    public short[] Heights { get { EnsureNotDisposed(); return _heightsField; } set { EnsureNotDisposed(); _heightsField = value; } }
+    public short[] Heights { get { EnsureLoaded(); return _heightsField; } set { EnsureLoaded(); _heightsField = value; } }
     /// <summary>
     /// Interleaved splatmap weights. For N layers, each pixel has N floats.
     /// Layout: [pixel0_layer0, pixel0_layer1, ..., pixel0_layerN-1, pixel1_layer0, ...].
     /// Length = SplatmapResolution * SplatmapResolution * LayerCount.
     /// </summary>
-    public float[] Splats { get { EnsureNotDisposed(); return _splatsField; } set { EnsureNotDisposed(); _splatsField = value; } }
+    public float[] Splats { get { EnsureLoaded(); return _splatsField; } set { EnsureLoaded(); _splatsField = value; } }
 
     /// <summary>Dynamic layer list. Each group of 4 layers maps to one RGBA splatmap texture.</summary>
-    public List<TerrainLayer> Layers { get { EnsureNotDisposed(); return _layers; } set { EnsureNotDisposed(); _layers = value; } }
+    public List<TerrainLayer> Layers { get { EnsureLoaded(); return _layers; } set { EnsureLoaded(); _layers = value; } }
 
     // --- Holes ---
 
@@ -165,7 +165,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// Per-pixel hole map at SplatmapResolution. 0 = hole (not rendered/no collision), 255 = solid.
     /// Null means no holes (all solid).
     /// </summary>
-    public byte[]? Holes { get { EnsureNotDisposed(); return _holesField; } set { EnsureNotDisposed(); _holesField = value; } }
+    public byte[]? Holes { get { EnsureLoaded(); return _holesField; } set { EnsureLoaded(); _holesField = value; } }
 
     // --- Details/Grass ---
 
@@ -174,10 +174,10 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <see cref="DetailToUV"/> to convert an index to UV, and <see cref="ResizeDetailMaps"/> to
     /// change it.
     /// </summary>
-    public int DetailResolution { get { EnsureNotDisposed(); return _detailResolution; } private set => _detailResolution = value; }
+    public int DetailResolution { get { EnsureLoaded(); return _detailResolution; } private set => _detailResolution = value; }
 
     /// <summary>Detail prototype definitions.</summary>
-    public List<DetailPrototype> DetailPrototypes { get { EnsureNotDisposed(); return _detailPrototypes; } set { EnsureNotDisposed(); _detailPrototypes = value; } }
+    public List<DetailPrototype> DetailPrototypes { get { EnsureLoaded(); return _detailPrototypes; } set { EnsureLoaded(); _detailPrototypes = value; } }
 
     /// <summary>
     /// Per-prototype density maps. DetailLayers[protoIndex] = byte[DetailResolution * DetailResolution],
@@ -185,12 +185,12 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// the memory of floats. Use GetDetailDensity/SetDetailDensity for 0-1 access.
     /// Array count matches DetailPrototypes.Count.
     /// </summary>
-    public List<byte[]> DetailLayers { get { EnsureNotDisposed(); return _detailLayers; } set { EnsureNotDisposed(); _detailLayers = value; } }
+    public List<byte[]> DetailLayers { get { EnsureLoaded(); return _detailLayers; } set { EnsureLoaded(); _detailLayers = value; } }
 
     // --- Trees ---
 
-    public List<TreeInstance> Trees { get { EnsureNotDisposed(); return _trees; } set { EnsureNotDisposed(); _trees = value; } }
-    public List<TreePrototype> TreePrototypes { get { EnsureNotDisposed(); return _treePrototypes; } set { EnsureNotDisposed(); _treePrototypes = value; } }
+    public List<TreeInstance> Trees { get { EnsureLoaded(); return _trees; } set { EnsureLoaded(); _trees = value; } }
+    public List<TreePrototype> TreePrototypes { get { EnsureLoaded(); return _treePrototypes; } set { EnsureLoaded(); _treePrototypes = value; } }
 
     // --- GPU Textures ---
 
@@ -200,14 +200,14 @@ public sealed class TerrainData : EngineObject, ISerializable
     [NonSerialized] private bool _splatmapDirty = true;
     [NonSerialized] private bool _holesDirty = true;
     [NonSerialized] private Texture2D? _holesTexture;
-    [NonSerialized] private int _heightsVersion;
-    [NonSerialized] private int _detailsVersion;
+    [NonSerialized, NotContent] private int _heightsVersion;
+    [NonSerialized, NotContent] private int _detailsVersion;
 
     /// <summary>Bumped on every height change. Renderers watch this to rebuild cached data.</summary>
-    public int HeightsVersion { get { EnsureNotDisposed(); return _heightsVersion; } }
+    public int HeightsVersion { get { EnsureLoaded(); return _heightsVersion; } }
 
     /// <summary>Bumped on every detail density change. Renderers watch this to rebuild cached data.</summary>
-    public int DetailsVersion { get { EnsureNotDisposed(); return _detailsVersion; } }
+    public int DetailsVersion { get { EnsureLoaded(); return _detailsVersion; } }
 
     public TerrainData() : base("New TerrainData")
     {
@@ -223,7 +223,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Ensure DetailLayers array matches DetailPrototypes count.</summary>
     public void EnsureDetailLayers()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         while (DetailLayers.Count < DetailPrototypes.Count)
             DetailLayers.Add(new byte[DetailResolution * DetailResolution]);
         while (DetailLayers.Count > DetailPrototypes.Count)
@@ -235,7 +235,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Get normalized height (0-1) at integer coordinates.</summary>
     public float GetHeight(int x, int z)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return 0f;
         return (float)Heights[z * HeightmapResolution + x] / kMaxHeight;
@@ -244,7 +244,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Set normalized height (0-1) at integer coordinates. Stored as 16-bit.</summary>
     public void SetHeight(int x, int z, float value)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return;
         Heights[z * HeightmapResolution + x] = (short)(Maths.Clamp(value, 0f, 1f) * kMaxHeight);
@@ -255,7 +255,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Interpolated height in world units at normalized UV coordinates.</summary>
     public float GetInterpolatedHeight(float u, float v)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Heights == null) return 0f;
         return Interpolation == TerrainInterpolation.Bicubic
             ? GetInterpolatedHeightBicubic(u, v)
@@ -361,19 +361,19 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public void ResizeHeightmap(int newRes)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         HeightmapResolution = newRes;
         Heights = new short[newRes * newRes];
         _heightmapDirty = true;
         _heightsVersion++;
     }
 
-    public void SetHeightmapDirty() { EnsureNotDisposed(); _heightmapDirty = true; _heightsVersion++; }
+    public void SetHeightmapDirty() { EnsureLoaded(); _heightmapDirty = true; _heightsVersion++; }
 
     /// <summary>Compute terrain normal at integer heightmap coordinates using Sobel operator.</summary>
     public Float3 CalculateNormalSobel(int x, int z)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Heights == null) return Float3.UnitY;
 
         // Sample 3x3 neighborhood (clamped at edges)
@@ -395,7 +395,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Interpolated normal at normalized UV coordinates (0-1).</summary>
     public Float3 GetInterpolatedNormal(float u, float v)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Heights == null) return Float3.UnitY;
 
         float px = u * (HeightmapResolution - 1);
@@ -411,7 +411,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// </summary>
     public float GetSteepness(float u, float v)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         var normal = GetInterpolatedNormal(u, v);
         // Angle between normal and up vector
         return MathF.Acos(Maths.Clamp(normal.Y, -1f, 1f)) * (180f / MathF.PI);
@@ -422,11 +422,11 @@ public sealed class TerrainData : EngineObject, ISerializable
     #region Splatmap
 
     /// <summary>Number of active terrain layers.</summary>
-    public int LayerCount { get { EnsureNotDisposed(); return Layers.Count; } }
+    public int LayerCount { get { EnsureLoaded(); return Layers.Count; } }
 
     public float GetSplat(int x, int z, int channel)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         int lc = LayerCount;
         if (Splats == null || channel < 0 || channel >= lc ||
             x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution)
@@ -436,7 +436,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public void SetSplat(int x, int z, int channel, float value)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         int lc = LayerCount;
         if (Splats == null || channel < 0 || channel >= lc ||
             x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution)
@@ -447,7 +447,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public void ResizeSplatmap(int newRes)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         SplatmapResolution = newRes;
         int lc = LayerCount;
         Splats = new float[newRes * newRes * lc];
@@ -462,7 +462,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Add a new terrain layer. Expands the splat array with zeros for the new channel.</summary>
     public void AddLayer(TerrainLayer layer)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Layers.Count >= kMaxLayers) return;
         int oldCount = Layers.Count;
         Layers.Add(layer);
@@ -474,7 +474,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Remove a terrain layer at the given index. Shrinks the splat array.</summary>
     public void RemoveLayer(int index)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (index < 0 || index >= Layers.Count || Layers.Count <= 1) return;
         int oldCount = Layers.Count;
         Layers.RemoveAt(index);
@@ -513,7 +513,7 @@ public sealed class TerrainData : EngineObject, ISerializable
         Splats = newSplats;
     }
 
-    public void SetSplatmapDirty() { EnsureNotDisposed(); _splatmapDirty = true; }
+    public void SetSplatmapDirty() { EnsureLoaded(); _splatmapDirty = true; }
 
     #endregion
 
@@ -522,7 +522,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Check if a cell is solid (not a hole). Returns true if solid.</summary>
     public bool IsHoleSolid(int x, int z)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Holes == null) return true; // No holes map = all solid
         if (x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution) return true;
         return Holes[z * SplatmapResolution + x] != 0;
@@ -531,7 +531,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Set a hole at the given splatmap-resolution coordinates. value=0 = hole, value=255 = solid.</summary>
     public void SetHole(int x, int z, byte value)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution) return;
         // Lazy-allocate holes map on first use
         if (Holes == null)
@@ -546,7 +546,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Check if a heightmap cell has a hole (any corner is a hole). Used by physics.</summary>
     public bool IsCellHole(int cellX, int cellZ)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Holes == null) return false;
         // Heightmap cell center to the splat texel covering it
         float scale = (float)SplatmapResolution / (HeightmapResolution - 1);
@@ -555,7 +555,7 @@ public sealed class TerrainData : EngineObject, ISerializable
         return !IsHoleSolid(sx, sz);
     }
 
-    public void SetHolesDirty() { EnsureNotDisposed(); _holesDirty = true; }
+    public void SetHolesDirty() { EnsureLoaded(); _holesDirty = true; }
 
     #endregion
 
@@ -563,7 +563,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public float GetDetailDensity(int layerIndex, int x, int z)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (layerIndex < 0 || layerIndex >= DetailLayers.Count) return 0f;
         var layer = DetailLayers[layerIndex];
         if (layer == null || x < 0 || x >= DetailResolution || z < 0 || z >= DetailResolution) return 0f;
@@ -572,7 +572,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public void SetDetailDensity(int layerIndex, int x, int z, float value)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (layerIndex < 0 || layerIndex >= DetailLayers.Count) return;
         var layer = DetailLayers[layerIndex];
         if (layer == null || x < 0 || x >= DetailResolution || z < 0 || z >= DetailResolution) return;
@@ -586,7 +586,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// </summary>
     public void ResizeDetailMaps(int newRes, bool resample = true)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (newRes < 1) return;
 
         int oldRes = DetailResolution;
@@ -640,7 +640,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Add a new detail prototype and its corresponding density layer.</summary>
     public void AddDetailPrototype(DetailPrototype proto)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         DetailPrototypes.Add(proto);
         DetailLayers.Add(new byte[DetailResolution * DetailResolution]);
         _detailsVersion++;
@@ -649,14 +649,14 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>Remove a detail prototype and its density layer.</summary>
     public void RemoveDetailPrototype(int index)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (index < 0 || index >= DetailPrototypes.Count) return;
         DetailPrototypes.RemoveAt(index);
         if (index < DetailLayers.Count) DetailLayers.RemoveAt(index);
         _detailsVersion++;
     }
 
-    public void SetDetailsDirty() { EnsureNotDisposed(); _detailsVersion++; }
+    public void SetDetailsDirty() { EnsureLoaded(); _detailsVersion++; }
 
     #endregion
 
@@ -681,7 +681,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public Texture2D? GetHeightmapTexture()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Heights == null) return null;
         if (_heightmapDirty || _heightmapTexture == null)
         {
@@ -711,7 +711,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// </summary>
     public IReadOnlyList<Texture2D> GetSplatmapTextures()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Splats == null) return Array.Empty<Texture2D>();
 
         int lc = LayerCount;
@@ -764,7 +764,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// </summary>
     public IReadOnlyList<Texture2D> GetDetailTextures()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         int layerCount = DetailLayers.Count;
         if (layerCount == 0) return Array.Empty<Texture2D>();
@@ -847,7 +847,7 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// </summary>
     public bool TryGetDetailBounds(int layerIndex, out Float4 rect)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         rect = default;
 
         GetDetailTextures(); // bounds are gathered by the same sweep that packs the textures
@@ -870,7 +870,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public Texture2D? GetHolesTexture()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (Holes == null) return null;
         if (_holesDirty || _holesTexture == null)
         {
@@ -893,7 +893,14 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     #endregion
 
-    protected override void OnDispose()
+    protected override void TakeContent(Asset staging)
+    {
+        base.TakeContent(staging);
+        _heightsVersion++;
+        _detailsVersion++;
+    }
+
+    protected override void OnUnload()
     {
         if (_heightmapTexture.IsValid()) _heightmapTexture.Dispose();
         if (_holesTexture.IsValid()) _holesTexture.Dispose();
@@ -1025,8 +1032,8 @@ public sealed class TerrainData : EngineObject, ISerializable
                 var lo = layerList.List[i];
                 Layers.Add(new TerrainLayer
                 {
-                    Albedo = Serializer.Deserialize<AssetRef<Texture2D>>(lo.Get("Albedo"), ctx),
-                    NormalMap = Serializer.Deserialize<AssetRef<Texture2D>>(lo.Get("NormalMap"), ctx),
+                    Albedo = Serializer.Deserialize<Texture2D>(lo.Get("Albedo"), ctx),
+                    NormalMap = Serializer.Deserialize<Texture2D>(lo.Get("NormalMap"), ctx),
                     Tiling = lo.Get("Tiling")?.FloatValue ?? 10f,
                     Roughness = lo.Get("Roughness")?.FloatValue ?? 1f,
                     Metallic = lo.Get("Metallic")?.FloatValue ?? 0f,
@@ -1070,8 +1077,8 @@ public sealed class TerrainData : EngineObject, ISerializable
             {
                 var dp = new DetailPrototype
                 {
-                    Texture = Serializer.Deserialize<AssetRef<Texture2D>>(dpo.Get("Texture"), ctx),
-                    Mesh = Serializer.Deserialize<AssetRef<Mesh>>(dpo.Get("Mesh"), ctx),
+                    Texture = Serializer.Deserialize<Texture2D>(dpo.Get("Texture"), ctx),
+                    Mesh = Serializer.Deserialize<Mesh>(dpo.Get("Mesh"), ctx),
                     RenderMode = (DetailRenderMode)(dpo.Get("RenderMode")?.IntValue ?? (dpo.Get("UseMesh")?.BoolValue == true ? 2 : 0)),
                     MinWidth = dpo.Get("MinWidth")?.FloatValue ?? 1f,
                     MaxWidth = dpo.Get("MaxWidth")?.FloatValue ?? 2f,
@@ -1087,7 +1094,7 @@ public sealed class TerrainData : EngineObject, ISerializable
                 var matList = dpo.Get("Materials");
                 if (matList != null)
                     foreach (var mat in matList.List)
-                        dp.Materials.Add(Serializer.Deserialize<AssetRef<Material>>(mat, ctx));
+                        dp.Materials.Add(Serializer.Deserialize<Material>(mat, ctx));
 
                 DetailPrototypes.Add(dp);
             }
@@ -1118,7 +1125,7 @@ public sealed class TerrainData : EngineObject, ISerializable
             {
                 var tp = new TreePrototype
                 {
-                    Mesh = Serializer.Deserialize<AssetRef<Mesh>>(tpo.Get("Mesh"), ctx),
+                    Mesh = Serializer.Deserialize<Mesh>(tpo.Get("Mesh"), ctx),
                     BendFactor = tpo.Get("BendFactor")?.FloatValue ?? 1f,
                 };
 
@@ -1126,14 +1133,14 @@ public sealed class TerrainData : EngineObject, ISerializable
                 if (matList != null)
                 {
                     foreach (var mat in matList.List)
-                        tp.Materials.Add(Serializer.Deserialize<AssetRef<Material>>(mat, ctx));
+                        tp.Materials.Add(Serializer.Deserialize<Material>(mat, ctx));
                 }
                 else
                 {
                     // Back-compat: old single-material field.
                     var legacy = tpo.Get("Material");
                     if (legacy != null)
-                        tp.Materials.Add(Serializer.Deserialize<AssetRef<Material>>(legacy, ctx));
+                        tp.Materials.Add(Serializer.Deserialize<Material>(legacy, ctx));
                 }
 
                 TreePrototypes.Add(tp);

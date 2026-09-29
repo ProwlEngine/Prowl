@@ -22,7 +22,7 @@ public class ParticleSystemComponent : MonoBehaviour
 {
     #region Configuration
 
-    public AssetRef<Material> Material;
+    public Material? Material;
     public int MaxParticles = 1000;
     public float Duration = 5.0f;
     public bool Looping = true;
@@ -163,7 +163,7 @@ public class ParticleSystemComponent : MonoBehaviour
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        if (_particles.Count <= 0 || Material.Res == null || _quadMesh == null) return;
+        if (_particles.Count <= 0 || Material == null || _quadMesh == null) return;
 
         // Update instance data from particles
         UpdateInstanceData();
@@ -176,7 +176,7 @@ public class ParticleSystemComponent : MonoBehaviour
         InstancedMeshRenderable.CreateBatched(
             renderables,
             _quadMesh,
-            Material.Res,
+            Material,
             _transforms,
             Transform.Position,
             _colors,

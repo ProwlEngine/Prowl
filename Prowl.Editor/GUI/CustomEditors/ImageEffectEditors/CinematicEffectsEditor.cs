@@ -70,10 +70,10 @@ public class CinematicEffectsEditor : CustomEditor
         EditorGUI.ModuleSection(paper, $"{id}_lut", EditorIcons.TableCells, "LUT Color Grading",
             fx.EnableLUT, v => fx.EnableLUT = v, () =>
         {
-            PropertyGridUtils.DrawField(paper, $"{id}_lut_tex", "LUT Texture", typeof(AssetRef<Texture2D>), fx.LUTTexture,
+            PropertyGridUtils.DrawField(paper, $"{id}_lut_tex", "LUT Texture", typeof(Texture2D), fx.LUTTexture,
                 newVal =>
                 {
-                    fx.LUTTexture = (AssetRef<Texture2D>)newVal!;
+                    fx.LUTTexture = newVal as Texture2D;
                 }, 0);
             EditorGUI.SliderRow(paper, $"{id}_lut_cont", "Contribution", fx.LUTContribution, 0, 1, v => fx.LUTContribution = v);
         });

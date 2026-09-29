@@ -141,26 +141,36 @@ public abstract class BuildPipeline
     /// </summary>
     private static bool TryBringInstancesUpToDate(ref EchoObject echo, string scenePath)
     {
+        // A live scene is walked by the asset database and prefabs are refreshed through shared editor state, both of
+        // which belong to the main thread.
+        EchoObject original = echo;
+        EchoObject? updated = null;
+        Core.EditorApplication.RunOnMainThread(() => updated = BringInstancesUpToDate(original, scenePath));
+        if (updated == null) return false;
+
+        echo = updated;
+        return true;
+    }
+
+    private static EchoObject? BringInstancesUpToDate(EchoObject echo, string scenePath)
+    {
         Runtime.Resources.Scene? scene = null;
         try
         {
             scene = Serializer.Deserialize<Runtime.Resources.Scene>(echo);
-            if (scene.IsNotValid()) return false;
+            if (scene.IsNotValid()) return null;
 
             EchoObject? before = Serializer.Serialize(typeof(object), scene);
             Prefabs.PrefabUtility.RefreshInstancesIn(scene!);
             EchoObject? after = Serializer.Serialize(typeof(object), scene);
 
-            if (before == null || after == null || before.Equals(after)) return false;
-
-            echo = after;
-            return true;
+            return before == null || after == null || before.Equals(after) ? null : after;
         }
         catch (Exception ex)
         {
             // Shipping what the scene last saved is wrong but survivable; failing the build is not.
             Runtime.Debug.LogWarning($"[Build] Could not bring prefab instances in '{scenePath}' up to date: {ex.Message}");
-            return false;
+            return null;
         }
         finally
         {
@@ -183,7 +193,13 @@ public abstract class BuildPipeline
             var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
             if (echo == null) return null;
 
-            bool changed = entry.ImporterType == "SceneImporter" && TryBringInstancesUpToDate(ref echo, entry.Path);
+            // A scene's cache is the SceneAsset, which carries the stored scene as its data.
+            bool changed = false;
+            if (entry.ImporterType == "SceneImporter" && echo.Get("_data") is { TagType: EchoType.Compound } sceneData)
+            {
+                changed = TryBringInstancesUpToDate(ref sceneData, entry.Path);
+                if (changed) echo["_data"] = sceneData;
+            }
 
             changed |= StripEditorOnlyPrefabData(echo);
 
@@ -383,11 +399,29 @@ public abstract class BuildPipeline
         List<ResourceEntry> resourcesMap, Guid defaultSceneGuid)
     {
         var root = EchoObject.NewCompound();
+        root["format"] = new EchoObject(PlayerAssetBackend.ManifestFormat);
         root["defaultScene"] = new EchoObject(defaultSceneGuid.ToString());
 
+        // Enough per asset that a player knows what a GUID is, how big it is and what it loads with,
+        // without opening a single file.
+        var db = EditorAssetBackend.Instance;
         var assetsTag = EchoObject.NewCompound();
         foreach (var guid in InBuildOrder(assets))
-            assetsTag[guid.ToString()] = new EchoObject($"{guid}.asset");
+        {
+            var item = EchoObject.NewCompound();
+            item["file"] = new EchoObject($"{guid}.asset");
+            if (db != null)
+            {
+                var (typeName, hard, soft) = db.GetManifestInfo(guid);
+                item["path"] = new EchoObject(db.GetAssetPath(guid) ?? "");
+                item["type"] = new EchoObject(typeName);
+                item["size"] = new EchoObject(db.GetEstimatedSize(guid));
+                item["hard"] = GuidList(hard.Where(assets.Contains));
+                item["soft"] = GuidList(soft.Where(assets.Contains));
+                if (db.TryGetParentGuid(guid, out Guid parent)) item["parent"] = new EchoObject(parent.ToString());
+            }
+            assetsTag[guid.ToString()] = item;
+        }
         root["assets"] = assetsTag;
 
         // Kept in the order collected, since that order decides which asset wins a shared load path.
@@ -403,6 +437,13 @@ public abstract class BuildPipeline
         root["resources"] = resTag;
 
         root.WriteToBinary(new FileInfo(outputPath));
+    }
+
+    private static EchoObject GuidList(IEnumerable<Guid> guids)
+    {
+        var list = EchoObject.NewList();
+        foreach (Guid guid in guids) list.ListAdd(new EchoObject(guid.ToString()));
+        return list;
     }
 
     /// <summary>Export only build-relevant project settings as Echo YAML files.</summary>

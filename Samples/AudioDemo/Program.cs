@@ -89,7 +89,7 @@ public sealed class AudioDemoGame : Game
         MeshRenderer groundMr = groundGO.AddComponent<MeshRenderer>();
         groundMr.Mesh = Mesh.CreateCube(Float3.One);
         groundMr.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
-        groundMr.Material.Res?.SetColor("_Color", new Color(0.3f, 0.3f, 0.35f, 1));
+        groundMr.Material!.SetColor("_Color", new Color(0.3f, 0.3f, 0.35f, 1));
         groundGO.Transform.Position = new(0, -1, 0);
         groundGO.Transform.LocalScale = new(40, 0.5f, 40);
         scene.Add(groundGO);
@@ -256,19 +256,19 @@ public sealed class AudioDemoGame : Game
             mr.Material = markerMat;
 
             // Color based on audio source type
-            var mat = mr.Material.Res;
+            Material mat = mr.Material!;
             if (audioSource.GameObject.Name.Contains("Doppler"))
-                mat?.SetColor("_Color", new Color(1, 0.2f, 0.2f, 1));
+                mat.SetColor("_Color", new Color(1, 0.2f, 0.2f, 1));
             else if (audioSource.GameObject.Name.Contains("Filter"))
-                mat?.SetColor("_Color", new Color(1, 1, 0.2f, 1));
+                mat.SetColor("_Color", new Color(1, 1, 0.2f, 1));
             else if (audioSource.GameObject.Name.Contains("Reverb"))
-                mat?.SetColor("_Color", new Color(0.8f, 0.2f, 1, 1));
+                mat.SetColor("_Color", new Color(0.8f, 0.2f, 1, 1));
             else if (audioSource.GameObject.Name.Contains("High Pitch"))
-                mat?.SetColor("_Color", new Color(0.2f, 1, 0.2f, 1));
+                mat.SetColor("_Color", new Color(0.2f, 1, 0.2f, 1));
             else if (audioSource.GameObject.Name.Contains("Low Pitch"))
-                mat?.SetColor("_Color", new Color(0.2f, 0.5f, 1, 1));
+                mat.SetColor("_Color", new Color(0.2f, 0.5f, 1, 1));
             else
-                mat?.SetColor("_Color", new Color(0.8f, 0.8f, 0.8f, 1));
+                mat.SetColor("_Color", new Color(0.8f, 0.8f, 0.8f, 1));
 
             markerGO.Transform.Position = audioSource.GameObject.Transform.Position;
             markerGO.Transform.LocalScale = new Float3(0.5f, 0.5f, 0.5f);

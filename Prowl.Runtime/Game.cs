@@ -102,6 +102,7 @@ public abstract class Game
             _paper.DevTools.Enabled = true;
 
             BuiltInAssets.Initialize();
+            AssetLoader.SetMainThread();
 
             Initialize();
         }
@@ -214,6 +215,9 @@ public abstract class Game
                 // Then the scene swap, so a load requested this frame tears the outgoing scene down
                 // here rather than under whatever was still running.
                 Scene.ProcessPendingLoad();
+
+                // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
+                AssetDatabase.EndFrame();
             }
             catch (Exception e)
             {
@@ -251,6 +255,9 @@ public abstract class Game
             // Dispose the current scene so everything in it runs its teardown callbacks.
             Scene.Shutdown();
 
+            // Asset payloads go while the audio and graphics they belong to are still up.
+            AssetDatabase.Shutdown();
+
             AudioContext.Deinitialize();
 
             Debug.Log("Is terminating...");
@@ -282,6 +289,7 @@ public abstract class Game
         Tasks.MainThreadContext.Install();
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
         BuiltInAssets.Initialize();
+        AssetLoader.SetMainThread();
         Initialize();
 
         Debug.LogSuccess("Headless initialization complete");
@@ -315,6 +323,9 @@ public abstract class Game
                 // here rather than under whatever was still running.
                 Scene.ProcessPendingLoad();
 
+                // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
+                AssetDatabase.EndFrame();
+
                 frame++;
                 if (options.MaxFrames > 0 && frame >= options.MaxFrames) break;
                 if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
@@ -328,6 +339,7 @@ public abstract class Game
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
             Scene.Shutdown();
+            AssetDatabase.Shutdown();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
             Application.IsHeadless = false;
         }
@@ -347,6 +359,9 @@ public abstract class Game
         // Before the scene runs, so a continuation resumed this frame sees the same world the rest of
         // the frame will. Anything left over from a finished play session is dropped here.
         Tasks.MainThreadContext.Current?.Pump();
+
+        // Assets that finished loading in the background join at the start of the frame, all at once.
+        AssetDatabase.Pump();
 
         // Pausing play mode has to stop the sound as well as the simulation, or the music carries on
         // over a frozen game. Only in the editor: pausing there is a debugging tool that freezes

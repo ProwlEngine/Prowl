@@ -35,7 +35,7 @@ public sealed class SDFFeatureSpec : MeshFeatureSpec
         settings[Key] = sdf;
     }
 
-    public override EngineObject? TryGenerate(Mesh mesh, EchoObject? settings)
+    public override Asset? TryGenerate(Mesh mesh, EchoObject? settings)
     {
         var options = ReadOptions(settings, out bool enabled);
         if (!enabled) return null;

@@ -197,15 +197,15 @@ public class PreviewRenderer : IDisposable
         Animator? animator = FindAnimator(root);
         if (animator.IsNotValid()) return;
 
-        Avatar? avatar = animator!.Avatar.Res;
+        Avatar? avatar = animator!.Avatar;
         if (avatar.IsNotValid() || avatar!.Skeleton == null) return;
 
         _avatar = avatar.Runtime;
         _pose = new MotionPose(avatar.Skeleton);
         _binding = new AnimatorBinding(animator.Transform, avatar.Skeleton);
 
-        foreach (AssetRef<AnimationClip> clip in animator.Clips)
-            if (clip.Res.IsValid()) _clips.Add(clip.Res!);
+        foreach (AnimationClip clip in animator.Clips)
+            if (clip.IsValid()) _clips.Add(clip);
     }
 
     private static Animator? FindAnimator(GameObject go)
@@ -342,10 +342,10 @@ public class PreviewRenderer : IDisposable
         // Fast path for single-MeshRenderer subjects (SetupForMesh case): use the mesh's own
         // bounds directly, since there is no child hierarchy to walk and world == local at this
         // point thanks to the identity reset above.
-        if (meshRenderer != null && meshRenderer.Mesh.Res != null && subject.Children.Count == 0)
-            bounds = meshRenderer.Mesh.Res.bounds;
-        else if (skinnedRenderer != null && skinnedRenderer.SharedMesh.Res != null && subject.Children.Count == 0)
-            bounds = skinnedRenderer.SharedMesh.Res.bounds;
+        if (meshRenderer != null && meshRenderer.Mesh != null && subject.Children.Count == 0)
+            bounds = meshRenderer.Mesh.bounds;
+        else if (skinnedRenderer != null && skinnedRenderer.SharedMesh != null && subject.Children.Count == 0)
+            bounds = skinnedRenderer.SharedMesh.bounds;
         else
             bounds = ComputeHierarchyBounds(subject);
 
@@ -429,7 +429,7 @@ public class PreviewRenderer : IDisposable
         var mr = go.GetComponent<MeshRenderer>();
         if (mr != null)
         {
-            var mesh = mr.Mesh.Res;
+            var mesh = mr.Mesh;
             if (mesh != null)
             {
                 var worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
@@ -443,7 +443,7 @@ public class PreviewRenderer : IDisposable
         var smr = go.GetComponent<SkinnedMeshRenderer>();
         if (smr != null)
         {
-            var mesh = smr.SharedMesh.Res;
+            var mesh = smr.SharedMesh;
             if (mesh != null)
             {
                 var worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);

@@ -145,16 +145,16 @@ public static class MaterialPropertyDrawer
                 }
             case ShaderPropertyType.Texture2D:
                 {
-                    var val = ps.HasTexture(prop.Name) ? ps.GetTextureRef(prop.Name) : new AssetRef<Texture2D>(prop.Texture2DValue);
-                    PropertyGridUtils.DrawField(paper, id, label, typeof(AssetRef<Texture2D>), val,
-                        newVal => { material.SetTexture(prop.Name, (AssetRef<Texture2D>)newVal!); onChanged?.Invoke(); }, 0);
+                    var val = ps.HasTexture(prop.Name) ? ps.GetTexture(prop.Name) : prop.Texture2DValue;
+                    PropertyGridUtils.DrawField(paper, id, label, typeof(Texture2D), val,
+                        newVal => { material.SetTexture(prop.Name, newVal as Texture2D); onChanged?.Invoke(); }, 0);
                     break;
                 }
             case ShaderPropertyType.Texture3D:
                 {
-                    var val = ps.HasTexture3D(prop.Name) ? ps.GetTexture3DRef(prop.Name) : new AssetRef<Texture3D>(prop.Texture3DValue);
-                    PropertyGridUtils.DrawField(paper, id, label, typeof(AssetRef<Texture3D>), val,
-                        newVal => { material.SetTexture3D(prop.Name, (AssetRef<Texture3D>)newVal!); onChanged?.Invoke(); }, 0);
+                    var val = ps.HasTexture3D(prop.Name) ? ps.GetTexture3D(prop.Name) : prop.Texture3DValue;
+                    PropertyGridUtils.DrawField(paper, id, label, typeof(Texture3D), val,
+                        newVal => { material.SetTexture3D(prop.Name, newVal as Texture3D); onChanged?.Invoke(); }, 0);
                     break;
                 }
         }

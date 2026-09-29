@@ -14,16 +14,32 @@ namespace Prowl.Runtime.Resources;
 /// The Shader class itself doesnt do much, It stores the properties of the shader and the shader code and Keywords.
 /// This is used in conjunction with the Material class to create shader variants with the correct keywords and to render things
 /// </summary>
-public sealed class Shader : EngineObject, ISerializationCallbackReceiver
+public sealed class Shader : Asset, ISerializationCallbackReceiver
 {
     [SerializeField]
-    private ShaderProperty[] _properties;
-    public IEnumerable<ShaderProperty> Properties { get { EnsureNotDisposed(); return _properties; } }
+    private ShaderProperty[] _properties = [];
+    public IEnumerable<ShaderProperty> Properties { get { EnsureLoaded(); return _properties; } }
+
+    /// <summary>The properties without loading, empty once unloaded, for the render thread.</summary>
+    internal ShaderProperty[] LoadedProperties => _properties ?? [];
 
 
     [SerializeField]
-    private ShaderPass[] _passes;
-    public IEnumerable<ShaderPass> Passes { get { EnsureNotDisposed(); return _passes; } }
+    private ShaderPass[] _passes = [];
+    public IEnumerable<ShaderPass> Passes { get { EnsureLoaded(); return _passes; } }
+
+    /// <summary>Loads the default textures and creates their handles, so the render thread only binds what exists.</summary>
+    internal void PrepareDefaultTextures()
+    {
+        EnsureLoaded();
+        foreach (ShaderProperty property in _properties)
+        {
+            if (property.PropertyType == ShaderPropertyType.Texture2D && property.Texture2DValue is { IsDisposed: false, HandleIfLoaded: null } texture2D)
+                _ = texture2D.Handle;
+            else if (property.PropertyType == ShaderPropertyType.Texture3D && property.Texture3DValue is { IsDisposed: false, HandleIfLoaded: null } texture3D)
+                _ = texture3D.Handle;
+        }
+    }
 
 
     private Dictionary<string, int> _nameIndexLookup = [];
@@ -62,33 +78,33 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public ShaderPass GetPass(int passIndex)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         passIndex = Maths.Clamp(passIndex, 0, _passes.Length - 1);
         return _passes[passIndex];
     }
 
     public ShaderPass GetPass(string passName)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         return _passes[GetPassIndex(passName)];
     }
 
     public int GetPassIndex(string passName)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         return _nameIndexLookup.GetValueOrDefault(passName, -1);
     }
 
     public int? GetPassWithTag(string tag, string? tagValue = null)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         List<int> passes = GetPassesWithTag(tag, tagValue);
         return passes.Count > 0 ? passes[0] : null;
     }
 
     public List<int> GetPassesWithTag(string tag, string? tagValue = null)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         List<int> passes = [];
 
         if (_tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
@@ -147,7 +163,6 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         if (shader.IsNotValid())
             throw new System.Exception($"Shader parsing returned null: {filePath}");
 
-        shader.AssetPath = filePath;
         return shader;
     }
 
@@ -156,14 +171,10 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     /// across the whole app so ShaderPass variant caches aren't defeated by repeated
     /// re-parsing the parse happens exactly once per shader enum value.
     /// </summary>
-    public static Shader LoadDefault(DefaultShader shader)
-    {
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(shader)) is Shader cached)
-            return cached;
-        // BuiltInAssets.Initialize() hasn't run, or the loader errored parse directly
-        // as a last resort so this method never silently returns null.
-        return ParseDefault(shader);
-    }
+    public static Shader LoadDefault(DefaultShader shader) => BuiltInAssets.Load<Shader>(BuiltInAssets.GuidFor(shader));
+
+    /// <summary>The built-in shader without loading it, for code that runs while another asset loads.</summary>
+    internal static Shader GetDefault(DefaultShader shader) => AssetDatabase.Get<Shader>(BuiltInAssets.GuidFor(shader))!;
 
     /// <summary>
     /// Raw parse of a default embedded shader invoked by <see cref="BuiltInAssets"/>
@@ -195,8 +206,6 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         if (result.IsNotValid())
             throw new System.Exception($"Default shader parsing returned null: {shader}");
 
-        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after the loader returns,
-        // so we don't set them here keeping the raw parse free of registry coupling.
         return result;
     }
 
@@ -271,9 +280,9 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
             RegisterPass(_passes[i], i);
     }
 
-    protected override void OnDispose()
+    protected override void OnUnload()
     {
-        foreach (var pass in _passes)
+        foreach (var pass in _passes ?? [])
             pass.Dispose();
     }
 

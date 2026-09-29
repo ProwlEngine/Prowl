@@ -124,10 +124,10 @@ public struct ModelImporterSettings
     /// </summary>
     public Dictionary<string, string>? HumanoidBoneMap;
 
-    /// <summary>Strategy for turning a model's texture references into AssetRefs. Null (the default)
+    /// <summary>Strategy for turning a model's texture references into textures. Null (the default)
     /// uses <see cref="DefaultModelTextureResolver"/>, which decodes/GPU-uploads immediately - correct
     /// for a direct runtime load with no separate asset-tracking step. The editor importer supplies
-    /// its own resolver that only ever produces GUID-backed AssetRefs, with no decode of its own.</summary>
+    /// its own resolver that only ever produces database textures, with no decode of its own.</summary>
     public IModelTextureResolver? TextureResolver;
 
     public ModelImporterSettings() { }
@@ -182,11 +182,11 @@ public struct ModelClipSettings
 public interface IModelMaterialResolver
 {
     /// <summary>
-    /// The asset standing in for a material the file defines, or <see langword="default"/> to have the
-    /// import build it. Returning default for a reference that has gone missing is what lets a model
+    /// The asset standing in for a material the file defines, or null to have the
+    /// import build it. Returning null for a reference that has gone missing is what lets a model
     /// heal itself on the next reimport.
     /// </summary>
-    AssetRef<Material> Resolve(string materialName);
+    Material? Resolve(string materialName);
 }
 
 /// <summary>
@@ -246,7 +246,7 @@ public class ModelImporter
 }
 
 /// <summary>
-/// Strategy for turning a model's texture references into <see cref="AssetRef{T}"/>s during import.
+/// Strategy for turning a model's texture references into textures during import.
 /// Invoked once per distinct texture the model references (the caller caches and reuses the result
 /// across every material slot that references the same texture).
 /// <para/>
@@ -263,18 +263,16 @@ public interface IModelTextureResolver
     /// Resolve a texture referenced by a sibling file on disk. <paramref name="sourcePath"/> is
     /// always an already-resolved, existing, absolute path.
     /// </summary>
-    /// <returns>An <see cref="AssetRef{T}"/> for the texture, or <see langword="default"/> if it
-    /// can't/shouldn't be resolved - the caller falls back to the material slot's built-in default
-    /// texture (Grid/Normal/Surface/Emission).</returns>
-    AssetRef<Texture2D> ResolveExternal(string sourcePath);
+    /// <returns>The texture, or null if it can't/shouldn't be resolved - the caller falls back to the
+    /// material slot's built-in default texture (Grid/Normal/Surface/Emission).</returns>
+    Texture2D? ResolveExternal(string sourcePath);
 
     /// <summary>
     /// Resolve a texture embedded directly in the model file (GLB bufferView, FBX Video::Clip
     /// content, data: URI - no file of its own).
     /// </summary>
-    /// <returns>An <see cref="AssetRef{T}"/> for the texture, or <see langword="default"/> if it
-    /// can't/shouldn't be resolved.</returns>
-    AssetRef<Texture2D> ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType);
+    /// <returns>The texture, or null if it can't/shouldn't be resolved.</returns>
+    Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType);
 }
 
 /// <summary>
@@ -287,14 +285,14 @@ public sealed class DefaultModelTextureResolver : IModelTextureResolver
 {
     public static readonly DefaultModelTextureResolver Instance = new();
 
-    public AssetRef<Texture2D> ResolveExternal(string sourcePath)
+    public Texture2D? ResolveExternal(string sourcePath)
     {
         try
         {
             var tex = Texture2D.LoadFromFile(sourcePath, generateMipmaps: true);
             if (string.IsNullOrEmpty(tex.Name))
                 tex.Name = Path.GetFileNameWithoutExtension(sourcePath);
-            return new AssetRef<Texture2D>(tex);
+            return tex;
         }
         catch (Exception ex)
         {
@@ -303,14 +301,14 @@ public sealed class DefaultModelTextureResolver : IModelTextureResolver
         }
     }
 
-    public AssetRef<Texture2D> ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
+    public Texture2D? ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
     {
         try
         {
             using var ms = new MemoryStream(encodedBytes);
             var tex = Texture2D.LoadFromStream(ms, generateMipmaps: true);
             tex.Name = string.IsNullOrEmpty(name) ? "EmbeddedTexture" : name;
-            return new AssetRef<Texture2D>(tex);
+            return tex;
         }
         catch (Exception ex)
         {

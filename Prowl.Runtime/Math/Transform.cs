@@ -5,12 +5,11 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.Runtime;
 
 namespace Prowl.Vector;
 
-public class Transform : ICloneCallbackReceiver
+public class Transform : ISerializationCallbackReceiver
 {
     #region Properties
 
@@ -256,10 +255,10 @@ public class Transform : ICloneCallbackReceiver
     public GameObject GameObject { get; internal set; }
     #endregion
 
-    // The cache and the version it is keyed on are not part of what gets copied, so a copy writes the
+    // The cache and the version it is keyed on are not saved, so a read into an existing Transform writes the
     // local position, rotation and scale straight past whatever would have invalidated it.
-    void ICloneCallbackReceiver.OnBeforeClone(CloneContext context) { }
-    void ICloneCallbackReceiver.OnAfterClone(CloneContext context) => _version++;
+    void ISerializationCallbackReceiver.OnBeforeSerialize() { }
+    void ISerializationCallbackReceiver.OnAfterDeserialize() => _version++;
 
     public void SetLocalTransform(Float3 position, Quaternion rotation, Float3 scale)
     {

@@ -21,7 +21,7 @@ public class ShaderImporter : AssetImporter
         // Resolve #include directives:
         // 1. Relative to the shader file's directory
         // 2. Relative to the project's Assets root
-        // 3. Built-in engine includes (Fragment.glsl, PBR.glsl, Lighting.glsl, etc.)
+        // 3. Built-in engine includes (ProwlCG.glsl, PBR.glsl, Lighting.glsl, etc.)
         string? IncludeResolver(string includePath)
         {
             // 1. Relative to shader file

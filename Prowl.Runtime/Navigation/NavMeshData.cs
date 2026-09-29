@@ -21,7 +21,7 @@ namespace Prowl.Runtime;
 /// <see cref="NavMeshBuilder"/> and registered through <see cref="NavMeshWorld.AddNavMeshData"/>.
 /// Independent of any scene, so a procedural world can build one at runtime.
 /// </summary>
-public sealed class NavMeshData : EngineObject
+public sealed class NavMeshData : Asset
 {
     /// <summary>One serialized Detour tile.</summary>
     public sealed class NavMeshTile

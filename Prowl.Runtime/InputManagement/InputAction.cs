@@ -162,6 +162,18 @@ public class InputAction
     }
 
     /// <summary>
+    /// Takes what another action was configured with, keeping this one's listeners, for a map read again.
+    /// </summary>
+    internal void TakeConfiguration(InputAction from)
+    {
+        ActionType = from.ActionType;
+        ExpectedValueType = from.ExpectedValueType;
+        Bindings = from.Bindings;
+        _composites = from._composites;
+        _interactionStates.Clear();
+    }
+
+    /// <summary>
     /// Adds a composite binding that combines multiple inputs into one value.
     /// Example: WASD keys → Vector2, or two triggers → float axis
     /// </summary>

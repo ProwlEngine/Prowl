@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI.SceneView;
@@ -32,6 +33,9 @@ public static class ComponentClipboard
 {
     private const string ClipboardHeader = "ProwlComponent:";
 
+    // The runtime assets the copied data links. A link is weak, so the clipboard keeps them.
+    private static IReadOnlyList<Asset> s_linkedAssets = [];
+
     // ================================================================
     //  Copy
     // ================================================================
@@ -41,7 +45,9 @@ public static class ComponentClipboard
     {
         if (comp == null) return;
 
-        var data = Serializer.Serialize(comp.GetType(), comp, SerializeContext(comp));
+        DependencySerializationContext context = SerializeContext(comp);
+        var data = Serializer.Serialize(comp.GetType(), comp, context);
+        s_linkedAssets = context.LinkedAssets;
         Input.Clipboard = $"{ClipboardHeader}{comp.GetType().AssemblyQualifiedName}\n{data.WriteToString()}";
     }
 
@@ -165,16 +171,17 @@ public static class ComponentClipboard
 
             // Snapshot the current state through the same reference-linking path, so undo restores
             // scene references as live instances rather than deep-cloned orphans.
-            var beforeData = Serializer.Serialize(target.GetType(), target, SerializeContext(target));
+            DependencySerializationContext beforeContext = SerializeContext(target);
+            var before = new MemoryCopy(Serializer.Serialize(target.GetType(), target, beforeContext), beforeContext.LinkedAssets);
 
             ApplyState(target, data);
 
             var compId = target.Identifier;
-            var afterData = data;
+            var after = new MemoryCopy(data, s_linkedAssets);
 
             Undo.RegisterAction("Paste Component Values",
-                undo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, beforeData); },
-                redo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, afterData); });
+                undo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, before.Data); },
+                redo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, after.Data); });
 
             EditorSceneManager.MarkDirty();
             return true;
@@ -223,8 +230,9 @@ public static class ComponentClipboard
 
     // Serializing keys every scene reference except the component being copied (see
     // SceneReferenceResolver); deserializing only resolves keys, so it passes no copy roots.
-    private static SerializationContext SerializeContext(MonoBehaviour root)
-        => new() { ExternalReferences = new SceneReferenceResolver(root) };
+    // Never leaves memory, so runtime assets are linked rather than copied.
+    private static DependencySerializationContext SerializeContext(MonoBehaviour root)
+        => new() { ExternalReferences = new SceneReferenceResolver(root), LinkRuntimeAssets = true };
 
     private static SerializationContext DeserializeContext()
         => new() { ExternalReferences = new SceneReferenceResolver() };

@@ -183,7 +183,7 @@ public sealed class AssemblyDefinition
 /// and can use the normal type-keyed inspector (<see cref="AssemblyDefinition"/> data lives in the
 /// file itself). It is editor-only and never shipped.
 /// </summary>
-public sealed class AssemblyDefinitionAsset : Prowl.Runtime.EngineObject { }
+public sealed class AssemblyDefinitionAsset : Prowl.Runtime.Asset { }
 
 /// <summary>An assembly definition file discovered on disk, paired with its owning directory.</summary>
 public sealed class AsmDefFile

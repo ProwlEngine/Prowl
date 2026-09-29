@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Prowl.Editor.Projects;
 
@@ -10,6 +11,9 @@ namespace Prowl.Editor.Projects;
 /// </summary>
 public class Project
 {
+    /// <summary> The engine version projects are saved with. A project from any other version is migrated when opened. </summary>
+    public const string CurrentVersion = "preview-5";
+
     /// <summary> Gets the currently active project, or null if no project is open. </summary>
     public static Project? Current { get; private set; }
 
@@ -17,6 +21,9 @@ public class Project
     public string Name { get; private set; }
     /// <summary> Gets the absolute root path of the project. </summary>
     public string RootPath { get; private set; }
+    /// <summary> The engine version the project was last saved with. </summary>
+    public string Version { get; private set; } = CurrentVersion;
+    public bool IsOutdated => Version != CurrentVersion;
 
     // Standard directories
     public string AssetsPath => Path.Combine(RootPath, "Assets");
@@ -104,29 +111,45 @@ public class Project
         if (!Directory.Exists(assetsDir))
             throw new InvalidOperationException($"Not a valid Prowl project: missing Assets/ folder in '{rootPath}'");
 
-        // Find the project name from .prowl file or folder name
-        string name = Path.GetFileName(rootPath);
-        var prowlFiles = Directory.GetFiles(rootPath, "*.prowl");
-        if (prowlFiles.Length > 0)
-        {
-            try
-            {
-                string json = File.ReadAllText(prowlFiles[0]);
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("name", out var nameProp))
-                    name = nameProp.GetString() ?? name;
-            }
-            catch { }
-        }
-
-        var project = new Project(rootPath, name);
+        (string? name, string version) = ReadProwlFile(rootPath);
+        var project = new Project(rootPath, name ?? Path.GetFileName(rootPath)) { Version = version };
         project.EnsureDirectories();
 
         // Write .prowl file if missing
-        if (prowlFiles.Length == 0)
+        if (name == null)
             project.WriteProwlFile();
 
         return project;
+    }
+
+    /// <summary> The version a project folder was last saved with, without opening it. </summary>
+    public static string ReadVersion(string rootPath) => ReadProwlFile(rootPath).Version;
+
+    // A project without a .prowl file, or one that predates versions, is from before versions were written.
+    private static (string? Name, string Version) ReadProwlFile(string rootPath)
+    {
+        string[] prowlFiles = Directory.Exists(rootPath) ? Directory.GetFiles(rootPath, "*.prowl") : [];
+        if (prowlFiles.Length == 0) return (null, "");
+
+        string name = Path.GetFileName(rootPath);
+        string version = "";
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(prowlFiles[0]));
+            if (doc.RootElement.TryGetProperty("name", out var nameProp))
+                name = nameProp.GetString() ?? name;
+            if (doc.RootElement.TryGetProperty("version", out var versionProp))
+                version = versionProp.GetString() ?? "";
+        }
+        catch { }
+        return (name, version);
+    }
+
+    /// <summary> Records that the project is now in the current version's format. </summary>
+    public void MarkCurrent()
+    {
+        Version = CurrentVersion;
+        WriteProwlFile();
     }
 
     /// <summary>
@@ -174,16 +197,19 @@ public class Project
 
     private void WriteProwlFile()
     {
-        var data = new
-        {
-            name = Name,
-            engine = "Prowl",
-            version = "0.0.1",
-            created = DateTime.UtcNow.ToString("o")
-        };
+        JsonObject data = (File.Exists(ProwlFilePath) ? TryParse(File.ReadAllText(ProwlFilePath)) : null) ?? new JsonObject();
+        data["name"] = Name;
+        data["engine"] = "Prowl";
+        data["version"] = Version;
+        data["created"] ??= DateTime.UtcNow.ToString("o");
 
-        string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(ProwlFilePath, json);
+        File.WriteAllText(ProwlFilePath, data.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static JsonObject? TryParse(string json)
+    {
+        try { return JsonNode.Parse(json) as JsonObject; }
+        catch (JsonException) { return null; }
     }
 
     private const string DirectoryBuildPropsTemplate =

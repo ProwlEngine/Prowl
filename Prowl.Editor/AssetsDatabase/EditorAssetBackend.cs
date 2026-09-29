@@ -17,17 +17,17 @@ namespace Prowl.Editor;
 
 /// <summary>
 /// Central asset database for the editor. Manages the full asset lifecycle: scanning, importing,
-/// caching, file watching.
+/// caching, file watching. The runtime's <see cref="AssetDatabase"/> owns the asset objects, and this
+/// answers what a GUID is and reads its import cache when one loads.
 /// </summary>
-public class EditorAssetBackend : AssetBackendBase
+public class EditorAssetBackend : AssetBackend
 {
     public static EditorAssetBackend? Instance { get; private set; }
 
     private readonly Project _project;
-    // Concurrent so the background AssetLoader thread can read entries / write loaded assets
-    // while the main thread imports/scans. (_pathToGuid is main-thread-only the loader never touches it.)
+    // Concurrent so the loader and build threads can read entries while the main thread imports and scans.
     private readonly ConcurrentDictionary<Guid, AssetEntry> _guidToEntry = new();
-    private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
     // GPU-uploaded thumbnail cache. Main-thread-only (texture creation isn't thread-safe), same
     // as _pathToGuid every UI that shows asset thumbnails shares this instead of keeping its own.
@@ -35,6 +35,9 @@ public class EditorAssetBackend : AssetBackendBase
     // Importing (and the file writes / GPU work it implies) stays on the main thread; the
     // background loader only deserializes already-imported on-disk cache files.
     private int _mainThreadId = -1;
+    // Held only around reading or replacing a cache file, so the loader never reads one mid-replace.
+    private readonly object _cacheFileLock = new();
+    private IReadOnlyList<ResourceEntry> _resources = [];
     private readonly DependencyGraph _dependencies = new();
     private AssetWatcher? _watcher;
     private FileSystemWatcher? _buildPropsWatcher;
@@ -74,13 +77,11 @@ public class EditorAssetBackend : AssetBackendBase
         _mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
         Instance = this;
-        Runtime.AssetDatabase.Current = this;
+        AssetDatabase.Backend = this;
+        AssetLoader.SetMainThread();
 
-        // A sub-asset never loads except as a side effect of loading its parent (see LoadFresh), so
-        // resolve it to its parent's GUID for touch/idle/lock purposes too - the whole family is one
-        // atomic unit.
-        AssetDatabase.ResolveFamily = guid =>
-            _subAssetIndex.TryGetValue(guid, out var info) ? info.parentGuid : guid;
+        AssetDatabase.Loaded -= EnqueueThumbnailIfMissing;
+        AssetDatabase.Loaded += EnqueueThumbnailIfMissing;
 
         // Importers (and every other EditorRegistries scanner) must be ready before anything below
         // tries to import a file - idempotent, so this is cheap on every call after the first.
@@ -93,6 +94,8 @@ public class EditorAssetBackend : AssetBackendBase
         // subscribing twice would refresh every instance twice per import.
         OnAssetsImported -= PrefabUtility.OnAssetsImported;
         OnAssetsImported += PrefabUtility.OnAssetsImported;
+        AssetDatabase.Reloaded -= PrefabUtility.OnAssetReloaded;
+        AssetDatabase.Reloaded += PrefabUtility.OnAssetReloaded;
 
         // A deleted prefab must stop being the baseline instances are compared against, or an edit to
         // an instance keeps recording overrides against contents that no longer exist anywhere.
@@ -120,16 +123,16 @@ public class EditorAssetBackend : AssetBackendBase
                 // Seed the dependency graph from persisted dependencies. Without this, unchanged
                 // assets (not reimported on startup) have no graph edges after a reopen, so
                 // GetDependents/GetDependencies return empty until something is reimported.
-                if (entry.Dependencies is { Length: > 0 })
-                    _dependencies.SetDependencies(guid, entry.Dependencies);
+                if (entry.Dependencies.Length + entry.SoftDependencies.Length > 0)
+                    _dependencies.SetDependencies(guid, entry.Dependencies.Concat(entry.SoftDependencies));
 
                 // Sub-assets have their own dependency-graph entry too (see RunImport) - needs the
                 // same seeding or a later DependenciesOnly build silently drops what they reference.
                 if (entry.SubAssets is { Length: > 0 })
                 {
                     foreach (var sub in entry.SubAssets)
-                        if (sub.Dependencies is { Length: > 0 })
-                            _dependencies.SetDependencies(sub.Guid, sub.Dependencies);
+                        if (sub.Dependencies.Length + sub.SoftDependencies.Length > 0)
+                            _dependencies.SetDependencies(sub.Guid, sub.Dependencies.Concat(sub.SoftDependencies));
                 }
             }
             Runtime.Debug.Log($"Loaded {cached.Count} entries from metadata cache.");
@@ -161,7 +164,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
 
-        // Initialize GameResources mapping for editor play mode
+        // What FindResource resolves in play mode.
         RefreshResourcesMap();
     }
 
@@ -207,13 +210,27 @@ public class EditorAssetBackend : AssetBackendBase
             }
     }
 
-    /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>
+    /// <summary>Every asset under a Resources folder, for <see cref="AssetDatabase.FindResource{T}"/>. Rebuilt after any change to the index.</summary>
+    public override IReadOnlyList<ResourceEntry> Resources
+    {
+        get
+        {
+            // The index belongs to the main thread, so another thread reads the last map built.
+            if (_resourcesIndexVersion != IndexVersion && AssetLoader.IsMainThread && !AssetLoader.IsLoaderThread) RefreshResourcesMap();
+            return _resources;
+        }
+    }
+
+    private int _resourcesIndexVersion = -1;
+
+    /// <summary>Scan all assets under Resources/ folders and rebuild what <see cref="AssetDatabase.FindResource{T}"/> resolves.</summary>
     public void RefreshResourcesMap()
     {
         var resources = new List<ResourceEntry>();
         foreach (var entry in _guidToEntry.Values.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase))
             AddResourcePaths(resources, entry);
-        Runtime.GameResources.Initialize(resources);
+        _resources = resources;
+        _resourcesIndexVersion = IndexVersion;
     }
 
     /// <summary>
@@ -223,167 +240,114 @@ public class EditorAssetBackend : AssetBackendBase
     /// </summary>
     internal static void AddResourcePaths(List<ResourceEntry> resources, AssetEntry entry)
     {
-        string? loadPath = Runtime.GameResources.GetLoadPath(entry.Path);
+        string? loadPath = AssetDatabase.GetLoadPath(entry.Path);
         if (loadPath == null) return;
 
         resources.Add(new ResourceEntry(loadPath, entry.Guid, entry.MainAssetTypeName ?? ""));
         foreach (var sub in entry.SubAssets)
-            resources.Add(new ResourceEntry(Runtime.GameResources.GetLoadPath(entry.Path, sub.Name)!, sub.Guid, sub.TypeName));
+            resources.Add(new ResourceEntry(AssetDatabase.GetLoadPath(entry.Path, sub.Name)!, sub.Guid, sub.TypeName));
     }
 
     // ================================================================
-    //  Asset Loading
+    //  Asset content
     // ================================================================
 
-    /// <summary> Load an asset from its cache file, reimporting if the source or importer has changed. Sub-assets are loaded through their parent. Returns null when the asset is not available. </summary>
-    protected override EngineObject? LoadFresh(Guid assetId)
+    public override Type? GetAssetType(Guid assetId)
     {
-        // Importing writes files / creates GPU resources and mutates the index, so it must run
-        // on the main thread. The background loader only deserializes existing cache files; if a
-        // (re)import is required it bails and leaves it to the main-thread import flow.
-        bool onMainThread = Thread.CurrentThread.ManagedThreadId == _mainThreadId;
-
-        // Check if this is a sub-asset
-        if (_subAssetIndex.TryGetValue(assetId, out var subInfo))
-        {
-            // Load the parent first this will also cache all sub-assets
-            var parent = Get(subInfo.parentGuid);
-            if (TryGetLoaded(assetId, out var loadedSub))
-                return loadedSub;
-
-            // Parent was already alive (Get returned early without touching LoadSubAssetsIntoCache),
-            // but this sub-asset's own weak entry died independently of its parent - a sub-asset and
-            // its parent are no longer collected as a unit, so "parent alive" no longer implies "every
-            // sub-asset is still alive". Reload subs explicitly; already-alive ones are skipped.
-            var parentEntry = GetEntry(subInfo.parentGuid);
-            if (parentEntry?.SubAssets != null)
-                LoadSubAssetsIntoCache(parentEntry);
-
-            return TryGetLoaded(assetId, out var reloadedSub) ? reloadedSub : null;
-        }
-
-        // Try loading main asset from disk cache
-        string cachePath = GetCachePath(assetId);
-        var entry = GetEntry(assetId);
-
-        // Validate the cache against both the importer and the source file before trusting it.
-        if (onMainThread && entry != null)
-        {
-            var importer = !string.IsNullOrEmpty(entry.ImporterType)
-                ? EditorRegistries.CreateImporterByName(entry.ImporterType) : null;
-            bool importerChanged = importer != null && importer.Version != entry.ImporterVersion;
-            bool sourceChanged = IsSourceNewerThanImport(entry);
-
-            if (importerChanged || sourceChanged)
-            {
-                string why = sourceChanged
-                    ? "source file changed"
-                    : $"importer v{entry.ImporterVersion} -> v{importer!.Version}";
-                Runtime.Debug.Log($"Cache stale for '{entry.Path}': {why}. Reimporting.");
-                entry.NeedsReimport = true;
-                RunImport(entry);
-                return TryGetLoaded(assetId, out var reimported) ? reimported : null;
-            }
-        }
-
-        if (File.Exists(cachePath))
-        {
-            try
-            {
-                var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
-
-                var targetType = entry?.MainAssetType ?? typeof(EngineObject);
-
-                var obj = Serializer.Deserialize(echo, targetType) as EngineObject;
-                if (obj != null)
-                {
-                    obj.AssetID = assetId;
-                    if (entry != null) obj.AssetPath = entry.Path;
-                    SetLoaded(assetId, obj);
-                    if (onMainThread) EnqueueThumbnailIfMissing(assetId, obj);
-
-                    // Also load and cache sub-assets
-                    if (entry?.SubAssets != null)
-                        LoadSubAssetsIntoCache(entry);
-
-                    return obj;
-                }
-            }
-            catch (Exception ex)
-            {
-                Runtime.Debug.LogWarning($"Failed to load cached asset {assetId}: {ex.Message}");
-            }
-        }
-
-        // Cache miss try importing on demand (main thread only the loader leaves importing
-        // to the main-thread flow and simply reports the asset as not-yet-available).
-        if (onMainThread && _guidToEntry.TryGetValue(assetId, out var e) && !string.IsNullOrEmpty(e.Path))
-        {
-            RunImport(e);
-            return TryGetLoaded(assetId, out var justImported) ? justImported : null;
-        }
-
+        if (_guidToEntry.TryGetValue(assetId, out var entry)) return entry.MainAssetType;
+        if (_subAssetIndex.TryGetValue(assetId, out var sub) && _guidToEntry.TryGetValue(sub.parentGuid, out var parent)
+            && sub.index < parent.SubAssets.Length)
+            return parent.SubAssets[sub.index].Type;
         return null;
     }
 
-    private void LoadSubAssetsIntoCache(AssetEntry parentEntry)
+    public override string? GetAssetPath(Guid assetId)
     {
-        bool onMainThread = Thread.CurrentThread.ManagedThreadId == _mainThreadId;
-
-        foreach (var sub in parentEntry.SubAssets)
-        {
-            // Must be a liveness check, not a bare key-presence check: a collected sub-asset's dict
-            // entry can still exist (dead weak ref), and skipping it here would leave it permanently
-            // unresolvable even though its cache file is right there ready to reload.
-            if (TryGetLoaded(sub.Guid, out _)) continue;
-
-            string subCachePath = GetCachePath(sub.Guid);
-            if (!File.Exists(subCachePath))
-            {
-                Runtime.Debug.LogWarning($"Sub-asset cache missing for '{sub.Name}' in '{parentEntry.Path}'. Reimport the parent asset.");
-                continue;
-            }
-
-            try
-            {
-                var echo = EchoObject.ReadFromBinary(new FileInfo(subCachePath));
-                var ctx = new SerializationContext();
-                var subType = sub.Type ?? typeof(EngineObject);
-                var obj = Serializer.Deserialize(echo, subType) as EngineObject;
-                if (obj != null)
-                {
-                    obj.AssetID = sub.Guid;
-                    obj.AssetPath = $"{parentEntry.Path}#{sub.Name}";
-                    SetLoaded(sub.Guid, obj);
-                    if (onMainThread) EnqueueThumbnailIfMissing(sub.Guid, obj);
-                }
-                else
-                {
-                    Runtime.Debug.LogWarning($"Failed to deserialize sub-asset '{sub.Name}' from '{parentEntry.Path}' (type: {sub.TypeName}).");
-                }
-            }
-            catch (Exception ex)
-            {
-                Runtime.Debug.LogWarning($"Error loading sub-asset '{sub.Name}' from '{parentEntry.Path}': {ex.Message}");
-            }
-        }
+        if (_guidToEntry.TryGetValue(assetId, out var entry)) return entry.Path;
+        if (_subAssetIndex.TryGetValue(assetId, out var sub) && _guidToEntry.TryGetValue(sub.parentGuid, out var parent)
+            && sub.index < parent.SubAssets.Length)
+            return $"{parent.Path}#{parent.SubAssets[sub.index].Name}";
+        return null;
     }
 
-    /// <summary>Lazily backfill a thumbnail the first time an asset is actually loaded (import/reimport
-    /// already enqueue directly - this only catches the gap where a cache-file deserialize resolves an
-    /// asset whose thumbnail is missing, e.g. a fresh checkout where thumbnails aren't checked into
-    /// source control, or a manually deleted thumbnail file). Main-thread only: ThumbnailGenerator's
-    /// queue isn't thread-safe, and this runs from the same disk-deserialize path the background
-    /// loader also uses.</summary>
-    private void EnqueueThumbnailIfMissing(Guid guid, EngineObject obj)
+    public override IReadOnlyList<Guid> GetHardDependencies(Guid assetId) => GetManifestInfo(assetId).Hard;
+
+    /// <summary>The type name, and the hard and soft dependencies, an asset ships with.</summary>
+    public (string TypeName, Guid[] Hard, Guid[] Soft) GetManifestInfo(Guid assetId)
     {
-        if (File.Exists(ThumbnailGenerator.GetThumbnailPath(guid, _project.ThumbnailsPath)))
+        if (_guidToEntry.TryGetValue(assetId, out var entry))
+            return (entry.MainAssetTypeName ?? "", entry.Dependencies, entry.SoftDependencies);
+        if (_subAssetIndex.TryGetValue(assetId, out var sub) && _guidToEntry.TryGetValue(sub.parentGuid, out var parent)
+            && sub.index < parent.SubAssets.Length)
+        {
+            SubAssetEntry subEntry = parent.SubAssets[sub.index];
+            return (subEntry.TypeName, subEntry.Dependencies, subEntry.SoftDependencies);
+        }
+        return ("", [], []);
+    }
+
+    public override long GetEstimatedSize(Guid assetId)
+    {
+        try
+        {
+            var info = new FileInfo(GetCachePath(assetId));
+            return info.Exists ? info.Length : 0;
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>Stale or missing caches are imported first, which only the main thread may do.</summary>
+    protected internal override bool NeedsMainThread(Guid assetId)
+    {
+        AssetEntry? entry = OwningEntry(assetId);
+        if (entry == null || string.IsNullOrEmpty(entry.Path)) return false;
+        if (entry.NeedsReimport || !File.Exists(GetCachePath(assetId))) return true;
+
+        AssetImporter? importer = ImporterOf(entry);
+        return (importer != null && importer.Version != entry.ImporterVersion) || IsSourceNewerThanImport(entry);
+    }
+
+    protected internal override void PrepareOnMainThread(Guid assetId)
+    {
+        AssetEntry? entry = OwningEntry(assetId);
+        if (entry == null) return;
+
+        Runtime.Debug.Log($"Cache stale for '{entry.Path}'. Reimporting.");
+        entry.NeedsReimport = true;
+        RunImport(entry);
+    }
+
+    protected internal override bool ReadContent(Guid assetId, Asset staging, SerializationContext context)
+    {
+        byte[] bytes;
+        lock (_cacheFileLock)
+        {
+            string cachePath = GetCachePath(assetId);
+            if (!File.Exists(cachePath)) return false;
+            bytes = File.ReadAllBytes(cachePath);
+        }
+
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
+        return ReadInto(EchoObject.ReadFromBinary(reader), staging, context);
+    }
+
+    // The entry a GUID imports through: its own, or its parent's for a sub-asset.
+    private AssetEntry? OwningEntry(Guid assetId)
+        => _subAssetIndex.TryGetValue(assetId, out var sub) ? GetEntry(sub.parentGuid) : GetEntry(assetId);
+
+    /// <summary>Lazily backfill a thumbnail the first time an asset is actually loaded, for one whose
+    /// thumbnail is missing (a fresh checkout, or a deleted thumbnail file).</summary>
+    private void EnqueueThumbnailIfMissing(Asset asset)
+    {
+        if (!_guidToEntry.ContainsKey(asset.AssetID) && !_subAssetIndex.ContainsKey(asset.AssetID)) return;
+        if (File.Exists(ThumbnailGenerator.GetThumbnailPath(asset.AssetID, _project.ThumbnailsPath)))
             return;
 
-        string? sourceFile = obj is Runtime.Resources.Texture2D && !_subAssetIndex.ContainsKey(guid)
-            ? Path.Combine(_project.AssetsPath, obj.AssetPath)
+        string? sourceFile = asset is Runtime.Resources.Texture2D && !_subAssetIndex.ContainsKey(asset.AssetID)
+            ? Path.Combine(_project.AssetsPath, asset.AssetPath)
             : null;
-        ThumbnailGenerator.Enqueue(guid, obj, sourceFile);
+        ThumbnailGenerator.Enqueue(asset.AssetID, asset, sourceFile);
     }
 
     // ================================================================
@@ -439,11 +403,11 @@ public class EditorAssetBackend : AssetBackendBase
         {
             var entry = _guidToEntry[guid];
 
-            // Dispose main + sub-assets so AssetRefs detect invalidation
-            DisposeAndRemove(guid);
+            // Missing rather than gone, so everything referencing them keeps the GUID.
+            AssetDatabase.MarkMissing(guid);
             RemoveSubAssets(entry, includeThumbnails: false);
 
-            _pathToGuid.Remove(entry.Path);
+            _pathToGuid.TryRemove(entry.Path, out _);
             _guidToEntry.TryRemove(guid, out _);
             _dependencies.RemoveAsset(guid);
 
@@ -504,8 +468,8 @@ public class EditorAssetBackend : AssetBackendBase
 
                 // Clean up old GUID references
                 _guidToEntry.TryRemove(existingGuid, out _);
-                _pathToGuid.Remove(relativePath);
-                DisposeAndRemove(existingGuid);
+                _pathToGuid.TryRemove(relativePath, out _);
+                AssetDatabase.MarkMissing(existingGuid);
                 _dependencies.RemoveAsset(existingGuid);
 
                 // Remove old sub-asset index entries
@@ -514,7 +478,7 @@ public class EditorAssetBackend : AssetBackendBase
                     foreach (var sub in entry.SubAssets)
                     {
                         _subAssetIndex.TryRemove(sub.Guid, out _);
-                        DisposeAndRemove(sub.Guid);
+                        AssetDatabase.MarkMissing(sub.Guid);
                         _dependencies.RemoveAsset(sub.Guid);
                     }
                 }
@@ -557,7 +521,7 @@ public class EditorAssetBackend : AssetBackendBase
                     AssignFreshGuid(claimedAbsolute, oldPath, entry.ImporterType, displacedMeta);
 
                     _guidToEntry.TryRemove(meta.Guid, out _);
-                    DisposeAndRemove(meta.Guid);
+                    AssetDatabase.MarkMissing(meta.Guid);
                     RemoveSubAssets(entry, includeThumbnails: true);
 
                     _guidToEntry[meta.Guid] = new AssetEntry
@@ -574,7 +538,7 @@ public class EditorAssetBackend : AssetBackendBase
             else
             {
                 // The original is gone: this is a move/rename - just repoint the entry.
-                _pathToGuid.Remove(oldPath);
+                _pathToGuid.TryRemove(oldPath, out _);
                 entry.Path = relativePath;
                 _pathToGuid[relativePath] = meta.Guid;
             }
@@ -649,31 +613,11 @@ public class EditorAssetBackend : AssetBackendBase
             bool ok = RunImport(entry);
 
             if (ok)
-            {
                 succeeded.Add(entry.Path);
 
-                // RunImport's SetLoaded calls (main asset + every sub-asset) each touched this
-                // family's shared idle clock (Touch/IsIdle resolve a sub-asset to its parent - see
-                // AssetDatabase.Resolve), so a big model imported here looks "just used" even though
-                // nothing has actually asked for any of it yet. Reset the clock right after each
-                // entry - but marking it idle isn't enough on its own: this whole loop runs
-                // synchronously as part of Initialize(), before the editor's main loop (and its
-                // per-frame TickIdleSweep call) ever starts ticking, so nothing would actually act on
-                // that until the entire batch finishes and normal frame ticking begins. Sweep right
-                // here instead, so peak memory across a big import batch is bounded to roughly one
-                // entry's worth instead of accumulating unreclaimed across all of them. Scoped to this
-                // batch-import loop only (not RunImport itself) - CreateAsset and other single-asset
-                // RunImport callers want the normal "just touched" behavior, since the caller is about
-                // to use what it just created.
-                AssetDatabase.ForceIdle(entry.Guid);
-                ForceIdleSweep();
-            }
-
-            // A full GC+LOH-compaction pass per entry would be excessive (each pass has real CPU
-            // cost), but leaving it only until the whole batch finishes lets committed memory
-            // accumulate unreclaimed across every entry in between - defeating the point of sweeping
-            // above. Every few entries strikes a balance: bounds peak commit without paying full GC
-            // cost per asset.
+            // Importing keeps nothing loaded, but what it allocated on the way lingers until collected.
+            // A full collection every few entries bounds peak memory across a big batch without paying
+            // for one per asset.
             if (++sinceReclaim >= 5)
             {
                 sinceReclaim = 0;
@@ -685,7 +629,7 @@ public class EditorAssetBackend : AssetBackendBase
 
         if (succeeded.Count > 0)
         {
-            ContentVersion++;
+            IndexVersion++;
             OnAssetsImported?.Invoke(succeeded.ToArray());
             ReclaimMemory();
         }
@@ -707,14 +651,11 @@ public class EditorAssetBackend : AssetBackendBase
         GC.Collect();
     }
 
-    // Under _loadLock: an import rewrites the very cache files LoadFresh reads, and the AssetLoader
-    // reads them from its own thread. Unsynchronized, a load either fails on a sharing violation or
-    // reads a file mid-replace, and the replace itself can lose to the reader and leave the previous
-    // cache in place. Re-entrant, so LoadFresh's own on-demand import path still works.
+    // Main thread only. The loader reads cache files from its own thread, which _cacheFileLock keeps apart from the
+    // import replacing them.
     private bool RunImport(AssetEntry entry)
     {
-        bool imported;
-        lock (_loadLock) imported = RunImportCore(entry);
+        bool imported = RunImportCore(entry);
 
         // Every add and every reimport funnels through here, so this is the one place the shader
         // catalog has to react to a declaration having possibly changed.
@@ -784,6 +725,8 @@ public class EditorAssetBackend : AssetBackendBase
 
             // Create context with entry GUID so sub-assets get correct deterministic IDs
             var ctx = new Importers.ImportContext(entry.Guid, absolutePath, settings);
+            // Taken before reading, so a change made while the import runs still reads as newer than it.
+            long sourceTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
             bool success = importer.Import(ctx);
 
             if (!success || ctx.MainAsset == null)
@@ -799,21 +742,17 @@ public class EditorAssetBackend : AssetBackendBase
                 // for a script means asking for a recompile every time anything triggers a scan.
                 if (success)
                 {
-                    entry.LastModifiedTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
+                    entry.LastModifiedTicks = sourceTicks;
                     entry.ImporterVersion = importer.Version;
                 }
 
                 return false;
             }
 
-            // Main asset ID already assigned by ctx.SetMainAsset
-            ctx.MainAsset.AssetPath = entry.Path;
             if (string.IsNullOrEmpty(ctx.MainAsset.Name))
                 ctx.MainAsset.Name = Path.GetFileNameWithoutExtension(entry.Path);
 
-            SetLoaded(entry.Guid, ctx.MainAsset);
             entry.MainAssetType = ctx.MainAsset.GetType();
-            entry.Dependencies = ctx.Dependencies.ToArray();
 
             // Process sub-assets IDs already assigned by ctx.AddSubAsset. Remember the previous set so
             // sub-assets that disappear this import (renamed/removed) can be cleaned up below.
@@ -829,21 +768,15 @@ public class EditorAssetBackend : AssetBackendBase
                     var sub = ctx.SubAssets[i];
                     if (sub == null) continue;
 
-                    sub.AssetPath = $"{entry.Path}#{sub.Name}";
-
-                    // A sub-asset (e.g. a Sprite) can hold AssetRef fields of its own - track those
-                    // under its own GUID, or a DependenciesOnly build's walk stops at the sub-asset.
+                    // A sub-asset (e.g. a Sprite) can reference assets of its own - track those under its
+                    // own GUID, or a DependenciesOnly build's walk stops at the sub-asset.
                     var subCtx = new DependencySerializationContext();
                     if (!SerializeToCache(sub.AssetID, sub, subCtx))
                         cachesWritten = false;
-                    _dependencies.SetDependencies(sub.AssetID, subCtx.Dependencies);
+                    _dependencies.SetDependencies(sub.AssetID, ShippedEdges(subCtx));
 
-                    // Populate the sub-asset index BEFORE SetLoaded (which touches the activity
-                    // tracker) - ResolveFamily looks this up to route the touch to the parent, so it
-                    // must already resolve correctly on this very first touch.
-                    _subAssetIndex[sub.AssetID] = (entry.Guid, i);
+                    _subAssetIndex[sub.AssetID] = (entry.Guid, subEntries.Count);
                     newSubGuids.Add(sub.AssetID);
-                    SetLoaded(sub.AssetID, sub);
 
                     subEntries.Add(new SubAssetEntry
                     {
@@ -851,7 +784,8 @@ public class EditorAssetBackend : AssetBackendBase
                         Name = sub.Name,
                         Type = sub.GetType(),
                         // Persisted so the graph can be re-seeded on next startup (see Initialize()).
-                        Dependencies = subCtx.Dependencies.ToArray()
+                        Dependencies = subCtx.Dependencies.ToArray(),
+                        SoftDependencies = subCtx.SoftDependencies.ToArray(),
                     });
                 }
                 entry.SubAssets = subEntries.ToArray();
@@ -869,9 +803,13 @@ public class EditorAssetBackend : AssetBackendBase
                 RemoveSubAsset(oldGuid, includeThumbnails: true);
             }
 
-            // Serialize main asset
-            if (!SerializeToCache(entry.Guid, ctx.MainAsset))
+            // Serialize main asset. Whatever the write reaches is a dependency, as well as what the importer reported.
+            var mainCtx = new DependencySerializationContext();
+            if (!SerializeToCache(entry.Guid, ctx.MainAsset, mainCtx))
                 cachesWritten = false;
+            mainCtx.Dependencies.UnionWith(ctx.Dependencies);
+            mainCtx.SoftDependencies.UnionWith(ctx.SoftDependencies);
+            mainCtx.SoftDependencies.ExceptWith(mainCtx.Dependencies);
 
             // The cache file IS the imported asset - it's what loads later and what a build ships. An
             // import that couldn't write one has produced nothing, so it must not be recorded as done:
@@ -885,12 +823,20 @@ public class EditorAssetBackend : AssetBackendBase
             }
 
             // Update timestamps
-            entry.LastModifiedTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
+            entry.LastModifiedTicks = sourceTicks;
             entry.ImporterVersion = importer.Version;
             entry.NeedsReimport = false;
 
-            // Update dependency graph
-            _dependencies.SetDependencies(entry.Guid, ctx.Dependencies);
+            // Hard and soft edges both ship. Editor edges (prefab links) only drive refreshes.
+            entry.Dependencies = mainCtx.Dependencies.ToArray();
+            entry.SoftDependencies = mainCtx.SoftDependencies.ToArray();
+            entry.EditorDependencies = ctx.EditorDependencies.ToArray();
+            _dependencies.SetDependencies(entry.Guid, ShippedEdges(mainCtx));
+
+            // Every object already standing for this file takes the new content, so whatever holds one keeps it.
+            RefillFromCache(entry.Guid, entry.MainAssetType);
+            foreach (SubAssetEntry sub in entry.SubAssets)
+                RefillFromCache(sub.Guid, sub.Type);
 
             // Queue thumbnail generation (lazy, one per frame) and drop any cached GPU texture for
             // the old content so the next access rebuilds it from the freshly generated thumbnail.
@@ -899,6 +845,10 @@ public class EditorAssetBackend : AssetBackendBase
                 ThumbnailGenerator.Enqueue(entry.Guid, ctx.MainAsset, sourceFile);
                 InvalidateThumbnailTexture(entry.Guid);
             }
+
+            // Only the caches needed the GUIDs. Left on, what the import built would be a second object claiming each one.
+            foreach (Asset built in ctx.SubAssets.Append(ctx.MainAsset))
+                if (built is { Registered: false }) built.SetIdentity(Guid.Empty, "");
 
             return true;
         }
@@ -912,25 +862,39 @@ public class EditorAssetBackend : AssetBackendBase
         }
     }
 
+    private static HashSet<Guid> ShippedEdges(DependencySerializationContext context)
+    {
+        var edges = new HashSet<Guid>(context.Dependencies);
+        edges.UnionWith(context.SoftDependencies);
+        return edges;
+    }
+
+    /// <summary>
+    /// Refills the stable object for a GUID from its new cache when it is loaded, brings one that was missing back,
+    /// and retires one whose type the import changed.
+    /// </summary>
+    private void RefillFromCache(Guid guid, Type? type)
+    {
+        if (!AssetDatabase.TryGetExisting(guid, out Asset stable)) return;
+
+        if (type != null && stable.GetType() != type)
+        {
+            AssetDatabase.Retire(guid);
+            return;
+        }
+        AssetDatabase.Refill(stable, _refillReason);
+    }
+
     /// <summary>Writes the asset's cache file, reporting whether it actually landed.</summary>
-    private bool SerializeToCache(Guid guid, EngineObject obj, SerializationContext? context = null)
+    private bool SerializeToCache(Guid guid, Asset obj, SerializationContext context)
     {
         string cachePath = GetCachePath(guid);
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
 
         try
         {
-            // Temporarily clear AssetID so the serializer writes the full object
-            // instead of short-circuiting to a $assetId reference
-            var savedId = obj.AssetID;
-            obj.AssetID = Guid.Empty;
-
-            // Force serialize with Base Type info, Required for Builds since they dont know the Type of the Asset
-            var echo = context != null
-                ? Serializer.Serialize(typeof(object), obj, context)
-                : Serializer.Serialize(typeof(object), obj);
-            obj.AssetID = savedId;
-
+            // With its base type, since a build does not know the type of what it loads.
+            var echo = Serializer.Serialize(typeof(object), obj, context);
             if (echo == null)
             {
                 Runtime.Debug.LogError($"Serializing asset {guid} produced nothing.");
@@ -941,7 +905,7 @@ public class EditorAssetBackend : AssetBackendBase
             // crash/power-loss mid-write can't leave a truncated cache file behind.
             string tempPath = cachePath + ".tmp";
             echo.WriteToBinary(new FileInfo(tempPath));
-            File.Move(tempPath, cachePath, overwrite: true);
+            lock (_cacheFileLock) File.Move(tempPath, cachePath, overwrite: true);
             return true;
         }
         catch (Exception ex)
@@ -1071,8 +1035,7 @@ public class EditorAssetBackend : AssetBackendBase
     // liveness check (they have no asset entry to be live against).
     private readonly Dictionary<Guid, string> _builtInShaderPaths = new();
 
-    // Written from the import path and read from the inspector, so this carries its own lock
-    // rather than borrowing _loadLock (which is held across a whole import).
+    // Written from the import path and read from the inspector, so this carries its own lock.
     private readonly Dictionary<Guid, string> _projectShaderPaths = new();
     private readonly object _shaderMenuLock = new();
 
@@ -1278,13 +1241,13 @@ public class EditorAssetBackend : AssetBackendBase
     /// Bumped every time the folder/file index is invalidated or an asset is imported, deleted or moved.
     /// Lets views that rebuild a model from the index cache it and rebuild only when this changes.
     /// </summary>
-    public int ContentVersion { get; private set; }
+    public int IndexVersion { get; private set; }
 
     /// <summary>Force the folder/file index to rebuild on next query. Driven by the asset watcher.</summary>
     public void InvalidateFolderIndex()
     {
         _folderIndexDirty = true;
-        ContentVersion++;
+        IndexVersion++;
     }
 
     private void EnsureFolderIndex()
@@ -1396,9 +1359,10 @@ public class EditorAssetBackend : AssetBackendBase
     // ================================================================
 
     /// <summary>
-    /// Create a new asset file on disk from an EngineObject.
+    /// Create a new asset file on disk from an asset built in memory, which becomes that asset's object: whatever
+    /// already holds it holds the database asset.
     /// </summary>
-    public void CreateAsset(EngineObject obj, string relativePath)
+    public void CreateAsset(Asset obj, string relativePath)
     {
         relativePath = NormalizePath(relativePath);
         if (!TryResolveAssetPath(relativePath, out string absolutePath)) return;
@@ -1416,11 +1380,6 @@ public class EditorAssetBackend : AssetBackendBase
         var meta = MetaFile.CreateNew(importerName, importer?.Version ?? 1);
         MetaFile.Write(MetaFile.GetMetaPath(absolutePath), meta);
 
-        // Assign the GUID and path to the original instance so any existing
-        // AssetRef holding this instance picks up the asset ID immediately,
-        obj.AssetID = meta.Guid;
-        obj.AssetPath = relativePath;
-
         // Add to index and import
         var entry = new AssetEntry
         {
@@ -1435,6 +1394,9 @@ public class EditorAssetBackend : AssetBackendBase
 
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+
+        AssetDatabase.Register(obj, meta.Guid, relativePath);
+        obj.Name = Path.GetFileNameWithoutExtension(relativePath);
     }
 
     /// <summary>
@@ -1461,15 +1423,14 @@ public class EditorAssetBackend : AssetBackendBase
         // caller persists (e.g. into the scene's lightmap refs) yet nothing resolves to it on reload.
         if (_pathToGuid.TryGetValue(relativePath, out var staleGuid) && staleGuid != meta.Guid)
         {
-            DisposeAndRemove(staleGuid);
+            AssetDatabase.MarkMissing(staleGuid);
             _guidToEntry.TryRemove(staleGuid, out _);
-            _pathToGuid.Remove(relativePath);
+            _pathToGuid.TryRemove(relativePath, out _);
         }
 
         // Already tracked at this path -> reimport in place (re-bake replacement).
         if (_pathToGuid.TryGetValue(relativePath, out var existingGuid) && _guidToEntry.TryGetValue(existingGuid, out var existing))
         {
-            DisposeAndRemove(existing.Guid);
             existing.NeedsReimport = true;
             RunImport(existing);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -1492,33 +1453,89 @@ public class EditorAssetBackend : AssetBackendBase
     }
 
     /// <summary>
-    /// Re-serialize an in-memory asset back to its source file.
+    /// Re-serialize an in-memory asset back to its source file, or its parent's for a sub-asset. The asset is refilled
+    /// from what was written, so everything holding it sees the saved content. False when it could not be saved.
     /// </summary>
-    public void SaveAsset(EngineObject obj)
+    public bool SaveAsset(Asset obj)
     {
-        if (obj.AssetID == Guid.Empty || string.IsNullOrEmpty(obj.AssetPath)) return;
+        if (!obj.IsFromDatabase) return false;
 
-        // Sub-assets have paths like "Model.fbx#Mesh_0" can't save those directly
-        if (obj.AssetPath.Contains('#'))
+        Asset owner = TryGetParentGuid(obj.AssetID, out Guid parentGuid) && AssetDatabase.Get(parentGuid) is { } parent ? parent : obj;
+        return SerializeForSave(owner) is { } serialized && SaveAsset(owner.AssetID, serialized);
+    }
+
+    /// <summary>Whether edits to this asset can be saved: its source file, or its parent's, is the asset written by Echo.</summary>
+    public bool CanSave(Guid assetId) => SourceOf(OwningEntry(assetId)) != EchoSource.None;
+
+    private static EchoSource SourceOf(AssetEntry? entry) => entry != null && ImporterOf(entry) is { } importer ? importer.Source : EchoSource.None;
+
+    // One per importer type, for reading what it declares. Importing makes its own.
+    private static readonly ConcurrentDictionary<string, AssetImporter?> s_importers = new();
+
+    internal static void ClearImporterCache() => s_importers.Clear();
+
+    private static AssetImporter? ImporterOf(AssetEntry entry)
+        => string.IsNullOrEmpty(entry.ImporterType) ? null : s_importers.GetOrAdd(entry.ImporterType, EditorRegistries.CreateImporterByName);
+
+    /// <summary>
+    /// An asset written the way its source file holds it: the asset itself and the sub-assets it carries in full,
+    /// everything else it references by GUID. Null when a sub-asset could not be loaded, since writing it would
+    /// replace its data with an empty one.
+    /// </summary>
+    public EchoObject? SerializeForSave(Asset asset)
+    {
+        asset.Load();
+        if (!asset.IsLoaded)
         {
-            Runtime.Debug.LogWarning($"Cannot save sub-asset directly: {obj.AssetPath}");
-            return;
+            Runtime.Debug.LogError($"Not saving '{asset.AssetPath}', it could not be loaded and would be written empty.");
+            return null;
         }
 
-        if (Serializer.Serialize(typeof(object), obj) is { } echo) SaveAsset(obj.AssetID, echo);
+        var inline = new HashSet<Asset>(ReferenceEqualityComparer.Instance);
+        foreach (SubAssetEntry sub in GetSubAssets(asset.AssetID))
+            if (AssetDatabase.TryGetExisting(sub.Guid, out Asset existing))
+            {
+                existing.Load();
+                if (!existing.IsLoaded)
+                {
+                    Runtime.Debug.LogError($"Not saving '{asset.AssetPath}', its sub-asset '{existing.Name}' could not be loaded and would be written empty.");
+                    return null;
+                }
+                inline.Add(existing);
+            }
+
+        return Serializer.Serialize(typeof(object), asset, new DependencySerializationContext { Inline = inline });
+    }
+
+    /// <summary>Puts an asset and its sub-assets back to what was last imported, discarding edits made in memory.</summary>
+    public void RevertToSaved(Asset asset)
+    {
+        AssetDatabase.Refill(asset, ReloadReason.Revert);
+        foreach (SubAssetEntry sub in GetSubAssets(asset.AssetID))
+            if (AssetDatabase.TryGetExisting(sub.Guid, out Asset subAsset))
+                AssetDatabase.Refill(subAsset, ReloadReason.Revert);
     }
 
     /// <summary>
-    /// Writes an asset's serialized form over its source file and reimports it, which disposes the loaded
-    /// instance so every AssetRef picks up the new one. False, and logged, when the write fails.
+    /// Writes an asset's serialized form over its source file and reimports it, refilling the loaded asset in
+    /// place. False, and logged, when the write fails.
     /// </summary>
     public bool SaveAsset(Guid guid, EchoObject serialized)
     {
         if (!_guidToEntry.TryGetValue(guid, out var entry)) return false;
 
+        EchoSource source = SourceOf(entry);
+        if (source == EchoSource.None)
+        {
+            Runtime.Debug.LogError($"Not saving '{entry.Path}', its file is not the asset written by Echo and would be overwritten.");
+            return false;
+        }
+
         try
         {
-            File.WriteAllText(Path.Combine(_project.AssetsPath, entry.Path), serialized.WriteToString());
+            string path = Path.Combine(_project.AssetsPath, entry.Path);
+            if (source == EchoSource.Binary) serialized.WriteToBinary(new FileInfo(path));
+            else File.WriteAllText(path, serialized.WriteToString());
         }
         catch (Exception ex)
         {
@@ -1526,7 +1543,7 @@ public class EditorAssetBackend : AssetBackendBase
             return false;
         }
 
-        Reimport(guid);
+        Reimport(guid, ReloadReason.Save);
         return true;
     }
 
@@ -1540,19 +1557,17 @@ public class EditorAssetBackend : AssetBackendBase
 
         if (_pathToGuid.TryGetValue(relativePath, out var guid))
         {
-            // Dispose main + sub-asset instances FIRST so any AssetRef holding them
-            // detects IsNotValid on next access and stops returning the deleted
-            // instance. Without this, materials etc. keep using the now-orphaned
-            // shader (cached in _shader.instance) until the editor restarts.
+            // Missing rather than gone, so everything referencing them keeps the GUID and comes back
+            // in place if the file is restored.
             var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
-            DisposeAndRemove(guid);
+            AssetDatabase.MarkMissing(guid);
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
             InvalidateThumbnailTexture(guid);
             if (entry != null)
                 RemoveSubAssets(entry, includeThumbnails: true);
 
             _guidToEntry.TryRemove(guid, out _);
-            _pathToGuid.Remove(relativePath);
+            _pathToGuid.TryRemove(relativePath, out _);
             _dependencies.RemoveAsset(guid);
 
             // Clean main cache file
@@ -1657,17 +1672,10 @@ public class EditorAssetBackend : AssetBackendBase
         // Update index
         if (_pathToGuid.TryGetValue(oldRelativePath, out var guid))
         {
-            _pathToGuid.Remove(oldRelativePath);
+            _pathToGuid.TryRemove(oldRelativePath, out _);
             _pathToGuid[newRelativePath] = guid;
             _guidToEntry[guid].Path = newRelativePath;
-
-            if (TryGetLoaded(guid, out var obj))
-                obj.AssetPath = newRelativePath;
-
-            // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
-            var movedEntry = _guidToEntry.GetValueOrDefault(guid);
-            if (movedEntry != null)
-                UpdateSubAssetPaths(movedEntry, newRelativePath);
+            UpdateAssetPaths(_guidToEntry[guid]);
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -1741,17 +1749,13 @@ public class EditorAssetBackend : AssetBackendBase
         foreach (var (oldPath, newPath, guid) in toRemap)
         {
             recompile |= AffectsCompilation(oldPath);
-            _pathToGuid.Remove(oldPath);
+            _pathToGuid.TryRemove(oldPath, out _);
             _pathToGuid[newPath] = guid;
             if (_guidToEntry.TryGetValue(guid, out var entry))
             {
                 entry.Path = newPath;
-
-                // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
-                UpdateSubAssetPaths(entry, newPath);
+                UpdateAssetPaths(entry);
             }
-            if (TryGetLoaded(guid, out var obj))
-                obj.AssetPath = newPath;
 
             OnAssetMoved?.Invoke(oldPath, newPath);
         }
@@ -1764,32 +1768,13 @@ public class EditorAssetBackend : AssetBackendBase
         return true;
     }
 
-    /// <summary>
-    /// Force reimport a specific asset.
-    /// </summary>
-    /// <summary>Dispose and remove a cached asset. Triggers AssetRef re-resolve on next access.</summary>
-    private void DisposeAndRemove(Guid guid)
-    {
-        if (TryGetLoaded(guid, out var old))
-        {
-            try { old.Dispose(); } catch { }
-        }
-        _loadedAssets.TryRemove(guid, out _);
-        AssetDatabase.Forget(guid);
-    }
+    /// <summary> Reimport an asset by GUID: clear thumbnails, run the importer, which refills every loaded object from it, and regenerate thumbnails. </summary>
+    public void Reimport(Guid guid) => Reimport(guid, ReloadReason.Reimport);
 
-    /// <summary> Reimport an asset by GUID: dispose cached instances, clear thumbnails, run the importer, and regenerate thumbnails. </summary>
-    public void Reimport(Guid guid)
+    private void Reimport(Guid guid, ReloadReason reason)
     {
         if (_guidToEntry.TryGetValue(guid, out var entry))
         {
-            // Dispose and remove the old cached instance this causes any AssetRef
-            // holding it to detect IsNotValid and re-resolve via AssetDatabase.Get()
-            DisposeAndRemove(guid);
-            if (entry.SubAssets != null)
-                foreach (var sub in entry.SubAssets)
-                    DisposeAndRemove(sub.Guid);
-
             // Clear old thumbnails and invalidate the cached GPU texture
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
             InvalidateThumbnailTexture(guid);
@@ -1801,33 +1786,22 @@ public class EditorAssetBackend : AssetBackendBase
                 }
 
             entry.NeedsReimport = true;
-            RunImport(entry);
+            _refillReason = reason;
+            try { RunImport(entry); }
+            finally { _refillReason = ReloadReason.Reimport; }
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
-            ContentVersion++;
+            IndexVersion++;
             OnAssetsImported?.Invoke(new[] { entry.Path });
 
-            // Reload the asset and enqueue thumbnail regeneration
-            var reloaded = Get(guid);
-            if (reloaded != null)
-            {
-                string? sourceFile = entry.MainAssetType == typeof(Runtime.Resources.Texture2D)
-                    ? System.IO.Path.Combine(_project.AssetsPath, entry.Path)
-                    : null;
-                ThumbnailGenerator.Enqueue(guid, reloaded, sourceFile);
-            }
-
-            // Also regenerate sub-asset thumbnails
-            if (entry.SubAssets != null)
-            {
-                foreach (var sub in entry.SubAssets)
-                {
-                    var subAsset = Get(sub.Guid);
-                    if (subAsset != null)
-                        ThumbnailGenerator.Enqueue(sub.Guid, subAsset, null);
-                }
-            }
+            // Sub-asset thumbnails regenerate from their objects. One not loaded now is queued when it next loads.
+            foreach (var sub in entry.SubAssets)
+                if (AssetDatabase.TryGetExisting(sub.Guid, out Asset subAsset) && subAsset.IsLoaded)
+                    ThumbnailGenerator.Enqueue(sub.Guid, subAsset, null);
         }
     }
+
+    // What a refill during the running import is reported as: a save is a reimport the user asked for by saving.
+    private ReloadReason _refillReason = ReloadReason.Reimport;
 
     // ================================================================
     //  File Watching (per-frame update)
@@ -1867,20 +1841,9 @@ public class EditorAssetBackend : AssetBackendBase
             toImport.Add(existingEntry);
     }
 
-    /// <summary>Import a file that was registered earlier in this batch.</summary>
+    /// <summary>Import a file that was registered earlier in this batch. The import refills whatever is loaded from it.</summary>
     private void ImportRegisteredChange(AssetEntry entry, List<string> imported)
     {
-        // Dispose previous main + sub-asset instances so any holding
-        // AssetRef detects them as invalid and re-resolves to the freshly
-        // imported instance. The Reimport() entry-point already does this;
-        // the watcher path needs to match or downstream refs (e.g. a
-        // Material pointing at a regenerated shader sub-asset) keep the
-        // stale instance until the user manually reimports.
-        DisposeAndRemove(entry.Guid);
-        if (entry.SubAssets != null)
-            foreach (var sub in entry.SubAssets)
-                DisposeAndRemove(sub.Guid);
-
         RunImport(entry);
         imported.Add(entry.Path);
     }
@@ -1917,14 +1880,9 @@ public class EditorAssetBackend : AssetBackendBase
         if (imported.Count > 0 || deleted.Count > 0)
         {
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
-            ContentVersion++;
+            IndexVersion++;
             if (imported.Count > 0) OnAssetsImported?.Invoke(imported.ToArray());
             if (deleted.Count > 0) OnAssetsDeleted?.Invoke(deleted.ToArray());
-
-            // Refresh resources map if any changes involved Resources/ folders
-            if (imported.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/"))
-                || deleted.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/")))
-                RefreshResourcesMap();
         }
     }
 
@@ -1952,6 +1910,12 @@ public class EditorAssetBackend : AssetBackendBase
 
         switch (evt.Type)
         {
+            // Already imported as it now is, as after the editor's own save.
+            case FileEventType.Modified when _pathToGuid.TryGetValue(relativePath, out Guid known)
+                                          && _guidToEntry.TryGetValue(known, out AssetEntry? current)
+                                          && !current.NeedsReimport && !IsSourceNewerThanImport(current):
+                break;
+
             case FileEventType.Created:
             case FileEventType.Modified:
                 RegisterFileChange(evt.Path, relativePath, toImport);
@@ -1963,13 +1927,12 @@ public class EditorAssetBackend : AssetBackendBase
                     {
                         var deletedEntry = _guidToEntry.GetValueOrDefault(guid);
 
-                        // Dispose main + sub-assets so AssetRefs detect invalidation
-                        DisposeAndRemove(guid);
+                        AssetDatabase.MarkMissing(guid);
                         if (deletedEntry != null)
                             RemoveSubAssets(deletedEntry, includeThumbnails: false);
 
                         _guidToEntry.TryRemove(guid, out _);
-                        _pathToGuid.Remove(relativePath);
+                        _pathToGuid.TryRemove(relativePath, out _);
                         _dependencies.RemoveAsset(guid);
 
                         // Clean main cache file
@@ -2008,7 +1971,7 @@ public class EditorAssetBackend : AssetBackendBase
                         }
                         else
                         {
-                            _pathToGuid.Remove(oldRelative);
+                            _pathToGuid.TryRemove(oldRelative, out _);
                             _pathToGuid[relativePath] = guid;
                             var renamedEntry = _guidToEntry[guid];
                             renamedEntry.Path = relativePath;
@@ -2019,11 +1982,7 @@ public class EditorAssetBackend : AssetBackendBase
                             if (File.Exists(oldMeta) && !File.Exists(newMeta))
                                 try { File.Move(oldMeta, newMeta); } catch { }
 
-                            if (TryGetLoaded(guid, out var obj))
-                                obj.AssetPath = relativePath;
-
-                            // Update sub-asset AssetPaths
-                            UpdateSubAssetPaths(renamedEntry, relativePath);
+                            UpdateAssetPaths(renamedEntry);
 
                             // If extension changed, update importer and trigger reimport
                             string oldExt = Path.GetExtension(evt.OldPath);
@@ -2119,7 +2078,7 @@ public class EditorAssetBackend : AssetBackendBase
     /// The file watcher normally keeps caches current, but it debounces and can miss changes outright
     /// (buffer overflow, a save immediately before the work that reads the cache), and until now nothing
     /// but a full editor restart reconciled that. Anything that reads caches straight off disk rather than
-    /// through <see cref="LoadFresh"/> - a build, above all - has to check first or it ships whatever the
+    /// through the asset database - a build, above all - has to check first or it ships whatever the
     /// asset used to be.
     /// </para>
     /// </summary>
@@ -2139,7 +2098,7 @@ public class EditorAssetBackend : AssetBackendBase
 
     private void RemoveSubAsset(Guid subGuid, bool includeThumbnails)
     {
-        DisposeAndRemove(subGuid);
+        AssetDatabase.MarkMissing(subGuid);
         _subAssetIndex.TryRemove(subGuid, out _);
         _dependencies.RemoveAsset(subGuid);
         if (includeThumbnails)
@@ -2159,12 +2118,18 @@ public class EditorAssetBackend : AssetBackendBase
             RemoveSubAsset(sub.Guid, includeThumbnails);
     }
 
-    private void UpdateSubAssetPaths(AssetEntry entry, string newPath)
+    // A rename changes the path and the name of the asset and its sub-assets, loaded or not.
+    private static void UpdateAssetPaths(AssetEntry entry)
     {
-        if (entry.SubAssets == null) return;
+        if (AssetDatabase.TryGetExisting(entry.Guid, out Asset main))
+        {
+            main.SetPath(entry.Path);
+            main.Name = Path.GetFileNameWithoutExtension(entry.Path);
+        }
+
         foreach (var sub in entry.SubAssets)
-            if (TryGetLoaded(sub.Guid, out var subObj))
-                subObj.AssetPath = $"{newPath}#{sub.Name}";
+            if (AssetDatabase.TryGetExisting(sub.Guid, out Asset subAsset))
+                subAsset.SetPath($"{entry.Path}#{sub.Name}");
     }
 
     private void RebuildSubAssetIndex()
@@ -2210,11 +2175,12 @@ public class EditorAssetBackend : AssetBackendBase
         _buildPropsWatcher = null;
 
         ClearThumbnailTextureCache();
+        AssetDatabase.Loaded -= EnqueueThumbnailIfMissing;
+        AssetDatabase.Reloaded -= PrefabUtility.OnAssetReloaded;
 
         // Clear the global registrations if they still point at this instance, so a torn-down
         // database (e.g. between tests) doesn't leave dangling statics behind.
         if (Instance == this) Instance = null;
-        if (Runtime.AssetDatabase.Current == this) Runtime.AssetDatabase.Current = null;
-        if (Instance == null) AssetDatabase.ResolveFamily = null;
+        if (AssetDatabase.Backend == this) AssetDatabase.Backend = null;
     }
 }

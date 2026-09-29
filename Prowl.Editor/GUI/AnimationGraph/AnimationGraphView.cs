@@ -264,11 +264,11 @@ internal sealed class AnimationGraphView
             if (state.IsAny) continue;
             if (state.UsesAsset)
             {
-                if (state.Graph.Res.IsNotValid())
+                if (state.Graph.IsNotValid())
                     _problems.Add(new GraphProblem(machine.Id, $"The graph the state '{state.Name}' plays is missing.", true));
-                else if (LeadsBack(_graph!, state.Graph.Res!))
+                else if (LeadsBack(_graph!, state.Graph))
                     _problems.Add(new GraphProblem(machine.Id,
-                        $"The state '{state.Name}' plays '{state.Graph.Res!.Name}', which leads back to this graph, so it would never end.", true));
+                        $"The state '{state.Name}' plays '{state.Graph.Name}', which leads back to this graph, so it would never end.", true));
                 continue;
             }
 
@@ -1173,7 +1173,7 @@ internal sealed class AnimationGraphStateView
         if (state.IsAny) return BuildAnyState(state);
 
         string source = !state.UsesAsset ? "Own graph"
-            : state.Graph.Res is { } asset && asset.IsValid() ? "Plays " + asset.Name
+            : state.Graph is { } asset && asset.IsValid() ? "Plays " + asset.Name
             : "Missing graph";
 
         var node = new GraphNode
@@ -1191,7 +1191,7 @@ internal sealed class AnimationGraphStateView
 
         if (state.IsDefault) node.Badge = new GraphBadge("default", EditorTheme.Accent, "The state the machine starts in");
 
-        if (_graph.IsValid() && state.UsesAsset && state.Graph.Res is { } played && played.IsValid()
+        if (_graph.IsValid() && state.UsesAsset && state.Graph is { } played && played.IsValid()
             && AnimationGraphView.LeadsBack(_graph!, played))
             node.Badges.Add(new GraphBadge
             {

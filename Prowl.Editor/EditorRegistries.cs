@@ -126,6 +126,7 @@ public static class EditorRegistries
         _importersByExt.Clear();
         _customAssetExtensions.Clear();
         _importersByName.Clear();
+        EditorAssetBackend.ClearImporterCache();
 
         _componentIcons.Clear();
         _thumbnailGenerators.Clear();

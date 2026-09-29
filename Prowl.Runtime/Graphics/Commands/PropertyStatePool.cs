@@ -32,6 +32,7 @@ internal static class PropertyStatePool
         else
             ps.Clear();
         ps.ApplyOverride(source);
+        ps.ResolveHandles();
         return ps;
     }
 

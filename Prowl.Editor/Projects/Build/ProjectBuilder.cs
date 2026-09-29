@@ -204,20 +204,11 @@ public static class ProjectBuilder
         var progress = new BuildProgress();
         var projectPath = Project.Current?.RootPath ?? "";
 
-        var assetSettings = EditorRegistries.GetSettings<AssetSettings>();
-        if (assetSettings != null && assetSettings.AsyncAssetLoading)
+        // In the editor the build runs beside the frame loop, which publishes any asset it loads. A command line
+        // build blocks the main thread instead, so it builds there.
+        if (!Program.BuildMode)
         {
-            // Now that rendering is handled by a separate thread, we should be able to run
-            // the build in a separate thread as well without having any issues
-            System.Threading.Tasks.Task task = System.Threading.Tasks.Task.Run(() =>
-            {
-                ProcessBuild(projectPath, pipeline, settings, outputPath, progress, andRun);
-            });
-
-            if (Program.BuildMode)
-            {
-                task.Wait();
-            }
+            System.Threading.Tasks.Task.Run(() => ProcessBuild(projectPath, pipeline, settings, outputPath, progress, andRun));
         }
         else
         {

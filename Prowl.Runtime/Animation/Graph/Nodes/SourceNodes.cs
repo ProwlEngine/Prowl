@@ -203,7 +203,7 @@ public sealed class SubGraphNode : AnimationGraphNode
     private AnimationGraph? GraphAsset(GraphNodeRecord r)
     {
         if (r.Get(Embedded)) return null;
-        AnimationGraph? asset = r.Get(GraphAssetSetting)?.Graph.Res;
+        AnimationGraph? asset = r.Get(GraphAssetSetting)?.Graph;
         return asset.IsValid() ? asset : null;
     }
 

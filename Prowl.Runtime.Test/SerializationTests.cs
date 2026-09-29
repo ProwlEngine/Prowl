@@ -19,7 +19,7 @@ public sealed class SerializableComponent : MonoBehaviour
 }
 
 /// <summary>A minimal runtime asset (EngineObject) used to test AssetRef serialization.</summary>
-public sealed class TestAsset : EngineObject
+public sealed class TestAsset : Asset
 {
     public int Value;
     public TestAsset() : base() { }
@@ -243,23 +243,27 @@ public class SerializationTests : RuntimeTestBase
     }
 
     // ---------------------------------------------------------------------
-    // AssetRef (custom ISerializable: inline instance vs AssetID reference)
+    // AssetRef (a GUID that neither loads nor holds)
     // ---------------------------------------------------------------------
 
-    [Fact]
-    public void AssetRef_RuntimeInstance_RoundTripsInline()
+    private sealed class Holder
     {
-        var asset = new TestAsset { Value = 55, Name = "Asset" };
-        AssetRef<TestAsset> aref = asset; // no AssetID -> serialized inline
-
-        var clone = RoundTrip(aref);
-
-        Assert.NotNull(clone.Res);
-        Assert.Equal(55, clone.Res!.Value);
+        public TestAsset? Asset;
     }
 
     [Fact]
-    public void AssetRef_AssetId_RoundTripsReference()
+    public void ARuntimeAssetInAField_RoundTripsInline()
+    {
+        var holder = new Holder { Asset = new TestAsset { Value = 55, Name = "Asset" } };
+
+        var clone = RoundTrip(holder);
+
+        Assert.NotNull(clone.Asset);
+        Assert.Equal(55, clone.Asset!.Value);
+    }
+
+    [Fact]
+    public void AssetRef_RoundTripsItsGuid()
     {
         var id = Guid.NewGuid();
         var aref = new AssetRef<TestAsset>(id);
@@ -270,13 +274,13 @@ public class SerializationTests : RuntimeTestBase
     }
 
     [Fact]
-    public void AssetRef_Null_RoundTrips()
+    public void AssetRef_Empty_RoundTrips()
     {
         AssetRef<TestAsset> aref = default;
 
         var clone = RoundTrip(aref);
 
-        Assert.True(clone.IsExplicitNull);
+        Assert.True(clone.IsEmpty);
     }
 
     // ---------------------------------------------------------------------
@@ -318,10 +322,10 @@ public class SerializationTests : RuntimeTestBase
         last.SetTransform(1, new Vector.Spatial.Transform3D(new Float3(0f, 3f, 0f), Quaternion.Identity, Float3.One));
 
         var source = new Motion.AnimationClip(skeleton, new[] { first, last }, 1f);
-        AnimationClip clip = AnimationClip.FromSkeletal(source, new AssetRef<Avatar>(avatar), "Walk");
+        AnimationClip clip = AnimationClip.FromSkeletal(source, avatar, "Walk");
 
         AnimationClip clone = RoundTrip(clip);
-        clone.Avatar = new AssetRef<Avatar>(avatar);
+        clone.Avatar = avatar;
 
         Assert.Equal(AnimationClipKind.Skeletal, clone.Kind);
         Assert.Equal(1f, clone.Duration, 3);
@@ -346,14 +350,14 @@ public class SerializationTests : RuntimeTestBase
         pose.SetToReferencePose();
 
         var source = new Motion.AnimationClip(skeleton, new[] { pose, pose }, 2f);
-        AnimationClip clip = AnimationClip.FromSkeletal(source, new AssetRef<Avatar>(avatar), "Walk", new[]
+        AnimationClip clip = AnimationClip.FromSkeletal(source, avatar, "Walk", new[]
         {
             new ClipEvent { Kind = ClipEventKind.Foot, Time = 0.5f, Option = (int)Motion.FootPhase.RightFootDown },
             new ClipEvent { Kind = ClipEventKind.Named, Time = 1f, Length = 0.5f, Name = "Swing" },
         });
 
         AnimationClip clone = RoundTrip(clip);
-        clone.Avatar = new AssetRef<Avatar>(avatar);
+        clone.Avatar = avatar;
         var events = clone.GetClip(avatar.Runtime)!.Events;
 
         Assert.Equal(2, events.Count);

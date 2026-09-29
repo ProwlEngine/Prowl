@@ -196,9 +196,9 @@ public class AnimationNodeEditor
 
     private static string AssetName(NodeValue value) => value.Kind switch
     {
-        NodeValueKind.Clip when value.Clip.Res is { } clip && clip.IsValid() => clip.Name,
-        NodeValueKind.Graph when value.Graph.Res is { } graph && graph.IsValid() => graph.Name,
-        NodeValueKind.Mask when value.Mask.Res is { } mask && mask.IsValid() => mask.Name,
+        NodeValueKind.Clip when value.Clip is { } clip && clip.IsValid() => clip.Name,
+        NodeValueKind.Graph when value.Graph is { } graph && graph.IsValid() => graph.Name,
+        NodeValueKind.Mask when value.Mask is { } mask && mask.IsValid() => mask.Name,
         _ => string.Empty,
     };
 }
@@ -232,14 +232,14 @@ public sealed class AnimationGraphEditing
     internal Action<string, Action, bool>? EditHandler;
     internal Action<GraphNodeRecord>? EnterStatesHandler;
     internal Action<GraphNodeRecord>? OpenSubGraphHandler;
-    internal Action<string, string, Action<AssetRef<AnimationGraph>>>? ExtractHandler;
+    internal Action<string, string, Action<AnimationGraph>>? ExtractHandler;
 
     internal AnimationGraphView View => _view;
 
     public AnimationGraph? Graph => _view.Graph;
 
     /// <summary>The rig the editor picks bones and clips from.</summary>
-    public Avatar? Rig => _view.Graph.IsValid() ? _view.Graph!.Rig.Res : null;
+    public Avatar? Rig => _view.Graph.IsValid() ? _view.Graph!.Rig : null;
 
     /// <summary>Makes a change undoable. A rebuild redraws every card after, for a change to what cards show.</summary>
     public void Edit(string description, Action change, bool rebuild = true)
@@ -276,7 +276,7 @@ public sealed class AnimationGraphEditing
     public void OpenSubGraph(GraphNodeRecord record) => OpenSubGraphHandler?.Invoke(record);
 
     /// <summary>Moves the nodes an owner holds into a new graph asset, then hands the asset over to use in their place.</summary>
-    public void ExtractToAsset(string owner, string name, Action<AssetRef<AnimationGraph>> use) => ExtractHandler?.Invoke(owner, name, use);
+    public void ExtractToAsset(string owner, string name, Action<AnimationGraph> use) => ExtractHandler?.Invoke(owner, name, use);
 }
 
 /// <summary>A node's card as its editor fills it in: fixed height rows of widgets under the header.</summary>
@@ -500,10 +500,10 @@ public sealed class AnimationNodeCard
         }
     }
 
-    public static void AssetField<T>(Paper paper, string id, string label, AssetRef<T> value, Action<AssetRef<T>> setter) where T : EngineObject
+    public static void AssetField<T>(Paper paper, string id, string label, T? value, Action<T?> setter) where T : Asset
     {
-        object boxed = value;
-        new AssetRefPropertyEditor().OnGUI(paper, id, label, boxed, _ => setter((AssetRef<T>)boxed), 0);
+        EngineObjectPropertyEditor.SetFieldType(typeof(T));
+        new EngineObjectPropertyEditor().OnGUI(paper, id, label, value, picked => setter(picked as T), 0);
     }
 
     /// <summary>The on and off settings of a node, as chips: the Loop of a clip, the Mirror of a blend.</summary>

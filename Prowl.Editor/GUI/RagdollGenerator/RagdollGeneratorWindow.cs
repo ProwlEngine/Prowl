@@ -105,7 +105,7 @@ public class RagdollGeneratorWindow : DockPanel
         Animator? copied = copy.GetComponent<Animator>();
         Dictionary<HumanBodyBone, Transform>? bones = copied.IsValid() ? RagdollBuilder.FindBones(copied!, out _) : null;
         if (bones != null)
-            RagdollBuilder.Build(copy.Transform, bones, _settings with { Avatar = copied!.Avatar.Res });
+            RagdollBuilder.Build(copy.Transform, bones, _settings with { Avatar = copied!.Avatar });
 
         foreach (Animator stripped in copy.GetComponentsInChildren<Animator>().ToList())
             stripped.GameObject.RemoveComponent(stripped);

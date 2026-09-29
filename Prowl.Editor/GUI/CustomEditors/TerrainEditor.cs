@@ -49,15 +49,15 @@ public class TerrainEditor : CustomEditor
 
         _terrain = (TerrainComponent)target;
         var terrain = _terrain;
-        var terrainData = terrain.Data.Res;
+        var terrainData = terrain.Data;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
         Undo.Snapshot(terrain);
 
         // Terrain Data asset ref (outside tabs - required before any tab content)
-        PropertyGridUtils.DrawField(paper, $"{id}_data", "Terrain Data", typeof(AssetRef<TerrainData>), terrain.Data,
-            v => terrain.Data = (AssetRef<TerrainData>)v!, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_data", "Terrain Data", typeof(TerrainData), terrain.Data,
+            v => terrain.Data = v as TerrainData, 0);
 
         if (terrainData == null)
         {
@@ -236,7 +236,7 @@ public class TerrainEditor : CustomEditor
             {
                 int idx = i;
                 bool selected = PaintLayer == i;
-                Texture2D? albedo = data.Layers[i].Albedo.Res;
+                Texture2D? albedo = data.Layers[i].Albedo;
                 string lname = albedo.IsValid() ? albedo.Name : $"Layer {i}";
                 using (paper.Row($"{id}_l{i}").Width(UnitValue.StretchOne).Height(28).Rounded(m.Rounding).Padding(8, 8, 0, 0).Gap(8)
                     .BackgroundColor(selected ? EditorTheme.Selected : SColor.Transparent)
@@ -276,10 +276,10 @@ public class TerrainEditor : CustomEditor
         {
             var sl = data.Layers[PaintLayer];
             EditorGUI.SectionHeader(paper, $"{id}_slh", $"Layer {PaintLayer}");
-            PropertyGridUtils.DrawField(paper, $"{id}_alb", "Albedo", typeof(AssetRef<Texture2D>), sl.Albedo,
-                v => { sl.Albedo = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
-            PropertyGridUtils.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(AssetRef<Texture2D>), sl.NormalMap,
-                v => { sl.NormalMap = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
+            PropertyGridUtils.DrawField(paper, $"{id}_alb", "Albedo", typeof(Texture2D), sl.Albedo,
+                v => { sl.Albedo = v as Texture2D; _isDirty = true; }, 0);
+            PropertyGridUtils.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(Texture2D), sl.NormalMap,
+                v => { sl.NormalMap = v as Texture2D; _isDirty = true; }, 0);
             EditorGUI.Row(paper, $"{id}_til", "Tiling", () =>
                 Origami.NumericField<float>(paper, $"{id}_til_v", sl.Tiling,
                     v => { sl.Tiling = MathF.Max(0.01f, v); _isDirty = true; }).Min(0.01f).Show());
@@ -319,10 +319,10 @@ public class TerrainEditor : CustomEditor
                 var p = data.DetailPrototypes[i];
                 if (p.RenderMode == DetailRenderMode.Mesh)
                 {
-                    var mesh = p.Mesh.Res;
+                    var mesh = p.Mesh;
                     return mesh.IsValid() ? mesh.Name : "Empty";
                 }
-                var tex = p.Texture.Res;
+                var tex = p.Texture;
                 return tex.IsValid() ? tex.Name : "Empty";
             },
             i => data.DetailPrototypes[i].RenderMode == DetailRenderMode.Mesh ? EditorIcons.Cube_I : EditorIcons.Seedling_I,
@@ -343,16 +343,16 @@ public class TerrainEditor : CustomEditor
 
             if (dp.RenderMode == DetailRenderMode.Mesh)
             {
-                PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), dp.Mesh,
-                    v => { dp.Mesh = (AssetRef<Mesh>)v!; MarkDetailsDirty(); }, 0);
-                DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", dp.Mesh.Res, dp.Materials);
+                PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(Mesh), dp.Mesh,
+                    v => { dp.Mesh = v as Mesh; MarkDetailsDirty(); }, 0);
+                DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", dp.Mesh, dp.Materials);
             }
             else
             {
-                PropertyGridUtils.DrawField(paper, $"{id}_tex", "Texture", typeof(AssetRef<Texture2D>), dp.Texture,
-                    v => { dp.Texture = (AssetRef<Texture2D>)v!; MarkDetailsDirty(); }, 0);
-                PropertyGridUtils.DrawField(paper, $"{id}_gmat", "Grass Material", typeof(AssetRef<Material>), dp.GrassMaterial,
-                    v => { dp.GrassMaterial = (AssetRef<Material>)v!; MarkDetailsDirty(); }, 0);
+                PropertyGridUtils.DrawField(paper, $"{id}_tex", "Texture", typeof(Texture2D), dp.Texture,
+                    v => { dp.Texture = v as Texture2D; MarkDetailsDirty(); }, 0);
+                PropertyGridUtils.DrawField(paper, $"{id}_gmat", "Grass Material", typeof(Material), dp.GrassMaterial,
+                    v => { dp.GrassMaterial = v as Material; MarkDetailsDirty(); }, 0);
             }
 
             EditorGUI.Row(paper, $"{id}_minw", "Min Width", () =>
@@ -399,7 +399,7 @@ public class TerrainEditor : CustomEditor
             i => ActiveTreePrototype = i,
             i =>
             {
-                var mesh = data.TreePrototypes[i].Mesh.Res;
+                var mesh = data.TreePrototypes[i].Mesh;
                 return mesh.IsValid() ? mesh.Name : "Empty";
             },
             _ => EditorIcons.Leaf_I,
@@ -410,9 +410,9 @@ public class TerrainEditor : CustomEditor
         {
             var proto = data.TreePrototypes[ActiveTreePrototype];
             EditorGUI.SectionHeader(paper, $"{id}_pth", "Prototype");
-            PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), proto.Mesh,
-                v => { proto.Mesh = (AssetRef<Mesh>)v!; _isDirty = true; }, 0);
-            DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", proto.Mesh.Res, proto.Materials);
+            PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(Mesh), proto.Mesh,
+                v => { proto.Mesh = v as Mesh; _isDirty = true; }, 0);
+            DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", proto.Mesh, proto.Materials);
             EditorGUI.Row(paper, $"{id}_bend", "Bend Factor", () =>
                 Origami.Slider(paper, $"{id}_bend_v", proto.BendFactor, v => { proto.BendFactor = v; _isDirty = true; }, 0f, 2f).Format("F2").Show());
         }
@@ -429,10 +429,10 @@ public class TerrainEditor : CustomEditor
     private void DrawSettings(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainComponent terrain, TerrainData data)
     {
         EditorGUI.SectionHeader(paper, $"{id}_mh", "Materials", first: true);
-        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), terrain.Material,
-            v => terrain.Material = (AssetRef<Material>)v!, 0);
-        PropertyGridUtils.DrawField(paper, $"{id}_detailmat", "Detail Material", typeof(AssetRef<Material>), terrain.DetailMaterial,
-            v => { terrain.DetailMaterial = (AssetRef<Material>)v!; terrain.InvalidateDetailCache(); }, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Material), terrain.Material,
+            v => terrain.Material = v as Material, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_detailmat", "Detail Material", typeof(Material), terrain.DetailMaterial,
+            v => { terrain.DetailMaterial = v as Material; terrain.InvalidateDetailCache(); }, 0);
 
         EditorGUI.SectionHeader(paper, $"{id}_dh", "Dimensions");
         EditorGUI.Row(paper, $"{id}_size", "Terrain Size", () =>
@@ -677,7 +677,7 @@ public class TerrainEditor : CustomEditor
     /// list to match the mesh's <see cref="Mesh.SubMeshCount"/> when a mesh is assigned, so users see one
     /// slot per submesh; falls back to a single "Material" field when no mesh is assigned yet.
     /// </summary>
-    private void DrawPrototypeMaterials(Paper paper, string id, string label, Mesh? mesh, List<AssetRef<Material>> materials)
+    private void DrawPrototypeMaterials(Paper paper, string id, string label, Mesh? mesh, List<Material> materials)
     {
         var m = Origami.Current.Metrics;
         // Left accent strip (design .tr-matlist) wrapping the per-submesh fields.
@@ -693,10 +693,10 @@ public class TerrainEditor : CustomEditor
                 {
                     // No mesh assigned show a single material field (will end up as submesh 0).
                     AssetRef<Material> single = materials.Count > 0 ? materials[0] : default;
-                    PropertyGridUtils.DrawField(paper, $"{id}_single", label, typeof(AssetRef<Material>), single,
+                    PropertyGridUtils.DrawField(paper, $"{id}_single", label, typeof(Material), single,
                         v =>
                         {
-                            var val = (AssetRef<Material>)v!;
+                            var val = v as Material;
                             if (materials.Count == 0) materials.Add(val); else materials[0] = val;
                             _isDirty = true; MarkDetailsDirty();
                         }, 0);
@@ -712,10 +712,10 @@ public class TerrainEditor : CustomEditor
                 {
                     int capturedIndex = i;
                     string slotLabel = subCount > 1 ? $"{label} [{i}]" : label;
-                    PropertyGridUtils.DrawField(paper, $"{id}_{i}", slotLabel, typeof(AssetRef<Material>), materials[i],
+                    PropertyGridUtils.DrawField(paper, $"{id}_{i}", slotLabel, typeof(Material), materials[i],
                         v =>
                         {
-                            materials[capturedIndex] = (AssetRef<Material>)v!;
+                            materials[capturedIndex] = v as Material;
                             _isDirty = true; MarkDetailsDirty();
                         }, 0);
                 }
@@ -1033,7 +1033,7 @@ public class TerrainEditor : CustomEditor
             var terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
             if (terrain == null) continue;
 
-            var terrainData = terrain.Data.Res;
+            var terrainData = terrain.Data;
             if (terrainData == null || terrainData.AssetID == Guid.Empty) continue;
 
             try
@@ -1065,7 +1065,7 @@ public class TerrainEditor : CustomEditor
             terrain.InvalidateDetailCache();
 
             // Re-mark GPU textures as dirty so they regenerate
-            var data = terrain.Data.Res;
+            var data = terrain.Data;
             if (data != null)
             {
                 data.SetHeightmapDirty();

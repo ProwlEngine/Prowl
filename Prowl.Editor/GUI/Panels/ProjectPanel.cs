@@ -548,7 +548,7 @@ public class ProjectPanel : DockPanel
             // Flat node list from a recursive walk, plus a parallel ContentItem list for multi-select
             // via Selection.HandleListClick. Both depend only on the folder index, so they are rebuilt
             // when it moves rather than every frame.
-            int treeVersion = EditorAssetBackend.Instance?.ContentVersion ?? -1;
+            int treeVersion = EditorAssetBackend.Instance?.IndexVersion ?? -1;
             if (_folderTreeNodes == null || _folderTreeVersion != treeVersion)
             {
                 var builtNodes = new List<OrigamiUI.TreeNode>();
@@ -1506,7 +1506,7 @@ public class ProjectPanel : DockPanel
     private List<ContentItem> GetContentEntries(EditorAssetBackend db)
     {
         if (_contentCache != null
-            && _contentCacheVersion == db.ContentVersion
+            && _contentCacheVersion == db.IndexVersion
             && _contentCacheFolder == _currentFolder
             && _contentCacheSearch == _searchText
             && _contentCacheVirtualCount == VirtualContentItems.Count
@@ -1518,7 +1518,7 @@ public class ProjectPanel : DockPanel
         var built = BuildContentEntries(db);
 
         _contentCache = built;
-        _contentCacheVersion = db.ContentVersion;
+        _contentCacheVersion = db.IndexVersion;
         _contentCacheFolder = _currentFolder;
         _contentCacheSearch = _searchText;
         _contentCacheVirtualCount = VirtualContentItems.Count;

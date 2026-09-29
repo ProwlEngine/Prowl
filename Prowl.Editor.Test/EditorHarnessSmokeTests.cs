@@ -30,9 +30,9 @@ public class EditorHarnessSmokeTests : EditorTestHarness
     }
 
     [Fact]
-    public void AssetDatabase_IsRegisteredAsCurrent()
+    public void AssetDatabase_IsRegisteredAsTheBackend()
     {
-        Assert.Same(Assets, AssetDatabase.Current);
+        Assert.Same(Assets, AssetDatabase.Backend);
     }
 
     [Fact]

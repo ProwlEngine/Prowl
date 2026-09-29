@@ -20,7 +20,7 @@ namespace Prowl.Runtime.MeshFeatures;
 ///   uvw = (localPos - Bounds.Min) / (Bounds.Max - Bounds.Min);
 ///   distance = texture(volume, uvw).r;
 /// </remarks>
-public sealed class MeshSDF : EngineObject, IMeshFeature
+public sealed class MeshSDF : Asset, IMeshFeature
 {
     private Texture3D? _volume;
     private AABB _bounds;
@@ -29,22 +29,22 @@ public sealed class MeshSDF : EngineObject, IMeshFeature
     private float _maxDistance;
 
     /// <summary>Float3D texture holding signed distances, layout matches <see cref="Resolution"/>.</summary>
-    public Texture3D? Volume { get { EnsureNotDisposed(); return _volume; } set { EnsureNotDisposed(); _volume = value; } }
+    public Texture3D? Volume { get { EnsureLoaded(); return _volume; } set { EnsureLoaded(); _volume = value; } }
 
     /// <summary>World-agnostic bounds the volume covers, in mesh-local coordinates.</summary>
-    public AABB Bounds { get { EnsureNotDisposed(); return _bounds; } set { EnsureNotDisposed(); _bounds = value; } }
+    public AABB Bounds { get { EnsureLoaded(); return _bounds; } set { EnsureLoaded(); _bounds = value; } }
 
     /// <summary>Voxel grid resolution (X/Y/Z counts).</summary>
-    public Int3 Resolution { get { EnsureNotDisposed(); return _resolution; } set { EnsureNotDisposed(); _resolution = value; } }
+    public Int3 Resolution { get { EnsureLoaded(); return _resolution; } set { EnsureLoaded(); _resolution = value; } }
 
     /// <summary>Extra margin around the source mesh bounds, in mesh-local units.</summary>
-    public float Padding { get { EnsureNotDisposed(); return _padding; } set { EnsureNotDisposed(); _padding = value; } }
+    public float Padding { get { EnsureLoaded(); return _padding; } set { EnsureLoaded(); _padding = value; } }
 
     /// <summary>
     /// Distance values are clamped to this during generation. Useful for narrow-band SDFs
     /// and for normalizing for visualization.
     /// </summary>
-    public float MaxDistance { get { EnsureNotDisposed(); return _maxDistance; } set { EnsureNotDisposed(); _maxDistance = value; } }
+    public float MaxDistance { get { EnsureLoaded(); return _maxDistance; } set { EnsureLoaded(); _maxDistance = value; } }
 
     public MeshSDF() { }
 

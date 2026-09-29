@@ -54,10 +54,10 @@ public static class PlayerSettingsLoader
 
         try
         {
-            // Default ON if the key is absent.
-            bool async = !settings.TryGet("AsyncAssetLoading", out var a) || a!.BoolValue;
-            AssetLoadingConfig.AsyncEnabled = async;
-            Debug.Log($"[PlayerSettings] Async asset loading: {async}.");
+            if (settings.TryGet("GracePeriodSeconds", out var grace))
+                AssetDatabase.GracePeriod = TimeSpan.FromSeconds(grace!.FloatValue);
+            if (settings.TryGet("MemoryBudgetMB", out var budget))
+                AssetDatabase.MemoryBudget = (long)budget!.IntValue * 1024 * 1024;
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply asset config: {ex.Message}"); }
     }

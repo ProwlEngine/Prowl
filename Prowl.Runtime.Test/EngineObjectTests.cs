@@ -127,14 +127,6 @@ public class EngineObjectTests
         Assert.Equal("Custom", obj.Name);
     }
 
-    [Fact]
-    public void Defaults_AssetIdEmpty_AssetPathEmpty()
-    {
-        var obj = new TestEngineObject();
-        Assert.Equal(Guid.Empty, obj.AssetID);
-        Assert.Equal(string.Empty, obj.AssetPath);
-    }
-
     // ---- Destroy ----
 
     [Fact]

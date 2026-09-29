@@ -92,7 +92,7 @@ public class Camera : MonoBehaviour
     /// part in is going - the backbuffer in a player, the Game View or scene view texture in the editor
     /// (see <see cref="RenderingData.FallbackTarget"/>).
     /// </summary>
-    public AssetRef<RenderTexture> Target;
+    public RenderTexture? Target;
     public bool HDR = false;
     public float RenderScale = 1.0f;
 
@@ -277,7 +277,7 @@ public class Camera : MonoBehaviour
     public RenderTexture? UpdateRenderData(RenderTexture? fallbackTarget = null)
     {
         // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
-        RenderTexture? camTarget = Target.Res;
+        RenderTexture? camTarget = Target;
         if (camTarget.IsNotValid()) camTarget = fallbackTarget;
 
         int width = camTarget.IsValid() ? camTarget.Width : Window.InternalWindow.FramebufferSize.X;

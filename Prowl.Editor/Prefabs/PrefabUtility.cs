@@ -5,7 +5,6 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
@@ -21,6 +20,10 @@ namespace Prowl.Editor.Prefabs;
 /// </summary>
 public static partial class PrefabUtility
 {
+    /// <summary>The prefab with this GUID, loaded, or null when it is gone or could not be read.</summary>
+    internal static PrefabAsset? LoadPrefab(Guid prefabGuid)
+        => AssetDatabase.Load<PrefabAsset>(prefabGuid) is { IsLoaded: true } prefab ? prefab : null;
+
     // TODO: Collection overrides need per-element support. Currently all-or-nothing, so an instance that
     // overrides a list stops seeing elements the prefab adds to it.
     // TODO: An instance cannot drop a component the prefab provides and stay an instance. Removing one
@@ -170,14 +173,14 @@ public static partial class PrefabUtility
     /// track and revert overrides, they just cannot apply them.
     /// </summary>
     public static bool IsEditablePrefab(Guid prefabGuid)
-        => AssetDatabase.Get(prefabGuid) is PrefabAsset { IsReadOnly: false };
+        => LoadPrefab(prefabGuid) is PrefabAsset { IsReadOnly: false };
 
     private static bool GuardEditablePrefab(Guid prefabGuid, string operation)
     {
         if (IsEditablePrefab(prefabGuid)) return true;
 
         string name = EditorAssetBackend.Instance?.GetEntry(prefabGuid)?.Path ?? prefabGuid.ToString();
-        Runtime.Debug.LogWarning(AssetDatabase.Get(prefabGuid) is PrefabAsset
+        Runtime.Debug.LogWarning(LoadPrefab(prefabGuid) is PrefabAsset
             ? $"[Prefab] Cannot {operation}: '{name}' is generated from its source file. " +
               "Change it there and reimport, or unpack the instance."
             : $"[Prefab] Cannot {operation}: prefab asset '{name}' could not be loaded.");
@@ -194,7 +197,7 @@ public static partial class PrefabUtility
     /// </summary>
     public static GameObject? InstantiatePrefab(Guid prefabGuid)
     {
-        var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
+        var prefab = LoadPrefab(prefabGuid);
         if (prefab == null)
         {
             Runtime.Debug.LogWarning($"[Prefab] Failed to load prefab asset {prefabGuid}");
@@ -363,7 +366,7 @@ public static partial class PrefabUtility
 
     private static void RevertOverridesCore(GameObject instanceRoot, bool recordUndo)
     {
-        var prefab = AssetDatabase.Get(instanceRoot.PrefabAssetId) as PrefabAsset;
+        var prefab = LoadPrefab(instanceRoot.PrefabAssetId);
         if (prefab == null)
         {
             Runtime.Debug.LogWarning("[Prefab] Cannot revert prefab asset not found.");
@@ -497,7 +500,7 @@ public static partial class PrefabUtility
         if (entry == null) return;
 
         // Load the prefab source, apply the single field, save back
-        var prefab = Runtime.AssetDatabase.Get(instanceGO.PrefabAssetId) as PrefabAsset;
+        var prefab = LoadPrefab(instanceGO.PrefabAssetId);
         if (prefab.IsNotValid() || prefab.GameObjectData == null) return;
 
         // Capture old prefab file content for undo
@@ -664,24 +667,24 @@ public static partial class PrefabUtility
         Type type = sourceValue.GetType();
         if (type.IsValueType || type == typeof(string)) return sourceValue;
 
-        var context = new CloneContext();
-        PairSourceToInstance(source, instanceRoot, context);
+        var map = new CopyMap();
+        PairSourceToInstance(source, instanceRoot, map);
 
-        // Cloner.Clone treats its own root as owned, so it would copy an asset outright.
+        // A copy treats its own root as owned, so it would copy an asset outright.
         if (sourceValue is EngineObject)
-            return context.TryGetTarget(sourceValue, out object? paired) ? paired : sourceValue;
+            return map.TryGetTarget(sourceValue, out object? paired) ? paired : sourceValue;
 
-        return Cloner.Clone(sourceValue, context);
+        return ObjectCopy.Clone(sourceValue, map);
     }
 
     /// <summary>
     /// Maps each prefab object to the instance object standing for it, contents sealed. Read-only,
     /// unlike <see cref="PairToSource"/>, which creates what the instance is missing.
     /// </summary>
-    private static void PairSourceToInstance(GameObject source, GameObject instance, CloneContext context)
+    private static void PairSourceToInstance(GameObject source, GameObject instance, CopyMap map)
     {
-        context.AddTarget(source, instance, walkContents: false);
-        context.AddTarget(source.Transform, instance.Transform, walkContents: false);
+        map.Link(source, instance);
+        map.Link(source.Transform, instance.Transform);
 
         foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
         {
@@ -690,7 +693,7 @@ public static partial class PrefabUtility
 
             MonoBehaviour? match = instance.GetComponents<MonoBehaviour>()
                 .FirstOrDefault(c => instance.GetComponentSourceIdentifier(c) == sourceId);
-            if (match.IsValid()) context.AddTarget(sourceComponent, match!, walkContents: false);
+            if (match.IsValid()) map.Link(sourceComponent, match!);
         }
 
         foreach (GameObject sourceChild in source.Children)
@@ -699,7 +702,7 @@ public static partial class PrefabUtility
             if (sourceId == Guid.Empty) continue;
 
             GameObject? match = instance.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
-            if (match.IsValid()) PairSourceToInstance(sourceChild, match!, context);
+            if (match.IsValid()) PairSourceToInstance(sourceChild, match!, map);
         }
     }
 
@@ -712,8 +715,9 @@ public static partial class PrefabUtility
     // copy. Left alone it deep-copies the target into the override blob, and applying that later
     // produces an orphan clone that is in no scene. Keying the reference by identifier instead lets
     // it re-link to the live object, the same way the component clipboard does.
+    // A value that is itself an asset is written as a reference to it, like any asset inside one.
     private static SerializationContext InstanceValueContext()
-        => new() { ExternalReferences = new SceneReferenceResolver() };
+        => new() { ExternalReferences = new SceneReferenceResolver(), RootByReference = true };
 
     /// <summary>
     /// Context for serializing a whole component: it is listed as copied-by-value, so what it holds
@@ -955,7 +959,7 @@ public static partial class PrefabUtility
         Guid prefabGuid = instanceGO.PrefabAssetId;
         var entry = db.GetEntry(prefabGuid);
         if (entry == null) return;
-        if (AssetDatabase.Get(prefabGuid) is not PrefabAsset prefab) return;
+        if (LoadPrefab(prefabGuid) is not PrefabAsset prefab) return;
 
         GameObject? prefabRoot = GetPrefabInstanceRoot(instanceGO);
         GameObject root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
@@ -1491,7 +1495,7 @@ public static partial class PrefabUtility
         List<GameObject> roots = FindInstancesOf(prefabGuid, scene);
         if (roots.Count == 0) return;
 
-        var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
+        var prefab = LoadPrefab(prefabGuid);
         if (prefab == null) return;
 
         // One copy of the prefab's contents, read from by every instance. Never mutated.
@@ -1612,7 +1616,7 @@ public static partial class PrefabUtility
     /// </summary>
     internal static void RefreshOneInstance(GameObject instanceRoot)
     {
-        if (AssetDatabase.Get(instanceRoot.PrefabAssetId) is not PrefabAsset prefab) return;
+        if (LoadPrefab(instanceRoot.PrefabAssetId) is not PrefabAsset prefab) return;
 
         var source = GameObject.InstantiateDetached(prefab);
         if (source == null) return;
@@ -1651,19 +1655,19 @@ public static partial class PrefabUtility
     /// </summary>
     private static void ReconcileToSource(GameObject instance, GameObject source, Guid boundaryPrefabId)
     {
-        var context = new CloneContext();
+        var map = new CopyMap();
         var placement = new List<PlacementState>();
 
-        PairToSource(instance, source, boundaryPrefabId, context, placement, isInstanceRoot: true);
+        PairToSource(instance, source, boundaryPrefabId, map, placement, isInstanceRoot: true);
         DropWhatTheSourceNoLongerHas(instance, source, boundaryPrefabId);
 
-        Cloner.CopyTo(source, instance, context);
+        ObjectCopy.CopyTo(source, instance, map);
 
         foreach (PlacementState state in placement)
             state.Restore();
 
 
-        AdoptClonedObjects(instance, source, boundaryPrefabId, context);
+        AdoptCopiedObjects(instance, source, boundaryPrefabId, map);
     }
 
     /// <summary>
@@ -1705,15 +1709,15 @@ public static partial class PrefabUtility
     /// sits is this prefab's business, what is inside it is not.
     /// </summary>
     private static void PairToSource(GameObject instance, GameObject source, Guid boundaryPrefabId,
-        CloneContext context, List<PlacementState> placement, bool isInstanceRoot)
+        CopyMap map, List<PlacementState> placement, bool isInstanceRoot)
     {
         if (instance.IsPrefabInstance && instance.PrefabAssetId != boundaryPrefabId)
         {
-            context.AddTarget(source, instance, walkContents: false);
+            map.Link(source, instance);
             return;
         }
 
-        context.AddTarget(source, instance);
+        map.Fill(source, instance);
         placement.Add(new PlacementState(instance, isInstanceRoot));
 
         // What ties the instance to its prefab, overrides and all, is the instance's own record. The
@@ -1721,10 +1725,10 @@ public static partial class PrefabUtility
         PrefabLink? sourceLink = source.PrefabLink;
         PrefabLink? instanceLink = instance.EnsurePrefabLink();
         if (sourceLink != null)
-            context.AddTarget(sourceLink, instanceLink, walkContents: false);
+            map.Link(sourceLink, instanceLink);
 
         // Every prefab component gets a counterpart, found or made. An unpaired one falls through to the
-        // cloner, whose fallback is "whatever sits at the same index", and that eats instance additions.
+        // copy, whose fallback is "whatever sits at the same index", and that eats instance additions.
         foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
         {
             Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
@@ -1741,13 +1745,13 @@ public static partial class PrefabUtility
                 match = null;
             }
 
-            MonoBehaviour? paired = match.IsValid() ? match! : instance.AttachClonedComponent(sourceComponent.GetType());
+            MonoBehaviour? paired = match.IsValid() ? match! : instance.AttachBareComponent(sourceComponent.GetType());
             if (paired is null) continue;
 
-            context.AddTarget(sourceComponent, paired);
+            map.Fill(sourceComponent, paired);
         }
 
-        // Same for children, where the cloner's fallback has no type check at all.
+        // Same for children, where the copy's fallback has no type check at all.
         foreach (GameObject sourceChild in source.Children)
         {
             Guid sourceId = sourceChild.SourceIdentifier;
@@ -1760,7 +1764,7 @@ public static partial class PrefabUtility
                 match.SetParent(instance, worldPositionStays: false);
             }
 
-            PairToSource(match!, sourceChild, boundaryPrefabId, context, placement, isInstanceRoot: false);
+            PairToSource(match!, sourceChild, boundaryPrefabId, map, placement, isInstanceRoot: false);
         }
     }
 
@@ -1817,7 +1821,7 @@ public static partial class PrefabUtility
     /// Records where the objects the copy just created came from, puts new children into the scene,
     /// and brings sibling order back into line with the prefab.
     /// </summary>
-    private static void AdoptClonedObjects(GameObject instance, GameObject source, Guid boundaryPrefabId, CloneContext context)
+    private static void AdoptCopiedObjects(GameObject instance, GameObject source, Guid boundaryPrefabId, CopyMap map)
     {
         if (instance.IsPrefabInstance && instance.PrefabAssetId != boundaryPrefabId)
             return;
@@ -1829,7 +1833,7 @@ public static partial class PrefabUtility
         {
             Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
             if (sourceId == Guid.Empty) continue;
-            if (!context.TryGetTarget(sourceComponent, out object? paired) || paired is not MonoBehaviour component)
+            if (!map.TryGetTarget(sourceComponent, out object? paired) || paired is not MonoBehaviour component)
                 continue;
 
             component.OnValidate();
@@ -1840,7 +1844,7 @@ public static partial class PrefabUtility
 
         foreach (GameObject sourceChild in source.Children)
         {
-            if (!context.TryGetTarget(sourceChild, out object? paired) || paired is not GameObject child)
+            if (!map.TryGetTarget(sourceChild, out object? paired) || paired is not GameObject child)
                 continue;
 
             child.SourceIdentifier = sourceChild.SourceIdentifier;
@@ -1850,7 +1854,7 @@ public static partial class PrefabUtility
 
             child.SetSiblingIndex(order++);
 
-            AdoptClonedObjects(child, sourceChild, boundaryPrefabId, context);
+            AdoptCopiedObjects(child, sourceChild, boundaryPrefabId, map);
         }
     }
 
@@ -2130,9 +2134,7 @@ public static partial class PrefabUtility
     private static readonly Dictionary<Type, FieldInfo[]> _overridableFields = new();
 
     /// <summary>
-    /// The fields an override may address: exactly what Echo persists, minus engine bookkeeping and
-    /// anything a clone never copies. A field the clone never copies is one the prefab has no say in,
-    /// since bringing an instance into line leaves it alone by construction.
+    /// The fields an override may address: exactly what Echo persists, minus engine bookkeeping.
     /// </summary>
     private static FieldInfo[] GetOverridableFields(object instance)
     {
@@ -2141,7 +2143,6 @@ public static partial class PrefabUtility
 
         var fields = instance.GetSerializableFields()
             .Where(f => !_skipFields.Contains(f.Name))
-            .Where(f => (f.GetCustomAttribute<CloneFieldAttribute>()?.Flags & CloneFieldFlags.Skip) == null)
             .ToArray();
 
         _overridableFields[type] = fields;
@@ -2254,7 +2255,7 @@ public static partial class PrefabUtility
             _sourceCache.Remove(prefabGuid);
         }
 
-        var prefab = Runtime.AssetDatabase.Get(prefabGuid) as PrefabAsset;
+        var prefab = LoadPrefab(prefabGuid);
         if (prefab.IsNotValid() || prefab.GameObjectData == null) return null;
 
         // Built exactly as an instance is, so the comparison baseline matches what instantiating
@@ -2277,6 +2278,12 @@ public static partial class PrefabUtility
     /// dead one, to buy nothing the collector was not already going to do.
     /// </summary>
     private static void InvalidateSource(Guid prefabGuid) => _sourceCache.Remove(prefabGuid);
+
+    // A revert, an undo or leaving play mode refills a prefab without an import, which is what normally drops its source.
+    internal static void OnAssetReloaded(Asset asset, ReloadReason reason)
+    {
+        if (asset is PrefabAsset) InvalidateSource(asset.AssetID);
+    }
 
     /// <summary>
     /// What an instance is compared against, or null when the prefab never loaded. Without it nothing
@@ -2478,10 +2485,7 @@ public static partial class PrefabUtility
     {
         // Serialize the source. Objects outside this tree are scene references, so they are linked
         // rather than copied into the clone (and from there into the asset).
-        var savedId = source.AssetID;
-        source.AssetID = Guid.Empty;
         var echo = Serializer.Serialize(typeof(object), source, TreeValueContext(source));
-        source.AssetID = savedId;
         if (echo == null) return null;
 
         // Preserving identifiers, so StripInstanceAdditions can pair the copy with the live tree by

@@ -39,10 +39,10 @@ public sealed class NodeValue
     public int Integer;
     public string Text = string.Empty;
     public Float3 Vector;
-    public AssetRef<AnimationClip> Clip;
-    public AssetRef<AvatarMask> Mask;
-    public AssetRef<Avatar> Avatar;
-    public AssetRef<AnimationGraph> Graph;
+    public AnimationClip? Clip;
+    public AvatarMask? Mask;
+    public Avatar? Avatar;
+    public AnimationGraph? Graph;
     public AnimationCurve? Curve;
 
     public static NodeValue FromNumber(float value) => new() { Kind = NodeValueKind.Number, Number = value };
@@ -50,10 +50,10 @@ public sealed class NodeValue
     public static NodeValue FromInteger(int value) => new() { Kind = NodeValueKind.Integer, Integer = value };
     public static NodeValue FromText(string value) => new() { Kind = NodeValueKind.Text, Text = value };
     public static NodeValue FromVector(Float3 value) => new() { Kind = NodeValueKind.Vector, Vector = value };
-    public static NodeValue FromClip(AssetRef<AnimationClip> value) => new() { Kind = NodeValueKind.Clip, Clip = value };
-    public static NodeValue FromMask(AssetRef<AvatarMask> value) => new() { Kind = NodeValueKind.Mask, Mask = value };
-    public static NodeValue FromAvatar(AssetRef<Avatar> value) => new() { Kind = NodeValueKind.Avatar, Avatar = value };
-    public static NodeValue FromGraph(AssetRef<AnimationGraph> value) => new() { Kind = NodeValueKind.Graph, Graph = value };
+    public static NodeValue FromClip(AnimationClip? value) => new() { Kind = NodeValueKind.Clip, Clip = value };
+    public static NodeValue FromMask(AvatarMask? value) => new() { Kind = NodeValueKind.Mask, Mask = value };
+    public static NodeValue FromAvatar(Avatar? value) => new() { Kind = NodeValueKind.Avatar, Avatar = value };
+    public static NodeValue FromGraph(AnimationGraph? value) => new() { Kind = NodeValueKind.Graph, Graph = value };
     public static NodeValue FromCurve(AnimationCurve value) => new() { Kind = NodeValueKind.Curve, Curve = value };
 
     public NodeValue Clone() => (NodeValue)MemberwiseClone();
@@ -150,7 +150,7 @@ public sealed class GraphStateRecord
     public string Name = string.Empty;
 
     /// <summary>A graph asset this state plays instead of its embedded nodes, when set.</summary>
-    public AssetRef<AnimationGraph> Graph;
+    public AnimationGraph? Graph;
 
     public bool IsDefault;
 
@@ -160,7 +160,7 @@ public sealed class GraphStateRecord
     public List<GraphTransitionRecord> Transitions = new();
     public Float2 EditorPosition;
 
-    public bool UsesAsset => !Graph.IsExplicitNull;
+    public bool UsesAsset => Graph is not null;
 
     public GraphStateRecord Clone()
     {

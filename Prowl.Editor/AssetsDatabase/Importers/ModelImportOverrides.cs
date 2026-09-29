@@ -51,15 +51,15 @@ public sealed class ExtractedMaterialResolver : IModelMaterialResolver
                 _remap[entry.Key] = guid;
     }
 
-    public AssetRef<Material> Resolve(string materialName)
+    public Material? Resolve(string materialName)
     {
-        if (!_remap.TryGetValue(materialName, out Guid guid)) return default;
+        if (!_remap.TryGetValue(materialName, out Guid guid)) return null;
         if (EditorAssetBackend.Instance?.GuidToPath(guid) == null)
         {
             Debug.LogWarning($"[Model] The extracted material '{materialName}' is missing, so the import rebuilt it. Extract it again to point at an asset.");
-            return default;
+            return null;
         }
-        return new AssetRef<Material>(guid);
+        return AssetDatabase.Get<Material>(guid);
     }
 }
 

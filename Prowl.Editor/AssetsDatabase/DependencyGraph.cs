@@ -6,14 +6,21 @@ namespace Prowl.Editor;
 /// <summary>
 /// Tracks forward and reverse dependencies between assets.
 /// Forward: asset -> what it depends on. Reverse: asset -> what depends on it.
+/// Locked, since a build reads it on its own thread while the editor imports, and what it hands out is a copy.
 /// </summary>
 public class DependencyGraph
 {
     private readonly Dictionary<Guid, HashSet<Guid>> _forward = new();
     private readonly Dictionary<Guid, HashSet<Guid>> _reverse = new();
+    private readonly object _lock = new();
 
     /// <summary> Sets the dependencies for the specified asset, replacing any existing dependencies. </summary>
     public void SetDependencies(Guid asset, IEnumerable<Guid> dependencies)
+    {
+        lock (_lock) SetDependenciesLocked(asset, dependencies);
+    }
+
+    private void SetDependenciesLocked(Guid asset, IEnumerable<Guid> dependencies)
     {
         // Remove old reverse links
         if (_forward.TryGetValue(asset, out var oldDeps))
@@ -46,6 +53,11 @@ public class DependencyGraph
     /// <summary> Removes the asset and its forward dependencies from the graph. Reverse links pointing to this asset are preserved. </summary>
     public void RemoveAsset(Guid asset)
     {
+        lock (_lock) RemoveAssetLocked(asset);
+    }
+
+    private void RemoveAssetLocked(Guid asset)
+    {
         if (_forward.Remove(asset, out var deps))
         {
             foreach (var dep in deps)
@@ -61,38 +73,39 @@ public class DependencyGraph
 
     /// <summary> Returns the set of assets that the given asset directly depends on. </summary>
     public IReadOnlySet<Guid> GetDependencies(Guid asset)
-        => _forward.GetValueOrDefault(asset) ?? (IReadOnlySet<Guid>)new HashSet<Guid>();
+    {
+        lock (_lock) return _forward.TryGetValue(asset, out var deps) ? new HashSet<Guid>(deps) : new HashSet<Guid>();
+    }
 
     /// <summary> Returns the set of assets that directly depend on the given asset. </summary>
     public IReadOnlySet<Guid> GetDependents(Guid asset)
-        => _reverse.GetValueOrDefault(asset) ?? (IReadOnlySet<Guid>)new HashSet<Guid>();
+    {
+        lock (_lock) return _reverse.TryGetValue(asset, out var dependents) ? new HashSet<Guid>(dependents) : new HashSet<Guid>();
+    }
 
     /// <summary>Get all assets that transitively depend on the given roots.</summary>
     public HashSet<Guid> GetTransitiveDependents(IEnumerable<Guid> roots)
     {
-        var visited = new HashSet<Guid>();
-        var queue = new Queue<Guid>(roots);
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-            if (!visited.Add(current)) continue;
-            foreach (var dep in GetDependents(current))
-                queue.Enqueue(dep);
-        }
-        return visited;
+        lock (_lock) return Transitive(roots, _reverse);
     }
 
     /// <summary>Get all assets that the given roots transitively depend on (forward walk).</summary>
     public HashSet<Guid> GetTransitiveDependencies(IEnumerable<Guid> roots)
     {
+        lock (_lock) return Transitive(roots, _forward);
+    }
+
+    private static HashSet<Guid> Transitive(IEnumerable<Guid> roots, Dictionary<Guid, HashSet<Guid>> edges)
+    {
         var visited = new HashSet<Guid>();
         var queue = new Queue<Guid>(roots);
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
             if (!visited.Add(current)) continue;
-            foreach (var dep in GetDependencies(current))
-                queue.Enqueue(dep);
+            if (edges.TryGetValue(current, out var next))
+                foreach (var guid in next)
+                    queue.Enqueue(guid);
         }
         return visited;
     }
@@ -100,7 +113,10 @@ public class DependencyGraph
     /// <summary> Removes all assets and dependencies from the graph. </summary>
     public void Clear()
     {
-        _forward.Clear();
-        _reverse.Clear();
+        lock (_lock)
+        {
+            _forward.Clear();
+            _reverse.Clear();
+        }
     }
 }

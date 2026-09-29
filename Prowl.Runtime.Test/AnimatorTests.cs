@@ -56,7 +56,7 @@ public class AnimatorTests : RuntimeTestBase
             : null;
 
         var clip = new Motion.AnimationClip(skeleton, new[] { first, last }, 1f, false, rootMotion);
-        return AnimationClip.FromSkeletal(clip, new AssetRef<Avatar>(avatar), "Slide");
+        return AnimationClip.FromSkeletal(clip, avatar, "Slide");
     }
 
     private (Scene Scene, Animator Animator, GameObject Root) Setup(float distance = 2f, Transform3D? rootMotionEnd = null)
@@ -69,8 +69,8 @@ public class AnimatorTests : RuntimeTestBase
         scene.Add(root);
 
         var animator = root.AddComponent<Animator>();
-        animator.Avatar = new AssetRef<Avatar>(avatar);
-        animator.Clips = new List<AssetRef<AnimationClip>> { new(SlideClip(skeleton, avatar, distance, rootMotionEnd)) };
+        animator.Avatar = avatar;
+        animator.Clips = new List<AnimationClip> { SlideClip(skeleton, avatar, distance, rootMotionEnd) };
 
         scene.Enable();
         return (scene, animator, root);

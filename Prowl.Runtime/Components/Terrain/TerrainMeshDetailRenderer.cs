@@ -107,7 +107,7 @@ internal class TerrainMeshDetailRenderer
             if (proto.RenderMode != DetailRenderMode.Mesh) continue;
             if (protoIdx >= data.DetailLayers.Count) continue;
 
-            var mesh = proto.Mesh.Res;
+            var mesh = proto.Mesh;
             if (mesh == null) continue;
 
             // Nothing painted, nothing to place
@@ -233,7 +233,7 @@ internal class TerrainMeshDetailRenderer
         for (int sub = 0; sub < subMeshCount; sub++)
         {
             Material material = null!;
-            if (sub < proto.Materials.Count) material = CollectionsMarshal.AsSpan(proto.Materials)[sub].Res!;
+            if (sub < proto.Materials.Count) material = proto.Materials[sub];
             if (material.IsNotValid()) material = s_defaultStandardMat!;
 
             result[sub] = new InstancedMeshRenderable(
