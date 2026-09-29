@@ -258,8 +258,8 @@ public sealed class ScrollViewBuilder
             _paper.SetElementStorage(outerHandle, "scrollY", scrollY);
             _paper.SetElementStorage(outerHandle, "scrollX", scrollX);
 
-            float animScrollX = EaseScrollAxis(outerHandle, "X", scrollX);
-            float animScrollY = EaseScrollAxis(outerHandle, "Y", scrollY);
+            float animScrollX = EaseScrollAxis(outerHandle, "easeX", scrollX);
+            float animScrollY = EaseScrollAxis(outerHandle, "easeY", scrollY);
 
             // Content area: SelfDirected so we can offset it by (-animScrollX, -animScrollY).
             // Width is Auto when horizontal scroll is enabled (content can extend), otherwise
@@ -429,30 +429,35 @@ public sealed class ScrollViewBuilder
         thumb.OnDragEnd(e => _paper.SetElementStorage(capturedHandle, "barDrag", 0f));
     }
 
-    private float EaseScrollAxis(ElementHandle outerHandle, string axis, float target)
+    // Kept in element storage as one object per axis and updated in place, so easing a scroll view
+    // neither builds keys nor boxes floats every frame.
+    private sealed class ScrollEase
+    {
+        public float Target, Start, Time, Value;
+    }
+
+    private float EaseScrollAxis(ElementHandle outerHandle, string key, float target)
     {
         if (!_smoothScroll) return target;
 
         const float duration = 0.33f;
-        float prevTarget = _paper.GetElementStorage(outerHandle, $"animTarget{axis}", target);
-        float time = _paper.GetElementStorage(outerHandle, $"animTime{axis}", duration);
-        float start = _paper.GetElementStorage(outerHandle, $"animStart{axis}", target);
-
-        if (target != prevTarget)
+        var ease = _paper.GetElementStorage<ScrollEase?>(outerHandle, key, null);
+        if (ease == null)
         {
-            start = _paper.GetElementStorage(outerHandle, $"animScroll{axis}", target);
-            time = 0f;
+            ease = new ScrollEase { Target = target, Start = target, Time = duration, Value = target };
+            _paper.SetElementStorage(outerHandle, key, ease);
         }
 
-        time += (float)_paper.DeltaTime;
+        if (target != ease.Target)
+        {
+            ease.Start = ease.Value;
+            ease.Time = 0f;
+        }
 
-        float value = time >= duration ? target : start + (target - start) * Easing.EaseOut(time / duration);
-
-        _paper.SetElementStorage(outerHandle, $"animTarget{axis}", target);
-        _paper.SetElementStorage(outerHandle, $"animStart{axis}", start);
-        _paper.SetElementStorage(outerHandle, $"animTime{axis}", time);
-        _paper.SetElementStorage(outerHandle, $"animScroll{axis}", value);
-        return value;
+        ease.Time += (float)_paper.DeltaTime;
+        ease.Value = ease.Time >= duration ? target : ease.Start + (target - ease.Start) * Easing.EaseOut(ease.Time / duration);
+        ease.Target = target;
+        return ease.Value;
     }
 
     private static float Clamp(float v, float lo, float hi) => MathF.Max(lo, MathF.Min(hi, v));
