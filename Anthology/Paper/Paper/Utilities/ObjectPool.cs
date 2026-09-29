@@ -7,7 +7,7 @@ using System.Collections.Generic;
 namespace Prowl.PaperUI.Utilities;
 
 /// <summary>
-/// Generic object pool for reusing objects
+/// Generic object pool for reusing objects. Not thread safe, give each thread its own pool.
 /// </summary>
 public class ObjectPool<T> where T : class
 {
@@ -39,15 +39,7 @@ public class ObjectPool<T> where T : class
     /// </summary>
     public T Get()
     {
-        lock (_objects)
-        {
-            if (_objects.Count > 0)
-            {
-                return _objects.Pop();
-            }
-        }
-
-        return _objectGenerator();
+        return _objects.Count > 0 ? _objects.Pop() : _objectGenerator();
     }
 
     /// <summary>
@@ -57,14 +49,9 @@ public class ObjectPool<T> where T : class
     {
         if (item == null) throw new ArgumentNullException(nameof(item));
 
-        lock (_objects)
-        {
-            // Only add to the pool if we're under the max size
-            if (_maxSize <= 0 || _objects.Count < _maxSize)
-            {
-                _objects.Push(item);
-            }
-        }
+        // Only add to the pool if we're under the max size
+        if (_maxSize <= 0 || _objects.Count < _maxSize)
+            _objects.Push(item);
     }
 
     /// <summary>
@@ -72,13 +59,7 @@ public class ObjectPool<T> where T : class
     /// </summary>
     public int Count
     {
-        get
-        {
-            lock (_objects)
-            {
-                return _objects.Count;
-            }
-        }
+        get => _objects.Count;
     }
 
     /// <summary>
@@ -86,9 +67,6 @@ public class ObjectPool<T> where T : class
     /// </summary>
     public void Clear()
     {
-        lock (_objects)
-        {
-            _objects.Clear();
-        }
+        _objects.Clear();
     }
 }

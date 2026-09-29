@@ -372,7 +372,9 @@ namespace Prowl.PaperUI
     {
         private ElementBuilder _owner;
         private bool _isActive;
-        private static readonly ObjectPool<StateDrivenStyle> _pool = new ObjectPool<StateDrivenStyle>(() => new StateDrivenStyle());
+        // One pool per thread, so taking a style never locks even with several Paper instances around.
+        [ThreadStatic] private static ObjectPool<StateDrivenStyle>? _pool;
+        private static ObjectPool<StateDrivenStyle> Pool => _pool ??= new ObjectPool<StateDrivenStyle>(() => new StateDrivenStyle());
 
         // Private constructor for the pool
         private StateDrivenStyle() : base(default)
@@ -393,7 +395,7 @@ namespace Prowl.PaperUI
         /// </summary>
         internal static StateDrivenStyle Get(ElementBuilder owner, bool isActive)
         {
-            var style = _pool.Get();
+            var style = Pool.Get();
             style.Initialize(owner, isActive);
             return style;
         }
@@ -464,7 +466,7 @@ namespace Prowl.PaperUI
         public ElementBuilder End()
         {
             var owner = _owner;
-            _pool.Return(this);
+            Pool.Return(this);
             return owner;
         }
     }
