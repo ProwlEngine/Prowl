@@ -637,7 +637,6 @@ public class Mesh : Asset, ISerializable
         {
             vertexArrayObject?.Dispose();
             vertexArrayObject = Graphics.CreateVertexArray(layout, vertexBuffer, indexBuffer);
-            Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
         }
     }
 
