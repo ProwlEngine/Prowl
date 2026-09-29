@@ -12,6 +12,7 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Thumbnails;
 using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor;
 
@@ -1583,10 +1584,10 @@ public class EditorAssetBackend : AssetBackend
         try
         {
             if (File.Exists(absolutePath))
-                File.Delete(absolutePath);
+                File.DeleteSafe(absolutePath);
             string metaPath = MetaFile.GetMetaPath(absolutePath);
             if (File.Exists(metaPath))
-                File.Delete(metaPath);
+                File.DeleteSafe(metaPath);
         }
         catch (Exception ex)
         {

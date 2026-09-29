@@ -26,6 +26,10 @@
     <OutputPath>../Build/Runtime/Release/</OutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Jitter2" Version="2.8.13" />
 
