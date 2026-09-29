@@ -337,7 +337,7 @@ public static class ProjectLauncher
                     if (exists)
                     {
                         string version = VersionOf(entry.Path);
-                        bool current = version == Project.CurrentVersion;
+                        bool current = EngineVersion.TryParse(version, out EngineVersion parsed) && parsed == Project.CurrentVersion;
                         P.Box("pl_cver" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(M.SmallRounding).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
                             .BackgroundColor(current ? Raised : Color.FromArgb(90, EditorTheme.Amber400))
                             .Text(version.Length > 0 ? version : Loc.Get("launcher.version_unknown"), mono).FontSize(10 * TS)
@@ -643,15 +643,21 @@ public static class ProjectLauncher
             return;
         }
 
-        if (!project.IsOutdated)
+        string version = project.Version.IsUnknown ? Loc.Get("launcher.version_unknown") : project.Version.ToString();
+        if (project.IsFromNewerEngine)
+        {
+            Toasts.Warning(Loc.Get("launcher.newer_title"), Loc.Get("launcher.newer_body", new { name = project.Name, version, current = Project.CurrentVersion.ToString() }));
+            return;
+        }
+
+        if (!project.NeedsMigration)
         {
             Activate(project);
             return;
         }
 
-        string version = project.Version.Length > 0 ? project.Version : Loc.Get("launcher.version_unknown");
         Origami.Confirm(Loc.Get("launcher.migrate_title"),
-            Loc.Get("launcher.migrate_body", new { name = project.Name, version, current = Project.CurrentVersion }),
+            Loc.Get("launcher.migrate_body", new { name = project.Name, version, current = Project.CurrentVersion.ToString() }),
             () =>
             {
                 try

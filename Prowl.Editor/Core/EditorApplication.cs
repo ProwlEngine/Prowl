@@ -109,7 +109,7 @@ public class EditorApplication : Game
             try
             {
                 var project = Project.Open(Program.StartupProjectPath);
-                outdatedStartupProject = project.IsOutdated;
+                outdatedStartupProject = project.NeedsMigration || project.IsFromNewerEngine;
                 if (!outdatedStartupProject)
                 {
                     project.SetActive();
