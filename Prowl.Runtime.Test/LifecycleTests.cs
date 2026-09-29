@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Test;
 /// <summary>
 /// A test component that tracks all lifecycle events for verification in unit tests.
 /// </summary>
-public class TestLifecycleComponent : MonoBehaviour
+public class TestLifecycleComponent : Component
 {
     public List<string> Events { get; } = [];
 
@@ -49,13 +49,13 @@ public class TestLifecycleComponent : MonoBehaviour
 }
 
 /// <summary>
-/// Comprehensive tests for MonoBehaviour lifecycle methods.
+/// Comprehensive tests for Component lifecycle methods.
 /// Ported from the LifecycleTest sample project.
 /// Scene/GameObject creation, play-mode setup and teardown come from <see cref="RuntimeTestBase"/>.
 /// </summary>
 public class LifecycleTests : RuntimeTestBase
 {
-    private sealed class StartOrderComponent : MonoBehaviour
+    private sealed class StartOrderComponent : Component
     {
         public readonly List<string> Events = [];
         public override void Start() => Events.Add("Start");
@@ -414,14 +414,14 @@ public class LifecycleTests : RuntimeTestBase
 
     // ---- Reentrancy from lifecycle callbacks ----
 
-    private sealed class AddsComponentOnEnable : MonoBehaviour
+    private sealed class AddsComponentOnEnable : Component
     {
         public override void OnEnable() => GameObject.AddComponent<PlainComponent>();
     }
 
-    private sealed class RemovesComponentOnDisable : MonoBehaviour
+    private sealed class RemovesComponentOnDisable : Component
     {
-        public MonoBehaviour? Victim;
+        public Component? Victim;
         public override void OnDisable() => GameObject.RemoveComponent(Victim!);
     }
 

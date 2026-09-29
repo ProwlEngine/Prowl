@@ -17,7 +17,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Sprite Renderer")]
 [ComponentIcon("")] // Image
-public class SpriteRenderer : MonoBehaviour
+public class SpriteRenderer : Component
 {
     /// <summary>Sorting-order spacing along Z (world units) so higher orders sort in front for the transparent queue.</summary>
     private const float SortBias = 0.0001f;

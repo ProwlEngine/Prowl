@@ -37,7 +37,7 @@ public class PluginTests : EditorTestHarness
             using Prowl.Runtime;
             using Acme.Greeter;
 
-            public class PluginUser : MonoBehaviour
+            public class PluginUser : Component
             {
                 public override void Start() => System.Console.WriteLine(Greeter.Message);
             }

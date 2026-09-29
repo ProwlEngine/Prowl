@@ -17,7 +17,7 @@ public sealed record MemoryCopy(EchoObject Data, IReadOnlyList<Asset> LinkedAsse
 /// <summary>
 /// Echo external-reference resolver for scene objects. The objects passed to the constructor - the
 /// copy selection, or the tree being written to an asset - serialize by value; every other
-/// GameObject / MonoBehaviour / Transform reference is linked by its persistence id and resolved back
+/// GameObject / Component / Transform reference is linked by its persistence id and resolved back
 /// against the current scene, so the copy keeps its references to the rest of the scene instead of
 /// deep-cloning them into orphans. References that can't be resolved (different scene, deleted
 /// object) become null.
@@ -103,7 +103,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         {
             objects.Add(go);
             objects.Add(go.Transform);
-            foreach (var component in go.GetComponents<MonoBehaviour>())
+            foreach (var component in go.GetComponents<Component>())
                 objects.Add(component);
             foreach (var child in go.Children)
                 Collect(child);
@@ -135,7 +135,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         object? key = value switch
         {
             GameObject go => go.Identifier,
-            MonoBehaviour mb => mb.Identifier,
+            Component mb => mb.Identifier,
             // Transform has no id of its own; anchor it to its GameObject. A detached Transform can't
             // be anchored - key it with the never-assigned Guid.Empty so it's still linked (not
             // deep-copied into an orphan) and simply resolves to null on paste.
@@ -152,7 +152,7 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         Scene? target = ResolveIn.IsValid() ? ResolveIn : Scene.Current;
         if (key is not Guid id || target is not { } scene) return null;
 
-        // GameObject and MonoBehaviour share the FindObjectByIdentifier lookup; a Transform key is
+        // GameObject and Component share the FindObjectByIdentifier lookup; a Transform key is
         // its GameObject's id, so resolve the GameObject and hand back its Transform.
         if (typeof(Transform).IsAssignableFrom(targetType))
         {

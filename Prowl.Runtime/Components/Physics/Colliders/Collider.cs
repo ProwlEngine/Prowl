@@ -12,7 +12,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 [ComponentIcon("\uf1b2")] // Cube subclasses override with their specific shape
-public abstract class Collider : MonoBehaviour
+public abstract class Collider : Component
 {
     [SerializeField] private Float3 center;
     [SerializeField] private Float3 rotation;

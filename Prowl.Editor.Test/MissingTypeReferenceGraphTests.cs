@@ -12,14 +12,14 @@ namespace Prowl.Editor.Test;
 
 // A component that references another component and a GameObject. When this is the FIRST thing traversed
 // during serialization, Echo emits the FULL definitions of its targets inline in this component's data.
-public sealed class MissRefComp : MonoBehaviour
+public sealed class MissRefComp : Component
 {
-    public MonoBehaviour? Target;
+    public Component? Target;
     public GameObject? TargetGO;
 }
 
 // A component that holds a GUID-based AssetRef (like MeshRenderer.Mesh).
-public sealed class AssetHolderComp : MonoBehaviour
+public sealed class AssetHolderComp : Component
 {
     public AssetRef<Texture2D> Tex;
 }

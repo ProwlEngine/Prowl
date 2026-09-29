@@ -150,7 +150,7 @@ public static partial class PrefabUtility
 
         // Each component's identifier becomes the identity the asset holds it under, and its record of
         // where it came from goes: this tree is becoming the prefab.
-        foreach (var component in root.GetComponents<MonoBehaviour>())
+        foreach (var component in root.GetComponents<Component>())
         {
             component.Identifier = component.SourceIdentifier != Guid.Empty
                 ? component.SourceIdentifier
@@ -621,7 +621,7 @@ public static partial class PrefabUtility
         // Copy source value to instance
         var sourceValue = GetMemberValue(sourceTarget, sourceFieldPath);
         SetMemberValue(instanceTarget, instanceFieldPath, CopyFromSource(sourceValue, source, root!));
-        if (instanceTarget is MonoBehaviour reverted)
+        if (instanceTarget is Component reverted)
         {
             reverted.HierarchyStateChanged();
             reverted.OnValidate();
@@ -686,12 +686,12 @@ public static partial class PrefabUtility
         map.Link(source, instance);
         map.Link(source.Transform, instance.Transform);
 
-        foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
+        foreach (Component sourceComponent in source.GetComponents<Component>())
         {
             Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
             if (sourceId == Guid.Empty) continue;
 
-            MonoBehaviour? match = instance.GetComponents<MonoBehaviour>()
+            Component? match = instance.GetComponents<Component>()
                 .FirstOrDefault(c => instance.GetComponentSourceIdentifier(c) == sourceId);
             if (match.IsValid()) map.Link(sourceComponent, match!);
         }
@@ -726,7 +726,7 @@ public static partial class PrefabUtility
     /// Not <see cref="InstanceValueContext"/>, which lists nothing as copied and would write the
     /// component itself out as a link to itself - an echo that restores nothing at all.
     /// </summary>
-    private static SerializationContext ComponentValueContext(MonoBehaviour component)
+    private static SerializationContext ComponentValueContext(Component component)
         => new() { ExternalReferences = new SceneReferenceResolver(component) };
 
     /// <summary>
@@ -755,7 +755,7 @@ public static partial class PrefabUtility
             .Select(o => o switch
             {
                 GameObject go => go.Name,
-                MonoBehaviour mb => $"{mb.GameObject.Name} > {mb.GetType().Name}",
+                Component mb => $"{mb.GameObject.Name} > {mb.GetType().Name}",
                 Transform t => t.GameObject.IsValid() ? $"{t.GameObject.Name} > Transform" : "Transform",
                 _ => o.GetType().Name
             })
@@ -827,7 +827,7 @@ public static partial class PrefabUtility
 
         void Walk(GameObject owner)
         {
-            foreach (MonoBehaviour component in owner.GetComponents<MonoBehaviour>())
+            foreach (Component component in owner.GetComponents<Component>())
             {
                 if (owner.GetComponentSourceIdentifier(component) != Guid.Empty) continue;
 
@@ -863,7 +863,7 @@ public static partial class PrefabUtility
 
         static bool Any(GameObject owner)
         {
-            foreach (MonoBehaviour component in owner.GetComponents<MonoBehaviour>())
+            foreach (Component component in owner.GetComponents<Component>())
                 if (owner.GetComponentSourceIdentifier(component) == Guid.Empty) return true;
 
             foreach (GameObject child in owner.Children)
@@ -906,7 +906,7 @@ public static partial class PrefabUtility
                 ? root
                 : root.FindChildByIdentifier(addition.OwnerIdentifier);
 
-            MonoBehaviour? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
+            Component? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
             if (component.IsNotValid()) return;
 
             EchoObject? state = Serializer.Serialize(component!.GetType(), component, ComponentValueContext(component!));
@@ -922,14 +922,14 @@ public static partial class PrefabUtility
                     GameObject? live = Undo.FindGO(ownerId);
                     if (live.IsNotValid() || state == null) return;
 
-                    if (Serializer.Deserialize(state, componentType, InstanceValueContext()) is not MonoBehaviour restored) return;
+                    if (Serializer.Deserialize(state, componentType, InstanceValueContext()) is not Component restored) return;
                     restored.Identifier = componentId;
                     live!.AddComponent(restored);
                 },
                 redo: () =>
                 {
                     GameObject? live = Undo.FindGO(ownerId);
-                    MonoBehaviour? target = live.IsValid() ? live!.GetComponentByIdentifier(componentId) : null;
+                    Component? target = live.IsValid() ? live!.GetComponentByIdentifier(componentId) : null;
                     if (target.IsValid()) live!.RemoveComponent(target!);
                 });
         }
@@ -1049,13 +1049,13 @@ public static partial class PrefabUtility
             ? root
             : root.FindChildByIdentifier(addition.OwnerIdentifier);
 
-        MonoBehaviour? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
+        Component? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
         if (component.IsNotValid()) return false;
 
         GameObject? sourceOwner = FindBySourceIdentifier(source, owner!.SourceIdentifier, source.PrefabAssetId);
         if (sourceOwner == null) return false;
 
-        MonoBehaviour copied = sourceOwner.AddComponent(component!.GetType());
+        Component copied = sourceOwner.AddComponent(component!.GetType());
         EchoObject? state = Serializer.Serialize(component!.GetType(), component, ComponentValueContext(component!));
         if (state != null)
             Serializer.DeserializeInto(state, copied, InstanceValueContext());
@@ -1078,12 +1078,12 @@ public static partial class PrefabUtility
             ? root
             : root.FindChildByIdentifier(addition.OwnerIdentifier);
 
-        MonoBehaviour? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
+        Component? component = owner.IsValid() ? owner!.GetComponentByIdentifier(addition.Identifier) : null;
         if (component.IsValid()) component!.SourceIdentifier = Guid.Empty;
     }
 
     /// <summary>The override paths on one component of an instance, as they are stored on its root.</summary>
-    private static List<string> PathsFor(GameObject instanceGO, MonoBehaviour component, out GameObject root)
+    private static List<string> PathsFor(GameObject instanceGO, Component component, out GameObject root)
     {
         GameObject? prefabRoot = GetPrefabInstanceRoot(instanceGO);
         root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
@@ -1096,7 +1096,7 @@ public static partial class PrefabUtility
     }
 
     /// <summary>Whether this component of an instance has anything overridden on it.</summary>
-    public static bool HasComponentOverrides(GameObject instanceGO, MonoBehaviour component)
+    public static bool HasComponentOverrides(GameObject instanceGO, Component component)
         => instanceGO.IsPrefabInstance && PathsFor(instanceGO, component, out _).Count > 0;
 
     /// <summary>
@@ -1104,7 +1104,7 @@ public static partial class PrefabUtility
     /// already be reverted from the prefab bar; this is the same thing at the scale the user is
     /// usually working at, which is the component they are looking at.
     /// </summary>
-    public static void RevertComponentOverrides(GameObject instanceGO, MonoBehaviour component)
+    public static void RevertComponentOverrides(GameObject instanceGO, Component component)
     {
         if (!instanceGO.IsPrefabInstance) return;
         if (!GuardNotPlaying("revert a component")) return;
@@ -1139,7 +1139,7 @@ public static partial class PrefabUtility
 
             live!.PrefabOverrides = overrides.ToList();
 
-            MonoBehaviour? target = live.GetComponentInChildrenByIdentifier(componentId);
+            Component? target = live.GetComponentInChildrenByIdentifier(componentId);
             if (target.IsNotValid() || state == null) return;
 
             Serializer.DeserializeInto(state, target!, InstanceValueContext());
@@ -1149,7 +1149,7 @@ public static partial class PrefabUtility
     }
 
     /// <summary>Push everything overridden on one component into the prefab, as one step.</summary>
-    public static void ApplyComponentOverrides(GameObject instanceGO, MonoBehaviour component)
+    public static void ApplyComponentOverrides(GameObject instanceGO, Component component)
     {
         if (!instanceGO.IsPrefabInstance) return;
         if (!GuardNotPlaying("apply a component")) return;
@@ -1166,7 +1166,7 @@ public static partial class PrefabUtility
     /// Put a component back to the values a new one of its type would have. What Reset means where
     /// there is no prefab to answer to; on an instance <see cref="RevertComponentOverrides"/> does.
     /// </summary>
-    public static void ResetComponentToDefaults(GameObject go, MonoBehaviour component)
+    public static void ResetComponentToDefaults(GameObject go, Component component)
     {
         if (Application.IsPlaying)
         {
@@ -1177,7 +1177,7 @@ public static partial class PrefabUtility
         object? fresh = Activator.CreateInstance(component.GetType(), nonPublic: true);
         if (fresh == null) return;
 
-        EchoObject? defaults = Serializer.Serialize(component.GetType(), fresh, ComponentValueContext((MonoBehaviour)fresh));
+        EchoObject? defaults = Serializer.Serialize(component.GetType(), fresh, ComponentValueContext((Component)fresh));
         EchoObject? before = Serializer.Serialize(component.GetType(), component, ComponentValueContext(component));
         if (defaults == null || before == null) return;
 
@@ -1195,7 +1195,7 @@ public static partial class PrefabUtility
         void Restore(EchoObject state)
         {
             GameObject? live = Undo.FindGO(goId);
-            MonoBehaviour? target = live.IsValid() ? live!.GetComponentByIdentifier(componentId) : null;
+            Component? target = live.IsValid() ? live!.GetComponentByIdentifier(componentId) : null;
             if (target.IsNotValid()) return;
 
             // Through the component's own Deserialize, and keeping its identity: it is the same
@@ -1269,7 +1269,7 @@ public static partial class PrefabUtility
 
         switch (target)
         {
-            case MonoBehaviour component:
+            case Component component:
                 described.ObjectName = component.GameObject.IsValid() ? component.GameObject.Name : "";
                 described.ComponentName = component.GetType().Name;
                 described.ComponentIdentifier = component.Identifier;
@@ -1729,12 +1729,12 @@ public static partial class PrefabUtility
 
         // Every prefab component gets a counterpart, found or made. An unpaired one falls through to the
         // copy, whose fallback is "whatever sits at the same index", and that eats instance additions.
-        foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
+        foreach (Component sourceComponent in source.GetComponents<Component>())
         {
             Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
             if (sourceId == Guid.Empty) continue;
 
-            MonoBehaviour? match = instance.GetComponents<MonoBehaviour>()
+            Component? match = instance.GetComponents<Component>()
                 .FirstOrDefault(c => instance.GetComponentSourceIdentifier(c) == sourceId);
 
             // Same identity, different type: the prefab replaced what sits there, so the old one goes
@@ -1745,7 +1745,7 @@ public static partial class PrefabUtility
                 match = null;
             }
 
-            MonoBehaviour? paired = match.IsValid() ? match! : instance.AttachBareComponent(sourceComponent.GetType());
+            Component? paired = match.IsValid() ? match! : instance.AttachBareComponent(sourceComponent.GetType());
             if (paired is null) continue;
 
             map.Fill(sourceComponent, paired);
@@ -1778,11 +1778,11 @@ public static partial class PrefabUtility
             return;
 
         PrefabLink link = instance.EnsurePrefabLink();
-        var sourceComponentIds = source.GetComponents<MonoBehaviour>()
+        var sourceComponentIds = source.GetComponents<Component>()
             .Select(c => source.GetComponentSourceIdentifier(c))
             .ToHashSet();
 
-        foreach (MonoBehaviour component in instance.GetComponents<MonoBehaviour>().ToList())
+        foreach (Component component in instance.GetComponents<Component>().ToList())
         {
             if (component.IsNotValid()) continue;
 
@@ -1829,11 +1829,11 @@ public static partial class PrefabUtility
         PrefabLink link = instance.EnsurePrefabLink();
         link.AssetId = source.PrefabAssetId != Guid.Empty ? source.PrefabAssetId : link.AssetId;
 
-        foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
+        foreach (Component sourceComponent in source.GetComponents<Component>())
         {
             Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
             if (sourceId == Guid.Empty) continue;
-            if (!map.TryGetTarget(sourceComponent, out object? paired) || paired is not MonoBehaviour component)
+            if (!map.TryGetTarget(sourceComponent, out object? paired) || paired is not Component component)
                 continue;
 
             component.OnValidate();
@@ -1956,7 +1956,7 @@ public static partial class PrefabUtility
     // children are added, removed or reordered - which the old index-based paths could not.
 
     /// <summary>The override path for a field on a component of a prefab instance.</summary>
-    public static string GetOverridePath(GameObject instanceGO, MonoBehaviour component, string fieldPath)
+    public static string GetOverridePath(GameObject instanceGO, Component component, string fieldPath)
         => $"{instanceGO.SourceIdentifier}{PathSeparator}{instanceGO.GetComponentSourceIdentifier(component)}{PathSeparator}{fieldPath}";
 
     /// <summary>The override path for a field on the GameObject itself.</summary>
@@ -1974,7 +1974,7 @@ public static partial class PrefabUtility
     /// Compare a component's current state against its prefab source and update overrides.
     /// Uses index-based paths. Called after each component is drawn in the inspector.
     /// </summary>
-    public static void RecordComponentOverrides(GameObject instanceGO, MonoBehaviour instanceComp)
+    public static void RecordComponentOverrides(GameObject instanceGO, Component instanceComp)
     {
         if (!instanceGO.IsPrefabInstance) return;
 
@@ -1985,7 +1985,7 @@ public static partial class PrefabUtility
         // reordering components on either side does not change which one it is compared against.
         string path = GetOverridePath(instanceGO, instanceComp, "");
         ParseOverridePath(source, path, out var sourceTarget, out _);
-        if (sourceTarget is not MonoBehaviour sourceComp) return;
+        if (sourceTarget is not Component sourceComp) return;
 
         if (sourceComp.GetType() != instanceComp.GetType())
         {
@@ -2027,7 +2027,7 @@ public static partial class PrefabUtility
         static void Reconcile(GameObject go, Guid boundaryPrefabId)
         {
             RecordGameObjectOverrides(go);
-            foreach (var component in go.GetComponents<MonoBehaviour>())
+            foreach (var component in go.GetComponents<Component>())
                 RecordComponentOverrides(go, component);
 
             foreach (var child in go.Children)
@@ -2070,7 +2070,7 @@ public static partial class PrefabUtility
     {
         switch (target)
         {
-            case MonoBehaviour component when component.GameObject.IsValid():
+            case Component component when component.GameObject.IsValid():
                 RecordComponentOverrides(component.GameObject, component);
                 break;
             case GameObject go:
@@ -2326,8 +2326,8 @@ public static partial class PrefabUtility
         link.SourceIdentifier = written.Identifier;
         link.Overrides.Clear();
 
-        var components = go.GetComponents<MonoBehaviour>().ToList();
-        var writtenComponents = written.GetComponents<MonoBehaviour>().ToList();
+        var components = go.GetComponents<Component>().ToList();
+        var writtenComponents = written.GetComponents<Component>().ToList();
         for (int i = 0; i < Math.Min(components.Count, writtenComponents.Count); i++)
             components[i].SourceIdentifier = writtenComponents[i].Identifier;
 
@@ -2344,7 +2344,7 @@ public static partial class PrefabUtility
     private readonly record struct PrefabState(
         GameObject Go,
         PrefabLink? Link,
-        (MonoBehaviour Component, Guid SourceIdentifier)[] Components);
+        (Component Component, Guid SourceIdentifier)[] Components);
 
     private static List<PrefabState> CapturePrefabState(GameObject root, Guid boundaryId)
     {
@@ -2358,7 +2358,7 @@ public static partial class PrefabUtility
 
             // The components too: each records where it came from on itself, and a link without those
             // addresses nothing.
-            var components = go.GetComponents<MonoBehaviour>()
+            var components = go.GetComponents<Component>()
                 .Select(c => (c, c.SourceIdentifier))
                 .ToArray();
 
@@ -2383,7 +2383,7 @@ public static partial class PrefabUtility
             else
                 state.Go.EnsurePrefabLink().CopyFrom(state.Link);
 
-            foreach ((MonoBehaviour component, Guid sourceIdentifier) in state.Components)
+            foreach ((Component component, Guid sourceIdentifier) in state.Components)
                 if (component.IsValid())
                     component.SourceIdentifier = sourceIdentifier;
         }
@@ -2447,11 +2447,11 @@ public static partial class PrefabUtility
         if (source == null) return;
 
         // By identifier rather than position, so a component that failed to load cannot shift the rest.
-        var sourceComponents = source.GetComponents<MonoBehaviour>().ToList();
+        var sourceComponents = source.GetComponents<Component>().ToList();
 
-        foreach (MonoBehaviour copyComponent in copy.GetComponents<MonoBehaviour>().ToList())
+        foreach (Component copyComponent in copy.GetComponents<Component>().ToList())
         {
-            MonoBehaviour? original = instance.GetComponentByIdentifier(copyComponent.Identifier);
+            Component? original = instance.GetComponentByIdentifier(copyComponent.Identifier);
             Guid sourceId = original.IsValid() ? instance.GetComponentSourceIdentifier(original!) : Guid.Empty;
 
             bool provided = sourceId != Guid.Empty

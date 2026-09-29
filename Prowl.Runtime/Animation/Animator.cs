@@ -19,7 +19,7 @@ namespace Prowl.Runtime;
 /// <summary>Plays clips with cross fades, or an animation graph, on a rig. Runs between Update and LateUpdate.</summary>
 [AddComponentMenu("Animation/Animator")]
 [ComponentIcon("")] // Film
-public class Animator : MonoBehaviour
+public class Animator : Component
 {
     /// <summary>The rig the clips play on. Usually the avatar the model was imported with.</summary>
     public Avatar? Avatar;

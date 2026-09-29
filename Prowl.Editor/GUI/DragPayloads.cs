@@ -63,9 +63,9 @@ public class GameObjectDragPayload : EditorDragPayload
 public class ComponentDragPayload : EditorDragPayload
 {
     public GameObject GameObject { get; }
-    public MonoBehaviour Component { get; }
+    public Component Component { get; }
 
-    public ComponentDragPayload(GameObject go, MonoBehaviour comp)
+    public ComponentDragPayload(GameObject go, Component comp)
         : base(comp.GetType().Name, EditorIcons.PuzzlePiece)
     {
         GameObject = go;

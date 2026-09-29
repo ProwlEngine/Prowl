@@ -31,7 +31,7 @@ namespace Prowl.Runtime;
 [AddComponentMenu("Navigation/NavMesh Obstacle")]
 [ComponentIcon("\ue562")] // road barrier
 [ExecuteAlways]
-public class NavMeshObstacle : MonoBehaviour
+public class NavMeshObstacle : Component
 {
     [Tooltip("Obstacle shape. Both stand upright: a cylinder has no tilt, and a box is oriented by yaw only.")]
     [SerializeField] private NavMeshObstacleShape shape = NavMeshObstacleShape.Box;

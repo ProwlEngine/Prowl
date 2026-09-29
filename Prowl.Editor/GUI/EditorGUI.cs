@@ -467,7 +467,7 @@ public static class EditorGUI
         if (DragDrop.Payload is AssetDragPayload adp && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType))
             return true;
         if (DragDrop.Payload is GameObjectDragPayload &&
-            (typeof(GameObject).IsAssignableFrom(fieldType) || typeof(MonoBehaviour).IsAssignableFrom(fieldType)))
+            (typeof(GameObject).IsAssignableFrom(fieldType) || typeof(Component).IsAssignableFrom(fieldType)))
             return true;
         if (DragDrop.Payload is ComponentDragPayload cdp && fieldType.IsAssignableFrom(cdp.Component.GetType()))
             return true;

@@ -101,7 +101,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
         // The stored Target is the exact object the call runs on (a GameObject or one of its
         // Components); the picker edits the owning GameObject, which we recover from either.
         GameObject? ownerGo = call.Target as GameObject;
-        MonoBehaviour? ownerComp = call.Target as MonoBehaviour;
+        Component? ownerComp = call.Target as Component;
         GameObject? owner = ownerGo.IsValid() ? ownerGo : (ownerComp.IsValid() ? ownerComp.GameObject : null);
 
         using (paper.Column(id).Height(UnitValue.Auto)
@@ -189,7 +189,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
     {
         var list = new List<MemberOption>();
         AddMembers(list, go, "GameObject", go);
-        foreach (MonoBehaviour comp in go.GetComponents<MonoBehaviour>())
+        foreach (Component comp in go.GetComponents<Component>())
         {
             if (comp == null) continue;
             AddMembers(list, comp, comp.GetType().Name, comp);

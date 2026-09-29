@@ -8,7 +8,7 @@ namespace Prowl.Runtime.Test;
 
 /// <summary>
 /// Base class for tests that spin up a live instance of the runtime (scenes, GameObjects,
-/// components and physics) to verify behaviour like MonoBehaviour lifecycles and the simulation.
+/// components and physics) to verify behaviour like Component lifecycles and the simulation.
 ///
 /// It puts the runtime into "play mode" (<see cref="Application.IsPlaying"/>) so gameplay
 /// callbacks (OnEnable/Start/Update/FixedUpdate/...) actually fire, gives a deterministic

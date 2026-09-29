@@ -20,13 +20,13 @@ public readonly struct Collision
     /// <summary>The collider that was hit. Null for terrain, which has no collider component per contact.</summary>
     public readonly Collider Collider;
 
-    /// <summary>Contact point in world space. Zero on <see cref="MonoBehaviour.OnCollisionEnd"/>.</summary>
+    /// <summary>Contact point in world space. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
     public readonly Float3 Point;
 
-    /// <summary>Contact normal in world space. Zero on <see cref="MonoBehaviour.OnCollisionEnd"/>.</summary>
+    /// <summary>Contact normal in world space. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
     public readonly Float3 Normal;
 
-    /// <summary>Impulse the solver applied at this contact. Zero on <see cref="MonoBehaviour.OnCollisionEnd"/>.</summary>
+    /// <summary>Impulse the solver applied at this contact. Zero on <see cref="Component.OnCollisionEnd"/>.</summary>
     public readonly float ImpulseMagnitude;
 
     /// <summary>The GameObject that was hit, or null when nothing identifiable was involved.</summary>

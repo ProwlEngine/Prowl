@@ -25,7 +25,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Agent")]
 [ComponentIcon("\uf554")] // Person Walking
-public class NavMeshAgent : MonoBehaviour
+public class NavMeshAgent : Component
 {
     [Header("Agent")]
     [Tooltip("The agent type whose navmesh this agent walks on.")]

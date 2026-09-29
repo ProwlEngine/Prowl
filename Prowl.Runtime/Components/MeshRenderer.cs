@@ -16,7 +16,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Mesh Renderer")]
 [ComponentIcon("\uf1b2")] // Cube
-public class MeshRenderer : MonoBehaviour
+public class MeshRenderer : Component
 {
     public Mesh? Mesh;
 

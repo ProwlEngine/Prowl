@@ -425,8 +425,8 @@ public class PhysicsTests : RuntimeTestBase
     // Trigger volumes
     // ---------------------------------------------------------------------
 
-    // Records the trigger callbacks now delivered as MonoBehaviour overrides. Lives on the trigger's GameObject.
-    private sealed class TriggerRecorder : MonoBehaviour
+    // Records the trigger callbacks now delivered as Component overrides. Lives on the trigger's GameObject.
+    private sealed class TriggerRecorder : Component
     {
         public readonly List<Rigidbody3D> Entered = new();
         public readonly List<Rigidbody3D> Exited = new();
@@ -626,7 +626,7 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     /// <summary>Records the collisions it is told about, so the payload can be asserted.</summary>
-    private sealed class CollisionRecorder : MonoBehaviour
+    private sealed class CollisionRecorder : Component
     {
         public readonly List<Collision> Begins = [];
         public readonly List<Collision> Ends = [];

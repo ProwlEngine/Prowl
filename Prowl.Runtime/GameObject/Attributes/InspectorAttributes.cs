@@ -87,7 +87,7 @@ public class TextAreaAttribute : Attribute
 }
 
 /// <summary>
-/// Organizes a MonoBehaviour in the Add Component menu.
+/// Organizes a Component in the Add Component menu.
 /// Path uses '/' for categories, e.g. "Physics/Rigidbody".
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]

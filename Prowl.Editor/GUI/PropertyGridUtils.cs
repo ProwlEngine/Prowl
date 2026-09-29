@@ -27,7 +27,7 @@ public static class PropertyGridUtils
         if (instance == null)
             return $"None ({fieldType.Name})";
 
-        if (instance is MonoBehaviour mb && mb.GameObject != null)
+        if (instance is Component mb && mb.GameObject != null)
             return $"{mb.GameObject.Name} ({instance.GetType().Name})";
 
         if (instance is Asset { IsMissing: true } missing)

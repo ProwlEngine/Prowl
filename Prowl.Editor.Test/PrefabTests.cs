@@ -16,35 +16,35 @@ namespace Prowl.Editor.Test;
 
 #region Test components
 
-public sealed class OverrideComp : MonoBehaviour
+public sealed class OverrideComp : Component
 {
     public int A;
     public int B;
 }
 
 /// <summary>Holds references, for checking they survive and re-point correctly.</summary>
-public sealed class LinkComp : MonoBehaviour
+public sealed class LinkComp : Component
 {
     public GameObject? Target;
-    public MonoBehaviour? Component;
+    public Component? Component;
 }
 
-public sealed class RefHolderComp : MonoBehaviour
+public sealed class RefHolderComp : Component
 {
     public GameObject? Target;
 }
 
-public sealed class RefComp : MonoBehaviour
+public sealed class RefComp : Component
 {
-    public MonoBehaviour? Other;
+    public Component? Other;
 }
 
-public sealed class VecComp : MonoBehaviour
+public sealed class VecComp : Component
 {
     public Float3 V;
 }
 
-public sealed class ListComp : MonoBehaviour
+public sealed class ListComp : Component
 {
     public List<int> Values = [];
 }
@@ -58,13 +58,13 @@ public sealed class LooseEquality
 }
 
 /// <summary>Holds something whose own equality cannot be trusted to mean equal content.</summary>
-public sealed class LooseComp : MonoBehaviour
+public sealed class LooseComp : Component
 {
     public LooseEquality Held = new();
 }
 
 /// <summary>State derived in OnValidate, for checking a refresh re-derives it.</summary>
-public sealed class DerivedStateComp : MonoBehaviour
+public sealed class DerivedStateComp : Component
 {
     public int Source;
     [SerializeIgnore] public int Derived;
@@ -1589,8 +1589,8 @@ public class PrefabTests : EditorTestHarness
 
         Assert.NotNull(instance); // the whole prefab does NOT break
         Assert.Equal(7, instance!.GetComponent<OverrideComp>()!.A); // valid component intact
-        var comps = instance.GetComponents<MonoBehaviour>().ToList();
-        Assert.Contains(comps, c => c is MissingMonobehaviour); // missing one becomes a placeholder
+        var comps = instance.GetComponents<Component>().ToList();
+        Assert.Contains(comps, c => c is MissingComponent); // missing one becomes a placeholder
         Assert.DoesNotContain(comps, c => c is VecComp);
     }
 
@@ -1609,7 +1609,7 @@ public class PrefabTests : EditorTestHarness
 
         Assert.NotNull(instance);
         Assert.Equal("Root", instance!.Name);
-        Assert.Contains(instance.GetComponents<MonoBehaviour>(), c => c is MissingMonobehaviour);
+        Assert.Contains(instance.GetComponents<Component>(), c => c is MissingComponent);
     }
 
     // ---------------------------------------------------------------------
@@ -1664,7 +1664,7 @@ public class PrefabTests : EditorTestHarness
         var instance = Instantiate(CreatePrefabAsset(new GameObject("Empty"), "Empty.prefab"));
 
         Assert.Equal("Empty", instance.Name);
-        Assert.Empty(instance.GetComponents<MonoBehaviour>());
+        Assert.Empty(instance.GetComponents<Component>());
         Assert.Empty(instance.Children);
     }
 
@@ -2530,13 +2530,13 @@ public class PrefabTests : EditorTestHarness
         Guid g = Assets.ImportFile("Shift.prefab");
 
         var instance = GameObject.InstantiateDetached(GetPrefab(g)!)!;
-        Assert.Equal(2, instance.GetComponents<MonoBehaviour>().Count());
+        Assert.Equal(2, instance.GetComponents<Component>().Count());
 
         // Each component's source identity is its own, not the one belonging to the entry before it.
         var written = EchoObject.ReadFromString(File.ReadAllText(AssetAbsolutePath("Shift.prefab")))
             .Get("Components")!.List;
 
-        foreach (MonoBehaviour live in instance.GetComponents<MonoBehaviour>())
+        foreach (Component live in instance.GetComponents<Component>())
         {
             EchoObject entry = written.First(e => e.Get("$type")?.StringValue?.Contains(live.GetType().Name) == true);
             Assert.Equal(Guid.Parse(entry.Get("_identifier")!.StringValue),
@@ -3358,7 +3358,7 @@ public class PrefabTests : EditorTestHarness
         OverrideComp component = added.GetComponent<OverrideComp>()!;
         Assert.Equal(7, component.A);
         Assert.NotEqual(Guid.Empty, added.GetComponentSourceIdentifier(component));
-        Assert.Single(added.GetComponents<MonoBehaviour>().Where(c => c.SourceIdentifier != Guid.Empty));
+        Assert.Single(added.GetComponents<Component>().Where(c => c.SourceIdentifier != Guid.Empty));
     }
 
     [Fact]
@@ -3377,7 +3377,7 @@ public class PrefabTests : EditorTestHarness
         PrefabUtility.RefreshAllInstances(guid);
 
         Assert.Null(instance.GetComponent<OverrideComp>());
-        Assert.Empty(instance.GetComponents<MonoBehaviour>().Where(c => c.SourceIdentifier != Guid.Empty));
+        Assert.Empty(instance.GetComponents<Component>().Where(c => c.SourceIdentifier != Guid.Empty));
         Assert.Single(instance.Children);
     }
 
@@ -3409,12 +3409,12 @@ public class PrefabTests : EditorTestHarness
         PrefabUtility.ReconcileInstance(instance);
 
         PrefabUtility.RefreshAllInstances(guid);
-        int tracked = instance.GetComponents<MonoBehaviour>().Count(c => c.SourceIdentifier != Guid.Empty);
+        int tracked = instance.GetComponents<Component>().Count(c => c.SourceIdentifier != Guid.Empty);
 
         PrefabUtility.RefreshAllInstances(guid);
 
         Assert.Equal(12, instance.GetComponent<OverrideComp>()!.A);
-        Assert.Equal(tracked, instance.GetComponents<MonoBehaviour>().Count(c => c.SourceIdentifier != Guid.Empty));
+        Assert.Equal(tracked, instance.GetComponents<Component>().Count(c => c.SourceIdentifier != Guid.Empty));
         Assert.Single(instance.Children);
     }
 
@@ -4167,7 +4167,7 @@ public class PrefabTests : EditorTestHarness
         LoadSceneWith(instance);
 
         OverrideComp component = instance.GetComponent<OverrideComp>()!;
-        MonoBehaviour? source = PrefabUtility.GetCorrespondingObjectFromSource(component);
+        Component? source = PrefabUtility.GetCorrespondingObjectFromSource(component);
 
         Assert.NotNull(source);
         Assert.NotSame(component, source);
@@ -5422,7 +5422,7 @@ public class PrefabTests : EditorTestHarness
         GameObject instance = Inst(guid);
 
         // Every component says where it came from, and none of them is left saying nothing.
-        Assert.All(instance.GetComponents<MonoBehaviour>(), c => Assert.NotEqual(Guid.Empty, c.SourceIdentifier));
+        Assert.All(instance.GetComponents<Component>(), c => Assert.NotEqual(Guid.Empty, c.SourceIdentifier));
     }
 
     #endregion

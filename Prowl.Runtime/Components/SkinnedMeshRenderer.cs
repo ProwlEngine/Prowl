@@ -21,7 +21,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Skinned Mesh Renderer")]
 [ComponentIcon("\uf1b3")] // Cubes
-public class SkinnedMeshRenderer : MonoBehaviour
+public class SkinnedMeshRenderer : Component
 {
     /// <summary>The mesh to render (may contain submeshes).</summary>
     public Mesh? SharedMesh;

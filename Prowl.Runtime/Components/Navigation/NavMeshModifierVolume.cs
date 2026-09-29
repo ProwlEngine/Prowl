@@ -18,7 +18,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Navigation/NavMesh Modifier Volume")]
 [ComponentIcon("\uf1b2")] // cube icon
-public class NavMeshModifierVolume : MonoBehaviour
+public class NavMeshModifierVolume : Component
 {
     [Tooltip("Volume center, local to this GameObject.")]
     [SerializeField] private Float3 center;

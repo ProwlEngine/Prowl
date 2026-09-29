@@ -224,7 +224,7 @@ public class AnimatorTests : RuntimeTestBase
         Assert.InRange(observer.SeenY, 1.8, 2.2);
     }
 
-    private sealed class SpineObserver : MonoBehaviour
+    private sealed class SpineObserver : Component
     {
         public Transform? Spine;
         public double SeenY;

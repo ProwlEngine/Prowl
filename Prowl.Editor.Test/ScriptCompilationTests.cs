@@ -63,7 +63,7 @@ public class ScriptCompilationTests : EditorTestHarness
     [Fact]
     public void EditorAssembly_IsNotShippedInBuild()
     {
-        WriteScript("PlayComponent.cs", "using Prowl.Runtime; public class PlayComponent : MonoBehaviour { }");
+        WriteScript("PlayComponent.cs", "using Prowl.Runtime; public class PlayComponent : Component { }");
         WriteScript(Path.Combine("Editor", "EditorOnlyTool.cs"), "public class EditorOnlyTool { public static int X => 1; }");
 
         var compile = ScriptCompiler.CompileAll(Project);

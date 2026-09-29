@@ -11,7 +11,7 @@ namespace Prowl.Runtime;
 
 [AddComponentMenu("Rendering/Line Renderer")]
 [ComponentIcon("\uf4d7")] // Route
-public class LineRenderer : MonoBehaviour, IRenderable
+public class LineRenderer : Component, IRenderable
 {
     public Material? Material;
     public float StartWidth = 0.1f;

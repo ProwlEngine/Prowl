@@ -114,7 +114,7 @@ public partial class GameObject
         link.SourceIdentifier = go.Identifier;
         go.SetIdentifier(Guid.NewGuid());
 
-        foreach (MonoBehaviour component in go._components)
+        foreach (Component component in go._components)
         {
             if (component.IsNotValid()) continue;
 

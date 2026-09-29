@@ -32,7 +32,7 @@ public enum RigidbodyInterpolation
 
 [AddComponentMenu("Physics/Rigidbody")]
 [ComponentIcon("\uf1b2")] // Cube
-public sealed class Rigidbody3D : MonoBehaviour
+public sealed class Rigidbody3D : Component
 {
     public class RigidBodyUserData
     {

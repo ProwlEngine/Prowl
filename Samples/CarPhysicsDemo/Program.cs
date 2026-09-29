@@ -320,7 +320,7 @@ public sealed class CarPhysicsGame : Game
 }
 
 // Third-person camera controller that follows the car
-public class ThirdPersonCamera : MonoBehaviour
+public class ThirdPersonCamera : Component
 {
     public GameObject? Target;
     public float Distance = 10.0f;
@@ -370,7 +370,7 @@ public class ThirdPersonCamera : MonoBehaviour
 }
 
 // Car controller using WheelColliders
-public class CarController : MonoBehaviour
+public class CarController : Component
 {
     public List<WheelCollider> frontWheels = new();
     public List<WheelCollider> rearWheels = new();

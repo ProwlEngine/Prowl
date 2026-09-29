@@ -205,7 +205,7 @@ public sealed class SceneLightSystem : IDisposable
 
     private static bool IsStaticLight(IRenderableLight light)
     {
-        // Honour the GameObject.IsStatic flag when the light is a MonoBehaviour-backed Light.
+        // Honour the GameObject.IsStatic flag when the light is a Component-backed Light.
         // Custom IRenderableLight implementations default to dynamic.
         return light is Light l && l.GameObject != null && l.GameObject.IsStatic;
     }

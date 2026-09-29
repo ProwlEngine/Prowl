@@ -22,7 +22,7 @@ namespace Prowl.Editor.Core;
 /// { ...serialized component... }
 /// </code>
 ///
-/// Scene-object references (fields typed GameObject / MonoBehaviour / Transform, at any depth) are
+/// Scene-object references (fields typed GameObject / Component / Transform, at any depth) are
 /// linked by persistence id rather than serialized by value: <see cref="SceneReferenceResolver"/>
 /// is handed to Echo as the context's external-reference resolver, so Echo emits a stable key for
 /// them instead of deep-cloning the target into an orphan, and resolves that key back to the live
@@ -41,7 +41,7 @@ public static class ComponentClipboard
     // ================================================================
 
     /// <summary>Serialize a component onto the system clipboard.</summary>
-    public static void Copy(MonoBehaviour comp)
+    public static void Copy(Component comp)
     {
         if (comp == null) return;
 
@@ -101,7 +101,7 @@ public static class ComponentClipboard
     /// Add the clipboard component to <paramref name="go"/> as a new component, with undo.
     /// Returns the new component, or null if the clipboard is empty/unusable.
     /// </summary>
-    public static MonoBehaviour? PasteAsNew(GameObject go)
+    public static Component? PasteAsNew(GameObject go)
     {
         if (go == null) return null;
 
@@ -110,7 +110,7 @@ public static class ComponentClipboard
             if (!TryReadClipboard(out Type? type, out EchoObject? data) || type == null || data == null)
                 return null;
 
-            var comp = Serializer.Deserialize(data, type, DeserializeContext()) as MonoBehaviour;
+            var comp = Serializer.Deserialize(data, type, DeserializeContext()) as Component;
             if (comp == null) return null;
 
             // AddComponent(instance) attaches, registers with the scene and fires OnAddedToScene /
@@ -130,14 +130,14 @@ public static class ComponentClipboard
                 {
                     GameObject g = Undo.FindGO(goId)!;
                     if (g.IsNotValid()) return;
-                    MonoBehaviour c = g.GetComponentByIdentifier(compId)!;
+                    Component c = g.GetComponentByIdentifier(compId)!;
                     if (c.IsValid()) g.RemoveComponent(c);
                 },
                 redo: () =>
                 {
                     GameObject g = Undo.FindGO(goId)!;
                     if (g.IsNotValid()) return;
-                    var restored = Serializer.Deserialize(compData, compType, DeserializeContext()) as MonoBehaviour;
+                    var restored = Serializer.Deserialize(compData, compType, DeserializeContext()) as Component;
                     if (restored == null) return;
                     restored.Identifier = compId;
                     g.AddComponent(restored);
@@ -159,7 +159,7 @@ public static class ComponentClipboard
     /// keeps its own identifier, GameObject and sibling index - only data is replaced. Requires the
     /// clipboard type to match exactly.
     /// </summary>
-    public static bool PasteValues(MonoBehaviour target)
+    public static bool PasteValues(Component target)
     {
         if (target == null) return false;
 
@@ -200,7 +200,7 @@ public static class ComponentClipboard
     /// Brackets the write with OnDisable/OnEnable so components with native state (rigidbodies, audio
     /// sources) rebuild against the new values.
     /// </summary>
-    private static void ApplyState(MonoBehaviour target, EchoObject data)
+    private static void ApplyState(Component target, EchoObject data)
     {
         bool attached = target.GameObject.IsValid();
         bool inActiveScene = attached && target.Scene.IsValid() && target.Scene!.IsActive;
@@ -231,7 +231,7 @@ public static class ComponentClipboard
     // Serializing keys every scene reference except the component being copied (see
     // SceneReferenceResolver); deserializing only resolves keys, so it passes no copy roots.
     // Never leaves memory, so runtime assets are linked rather than copied.
-    private static DependencySerializationContext SerializeContext(MonoBehaviour root)
+    private static DependencySerializationContext SerializeContext(Component root)
         => new() { ExternalReferences = new SceneReferenceResolver(root), LinkRuntimeAssets = true };
 
     private static SerializationContext DeserializeContext()
@@ -261,7 +261,7 @@ public static class ComponentClipboard
             return false;
         }
 
-        if (!typeof(MonoBehaviour).IsAssignableFrom(type) || type.IsAbstract) return false;
+        if (!typeof(Component).IsAssignableFrom(type) || type.IsAbstract) return false;
 
         data = EchoObject.ReadFromString(body);
         return data != null;

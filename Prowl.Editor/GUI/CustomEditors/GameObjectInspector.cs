@@ -233,7 +233,7 @@ public static class GameObjectInspector
     {
         // Component types in the first object's order, kept only if present on every selected object.
         var orderedTypes = new List<Type>();
-        foreach (var c in gos[0].GetComponents<MonoBehaviour>())
+        foreach (var c in gos[0].GetComponents<Component>())
         {
             if (c.HideFlags.HasFlag(HideFlags.Hide)) continue;
             if (c is RectTransform) continue; // handled by the transform row at the top
@@ -247,8 +247,8 @@ public static class GameObjectInspector
             bool onAll = true;
             foreach (var go in gos)
             {
-                MonoBehaviour? match = null;
-                foreach (var c in go.GetComponents<MonoBehaviour>())
+                Component? match = null;
+                foreach (var c in go.GetComponents<Component>())
                 {
                     if (c.HideFlags.HasFlag(HideFlags.Hide)) continue;
                     if (c.GetType() == type) { match = c; break; }
@@ -259,19 +259,19 @@ public static class GameObjectInspector
             if (!onAll) continue;
 
             string compId = $"gim_comp_{type.Name}";
-            string icon = GetComponentIcon((MonoBehaviour)instances[0]);
+            string icon = GetComponentIcon((Component)instances[0]);
 
             using (paper.Row($"{compId}_header")
                 .Height(24).BackgroundColor(EditorTheme.Neutral300).Rounded(EditorTheme.Roundness).PaddingLeft(4).Gap(4).Enter())
             {
-                bool allEn = instances.All(o => ((MonoBehaviour)o).Enabled);
+                bool allEn = instances.All(o => ((Component)o).Enabled);
                 Origami.Checkbox(paper, $"{compId}_en", allEn,
                     v =>
                     {
                         var actions = new List<(Action, Action)>(instances.Count);
                         foreach (var o in instances)
                         {
-                            var c = (MonoBehaviour)o;
+                            var c = (Component)o;
                             var cid = c.Identifier;
                             bool old = c.Enabled;
                             actions.Add((() => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = old; x.OnValidate(); } },
@@ -847,7 +847,7 @@ public static class GameObjectInspector
 
     private static void DrawComponents(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
-        var components = go.GetComponents<MonoBehaviour>().ToList();
+        var components = go.GetComponents<Component>().ToList();
 
         for (int i = 0; i < components.Count; i++)
         {
@@ -929,7 +929,7 @@ public static class GameObjectInspector
     }
 
     /// <summary>Take a component off its object, undoably, restoring it where it sat.</summary>
-    private static void RemoveComponentWithUndo(MonoBehaviour comp)
+    private static void RemoveComponentWithUndo(Component comp)
     {
         GameObject go = comp.GameObject;
         if (go.IsNotValid()) return;
@@ -945,7 +945,7 @@ public static class GameObjectInspector
             {
                 var g = Undo.FindGO(goId);
                 if (g == null) return;
-                if (Echo.Serializer.Deserialize(serialized, compType) is not MonoBehaviour restored) return;
+                if (Echo.Serializer.Deserialize(serialized, compType) is not Component restored) return;
 
                 restored.Identifier = compId;
                 g.AddComponent(restored);
@@ -963,7 +963,7 @@ public static class GameObjectInspector
         go.RemoveComponent(comp);
     }
 
-    private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
+    private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, Component comp, int index)
     {
         // On an instance, what this component is supposed to be is whatever the prefab says, so Reset
         // means go back to that. Everywhere else there is nothing to go back to but the values a new
@@ -990,7 +990,7 @@ public static class GameObjectInspector
         {
             if (PrefabUtility.NeedsBreaking(comp))
             {
-                MonoBehaviour target = comp;
+                Component target = comp;
                 PrefabUtility.BreakThenRun([go], () => RemoveComponentWithUndo(target));
                 return;
             }
@@ -1050,7 +1050,7 @@ public static class GameObjectInspector
     //  [Button] Methods
     // ================================================================
 
-    public static void DrawButtonMethods(Paper paper, string id, MonoBehaviour comp)
+    public static void DrawButtonMethods(Paper paper, string id, Component comp)
     {
         var methods = comp.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         int btnIdx = 0;
@@ -1343,7 +1343,7 @@ public static class GameObjectInspector
             // them here rather than making the user revert its members one at a time.
             if (string.IsNullOrEmpty(first.ComponentName)) return;
 
-            MonoBehaviour? component = ComponentFor(root, first);
+            Component? component = ComponentFor(root, first);
             if (component.IsNotValid()) return;
 
             OverrideButton(paper, font, $"gi_ovg_revert_{key}", Loc.Get("inspector.revert"), 50,
@@ -1402,7 +1402,7 @@ public static class GameObjectInspector
     /// The component an entry is on, by identity and inside this instance. Two instances of one prefab
     /// have identically named objects, so a search by name lands on whichever comes first.
     /// </summary>
-    private static MonoBehaviour? ComponentFor(GameObject root, PrefabUtility.OverrideDescription entry)
+    private static Component? ComponentFor(GameObject root, PrefabUtility.OverrideDescription entry)
     {
         if (entry.ComponentIdentifier == Guid.Empty) return null;
         return root.GetComponentInChildrenByIdentifier(entry.ComponentIdentifier);
@@ -1435,7 +1435,7 @@ public static class GameObjectInspector
     //  Helpers
     // ================================================================
 
-    private static string GetComponentIcon(MonoBehaviour comp) => EditorRegistries.GetComponentIcon(comp);
+    private static string GetComponentIcon(Component comp) => EditorRegistries.GetComponentIcon(comp);
 
     // ================================================================
     //  Anchor editing that preserves screen position
@@ -1501,7 +1501,7 @@ public static class GameObjectInspector
     private static List<MenuTreeEntry>? _cachedComponents;
 
     /// <summary>
-    /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
+    /// Drop the cached component list (which holds every Component <see cref="Type"/>,
     /// including user ones) so the script AssemblyLoadContext can be collected.
     /// </summary>
     public static void ClearAddComponentCache() => _cachedComponents = null;
@@ -1545,7 +1545,7 @@ public static class GameObjectInspector
     /// Adds a component of <paramref name="type"/> to <paramref name="go"/> and registers a matching
     /// undo/redo step. Shared by the popup and the drag-a-script-onto-the-inspector path.
     /// </summary>
-    public static MonoBehaviour? AddComponentWithUndo(GameObject go, Type type)
+    public static Component? AddComponentWithUndo(GameObject go, Type type)
     {
         var addedComp = go.AddComponent(type);
         if (addedComp != null)
@@ -1556,7 +1556,7 @@ public static class GameObjectInspector
             var compType = addedComp.GetType();
             Undo.RegisterAction("Add Component",
                 undo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = g.GetComponentByIdentifier(compId); if (c != null) g.RemoveComponent(c); },
-                redo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour; if (c != null) { c.Identifier = compId; g.AddComponent(c); } });
+                redo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = Echo.Serializer.Deserialize(serialized, compType) as Component; if (c != null) { c.Identifier = compId; g.AddComponent(c); } });
         }
         return addedComp;
     }
@@ -1567,9 +1567,9 @@ public static class GameObjectInspector
 
         foreach (var type in EditorUtils.GetAllTypes())
         {
-            if (!typeof(MonoBehaviour).IsAssignableFrom(type) || type.IsAbstract) continue;
-            if (type == typeof(MonoBehaviour)) continue;
-            if (type.Name == "MissingMonobehaviour") continue;
+            if (!typeof(Component).IsAssignableFrom(type) || type.IsAbstract) continue;
+            if (type == typeof(Component)) continue;
+            if (type.Name == "MissingComponent") continue;
 
             var menuAttr = type.GetCustomAttribute<AddComponentMenuAttribute>();
             string path = menuAttr?.Path ?? type.Name;

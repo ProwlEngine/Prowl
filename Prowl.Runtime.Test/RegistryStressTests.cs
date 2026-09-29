@@ -8,7 +8,7 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>Runs a supplied action during its Update, for reentrancy tests.</summary>
-public sealed class UpdateActionComponent : MonoBehaviour
+public sealed class UpdateActionComponent : Component
 {
     public Action? Action;
     public int Updates;
@@ -16,14 +16,14 @@ public sealed class UpdateActionComponent : MonoBehaviour
 }
 
 /// <summary>Minimal Update-only counter (no other callbacks) for clean assertions.</summary>
-public sealed class PlainUpdateCounter : MonoBehaviour
+public sealed class PlainUpdateCounter : Component
 {
     public int Updates;
     public override void Update() => Updates++;
 }
 
 /// <summary>Appends a tag on Update, for ordering tests.</summary>
-public sealed class TagTick : MonoBehaviour
+public sealed class TagTick : Component
 {
     public string Mark = "";
     public override void Update() => TickLog.Entries.Add(Mark);

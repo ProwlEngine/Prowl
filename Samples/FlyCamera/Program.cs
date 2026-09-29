@@ -208,7 +208,7 @@ public sealed class SphereBrush : IBrush
     }
 }
 
-public sealed class VoxelPlanet : MonoBehaviour
+public sealed class VoxelPlanet : Component
 {
     public Camera? camera;
     private PlanetNode? rootNode;

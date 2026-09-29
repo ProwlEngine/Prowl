@@ -9,7 +9,7 @@ namespace Prowl.Runtime.Test;
 
 public class GameObjectCloneTests : RuntimeTestBase
 {
-    private class Marker : MonoBehaviour
+    private class Marker : Component
     {
         public int Number;
         public string Text = "";
@@ -19,12 +19,12 @@ public class GameObjectCloneTests : RuntimeTestBase
         public List<GameObject> Many = [];
     }
 
-    private sealed class Required : MonoBehaviour { }
+    private sealed class Required : Component { }
 
     [RequireComponent(typeof(Required))]
-    private sealed class Requires : MonoBehaviour { public int Value; }
+    private sealed class Requires : Component { public int Value; }
 
-    private sealed class Lifecycle : MonoBehaviour
+    private sealed class Lifecycle : Component
     {
         public static int Enables, Starts;
         public override void OnEnable() => Enables++;
@@ -401,8 +401,8 @@ public class GameObjectCloneTests : RuntimeTestBase
         ObjectCopy.CopyTo(source, target);
         ObjectCopy.CopyTo(source, target);
 
-        Assert.Single(target.GetComponents<MonoBehaviour>());
-        Assert.IsType<MissingMonobehaviour>(target.GetComponents<MonoBehaviour>().Single());
+        Assert.Single(target.GetComponents<Component>());
+        Assert.IsType<MissingComponent>(target.GetComponents<Component>().Single());
     }
 
     [Fact]
@@ -497,11 +497,11 @@ public class GameObjectCloneTests : RuntimeTestBase
     {
         var source = new GameObject("s");
         source.AddComponent<Requires>().Value = 4;
-        int before = source.GetComponents<MonoBehaviour>().Count();
+        int before = source.GetComponents<Component>().Count();
 
         GameObject clone = ObjectCopy.Clone(source);
 
-        Assert.Equal(before, clone.GetComponents<MonoBehaviour>().Count());
+        Assert.Equal(before, clone.GetComponents<Component>().Count());
         Assert.NotNull(clone.GetComponent<Required>());
         Assert.Equal(4, clone.GetComponent<Requires>()!.Value);
     }

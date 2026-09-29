@@ -1254,7 +1254,7 @@ public class HierarchyPanel : DockPanel
                 continue;
             }
 
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+            foreach (var comp in go.GetComponents<Component>())
             {
                 // A field holding the asset, or naming it through an AssetRef.
                 bool found = false;

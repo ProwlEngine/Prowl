@@ -9,8 +9,8 @@ using System;
 /// <remarks>
 /// When this attribute is used on a component, the Prowl Game Engine will automatically add the required components
 /// to the GameObject if they are not already present. This ensures that the component has all its dependencies met.
-/// 
-/// This attribute can only be applied to classes (typically components deriving from MonoBehaviour).
+///
+/// This attribute can only be applied to classes (typically components deriving from Component).
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class)]
 public class RequireComponentAttribute : Attribute
@@ -26,7 +26,7 @@ public class RequireComponentAttribute : Attribute
     /// <param name="types">An array of Type objects representing the required components.</param>
     /// <example>
     /// [RequireComponent(typeof(Rigidbody), typeof(Collider))]
-    /// public class MyPhysicsComponent : MonoBehaviour
+    /// public class MyPhysicsComponent : Component
     /// {
     ///     // This component requires both a Rigidbody and a Collider
     /// }
