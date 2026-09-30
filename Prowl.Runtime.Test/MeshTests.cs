@@ -86,4 +86,24 @@ public class MeshTests
         Assert.NotSame(firstVertices, changed!.Vertices);
         Assert.Equal(Float3.UnitY, changed.Vertices[1]);
     }
+
+    // Regrowing a mesh recreates its buffers, so the instanced VAO built on the old ones must go too.
+    [Fact]
+    public void Upload_WithNewVertexCount_RebuildsInstancedVAO()
+    {
+        var mesh = new Mesh
+        {
+            Vertices = [Float3.Zero, Float3.UnitX, Float3.UnitY],
+            Indices = [0, 1, 2],
+        };
+        var before = mesh.EnsureInstanceVAO(4, out _);
+
+        mesh.Vertices = [Float3.Zero, Float3.UnitX, Float3.UnitY, Float3.One];
+        mesh.Indices = [0, 1, 2, 1, 3, 2];
+        mesh.Upload();
+        var after = mesh.EnsureInstanceVAO(4, out _);
+
+        Assert.NotNull(after);
+        Assert.NotSame(before, after);
+    }
 }

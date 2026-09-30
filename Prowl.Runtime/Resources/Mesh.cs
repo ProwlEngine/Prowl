@@ -637,6 +637,10 @@ public class Mesh : Asset, ISerializable
         {
             vertexArrayObject?.Dispose();
             vertexArrayObject = Graphics.CreateVertexArray(layout, vertexBuffer, indexBuffer);
+
+            // The instanced VAO points at the old buffers too; EnsureInstanceVAO rebuilds it.
+            if (instancedVAO != null) Graphics.DeferDispose(instancedVAO);
+            instancedVAO = null;
         }
     }
 
