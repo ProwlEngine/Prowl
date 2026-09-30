@@ -52,6 +52,8 @@ internal class TerrainMeshDetailRenderer
         public float Distance;
         public int DetailsVersion = -1;
         public int HeightsVersion = -1;
+        public int HolesVersion = -1;
+        public Float4x4 LocalToWorld;
     }
 
     private static readonly float[] s_ditherTable =
@@ -96,6 +98,7 @@ internal class TerrainMeshDetailRenderer
         if (data.DetailPrototypes.Count == 0) return;
 
         Float3 camLocal = terrain.WorldToTerrain(camera.Transform.Position);
+        Float4x4 terrainToWorld = terrain.Transform.LocalToWorldMatrix;
         Float3 terrainScale = terrain.Transform.LocalScale;
         float avgScale = MathF.Max(0.001f, (terrainScale.X + terrainScale.Z) * 0.5f);
         float distance = MathF.Max(terrain.DetailDistance, 0.01f) / avgScale;
@@ -118,9 +121,11 @@ internal class TerrainMeshDetailRenderer
 
             if (build.DetailsVersion != data.DetailsVersion
                 || build.HeightsVersion != data.HeightsVersion
+                || build.HolesVersion != data.HolesVersion
+                || build.LocalToWorld != terrainToWorld
                 || BuildIsStale(build.Centre, build.Distance, centre, distance))
             {
-                Rebuild(build, data, terrain, proto, protoIdx, mesh, centre, distance, painted);
+                Rebuild(build, data, terrain, terrainToWorld, proto, protoIdx, mesh, centre, distance, painted);
             }
 
             for (int i = 0; i < build.Renderables.Length; i++)
@@ -128,7 +133,7 @@ internal class TerrainMeshDetailRenderer
         }
     }
 
-    private static void Rebuild(Build build, TerrainData data, TerrainComponent terrain, DetailPrototype proto,
+    private static void Rebuild(Build build, TerrainData data, TerrainComponent terrain, Float4x4 terrainToWorld, DetailPrototype proto,
         int protoIdx, Mesh mesh, Float2 centre, float distance, Float4 painted)
     {
         var densityMap = data.DetailLayers[protoIdx];
@@ -141,6 +146,8 @@ internal class TerrainMeshDetailRenderer
         build.Distance = distance;
         build.DetailsVersion = data.DetailsVersion;
         build.HeightsVersion = data.HeightsVersion;
+        build.HolesVersion = data.HolesVersion;
+        build.LocalToWorld = terrainToWorld;
 
         var instances = new List<InstanceData>();
         float minY = float.MaxValue, maxY = float.MinValue;
@@ -166,9 +173,10 @@ internal class TerrainMeshDetailRenderer
                 if (dx * dx + dz * dz > radiusSq) continue;
 
                 float dither = s_ditherTable[(cx & 7) + (cz & 7) * 8];
-                int count = Math.Clamp((int)(rawDensity * MaxInstancesPerCell + (dither - 0.5f) * (1f / 64f) * MaxInstancesPerCell), 0, MaxInstancesPerCell);
+                // Ordered dither, so a faint cell still averages out to its share of an instance
+                int count = Math.Clamp((int)(rawDensity * MaxInstancesPerCell + dither), 0, MaxInstancesPerCell);
                 count = Math.Min(count, MaxInstancesPerPrototype - instances.Count);
-                if (count <= 0) break;
+                if (count <= 0) continue;
 
                 // Seeded from the world cell, so a rebuild reproduces the same scatter exactly
                 var rng = new SeededRandom((uint)(cx * 73856093 ^ cz * 19349663 ^ protoIdx * 83492791));
@@ -177,6 +185,9 @@ internal class TerrainMeshDetailRenderer
                 {
                     float u = (cx + rng.NextFloat()) / detailRes;
                     float v = (cz + rng.NextFloat()) / detailRes;
+                    float rotY = rng.NextFloat() * MathF.PI * 2f;
+                    float windPhase = rng.NextFloat() * MathF.PI * 2f;
+                    if (data.IsHoleAt(u, v)) continue;
 
                     float wx = u * terrainSize;
                     float wz = v * terrainSize;
@@ -190,15 +201,14 @@ internal class TerrainMeshDetailRenderer
                     float sw = proto.MinWidth + sizeT * (proto.MaxWidth - proto.MinWidth);
                     float sh = proto.MinHeight + sizeT * (proto.MaxHeight - proto.MinHeight);
 
-                    float rotY = rng.NextFloat() * MathF.PI * 2f;
-                    Float4x4 transform = Float4x4.CreateTranslation(new Float3(wx, wy, wz))
+                    Float4x4 transform = terrainToWorld * Float4x4.CreateTranslation(new Float3(wx, wy, wz))
                         * Float4x4.FromAxisAngle(new Float3(0, 1, 0), rotY)
                         * Float4x4.CreateScale(new Float3(sw, sh, sw));
 
                     Color tint = Color.Lerp(proto.HealthyColor, proto.DryColor, 1f - noise);
                     instances.Add(new InstanceData(transform,
                         new Float4(tint.R, tint.G, tint.B, tint.A),
-                        new Float4(rng.NextFloat() * MathF.PI * 2f, proto.BendFactor, 0, 0)));
+                        new Float4(windPhase, proto.BendFactor, 0, 0)));
                 }
             }
         }

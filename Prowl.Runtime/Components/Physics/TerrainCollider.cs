@@ -25,6 +25,13 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     private bool _isRegistered;
     private uint _lastTransformVersion;
 
+    // What the registration was built from. The triangle ID range is sized from the resolution, so a new
+    // resolution or asset needs a fresh registration, while size and height only move the bounds
+    private TerrainData? _registeredData;
+    private int _registeredResolution;
+    private float _registeredSize;
+    private float _registeredHeight;
+
     #region ITerrainHeightProvider samples directly from TerrainData
 
     public int Width => _terrain.IsValid() && _terrain.Data.IsValid() ? _terrain.Data.HeightmapResolution : 0;
@@ -170,19 +177,39 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         physics.RegisterTerrain(_heightmapProxy, _collisionFilter, this);
         _lastTransformVersion = ComputeWorldTransformVersion();
+        _registeredData = terrainData;
+        _registeredResolution = terrainData.HeightmapResolution;
+        _registeredSize = terrainData.Size;
+        _registeredHeight = terrainData.Height;
         _isRegistered = true;
     }
 
     public override void Update()
     {
-        if (!_isRegistered) return;
+        if (!_isRegistered)
+        {
+            // Picks the collider up once its terrain has data to collide with
+            RegisterWithPhysics();
+            return;
+        }
+
+        var data = _terrain.IsValid() ? _terrain.Data : null;
+        if (data != _registeredData || data.IsNotValid() || data.HeightmapResolution != _registeredResolution)
+        {
+            UnregisterFromPhysics();
+            RegisterWithPhysics();
+            return;
+        }
 
         // Re-read the placement and re-fit the broad-phase bounds when the terrain (or an ancestor)
-        // moves. Doing it here, on the main thread, is what lets the filter sample it from workers.
+        // moves or the data is resized. Doing it here, on the main thread, is what lets the filter
+        // sample it from workers.
         uint version = ComputeWorldTransformVersion();
-        if (version == _lastTransformVersion) return;
+        if (version == _lastTransformVersion && data.Size == _registeredSize && data.Height == _registeredHeight) return;
 
         _lastTransformVersion = version;
+        _registeredSize = data.Size;
+        _registeredHeight = data.Height;
         RefreshPlacement();
 
         var scene = GameObject.IsValid() ? GameObject.Scene : null;
@@ -208,6 +235,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         _heightmapProxy = null;
         _collisionFilter = null;
+        _registeredData = null;
         _isRegistered = false;
     }
 
