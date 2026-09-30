@@ -658,6 +658,33 @@ public sealed class TerrainData : Asset, ISerializable
 
     #endregion
 
+    #region Trees
+
+    /// <summary>Remove a tree prototype along with its trees, shifting the trees of later prototypes down to match.</summary>
+    public void RemoveTreePrototype(int index)
+    {
+        EnsureLoaded();
+        if (index < 0 || index >= TreePrototypes.Count) return;
+        TreePrototypes.RemoveAt(index);
+
+        var trees = Trees;
+        for (int i = trees.Count - 1; i >= 0; i--)
+        {
+            TreeInstance tree = trees[i];
+            if (tree.PrototypeIndex == index)
+            {
+                trees.RemoveAt(i);
+            }
+            else if (tree.PrototypeIndex > index)
+            {
+                tree.PrototypeIndex--;
+                trees[i] = tree;
+            }
+        }
+    }
+
+    #endregion
+
     #region Coordinate Helpers
 
     /// <summary>UV of heightmap sample (x, z). Heights are a vertex grid, sample 0 sits on the terrain edge.</summary>

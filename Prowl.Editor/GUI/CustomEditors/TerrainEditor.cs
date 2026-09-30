@@ -388,7 +388,16 @@ public class TerrainEditor : CustomEditor
             {
                 if (ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Count)
                 {
-                    data.TreePrototypes.RemoveAt(ActiveTreePrototype);
+                    var preProtos = new List<TreePrototype>(data.TreePrototypes);
+                    var preTrees = new List<TreeInstance>(data.Trees);
+                    data.RemoveTreePrototype(ActiveTreePrototype);
+                    var postProtos = new List<TreePrototype>(data.TreePrototypes);
+                    var postTrees = new List<TreeInstance>(data.Trees);
+
+                    Undo.RegisterAction("Remove Tree Prototype",
+                        () => { data.TreePrototypes = new List<TreePrototype>(preProtos); data.Trees = new List<TreeInstance>(preTrees); },
+                        () => { data.TreePrototypes = new List<TreePrototype>(postProtos); data.Trees = new List<TreeInstance>(postTrees); });
+
                     ActiveTreePrototype = Math.Clamp(ActiveTreePrototype, 0, Math.Max(0, data.TreePrototypes.Count - 1));
                     _isDirty = true;
                 }
