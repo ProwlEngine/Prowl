@@ -12,7 +12,6 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Thumbnails;
 using Prowl.Runtime;
-using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor;
 

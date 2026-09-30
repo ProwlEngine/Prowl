@@ -4,7 +4,7 @@
 using System.IO;
 using Prowl.Runtime.Core.Platforms;
 
-namespace Prowl.Runtime.Utils;
+namespace Prowl.Runtime;
 
 public static class FileExtensions
 {
