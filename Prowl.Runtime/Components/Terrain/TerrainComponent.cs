@@ -423,13 +423,17 @@ public class TerrainComponent : MonoBehaviour
         {
             for (int x = 0; x < resolution; x++)
             {
-                int vertIndex = z * (resolution + 1) + x;
-                indices[triIndex++] = (uint)(vertIndex);
-                indices[triIndex++] = (uint)(vertIndex + resolution + 1);
-                indices[triIndex++] = (uint)(vertIndex + 1);
-                indices[triIndex++] = (uint)(vertIndex + 1);
-                indices[triIndex++] = (uint)(vertIndex + resolution + 1);
-                indices[triIndex++] = (uint)(vertIndex + resolution + 2);
+                // Split along the (x, z) to (x+1, z+1) diagonal, the same one physics and the navmesh use
+                uint a = (uint)(z * (resolution + 1) + x);
+                uint b = a + 1;
+                uint d = a + (uint)resolution + 1;
+                uint c = d + 1;
+                indices[triIndex++] = a;
+                indices[triIndex++] = d;
+                indices[triIndex++] = c;
+                indices[triIndex++] = a;
+                indices[triIndex++] = c;
+                indices[triIndex++] = b;
             }
         }
 
