@@ -144,11 +144,13 @@ internal unsafe partial class VkGraphicsDevice
             SharedCommandPool pool = GetFreeCommandPool();
             Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
             VkCommandBuffer.CopyTextureCore_VkCommandBuffer(
-                Vk,
+                this,
                 cb,
                 stagingTex, 0, 0, 0, 0, 0,
                 texture, x, y, z, mipLevel, arrayLayer,
-                width, height, depth, 1);
+                width, height, depth, 1,
+                ImageLayout.Undefined,
+                VkBarriers.RestingLayout(vkTex));
             lock (_stagingResourcesLock)
             {
                 _submittedStagingTextures.Add(cb, stagingTex);

@@ -12,7 +12,7 @@ internal unsafe partial class VkCommandBuffer
     private VkFramebufferBase _currentFramebuffer;
     private bool _currentFramebufferEverActive;
     private RenderPass _activeRenderPass;
-    private bool _newFramebuffer; // Render pass cycle state
+    private bool _currentFramebufferGraphMode;
 
     private VkGraphicsProgram _currentShaderProgram;
     private VkComputeProgram _currentComputeProgram;
@@ -23,15 +23,31 @@ internal unsafe partial class VkCommandBuffer
     private Rect2D[] _scissorRects = Array.Empty<Rect2D>();
     private Viewport[] _viewports = Array.Empty<Viewport>();
 
-    private readonly List<VkTexture> _preDrawSampledImages = [];
+    private readonly List<VkTexture> _temporaryStorageImages = [];
 
     internal PropertySet ActiveProperties => _activeProperties;
     internal uint ActivePropertiesEpoch => _activePropertiesEpoch;
-    internal void QueuePreDrawSampledImage(VkTexture tex) => _preDrawSampledImages.Add(tex);
+
+    internal bool IsTemporaryStorage(VkTexture tex) => _temporaryStorageImages.Contains(tex);
+
+    internal void BeginTemporaryStorage(VkTexture tex)
+    {
+        VkBarriers.Transition(_gd, _cb, tex, VkBarriers.RestingLayout(tex), ImageLayout.General);
+        _temporaryStorageImages.Add(tex);
+    }
+
+    private void EndTemporaryStorage()
+    {
+        foreach (VkTexture tex in _temporaryStorageImages)
+            VkBarriers.Transition(_gd, _cb, tex, ImageLayout.General, VkBarriers.RestingLayout(tex));
+
+        _temporaryStorageImages.Clear();
+    }
 
     private void ClearGraphicsState()
     {
         _currentFramebuffer = null;
+        _temporaryStorageImages.Clear();
         _currentShaderProgram = null;
         _currentComputeProgram = null;
         _currentResolvedPipeline = default;

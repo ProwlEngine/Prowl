@@ -110,7 +110,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             SetBindState state = _setBindStates[setIdx];
 
             ResolveSet(setIdx, elements, meta, reportProgram);
-            TransitionResolvedTextures(elements);
+            PrepareResolvedTextures(elements, isGraphics);
             SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
             GatherDynOffsets(meta, state);
 

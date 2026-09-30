@@ -26,7 +26,7 @@ internal class VkResourceFactory : ResourceFactory
 
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
     {
-        return new VkFramebuffer(_gd, ref description, false);
+        return new VkFramebuffer(_gd, ref description);
     }
 
     protected override Sampler CreateSamplerCore(ref SamplerDescription description)

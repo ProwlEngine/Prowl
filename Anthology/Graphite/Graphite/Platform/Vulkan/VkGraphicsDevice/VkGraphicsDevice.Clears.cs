@@ -6,45 +6,31 @@ internal unsafe partial class VkGraphicsDevice
 {
     internal void ClearColorTexture(VkTexture texture, ClearColorValue color)
     {
-        uint effectiveLayers = texture.ArrayLayers;
-        if ((texture.Usage & TextureUsage.Cubemap) != 0)
-        {
-            effectiveLayers *= 6;
-        }
         ImageSubresourceRange range = new(
              ImageAspectFlags.ColorBit,
              0,
              texture.MipLevels,
              0,
-             effectiveLayers);
+             texture.ActualArrayLayers);
         SharedCommandPool pool = GetFreeCommandPool();
         Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
-        texture.TransitionImageLayout(cb, 0, texture.MipLevels, 0, effectiveLayers, ImageLayout.TransferDstOptimal);
+        VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, ImageLayout.TransferDstOptimal);
         Vk.CmdClearColorImage(cb, texture.OptimalDeviceImage, ImageLayout.TransferDstOptimal, &color, 1, &range);
-        ImageLayout colorLayout = texture.IsSwapchainTexture ? ImageLayout.PresentSrcKhr : ImageLayout.ColorAttachmentOptimal;
-        texture.TransitionImageLayout(cb, 0, texture.MipLevels, 0, effectiveLayers, colorLayout);
+        VkBarriers.Transition(this, cb, texture, ImageLayout.TransferDstOptimal, VkBarriers.RestingLayout(texture));
         pool.EndAndSubmit(cb);
     }
 
     internal void ClearDepthTexture(VkTexture texture, ClearDepthStencilValue clearValue)
     {
-        uint effectiveLayers = texture.ArrayLayers;
-        if ((texture.Usage & TextureUsage.Cubemap) != 0)
-        {
-            effectiveLayers *= 6;
-        }
-        ImageAspectFlags aspect = FormatHelpers.IsStencilFormat(texture.Format)
-            ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
-            : ImageAspectFlags.DepthBit;
         ImageSubresourceRange range = new(
-            aspect,
+            texture.AspectMask,
             0,
             texture.MipLevels,
             0,
-            effectiveLayers);
+            texture.ActualArrayLayers);
         SharedCommandPool pool = GetFreeCommandPool();
         Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
-        texture.TransitionImageLayout(cb, 0, texture.MipLevels, 0, effectiveLayers, ImageLayout.TransferDstOptimal);
+        VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, ImageLayout.TransferDstOptimal);
         Vk.CmdClearDepthStencilImage(
             cb,
             texture.OptimalDeviceImage,
@@ -52,7 +38,15 @@ internal unsafe partial class VkGraphicsDevice
             &clearValue,
             1,
             &range);
-        texture.TransitionImageLayout(cb, 0, texture.MipLevels, 0, effectiveLayers, ImageLayout.DepthStencilAttachmentOptimal);
+        VkBarriers.Transition(this, cb, texture, ImageLayout.TransferDstOptimal, VkBarriers.RestingLayout(texture));
+        pool.EndAndSubmit(cb);
+    }
+
+    internal void TransitionFromUndefined(VkTexture texture, ImageLayout layout)
+    {
+        SharedCommandPool pool = GetFreeCommandPool();
+        Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
+        VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, layout);
         pool.EndAndSubmit(cb);
     }
 

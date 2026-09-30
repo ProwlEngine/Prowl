@@ -2,13 +2,10 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Graphite.Vk;
 
-// Write phase: brings resolved textures into their shader-visible layouts and translates the resolve
-// scratch into vkUpdateDescriptorSets writes for a freshly allocated set.
 internal unsafe sealed partial class VkDescriptorBinder
 {
-    private void TransitionResolvedTextures(ResourceLayoutElementDescription[] elements)
+    private void PrepareResolvedTextures(ResourceLayoutElementDescription[] elements, bool isGraphics)
     {
-        Silk.NET.Vulkan.CommandBuffer cb = _cbOwner.CommandBuffer;
         for (int i = 0; i < elements.Length; i++)
         {
             ref ResolvedBinding r = ref _resolveScratch[i];
@@ -16,14 +13,30 @@ internal unsafe sealed partial class VkDescriptorBinder
                 continue;
 
             VkTexture tex = r.View.Target;
-            ImageLayout targetLayout = r.Kind == ResourceKind.TextureReadOnly
-                ? ImageLayout.ShaderReadOnlyOptimal
-                : ImageLayout.General;
+            ImageLayout current = VkBarriers.CurrentLayout(_cbOwner, tex);
 
-            tex.TransitionImageLayout(cb, 0, tex.MipLevels, 0, tex.ActualArrayLayers, targetLayout);
+            if (r.Kind == ResourceKind.TextureReadOnly)
+            {
+                if (current != ImageLayout.ShaderReadOnlyOptimal)
+                {
+                    throw new RenderException(
+                        $"Texture '{tex.Name}' is bound for sampling while in layout {current}. " +
+                        "Declare it as a Sampled input of the pass.");
+                }
+                continue;
+            }
 
-            if (r.Kind == ResourceKind.TextureReadWrite && (tex.Usage & TextureUsage.Sampled) != 0)
-                _cbOwner.QueuePreDrawSampledImage(tex);
+            if (current == ImageLayout.General || _cbOwner.IsTemporaryStorage(tex))
+                continue;
+
+            if (isGraphics || _cbOwner.StateOf(tex) != TextureState.Resting)
+            {
+                throw new RenderException(
+                    $"Texture '{tex.Name}' is bound for storage while in layout {current}. " +
+                    "Declare it as a Storage input or output of the pass.");
+            }
+
+            _cbOwner.BeginTemporaryStorage(tex);
         }
     }
 

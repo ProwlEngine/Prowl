@@ -137,17 +137,19 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
         uint layerCount)
     {
         VkCommandBuffer.CopyTextureCore_VkCommandBuffer(
-            _gd.Vk,
+            _gd,
             _cb,
             source, srcX, srcY, srcZ, srcMipLevel, srcBaseArrayLayer,
             destination, dstX, dstY, dstZ, dstMipLevel, dstBaseArrayLayer,
-            width, height, depth, layerCount);
+            width, height, depth, layerCount,
+            VkBarriers.CurrentLayout(this, Util.AssertSubtype<Texture, VkTexture>(source)),
+            VkBarriers.CurrentLayout(this, Util.AssertSubtype<Texture, VkTexture>(destination)));
     }
 
     private protected override void GenerateMipmapsCore(Texture texture)
     {
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
-        VkCommandBuffer.GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex);
+        VkCommandBuffer.GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex, VkBarriers.CurrentLayout(this, vkTex));
     }
 
     private protected override void DisposeCore()

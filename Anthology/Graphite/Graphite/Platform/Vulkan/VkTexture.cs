@@ -27,6 +27,7 @@ internal unsafe partial class VkTexture : Texture
 
     public ResourceRefCount RefCount { get; }
     public bool IsSwapchainTexture => _isSwapchainTexture;
+    public bool IsStaging => _stagingBuffer.Handle != 0;
 
     internal VkTexture(VkGraphicsDevice gd, ref TextureDescription description)
         : base(description)
@@ -51,7 +52,7 @@ internal unsafe partial class VkTexture : Texture
             imageCI.Extent.Width = Width;
             imageCI.Extent.Height = Height;
             imageCI.Extent.Depth = Depth;
-            imageCI.InitialLayout = ImageLayout.Preinitialized;
+            imageCI.InitialLayout = ImageLayout.Undefined;
             imageCI.Usage = VkFormats.ToVkTextureUsage(Usage);
             imageCI.Tiling = ImageTiling.Optimal;
             imageCI.Format = VkFormat;
@@ -63,7 +64,6 @@ internal unsafe partial class VkTexture : Texture
                 imageCI.Flags |= ImageCreateFlags.CreateCubeCompatibleBit;
             }
 
-            uint subresourceCount = MipLevels * _actualImageArrayLayers * Depth;
             _gd.Vk.CreateImage(gd.Device, in imageCI, null, out _optimalImage).CheckResult();
 
             MemoryRequirements memoryRequirements;
@@ -98,8 +98,9 @@ internal unsafe partial class VkTexture : Texture
             _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
             allocatedSize = memoryRequirements.Size;
 
-            _imageLayouts = new ImageLayout[subresourceCount];
-            Array.Fill(_imageLayouts, ImageLayout.Preinitialized);
+            _imageLayouts = new ImageLayout[MipLevels * _actualImageArrayLayers * Depth];
+            Array.Fill(_imageLayouts, ImageLayout.Undefined);
+
         }
         else // isStaging
         {
@@ -166,8 +167,8 @@ internal unsafe partial class VkTexture : Texture
             allocatedSize = bufferMemReqs.Size;
         }
 
-        ClearIfRenderTarget();
-        TransitionIfSampled();
+        if (!isStaging)
+            InitializeLayout();
         RefCount = new ResourceRefCount(DestroyNative);
 
         Constructor_RecordAllocation((long)allocatedSize);
@@ -193,32 +194,22 @@ internal unsafe partial class VkTexture : Texture
         VkFormat = vkFormat;
         VkSampleCount = VkFormats.ToVkSampleCount(sampleCount);
         _optimalImage = existingImage;
+        _actualImageArrayLayers = arrayLayers;
         _imageLayouts = [ImageLayout.Undefined];
         _isSwapchainTexture = true;
 
-        ClearIfRenderTarget();
+        InitializeLayout();
         RefCount = new ResourceRefCount(DestroyNative);
     }
 
-    private void ClearIfRenderTarget()
+    private void InitializeLayout()
     {
-        // If the image is going to be used as a render target, we need to clear the data before its first use.
         if ((Usage & TextureUsage.RenderTarget) != 0)
-        {
             _gd.ClearColorTexture(this, new ClearColorValue(0, 0, 0, 0));
-        }
         else if ((Usage & TextureUsage.DepthStencil) != 0)
-        {
             _gd.ClearDepthTexture(this, new ClearDepthStencilValue(0, 0));
-        }
-    }
-
-    private void TransitionIfSampled()
-    {
-        if ((Usage & TextureUsage.Sampled) != 0)
-        {
-            _gd.TransitionImageLayout(this, ImageLayout.ShaderReadOnlyOptimal);
-        }
+        else
+            _gd.TransitionFromUndefined(this, VkBarriers.RestingLayout(this));
     }
 
     internal SubresourceLayout GetSubresourceLayout(uint subresource)
@@ -288,7 +279,7 @@ internal unsafe partial class VkTexture : Texture
 #endif
         if (oldLayout != newLayout)
         {
-            ImageAspectFlags aspectMask = GetAspectMask();
+            ImageAspectFlags aspectMask = AspectMask;
             _gd.Vk.TransitionImageLayout(
                 cb,
                 OptimalDeviceImage,
@@ -333,7 +324,7 @@ internal unsafe partial class VkTexture : Texture
 
                 if (oldLayout != newLayout)
                 {
-                    ImageAspectFlags aspectMask = GetAspectMask();
+                    ImageAspectFlags aspectMask = AspectMask;
                     _gd.Vk.TransitionImageLayout(
                         cb,
                         OptimalDeviceImage,
@@ -352,16 +343,17 @@ internal unsafe partial class VkTexture : Texture
         }
     }
 
-    private ImageAspectFlags GetAspectMask()
+    internal ImageAspectFlags AspectMask
     {
-        if ((Usage & TextureUsage.DepthStencil) == 0)
+        get
         {
-            return ImageAspectFlags.ColorBit;
-        }
+            if ((Usage & TextureUsage.DepthStencil) == 0)
+                return ImageAspectFlags.ColorBit;
 
-        return FormatHelpers.IsStencilFormat(Format)
-            ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
-            : ImageAspectFlags.DepthBit;
+            return FormatHelpers.IsStencilFormat(Format)
+                ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
+                : ImageAspectFlags.DepthBit;
+        }
     }
 
     internal ImageLayout GetImageLayout(uint mipLevel, uint arrayLayer)

@@ -27,9 +27,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     public override VkFramebufferHandle CurrentFramebuffer => _scFramebuffers[(int)_currentImageIndex].CurrentFramebuffer;
 
-    public override RenderPass RenderPassNoClear_Init => _scFramebuffers[0].RenderPassNoClear_Init;
-    public override RenderPass RenderPassNoClear_Load => _scFramebuffers[0].RenderPassNoClear_Load;
-    public override RenderPass RenderPassClear => _scFramebuffers[0].RenderPassClear;
+    public override RenderPass GetRenderPass(bool graphMode, bool clear) => _scFramebuffers[0].GetRenderPass(graphMode, clear);
 
     public override IReadOnlyList<FramebufferAttachment> ColorTargets => _scColorTextures[(int)_currentImageIndex];
 
@@ -139,29 +137,9 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
                 TextureSampleCount.Count1,
                 _scImages[i]);
             FramebufferDescription desc = new(_depthAttachment?.Target, colorTex);
-            VkFramebuffer fb = new(_gd, ref desc, true);
+            VkFramebuffer fb = new(_gd, ref desc);
             _scFramebuffers[i] = fb;
             _scColorTextures[i] = [new FramebufferAttachment(colorTex, 0)];
-        }
-    }
-
-    public override void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb)
-    {
-        for (int i = 0; i < ColorTargets.Count; i++)
-        {
-            FramebufferAttachment ca = ColorTargets[i];
-            VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(ca.Target);
-            vkTex.SetImageLayout(0, ca.ArrayLayer, ImageLayout.ColorAttachmentOptimal);
-        }
-    }
-
-    public override void TransitionToFinalLayout(Silk.NET.Vulkan.CommandBuffer cb)
-    {
-        for (int i = 0; i < ColorTargets.Count; i++)
-        {
-            FramebufferAttachment ca = ColorTargets[i];
-            VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(ca.Target);
-            vkTex.TransitionImageLayout(cb, 0, 1, ca.ArrayLayer, 1, ImageLayout.PresentSrcKhr);
         }
     }
 

@@ -110,7 +110,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         if (_activeRenderPass.Handle != default)
         {
             EndCurrentRenderPass();
-            _currentFramebuffer!.TransitionToFinalLayout(_cb);
         }
 
         _gd.EndTiming(_cb, _pendingTimingPool);

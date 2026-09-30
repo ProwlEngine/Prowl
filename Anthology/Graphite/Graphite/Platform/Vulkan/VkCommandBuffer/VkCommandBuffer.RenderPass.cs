@@ -99,15 +99,10 @@ internal unsafe partial class VkCommandBuffer
             EndCurrentRenderPass();
         }
 
-        if (_currentFramebuffer != null)
-        {
-            _currentFramebuffer.TransitionToFinalLayout(_cb);
-        }
-
         VkFramebufferBase vkFB = Util.AssertSubtype<Framebuffer, VkFramebufferBase>(fb);
         _currentFramebuffer = vkFB;
         _currentFramebufferEverActive = false;
-        _newFramebuffer = true;
+        _currentFramebufferGraphMode = ResolveFramebufferMode(vkFB);
         _hasResolvedPipeline = false;
         Util.EnsureArrayMinimumSize(ref _scissorRects, Math.Max(1, (uint)vkFB.ColorTargets.Count));
         Util.EnsureArrayMinimumSize(ref _viewports, Math.Max(1, (uint)vkFB.ColorTargets.Count));
@@ -121,6 +116,46 @@ internal unsafe partial class VkCommandBuffer
         {
             AddStagingResource(scFB.Swapchain.RefCount);
         }
+    }
+
+    private bool ResolveFramebufferMode(VkFramebufferBase fb)
+    {
+        int total = 0;
+        int graph = 0;
+        foreach (FramebufferAttachment attachment in fb.ColorTargets)
+            CountAttachment(attachment.Target, ref total, ref graph);
+        if (fb.DepthTarget is FramebufferAttachment depth)
+            CountAttachment(depth.Target, ref total, ref graph);
+
+        if (graph != 0 && graph != total)
+        {
+            throw new RenderException(
+                "A framebuffer cannot mix graph attachments declared by the current pass with textures outside the graph.");
+        }
+
+        return graph != 0;
+    }
+
+    private void CountAttachment(Texture texture, ref int total, ref int graph)
+    {
+        total++;
+        TextureState state = StateOf(texture);
+        if (state == TextureState.Attachment)
+        {
+            graph++;
+        }
+        else if (state != TextureState.Resting)
+        {
+            throw new RenderException(
+                $"Texture '{texture.Name}' is declared as {state} by the current pass and cannot be a framebuffer attachment. " +
+                "Declare it as an Attachment output.");
+        }
+    }
+
+    internal override void RecordBarriers(ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst)
+    {
+        EnsureNoRenderPass();
+        VkBarriers.Record(_gd, _cb, textures, bufferSrc, bufferDst);
     }
 
     private void EnsureRenderPassActive()
@@ -163,8 +198,6 @@ internal unsafe partial class VkCommandBuffer
         {
             BeginRenderPassClearing(ref renderPassBI);
         }
-
-        _newFramebuffer = false;
     }
 
     private void SurveyQueuedClearValues(out bool haveAll, out bool haveAny)
@@ -185,9 +218,7 @@ internal unsafe partial class VkCommandBuffer
     // queued are replayed as CmdClearAttachments once it is open.
     private void BeginRenderPassLoading(ref RenderPassBeginInfo renderPassBI, bool haveAnyClearValues)
     {
-        renderPassBI.RenderPass = _newFramebuffer
-            ? _currentFramebuffer.RenderPassNoClear_Init
-            : _currentFramebuffer.RenderPassNoClear_Load;
+        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferGraphMode, clear: false);
         _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
         _activeRenderPass = renderPassBI.RenderPass;
 
@@ -216,7 +247,7 @@ internal unsafe partial class VkCommandBuffer
     // Every attachment has a queued clear value, so the render pass itself can do the clearing.
     private void BeginRenderPassClearing(ref RenderPassBeginInfo renderPassBI)
     {
-        renderPassBI.RenderPass = _currentFramebuffer.RenderPassClear;
+        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferGraphMode, clear: true);
 
         fixed (ClearValue* clearValuesPtr = &_clearValues[0])
         {
@@ -228,7 +259,7 @@ internal unsafe partial class VkCommandBuffer
                 _depthClearValue = null;
             }
             _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
-            _activeRenderPass = _currentFramebuffer.RenderPassClear;
+            _activeRenderPass = renderPassBI.RenderPass;
             Util.ClearArray(_validColorClearValues);
         }
     }
@@ -237,21 +268,6 @@ internal unsafe partial class VkCommandBuffer
     {
         Debug.Assert(_activeRenderPass.Handle != default);
         _gd.Vk.CmdEndRenderPass(_cb);
-        _currentFramebuffer.TransitionToIntermediateLayout(_cb);
         _activeRenderPass = default;
-
-        // Barrier so color/depth outputs can be read in subsequent passes.
-        _gd.Vk.CmdPipelineBarrier(
-            _cb,
-            PipelineStageFlags.BottomOfPipeBit,
-            PipelineStageFlags.TopOfPipeBit,
-            0,
-            0,
-            null,
-            0,
-            null,
-            0,
-            null);
-        _gd.Profiler?.RecordBarrier(BarrierBin.MemoryBarrier, 1);
     }
 }

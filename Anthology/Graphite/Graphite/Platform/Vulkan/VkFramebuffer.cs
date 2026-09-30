@@ -12,35 +12,25 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkFramebufferHandle _deviceFramebuffer;
-    private readonly RenderPass _renderPassNoClearLoad;
-    private readonly RenderPass _renderPassNoClear;
-    private readonly RenderPass _renderPassClear;
+    private readonly RenderPass[] _renderPasses = new RenderPass[4];
     private readonly List<ImageView> _attachmentViews = [];
 
     public override VkFramebufferHandle CurrentFramebuffer => _deviceFramebuffer;
-    public override RenderPass RenderPassNoClear_Init => _renderPassNoClear;
-    public override RenderPass RenderPassNoClear_Load => _renderPassNoClearLoad;
-    public override RenderPass RenderPassClear => _renderPassClear;
 
     public override uint RenderableWidth => Width;
     public override uint RenderableHeight => Height;
 
     public override uint AttachmentCount { get; }
 
-    public VkFramebuffer(VkGraphicsDevice gd, ref FramebufferDescription description, bool isPresented)
+    public VkFramebuffer(VkGraphicsDevice gd, ref FramebufferDescription description)
         : base(description.DepthTarget, description.ColorTargets)
     {
         _gd = gd;
 
         uint colorAttachmentCount = (uint)ColorTargets.Count;
 
-        CreateRenderPasses(
-            ref description,
-            isPresented,
-            colorAttachmentCount,
-            out _renderPassNoClear,
-            out _renderPassNoClearLoad,
-            out _renderPassClear);
+        for (int i = 0; i < _renderPasses.Length; i++)
+            _renderPasses[i] = CreateRenderPass(colorAttachmentCount, graphMode: (i & 2) != 0, clear: (i & 1) != 0);
 
         CreateDeviceFramebuffer(ref description, colorAttachmentCount, out _deviceFramebuffer);
 
@@ -49,137 +39,80 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
     }
 
-    private void CreateRenderPasses(
-        ref FramebufferDescription description,
-        bool isPresented,
-        uint colorAttachmentCount,
-        out RenderPass renderPassNoClear,
-        out RenderPass renderPassNoClearLoad,
-        out RenderPass renderPassClear)
+    public override RenderPass GetRenderPass(bool graphMode, bool clear)
+        => _renderPasses[(graphMode ? 2 : 0) | (clear ? 1 : 0)];
+
+    private RenderPass CreateRenderPass(uint colorAttachmentCount, bool graphMode, bool clear)
     {
-        RenderPassCreateInfo renderPassCI = new()
-        {
-            SType = StructureType.RenderPassCreateInfo
-        };
+        AttachmentLoadOp loadOp = clear ? AttachmentLoadOp.Clear : AttachmentLoadOp.Load;
 
         AttachmentDescription* attachments = stackalloc AttachmentDescription[(int)colorAttachmentCount + 1];
-        uint attachmentCount = 0;
         AttachmentReference* colorAttachmentRefs = stackalloc AttachmentReference[(int)colorAttachmentCount];
+        uint attachmentCount = 0;
+
         for (int i = 0; i < colorAttachmentCount; i++)
         {
             VkTexture vkColorTex = Util.AssertSubtype<Texture, VkTexture>(ColorTargets[i].Target);
-            AttachmentDescription colorAttachmentDesc = new();
-            colorAttachmentDesc.Format = vkColorTex.VkFormat;
-            colorAttachmentDesc.Samples = vkColorTex.VkSampleCount;
-            colorAttachmentDesc.LoadOp = AttachmentLoadOp.Load;
-            colorAttachmentDesc.StoreOp = AttachmentStoreOp.Store;
-            colorAttachmentDesc.StencilLoadOp = AttachmentLoadOp.DontCare;
-            colorAttachmentDesc.StencilStoreOp = AttachmentStoreOp.DontCare;
-            colorAttachmentDesc.InitialLayout = isPresented
-                ? ImageLayout.PresentSrcKhr
-                : ((vkColorTex.Usage & TextureUsage.Sampled) != 0)
-                    ? ImageLayout.ShaderReadOnlyOptimal
-                    : ImageLayout.ColorAttachmentOptimal;
-            colorAttachmentDesc.FinalLayout = ImageLayout.ColorAttachmentOptimal;
-            attachments[attachmentCount++] = colorAttachmentDesc;
-
-            AttachmentReference colorAttachmentRef = new();
-            colorAttachmentRef.Attachment = (uint)i;
-            colorAttachmentRef.Layout = ImageLayout.ColorAttachmentOptimal;
-            colorAttachmentRefs[i] = colorAttachmentRef;
+            ImageLayout outside = graphMode ? ImageLayout.ColorAttachmentOptimal : VkBarriers.RestingLayout(vkColorTex);
+            attachments[attachmentCount++] = new AttachmentDescription
+            {
+                Format = vkColorTex.VkFormat,
+                Samples = vkColorTex.VkSampleCount,
+                LoadOp = loadOp,
+                StoreOp = AttachmentStoreOp.Store,
+                StencilLoadOp = AttachmentLoadOp.DontCare,
+                StencilStoreOp = AttachmentStoreOp.DontCare,
+                InitialLayout = clear ? ImageLayout.Undefined : outside,
+                FinalLayout = outside,
+            };
+            colorAttachmentRefs[i] = new AttachmentReference((uint)i, ImageLayout.ColorAttachmentOptimal);
         }
 
-        AttachmentDescription depthAttachmentDesc = new();
-        AttachmentReference depthAttachmentRef = new();
+        AttachmentReference depthAttachmentRef = default;
         if (DepthTarget != null)
         {
             VkTexture vkDepthTex = Util.AssertSubtype<Texture, VkTexture>(DepthTarget.Value.Target);
             bool hasStencil = FormatHelpers.IsStencilFormat(vkDepthTex.Format);
-            depthAttachmentDesc.Format = vkDepthTex.VkFormat;
-            depthAttachmentDesc.Samples = vkDepthTex.VkSampleCount;
-            depthAttachmentDesc.LoadOp = AttachmentLoadOp.Load;
-            depthAttachmentDesc.StoreOp = AttachmentStoreOp.Store;
-            depthAttachmentDesc.StencilLoadOp = AttachmentLoadOp.DontCare;
-            depthAttachmentDesc.StencilStoreOp = hasStencil
-                ? AttachmentStoreOp.Store
-                : AttachmentStoreOp.DontCare;
-            depthAttachmentDesc.InitialLayout = ((vkDepthTex.Usage & TextureUsage.Sampled) != 0)
-                ? ImageLayout.ShaderReadOnlyOptimal
-                : ImageLayout.DepthStencilAttachmentOptimal;
-            depthAttachmentDesc.FinalLayout = ImageLayout.DepthStencilAttachmentOptimal;
-
-            depthAttachmentRef.Attachment = (uint)description.ColorTargets.Length;
-            depthAttachmentRef.Layout = ImageLayout.DepthStencilAttachmentOptimal;
-        }
-
-        SubpassDescription subpass = new();
-        subpass.PipelineBindPoint = PipelineBindPoint.Graphics;
-        if (ColorTargets.Count > 0)
-        {
-            subpass.ColorAttachmentCount = colorAttachmentCount;
-            subpass.PColorAttachments = colorAttachmentRefs;
-        }
-
-        if (DepthTarget != null)
-        {
-            subpass.PDepthStencilAttachment = &depthAttachmentRef;
-            attachments[attachmentCount++] = depthAttachmentDesc;
-        }
-
-        SubpassDependency subpassDependency = new();
-        subpassDependency.SrcSubpass = Silk.NET.Vulkan.Vk.SubpassExternal;
-        subpassDependency.SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
-        subpassDependency.DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
-        subpassDependency.DstAccessMask = AccessFlags.ColorAttachmentReadBit | AccessFlags.ColorAttachmentWriteBit;
-
-        renderPassCI.AttachmentCount = attachmentCount;
-        renderPassCI.PAttachments = attachments;
-        renderPassCI.SubpassCount = 1;
-        renderPassCI.PSubpasses = &subpass;
-        renderPassCI.DependencyCount = 1;
-        renderPassCI.PDependencies = &subpassDependency;
-
-        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out renderPassNoClear).CheckResult();
-
-        for (int i = 0; i < colorAttachmentCount; i++)
-        {
-            attachments[i].LoadOp = AttachmentLoadOp.Load;
-            attachments[i].InitialLayout = ImageLayout.ColorAttachmentOptimal;
-        }
-        if (DepthTarget != null)
-        {
-            attachments[attachmentCount - 1].LoadOp = AttachmentLoadOp.Load;
-            attachments[attachmentCount - 1].InitialLayout = ImageLayout.DepthStencilAttachmentOptimal;
-            bool hasStencil = FormatHelpers.IsStencilFormat(DepthTarget.Value.Target.Format);
-            if (hasStencil)
+            ImageLayout outside = graphMode ? ImageLayout.DepthStencilAttachmentOptimal : VkBarriers.RestingLayout(vkDepthTex);
+            depthAttachmentRef = new AttachmentReference(attachmentCount, ImageLayout.DepthStencilAttachmentOptimal);
+            attachments[attachmentCount++] = new AttachmentDescription
             {
-                attachments[attachmentCount - 1].StencilLoadOp = AttachmentLoadOp.Load;
-            }
-
+                Format = vkDepthTex.VkFormat,
+                Samples = vkDepthTex.VkSampleCount,
+                LoadOp = loadOp,
+                StoreOp = AttachmentStoreOp.Store,
+                StencilLoadOp = hasStencil ? loadOp : AttachmentLoadOp.DontCare,
+                StencilStoreOp = hasStencil ? AttachmentStoreOp.Store : AttachmentStoreOp.DontCare,
+                InitialLayout = clear ? ImageLayout.Undefined : outside,
+                FinalLayout = outside,
+            };
         }
-        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out renderPassNoClearLoad).CheckResult();
 
-
-        // Load version
-
-        if (DepthTarget != null)
+        SubpassDescription subpass = new()
         {
-            attachments[attachmentCount - 1].LoadOp = AttachmentLoadOp.Clear;
-            attachments[attachmentCount - 1].InitialLayout = ImageLayout.Undefined;
-            bool hasStencil = FormatHelpers.IsStencilFormat(DepthTarget.Value.Target.Format);
-            if (hasStencil)
-            {
-                attachments[attachmentCount - 1].StencilLoadOp = AttachmentLoadOp.Clear;
-            }
-        }
+            PipelineBindPoint = PipelineBindPoint.Graphics,
+            ColorAttachmentCount = colorAttachmentCount,
+            PColorAttachments = colorAttachmentCount > 0 ? colorAttachmentRefs : null,
+            PDepthStencilAttachment = DepthTarget != null ? &depthAttachmentRef : null,
+        };
 
-        for (int i = 0; i < colorAttachmentCount; i++)
+        SubpassDependency* dependencies = stackalloc SubpassDependency[2];
+        dependencies[0] = VkBarriers.ExternalToPass(_gd);
+        dependencies[1] = VkBarriers.PassToExternal(_gd);
+
+        RenderPassCreateInfo renderPassCI = new()
         {
-            attachments[i].LoadOp = AttachmentLoadOp.Clear;
-            attachments[i].InitialLayout = ImageLayout.Undefined;
-        }
+            SType = StructureType.RenderPassCreateInfo,
+            AttachmentCount = attachmentCount,
+            PAttachments = attachments,
+            SubpassCount = 1,
+            PSubpasses = &subpass,
+            DependencyCount = 2,
+            PDependencies = dependencies,
+        };
 
-        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out renderPassClear).CheckResult();
+        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out RenderPass renderPass).CheckResult();
+        return renderPass;
     }
 
     private void CreateDeviceFramebuffer(ref FramebufferDescription description, uint colorAttachmentCount, out VkFramebufferHandle deviceFramebuffer)
@@ -268,56 +201,9 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         fbCI.AttachmentCount = fbAttachmentsCount;
         fbCI.PAttachments = fbAttachments;
         fbCI.Layers = 1;
-        fbCI.RenderPass = _renderPassNoClear;
+        fbCI.RenderPass = _renderPasses[0];
 
         _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out deviceFramebuffer).CheckResult();
-    }
-
-    public override void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb)
-    {
-        for (int i = 0; i < ColorTargets.Count; i++)
-        {
-            FramebufferAttachment ca = ColorTargets[i];
-            VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(ca.Target);
-            vkTex.SetImageLayout(ca.MipLevel, ca.ArrayLayer, ImageLayout.ColorAttachmentOptimal);
-        }
-        if (DepthTarget != null)
-        {
-            VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(DepthTarget.Value.Target);
-            vkTex.SetImageLayout(
-                DepthTarget.Value.MipLevel,
-                DepthTarget.Value.ArrayLayer,
-                ImageLayout.DepthStencilAttachmentOptimal);
-        }
-    }
-
-    public override void TransitionToFinalLayout(Silk.NET.Vulkan.CommandBuffer cb)
-    {
-        for (int i = 0; i < ColorTargets.Count; i++)
-        {
-            FramebufferAttachment ca = ColorTargets[i];
-            VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(ca.Target);
-            if ((vkTex.Usage & TextureUsage.Sampled) != 0)
-            {
-                vkTex.TransitionImageLayout(
-                    cb,
-                    ca.MipLevel, 1,
-                    ca.ArrayLayer, 1,
-                    ImageLayout.ShaderReadOnlyOptimal);
-            }
-        }
-        if (DepthTarget != null)
-        {
-            VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(DepthTarget.Value.Target);
-            if ((vkTex.Usage & TextureUsage.Sampled) != 0)
-            {
-                vkTex.TransitionImageLayout(
-                    cb,
-                    DepthTarget.Value.MipLevel, 1,
-                    DepthTarget.Value.ArrayLayer, 1,
-                    ImageLayout.ShaderReadOnlyOptimal);
-            }
-        }
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
@@ -325,9 +211,8 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
     protected override void DestroyNative()
     {
         _gd.Vk.DestroyFramebuffer(_gd.Device, _deviceFramebuffer, null);
-        _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassNoClear, null);
-        _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassNoClearLoad, null);
-        _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassClear, null);
+        foreach (RenderPass renderPass in _renderPasses)
+            _gd.Vk.DestroyRenderPass(_gd.Device, renderPass, null);
         foreach (ImageView view in _attachmentViews)
         {
             _gd.Vk.DestroyImageView(_gd.Device, view, null);

@@ -34,10 +34,6 @@ internal abstract class VkFramebufferBase : Framebuffer
     protected abstract void DestroyNative();
 
     public abstract VkFramebufferHandle CurrentFramebuffer { get; }
-    public abstract RenderPass RenderPassNoClear_Init { get; }
-    public abstract RenderPass RenderPassNoClear_Load { get; }
-    public abstract RenderPass RenderPassClear { get; }
+    public abstract RenderPass GetRenderPass(bool graphMode, bool clear);
     public abstract uint AttachmentCount { get; }
-    public abstract void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb);
-    public abstract void TransitionToFinalLayout(Silk.NET.Vulkan.CommandBuffer cb);
 }

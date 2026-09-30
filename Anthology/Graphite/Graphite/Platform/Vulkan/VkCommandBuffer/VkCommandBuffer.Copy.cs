@@ -88,21 +88,23 @@ internal unsafe partial class VkCommandBuffer
         uint layerCount)
     {
         EnsureNoRenderPass();
+        VkTexture srcVkTexture = Util.AssertSubtype<Texture, VkTexture>(source);
+        VkTexture dstVkTexture = Util.AssertSubtype<Texture, VkTexture>(destination);
         CopyTextureCore_VkCommandBuffer(
-            _gd.Vk,
+            _gd,
             _cb,
             source, srcX, srcY, srcZ, srcMipLevel, srcBaseArrayLayer,
             destination, dstX, dstY, dstZ, dstMipLevel, dstBaseArrayLayer,
-            width, height, depth, layerCount);
+            width, height, depth, layerCount,
+            VkBarriers.CurrentLayout(this, srcVkTexture),
+            VkBarriers.CurrentLayout(this, dstVkTexture));
 
-        VkTexture srcVkTexture = Util.AssertSubtype<Texture, VkTexture>(source);
         AddStagingResource(srcVkTexture.RefCount);
-        VkTexture dstVkTexture = Util.AssertSubtype<Texture, VkTexture>(destination);
         AddStagingResource(dstVkTexture.RefCount);
     }
 
     internal static void CopyTextureCore_VkCommandBuffer(
-        VkApi vk,
+        VkGraphicsDevice gd,
         Silk.NET.Vulkan.CommandBuffer cb,
         Texture source,
         uint srcX, uint srcY, uint srcZ,
@@ -113,8 +115,11 @@ internal unsafe partial class VkCommandBuffer
         uint dstMipLevel,
         uint dstBaseArrayLayer,
         uint width, uint height, uint depth,
-        uint layerCount)
+        uint layerCount,
+        ImageLayout srcLayout,
+        ImageLayout dstLayout)
     {
+        VkApi vk = gd.Vk;
         VkTexture src = Util.AssertSubtype<Texture, VkTexture>(source);
         VkTexture dst = Util.AssertSubtype<Texture, VkTexture>(destination);
 
@@ -124,24 +129,24 @@ internal unsafe partial class VkCommandBuffer
         if (!sourceIsStaging && !destIsStaging)
         {
             CopyImageToImage(
-                vk, cb,
-                src, srcX, srcY, srcZ, srcMipLevel, srcBaseArrayLayer,
-                dst, dstX, dstY, dstZ, dstMipLevel, dstBaseArrayLayer,
+                gd, cb,
+                src, srcX, srcY, srcZ, srcMipLevel, srcBaseArrayLayer, srcLayout,
+                dst, dstX, dstY, dstZ, dstMipLevel, dstBaseArrayLayer, dstLayout,
                 width, height, depth, layerCount);
         }
         else if (sourceIsStaging && !destIsStaging)
         {
             CopyStagingToImage(
-                vk, cb,
+                gd, cb,
                 src, srcX, srcY, srcZ, srcMipLevel, srcBaseArrayLayer,
-                dst, dstX, dstY, dstZ, dstMipLevel, dstBaseArrayLayer,
+                dst, dstX, dstY, dstZ, dstMipLevel, dstBaseArrayLayer, dstLayout,
                 width, height, depth, layerCount);
         }
         else if (!sourceIsStaging && destIsStaging)
         {
             CopyImageToStaging(
-                vk, cb,
-                src, srcX, srcY, srcZ, srcMipLevel, srcBaseArrayLayer,
+                gd, cb,
+                src, srcX, srcY, srcZ, srcMipLevel, srcBaseArrayLayer, srcLayout,
                 dst, dstX, dstY, dstZ, dstMipLevel, dstBaseArrayLayer,
                 width, height, depth, layerCount);
         }
@@ -156,10 +161,10 @@ internal unsafe partial class VkCommandBuffer
     }
 
     private static void CopyImageToImage(
-        VkApi vk,
+        VkGraphicsDevice gd,
         Silk.NET.Vulkan.CommandBuffer cb,
-        VkTexture src, uint srcX, uint srcY, uint srcZ, uint srcMipLevel, uint srcBaseArrayLayer,
-        VkTexture dst, uint dstX, uint dstY, uint dstZ, uint dstMipLevel, uint dstBaseArrayLayer,
+        VkTexture src, uint srcX, uint srcY, uint srcZ, uint srcMipLevel, uint srcBaseArrayLayer, ImageLayout srcLayout,
+        VkTexture dst, uint dstX, uint dstY, uint dstZ, uint dstMipLevel, uint dstBaseArrayLayer, ImageLayout dstLayout,
         uint width, uint height, uint depth, uint layerCount)
     {
         ImageCopy region = new()
@@ -183,10 +188,10 @@ internal unsafe partial class VkCommandBuffer
             Extent = new Extent3D { Width = width, Height = height, Depth = depth }
         };
 
-        src.TransitionImageLayout(cb, srcMipLevel, 1, srcBaseArrayLayer, layerCount, ImageLayout.TransferSrcOptimal);
-        dst.TransitionImageLayout(cb, dstMipLevel, 1, dstBaseArrayLayer, layerCount, ImageLayout.TransferDstOptimal);
+        VkBarriers.Transition(gd, cb, src, srcLayout, ImageLayout.TransferSrcOptimal, srcMipLevel, 1, srcBaseArrayLayer, layerCount);
+        VkBarriers.Transition(gd, cb, dst, dstLayout, ImageLayout.TransferDstOptimal, dstMipLevel, 1, dstBaseArrayLayer, layerCount);
 
-        vk.CmdCopyImage(
+        gd.Vk.CmdCopyImage(
             cb,
             src.OptimalDeviceImage,
             ImageLayout.TransferSrcOptimal,
@@ -195,19 +200,19 @@ internal unsafe partial class VkCommandBuffer
             1,
             in region);
 
-        RestoreSampledLayout(cb, src, srcMipLevel, srcBaseArrayLayer, layerCount);
-        RestoreSampledLayout(cb, dst, dstMipLevel, dstBaseArrayLayer, layerCount);
+        VkBarriers.Transition(gd, cb, src, ImageLayout.TransferSrcOptimal, srcLayout, srcMipLevel, 1, srcBaseArrayLayer, layerCount);
+        VkBarriers.Transition(gd, cb, dst, ImageLayout.TransferDstOptimal, dstLayout, dstMipLevel, 1, dstBaseArrayLayer, layerCount);
     }
 
     private static void CopyStagingToImage(
-        VkApi vk,
+        VkGraphicsDevice gd,
         Silk.NET.Vulkan.CommandBuffer cb,
         VkTexture src, uint srcX, uint srcY, uint srcZ, uint srcMipLevel, uint srcBaseArrayLayer,
-        VkTexture dst, uint dstX, uint dstY, uint dstZ, uint dstMipLevel, uint dstBaseArrayLayer,
+        VkTexture dst, uint dstX, uint dstY, uint dstZ, uint dstMipLevel, uint dstBaseArrayLayer, ImageLayout dstLayout,
         uint width, uint height, uint depth, uint layerCount)
     {
         SubresourceLayout srcLayout = src.GetSubresourceLayout(src.CalculateSubresource(srcMipLevel, srcBaseArrayLayer));
-        dst.TransitionImageLayout(cb, dstMipLevel, 1, dstBaseArrayLayer, layerCount, ImageLayout.TransferDstOptimal);
+        VkBarriers.Transition(gd, cb, dst, dstLayout, ImageLayout.TransferDstOptimal, dstMipLevel, 1, dstBaseArrayLayer, layerCount);
 
         StagingImageLayout layout = new(src, srcMipLevel, src.Format, src.Format);
 
@@ -232,20 +237,20 @@ internal unsafe partial class VkCommandBuffer
             }
         };
 
-        vk.CmdCopyBufferToImage(cb, src.StagingBuffer, dst.OptimalDeviceImage, ImageLayout.TransferDstOptimal, 1, in region);
+        gd.Vk.CmdCopyBufferToImage(cb, src.StagingBuffer, dst.OptimalDeviceImage, ImageLayout.TransferDstOptimal, 1, in region);
 
-        RestoreSampledLayout(cb, dst, dstMipLevel, dstBaseArrayLayer, layerCount);
+        VkBarriers.Transition(gd, cb, dst, ImageLayout.TransferDstOptimal, dstLayout, dstMipLevel, 1, dstBaseArrayLayer, layerCount);
     }
 
     private static void CopyImageToStaging(
-        VkApi vk,
+        VkGraphicsDevice gd,
         Silk.NET.Vulkan.CommandBuffer cb,
-        VkTexture src, uint srcX, uint srcY, uint srcZ, uint srcMipLevel, uint srcBaseArrayLayer,
+        VkTexture src, uint srcX, uint srcY, uint srcZ, uint srcMipLevel, uint srcBaseArrayLayer, ImageLayout srcLayout,
         VkTexture dst, uint dstX, uint dstY, uint dstZ, uint dstMipLevel, uint dstBaseArrayLayer,
         uint width, uint height, uint depth, uint layerCount)
     {
         VkImageHandle srcImage = src.OptimalDeviceImage;
-        src.TransitionImageLayout(cb, srcMipLevel, 1, srcBaseArrayLayer, layerCount, ImageLayout.TransferSrcOptimal);
+        VkBarriers.Transition(gd, cb, src, srcLayout, ImageLayout.TransferSrcOptimal, srcMipLevel, 1, srcBaseArrayLayer, layerCount);
 
         ImageAspectFlags aspect = (src.Usage & TextureUsage.DepthStencil) != 0
             ? ImageAspectFlags.DepthBit
@@ -276,9 +281,9 @@ internal unsafe partial class VkCommandBuffer
             };
         }
 
-        vk.CmdCopyImageToBuffer(cb, srcImage, ImageLayout.TransferSrcOptimal, dst.StagingBuffer, layerCount, layers);
+        gd.Vk.CmdCopyImageToBuffer(cb, srcImage, ImageLayout.TransferSrcOptimal, dst.StagingBuffer, layerCount, layers);
 
-        RestoreSampledLayout(cb, src, srcMipLevel, srcBaseArrayLayer, layerCount);
+        VkBarriers.Transition(gd, cb, src, ImageLayout.TransferSrcOptimal, srcLayout, srcMipLevel, 1, srcBaseArrayLayer, layerCount);
     }
 
     private static void CopyStagingToStaging(
@@ -322,18 +327,6 @@ internal unsafe partial class VkCommandBuffer
                 vk.CmdCopyBuffer(cb, srcBuffer, dstBuffer, 1, in region);
             }
         }
-    }
-
-    private static void RestoreSampledLayout(
-        Silk.NET.Vulkan.CommandBuffer cb,
-        VkTexture texture,
-        uint mipLevel,
-        uint baseArrayLayer,
-        uint layerCount)
-    {
-        if ((texture.Usage & TextureUsage.Sampled) == 0) return;
-
-        texture.TransitionImageLayout(cb, mipLevel, 1, baseArrayLayer, layerCount, ImageLayout.ShaderReadOnlyOptimal);
     }
 
     private static ImageAspectFlags CopyAspectMask(VkTexture texture)
@@ -390,16 +383,12 @@ internal unsafe partial class VkCommandBuffer
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
         AddStagingResource(vkTex.RefCount);
 
-        GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex);
+        GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex, VkBarriers.CurrentLayout(this, vkTex));
     }
 
-    internal static void GenerateMipmapsCore_VkCommandBuffer(VkGraphicsDevice gd, Silk.NET.Vulkan.CommandBuffer cb, VkTexture vkTex)
+    internal static void GenerateMipmapsCore_VkCommandBuffer(VkGraphicsDevice gd, Silk.NET.Vulkan.CommandBuffer cb, VkTexture vkTex, ImageLayout layout)
     {
-        uint layerCount = vkTex.ArrayLayers;
-        if ((vkTex.Usage & TextureUsage.Cubemap) != 0)
-        {
-            layerCount *= 6;
-        }
+        uint layerCount = vkTex.ActualArrayLayers;
 
         uint width = vkTex.Width;
         uint height = vkTex.Height;
@@ -410,6 +399,9 @@ internal unsafe partial class VkCommandBuffer
             uint mipHeight = Math.Max(height >> 1, 1);
             uint mipDepth = Math.Max(depth >> 1, 1);
 
+            ImageLayout sourceLayout = level == 1 ? layout : ImageLayout.TransferDstOptimal;
+            VkBarriers.Transition(gd, cb, vkTex, sourceLayout, ImageLayout.TransferSrcOptimal, level - 1, 1, 0, layerCount);
+            VkBarriers.Transition(gd, cb, vkTex, layout, ImageLayout.TransferDstOptimal, level, 1, 0, layerCount);
             BlitMipLevel(gd, cb, vkTex, level, layerCount, width, height, depth, mipWidth, mipHeight, mipDepth);
 
             width = mipWidth;
@@ -417,10 +409,9 @@ internal unsafe partial class VkCommandBuffer
             depth = mipDepth;
         }
 
-        if ((vkTex.Usage & TextureUsage.Sampled) != 0)
-        {
-            vkTex.TransitionImageLayoutNonmatching(cb, 0, vkTex.MipLevels, 0, layerCount, ImageLayout.ShaderReadOnlyOptimal);
-        }
+        uint last = vkTex.MipLevels - 1;
+        VkBarriers.Transition(gd, cb, vkTex, ImageLayout.TransferSrcOptimal, layout, 0, last, 0, layerCount);
+        VkBarriers.Transition(gd, cb, vkTex, ImageLayout.TransferDstOptimal, layout, last, 1, 0, layerCount);
     }
 
     private static void BlitMipLevel(
@@ -432,9 +423,6 @@ internal unsafe partial class VkCommandBuffer
         uint width, uint height, uint depth,
         uint mipWidth, uint mipHeight, uint mipDepth)
     {
-        vkTex.TransitionImageLayoutNonmatching(cb, level - 1, 1, 0, layerCount, ImageLayout.TransferSrcOptimal);
-        vkTex.TransitionImageLayoutNonmatching(cb, level, 1, 0, layerCount, ImageLayout.TransferDstOptimal);
-
         ImageBlit region = new()
         {
             SrcSubresource = new ImageSubresourceLayers
@@ -485,8 +473,10 @@ internal unsafe partial class VkCommandBuffer
             DstSubresource = new ImageSubresourceLayers { LayerCount = 1, AspectMask = aspectFlags }
         };
 
-        vkSource.TransitionImageLayout(_cb, 0, 1, 0, 1, ImageLayout.TransferSrcOptimal);
-        vkDestination.TransitionImageLayout(_cb, 0, 1, 0, 1, ImageLayout.TransferDstOptimal);
+        ImageLayout sourceLayout = VkBarriers.CurrentLayout(this, vkSource);
+        ImageLayout destinationLayout = VkBarriers.CurrentLayout(this, vkDestination);
+        VkBarriers.Transition(_gd, _cb, vkSource, sourceLayout, ImageLayout.TransferSrcOptimal, 0, 1, 0, 1);
+        VkBarriers.Transition(_gd, _cb, vkDestination, destinationLayout, ImageLayout.TransferDstOptimal, 0, 1, 0, 1);
 
         _gd.Vk.CmdResolveImage(
             _cb,
@@ -497,6 +487,7 @@ internal unsafe partial class VkCommandBuffer
             1,
             in region);
 
-        RestoreSampledLayout(_cb, vkDestination, 0, 0, 1);
+        VkBarriers.Transition(_gd, _cb, vkSource, ImageLayout.TransferSrcOptimal, sourceLayout, 0, 1, 0, 1);
+        VkBarriers.Transition(_gd, _cb, vkDestination, ImageLayout.TransferDstOptimal, destinationLayout, 0, 1, 0, 1);
     }
 }

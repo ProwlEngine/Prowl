@@ -55,6 +55,7 @@ internal unsafe partial class VkCommandBuffer
     {
         PreDispatchCommand();
         _gd.Vk.CmdDispatch(_cb, groupCountX, groupCountY, groupCountZ);
+        EndTemporaryStorage();
     }
 
     private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
@@ -62,6 +63,7 @@ internal unsafe partial class VkCommandBuffer
         PreDispatchCommand();
         VkBuffer vkBuffer = ResolveIndirectBuffer(indirectBuffer);
         _gd.Vk.CmdDispatchIndirect(_cb, vkBuffer.DeviceBuffer, offset);
+        EndTemporaryStorage();
     }
 
     private VkBuffer ResolveIndirectBuffer(DeviceBuffer indirectBuffer)
@@ -74,8 +76,6 @@ internal unsafe partial class VkCommandBuffer
 
     private void PreDrawCommand()
     {
-        FlushPreDrawSampledImages();
-
         ResolveAndBindGraphicsPipeline();
 
         // Resolve + transition property textures (must precede the render pass) and prepare descriptor
@@ -96,8 +96,6 @@ internal unsafe partial class VkCommandBuffer
     {
         EnsureNoRenderPass();
 
-        FlushPreDrawSampledImages();
-
         bool needBind = _descriptorBinder.Prepare(
             _currentComputeProgram,
             reportProgram: _currentShaderProgram,
@@ -106,16 +104,6 @@ internal unsafe partial class VkCommandBuffer
 
         if (needBind)
             _descriptorBinder.EmitBind(_currentComputeProgram.PipelineLayout, PipelineBindPoint.Compute);
-    }
-
-    private void FlushPreDrawSampledImages()
-    {
-        foreach (VkTexture tex in _preDrawSampledImages)
-        {
-            tex.TransitionImageLayout(_cb, 0, tex.MipLevels, 0, tex.ActualArrayLayers, ImageLayout.ShaderReadOnlyOptimal);
-        }
-
-        _preDrawSampledImages.Clear();
     }
 
     private void ResolveAndBindGraphicsPipeline()
