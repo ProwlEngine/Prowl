@@ -43,6 +43,7 @@ public class ProjectPanel : DockPanel
             if (EditorAssetBackend.Instance != null)
             {
                 Runtime.Debug.Log("Refreshing asset database...");
+                EditorAssetBackend.Instance.Dispose();
                 var db = new EditorAssetBackend(Project.Current!);
                 db.Initialize();
             }
