@@ -197,7 +197,11 @@ public class EditorApplication : Game
         PropertyGridConfig.OnFieldChanged = target =>
         {
             var eo = target as Runtime.EngineObject;
-            if (eo.IsValid()) eo.OnValidate();
+            if (eo.IsValid())
+            {
+                try { eo.OnValidate(); }
+                catch (Exception ex) { Runtime.Debug.LogError($"OnValidate threw on {eo.GetType().Name}: {ex}"); }
+            }
 
             // Record the edit against the prefab it belongs to as it happens, rather than relying on
             // something drawing this object again later.
