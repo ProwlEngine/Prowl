@@ -120,8 +120,6 @@ public class DefaultRenderPipeline : RenderPipeline
         // change in the pipeline's CBs picks up wherever GL is.
         Internal_Render(camera, data);
 
-        PropertyState.ClearGlobals();
-
         base.Render(camera, in data);
     }
 
@@ -436,6 +434,10 @@ public class DefaultRenderPipeline : RenderPipeline
         using var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
         resetCmd.SetRenderTarget(null);
         resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+        // These point at this render's pooled targets; every other global stays set for the next render.
+        resetCmd.ClearGlobalTexture("_CameraDepthTexture");
+        resetCmd.ClearGlobalTexture("_CameraNormalsTexture");
+        resetCmd.ClearGlobalTexture("_CameraMotionVectorsTexture");
         Graphics.Submit(resetCmd);
 
         // Save previous VP for next frame's motion vectors.
