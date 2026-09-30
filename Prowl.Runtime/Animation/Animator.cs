@@ -180,7 +180,6 @@ public class Animator : MonoBehaviour
         }
     }
 
-    /// <summary>Plays a clip from the start, cancelling any cross fade.</summary>
     /// <summary>
     /// The pose the External Pose node of this name plays, on its source skeleton, for the game to write
     /// into each frame. Null when the running graph has no such node. From the first call the node plays
@@ -291,6 +290,7 @@ public class Animator : MonoBehaviour
         return null;
     }
 
+    /// <summary>Plays a clip from the start, cancelling any cross fade.</summary>
     public void Play(AnimationClip clip)
     {
         AssertOwner();
