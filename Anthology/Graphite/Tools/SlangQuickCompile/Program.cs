@@ -37,8 +37,8 @@ internal static class Program
         bool write = args.Contains("--write");
         string[] names = [.. args.Where(a => !a.StartsWith("--"))];
 
-        string shaderDir = LocateDirectory("Tests/Compiler/Shaders");
-        string knownGoodDir = LocateDirectory("Tests/Compiler/KnownGood");
+        string shaderDir = LocateDirectory("Tests/ShaderDef.Compiler/Shaders");
+        string knownGoodDir = LocateDirectory("Tests/ShaderDef.Compiler/KnownGood");
 
         Console.WriteLine($"Shaders:   {shaderDir}");
         Console.WriteLine($"KnownGood: {knownGoodDir}\n");
