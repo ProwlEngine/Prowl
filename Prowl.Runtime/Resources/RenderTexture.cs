@@ -78,6 +78,15 @@ public sealed class RenderTexture : Asset, ISerializable
         ReleaseResources();
     }
 
+    protected internal override long EstimateBytes()
+    {
+        if (_internalTextures == null) return 0;
+        long bytesPerPixel = _hasDepthAttachment ? Texture.GetBytesPerPixel(TextureImageFormat.Depth24f) : 0;
+        foreach (TextureImageFormat format in _textureFormats)
+            bytesPerPixel += Texture.GetBytesPerPixel(format);
+        return (long)_width * _height * bytesPerPixel;
+    }
+
     /// <summary>Allocates the framebuffer and its attachments if they aren't already.</summary>
     private void EnsureCreated()
     {
