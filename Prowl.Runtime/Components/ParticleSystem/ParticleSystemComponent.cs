@@ -181,7 +181,15 @@ public class ParticleSystemComponent : MonoBehaviour
 
     private const float MaxStep = 0.1f;
     private const float MaxCatchUp = 10f;
+    private const float MaxFrameDelta = 0.25f;
     private const int MaxCollisionEvents = 4096;
+    private const float PreviewRestartDelay = 1f;
+
+    /// <summary>
+    /// Set by the editor so a system can tell when it, or anything above it, is selected. Selecting any
+    /// ancestor previews the systems below it in edit mode.
+    /// </summary>
+    internal static Func<GameObject, bool>? EditorSelectionQuery;
 
     private Particle[] _particles = Array.Empty<Particle>();
     private int _count;
@@ -192,8 +200,10 @@ public class ParticleSystemComponent : MonoBehaviour
     private bool _isEmitting;
     private float _time;
     private float _delay;
-    private float _simTime;
+    private double _simTime;
     private float _catchUp;
+    private float _culledTime;
+    private float _culledDeadline;
     private bool _prewarming;
 
     // Spaces. Particles live in simulation space, the emitter's shape lives in emitter space.
@@ -204,12 +214,14 @@ public class ParticleSystemComponent : MonoBehaviour
     private bool _simIsWorld;
     private bool _spacesValid;
     private (SimulationSpace, ParticleScalingMode, GameObject?) _spaceKey;
+    private Float4x4 _lastValidWorldToSim = Float4x4.Identity;
     private Float3 _emitterOriginSim;
     private float _sizeScale = 1f;
 
     // Emitter motion over the frame being simulated.
     private bool _hasEmitterHistory;
     private Float3 _previousEmitterPosition;
+    private Float3 _previousEmitterOriginSim;
     private Float3 _emitterVelocitySim;
     private Float3 _emitterMoveSim;
     private float _emitterMoveDistance;
@@ -221,14 +233,23 @@ public class ParticleSystemComponent : MonoBehaviour
 
     private AABB _worldBounds;
     private bool _hasBounds;
+    private Float3 _simBoundsMin;
+    private Float3 _simBoundsMax;
+    private float _boundsPad;
 
     private long _lastVisibleFrame = long.MinValue / 2;
     private long _selectedFrame = long.MinValue / 2;
     private bool _previewActive;
-    private long _drivenFrame = long.MinValue / 2;
+    private bool _previewHeld;
+    private float _previewIdle;
+
+    // The system whose sub emitter list names this one. While it does, this one never emits on its own.
+    private ParticleSystemComponent? _driver;
+    private long _emitSpacesFrame = long.MinValue;
 
     private readonly List<ParticleCollisionEvent> _collisionEvents = new();
     private readonly List<SubEmitRequest> _subEmitQueue = new();
+    private readonly List<ParticleSystemComponent> _subEmitTargets = new();
     private bool _hasBirthSubEmitters;
     private bool _hasCollisionSubEmitters;
     private bool _hasDeathSubEmitters;
@@ -238,6 +259,10 @@ public class ParticleSystemComponent : MonoBehaviour
         public int Emitter;
         public int Count;
         public Float3 Position;
+        /// <summary>Where the parent particle started this step. Birth emission spreads along the way.</summary>
+        public Float3 PreviousPosition;
+        /// <summary>Seconds the spread covers, 0 to emit everything at <see cref="Position"/>.</summary>
+        public float Span;
         public Float3 Velocity;
         public Color Color;
         public Float3 Size;
@@ -267,7 +292,10 @@ public class ParticleSystemComponent : MonoBehaviour
     }
 
     /// <summary>Seconds simulated since the system was last cleared.</summary>
-    public float TotalTime => _simTime;
+    public float TotalTime => (float)_simTime;
+
+    internal double SimulationTime => _simTime;
+    internal int Capacity => _particles.Length;
 
     /// <summary>Collisions found during the last simulated frame.</summary>
     public IReadOnlyList<ParticleCollisionEvent> CollisionEvents => _collisionEvents;
@@ -281,10 +309,11 @@ public class ParticleSystemComponent : MonoBehaviour
     /// </summary>
     public void Play(bool withChildren = true)
     {
+        _previewHeld = false;
         if (_isPlaying && _isPaused)
             _isPaused = false;
         else if (!_isPlaying || !_isEmitting)
-            Restart();
+            StartPlayback();
 
         if (withChildren)
             foreach (ParticleSystemComponent child in Children())
@@ -294,6 +323,7 @@ public class ParticleSystemComponent : MonoBehaviour
     /// <summary>Freezes the system where it is. <see cref="Play"/> resumes it.</summary>
     public void Pause(bool withChildren = true)
     {
+        if (!Application.IsPlaying) _previewHeld = true;
         if (_isPlaying)
             _isPaused = true;
 
@@ -304,6 +334,7 @@ public class ParticleSystemComponent : MonoBehaviour
 
     public void Stop(bool withChildren = true, ParticleStopBehavior behavior = ParticleStopBehavior.StopEmitting)
     {
+        if (!Application.IsPlaying) _previewHeld = true;
         if (_isPlaying)
         {
             _isEmitting = false;
@@ -317,6 +348,27 @@ public class ParticleSystemComponent : MonoBehaviour
             foreach (ParticleSystemComponent child in Children())
                 child.Stop(false, behavior);
     }
+
+    /// <summary>
+    /// Clears the system and plays it again from the start. Unlike stopping and playing, this never runs
+    /// the stop action.
+    /// </summary>
+    public void Restart(bool withChildren = true)
+    {
+        _previewHeld = false;
+        ClearParticles();
+        StartPlayback();
+
+        if (withChildren)
+            foreach (ParticleSystemComponent child in Children())
+                child.Restart(false);
+    }
+
+    /// <summary>
+    /// Forgets where the emitter was, so its next move is not treated as travel. Call after teleporting it,
+    /// or a world space system fills the jump with particles and hands them the jump as velocity.
+    /// </summary>
+    public void ResetMotionHistory() => _hasEmitterHistory = false;
 
     /// <summary>Removes every particle and trail without stopping the system.</summary>
     public void Clear(bool withChildren = true)
@@ -334,22 +386,40 @@ public class ParticleSystemComponent : MonoBehaviour
     /// </summary>
     public void Simulate(float time, bool withChildren = true, bool restart = true)
     {
-        if (restart)
-        {
-            ClearParticles();
-            Restart();
-        }
-        else if (!_isPlaying)
-        {
-            Restart();
-        }
-
-        AdvanceInSteps(MathF.Max(0f, time), false);
-        _isPaused = true;
-
+        var systems = new List<ParticleSystemComponent> { this };
         if (withChildren)
-            foreach (ParticleSystemComponent child in Children())
-                child.Simulate(time, false, restart);
+            systems.AddRange(Children());
+
+        // Children restart first, so nothing a parent emits into them is cleared afterwards.
+        for (int i = systems.Count - 1; i >= 0; i--)
+        {
+            ParticleSystemComponent system = systems[i];
+            if (restart)
+            {
+                system.ClearParticles();
+                system.StartPlayback();
+            }
+            else if (!system._isPlaying)
+            {
+                system.StartPlayback();
+            }
+        }
+
+        // The whole tree steps together, so sub emitter children receive and simulate their particles
+        // at the same moments they would in play.
+        const float step = 1f / 30f;
+        float done = 0f;
+        time = MathF.Max(0f, time);
+        while (done < time - 1e-6f)
+        {
+            float dt = MathF.Min(step, time - done);
+            foreach (ParticleSystemComponent system in systems)
+                system.Advance(dt);
+            done += dt;
+        }
+
+        foreach (ParticleSystemComponent system in systems)
+            system._isPaused = true;
     }
 
     /// <summary>Emits <paramref name="count"/> particles from the shape right now, whether or not the system is emitting.</summary>
@@ -359,7 +429,7 @@ public class ParticleSystemComponent : MonoBehaviour
     public void Emit(in EmitParams overrides, int count)
     {
         if (count <= 0) return;
-        EnsureCapacity();
+        ApplyMaxParticles();
         RefreshSpaces();
         if (!_isPlaying)
         {
@@ -381,6 +451,7 @@ public class ParticleSystemComponent : MonoBehaviour
             if (overrides.Rotation.HasValue) p.Rotation = overrides.Rotation.Value;
             if (overrides.StartColor.HasValue) p.Color = p.StartColor = overrides.StartColor.Value;
             if (overrides.StartLifetime.HasValue) p.Lifetime = p.StartLifetime = MathF.Max(0f, overrides.StartLifetime.Value);
+            FinishSpawn(ref p);
         }
         RecalculateBounds();
     }
@@ -396,9 +467,11 @@ public class ParticleSystemComponent : MonoBehaviour
     /// <summary>Replaces every live particle. Trails restart from the new positions.</summary>
     public void SetParticles(ReadOnlySpan<Particle> particles)
     {
-        EnsureCapacity();
         Trails.Clear();
-        _count = Math.Min(particles.Length, _particles.Length);
+        int count = Math.Min(particles.Length, Math.Max(0, MaxParticles));
+        if (_particles.Length < count)
+            Array.Resize(ref _particles, count);
+        _count = count;
         particles[.._count].CopyTo(_particles);
         for (int i = 0; i < _count; i++)
             _particles[i].TrailSlot = 0;
@@ -466,6 +539,8 @@ public class ParticleSystemComponent : MonoBehaviour
         _isEmitting = false;
         _previewActive = false;
         ClearParticles();
+        ReleaseSubEmitters();
+        Renderer.ReleaseMeshes();
     }
 
     public override void OnValidate()
@@ -477,26 +552,80 @@ public class ParticleSystemComponent : MonoBehaviour
 
     public override void Update()
     {
+        // Claimed every frame, even while stopped, so a child never gets a frame to emit on its own.
+        ClaimSubEmitters();
+
         if (!Application.IsPlaying && !UpdateEditorPreview())
-            return;
-        if (!_isPlaying || _isPaused)
-            return;
-
-        float dt = (UseUnscaledTime ? Time.UnscaledDeltaTime : Time.DeltaTime) * MathF.Max(0f, SimulationSpeed);
-        if (dt <= 0f)
-            return;
-
-        if (Application.IsPlaying && CullingMode != ParticleCullingMode.AlwaysSimulate && !IsDriven && Time.FrameCount - _lastVisibleFrame > 2)
         {
-            if (CullingMode == ParticleCullingMode.PauseAndCatchUp)
-                _catchUp = MathF.Min(_catchUp + dt, MaxCatchUp);
+            _hasEmitterHistory = false;
             return;
         }
 
+        // Any frame the emitter is not simulated breaks its motion history, so a system that resumes
+        // after a pause or a cull does not treat everything it missed as one frame of travel.
+        float dt = (UseUnscaledTime ? Time.UnscaledDeltaTime : Time.DeltaTime) * MathF.Max(0f, SimulationSpeed);
+        if (!_isPlaying || _isPaused || dt <= 0f)
+        {
+            _hasEmitterHistory = false;
+            return;
+        }
+
+        // A debugger pause or loading hitch must not turn into hundreds of simulation steps.
+        dt = MathF.Min(dt, MaxFrameDelta);
+
+        if (Application.IsPlaying && CullingMode != ParticleCullingMode.AlwaysSimulate && !IsDriven && Time.FrameCount - _lastVisibleFrame > 2)
+        {
+            UpdateCulled(dt);
+            _hasEmitterHistory = false;
+            return;
+        }
+
+        _culledTime = 0f;
         dt += _catchUp;
         _catchUp = 0f;
         Advance(dt);
     }
+
+    /// <summary>
+    /// Keeps time for a system no camera sees. A non looping one still has to finish, so its stop action
+    /// runs off screen too: once everything it could have emitted would be dead, it is cleared and stopped.
+    /// </summary>
+    private void UpdateCulled(float dt)
+    {
+        if (CullingMode == ParticleCullingMode.PauseAndCatchUp)
+            _catchUp = MathF.Min(_catchUp + dt, MaxCatchUp);
+
+        if (Looping) return;
+
+        if (_culledTime <= 0f)
+            _culledDeadline = CulledLifespan();
+        _culledTime += dt;
+        if (_culledTime < _culledDeadline) return;
+
+        _culledTime = 0f;
+        _catchUp = 0f;
+        _isEmitting = false;
+        ClearParticles();
+        CheckFinished();
+    }
+
+    /// <summary>The longest this system could still have something alive, counting emission still to come.</summary>
+    private float CulledLifespan()
+    {
+        float longest = 0f;
+        for (int i = 0; i < _count; i++)
+            longest = MathF.Max(longest, _particles[i].Lifetime);
+
+        float emitting = _isEmitting ? _delay + MathF.Max(0f, EffectiveDuration - _time) : 0f;
+        float newest = _isEmitting ? Initial.StartLifetime.EstimateMax() : 0f;
+        float life = MathF.Max(longest, newest);
+        if (Trails.Enabled && !Trails.DieWithParticles)
+            life *= 1f + MathF.Max(0f, Trails.Lifetime.EstimateMax());
+        return emitting + life;
+    }
+
+    /// <summary>Records that a camera sees the system this frame, which keeps a culled system simulating.</summary>
+    internal void MarkVisible() => _lastVisibleFrame = Time.FrameCount;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
@@ -505,17 +634,17 @@ public class ParticleSystemComponent : MonoBehaviour
 
         RefreshSpaces();
 
-        bool visible = Renderer.Enabled && Renderer.Collect(this, camera, renderables, TextureSheet, Trails, _simTime);
+        bool visible = Renderer.Collect(this, camera, renderables, TextureSheet, Trails, _simTime, Renderer.Enabled);
         if (!visible && CullingMode != ParticleCullingMode.AlwaysSimulate)
         {
-            // Nothing drawn yet, so judge by the emitter itself or a culled system could never start.
+            // Nothing drawn yet, so judge by where it can emit, or a culled system could never start.
             Frustum frustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
-            Float3 origin = Transform.Position;
-            visible = frustum.Intersects(new AABB(origin - new Float3(1f), origin + new Float3(1f)))
+            AABB shape = Shape.LocalBounds().TransformBy(_emitterToWorld);
+            visible = frustum.Intersects(new AABB(shape.Min - new Float3(1f), shape.Max + new Float3(1f)))
                 || (_hasBounds && frustum.Intersects(_worldBounds));
         }
         if (visible)
-            _lastVisibleFrame = Time.FrameCount;
+            MarkVisible();
 
         if (Light.Enabled && _count > 0)
             Light.Collect(this, lights);
@@ -538,16 +667,32 @@ public class ParticleSystemComponent : MonoBehaviour
 
     private float EffectiveDuration => MathF.Max(0.05f, Duration);
 
-    private bool IsDriven => Time.FrameCount - _drivenFrame <= 2;
+    /// <summary>
+    /// Whether a live, enabled system currently lists this one as a sub emitter. Checked against the
+    /// driver's list every time, so removing the entry or disabling the driver hands the system back.
+    /// </summary>
+    private bool IsDriven
+    {
+        get
+        {
+            ParticleSystemComponent? driver = _driver;
+            if (driver.IsNotValid() || !driver.EnabledInHierarchy || !driver.SubEmitters.Enabled) return false;
+            foreach (SubEmitter entry in driver.SubEmitters.Emitters)
+                if (ReferenceEquals(entry.System, this))
+                    return true;
+            return false;
+        }
+    }
 
-    private void Restart()
+    private void StartPlayback()
     {
         ClaimSubEmitters();
         _isPlaying = true;
         _isPaused = false;
-        _isEmitting = true;
+        _isEmitting = !IsDriven;
         _time = 0f;
         _catchUp = 0f;
+        _culledTime = 0f;
         _hasEmitterHistory = false;
 
         if (!AutoRandomSeed)
@@ -581,7 +726,7 @@ public class ParticleSystemComponent : MonoBehaviour
     private void ClearParticles()
     {
         _count = 0;
-        _simTime = 0f;
+        _simTime = 0.0;
         _hasBounds = false;
         _collisionEvents.Clear();
         _subEmitQueue.Clear();
@@ -591,8 +736,17 @@ public class ParticleSystemComponent : MonoBehaviour
     /// <summary>Stops once emission is over and nothing is left alive, then runs the stop action.</summary>
     private void CheckFinished()
     {
-        if (!_isPlaying || _isEmitting || IsDriven) return;
+        if (!_isPlaying || _isEmitting) return;
         if (_count > 0 || Trails.HasOrphans) return;
+
+        // A driven system goes quiet once drained and is woken by its driver. It is not finished, so it
+        // raises nothing and never runs its stop action.
+        if (IsDriven)
+        {
+            _isPlaying = false;
+            _isPaused = false;
+            return;
+        }
 
         if (SubEmitters.Enabled)
             foreach (SubEmitter entry in SubEmitters.Emitters)
@@ -602,8 +756,11 @@ public class ParticleSystemComponent : MonoBehaviour
         _isPlaying = false;
         _isPaused = false;
 
-        Stopped?.Invoke(this);
-        if (!Application.IsPlaying || _prewarming) return;
+        try { Stopped?.Invoke(this); }
+        catch (Exception ex) { Debug.LogError($"[{Name}] Stopped handler threw: {ex.Message}\n{ex.StackTrace}"); }
+
+        // A handler that played the system again has taken it over, so the stop action no longer applies.
+        if (_isPlaying || !Application.IsPlaying || _prewarming) return;
 
         switch (StopAction)
         {
@@ -635,12 +792,13 @@ public class ParticleSystemComponent : MonoBehaviour
     /// </summary>
     private bool UpdateEditorPreview()
     {
-        bool selected = PreviewRoot()._selectedFrame >= Time.FrameCount - 1 || IsDriven;
+        bool selected = IsPreviewSelected() || (IsDriven && _driver!._previewActive);
         if (!selected)
         {
             if (_previewActive)
             {
                 _previewActive = false;
+                _previewHeld = false;
                 _isPlaying = false;
                 _isPaused = false;
                 _isEmitting = false;
@@ -652,10 +810,36 @@ public class ParticleSystemComponent : MonoBehaviour
         if (!_previewActive)
         {
             _previewActive = true;
+            _previewIdle = 0f;
             if (!_isPlaying)
                 Play(false);
         }
+        else if (!_isPlaying && !_previewHeld && !IsDriven)
+        {
+            // A system that finished on its own plays again after a moment, so a one shot effect keeps
+            // previewing. One the user stopped stays stopped.
+            _previewIdle += Time.UnscaledDeltaTime;
+            if (_previewIdle >= PreviewRestartDelay)
+            {
+                _previewIdle = 0f;
+                Restart(false);
+            }
+        }
         return true;
+    }
+
+    /// <summary>Selected in the editor: this system's tree was clicked in the scene view, or any GameObject above it is selected.</summary>
+    private bool IsPreviewSelected()
+    {
+        if (PreviewRoot()._selectedFrame >= Time.FrameCount - 1)
+            return true;
+
+        Func<GameObject, bool>? query = EditorSelectionQuery;
+        if (query == null) return false;
+        for (GameObject? go = GameObject; go.IsValid(); go = go.Parent)
+            if (query(go))
+                return true;
+        return false;
     }
 
     private IEnumerable<ParticleSystemComponent> Children()
@@ -675,7 +859,7 @@ public class ParticleSystemComponent : MonoBehaviour
     {
         if (dt <= 0f) return;
 
-        EnsureCapacity();
+        ApplyMaxParticles();
         UpdateEmitterMotion(dt);
         ClaimSubEmitters();
         _collisionEvents.Clear();
@@ -783,6 +967,7 @@ public class ParticleSystemComponent : MonoBehaviour
 
             ref Particle p = ref AddParticle();
             InitParticle(ref p, position, direction, time01, _emitterVelocitySim);
+            FinishSpawn(ref p);
 
             float age = _stepDt - offset;
             if (age > 0f && !UpdateParticle(ref p, age))
@@ -790,8 +975,11 @@ public class ParticleSystemComponent : MonoBehaviour
         }
     }
 
+    /// <summary>Takes the next free slot. Callers check <see cref="MaxParticles"/> first, storage grows on demand.</summary>
     private ref Particle AddParticle()
     {
+        if (_count >= _particles.Length)
+            Array.Resize(ref _particles, Math.Min(Math.Max(0, MaxParticles), Math.Max(64, _particles.Length * 2)));
         ref Particle p = ref _particles[_count++];
         p = default;
         p.RandomSeed = (uint)_random.NextInt64(0, uint.MaxValue);
@@ -804,16 +992,28 @@ public class ParticleSystemComponent : MonoBehaviour
         Initial.Apply(ref p, time01, _random);
         p.Velocity = direction * Initial.Speed(time01, _random);
 
-        if (Shape.Enabled && Shape.AlignToDirection)
-            p.Rotation += Quaternion.ToEuler(Quaternion.LookRotation(direction, MathF.Abs(direction.Y) > 0.99f ? Float3.UnitZ : Float3.UnitY));
+        if (Shape.Enabled && Shape.AlignToDirection && UsesFullRotation)
+        {
+            Quaternion facing = Quaternion.LookRotation(direction, MathF.Abs(direction.Y) > 0.99f ? Float3.UnitZ : Float3.UnitY);
+            p.Rotation = Quaternion.ToEuler(facing * Quaternion.FromEuler(p.Rotation));
+        }
 
         if (InheritVelocity.Enabled && InheritVelocity.Mode == InheritVelocityMode.Initial)
             p.Velocity += emitterVelocity * InheritVelocity.Multiplier.Evaluate(time01, p.Random(0xC1));
 
         if (TextureSheet.Enabled) TextureSheet.Apply(ref p, 0f, Float3.Length(p.Velocity));
         if (CustomData.Enabled) CustomData.Apply(ref p, 0f);
+    }
+
+    /// <summary>Last step of every spawn, after any overrides have settled the particle's lifetime.</summary>
+    private void FinishSpawn(ref Particle p)
+    {
         if (Trails.Enabled) p.TrailSlot = Trails.Allocate(in p);
     }
+
+    /// <summary>Whether particles show all three rotation axes, rather than only a roll around the view.</summary>
+    private bool UsesFullRotation => Renderer.RenderMode == ParticleRenderMode.Mesh
+        || (Renderer.RenderMode == ParticleRenderMode.Billboard && Renderer.Alignment is ParticleRenderAlignment.World or ParticleRenderAlignment.Local);
 
     private bool UpdateParticle(ref Particle p, float dt)
     {
@@ -833,7 +1033,7 @@ public class ParticleSystemComponent : MonoBehaviour
         float speedModifier = 1f;
         if (VelocityOverLifetime.Enabled)
         {
-            VelocityOverLifetime.Apply(this, ref p, age);
+            VelocityOverLifetime.Apply(this, ref p, age, dt);
             speedModifier = VelocityOverLifetime.Speed(in p, age);
         }
         if (InheritVelocity.Enabled) InheritVelocity.Apply(this, ref p, age);
@@ -881,13 +1081,18 @@ public class ParticleSystemComponent : MonoBehaviour
         _particles[index] = _particles[--_count];
     }
 
-    private void EnsureCapacity()
+    /// <summary>Trims to a lowered <see cref="MaxParticles"/>, releasing what the dropped particles held.</summary>
+    private void ApplyMaxParticles()
     {
-        int capacity = Math.Max(0, MaxParticles);
-        if (_particles.Length == capacity) return;
-
-        Array.Resize(ref _particles, capacity);
-        _count = Math.Min(_count, capacity);
+        int max = Math.Max(0, MaxParticles);
+        while (_count > max)
+        {
+            ref Particle p = ref _particles[--_count];
+            if (p.TrailSlot != 0)
+                Trails.Release(this, in p, _simTime);
+        }
+        if (_particles.Length > max)
+            Array.Resize(ref _particles, max);
     }
 
     private void RecalculateBounds()
@@ -912,17 +1117,35 @@ public class ParticleSystemComponent : MonoBehaviour
                 fastest = MathF.Max(fastest, Float3.LengthSquared(p.TotalVelocity));
         }
 
-        // A rotated quad reaches half its diagonal from the center, a pivot pushes it further out.
+        // A rotated quad reaches half its diagonal from the center, a mesh reaches its farthest corner,
+        // and a pivot pushes either further out.
+        float reach = 0.7072f;
+        if (Renderer.RenderMode == ParticleRenderMode.Mesh && Renderer.Mesh.IsValid())
+        {
+            AABB mesh = Renderer.Mesh.bounds;
+            reach = Float3.Length(Maths.Max(Maths.Abs(mesh.Min), Maths.Abs(mesh.Max)));
+        }
         float pivot = 1f + 2f * MathF.Max(MathF.Abs(Renderer.Pivot.X), MathF.Max(MathF.Abs(Renderer.Pivot.Y), MathF.Abs(Renderer.Pivot.Z)));
-        float pad = largest * _sizeScale * 0.7072f * pivot;
+        float pad = largest * _sizeScale * reach * pivot;
         if (Renderer.RenderMode == ParticleRenderMode.StretchedBillboard)
             pad = pad * MathF.Max(1f, Renderer.LengthScale) + MathF.Sqrt(fastest) * MathF.Abs(Renderer.VelocityScale) * 0.5f;
 
-        AABB box = new(min, max);
+        _simBoundsMin = min;
+        _simBoundsMax = max;
+        _boundsPad = pad;
+        _hasBounds = true;
+        UpdateWorldBounds();
+    }
+
+    /// <summary>Places the simulation space bounds in the world. Rerun whenever the space moves, so a paused local system culls where it is now.</summary>
+    private void UpdateWorldBounds()
+    {
+        if (!_hasBounds) return;
+
+        AABB box = new(_simBoundsMin, _simBoundsMax);
         if (!_simIsWorld)
             box = box.TransformBy(_simToWorld);
-        _worldBounds = new AABB(box.Min - new Float3(pad), box.Max + new Float3(pad));
-        _hasBounds = true;
+        _worldBounds = new AABB(box.Min - new Float3(_boundsPad), box.Max + new Float3(_boundsPad));
     }
 
     #endregion
@@ -946,7 +1169,8 @@ public class ParticleSystemComponent : MonoBehaviour
             : Float4x4.CreateTRS(position, rotation, scale);
 
         Float4x4 previousSimToWorld = _simToWorld;
-        var key = (SimulationSpace, ScalingMode, SimulationSpace == SimulationSpace.Custom ? CustomSimulationSpace : null);
+        bool customValid = SimulationSpace == SimulationSpace.Custom && CustomSimulationSpace.IsValid();
+        var key = (SimulationSpace, ScalingMode, customValid ? CustomSimulationSpace : null);
 
         switch (SimulationSpace)
         {
@@ -965,27 +1189,72 @@ public class ParticleSystemComponent : MonoBehaviour
                 _simIsWorld = true;
                 break;
         }
-        _worldToSim = _simIsWorld ? Float4x4.Identity : _simToWorld.Invert();
+        if (_simIsWorld)
+        {
+            _worldToSim = Float4x4.Identity;
+        }
+        else if (Float4x4.Invert(_simToWorld, out Float4x4 inverse) && IsFinite(inverse))
+        {
+            _worldToSim = inverse;
+            _lastValidWorldToSim = inverse;
+        }
+        else
+        {
+            // A zero scale leaves nothing to invert. Squash to a tiny scale instead, so particles keep
+            // finite values and come back intact when the scale does.
+            _simToWorld = Float4x4.CreateTRS(position, rotation, SafeScale(scale));
+            _worldToSim = Float4x4.Invert(_simToWorld, out inverse) ? inverse : _lastValidWorldToSim;
+        }
+
         _emitterToSim = _worldToSim * _emitterToWorld;
         _emitterOriginSim = WorldPointToSim(position);
         _sizeScale = ScalingMode == ParticleScalingMode.Shape
             ? 1f
             : (MathF.Abs(scale.X) + MathF.Abs(scale.Y) + MathF.Abs(scale.Z)) / 3f;
 
-        if (_spacesValid && key != _spaceKey && _count > 0)
-            MigrateParticles(previousSimToWorld);
+        if (_spacesValid && key != _spaceKey)
+        {
+            if (_count > 0 || Trails.HasOrphans)
+                MigrateParticles(previousSimToWorld);
+            _hasEmitterHistory = false;
+        }
         _spaceKey = key;
         _spacesValid = true;
+        UpdateWorldBounds();
     }
+
+    private static Float3 SafeScale(Float3 scale)
+    {
+        const float min = 1e-4f;
+        static float Safe(float v) => MathF.Abs(v) < min ? (v < 0f ? -min : min) : v;
+        return new Float3(Safe(scale.X), Safe(scale.Y), Safe(scale.Z));
+    }
+
+    private static bool IsFinite(in Float4x4 m)
+        => float.IsFinite(m.c0.X + m.c0.Y + m.c0.Z + m.c1.X + m.c1.Y + m.c1.Z + m.c2.X + m.c2.Y + m.c2.Z + m.c3.X + m.c3.Y + m.c3.Z);
 
     private void MigrateParticles(Float4x4 previousSimToWorld)
     {
         Float4x4 convert = _worldToSim * previousSimToWorld;
+
+        // Full 3D rotations turn with the space. A billboard's roll is relative to the view and stays.
+        bool turn = UsesFullRotation;
+        Quaternion delta = Quaternion.Identity;
+        if (turn)
+        {
+            Float3 x = Float3.NormalizeSafe(convert.c0.XYZ, Float3.UnitX);
+            Float3 y = Float3.NormalizeSafe(convert.c1.XYZ, Float3.UnitY);
+            Float3 z = Float3.NormalizeSafe(convert.c2.XYZ, Float3.UnitZ);
+            delta = Quaternion.FromMatrix(new Float3x3(x, y, z));
+        }
+
         for (int i = 0; i < _count; i++)
         {
             ref Particle p = ref _particles[i];
             p.Position = Point(convert, p.Position);
             p.Velocity = Vector(convert, p.Velocity);
+            if (turn)
+                p.Rotation = Quaternion.ToEuler(delta * Quaternion.FromEuler(p.Rotation));
             p.TrailSlot = 0;
         }
         Trails.Clear();
@@ -995,24 +1264,31 @@ public class ParticleSystemComponent : MonoBehaviour
     {
         RefreshSpaces();
 
+        // Motion is measured in simulation space, so an emitter riding along with a custom space (an
+        // engine on the ship it simulates in) is not moving at all as far as its particles can tell.
         Float3 position = Transform.Position;
-        Float3 moved = _hasEmitterHistory ? position - _previousEmitterPosition : Float3.Zero;
+        bool history = _hasEmitterHistory;
+        Float3 movedWorld = history ? position - _previousEmitterPosition : Float3.Zero;
+        Float3 movedSim = history ? _emitterOriginSim - _previousEmitterOriginSim : Float3.Zero;
         _previousEmitterPosition = position;
+        _previousEmitterOriginSim = _emitterOriginSim;
         _hasEmitterHistory = true;
 
-        Float3 velocityWorld = dt > 0f ? moved / dt : Float3.Zero;
+        Float3 velocitySim = dt > 0f ? movedSim / dt : Float3.Zero;
         if (EmitterVelocityMode == EmitterVelocityMode.Rigidbody)
         {
             Rigidbody3D? body = GetComponent<Rigidbody3D>();
             if (body.IsValid())
-                velocityWorld = body.LinearVelocity;
+                velocitySim = WorldVectorToSim(body.LinearVelocity);
         }
 
         // A local space system carries its particles along already, so its own motion is not inherited.
         bool local = SimulationSpace == SimulationSpace.Local;
-        _emitterVelocitySim = local ? Float3.Zero : WorldVectorToSim(velocityWorld);
-        _emitterMoveSim = local ? Float3.Zero : WorldVectorToSim(moved);
-        _emitterMoveDistance = Float3.Length(moved);
+        _emitterVelocitySim = local ? Float3.Zero : velocitySim;
+        _emitterMoveSim = local ? Float3.Zero : movedSim;
+        // Distance for rate over distance, in world units. A local system measures its travel through
+        // the world, the others measure it through the space their particles live in.
+        _emitterMoveDistance = Float3.Length(local ? movedWorld : SimVectorToWorld(movedSim));
         _gravitySim = WorldVectorToSim(new Float3(0f, -9.81f, 0f));
     }
 
@@ -1051,14 +1327,20 @@ public class ParticleSystemComponent : MonoBehaviour
         for (int i = 0; i < _collisionEvents.Count; i++)
         {
             ParticleCollisionEvent hit = _collisionEvents[i];
-            ParticleCollided?.Invoke(this, hit);
+            if (ParticleCollided != null)
+            {
+                try { ParticleCollided(this, hit); }
+                catch (Exception ex) { Debug.LogError($"[{Name}] ParticleCollided handler threw: {ex.Message}\n{ex.StackTrace}"); }
+            }
 
             if (!Collision.SendCollisionMessages || !Application.IsPlaying) continue;
             GameObject? other = hit.Other;
             if (other.IsNotValid()) continue;
 
-            foreach (MonoBehaviour component in other.GetComponents<MonoBehaviour>())
+            List<MonoBehaviour> components = other._components;
+            for (int c = 0; c < components.Count; c++)
             {
+                MonoBehaviour component = components[c];
                 if (component is not IParticleCollisionHandler handler || !component.EnabledInHierarchy) continue;
                 try { handler.OnParticleCollision(this, in hit); }
                 catch (Exception ex) { Debug.LogError($"[{component.GetType().Name}] OnParticleCollision threw: {ex.Message}\n{ex.StackTrace}"); }
@@ -1066,7 +1348,10 @@ public class ParticleSystemComponent : MonoBehaviour
         }
     }
 
-    /// <summary>Marks the child systems this one drives, so they stop emitting on their own and keep simulating.</summary>
+    /// <summary>
+    /// Takes ownership of the systems this one drives, so they stop emitting on their own and only simulate
+    /// what they are handed. A child that would drive this system back is skipped with a warning.
+    /// </summary>
     private void ClaimSubEmitters()
     {
         _hasBirthSubEmitters = _hasCollisionSubEmitters = _hasDeathSubEmitters = false;
@@ -1077,7 +1362,15 @@ public class ParticleSystemComponent : MonoBehaviour
             ParticleSystemComponent? child = entry.System;
             if (child.IsNotValid() || ReferenceEquals(child, this)) continue;
 
-            child._drivenFrame = Time.FrameCount;
+            if (IsDrivenBy(child))
+            {
+                Debug.LogWarningOnce($"particle_sub_emitter_cycle_{InstanceID}_{child.InstanceID}",
+                    $"[{Name}] Sub emitter {child.Name} already drives this system, the loop is ignored.");
+                continue;
+            }
+
+            child._driver = this;
+            child._isEmitting = false;
             switch (entry.Type)
             {
                 case SubEmitterType.Birth: _hasBirthSubEmitters = true; break;
@@ -1085,6 +1378,27 @@ public class ParticleSystemComponent : MonoBehaviour
                 case SubEmitterType.Death: _hasDeathSubEmitters = true; break;
             }
         }
+    }
+
+    /// <summary>True when <paramref name="system"/> drives this one, directly or through other systems.</summary>
+    private bool IsDrivenBy(ParticleSystemComponent system)
+    {
+        ParticleSystemComponent? current = this;
+        for (int depth = 0; depth < 64 && current.IsValid() && current.IsDriven; depth++)
+        {
+            current = current._driver;
+            if (ReferenceEquals(current, system))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Hands every system this one drives back to itself.</summary>
+    private void ReleaseSubEmitters()
+    {
+        foreach (SubEmitter entry in SubEmitters.Emitters)
+            if (entry.System.IsValid() && ReferenceEquals(entry.System._driver, this))
+                entry.System._driver = null;
     }
 
     private void QueueSubEmitters(SubEmitterType type, Float3 worldPosition, in Particle p)
@@ -1095,7 +1409,7 @@ public class ParticleSystemComponent : MonoBehaviour
                 QueueSubEmit(i, -1, worldPosition, in p);
     }
 
-    private void QueueSubEmit(int index, int count, Float3 worldPosition, in Particle p)
+    private void QueueSubEmit(int index, int count, Float3 worldPosition, in Particle p, Float3 previousWorld = default, float span = 0f)
     {
         SubEmitter entry = SubEmitters.Emitters[index];
         if (entry.System.IsNotValid() || ReferenceEquals(entry.System, this)) return;
@@ -1106,6 +1420,8 @@ public class ParticleSystemComponent : MonoBehaviour
             Emitter = index,
             Count = count,
             Position = worldPosition,
+            PreviousPosition = previousWorld,
+            Span = span,
             Velocity = SimVectorToWorld(p.TotalVelocity),
             Color = p.Color,
             Size = p.Size,
@@ -1125,6 +1441,7 @@ public class ParticleSystemComponent : MonoBehaviour
             if (entry.Type != SubEmitterType.Birth || entry.System.IsNotValid() || ReferenceEquals(entry.System, this)) continue;
 
             EmissionModule emission = entry.System.Emission;
+            if (!emission.Enabled) continue;
             float amount = MathF.Max(0f, emission.RateOverTime.Evaluate(age, p.Random((uint)(0x171 + i)))) * dt;
             float perUnit = emission.RateOverDistance.Evaluate(age, p.Random((uint)(0x181 + i)));
             if (perUnit > 0f)
@@ -1133,7 +1450,7 @@ public class ParticleSystemComponent : MonoBehaviour
             int count = (int)amount;
             if (_random.NextSingle() < amount - count) count++;
             if (count > 0)
-                QueueSubEmit(i, count, SimPointToWorld(p.Position), in p);
+                QueueSubEmit(i, count, SimPointToWorld(p.Position), in p, SimPointToWorld(previous), dt);
         }
     }
 
@@ -1144,10 +1461,19 @@ public class ParticleSystemComponent : MonoBehaviour
             SubEmitRequest request = _subEmitQueue[i];
             if ((uint)request.Emitter >= (uint)SubEmitters.Emitters.Count) continue;
             SubEmitter entry = SubEmitters.Emitters[request.Emitter];
-            if (entry.System.IsValid())
-                entry.System.EmitFromParent(in request, entry);
+            ParticleSystemComponent? target = entry.System;
+            if (target.IsNotValid()) continue;
+
+            target.EmitFromParent(in request, entry);
+            if (!_subEmitTargets.Contains(target))
+                _subEmitTargets.Add(target);
         }
         _subEmitQueue.Clear();
+
+        // Bounds once per child, so what it was just handed is drawn this frame.
+        foreach (ParticleSystemComponent target in _subEmitTargets)
+            target.RecalculateBounds();
+        _subEmitTargets.Clear();
     }
 
     /// <summary>Emits into this system on behalf of a parent particle, with the shape centered on it.</summary>
@@ -1155,8 +1481,13 @@ public class ParticleSystemComponent : MonoBehaviour
     {
         if (!EnabledInHierarchy) return;
 
-        EnsureCapacity();
-        if (!_spacesValid) RefreshSpaces();
+        ApplyMaxParticles();
+        // Once a frame, the child may have moved since it last simulated.
+        if (!_spacesValid || _emitSpacesFrame != Time.FrameCount)
+        {
+            RefreshSpaces();
+            _emitSpacesFrame = Time.FrameCount;
+        }
         if (!_isPlaying)
         {
             _isPlaying = true;
@@ -1166,21 +1497,35 @@ public class ParticleSystemComponent : MonoBehaviour
 
         int count = request.Count >= 0 ? request.Count : BurstTotal();
         Float3 scale = ScalingMode == ParticleScalingMode.Local ? Transform.LocalScale : Transform.LossyScale;
-        Float4x4 emitterToSim = _worldToSim * Float4x4.CreateTRS(request.Position, Transform.Rotation, scale);
+        Quaternion rotation = Transform.Rotation;
         Float3 inherited = WorldVectorToSim(request.Velocity);
         float time01 = _time / EffectiveDuration;
+        bool spread = request.Span > 0f && count > 0;
 
         for (int k = 0; k < count && _count < MaxParticles; k++)
         {
+            // Birth emission is spread along the parent's path this step and aged to match, so a fast
+            // parent leaves a stream rather than a bead at the end of every step.
+            float along = spread ? (k + 1f) / count : 1f;
+            Float3 at = spread ? Maths.LerpUnclamped(request.PreviousPosition, request.Position, along) : request.Position;
+            Float4x4 emitterToSim = _worldToSim * Float4x4.CreateTRS(at, rotation, scale);
+
             Shape.Sample(_random, out Float3 localPosition, out Float3 localDirection);
             ref Particle p = ref AddParticle();
             InitParticle(ref p, Point(emitterToSim, localPosition),
                 Float3.NormalizeSafe(Vector(emitterToSim, localDirection), Float3.UnitY), time01, inherited);
+            p.InheritedVelocity = inherited;
+            p.HasInheritedVelocity = true;
 
             if (entry.InheritColor) p.Color = p.StartColor *= request.Color;
             if (entry.InheritSize) p.Size = p.StartSize *= request.Size;
             if (entry.InheritRotation) p.Rotation += request.Rotation;
             if (entry.InheritLifetime) p.Lifetime = p.StartLifetime *= Maths.Saturate(request.LifeLeft);
+            FinishSpawn(ref p);
+
+            float age = spread ? request.Span * (1f - along) : 0f;
+            if (age > 0f && !UpdateParticle(ref p, age))
+                Kill(_count - 1);
         }
     }
 
@@ -1189,15 +1534,14 @@ public class ParticleSystemComponent : MonoBehaviour
     {
         if (!Emission.Enabled || Emission.Bursts.Count == 0) return 1;
 
-        int total = 0;
+        long total = 0;
         foreach (ParticleBurst burst in Emission.Bursts)
         {
             if (burst.Probability < 1f && _random.NextSingle() >= burst.Probability) continue;
-            int min = Math.Max(0, burst.MinCount);
-            int max = Math.Max(min, burst.MaxCount);
+            EmissionModule.BurstRange(burst, MaxParticles, out int min, out int max);
             total += min == max ? min : _random.Next(min, max + 1);
         }
-        return total;
+        return (int)Math.Min(total, Math.Max(0, MaxParticles));
     }
 
     #endregion

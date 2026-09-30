@@ -33,7 +33,7 @@ public class VelocityOverLifetimeModule : ParticleSystemModule
     [Tooltip("Multiplies the particle's total speed when it moves.")]
     public MinMaxCurve SpeedModifier = new(1f);
 
-    internal void Apply(ParticleSystemComponent system, ref Particle p, float age)
+    internal void Apply(ParticleSystemComponent system, ref Particle p, float age, float deltaTime)
     {
         Float3 linear = new(X.Evaluate(age, p.Random(0xA1)), Y.Evaluate(age, p.Random(0xA2)), Z.Evaluate(age, p.Random(0xA3)));
         if (linear != Float3.Zero)
@@ -45,8 +45,15 @@ public class VelocityOverLifetimeModule : ParticleSystemModule
 
         Float3 center = system.EmitterOriginSim + system.LocalVectorToSim(OrbitalOffset);
         Float3 offset = p.Position - center;
-        if (orbital != Float3.Zero)
-            p.AnimatedVelocity += Float3.Cross(system.LocalVectorToSim(orbital), offset);
+        float rate = Float3.Length(orbital);
+        if (rate > 0f && deltaTime > 0f)
+        {
+            // The chord of the arc this step rather than the tangent, so orbits keep their radius
+            // instead of spiralling outward.
+            Float3 axis = Float3.NormalizeSafe(system.LocalVectorToSim(orbital / rate), Float3.UnitY);
+            Float3 turned = Quaternion.AxisAngle(axis, rate * deltaTime) * offset;
+            p.AnimatedVelocity += (turned - offset) / deltaTime;
+        }
         if (radial != 0f)
             p.AnimatedVelocity += Float3.NormalizeSafe(offset, Float3.Zero) * radial;
     }
@@ -54,7 +61,10 @@ public class VelocityOverLifetimeModule : ParticleSystemModule
     internal float Speed(in Particle p, float age) => SpeedModifier.Evaluate(age, p.Random(0xA8));
 }
 
-/// <summary>Slows particles that go faster than a limit, and applies drag.</summary>
+/// <summary>
+/// Slows the simulated velocity (start speed, gravity, forces, wind and bounces) when it goes faster than
+/// a limit, and applies drag to it. Velocity over Lifetime is added on top and is not limited.
+/// </summary>
 [Serializable]
 public class LimitVelocityOverLifetimeModule : ParticleSystemModule
 {
@@ -105,7 +115,8 @@ public enum InheritVelocityMode
 
 /// <summary>
 /// Hands the emitter's movement on to its particles. Only has an effect when simulating in World or
-/// Custom space, a Local space system already carries its particles along.
+/// Custom space, a Local space system already carries its particles along. Particles emitted by a sub
+/// emitter inherit the velocity of the parent particle instead.
 /// </summary>
 [Serializable]
 public class InheritVelocityModule : ParticleSystemModule
@@ -113,16 +124,13 @@ public class InheritVelocityModule : ParticleSystemModule
     public InheritVelocityMode Mode = InheritVelocityMode.Initial;
     public MinMaxCurve Multiplier = new(1f);
 
-    internal void ApplySpawn(ParticleSystemComponent system, ref Particle p, float systemTime01)
-    {
-        if (Mode == InheritVelocityMode.Initial)
-            p.Velocity += system.EmitterVelocitySim * Multiplier.Evaluate(systemTime01, p.Random(0xC1));
-    }
-
     internal void Apply(ParticleSystemComponent system, ref Particle p, float age)
     {
-        if (Mode == InheritVelocityMode.Current)
-            p.AnimatedVelocity += system.EmitterVelocitySim * Multiplier.Evaluate(age, p.Random(0xC1));
+        if (Mode != InheritVelocityMode.Current) return;
+
+        // Particles from a sub emitter follow the parent particle they came from, not this emitter.
+        Float3 source = p.HasInheritedVelocity ? p.InheritedVelocity : system.EmitterVelocitySim;
+        p.AnimatedVelocity += source * Multiplier.Evaluate(age, p.Random(0xC1));
     }
 }
 

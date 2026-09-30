@@ -25,7 +25,7 @@ Pass "Particle"
 
             // 0 draws particles from their instance matrix, 1 draws trail segments.
             uniform int _ParticleMode;
-            // Columns, rows, frames per cycle, frame blending.
+            // Columns, rows, frames per cycle, frame blending (0 off, 1 wraps to the first frame, 2 holds the last).
             uniform vec4 _ParticleSheet;
 
 			out vec2 vUV0;
@@ -87,7 +87,9 @@ Pass "Particle"
                 float period = max(_ParticleSheet.z, 1.0);
                 float current = floor(frame);
                 float start = floor(current / period) * period;
-                float next = start + mod(current - start + 1.0, period);
+                float next = _ParticleSheet.w > 1.5
+                    ? min(current + 1.0, start + period - 1.0)
+                    : start + mod(current - start + 1.0, period);
                 vUV0 = SheetUV(vertexTexCoord0, current);
                 vUV1 = SheetUV(vertexTexCoord0, next);
                 vFrameBlend = _ParticleSheet.w > 0.5 ? fract(frame) : 0.0;
@@ -192,10 +194,11 @@ Pass "Particle"
                 else if (_ParticleBlend == 2)
                 {
                     float coverage = texel.a * _MainColor.a * vColor.a * fade;
-                    if (coverage < 0.002)
-                        discard;
                     // The texture's color already carries its own alpha, so only the tints scale it.
                     vec3 premultiplied = rgb * (_MainColor.a * vColor.a * fade);
+                    // Zero alpha texels can still add light, so only drop the ones that add nothing.
+                    if (coverage < 0.002 && max(premultiplied.r, max(premultiplied.g, premultiplied.b)) < 0.002)
+                        discard;
                     fragColor = vec4(mix(_FogColor.rgb * coverage, premultiplied, visibility), coverage);
                 }
                 else

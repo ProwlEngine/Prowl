@@ -90,7 +90,7 @@ public class ShapeModule : ParticleSystemModule
     public Float3 Scale = Float3.One;
 
     [Header("Direction")]
-    [Tooltip("Turns particles to face their start direction. Mostly useful for mesh particles.")]
+    [Tooltip("Turns particles to face their start direction. Shows on mesh particles and on billboards aligned to World or Local.")]
     public bool AlignToDirection = false;
     [Range(0f, 1f), Tooltip("Blends the start direction toward a random one.")]
     public float RandomizeDirection = 0f;
@@ -317,6 +317,34 @@ public class ShapeModule : ParticleSystemModule
         }
         _cachedMesh = mesh;
         _cachedMeshVersion = mesh.Version;
+    }
+
+    /// <summary>Where particles can be born, in the emitter's space. With the module off it is the origin.</summary>
+    internal AABB LocalBounds()
+    {
+        if (!Enabled) return new AABB(Float3.Zero, Float3.Zero);
+
+        float r = MathF.Max(0f, Radius);
+        Float3 extent = Type switch
+        {
+            ParticleShapeType.Sphere => new Float3(r),
+            ParticleShapeType.Hemisphere => new Float3(r),
+            ParticleShapeType.Circle => new Float3(r, 0f, r),
+            ParticleShapeType.Donut => new Float3(r + DonutRadius, DonutRadius, r + DonutRadius),
+            ParticleShapeType.Cone => ConeEmitFrom == ConeEmitFrom.Volume
+                ? new Float3(r + MathF.Max(0f, Length), MathF.Max(0f, Length), r + MathF.Max(0f, Length))
+                : new Float3(r, 0f, r),
+            ParticleShapeType.Box => Maths.Abs(BoxSize) * 0.5f,
+            ParticleShapeType.Edge => new Float3(r, 0f, 0f),
+            ParticleShapeType.Rectangle => new Float3(0.5f, 0f, 0.5f),
+            _ => Float3.Zero,
+        };
+
+        AABB local = Type == ParticleShapeType.Mesh && Mesh.IsValid()
+            ? Mesh.bounds
+            : new AABB(-extent, extent);
+        local = new AABB(local.Min - new Float3(RandomizePosition), local.Max + new Float3(RandomizePosition));
+        return local.TransformBy(ShapeMatrix);
     }
 
     /// <summary>Draws the emission shape as a wireframe, <paramref name="emitterToWorld"/> places the emitter.</summary>

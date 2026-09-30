@@ -18,9 +18,12 @@ public enum ParticleCollisionType
 
 public enum ParticleCollisionQuality
 {
-    /// <summary>Every particle casts a ray every frame.</summary>
+    /// <summary>Every particle sweeps a sphere of its own size every frame.</summary>
     High,
-    /// <summary>Surfaces found by earlier rays are cached per voxel and reused for a few frames.</summary>
+    /// <summary>
+    /// Surfaces found by earlier rays are cached per cell and direction of travel, and reused for a few
+    /// frames. Particles in a cell with nothing cached once the frame's rays run out skip collision that frame.
+    /// </summary>
     Medium,
     /// <summary>Like Medium with a quarter of the rays and a longer lived cache.</summary>
     Low
@@ -31,7 +34,7 @@ public struct ParticleCollisionEvent
 {
     public Float3 Intersection;
     public Float3 Normal;
-    /// <summary>World velocity of the particle after the bounce.</summary>
+    /// <summary>World velocity of the particle after the bounce, including animated velocity.</summary>
     public Float3 Velocity;
     /// <summary>The collider hit, null for planes and for geometry no collider owns.</summary>
     public Collider? Collider;
@@ -96,6 +99,12 @@ public class CollisionModule : ParticleSystemModule
     private bool IsWorld => Type == ParticleCollisionType.World;
     private bool IsCached => IsWorld && Quality != ParticleCollisionQuality.High;
 
+    // A particle already touching the surface at the start of the step, or meeting it slower than this,
+    // is resting on it: it is held there and slides along it, but does not count as a collision, so
+    // resting particles do not raise events or lose lifetime every step.
+    private const float RestingSpeed = 0.1f;
+    private const float ContactDistance = 1e-3f;
+
     private struct CachedSurface
     {
         public bool HasSurface;
@@ -106,13 +115,16 @@ public class CollisionModule : ParticleSystemModule
         public long Frame;
     }
 
-    private readonly Dictionary<(int, int, int), CachedSurface> _cache = new();
+    // Surfaces are cached per cell and per direction of travel, so a miss found by a particle moving one
+    // way is never reused for a particle moving another way through the same cell.
+    private readonly Dictionary<(int, int, int, int), CachedSurface> _cache = new();
     private long _queryFrame = -1;
     private int _queriesLeft;
 
     /// <summary>
     /// Sweeps the particle from <paramref name="previous"/> to where it moved this step and bounces it off
-    /// the first surface in the way. Returns true on a hit.
+    /// the first surface in the way. Returns true when the hit should be reported, false for no hit or for
+    /// a particle that is only resting on a surface.
     /// </summary>
     internal bool Apply(ParticleSystemComponent system, PhysicsWorld? physics, ref Particle p, Float3 previous, out ParticleCollisionEvent collision)
     {
@@ -122,54 +134,91 @@ public class CollisionModule : ParticleSystemModule
         Float3 to = system.SimPointToWorld(p.Position);
         float radius = MathF.Max(1e-4f, (MathF.Abs(p.Size.X) + MathF.Abs(p.Size.Y)) * 0.25f * RadiusScale * system.SizeScale);
 
+        Float3 center;
+        bool touching;
         bool hit = Type == ParticleCollisionType.Planes
-            ? SweepPlanes(from, to, radius, ref collision)
+            ? SweepPlanes(from, to, radius, ref collision, out center, out touching)
             : Quality == ParticleCollisionQuality.High
-                ? SweepWorld(physics, from, to, radius, ref collision)
-                : SweepCached(physics, from, to, radius, ref collision);
+                ? SweepWorld(physics, from, to, radius, ref collision, out center, out touching)
+                : SweepCached(physics, from, to, radius, ref collision, out center, out touching);
         if (!hit) return false;
 
-        Float3 velocity = system.SimVectorToWorld(p.TotalVelocity);
-        float into = Float3.Dot(velocity, collision.Normal);
+        Float3 normal = collision.Normal;
+
+        // Whatever of the move is left after the contact continues along the surface, so particles
+        // slide instead of stopping dead wherever they first touch.
+        Float3 rest = to - center;
+        float restInto = Float3.Dot(rest, normal);
+        if (restInto < 0f) rest -= normal * restInto;
+        center += rest;
+        Float3 animated = system.SimVectorToWorld(p.AnimatedVelocity);
+        Float3 velocity = system.SimVectorToWorld(p.Velocity);
+        float approach = -Float3.Dot(velocity + animated, normal);
+
+        // Only the simulated velocity bounces. Animated velocity is rebuilt every step, so folding it in
+        // here would make a particle pushed into a surface fly off it once the push ends.
+        float into = Float3.Dot(velocity, normal);
         if (into < 0f)
-            velocity -= collision.Normal * ((1f + Maths.Saturate(Bounce)) * into);
+            velocity -= normal * ((1f + Maths.Saturate(Bounce)) * into);
         velocity *= 1f - Maths.Saturate(Dampen);
 
-        p.Position = system.WorldPointToSim(collision.Intersection + collision.Normal * radius);
-        p.Velocity = system.WorldVectorToSim(velocity) - p.AnimatedVelocity;
+        p.Position = system.WorldPointToSim(center);
+        p.Velocity = system.WorldVectorToSim(velocity);
+        collision.Velocity = velocity + animated;
+
+        // Settled particles still die to the kill speeds, that is what Min Kill Speed is usually for.
+        float speed = Float3.Length(collision.Velocity);
+        if (speed < MinKillSpeed || speed > MaxKillSpeed)
+            p.Lifetime = 0f;
+
+        if (touching || approach < RestingSpeed)
+            return false;
 
         if (LifetimeLoss > 0f)
             p.Lifetime -= p.StartLifetime * LifetimeLoss;
 
-        float speed = Float3.Length(velocity);
-        if (speed < MinKillSpeed || speed > MaxKillSpeed)
-            p.Lifetime = 0f;
-
-        collision.Velocity = velocity;
         return true;
     }
 
-    private bool SweepWorld(PhysicsWorld? physics, Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision)
+    private bool SweepWorld(PhysicsWorld? physics, Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision, out Float3 center, out bool touching)
     {
+        center = default;
+        touching = false;
         if (physics == null) return false;
 
         Float3 delta = to - from;
         float distance = Float3.Length(delta);
         if (distance < 1e-6f) return false;
+        Float3 direction = delta / distance;
 
-        if (!physics.Raycast(from, delta / distance, out RaycastHit hit, distance + radius, CollidesWith))
+        // A sphere sweep, so a particle sliding along a surface touches it with its edge, not its center.
+        if (!physics.SphereCast(from, radius, direction, distance, out ShapeCastHit hit, CollidesWith))
             return false;
 
-        collision.Intersection = hit.Point;
-        collision.Normal = hit.Normal;
+        Float3 normal = Float3.NormalizeSafe(hit.Normal, -direction);
+        if (Float3.Dot(normal, direction) > 0f) normal = -normal;
+
+        center = hit.Penetration > 0f && hit.Distance <= 0f
+            ? from + normal * hit.Penetration
+            : from + direction * hit.Distance;
+        touching = hit.Distance <= ContactDistance;
+        collision.Intersection = hit.HitPoint;
+        collision.Normal = normal;
         collision.Collider = hit.Collider;
         collision.Transform = hit.Transform;
         return true;
     }
 
-    private bool SweepCached(PhysicsWorld? physics, Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision)
+    private bool SweepCached(PhysicsWorld? physics, Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision, out Float3 center, out bool touching)
     {
+        center = default;
+        touching = false;
         if (physics == null) return false;
+
+        Float3 delta = to - from;
+        float distance = Float3.Length(delta);
+        if (distance < 1e-6f) return false;
+        Float3 direction = delta / distance;
 
         long frame = Time.FrameCount;
         bool low = Quality == ParticleCollisionQuality.Low;
@@ -182,19 +231,15 @@ public class CollisionModule : ParticleSystemModule
         }
 
         float cell = MathF.Max(VoxelSize, 0.01f);
-        var key = ((int)MathF.Floor(from.X / cell), (int)MathF.Floor(from.Y / cell), (int)MathF.Floor(from.Z / cell));
+        var key = ((int)MathF.Floor(from.X / cell), (int)MathF.Floor(from.Y / cell), (int)MathF.Floor(from.Z / cell), DirectionBucket(direction));
 
         if (!_cache.TryGetValue(key, out CachedSurface surface) || frame - surface.Frame > lifetime)
         {
             if (_queriesLeft <= 0) return false;
             _queriesLeft--;
 
-            Float3 delta = to - from;
-            float distance = Float3.Length(delta);
-            if (distance < 1e-6f) return false;
-
             surface = new CachedSurface { Frame = frame };
-            if (physics.Raycast(from, delta / distance, out RaycastHit hit, MathF.Max(distance + radius, cell * 2f), CollidesWith))
+            if (physics.Raycast(from, direction, out RaycastHit hit, MathF.Max(distance + radius, cell * 2f), CollidesWith))
             {
                 surface.HasSurface = true;
                 surface.Point = hit.Point;
@@ -206,7 +251,7 @@ public class CollisionModule : ParticleSystemModule
         }
 
         if (!surface.HasSurface) return false;
-        if (!SweepPlane(from, to, radius, surface.Point, surface.Normal, out Float3 contact)) return false;
+        if (!SweepPlane(from, to, radius, surface.Point, surface.Normal, out Float3 contact, out center, out touching)) return false;
 
         collision.Intersection = contact;
         collision.Normal = surface.Normal;
@@ -215,8 +260,19 @@ public class CollisionModule : ParticleSystemModule
         return true;
     }
 
-    private bool SweepPlanes(Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision)
+    /// <summary>Which of the six axis directions <paramref name="direction"/> leans toward most.</summary>
+    private static int DirectionBucket(Float3 direction)
     {
+        float x = MathF.Abs(direction.X), y = MathF.Abs(direction.Y), z = MathF.Abs(direction.Z);
+        if (x >= y && x >= z) return direction.X >= 0f ? 0 : 1;
+        if (y >= z) return direction.Y >= 0f ? 2 : 3;
+        return direction.Z >= 0f ? 4 : 5;
+    }
+
+    private bool SweepPlanes(Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision, out Float3 center, out bool touching)
+    {
+        center = default;
+        touching = false;
         float best = float.MaxValue;
         bool hit = false;
         foreach (GameObject plane in Planes)
@@ -224,12 +280,14 @@ public class CollisionModule : ParticleSystemModule
             if (plane.IsNotValid()) continue;
             Transform t = plane.Transform;
             Float3 normal = Float3.NormalizeSafe(t.Up, Float3.UnitY);
-            if (!SweepPlane(from, to, radius, t.Position, normal, out Float3 contact)) continue;
+            if (!SweepPlane(from, to, radius, t.Position, normal, out Float3 contact, out Float3 resolved, out bool planeTouching)) continue;
 
-            float d = Float3.LengthSquared(contact - from);
+            float d = Float3.LengthSquared(resolved - from);
             if (d >= best) continue;
             best = d;
             hit = true;
+            center = resolved;
+            touching = planeTouching;
             collision.Intersection = contact;
             collision.Normal = normal;
             collision.Collider = null;
@@ -238,17 +296,23 @@ public class CollisionModule : ParticleSystemModule
         return hit;
     }
 
-    /// <summary>A sphere moving from <paramref name="from"/> to <paramref name="to"/> against the front of a plane. Contact is the point on the plane.</summary>
-    private static bool SweepPlane(Float3 from, Float3 to, float radius, Float3 point, Float3 normal, out Float3 contact)
+    /// <summary>
+    /// A sphere moving from <paramref name="from"/> to <paramref name="to"/> against the front of a plane.
+    /// Contact is the point on the plane, center is where the sphere comes to rest against it.
+    /// </summary>
+    private static bool SweepPlane(Float3 from, Float3 to, float radius, Float3 point, Float3 normal, out Float3 contact, out Float3 center, out bool touching)
     {
         float d0 = Float3.Dot(from - point, normal) - radius;
         float d1 = Float3.Dot(to - point, normal) - radius;
         contact = default;
+        center = default;
+        touching = d0 <= ContactDistance;
         if (d0 < -radius || d1 >= 0f || d1 >= d0) return false;
 
         float t = d0 <= 0f ? 0f : d0 / (d0 - d1);
-        Float3 center = from + (to - from) * t;
-        contact = center - normal * (Float3.Dot(center - point, normal));
+        Float3 swept = from + (to - from) * t;
+        contact = swept - normal * Float3.Dot(swept - point, normal);
+        center = contact + normal * radius;
         return true;
     }
 }

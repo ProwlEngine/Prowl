@@ -45,6 +45,10 @@ public struct Particle
     /// <summary>One based trail slot, 0 when the particle has no trail.</summary>
     internal int TrailSlot;
 
+    /// <summary>For particles from a sub emitter, the parent particle's velocity at birth in simulation space.</summary>
+    internal Float3 InheritedVelocity;
+    internal bool HasInheritedVelocity;
+
     public readonly float Age => StartLifetime - Lifetime;
 
     /// <summary>0 at birth, 1 at death.</summary>

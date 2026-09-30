@@ -80,11 +80,7 @@ public class ParticleSystemComponentEditor : CustomEditor
             else
                 Origami.Button(paper, $"{id}_play", $"{EditorIcons.Play}  Play", () => ps.Play()).Width(65).Show();
 
-            Origami.Button(paper, $"{id}_restart", $"{EditorIcons.RotateRight}  Restart", () =>
-            {
-                ps.Stop(true, ParticleStopBehavior.StopEmittingAndClear);
-                ps.Play();
-            }).Width(80).Show();
+            Origami.Button(paper, $"{id}_restart", $"{EditorIcons.RotateRight}  Restart", () => ps.Restart()).Width(80).Show();
 
             Origami.Button(paper, $"{id}_stop", $"{EditorIcons.Stop}  Stop", () => ps.Stop(true, ParticleStopBehavior.StopEmittingAndClear)).Width(65).Show();
 

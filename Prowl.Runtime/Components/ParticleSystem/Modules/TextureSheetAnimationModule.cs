@@ -68,10 +68,15 @@ public class TextureSheetAnimationModule : ParticleSystemModule
     /// <summary>Frames in one cycle: the whole sheet or a single row.</summary>
     internal int FramesPerCycle => IsSingleRow ? Columns : Columns * Rows;
 
-    /// <summary>Tiles, frames per cycle and blending, for the shader.</summary>
+    /// <summary>
+    /// Tiles, frames per cycle and blending, for the shader. Blending is 1 to wrap into the first frame, or
+    /// 2 when the animation plays once over the particle's life and must hold its last frame.
+    /// </summary>
     internal Float4 ShaderParams => Enabled && Columns * Rows > 1
-        ? new Float4(Columns, Rows, FramesPerCycle, FrameBlending ? 1f : 0f)
+        ? new Float4(Columns, Rows, FramesPerCycle, !FrameBlending ? 0f : PlaysOnce ? 2f : 1f)
         : new Float4(1f, 1f, 1f, 0f);
+
+    private bool PlaysOnce => TimeMode == TextureSheetTimeMode.Lifetime && Cycles <= 1;
 
     internal void Apply(ref Particle p, float age, float speed)
     {

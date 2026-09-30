@@ -93,6 +93,29 @@ public class MinMaxCurve
         _ => ConstantValue
     };
 
+    /// <summary>The largest value it can produce. Curves are sampled, so a spike between samples can be missed.</summary>
+    public float EstimateMax()
+    {
+        switch (Mode)
+        {
+            case MinMaxCurveMode.Constant:
+                return ConstantValue;
+            case MinMaxCurveMode.RandomBetweenTwoConstants:
+                return MathF.Max(MinValue, MaxValue);
+        }
+
+        const int samples = 16;
+        float max = float.MinValue;
+        for (int i = 0; i <= samples; i++)
+        {
+            float t = i / (float)samples;
+            max = MathF.Max(max, Evaluate(t, 0f));
+            if (Mode == MinMaxCurveMode.RandomBetweenTwoCurves)
+                max = MathF.Max(max, Evaluate(t, 1f));
+        }
+        return max;
+    }
+
     /// <summary>
     /// Evaluates at a normalized <paramref name="time"/>, drawing from <paramref name="random"/> only in the
     /// random modes so a seeded generator stays in step whatever modes are mixed. Null picks the min side.

@@ -123,8 +123,7 @@ public class EmissionModule : ParticleSystemModule
                 bool fires = burst.Probability >= 1f || random.NextSingle() < burst.Probability;
                 if (fires)
                 {
-                    int min = Math.Max(0, burst.MinCount);
-                    int max = Math.Max(min, burst.MaxCount);
+                    BurstRange(burst, system.MaxParticles, out int min, out int max);
                     int count = min == max ? min : random.Next(min, max + 1);
                     system.SpawnBatch(count, stepOffset + MathF.Max(0f, _nextBurstTime[i] - t0), stepOffset + MathF.Max(0f, _nextBurstTime[i] - t0));
                 }
@@ -134,10 +133,22 @@ public class EmissionModule : ParticleSystemModule
         }
     }
 
+    /// <summary>A burst's count range, clamped to what the system can hold so huge counts cannot overflow.</summary>
+    internal static void BurstRange(in ParticleBurst burst, int maxParticles, out int min, out int max)
+    {
+        int cap = Math.Clamp(maxParticles, 0, int.MaxValue - 1);
+        min = Math.Clamp(burst.MinCount, 0, cap);
+        max = Math.Clamp(burst.MaxCount, min, cap);
+    }
+
     // Particles are born at the exact moments the accumulator crosses a whole number.
     private static void EmitContinuous(ParticleSystemComponent system, ref float accumulator, float amount, float span, float stepOffset)
     {
-        if (amount <= 0f) return;
+        if (!(amount > 0f)) return;
+        if (!float.IsFinite(accumulator)) accumulator = 0f;
+
+        // More than a system can ever hold in one step is pointless, and would overflow the count.
+        amount = MathF.Min(amount, Math.Max(1, system.MaxParticles));
 
         float before = accumulator;
         accumulator += amount;

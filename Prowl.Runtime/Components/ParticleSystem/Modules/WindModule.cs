@@ -53,7 +53,9 @@ public class WindModule : ParticleSystemModule
     {
         _time = Time.TimeSinceStartup;
         _turbulenceScale = 1f / MathF.Max(TurbulenceScale, 1e-3f);
-        _turbulenceDrift = _time * TurbulenceSpeed;
+        // Zones follow global time so gusts stay in step with grass, the swirls follow the system's own
+        // clock so pausing, speed and scrubbing affect them. Wrapped to keep float precision.
+        _turbulenceDrift = (float)(system.SimulationTime * TurbulenceSpeed % 65536.0);
         _zone = WindZone.GetNearest(system.Transform.Position);
     }
 

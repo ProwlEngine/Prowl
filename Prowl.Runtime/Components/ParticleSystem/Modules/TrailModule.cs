@@ -65,7 +65,7 @@ public class TrailModule : ParticleSystemModule
     private struct TrailPoint
     {
         public Float3 Position;
-        public float Time;
+        public double Time;
     }
 
     private struct TrailState
@@ -89,7 +89,6 @@ public class TrailModule : ParticleSystemModule
 
     // Scratch for one trail's points, oldest first, while its segments are built.
     private Float3[] _scratchPos = Array.Empty<Float3>();
-    private float[] _scratchTime = Array.Empty<float>();
 
     internal bool HasOrphans => _orphans.Count > 0;
 
@@ -146,7 +145,7 @@ public class TrailModule : ParticleSystemModule
     }
 
     /// <summary>Adds a point where the particle is once it has moved far enough, and drops expired points.</summary>
-    internal void Record(ParticleSystemComponent system, in Particle p, float time)
+    internal void Record(ParticleSystemComponent system, in Particle p, double time)
     {
         int slot = p.TrailSlot - 1;
         if (slot < 0 || slot >= _slots) return;
@@ -165,7 +164,7 @@ public class TrailModule : ParticleSystemModule
     }
 
     /// <summary>The particle died. Its trail either goes with it or fades out on its own.</summary>
-    internal void Release(ParticleSystemComponent system, in Particle p, float time)
+    internal void Release(ParticleSystemComponent system, in Particle p, double time)
     {
         int slot = p.TrailSlot - 1;
         if (slot < 0 || slot >= _slots) return;
@@ -186,7 +185,7 @@ public class TrailModule : ParticleSystemModule
     }
 
     /// <summary>Ages the trails whose particles are gone and frees the ones that faded out.</summary>
-    internal void UpdateOrphans(float time)
+    internal void UpdateOrphans(double time)
     {
         for (int i = _orphans.Count - 1; i >= 0; i--)
         {
@@ -201,7 +200,7 @@ public class TrailModule : ParticleSystemModule
         }
     }
 
-    private void Push(ref TrailState s, int slot, Float3 position, float time)
+    private void Push(ref TrailState s, int slot, Float3 position, double time)
     {
         if (s.Count == _capacity)
         {
@@ -212,7 +211,7 @@ public class TrailModule : ParticleSystemModule
         s.Count++;
     }
 
-    private void Expire(ref TrailState s, int slot, float time)
+    private void Expire(ref TrailState s, int slot, double time)
     {
         while (s.Count > 0 && time - _points[slot * _capacity + s.Start].Time > s.Life)
         {
@@ -240,7 +239,7 @@ public class TrailModule : ParticleSystemModule
     /// width, tangent, texture coordinate and color) and the particle shader turns it into a camera facing
     /// quad, so neighbouring segments share their edges exactly. Returns how many were written.
     /// </summary>
-    internal int BuildSegments(ParticleSystemComponent system, float time, ref InstanceData[] buffer, ref AABB bounds, ref bool hasBounds)
+    internal int BuildSegments(ParticleSystemComponent system, double time, ref InstanceData[] buffer, ref AABB bounds, ref bool hasBounds)
     {
         int written = 0;
         ReadOnlySpan<Particle> particles = system.Particles;
@@ -263,7 +262,7 @@ public class TrailModule : ParticleSystemModule
         return written;
     }
 
-    private int BuildTrail(ParticleSystemComponent system, ref TrailState s, int slot, Float3 head, bool hasHead, float time,
+    private int BuildTrail(ParticleSystemComponent system, ref TrailState s, int slot, Float3 head, bool hasHead, double time,
         Color color, float width, ref InstanceData[] buffer, int written, ref AABB bounds, ref bool hasBounds)
     {
         int count = s.Count + (hasHead ? 1 : 0);
@@ -272,19 +271,16 @@ public class TrailModule : ParticleSystemModule
         if (_scratchPos.Length < count)
         {
             _scratchPos = new Float3[count * 2];
-            _scratchTime = new float[count * 2];
         }
 
         for (int k = 0; k < s.Count; k++)
         {
             TrailPoint point = _points[slot * _capacity + (s.Start + k) % _capacity];
             _scratchPos[k] = s.InWorld ? point.Position : system.SimPointToWorld(point.Position);
-            _scratchTime[k] = point.Time;
         }
         if (hasHead)
         {
             _scratchPos[count - 1] = s.InWorld ? head : system.SimPointToWorld(head);
-            _scratchTime[count - 1] = time;
         }
 
         int needed = written + count - 1;
@@ -297,11 +293,11 @@ public class TrailModule : ParticleSystemModule
 
         // Walk from the head back to the tail so texture coordinates start at the particle.
         float distanceFromHead = 0f;
-        PointData next = MakePoint(count - 1, count, time, s.Life, color, width, 0f, totalLength, s.ColorRandom);
+        PointData next = MakePoint(count - 1, count, color, width, 0f, totalLength, s.ColorRandom);
         for (int k = count - 2; k >= 0; k--)
         {
             distanceFromHead += Float3.Distance(_scratchPos[k + 1], _scratchPos[k]);
-            PointData current = MakePoint(k, count, time, s.Life, color, width, distanceFromHead, totalLength, s.ColorRandom);
+            PointData current = MakePoint(k, count, color, width, distanceFromHead, totalLength, s.ColorRandom);
 
             buffer[written++] = new InstanceData
             {
@@ -330,20 +326,20 @@ public class TrailModule : ParticleSystemModule
         public Color Color;
     }
 
-    private PointData MakePoint(int k, int count, float time, float life, Color color, float width, float distanceFromHead, float totalLength, float colorRandom)
+    private PointData MakePoint(int k, int count, Color color, float width, float distanceFromHead, float totalLength, float colorRandom)
     {
         Float3 before = _scratchPos[Math.Max(0, k - 1)];
         Float3 after = _scratchPos[Math.Min(count - 1, k + 1)];
-        float t = Maths.Saturate((time - _scratchTime[k]) / life);
+
+        // Position along the trail, so the tail always reaches the end of the width and color curves.
+        float t = totalLength > 0f ? Maths.Saturate(distanceFromHead / totalLength) : 0f;
 
         return new PointData
         {
             Position = _scratchPos[k],
             Tangent = Float3.NormalizeSafe(after - before, Float3.UnitY),
             Width = width * WidthOverTrail.Evaluate(t),
-            U = TextureMode == TrailTextureMode.Tile
-                ? distanceFromHead / MathF.Max(TileLength, 1e-4f)
-                : totalLength > 0f ? distanceFromHead / totalLength : 0f,
+            U = TextureMode == TrailTextureMode.Tile ? distanceFromHead / MathF.Max(TileLength, 1e-4f) : t,
             Color = color * ColorOverTrail.Evaluate(t, colorRandom),
         };
     }

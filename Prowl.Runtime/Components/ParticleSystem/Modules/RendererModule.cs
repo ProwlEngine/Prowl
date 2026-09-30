@@ -57,8 +57,10 @@ public enum ParticleBlendMode
 
 /// <summary>
 /// How particles are drawn. The shading options (blend, lighting, soft particles, camera fade) are read
-/// by the built in particle shader. Any other material still gets correctly oriented instances, since
-/// billboarding is baked into each instance's matrix.
+/// by the built in particle shader. Any other material still gets correctly oriented particle instances,
+/// since billboarding is baked into each instance's matrix. Trails are sent as packed segment data that
+/// only the particle shader decodes, so a custom trail material has to decode it the same way.
+/// Switching this module off hides the particles but not their trails.
 /// </summary>
 [Serializable]
 public class RendererModule : ParticleSystemModule
@@ -123,8 +125,11 @@ public class RendererModule : ParticleSystemModule
     private bool IsStretched => RenderMode == ParticleRenderMode.StretchedBillboard;
     private bool UsesAlignment => RenderMode is ParticleRenderMode.Billboard or ParticleRenderMode.Mesh;
 
-    private static Mesh? s_quad;
     private static Material? s_defaultMaterial;
+
+    // Each system draws with its own quads, so systems never take turns refilling one instance buffer.
+    private Mesh? _particleQuad;
+    private Mesh? _trailQuad;
 
     private readonly ParticleRenderable _particles = new();
     private readonly ParticleRenderable _trails = new();
@@ -139,23 +144,33 @@ public class RendererModule : ParticleSystemModule
 
     public RendererModule() => Enabled = true;
 
-    /// <summary>The unit quad billboards are drawn with, facing +Z, with normals for lit shading.</summary>
-    internal static Mesh Quad
+    /// <summary>A unit quad facing +Z, with normals for lit shading.</summary>
+    private static Mesh CreateQuad(string name)
     {
-        get
+        var quad = new Mesh
         {
-            if (s_quad.IsValid()) return s_quad;
-            s_quad = new Mesh
-            {
-                Name = "Particle Quad",
-                Vertices = [new(-0.5f, -0.5f, 0f), new(0.5f, -0.5f, 0f), new(0.5f, 0.5f, 0f), new(-0.5f, 0.5f, 0f)],
-            };
-            s_quad.UV = [new(0f, 0f), new(1f, 0f), new(1f, 1f), new(0f, 1f)];
-            s_quad.Normals = [Float3.UnitZ, Float3.UnitZ, Float3.UnitZ, Float3.UnitZ];
-            s_quad.Indices = [0, 1, 2, 0, 2, 3];
-            s_quad.RecalculateBounds();
-            return s_quad;
-        }
+            Name = name,
+            Vertices = [new(-0.5f, -0.5f, 0f), new(0.5f, -0.5f, 0f), new(0.5f, 0.5f, 0f), new(-0.5f, 0.5f, 0f)],
+        };
+        quad.UV = [new(0f, 0f), new(1f, 0f), new(1f, 1f), new(0f, 1f)];
+        quad.Normals = [Float3.UnitZ, Float3.UnitZ, Float3.UnitZ, Float3.UnitZ];
+        quad.Indices = [0, 1, 2, 0, 2, 3];
+        quad.RecalculateBounds();
+        return quad;
+    }
+
+    private Mesh ParticleQuad => _particleQuad.IsValid() ? _particleQuad : _particleQuad = CreateQuad("Particle Quad");
+    private Mesh TrailQuad => _trailQuad.IsValid() ? _trailQuad : _trailQuad = CreateQuad("Particle Trail Quad");
+
+    /// <summary>
+    /// Frees this system's quads once the frame's commands have run. They are made again the next time it draws.
+    /// </summary>
+    internal void ReleaseMeshes()
+    {
+        if (_particleQuad.IsValid()) Graphics.DeferDispose(_particleQuad);
+        if (_trailQuad.IsValid()) Graphics.DeferDispose(_trailQuad);
+        _particleQuad = null;
+        _trailQuad = null;
     }
 
     private Material? ResolveMaterial(Material? material)
@@ -167,8 +182,11 @@ public class RendererModule : ParticleSystemModule
         return s_defaultMaterial;
     }
 
-    /// <summary>Builds this camera's draw data. Returns true when any of it is in view.</summary>
-    internal bool Collect(ParticleSystemComponent system, Camera camera, List<IRenderable> renderables, TextureSheetAnimationModule sheet, TrailModule trails, float time)
+    /// <summary>
+    /// Builds this camera's draw data. Returns true when any of it is in view. Particles are only drawn when
+    /// <paramref name="drawParticles"/> is set, trails draw whenever they exist.
+    /// </summary>
+    internal bool Collect(ParticleSystemComponent system, Camera camera, List<IRenderable> renderables, TextureSheetAnimationModule sheet, TrailModule trails, double time, bool drawParticles)
     {
         Float4x4 view = camera.ViewMatrix;
         Float4x4 projection = camera.ProjectionMatrix;
@@ -177,17 +195,21 @@ public class RendererModule : ParticleSystemModule
         Float3 cameraForward = camera.Transform.Forward;
         bool visible = false;
 
-        if (system.ParticleCount > 0 && system.HasBounds && frustum.Intersects(system.WorldBounds))
+        if (drawParticles && system.ParticleCount > 0 && system.HasBounds)
         {
-            visible = true;
-            Material? material = ResolveMaterial(null);
-            if (material != null)
+            AABB bounds = PadForMinimumSize(system.WorldBounds, projection, cameraPosition);
+            if (frustum.Intersects(bounds))
             {
-                Mesh mesh = IsMesh && Mesh.IsValid() ? Mesh : Quad;
-                int count = BuildParticles(system, view, projection, cameraPosition, cameraForward);
-                ConfigureProperties(_particles.Properties, system, 0, sheet.ShaderParams);
-                _particles.Set(mesh, material, count, system.WorldBounds, system.GameObject.LayerIndex, cameraForward * SortingFudge);
-                renderables.Add(_particles);
+                visible = true;
+                Material? material = ResolveMaterial(null);
+                if (material != null)
+                {
+                    Mesh mesh = IsMesh && Mesh.IsValid() ? Mesh : ParticleQuad;
+                    int count = BuildParticles(system, view, projection, cameraPosition, cameraForward);
+                    ConfigureProperties(_particles.Properties, system, 0, sheet.ShaderParams);
+                    _particles.Set(mesh, material, count, bounds, system.GameObject.LayerIndex, SortOffset(bounds, cameraPosition, cameraForward, 0f));
+                    renderables.Add(_particles);
+                }
             }
         }
 
@@ -209,13 +231,39 @@ public class RendererModule : ParticleSystemModule
                 {
                     ConfigureProperties(_trails.Properties, system, 1, new Float4(1f, 1f, 1f, 0f));
                     _trails.Data = _trailData;
-                    _trails.Set(Quad, material, _trails.Count, _trailBounds, system.GameObject.LayerIndex, cameraForward * SortingFudge);
+                    // Trails sort a hair behind their particles so the pair keeps a stable order.
+                    _trails.Set(TrailQuad, material, _trails.Count, _trailBounds, system.GameObject.LayerIndex, SortOffset(_trailBounds, cameraPosition, cameraForward, 0.01f));
                     renderables.Add(_trails);
                 }
             }
         }
 
         return visible;
+    }
+
+    /// <summary>
+    /// The sorting fudge as an offset along the view, clamped so the sort point never passes the camera,
+    /// where it would count as far away and flip the order the fudge asked for.
+    /// </summary>
+    private Float3 SortOffset(AABB bounds, Float3 cameraPosition, Float3 cameraForward, float extra)
+    {
+        float depth = Float3.Dot(bounds.Center - cameraPosition, cameraForward);
+        float bias = SortingFudge + extra;
+        if (depth > 0.01f)
+            bias = MathF.Max(bias, 0.01f - depth);
+        return cameraForward * bias;
+    }
+
+    /// <summary>Grows the bounds by how far Min Particle Size can enlarge a particle on screen.</summary>
+    private AABB PadForMinimumSize(AABB bounds, Float4x4 projection, Float3 cameraPosition)
+    {
+        if (MinParticleSize <= 0f || IsMesh) return bounds;
+
+        bool orthographic = projection.c3.W > 0.5f;
+        float screenScale = 2f / MathF.Max(MathF.Abs(projection.c1.Y), 1e-6f);
+        float farthest = Float3.Distance(cameraPosition, bounds.Center) + Float3.Length(bounds.Extents);
+        float pad = MinParticleSize * screenScale * (orthographic ? 1f : farthest) * 0.75f;
+        return new AABB(bounds.Min - new Float3(pad), bounds.Max + new Float3(pad));
     }
 
     private void ConfigureProperties(PropertyState properties, ParticleSystemComponent system, int mode, Float4 sheet)
@@ -305,7 +353,7 @@ public class RendererModule : ParticleSystemModule
                 Float3 velocity = system.SimVectorToWorld(p.TotalVelocity);
                 float speed = Float3.Length(velocity);
                 Float3 facing = Float3.NormalizeSafe(cameraPosition - position, towardCamera);
-                Float3 side = Float3.Cross(velocity, facing);
+                Float3 side = Float3.Cross(facing, velocity);
                 float sideLength = Float3.Length(side);
                 if (speed < 1e-5f || sideLength < 1e-6f)
                     break;

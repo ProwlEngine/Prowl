@@ -188,6 +188,9 @@ public class EditorApplication : Game
         // Initialize status bar log tracking
         InitializeStatusBar();
 
+        // Selecting a GameObject previews the particle systems at and below it in edit mode.
+        Runtime.ParticleSystem.ParticleSystemComponent.EditorSelectionQuery = go => Selection.IsSelected(go);
+
         // Build the editor's PropertyGrid config
         PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
