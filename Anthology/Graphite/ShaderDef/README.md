@@ -1,6 +1,6 @@
 # ShaderDef
 
-ShaderDef is Graphite's shader authoring system: a ShaderLab-inspired markup format (`Shader { Pass { ... } }`) that wraps a Slang shader in declarative render state, variant axes, and material properties. For the markup syntax itself see [`Core/ShaderSpec.md`](Core/ShaderSpec.md). This document covers the library side: the object model, how variants and pass state actually work at runtime, how the Compiler project turns Slang source into `ShaderDescription`s, and how the two projects fit into Graphite as a whole.
+ShaderDef is Graphite's shader authoring system: a ShaderLab-inspired markup format (`Shader { Pass { ... } }`) that wraps a Slang shader in declarative render state, variant axes, and material properties. For the markup syntax itself see [`Core/ShaderSpec.md`](Core/ShaderSpec.md). For usage examples and the full API reference see the [ShaderDef docs](../docs/api/shaderdef.md). This document covers the library side: the object model, how variants and pass state actually work at runtime, how the Compiler project turns Slang source into `ShaderDescription`s, and how the two projects fit into Graphite as a whole.
 
 The library is split into two assemblies:
 
@@ -39,10 +39,7 @@ This is all just data at this point - `ShaderDefinition.Create` is what turns it
 
 ## Binding a Shader to a Device
 
-```csharp
-ShaderDefinition def = ShaderParser.Parse(source);
-def.Create(device, compiler, CompileMode.OnDemand);
-```
+See [Quick example](../docs/api/shaderdef.md#quick-example) and [Common patterns](../docs/api/shaderdef.md#common-patterns) in the ShaderDef docs.
 
 `Create` walks every pass and calls `ShaderPass.Bind`, which:
 
@@ -65,10 +62,7 @@ Axes are not declared in the ShaderDef markup itself - they come from the Slang 
 
 Each `ShaderPass` keeps a single `KeywordState` representing "what's currently selected" and an index into its `_variants` array for the currently active combination. Calling `SetKeyword`/`SetKeywords` (or the `Try*` variants, which don't throw on an unrecognized keyword name) updates that state and re-resolves. For per-draw composition, `ResetKeywords()` returns to the first combination and `ApplyKeywords(ReadOnlySpan<Keyword>)` sets every recognized name, skips the rest, and re-resolves once; `Axes` lists the pass's `VariantSpace`s for UI:
 
-```csharp
-pass.SetKeyword(new Keyword("Lighting", "Baked"));
-GraphicsProgram program = pass.ActiveVariant...
-```
+See [Keywords and variants](../docs/api/shader-programs.md#keywords-and-variants) for usage.
 
 Resolution goes through `KeywordMap.FindNearest`: it first looks for an exact hash match for the current keyword state (`Find`), and if the exact combination was never compiled, it falls back to whichever known variant shares the most keyword slots (`MatchScore`) - there is always at least one variant in the map, so this never fails, it just degrades to the closest thing available. This means a pass can have only a handful of its full combinatorial variant space actually compiled and still resolve to *something* reasonable for combinations you haven't asked for yet.
 
@@ -102,10 +96,7 @@ Three methods (`ToBlendState`, `ToDepthStencilState`, `ToRasterizerState`) colla
 
 `IShaderCompiler` is the seam Core depends on and Compiler implements:
 
-```csharp
-IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass);
-ShaderDescription Compile(ShaderPass pass, Keyword[] combo, GraphicsBackend backend);
-```
+See [IShaderCompiler](../docs/api/shaderdef.md#ishadercompiler) for the interface members.
 
 `SlangShaderCompiler` is the only implementation. A compiler instance owns a Slang `Session` (`BeginSession`/`EndSession`) and one or more registered `CompilerModule`s, one per target backend (Vulkan, Metal, WebGPU; D3D11 is present but explicitly unsupported - see the OpenGL/legacy-backend note in the repo's Graphite guidance, D3D11 is in the same boat: get it to compile, nothing more). Reuse a single compiler instance across many shaders in the same session to keep its loaded-module cache warm.
 
@@ -134,9 +125,7 @@ Each distinct combo gets its own uniquely-named specialization module (`__Varian
 
 `CommandBufferExtensions.SetShader(commandBuffer, pass, ...)` is the usual entry point at draw time:
 
-```csharp
-commandBuffer.SetShader(pass);
-```
+See [Quick example](../docs/api/shaderdef.md#quick-example) for usage.
 
 This calls `ShaderPass.ResolveProgram`, which resolves the active variant (compiling on demand if needed and possible), overlays the pass's `PassState` onto the given base blend/depth/rasterizer descriptions, and creates (or reuses, via a per-pass `_programCache` keyed by active variant index) a `GraphicsProgram` from the device's `ResourceFactory`. The overload with no base-state arguments uses library defaults (`BlendStateDescription.SingleDisabled`, `DepthStencilStateDescription.DepthOnlyLessEqual`, back-face culling with clockwise front faces) - the same defaults `PassState`'s own null-coalescing falls back to when a `.shaderdef` file leaves a field unset.
 
