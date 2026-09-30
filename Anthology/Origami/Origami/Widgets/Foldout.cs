@@ -222,16 +222,21 @@ public sealed class FoldoutBuilder
                 {
                     bool drawBadge = !string.IsNullOrEmpty(_badge);
 
-                    // Enable toggle (optional). The glyph font is empty, so this reads as a small
-                    // click target that dims the label as feedback.
+                    // Enable toggle (optional). The checkbox is read only so this box owns the click
+                    // and can keep it from also opening or closing the foldout.
                     if (hasToggle)
                     {
                         var setter = _toggleSetter!;
-                        _paper.Box($"{_id}_chk")
-                            .Width(metrics.IconWidth).Height(headH)
+                        using (_paper.Column($"{_id}_chk")
+                            .Width(UnitValue.Auto).Height(headH)
                             .Margin(0, gap, 0, 0)
-                            .Alignment(TextAlignment.MiddleCenter)
-                            .OnClick(0, (_, e) => { e.StopPropagation(); setter(!isEnabled); });
+                            .OnClick(0, (_, e) => { e.StopPropagation(); setter(!isEnabled); })
+                            .Enter())
+                        {
+                            _paper.Box($"{_id}_chk_top").Height(UnitValue.Stretch());
+                            Origami.Checkbox(_paper, $"{_id}_chk_box", isEnabled, setter).Small().NoLabel().ReadOnly().Show();
+                            _paper.Box($"{_id}_chk_bottom").Height(UnitValue.Stretch());
+                        }
                     }
 
                     // Label — fills the remaining width; carries the right edge padding when no badge follows.
