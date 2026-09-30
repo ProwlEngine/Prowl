@@ -81,22 +81,21 @@ public static unsafe class Graphics
     /// </summary>
     internal static void SetSwapInterval(int interval) => System.Threading.Volatile.Write(ref s_wantedSwapInterval, interval);
 
-    /// <summary>Enqueue a CB for the render thread to execute. Fire-and-forget.</summary>
+    /// <summary>Enqueue a CB for the render thread to execute. The buffer is recycled once it has run
+    /// and the owner has disposed it, so rent it with <c>using</c>.</summary>
     public static void Submit(CommandBuffer cmd)
     {
         if (cmd == null) return;
-        if (cmd._inPool)
-            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
-        // No graphics device: drop GPU work and recycle the buffer instead of queueing it for a
-        // render thread that will never drain it (which would leak the buffer).
+        if (cmd._submitted || cmd._inPool)
+            throw new System.InvalidOperationException("CommandBuffer has already been submitted.");
+        cmd._submitted = true;
+        // No graphics device: drop GPU work instead of queueing it for a render thread that will
+        // never drain it.
         if (IsHeadless)
         {
-            cmd._ownerReleased = true;
-            CommandBufferPool.Return(cmd);
+            cmd.Release();
             return;
         }
-        cmd._submitted = true;
-        cmd._ownerReleased = true;
         s_renderQueue.Add(new CBJob { Cmd = cmd });
     }
 
@@ -106,18 +105,16 @@ public static unsafe class Graphics
     public static void SubmitAndWait(CommandBuffer cmd)
     {
         if (cmd == null) return;
-        if (cmd._inPool)
-            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
+        if (cmd._submitted || cmd._inPool)
+            throw new System.InvalidOperationException("CommandBuffer has already been submitted.");
+        cmd._submitted = true;
         // No graphics device: nothing executes, so don't block waiting on a render thread. Any
         // read-back this would have filled keeps its default (zeroed) contents.
         if (IsHeadless)
         {
-            cmd._ownerReleased = true;
-            CommandBufferPool.Return(cmd);
+            cmd.Release();
             return;
         }
-        cmd._submitted = true;
-        cmd._ownerReleased = true;
         var job = new CBJob { Cmd = cmd, Done = new System.Threading.ManualResetEventSlim(false) };
         s_renderQueue.Add(job);
         job.Done.Wait();
@@ -280,7 +277,7 @@ public static unsafe class Graphics
                 finally
                 {
                     if (pushed) PopCBDebugGroup();
-                    CommandBufferPool.Return(cmd);
+                    cmd.Release();
                     job.Done?.Set();
                 }
             }

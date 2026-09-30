@@ -65,6 +65,28 @@ public class RenderPipelineTests
         Assert.Equal(70_000, cmd._objects.Count);
     }
 
+    // A submitted buffer that has run must stay out of the pool until its owner disposes it, or the
+    // owner's late Dispose would recycle it out from under whoever rented it next.
+    [Fact]
+    public void CommandBuffer_IsNotReusedUntilOwnerDisposes()
+    {
+        var first = Graphics.GetCommandBuffer("First");
+        Graphics.Submit(first);
+        Assert.False(first._inPool);
+
+        first.Dispose();
+        Assert.True(first._inPool);
+    }
+
+    [Fact]
+    public void CommandBuffer_EncodingAfterSubmitThrows()
+    {
+        using var cmd = Graphics.GetCommandBuffer("Test");
+        Graphics.Submit(cmd);
+
+        Assert.Throws<System.InvalidOperationException>(() => cmd.SetRenderTarget(null));
+    }
+
     private sealed class MotionPipeline : RenderPipeline
     {
         public Float4x4 Frame(Camera camera, int objectId, int subMesh, Float4x4 model)

@@ -282,7 +282,7 @@ public class DefaultRenderPipeline : RenderPipeline
         ]);
 
         // ─── Pre-pass + opaque CB ───
-        var mainCmd = Graphics.GetCommandBuffer("ColorPass");
+        using var mainCmd = Graphics.GetCommandBuffer("ColorPass");
 
         // Single MRT prepass: depth + view-space normals + motion + roughness/metallic.
         // Cleared to zero so sky/background reads zero motion (and the unwritten normal/material
@@ -376,7 +376,7 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderStats.EndPostFx();
 
         // ─── Transparents CB ───
-        var transparentCmd = Graphics.GetCommandBuffer("Transparents");
+        using var transparentCmd = Graphics.GetCommandBuffer("Transparents");
         transparentCmd.SetRenderTarget(colorRT.frameBuffer);
         transparentCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
         List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
@@ -416,7 +416,7 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderStats.EndPostFx();
 
         // ─── Gizmos + final blit CB ───
-        var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
+        using var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
         if (data.DisplayGizmos)
         {
             finalCmd.SetRenderTarget(colorRT.frameBuffer);
@@ -433,7 +433,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.). MUST run after the
         // overlay pass, which binds `target` - otherwise the editor's UI draws into the game RT and the
         // window goes black.
-        var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
+        using var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
         resetCmd.SetRenderTarget(null);
         resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         Graphics.Submit(resetCmd);
@@ -516,7 +516,7 @@ public class DefaultRenderPipeline : RenderPipeline
             // Screen-space orthographic projection (origin bottom-left, +Y up to match RectTransform).
             AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
 
-            var cmd = Graphics.GetCommandBuffer("UI");
+            using var cmd = Graphics.GetCommandBuffer("UI");
             if (targetRT != null)
             {
                 cmd.SetRenderTarget(targetRT.frameBuffer);
@@ -565,7 +565,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
             s_uiTmp.Sort(static (a, b) => ((UIRenderItem)a).SortKey.CompareTo(((UIRenderItem)b).SortKey));
 
-            var cmd = Graphics.GetCommandBuffer("UIWorld");
+            using var cmd = Graphics.GetCommandBuffer("UIWorld");
             if (targetRT != null)
             {
                 cmd.SetRenderTarget(targetRT.frameBuffer);
