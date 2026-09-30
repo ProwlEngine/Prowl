@@ -247,6 +247,9 @@ public class DefaultRenderPipeline : RenderPipeline
         // then submits its own CB (necessary because each face uploads different
         // view/proj matrices and they can't share a CB see Light.RenderShadows).
         {
+            ShadowAtlas.TryInitialize();
+            ShadowAtlas.Clear();
+
             using var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
             shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
             shadowSetup.ClearRenderTarget(ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));

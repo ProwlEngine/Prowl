@@ -159,9 +159,6 @@ public abstract class Game
                     Graphics.Submit(frameStart);
                 }
 
-                Rendering.ShadowAtlas.TryInitialize();
-                Rendering.ShadowAtlas.Clear();
-
                 // === End of Start Graphics ===
 
                 BeginRender();
