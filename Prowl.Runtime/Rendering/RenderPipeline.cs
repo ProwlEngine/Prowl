@@ -822,6 +822,8 @@ public abstract class RenderPipeline : EngineObject
 
         if (sharedProperties != null)
             cmd.SetInstanceProperties(sharedProperties);
+        else
+            cmd.ClearInstanceProperties();
 
         // Upload THIS batch's instance data immediately before the draw so the
         // shared instance buffer holds the right contents when the draw executes.

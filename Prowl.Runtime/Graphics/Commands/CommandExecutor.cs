@@ -82,6 +82,13 @@ internal sealed class CommandExecutor
         var store = cmd._store;
         int pos = 0;
 
+        // Property bindings are snapshots owned by the buffer that encoded them, and go back to the
+        // pool with it, so each buffer starts with none bound.
+        _boundProperties = null;
+        _boundShader = null;
+        _boundInstanceProperties = null;
+        _pendingDirectTextures.Clear();
+
         while (pos < stream.Length)
         {
             CommandOpcode op = ReadOpcode(stream, ref pos);
