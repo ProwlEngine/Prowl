@@ -157,7 +157,7 @@ public sealed class TerrainData : Asset, ISerializable
     public float[] Splats { get { EnsureLoaded(); return _splatsField ??= CreateDefaultSplats(); } set { EnsureLoaded(); _splatsField = value; } }
 
     /// <summary>Dynamic layer list. Each group of 4 layers maps to one RGBA splatmap texture.</summary>
-    public List<TerrainLayer> Layers { get { EnsureLoaded(); return _layers; } set { EnsureLoaded(); _layers = value; } }
+    public List<TerrainLayer> Layers { get { EnsureLoaded(); return _layers; } private set { EnsureLoaded(); _layers = value; } }
 
     // --- Holes ---
 
@@ -165,7 +165,7 @@ public sealed class TerrainData : Asset, ISerializable
     /// Per-pixel hole map at SplatmapResolution. 0 = hole (not rendered/no collision), 255 = solid.
     /// Null means no holes (all solid).
     /// </summary>
-    public byte[]? Holes { get { EnsureLoaded(); return _holesField; } set { EnsureLoaded(); _holesField = value; } }
+    public byte[]? Holes { get { EnsureLoaded(); return _holesField; } set { EnsureLoaded(); _holesField = value; _holesDirty = true; _holesVersion++; } }
 
     // --- Details/Grass ---
 
@@ -202,12 +202,16 @@ public sealed class TerrainData : Asset, ISerializable
     [NonSerialized] private Texture2D? _holesTexture;
     [NonSerialized, NotContent] private int _heightsVersion;
     [NonSerialized, NotContent] private int _detailsVersion;
+    [NonSerialized, NotContent] private int _holesVersion;
 
     /// <summary>Bumped on every height change. Renderers watch this to rebuild cached data.</summary>
     public int HeightsVersion { get { EnsureLoaded(); return _heightsVersion; } }
 
     /// <summary>Bumped on every detail density change. Renderers watch this to rebuild cached data.</summary>
     public int DetailsVersion { get { EnsureLoaded(); return _detailsVersion; } }
+
+    /// <summary>Bumped on every hole change. Renderers watch this to rebuild cached data.</summary>
+    public int HolesVersion { get { EnsureLoaded(); return _holesVersion; } }
 
     public TerrainData() : base("New TerrainData") { }
 
@@ -340,13 +344,10 @@ public sealed class TerrainData : Asset, ISerializable
         // GPU linear filtering: texel centers at (i+0.5)/N
         // Convert UV to texel space, subtract 0.5 for center offset
         float px = u * HeightmapResolution - 0.5f;
-        float pz = v * HeightmapResolution - 0.5f;
-        int x0 = Maths.Clamp((int)MathF.Floor(px), 0, HeightmapResolution - 1);
         int z0 = Maths.Clamp((int)MathF.Floor(pz), 0, HeightmapResolution - 1);
         int x1 = Maths.Min(x0 + 1, HeightmapResolution - 1);
         int z1 = Maths.Min(z0 + 1, HeightmapResolution - 1);
         float fx = px - x0, fz = pz - z0;
-        fx = Maths.Clamp(fx, 0f, 1f);
         fz = Maths.Clamp(fz, 0f, 1f);
         float h00 = Heights[z0 * HeightmapResolution + x0] * scale;
         float h10 = Heights[z0 * HeightmapResolution + x1] * scale;
@@ -441,15 +442,36 @@ public sealed class TerrainData : Asset, ISerializable
         _splatmapDirty = true;
     }
 
+    /// <summary>Change the splatmap resolution. Splat weights reset, holes are resampled so they survive.</summary>
     public void ResizeSplatmap(int newRes)
     {
         EnsureLoaded();
+        int oldRes = SplatmapResolution;
         SplatmapResolution = newRes;
         int lc = LayerCount;
         Splats = new float[newRes * newRes * lc];
         // Default: layer 0 = 1.0, rest = 0.0
         for (int i = 0; i < Splats.Length; i += lc) Splats[i] = 1f;
         _splatmapDirty = true;
+
+        if (_holesField != null)
+            Holes = _holesField.Length == oldRes * oldRes ? ResampleNearest(_holesField, oldRes, newRes) : null;
+    }
+
+    private static byte[] ResampleNearest(byte[] source, int oldRes, int newRes)
+    {
+        var result = new byte[newRes * newRes];
+        float scale = (float)oldRes / newRes;
+        for (int z = 0; z < newRes; z++)
+        {
+            int sz = Maths.Min((int)((z + 0.5f) * scale), oldRes - 1);
+            for (int x = 0; x < newRes; x++)
+            {
+                int sx = Maths.Min((int)((x + 0.5f) * scale), oldRes - 1);
+                result[z * newRes + x] = source[sz * oldRes + sx];
+            }
+        }
+        return result;
     }
 
     /// <summary>Max supported terrain layers (2 splatmap textures x 4 channels).</summary>
@@ -475,6 +497,11 @@ public sealed class TerrainData : Asset, ISerializable
         int oldCount = Layers.Count;
         Layers.RemoveAt(index);
         int newCount = Layers.Count;
+        _splatmapDirty = true;
+
+        // Never materialized, so the lazy default is built with the new count
+        float[]? oldSplats = _splatsField;
+        if (oldSplats == null) return;
 
         // Rebuild splats removing the channel at index
         int res = SplatmapResolution;
@@ -486,17 +513,17 @@ public sealed class TerrainData : Asset, ISerializable
             for (int c = 0; c < oldCount; c++)
             {
                 if (c == index) continue;
-                newSplats[p * newCount + dst] = Splats[p * oldCount + c];
+                newSplats[p * newCount + dst] = oldSplats[p * oldCount + c];
                 dst++;
             }
         }
         Splats = newSplats;
-        _splatmapDirty = true;
     }
 
     private void RebuildSplatsForLayerCount(int oldCount, int newCount)
     {
-        if (Splats == null) return;
+        float[]? oldSplats = _splatsField;
+        if (oldSplats == null) return;
         int res = SplatmapResolution;
         int pixelCount = res * res;
         var newSplats = new float[pixelCount * newCount];
@@ -504,7 +531,7 @@ public sealed class TerrainData : Asset, ISerializable
         for (int p = 0; p < pixelCount; p++)
         {
             for (int c = 0; c < copyChannels; c++)
-                newSplats[p * newCount + c] = Splats[p * oldCount + c];
+                newSplats[p * newCount + c] = oldSplats[p * oldCount + c];
         }
         Splats = newSplats;
     }
@@ -537,6 +564,18 @@ public sealed class TerrainData : Asset, ISerializable
         }
         Holes[z * SplatmapResolution + x] = value;
         _holesDirty = true;
+        _holesVersion++;
+    }
+
+    /// <summary>Whether the point at terrain UV falls in a hole, using the same texel the surface shader discards.</summary>
+    public bool IsHoleAt(float u, float v)
+    {
+        EnsureLoaded();
+        if (Holes == null) return false;
+        int res = SplatmapResolution;
+        int x = Maths.Clamp((int)MathF.Floor(u * res), 0, res - 1);
+        int z = Maths.Clamp((int)MathF.Floor(v * res), 0, res - 1);
+        return !IsHoleSolid(x, z);
     }
 
     /// <summary>Check if a heightmap cell has a hole (any corner is a hole). Used by physics.</summary>
@@ -551,7 +590,7 @@ public sealed class TerrainData : Asset, ISerializable
         return !IsHoleSolid(sx, sz);
     }
 
-    public void SetHolesDirty() { EnsureLoaded(); _holesDirty = true; }
+    public void SetHolesDirty() { EnsureLoaded(); _holesDirty = true; _holesVersion++; }
 
     #endregion
 
