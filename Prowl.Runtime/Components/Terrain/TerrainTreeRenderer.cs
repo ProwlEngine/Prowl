@@ -45,6 +45,7 @@ internal class TerrainTreeRenderer
             foreach (var tree in data.Trees)
             {
                 if (tree.PrototypeIndex != protoIdx) continue;
+                if (data.IsHoleAt(tree.Position.X, tree.Position.Y)) continue;
 
                 // Position in terrain-local space
                 float lx = tree.Position.X * terrainSize;
