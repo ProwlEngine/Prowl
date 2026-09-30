@@ -24,8 +24,7 @@
 
     },
     "_floats": {
-      "_EmissionIntensity": 1F,
-      "_SoftParticlesFactor": 1F
+
     },
     "_ints": {
 
@@ -39,15 +38,6 @@
     "_textures": {
       "_MainTex": {
         "$asset": "61fe6b22-0991-6a59-8c79-69a3dba090a9"
-      },
-      "_NormalTex": {
-        "$asset": "0c9986f4-620f-3053-acf5-aaa504c7e31c"
-      },
-      "_SurfaceTex": {
-        "$asset": "96be834e-eb6c-fe51-a195-30e5cd7e9bed"
-      },
-      "_EmissionTex": {
-        "$asset": "4ad67725-8cd3-f45c-a783-5e565ac55462"
       }
     },
     "_textures3D": {
@@ -60,5 +50,5 @@
 
     }
   },
-  "Name": "New Material"
+  "Name": "Particle"
 }

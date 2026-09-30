@@ -36,6 +36,7 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
                     break;
 
                 case MinMaxGradientMode.Gradient:
+                case MinMaxGradientMode.RandomColor:
                     PropertyGridUtils.DrawField(paper, $"{id}_grad", "Gradient", typeof(Gradient), gradient.Gradient,
                         v => { gradient.Gradient = v as Gradient ?? new Gradient(); onChange(gradient); }, depth + 1);
                     break;

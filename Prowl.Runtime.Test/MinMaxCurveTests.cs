@@ -33,8 +33,8 @@ public class MinMaxCurveTests
         var used = new Random(123);
         var reference = new Random(123);
 
-        var curve = new MinMaxCurve { Mode = MinMaxCurveMode.Random, MinValue = 0f, MaxValue = 1f };
-        curve.EvaluateInitial(used);   // consumes exactly one draw
+        var curve = new MinMaxCurve { Mode = MinMaxCurveMode.RandomBetweenTwoConstants, MinValue = 0f, MaxValue = 1f };
+        curve.Evaluate(0f, used);   // consumes exactly one draw
         reference.NextSingle();         // match it
 
         Assert.Equal(reference.NextSingle(), used.NextSingle());

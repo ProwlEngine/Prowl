@@ -6,21 +6,20 @@ using System;
 namespace Prowl.Runtime.ParticleSystem;
 
 /// <summary>
-/// Base class for all particle system modules.
-/// Modules control different aspects of particle behavior.
+/// Base class for particle system modules. A module is a group of settings the system reads while it
+/// simulates or renders. The inspector draws <see cref="Enabled"/> as the section toggle.
 /// </summary>
 [Serializable]
 public abstract class ParticleSystemModule
 {
-    public bool Enabled = false;
+    [HideInInspector]
+    public bool Enabled;
+}
 
-    /// <summary>
-    /// Called when particles are spawned to initialize their values.
-    /// </summary>
-    public virtual void OnParticleSpawn(ref Particle particle, Random random) { }
-
-    /// <summary>
-    /// Called every frame to update particle values.
-    /// </summary>
-    public virtual void OnParticleUpdate(ref Particle particle, float deltaTime) { }
+/// <summary>Which axes a module's vectors are expressed in.</summary>
+public enum ParticleSpace
+{
+    /// <summary>The emitter's own axes.</summary>
+    Local,
+    World
 }

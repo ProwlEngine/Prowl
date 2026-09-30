@@ -8,380 +8,247 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.ParticleSystem.Modules;
 
-/// <summary>
-/// Collision mode for particles.
-/// </summary>
-[Serializable]
-public enum CollisionMode
+public enum ParticleCollisionType
 {
-    World,  // Collide with physics world
-    Planes  // Collide with simple planes
+    /// <summary>Collide with the physics world.</summary>
+    World,
+    /// <summary>Collide with infinite planes, one per GameObject, facing along its up axis.</summary>
+    Planes
+}
+
+public enum ParticleCollisionQuality
+{
+    /// <summary>Every particle casts a ray every frame.</summary>
+    High,
+    /// <summary>Surfaces found by earlier rays are cached per voxel and reused for a few frames.</summary>
+    Medium,
+    /// <summary>Like Medium with a quarter of the rays and a longer lived cache.</summary>
+    Low
+}
+
+/// <summary>One particle hitting something.</summary>
+public struct ParticleCollisionEvent
+{
+    public Float3 Intersection;
+    public Float3 Normal;
+    /// <summary>World velocity of the particle after the bounce.</summary>
+    public Float3 Velocity;
+    /// <summary>The collider hit, null for planes and for geometry no collider owns.</summary>
+    public Collider? Collider;
+    /// <summary>The transform of what was hit.</summary>
+    public Transform? Transform;
+
+    public readonly GameObject? Other => Transform?.GameObject;
 }
 
 /// <summary>
-/// Quality level for collision detection.
+/// Implement on a component to hear about particles hitting its GameObject. Only called when the
+/// system's <see cref="CollisionModule.SendCollisionMessages"/> is on.
 /// </summary>
-[Serializable]
-public enum CollisionQuality
+public interface IParticleCollisionHandler
 {
-    High,    // Check every particle (slow but accurate)
-    Medium,  // Use voxel approximation (balanced)
-    Low      // Aggressive voxel approximation (fast but less accurate)
+    void OnParticleCollision(ParticleSystemComponent system, in ParticleCollisionEvent collision);
 }
 
-/// <summary>
-/// Controls particle collision with the world or planes.
-/// </summary>
+/// <summary>Makes particles bounce off the world or off planes.</summary>
 [Serializable]
 public class CollisionModule : ParticleSystemModule
 {
-    public CollisionMode Mode = CollisionMode.World;
-    public CollisionQuality Quality = CollisionQuality.Medium;
+    public ParticleCollisionType Type = ParticleCollisionType.World;
 
-    // Physics properties
-    public float Dampen = 0.5f;           // Velocity damping on collision (0-1)
-    public float Bounce = 0.3f;           // Bounciness (0-1)
-    public float LifetimeLoss = 0.0f;     // Lifetime percentage lost on collision (0-1)
-    public float MinKillSpeed = 0.0f;     // Kill particle if speed drops below this
-    public float ParticleRadius = 0.05f;  // Radius for collision detection
-    public float MaxCollisionDistance = 1.0f; // Maximum raycast distance
+    [ShowIf(nameof(IsPlanes))]
+    public List<GameObject> Planes = new();
 
-    // Layer filtering for world collision
+    [Range(0f, 1f), Tooltip("Share of speed lost on every hit.")]
+    public float Dampen = 0f;
+
+    [Range(0f, 1f), Tooltip("Share of the speed into the surface kept as speed away from it.")]
+    public float Bounce = 1f;
+
+    [Range(0f, 1f), Tooltip("Share of the start lifetime lost on every hit.")]
+    public float LifetimeLoss = 0f;
+
+    [Tooltip("Particles slower than this after a hit die.")]
+    public float MinKillSpeed = 0f;
+
+    [Tooltip("Particles faster than this after a hit die.")]
+    public float MaxKillSpeed = 10000f;
+
+    [Tooltip("Collision radius as a share of half the particle's size.")]
+    public float RadiusScale = 1f;
+
+    [ShowIf(nameof(IsWorld))]
     public LayerMask CollidesWith = LayerMask.Everything;
 
-    // Voxel settings for optimization
-    public float VoxelSize = 1.0f;        // Size of spatial voxels for approximation
+    [ShowIf(nameof(IsWorld))]
+    public ParticleCollisionQuality Quality = ParticleCollisionQuality.High;
 
-    // Plane collision mode
-    public List<Plane> Planes = new();
+    [ShowIf(nameof(IsCached)), Tooltip("Size of the cells cached surfaces are stored in.")]
+    public float VoxelSize = 0.5f;
 
-    // Spatial optimization cache
-    [NonSerialized]
-    private Dictionary<Int3, List<int>> _voxelGrid = new();
+    [ShowIf(nameof(IsCached)), Tooltip("Rays cast per frame to fill the cache.")]
+    public int MaxCollisionQueries = 256;
 
-    [NonSerialized]
-    private Dictionary<Int3, bool> _voxelCollisionCache = new();
+    [Tooltip("Call IParticleCollisionHandler on what was hit.")]
+    public bool SendCollisionMessages = false;
 
-    public override void OnParticleUpdate(ref Particle particle, float deltaTime)
+    private bool IsPlanes => Type == ParticleCollisionType.Planes;
+    private bool IsWorld => Type == ParticleCollisionType.World;
+    private bool IsCached => IsWorld && Quality != ParticleCollisionQuality.High;
+
+    private struct CachedSurface
     {
-        // Collision is handled in bulk update for efficiency
+        public bool HasSurface;
+        public Float3 Point;
+        public Float3 Normal;
+        public Collider? Collider;
+        public Transform? Transform;
+        public long Frame;
     }
+
+    private readonly Dictionary<(int, int, int), CachedSurface> _cache = new();
+    private long _queryFrame = -1;
+    private int _queriesLeft;
 
     /// <summary>
-    /// Updates all particles with collision detection (called from ParticleSystemComponent).
+    /// Sweeps the particle from <paramref name="previous"/> to where it moved this step and bounces it off
+    /// the first surface in the way. Returns true on a hit.
     /// </summary>
-    public void UpdateCollisions(List<Particle> particles, PhysicsWorld physics, float deltaTime, Transform particleSystemTransform, SimulationSpace simulationSpace)
+    internal bool Apply(ParticleSystemComponent system, PhysicsWorld? physics, ref Particle p, Float3 previous, out ParticleCollisionEvent collision)
     {
-        if (!Enabled || particles.Count == 0)
-            return;
+        collision = default;
 
-        if (Mode == CollisionMode.Planes)
-        {
-            UpdatePlaneCollisions(particles, deltaTime, particleSystemTransform, simulationSpace);
-        }
-        else if (Mode == CollisionMode.World)
-        {
-            UpdateWorldCollisions(particles, physics, deltaTime, particleSystemTransform, simulationSpace);
-        }
+        Float3 from = system.SimPointToWorld(previous);
+        Float3 to = system.SimPointToWorld(p.Position);
+        float radius = MathF.Max(1e-4f, (MathF.Abs(p.Size.X) + MathF.Abs(p.Size.Y)) * 0.25f * RadiusScale * system.SizeScale);
+
+        bool hit = Type == ParticleCollisionType.Planes
+            ? SweepPlanes(from, to, radius, ref collision)
+            : Quality == ParticleCollisionQuality.High
+                ? SweepWorld(physics, from, to, radius, ref collision)
+                : SweepCached(physics, from, to, radius, ref collision);
+        if (!hit) return false;
+
+        Float3 velocity = system.SimVectorToWorld(p.TotalVelocity);
+        float into = Float3.Dot(velocity, collision.Normal);
+        if (into < 0f)
+            velocity -= collision.Normal * ((1f + Maths.Saturate(Bounce)) * into);
+        velocity *= 1f - Maths.Saturate(Dampen);
+
+        p.Position = system.WorldPointToSim(collision.Intersection + collision.Normal * radius);
+        p.Velocity = system.WorldVectorToSim(velocity) - p.AnimatedVelocity;
+
+        if (LifetimeLoss > 0f)
+            p.Lifetime -= p.StartLifetime * LifetimeLoss;
+
+        float speed = Float3.Length(velocity);
+        if (speed < MinKillSpeed || speed > MaxKillSpeed)
+            p.Lifetime = 0f;
+
+        collision.Velocity = velocity;
+        return true;
     }
 
-    private void UpdatePlaneCollisions(List<Particle> particles, float deltaTime, Transform particleSystemTransform, SimulationSpace simulationSpace)
+    private bool SweepWorld(PhysicsWorld? physics, Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision)
     {
-        if (Planes.Count == 0)
-            return;
+        if (physics == null) return false;
 
-        for (int i = 0; i < particles.Count; i++)
+        Float3 delta = to - from;
+        float distance = Float3.Length(delta);
+        if (distance < 1e-6f) return false;
+
+        if (!physics.Raycast(from, delta / distance, out RaycastHit hit, distance + radius, CollidesWith))
+            return false;
+
+        collision.Intersection = hit.Point;
+        collision.Normal = hit.Normal;
+        collision.Collider = hit.Collider;
+        collision.Transform = hit.Transform;
+        return true;
+    }
+
+    private bool SweepCached(PhysicsWorld? physics, Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision)
+    {
+        if (physics == null) return false;
+
+        long frame = Time.FrameCount;
+        bool low = Quality == ParticleCollisionQuality.Low;
+        int lifetime = low ? 30 : 8;
+        if (_queryFrame != frame)
         {
-            var particle = particles[i];
+            _queryFrame = frame;
+            _queriesLeft = Math.Max(1, low ? MaxCollisionQueries / 4 : MaxCollisionQueries);
+            if (_cache.Count > 8192) _cache.Clear();
+        }
 
-            // Transform to world space if needed
-            Float3 worldPos = particle.Position;
-            Float3 worldVel = particle.Velocity;
-            if (simulationSpace == SimulationSpace.Local && particleSystemTransform != null)
+        float cell = MathF.Max(VoxelSize, 0.01f);
+        var key = ((int)MathF.Floor(from.X / cell), (int)MathF.Floor(from.Y / cell), (int)MathF.Floor(from.Z / cell));
+
+        if (!_cache.TryGetValue(key, out CachedSurface surface) || frame - surface.Frame > lifetime)
+        {
+            if (_queriesLeft <= 0) return false;
+            _queriesLeft--;
+
+            Float3 delta = to - from;
+            float distance = Float3.Length(delta);
+            if (distance < 1e-6f) return false;
+
+            surface = new CachedSurface { Frame = frame };
+            if (physics.Raycast(from, delta / distance, out RaycastHit hit, MathF.Max(distance + radius, cell * 2f), CollidesWith))
             {
-                var worldPosDouble = particleSystemTransform.LocalToWorldMatrix * new Float4(particle.Position, 1.0f);
-                worldPos = new Float3((float)worldPosDouble.X, (float)worldPosDouble.Y, (float)worldPosDouble.Z);
-
-                var worldVelDouble = particleSystemTransform.LocalToWorldMatrix * new Float4(particle.Velocity, 0.0f);
-                worldVel = new Float3((float)worldVelDouble.X, (float)worldVelDouble.Y, (float)worldVelDouble.Z);
+                surface.HasSurface = true;
+                surface.Point = hit.Point;
+                surface.Normal = hit.Normal;
+                surface.Collider = hit.Collider;
+                surface.Transform = hit.Transform;
             }
-
-            foreach (var plane in Planes)
-            {
-                Float3 nextPos = worldPos + worldVel * deltaTime;
-                float distance = (float)plane.GetSignedDistanceToPoint(nextPos) - ParticleRadius;
-
-                if (distance < 0) // Collision detected
-                {
-                    // Reflect velocity in world space
-                    Float3 normal = (Float3)plane.Normal;
-                    Float3 reflectedVelocity = worldVel - normal * (2.0f * Float3.Dot(worldVel, normal));
-                    worldVel = reflectedVelocity * Bounce + worldVel * (1.0f - Bounce);
-                    worldVel *= (1.0f - Dampen);
-
-                    // Correct position in world space
-                    worldPos = nextPos - normal * distance;
-
-                    // Transform back to local space if needed
-                    if (simulationSpace == SimulationSpace.Local && particleSystemTransform != null)
-                    {
-                        var localPosDouble = particleSystemTransform.WorldToLocalMatrix * new Float4(worldPos, 1.0f);
-                        particle.Position = new Float3((float)localPosDouble.X, (float)localPosDouble.Y, (float)localPosDouble.Z);
-
-                        var localVelDouble = particleSystemTransform.WorldToLocalMatrix * new Float4(worldVel, 0.0f);
-                        particle.Velocity = new Float3((float)localVelDouble.X, (float)localVelDouble.Y, (float)localVelDouble.Z);
-                    }
-                    else
-                    {
-                        particle.Position = worldPos;
-                        particle.Velocity = worldVel;
-                    }
-
-                    // Apply lifetime loss
-                    if (LifetimeLoss > 0)
-                    {
-                        particle.Lifetime *= (1.0f - LifetimeLoss);
-                    }
-
-                    // Check kill speed
-                    if (MinKillSpeed > 0 && Float3.Length(particle.Velocity) < MinKillSpeed)
-                    {
-                        particle.Lifetime = 0;
-                    }
-
-                    particles[i] = particle;
-                    break; // Only collide with first plane hit
-                }
-            }
+            _cache[key] = surface;
         }
+
+        if (!surface.HasSurface) return false;
+        if (!SweepPlane(from, to, radius, surface.Point, surface.Normal, out Float3 contact)) return false;
+
+        collision.Intersection = contact;
+        collision.Normal = surface.Normal;
+        collision.Collider = surface.Collider;
+        collision.Transform = surface.Transform;
+        return true;
     }
 
-    private void UpdateWorldCollisions(List<Particle> particles, PhysicsWorld physics, float deltaTime, Transform particleSystemTransform, SimulationSpace simulationSpace)
+    private bool SweepPlanes(Float3 from, Float3 to, float radius, ref ParticleCollisionEvent collision)
     {
-        if (physics == null)
-            return;
-
-        _voxelGrid.Clear();
-        _voxelCollisionCache.Clear();
-
-        switch (Quality)
+        float best = float.MaxValue;
+        bool hit = false;
+        foreach (GameObject plane in Planes)
         {
-            case CollisionQuality.High:
-                UpdateWorldCollisions_High(particles, physics, deltaTime, particleSystemTransform, simulationSpace);
-                break;
-            case CollisionQuality.Medium:
-                UpdateWorldCollisions_Medium(particles, physics, deltaTime, particleSystemTransform, simulationSpace);
-                break;
-            case CollisionQuality.Low:
-                UpdateWorldCollisions_Low(particles, physics, deltaTime, particleSystemTransform, simulationSpace);
-                break;
+            if (plane.IsNotValid()) continue;
+            Transform t = plane.Transform;
+            Float3 normal = Float3.NormalizeSafe(t.Up, Float3.UnitY);
+            if (!SweepPlane(from, to, radius, t.Position, normal, out Float3 contact)) continue;
+
+            float d = Float3.LengthSquared(contact - from);
+            if (d >= best) continue;
+            best = d;
+            hit = true;
+            collision.Intersection = contact;
+            collision.Normal = normal;
+            collision.Collider = null;
+            collision.Transform = t;
         }
+        return hit;
     }
 
-    // High quality: Check every particle
-    private void UpdateWorldCollisions_High(List<Particle> particles, PhysicsWorld physics, float deltaTime, Transform particleSystemTransform, SimulationSpace simulationSpace)
+    /// <summary>A sphere moving from <paramref name="from"/> to <paramref name="to"/> against the front of a plane. Contact is the point on the plane.</summary>
+    private static bool SweepPlane(Float3 from, Float3 to, float radius, Float3 point, Float3 normal, out Float3 contact)
     {
-        for (int i = 0; i < particles.Count; i++)
-        {
-            var particle = particles[i];
-            CheckAndResolveCollision(ref particle, physics, deltaTime, particleSystemTransform, simulationSpace);
-            particles[i] = particle;
-        }
+        float d0 = Float3.Dot(from - point, normal) - radius;
+        float d1 = Float3.Dot(to - point, normal) - radius;
+        contact = default;
+        if (d0 < -radius || d1 >= 0f || d1 >= d0) return false;
+
+        float t = d0 <= 0f ? 0f : d0 / (d0 - d1);
+        Float3 center = from + (to - from) * t;
+        contact = center - normal * (Float3.Dot(center - point, normal));
+        return true;
     }
-
-    // Medium quality: Voxelize and check representative particles
-    private void UpdateWorldCollisions_Medium(List<Particle> particles, PhysicsWorld physics, float deltaTime, Transform particleSystemTransform, SimulationSpace simulationSpace)
-    {
-        // Build voxel grid
-        for (int i = 0; i < particles.Count; i++)
-        {
-            Int3 voxelKey = WorldToVoxel(particles[i].Position);
-            if (!_voxelGrid.ContainsKey(voxelKey))
-                _voxelGrid[voxelKey] = new List<int>();
-            _voxelGrid[voxelKey].Add(i);
-        }
-
-        // Check one particle per voxel, apply to all
-        foreach (var kvp in _voxelGrid)
-        {
-            Int3 voxelKey = kvp.Key;
-            List<int> particleIndices = kvp.Value;
-
-            if (particleIndices.Count == 0)
-                continue;
-
-            // Check first particle in voxel
-            int representativeIndex = particleIndices[0];
-            var testParticle = particles[representativeIndex];
-            bool hadCollision = CheckAndResolveCollision(ref testParticle, physics, deltaTime, particleSystemTransform, simulationSpace);
-            particles[representativeIndex] = testParticle;
-
-            // Apply same collision response to other particles in voxel
-            if (hadCollision && particleIndices.Count > 1)
-            {
-                for (int i = 1; i < particleIndices.Count; i++)
-                {
-                    int idx = particleIndices[i];
-                    var particle = particles[idx];
-
-                    // Apply similar response (damping and bounce)
-                    particle.Velocity *= (1.0f - Dampen) * Bounce;
-
-                    if (LifetimeLoss > 0)
-                        particle.Lifetime *= (1.0f - LifetimeLoss);
-
-                    if (MinKillSpeed > 0 && Float3.Length(particle.Velocity) < MinKillSpeed)
-                        particle.Lifetime = 0;
-
-                    particles[idx] = particle;
-                }
-            }
-        }
-    }
-
-    // Low quality: Aggressive voxelization, check even fewer particles
-    private void UpdateWorldCollisions_Low(List<Particle> particles, PhysicsWorld physics, float deltaTime, Transform particleSystemTransform, SimulationSpace simulationSpace)
-    {
-        float largeVoxelSize = VoxelSize * 2.0f;
-
-        // Build voxel grid with larger voxels
-        for (int i = 0; i < particles.Count; i++)
-        {
-            Int3 voxelKey = WorldToVoxel(particles[i].Position, largeVoxelSize);
-            if (!_voxelGrid.ContainsKey(voxelKey))
-                _voxelGrid[voxelKey] = new List<int>();
-            _voxelGrid[voxelKey].Add(i);
-        }
-
-        // Check one particle per large voxel
-        foreach (var kvp in _voxelGrid)
-        {
-            List<int> particleIndices = kvp.Value;
-            if (particleIndices.Count == 0)
-                continue;
-
-            // Only check representative particle
-            int representativeIndex = particleIndices[0];
-            var testParticle = particles[representativeIndex];
-            bool hadCollision = CheckAndResolveCollision(ref testParticle, physics, deltaTime, particleSystemTransform, simulationSpace);
-            particles[representativeIndex] = testParticle;
-
-            // Apply to all if collision detected
-            if (hadCollision)
-            {
-                for (int i = 1; i < particleIndices.Count; i++)
-                {
-                    int idx = particleIndices[i];
-                    var particle = particles[idx];
-                    particle.Velocity *= (1.0f - Dampen) * Bounce;
-
-                    if (LifetimeLoss > 0)
-                        particle.Lifetime *= (1.0f - LifetimeLoss);
-
-                    if (MinKillSpeed > 0 && Float3.Length(particle.Velocity) < MinKillSpeed)
-                        particle.Lifetime = 0;
-
-                    particles[idx] = particle;
-                }
-            }
-        }
-    }
-
-    private bool CheckAndResolveCollision(ref Particle particle, PhysicsWorld physics, float deltaTime, Transform particleSystemTransform, SimulationSpace simulationSpace)
-    {
-        // Transform to world space if needed
-        Float3 worldPos = particle.Position;
-        Float3 worldVel = particle.Velocity;
-
-        if (simulationSpace == SimulationSpace.Local && particleSystemTransform != null)
-        {
-            var worldPosDouble = particleSystemTransform.LocalToWorldMatrix * new Float4(particle.Position, 1.0f);
-            worldPos = new Float3((float)worldPosDouble.X, (float)worldPosDouble.Y, (float)worldPosDouble.Z);
-
-            var worldVelDouble = particleSystemTransform.LocalToWorldMatrix * new Float4(particle.Velocity, 0.0f);
-            worldVel = new Float3((float)worldVelDouble.X, (float)worldVelDouble.Y, (float)worldVelDouble.Z);
-        }
-
-        Float3 currentPos = worldPos;
-        Float3 nextPos = currentPos + worldVel * deltaTime;
-        Float3 direction = Float3.Normalize(nextPos - currentPos);
-        float distance = Float3.Distance(currentPos, nextPos) + ParticleRadius;
-
-        // Clamp distance to max
-        distance = Maths.Min(distance, MaxCollisionDistance);
-
-        // Raycast from current to next position
-        if (physics.Raycast((Float3)currentPos, (Float3)direction, out RaycastHit hit, distance, CollidesWith))
-        {
-            // Collision detected!
-            Float3 hitPoint = (Float3)hit.Point;
-            Float3 hitNormal = (Float3)hit.Normal;
-
-            // Reflect velocity in world space
-            Float3 reflectedVelocity = worldVel - hitNormal * (2.0f * Float3.Dot(worldVel, hitNormal));
-            worldVel = reflectedVelocity * Bounce + worldVel * (1.0f - Bounce);
-            worldVel *= (1.0f - Dampen);
-
-            // Position at hit point with offset
-            worldPos = hitPoint + hitNormal * ParticleRadius;
-
-            // Transform back to local space if needed
-            if (simulationSpace == SimulationSpace.Local && particleSystemTransform != null)
-            {
-                var localPosDouble = particleSystemTransform.WorldToLocalMatrix * new Float4(worldPos, 1.0f);
-                particle.Position = new Float3((float)localPosDouble.X, (float)localPosDouble.Y, (float)localPosDouble.Z);
-
-                var localVelDouble = particleSystemTransform.WorldToLocalMatrix * new Float4(worldVel, 0.0f);
-                particle.Velocity = new Float3((float)localVelDouble.X, (float)localVelDouble.Y, (float)localVelDouble.Z);
-            }
-            else
-            {
-                particle.Position = worldPos;
-                particle.Velocity = worldVel;
-            }
-
-            // Apply lifetime loss
-            if (LifetimeLoss > 0)
-            {
-                particle.Lifetime *= (1.0f - LifetimeLoss);
-            }
-
-            // Check kill speed
-            if (MinKillSpeed > 0 && Float3.Length(particle.Velocity) < MinKillSpeed)
-            {
-                particle.Lifetime = 0;
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    private Int3 WorldToVoxel(Float3 worldPos, float customVoxelSize = 0)
-    {
-        float voxelSize = customVoxelSize > 0 ? customVoxelSize : VoxelSize;
-        return new Int3(
-            (int)Maths.Floor(worldPos.X / voxelSize),
-            (int)Maths.Floor(worldPos.Y / voxelSize),
-            (int)Maths.Floor(worldPos.Z / voxelSize)
-        );
-    }
-}
-
-// Simple 3D integer vector for voxel keys
-internal struct Int3 : IEquatable<Int3>
-{
-    public int X, Y, Z;
-
-    public Int3(int x, int y, int z)
-    {
-        X = x;
-        Y = y;
-        Z = z;
-    }
-
-    public bool Equals(Int3 other) => X == other.X && Y == other.Y && Z == other.Z;
-    public override bool Equals(object? obj) => obj is Int3 other && Equals(other);
-    public override int GetHashCode() => HashCode.Combine(X, Y, Z);
 }

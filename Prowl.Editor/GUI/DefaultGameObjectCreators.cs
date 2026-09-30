@@ -6,7 +6,6 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
-using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Runtime.UI;
@@ -152,11 +151,7 @@ internal static class DefaultGameObjectCreators
     {
         var go = HierarchyPanel.CreateGameObject("Particle System", MenuContext.ActiveGameObject);
         var ps = go.AddComponent<ParticleSystemComponent>();
-        ps.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
-        ps.Emission.Enabled = true;
-        ps.Emission.RateOverTime = new MinMaxCurve(10f);
-        ps.Emission.Shape = EmissionShape.Cone;
-        ps.Initial.Enabled = true;
+        ps.Renderer.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
         ps.Initial.StartLifetime = new MinMaxCurve(2f);
         ps.Initial.StartSpeed = new MinMaxCurve(3f);
         ps.Initial.StartSize = new MinMaxCurve(0.2f);

@@ -68,6 +68,12 @@ public interface IRenderable
     public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData);
 
     /// <summary>
+    /// How many leading entries of <paramref name="instanceData"/> to draw. Renderables that reuse a
+    /// larger pooled array report the live count so they never have to allocate an exact sized one.
+    /// </summary>
+    public int GetInstanceCount(InstanceData[] instanceData) => instanceData.Length;
+
+    /// <summary>
     /// World-to-object matrix (the inverse of the model matrix), bound as <c>prowl_WorldToObject</c>
     /// for normal transforms. The default inverts on demand; renderables whose transform is fixed
     /// for the frame should cache the result so it isn't re-inverted once per render pass.
@@ -519,7 +525,7 @@ public abstract class RenderPipeline : EngineObject
             // instanced path and draw nothing, rather than falling through to the single-instance
             // path and drawing one untransformed copy of its mesh.
             bool isProcedural = renderable is IProceduralInstanced;
-            if (isProcedural || (instanceData != null && instanceData.Length > 0))
+            if (isProcedural || (instanceData != null && renderable.GetInstanceCount(instanceData) > 0))
             {
                 // Get material hash for batching
                 ulong instancedMaterialHash = material.GetStateHash();
@@ -765,9 +771,8 @@ public abstract class RenderPipeline : EngineObject
         bool procedural = renderable is IProceduralInstanced;
         int proceduralCount = procedural ? ((IProceduralInstanced)renderable).InstanceCount : 0;
 
-        if (!procedural && (instanceData == null || instanceData.Length == 0))
-            return;
-        if (procedural && proceduralCount <= 0)
+        int instanceCount = procedural ? proceduralCount : instanceData == null ? 0 : Math.Min(renderable.GetInstanceCount(instanceData), instanceData.Length);
+        if (instanceCount <= 0)
             return;
 
         // Ensure the shared instance VAO + buffer exist. The actual data upload is
@@ -785,11 +790,10 @@ public abstract class RenderPipeline : EngineObject
         }
         else
         {
-            vao = mesh.EnsureInstanceVAO(instanceData!.Length, out instanceBuf);
+            vao = mesh.EnsureInstanceVAO(instanceCount, out instanceBuf);
         }
         if (vao == null) return;
 
-        int instanceCount = procedural ? proceduralCount : instanceData!.Length;
         int indexCount = mesh.IndexCount;
         bool useIndex32 = mesh.IndexFormat == IndexFormat.UInt32;
 

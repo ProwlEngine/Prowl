@@ -1,35 +1,46 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Vector;
 using System;
+
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>
-/// Mode for MinMaxCurve evaluation.
-/// </summary>
 public enum MinMaxCurveMode
 {
     Constant,
     Curve,
-    Random
+    RandomBetweenTwoConstants,
+    RandomBetweenTwoCurves
 }
 
 /// <summary>
-/// A curve that can be constant, animated, or random between two values.
-/// Used for particle properties that change over time.
+/// A value that is a constant, a curve, or a random pick between two constants or two curves.
+/// Curve modes are sampled at a normalized time and scaled by <see cref="CurveMultiplier"/>.
 /// </summary>
 [Serializable]
 public class MinMaxCurve
 {
     public MinMaxCurveMode Mode = MinMaxCurveMode.Constant;
+
+    [ShowIf(nameof(IsConstant))]
     public float ConstantValue = 1.0f;
+
+    [ShowIf(nameof(IsTwoConstants))]
     public float MinValue = 0.0f;
+    [ShowIf(nameof(IsTwoConstants))]
     public float MaxValue = 1.0f;
-    public AnimationCurve Curve = new();
-    public AnimationCurve MinCurve = new();
-    public AnimationCurve MaxCurve = new();
+
+    [ShowIf(nameof(IsSingleCurve))]
+    public AnimationCurve Curve = new(new Keyframe(0f, 1f), new Keyframe(1f, 1f));
+    [ShowIf(nameof(IsTwoCurves))]
+    public AnimationCurve MinCurve = new(new Keyframe(0f, 0f), new Keyframe(1f, 0f));
+    [ShowIf(nameof(IsTwoCurves))]
+    public AnimationCurve MaxCurve = new(new Keyframe(0f, 1f), new Keyframe(1f, 1f));
+
+    [ShowIf(nameof(IsAnyCurve))]
+    public float CurveMultiplier = 1.0f;
 
     public MinMaxCurve() { }
 
@@ -39,39 +50,53 @@ public class MinMaxCurve
         ConstantValue = constant;
     }
 
-    /// <summary>
-    /// Evaluates the curve at the given normalized time (0-1).
-    /// </summary>
-    public float Evaluate(float normalizedTime, Random? random)
+    public MinMaxCurve(float min, float max)
     {
-        // Only draw from the RNG in Random mode - otherwise Constant/Curve would still advance a
-        // seeded Random and desync deterministic playback. Null random => Min side (deterministic).
-        return Mode switch
-        {
-            MinMaxCurveMode.Constant => ConstantValue,
-            MinMaxCurveMode.Curve => (float)Curve.Evaluate(normalizedTime),
-            MinMaxCurveMode.Random => Lerp(
-                (float)MinCurve.Evaluate(normalizedTime),
-                (float)MaxCurve.Evaluate(normalizedTime),
-                random?.NextSingle() ?? 0f
-            ),
-            _ => ConstantValue
-        };
+        Mode = MinMaxCurveMode.RandomBetweenTwoConstants;
+        MinValue = min;
+        MaxValue = max;
     }
 
-    /// <summary>
-    /// Evaluates the curve for initial particle spawn.
-    /// </summary>
-    public float EvaluateInitial(Random? random)
+    public MinMaxCurve(AnimationCurve curve, float multiplier = 1f)
     {
-        return Mode switch
-        {
-            MinMaxCurveMode.Constant => ConstantValue,
-            MinMaxCurveMode.Curve => (float)Curve.Evaluate(0),
-            MinMaxCurveMode.Random => Lerp(MinValue, MaxValue, random?.NextSingle() ?? 0f),
-            _ => ConstantValue
-        };
+        Mode = MinMaxCurveMode.Curve;
+        Curve = curve;
+        CurveMultiplier = multiplier;
     }
 
-    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+    public MinMaxCurve(AnimationCurve min, AnimationCurve max, float multiplier = 1f)
+    {
+        Mode = MinMaxCurveMode.RandomBetweenTwoCurves;
+        MinCurve = min;
+        MaxCurve = max;
+        CurveMultiplier = multiplier;
+    }
+
+    public bool IsRandom => Mode is MinMaxCurveMode.RandomBetweenTwoConstants or MinMaxCurveMode.RandomBetweenTwoCurves;
+
+    private bool IsConstant => Mode == MinMaxCurveMode.Constant;
+    private bool IsTwoConstants => Mode == MinMaxCurveMode.RandomBetweenTwoConstants;
+    private bool IsSingleCurve => Mode == MinMaxCurveMode.Curve;
+    private bool IsTwoCurves => Mode == MinMaxCurveMode.RandomBetweenTwoCurves;
+    private bool IsAnyCurve => IsSingleCurve || IsTwoCurves;
+
+    /// <summary>
+    /// Evaluates at a normalized <paramref name="time"/>. <paramref name="lerp"/> picks between the
+    /// min and max side in the random modes and is ignored otherwise.
+    /// </summary>
+    public float Evaluate(float time, float lerp) => Mode switch
+    {
+        MinMaxCurveMode.Constant => ConstantValue,
+        MinMaxCurveMode.Curve => Curve.Evaluate(time) * CurveMultiplier,
+        MinMaxCurveMode.RandomBetweenTwoConstants => MinValue + (MaxValue - MinValue) * lerp,
+        MinMaxCurveMode.RandomBetweenTwoCurves => Maths.LerpUnclamped(MinCurve.Evaluate(time), MaxCurve.Evaluate(time), lerp) * CurveMultiplier,
+        _ => ConstantValue
+    };
+
+    /// <summary>
+    /// Evaluates at a normalized <paramref name="time"/>, drawing from <paramref name="random"/> only in the
+    /// random modes so a seeded generator stays in step whatever modes are mixed. Null picks the min side.
+    /// </summary>
+    public float Evaluate(float time, Random? random)
+        => Evaluate(time, IsRandom ? random?.NextSingle() ?? 0f : 0f);
 }

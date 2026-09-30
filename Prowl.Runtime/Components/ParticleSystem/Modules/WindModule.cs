@@ -41,9 +41,6 @@ public class WindModule : ParticleSystemModule
     public float TurbulenceSpeed = 0.5f;
 
     [NonSerialized] private WindZone? _zone;
-    [NonSerialized] private bool _localSpace;
-    [NonSerialized] private Float4x4 _localToWorld;
-    [NonSerialized] private Quaternion _worldToLocalRotation;
     [NonSerialized] private float _time;
     [NonSerialized] private float _turbulenceScale;
     [NonSerialized] private float _turbulenceDrift;
@@ -51,34 +48,18 @@ public class WindModule : ParticleSystemModule
     /// <summary>The zone this module is currently pulling wind from, if any.</summary>
     public WindZone? CurrentZone => _zone;
 
-    /// <summary>
-    /// Picks the zone for this frame and caches the transform state the per-particle path needs.
-    /// Called once per system update.
-    /// </summary>
-    public void BeginFrame(Transform transform, SimulationSpace simulationSpace)
+    /// <summary>Picks the zone for this step from the emitter position. Called once per simulation step.</summary>
+    internal void BeginStep(ParticleSystemComponent system)
     {
-        if (!Enabled)
-        {
-            _zone = null;
-            return;
-        }
-
-        _localSpace = simulationSpace == SimulationSpace.Local;
-        _localToWorld = transform.LocalToWorldMatrix;
-        _worldToLocalRotation = Quaternion.Inverse(transform.Rotation);
         _time = Time.TimeSinceStartup;
         _turbulenceScale = 1f / MathF.Max(TurbulenceScale, 1e-3f);
         _turbulenceDrift = _time * TurbulenceSpeed;
-        _zone = WindZone.GetNearest(transform.Position);
+        _zone = WindZone.GetNearest(system.Transform.Position);
     }
 
-    public override void OnParticleUpdate(ref Particle particle, float deltaTime)
+    internal void Apply(ParticleSystemComponent system, ref Particle particle, float deltaTime)
     {
-        if (!Enabled) return;
-
-        Float3 worldPosition = _localSpace
-            ? Float4x4.TransformPoint(particle.Position, _localToWorld)
-            : particle.Position;
+        Float3 worldPosition = system.SimPointToWorld(particle.Position);
 
         Float3 wind = AmbientWind;
         if (_zone.IsValid())
@@ -86,9 +67,7 @@ public class WindModule : ParticleSystemModule
         if (Turbulence != 0f)
             wind += SampleTurbulence(worldPosition, particle.RandomSeed) * Turbulence;
 
-        wind *= Multiplier;
-        if (_localSpace)
-            wind = _worldToLocalRotation * wind;
+        wind = system.WorldVectorToSim(wind * Multiplier);
 
         if (Force != 0f)
             particle.Velocity += wind * (Force * deltaTime);

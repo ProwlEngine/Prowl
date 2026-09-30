@@ -37,9 +37,10 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
                     EditorGUI.Row(paper, $"{id}_curve", "Curve", () =>
                         CurveField.Create(paper, $"{id}_curve_cf", curve.Curve,
                             v => { curve.Curve = v; onChange(curve); }).Show());
+                    MultiplierRow(paper, id, curve, onChange);
                     break;
 
-                case MinMaxCurveMode.Random:
+                case MinMaxCurveMode.RandomBetweenTwoConstants:
                     EditorGUI.Row(paper, $"{id}_min", "Min", () =>
                         Origami.NumericField<float>(paper, $"{id}_min_v", curve.MinValue,
                             v => { curve.MinValue = v; onChange(curve); }).Show());
@@ -47,7 +48,22 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
                         Origami.NumericField<float>(paper, $"{id}_max_v", curve.MaxValue,
                             v => { curve.MaxValue = v; onChange(curve); }).Show());
                     break;
+
+                case MinMaxCurveMode.RandomBetweenTwoCurves:
+                    EditorGUI.Row(paper, $"{id}_minc", "Min Curve", () =>
+                        CurveField.Create(paper, $"{id}_minc_cf", curve.MinCurve,
+                            v => { curve.MinCurve = v; onChange(curve); }).Show());
+                    EditorGUI.Row(paper, $"{id}_maxc", "Max Curve", () =>
+                        CurveField.Create(paper, $"{id}_maxc_cf", curve.MaxCurve,
+                            v => { curve.MaxCurve = v; onChange(curve); }).Show());
+                    MultiplierRow(paper, id, curve, onChange);
+                    break;
             }
         }
     }
+
+    private static void MultiplierRow(Paper paper, string id, MinMaxCurve curve, Action<object?> onChange)
+        => EditorGUI.Row(paper, $"{id}_mul", "Multiplier", () =>
+            Origami.NumericField<float>(paper, $"{id}_mul_v", curve.CurveMultiplier,
+                v => { curve.CurveMultiplier = v; onChange(curve); }).Show());
 }
