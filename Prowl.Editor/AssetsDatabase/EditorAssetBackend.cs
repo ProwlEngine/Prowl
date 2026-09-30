@@ -1368,15 +1368,19 @@ public class EditorAssetBackend : AssetBackend
         if (!TryResolveAssetPath(relativePath, out string absolutePath)) return;
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 
-        // Serialize to the file (typeof(object) forces $type inclusion)
-        var echo = Serializer.Serialize(typeof(object), obj);
-        if (echo != null)
-            File.WriteAllText(absolutePath, echo.WriteToString());
-
-        // Create meta with correct importer version
         string ext = Path.GetExtension(relativePath);
         string importerName = EditorRegistries.GetImporterTypeName(ext);
         var importer = EditorRegistries.CreateImporterByName(importerName);
+
+        // Serialize to the file (typeof(object) forces $type inclusion)
+        var echo = Serializer.Serialize(typeof(object), obj);
+        if (echo != null)
+        {
+            if (importer?.Source == EchoSource.Binary) echo.WriteToBinary(new FileInfo(absolutePath));
+            else File.WriteAllText(absolutePath, echo.WriteToString());
+        }
+
+        // Create meta with correct importer version
         var meta = MetaFile.CreateNew(importerName, importer?.Version ?? 1);
         MetaFile.Write(MetaFile.GetMetaPath(absolutePath), meta);
 
@@ -2092,7 +2096,6 @@ public class EditorAssetBackend : AssetBackend
         bool cacheMissing = !File.Exists(GetCachePath(guid)) || !File.Exists(GetCachePath(parentGuid));
         if (!cacheMissing && !IsSourceNewerThanImport(entry)) return false;
 
-        Reimport(parentGuid);
         Core.EditorApplication.RunOnMainThread(() => Reimport(parentGuid));
         return true;
     }
