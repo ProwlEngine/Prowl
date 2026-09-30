@@ -86,8 +86,10 @@ public partial class PropertyState
         hash = HashDictionary(_vectors4, hash);
         hash = HashDictionary(_colors, hash);
         hash = HashDictionary(_matrices, hash);
+        hash = HashDictionary(_matrixArr, hash);
         hash = HashDictionary(_textures, hash);
         hash = HashDictionary(_textures3D, hash);
+        hash = HashDictionary(_texturesCube, hash);
         hash = HashDictionary(_buffers, hash);
 
         return hash;

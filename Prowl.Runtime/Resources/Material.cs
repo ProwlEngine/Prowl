@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
@@ -138,7 +139,13 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
     public Material Clone() { EnsureLoaded(); return new Material(this); }
 
-    public void SetKeyword(string keyword, bool value) { EnsureLoaded(); _localKeywords[keyword] = value; }
+    public void SetKeyword(string keyword, bool value)
+    {
+        EnsureLoaded();
+        if (_localKeywords.TryGetValue(keyword, out bool current) && current == value) return;
+        _localKeywords[keyword] = value;
+        MarkDirty();
+    }
 
     // Every public Set marks the property as user-overridden so subsequent shader
     // default-refreshes won't stomp the user's value.
@@ -248,20 +255,33 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Gets a hash representing the current material state (uniform values only, not keywords or shader).
-    /// The hash is used by the renderer to batch objects with identical material properties together,
-    /// minimizing GPU uniform binding overhead. The hash is cached and only recalculated when dirty.
+    /// Gets a hash of everything that decides how this material draws: its shader, enabled keywords and
+    /// uniform values. The renderer batches materials with equal hashes, so two materials only share a
+    /// hash when either one could draw the other's objects. Properties and keywords are cached until dirty.
     /// </summary>
-    /// <returns>A 64-bit hash of all material uniform values</returns>
     public ulong GetStateHash()
     {
         EnsureLoaded();
         if (_isDirty)
         {
-            _stateHash = _properties.ComputeHash();
+            _stateHash = HashKeywords(_properties.ComputeHash());
             _isDirty = false;
         }
-        return _stateHash;
+
+        // The shader is resolved live since a missing or failed shader falls back without dirtying.
+        ulong hash = _stateHash ^ (ulong)Shader.InstanceID;
+        return hash * 1099511628211UL;
+    }
+
+    private ulong HashKeywords(ulong hash)
+    {
+        foreach (var kv in _localKeywords.OrderBy(x => x.Key, StringComparer.Ordinal))
+        {
+            if (!kv.Value) continue;
+            hash ^= (ulong)kv.Key.GetHashCode();
+            hash *= 1099511628211UL;
+        }
+        return hash;
     }
 
     /// <summary>
@@ -311,6 +331,7 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
             if (_overrides.Contains(prop.Name)) continue;
             UpdatePropertyState(prop);
         }
+        MarkDirty();
     }
 
     private bool HasProperty(string name, ShaderPropertyType type)
