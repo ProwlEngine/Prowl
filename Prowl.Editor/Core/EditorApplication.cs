@@ -188,9 +188,6 @@ public class EditorApplication : Game
         // Initialize status bar log tracking
         InitializeStatusBar();
 
-        // Selecting a GameObject previews the particle systems at and below it in edit mode.
-        Runtime.ParticleSystem.ParticleSystemComponent.EditorSelectionQuery = go => Selection.IsSelected(go);
-
         // Build the editor's PropertyGrid config
         PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
@@ -2018,16 +2015,29 @@ public class EditorApplication : Game
 
             if (Selection.Count > 0)
             {
-                // Draw selection gizmo
-                var selectedGOs = Selection.GetSelected<GameObject>();
-                foreach (var comp in selectedGOs.SelectMany(e => e.GetComponents()))
-                    comp.DrawGizmosSelected();
+                // Selected gizmos draw for the selection and everything below it, each GameObject once
+                // even when a parent and its child are both selected.
+                s_selectedGizmoObjects.Clear();
+                foreach (GameObject go in Selection.GetSelected<GameObject>())
+                    CollectSelectedGizmoObjects(go);
+                foreach (GameObject go in s_selectedGizmoObjects)
+                    foreach (MonoBehaviour comp in go.GetComponents())
+                        comp.DrawGizmosSelected();
             }
         }
         finally
         {
             GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
+    }
+
+    private static readonly HashSet<GameObject> s_selectedGizmoObjects = new();
+
+    private static void CollectSelectedGizmoObjects(GameObject go)
+    {
+        if (go.IsNotValid() || !s_selectedGizmoObjects.Add(go)) return;
+        foreach (GameObject child in go.Children)
+            CollectSelectedGizmoObjects(child);
     }
 
     /// <summary>

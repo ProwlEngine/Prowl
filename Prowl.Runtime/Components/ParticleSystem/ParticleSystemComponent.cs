@@ -185,12 +185,6 @@ public class ParticleSystemComponent : MonoBehaviour
     private const int MaxCollisionEvents = 4096;
     private const float PreviewRestartDelay = 1f;
 
-    /// <summary>
-    /// Set by the editor so a system can tell when it, or anything above it, is selected. Selecting any
-    /// ancestor previews the systems below it in edit mode.
-    /// </summary>
-    internal static Func<GameObject, bool>? EditorSelectionQuery;
-
     private Particle[] _particles = Array.Empty<Particle>();
     private int _count;
     private Random _random = new();
@@ -792,7 +786,7 @@ public class ParticleSystemComponent : MonoBehaviour
     /// </summary>
     private bool UpdateEditorPreview()
     {
-        bool selected = IsPreviewSelected() || (IsDriven && _driver!._previewActive);
+        bool selected = PreviewRoot()._selectedFrame >= Time.FrameCount - 1 || (IsDriven && _driver!._previewActive);
         if (!selected)
         {
             if (_previewActive)
@@ -826,20 +820,6 @@ public class ParticleSystemComponent : MonoBehaviour
             }
         }
         return true;
-    }
-
-    /// <summary>Selected in the editor: this system's tree was clicked in the scene view, or any GameObject above it is selected.</summary>
-    private bool IsPreviewSelected()
-    {
-        if (PreviewRoot()._selectedFrame >= Time.FrameCount - 1)
-            return true;
-
-        Func<GameObject, bool>? query = EditorSelectionQuery;
-        if (query == null) return false;
-        for (GameObject? go = GameObject; go.IsValid(); go = go.Parent)
-            if (query(go))
-                return true;
-        return false;
     }
 
     private IEnumerable<ParticleSystemComponent> Children()
