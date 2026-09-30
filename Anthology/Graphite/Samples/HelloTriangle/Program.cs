@@ -106,8 +106,6 @@ public static class Program
         tracker.Begin();
 
         device.DispatchGraph(pipeline, views);
-
-        // Explicitly avoid timing SwapBuffers() to not pollute with OS throttling/presentation limits.
         tracker.End(dt);
     }
 
