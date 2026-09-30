@@ -112,6 +112,7 @@ public class DefaultRenderPipeline : RenderPipeline
     public override void Render(Camera camera, in RenderingData data)
     {
         ValidateDefaults();
+        BeginMotionTracking(camera);
 
         // Main rendering with correct order of operations. The CommandExecutor
         // keeps its own GL state mirror and skips redundant binds, so we no

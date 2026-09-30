@@ -3,7 +3,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
@@ -188,51 +188,33 @@ public abstract class RenderPipeline : EngineObject
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
     }
 
-    public HashSet<int> ActiveObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }
-
-    private Dictionary<int, Float4x4> s_prevModelMatrices = [];
-    private HashSet<int> s_activeObjectIds = [];
-    private const int CLEANUP_INTERVAL_FRAMES = 120; // Clean up every 120 frames
-    private int s_framesSinceLastCleanup = 0;
-
-    private void CleanupUnusedModelMatrices()
+    // Model matrices for motion vectors, per camera: last render's to read and this render's to fill.
+    private sealed class MotionHistory
     {
-        // Increment frame counter
-        s_framesSinceLastCleanup++;
-
-        // Only perform cleanup at specified interval
-        if (s_framesSinceLastCleanup < CLEANUP_INTERVAL_FRAMES)
-            return;
-
-        s_framesSinceLastCleanup = 0;
-
-        // Remove all matrices that weren't used in this frame
-        var unusedKeys = s_prevModelMatrices.Keys
-            .Where(key => !ActiveObjectIds.Contains(key))
-            .ToList();
-
-        foreach (int key in unusedKeys)
-            s_prevModelMatrices.Remove(key);
-
-        // Clear the active IDs set for next frame
-        ActiveObjectIds.Clear();
+        public Dictionary<long, Float4x4> Previous = [];
+        public Dictionary<long, Float4x4> Current = [];
     }
 
+    private readonly ConditionalWeakTable<Camera, MotionHistory> _motionHistories = new();
+    private MotionHistory? _motion;
+
     /// <summary>
-    /// Tracks an object's model matrix for motion vector computation.
-    /// Returns the previous frame's model matrix (or current if first frame).
+    /// Starts motion vector tracking for <paramref name="camera"/>. Call at the start of a render;
+    /// <see cref="Render"/> ends it.
     /// </summary>
-    private Float4x4 TrackModelMatrix(int objectId, Float4x4 currentModel)
+    protected void BeginMotionTracking(Camera camera) => _motion = _motionHistories.GetValue(camera, _ => new MotionHistory());
+
+    /// <summary>
+    /// Records a renderable's model matrix for this render and returns the one from the camera's last
+    /// render, or the current one when it wasn't drawn then.
+    /// </summary>
+    internal Float4x4 TrackModelMatrix(int objectId, int subMeshIndex, in Float4x4 currentModel)
     {
-        // Mark this object ID as active this frame
-        ActiveObjectIds.Add(objectId);
+        if (_motion == null) return currentModel;
 
-        Float4x4 prevModel;
-        if (!s_prevModelMatrices.TryGetValue(objectId, out prevModel))
-            prevModel = currentModel; // First frame, use current matrix
-
-        s_prevModelMatrices[objectId] = currentModel;
-        return prevModel;
+        long key = ((long)objectId << 32) | (uint)subMeshIndex;
+        _motion.Current[key] = currentModel;
+        return _motion.Previous.TryGetValue(key, out Float4x4 prevModel) ? prevModel : currentModel;
     }
 
     /// <summary>
@@ -249,8 +231,11 @@ public abstract class RenderPipeline : EngineObject
 
     public virtual void Render(Camera camera, in RenderingData data)
     {
-        // Clean up unused matrices after rendering
-        CleanupUnusedModelMatrices();
+        if (_motion == null) return;
+
+        (_motion.Previous, _motion.Current) = (_motion.Current, _motion.Previous);
+        _motion.Current.Clear();
+        _motion = null;
     }
 
     /// <summary>
@@ -726,7 +711,7 @@ public abstract class RenderPipeline : EngineObject
                 int instanceId = properties.GetInt("_ObjectID");
                 Float4x4 prevModel = model;
                 if (updatePreviousMatrices && instanceId != 0)
-                    prevModel = TrackModelMatrix(instanceId, model);
+                    prevModel = TrackModelMatrix(instanceId, renderable.GetSubMeshIndex(), in model);
 
                 cmd.SetInstanceProperties(properties);
 
