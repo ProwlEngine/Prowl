@@ -196,7 +196,6 @@ namespace Prowl.PaperUI
             SetTime(deltaTime);
 
             _canvas.BeginFrame(_width, _height, DisplayFramebufferScale.X);
-            _recordingSnapshot = false;
 
             _elementStack.Clear();
 
@@ -394,7 +393,7 @@ namespace Prowl.PaperUI
 
             // Cull: if this whole subtree (including its shadow) lies outside the current clip and
             // nothing in it escapes to a higher layer, skip drawing it and all of its children.
-            if (!data._cullHasLayerBreakout && !_recordingSnapshot && _canvas.GetCurrentClipRect(out var clip) &&
+            if (!data._cullHasLayerBreakout && _canvas.GetCurrentClipRect(out var clip) &&
                 (data._cullMaxX < clip.Min.X || data._cullMinX > clip.Max.X ||
                  data._cullMaxY < clip.Min.Y || data._cullMinY > clip.Max.Y))
             {
@@ -545,13 +544,6 @@ namespace Prowl.PaperUI
                 _canvas.IntersectScissor(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
             }
 
-            // Everything past the element's own background and clip can be recorded and replayed.
-            if (ReplayOrRecord(ref data, rect, out bool recording))
-            {
-                _canvas.RestoreState();
-                return;
-            }
-
             // Draw text style
             if (!string.IsNullOrEmpty(data.Paragraph))
             {
@@ -605,9 +597,6 @@ namespace Prowl.PaperUI
                     }
                 }
             }
-
-            if (recording)
-                EndRecording();
 
             _canvas.RestoreState();
         }
