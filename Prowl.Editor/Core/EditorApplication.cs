@@ -1449,6 +1449,7 @@ public class EditorApplication : Game
         {
             if (Project.Current != null)
             {
+                EditorAssetBackend.Instance?.Dispose();
                 var db = new EditorAssetBackend(Project.Current);
                 db.Initialize();
             }
