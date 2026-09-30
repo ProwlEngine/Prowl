@@ -126,6 +126,10 @@ public class TerrainComponent : MonoBehaviour
         var heightmap = data.GetHeightmapTexture();
         if (heightmap != null) material.SetTexture("_Heightmap", heightmap);
 
+        var holes = data.GetHolesTexture();
+        if (holes != null) material.SetTexture("_HolesMap", holes);
+        material.SetInt("_HasHoles", holes != null ? 1 : 0);
+
         ApplyWindZones(material);
     }
 
