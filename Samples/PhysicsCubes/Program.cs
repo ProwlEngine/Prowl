@@ -134,66 +134,49 @@ public sealed class PhysicsDemo : Game
         Material particleMaterial = new Material(Shader.LoadDefault(DefaultShader.Particle));
         particleMaterial.SetTexture("_MainTex", Texture2D.LoadDefault(DefaultTexture.White));
         particleMaterial.SetColor("_MainColor", new Color(1.0f, 0.8f, 0.4f, 1.0f));
-        particleSystem.Material = particleMaterial;
+        particleSystem.Renderer.Material = particleMaterial;
 
         // Configure particle system settings
         particleSystem.MaxParticles = 1000;
         particleSystem.Duration = 2.0f;
         particleSystem.Looping = true;
         particleSystem.PlayOnEnable = true;
-        particleSystem.Prewarm = false;
         particleSystem.SimulationSpace = SimulationSpace.Local;
 
-        // Configure Initial module (required)
-        particleSystem.Initial.Enabled = true;
-        particleSystem.Initial.StartLifetime = new MinMaxCurve { Mode = MinMaxCurveMode.Random, MinValue = 1.0f, MaxValue = 2.5f };
-        particleSystem.Initial.StartSpeed = new MinMaxCurve { Mode = MinMaxCurveMode.Random, MinValue = 2.0f, MaxValue = 5.0f };
-        particleSystem.Initial.StartSize = new MinMaxCurve { Mode = MinMaxCurveMode.Random, MinValue = 0.1f, MaxValue = 0.3f };
-        particleSystem.Initial.StartRotation = new MinMaxCurve { Mode = MinMaxCurveMode.Random, MinValue = 0.0f, MaxValue = 360.0f };
-        particleSystem.Initial.StartColor = new MinMaxGradient
-        {
-            Mode = MinMaxGradientMode.RandomBetweenTwoColors,
-            MinColor = new Color(1.0f, 0.5f, 0.2f, 1.0f), // Orange
-            MaxColor = new Color(1.0f, 1.0f, 0.3f, 1.0f)  // Yellow
-        };
+        particleSystem.Initial.StartLifetime = new MinMaxCurve(1.0f, 2.5f);
+        particleSystem.Initial.StartSpeed = new MinMaxCurve(2.0f, 5.0f);
+        particleSystem.Initial.StartSize = new MinMaxCurve(0.1f, 0.3f);
+        particleSystem.Initial.StartRotation = new MinMaxCurve(0.0f, 360.0f);
+        particleSystem.Initial.StartColor = new MinMaxGradient(
+            new Color(1.0f, 0.5f, 0.2f, 1.0f), // Orange
+            new Color(1.0f, 1.0f, 0.3f, 1.0f)); // Yellow
 
-       // Configure Emission module
-       particleSystem.Emission.Enabled = true;
-       particleSystem.Emission.RateOverTime = new MinMaxCurve(10.0f); // 500 particles per second
+        particleSystem.Emission.RateOverTime = new MinMaxCurve(10.0f);
 
-       // Configure emission shape (try Sphere, Box, Cone, LineSegment, Circle)
-       particleSystem.Emission.Shape = EmissionShape.Cone;
-       particleSystem.Emission.Radius = 0.0f;
-       particleSystem.Emission.EmitFromShell = true; // Emit from surface only
-       
-       // Configure Size over Lifetime
-       // Size starts at 1.0, grows to 1.5 at middle, then shrinks to 0 at end
-       particleSystem.SizeOverLifetime.Enabled = true;
-       particleSystem.SizeOverLifetime.SizeCurve = new AnimationCurve(
-           [new Keyframe(0.0f, 1.0f), new Keyframe(0.5f, 1.5f), new Keyframe(1.0f, 0.0f)]);
+        particleSystem.Shape.Type = ParticleShapeType.Cone;
+        particleSystem.Shape.Radius = 0.0f;
 
-       // Configure Color over Lifetime (fade out)
-       particleSystem.ColorOverLifetime.Enabled = true;
-       particleSystem.ColorOverLifetime.ColorGradient = new Gradient(
-           [new (0.0f, Color.White), new (0.5f, new Color(1, 0.8f, 0.6f, 1)), new (1.0f, new Color(0.5f, 0.3f, 0.2f, 1))],
-           [new (0.0f, 1.0f), new (0.5f, 0.8f), new (1.0f, 0.0f)]);
+        // Size starts at 1.0, grows to 1.5 at middle, then shrinks to 0 at end
+        particleSystem.SizeOverLifetime.Enabled = true;
+        particleSystem.SizeOverLifetime.Size = new MinMaxCurve(new AnimationCurve(
+            [new Keyframe(0.0f, 1.0f), new Keyframe(0.5f, 1.5f), new Keyframe(1.0f, 0.0f)]));
 
-       // Configure Rotation over Lifetime (still MinMaxCurve evaluated at spawn)
-       particleSystem.RotationOverLifetime.Enabled = true;
-       particleSystem.RotationOverLifetime.AngularVelocity = new MinMaxCurve
-       {
-           Mode = MinMaxCurveMode.Random,
-           MinValue = -180.0f,
-           MaxValue = 180.0f
-       };
+        // Fade out
+        particleSystem.ColorOverLifetime.Enabled = true;
+        particleSystem.ColorOverLifetime.Color = new MinMaxGradient(new Gradient(
+            [new (0.0f, Color.White), new (0.5f, new Color(1, 0.8f, 0.6f, 1)), new (1.0f, new Color(0.5f, 0.3f, 0.2f, 1))],
+            [new (0.0f, 1.0f), new (0.5f, 0.8f), new (1.0f, 0.0f)]));
 
-       // Configure Velocity over Lifetime (simulate wind/drift)
-       particleSystem.VelocityOverLifetime.Enabled = true;
-       particleSystem.VelocityOverLifetime.VelocityX = new AnimationCurve(
-           [new Keyframe(0.0f, 0.0f), new Keyframe(1.0f, 20.0f)]);
+        particleSystem.RotationOverLifetime.Enabled = true;
+        particleSystem.RotationOverLifetime.Z = new MinMaxCurve(-180.0f, 180.0f);
+
+        // Drift sideways over each particle's life
+        particleSystem.VelocityOverLifetime.Enabled = true;
+        particleSystem.VelocityOverLifetime.X = new MinMaxCurve(new AnimationCurve(
+            [new Keyframe(0.0f, 0.0f), new Keyframe(1.0f, 2.0f)]));
 
         particleSystem.Collision.Enabled = true;
-        particleSystem.Collision.Quality = CollisionQuality.Medium;
+        particleSystem.Collision.Quality = ParticleCollisionQuality.Medium;
 
         scene.Add(particleSystemGO);
 
