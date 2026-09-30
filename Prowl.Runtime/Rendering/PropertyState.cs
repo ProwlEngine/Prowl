@@ -230,7 +230,7 @@ public partial class PropertyState
 
     /// <summary>
     /// Resolves every texture to the GPU handle a draw binds. Main thread, when a draw is encoded. A texture still
-    /// loading binds white this frame, and one that is missing binds nothing.
+    /// loading binds white this frame, and one that is missing or disposed binds nothing so the shader default fills in.
     /// </summary>
     internal void ResolveHandles()
     {

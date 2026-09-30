@@ -185,14 +185,14 @@ internal static class PropertyApply
                     }
                     break;
                 case ShaderPropertyType.Texture2D:
-                    if (overrides == null || !overrides._textures.ContainsKey(name))
+                    if (overrides == null || !overrides._boundTextures.ContainsKey(name))
                     {
                         if (prop.Texture2DValue is { IsDisposed: false, HandleIfLoaded: { } handle2D })
                             BindTexUniform(p, name, handle2D, exec);
                     }
                     break;
                 case ShaderPropertyType.Texture3D:
-                    if (overrides == null || !overrides._textures3D.ContainsKey(name))
+                    if (overrides == null || !overrides._boundTextures.ContainsKey(name))
                     {
                         if (prop.Texture3DValue is { IsDisposed: false, HandleIfLoaded: { } handle3D })
                             BindTexUniform(p, name, handle3D, exec);
