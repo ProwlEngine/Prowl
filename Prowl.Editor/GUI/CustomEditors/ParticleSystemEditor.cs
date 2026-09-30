@@ -7,7 +7,6 @@ using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
@@ -96,8 +95,5 @@ public class ParticleSystemComponentEditor : CustomEditor
                 .Text($"{ps.PlaybackTime:0.00}s   {ps.ParticleCount} particles", font).TextColor(EditorTheme.Ink400)
                 .FontSize(fs - 2).Alignment(TextAlignment.MiddleRight);
         }
-
-        if (!Application.IsPlaying)
-            EditorGUI.Note(paper, $"{id}_note", "Previews while selected.");
     }
 }
