@@ -262,98 +262,61 @@ public sealed class TerrainData : Asset, ISerializable
             : GetInterpolatedHeightBilinear(u, v);
     }
 
+    // Both filters mirror TerrainHeight.glsl tap for tap, so the CPU and GPU agree on the ground.
+
     private float GetInterpolatedHeightBilinear(float u, float v)
     {
-        float px = u * (HeightmapResolution - 1);
-        float pz = v * (HeightmapResolution - 1);
-        int x0 = Maths.Clamp((int)MathF.Floor(px), 0, HeightmapResolution - 1);
-        int z0 = Maths.Clamp((int)MathF.Floor(pz), 0, HeightmapResolution - 1);
-        int x1 = Maths.Min(x0 + 1, HeightmapResolution - 1);
-        int z1 = Maths.Min(z0 + 1, HeightmapResolution - 1);
-        float fx = px - x0, fz = pz - z0;
-        float scale = 1f / kMaxHeight;
-        float h00 = Heights[z0 * HeightmapResolution + x0] * scale;
-        float h10 = Heights[z0 * HeightmapResolution + x1] * scale;
-        float h01 = Heights[z1 * HeightmapResolution + x0] * scale;
-        float h11 = Heights[z1 * HeightmapResolution + x1] * scale;
-        return ((h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz) * Height;
+        int res = HeightmapResolution;
+        short[] heights = Heights;
+        float px = u * (res - 1), pz = v * (res - 1);
+        float baseX = MathF.Floor(px), baseZ = MathF.Floor(pz);
+        float fx = px - baseX, fz = pz - baseZ;
+        int x = (int)baseX, z = (int)baseZ;
+
+        float h00 = HeightTap(heights, res, x, z);
+        float h10 = HeightTap(heights, res, x + 1, z);
+        float h01 = HeightTap(heights, res, x, z + 1);
+        float h11 = HeightTap(heights, res, x + 1, z + 1);
+        float row0 = h00 + (h10 - h00) * fx;
+        float row1 = h01 + (h11 - h01) * fx;
+        return (row0 + (row1 - row0) * fz) * Height;
     }
 
-    /// <summary>
-    /// Bicubic (Catmull-Rom) interpolation using the same 4-tap bilinear trick as the GPU shader.
-    /// This mirrors the GPU path exactly to ensure CPU/GPU height agreement.
-    /// </summary>
+    /// <summary>Catmull Rom over the 4x4 samples around the point. Passes through every sample.</summary>
     private float GetInterpolatedHeightBicubic(float u, float v)
     {
-        // Mirror the GPU: sample grid coord = uv * (texSize - 1)
-        float texSize = HeightmapResolution;
-        float invTexSize = 1f / texSize;
-        float scale = 1f / kMaxHeight;
+        int res = HeightmapResolution;
+        short[] heights = Heights;
+        float px = u * (res - 1), pz = v * (res - 1);
+        float baseX = MathF.Floor(px), baseZ = MathF.Floor(pz);
+        int x = (int)baseX, z = (int)baseZ;
 
-        float coordX = u * (texSize - 1f);
-        float coordZ = v * (texSize - 1f);
-        float floorX = MathF.Floor(coordX);
-        float floorZ = MathF.Floor(coordZ);
-        float fx = coordX - floorX;
-        float fz = coordZ - floorZ;
+        CatmullRomWeights(px - baseX, out float wx0, out float wx1, out float wx2, out float wx3);
+        CatmullRomWeights(pz - baseZ, out float wz0, out float wz1, out float wz2, out float wz3);
 
-        // Catmull-Rom weights (same as GPU)
-        float fx2 = fx * fx, fx3 = fx2 * fx;
-        float fz2 = fz * fz, fz3 = fz2 * fz;
+        float Row(int zi) =>
+            wx0 * HeightTap(heights, res, x - 1, zi) + wx1 * HeightTap(heights, res, x, zi) +
+            wx2 * HeightTap(heights, res, x + 1, zi) + wx3 * HeightTap(heights, res, x + 2, zi);
 
-        float w0x = -0.5f * fx3 + fx2 - 0.5f * fx;
-        float w1x = 1.5f * fx3 - 2.5f * fx2 + 1f;
-        float w2x = -1.5f * fx3 + 2f * fx2 + 0.5f * fx;
-        float w3x = 0.5f * fx3 - 0.5f * fx2;
-
-        float w0z = -0.5f * fz3 + fz2 - 0.5f * fz;
-        float w1z = 1.5f * fz3 - 2.5f * fz2 + 1f;
-        float w2z = -1.5f * fz3 + 2f * fz2 + 0.5f * fz;
-        float w3z = 0.5f * fz3 - 0.5f * fz2;
-
-        // Combine pairs for the bilinear trick. Both sums reach zero on sample-aligned
-        // coords, so they are floored to keep the tap positions finite.
-        float s0x = MathF.Max(w0x + w1x, 1e-5f), s1x = MathF.Max(w2x + w3x, 1e-5f);
-        float s0z = MathF.Max(w0z + w1z, 1e-5f), s1z = MathF.Max(w2z + w3z, 1e-5f);
-        float f0x = w1x / s0x, f1x = w3x / s1x;
-        float f0z = w1z / s0z, f1z = w3z / s1z;
-
-        // Texel-center UV of the two bilinear taps per axis
-        float t0x = (floorX - 0.5f + f0x) * invTexSize;
-        float t1x = (floorX + 1.5f + f1x) * invTexSize;
-        float t0z = (floorZ - 0.5f + f0z) * invTexSize;
-        float t1z = (floorZ + 1.5f + f1z) * invTexSize;
-
-        // Bilinear sample at each of the 4 positions (replicates GPU texture() with linear filtering)
-        float h00 = SampleBilinear(t0x, t0z, scale);
-        float h10 = SampleBilinear(t1x, t0z, scale);
-        float h01 = SampleBilinear(t0x, t1z, scale);
-        float h11 = SampleBilinear(t1x, t1z, scale);
-
-        // Blend (same as GPU)
-        float blendX = s1x / (s0x + s1x);
-        float blendZ = s1z / (s0z + s1z);
-        float row0 = h00 + (h10 - h00) * blendX;
-        float row1 = h01 + (h11 - h01) * blendX;
-        return (row0 + (row1 - row0) * blendZ) * Height;
+        float h = wz0 * Row(z - 1) + wz1 * Row(z) + wz2 * Row(z + 1) + wz3 * Row(z + 2);
+        return h * Height;
     }
 
-    /// <summary>Bilinear sample in UV space, matching GPU texture() with linear filtering.</summary>
-    private float SampleBilinear(float u, float v, float scale)
+    private static void CatmullRomWeights(float f, out float w0, out float w1, out float w2, out float w3)
     {
-        // GPU linear filtering: texel centers at (i+0.5)/N
-        // Convert UV to texel space, subtract 0.5 for center offset
-        float px = u * HeightmapResolution - 0.5f;
-        int z0 = Maths.Clamp((int)MathF.Floor(pz), 0, HeightmapResolution - 1);
-        int x1 = Maths.Min(x0 + 1, HeightmapResolution - 1);
-        int z1 = Maths.Min(z0 + 1, HeightmapResolution - 1);
-        float fx = px - x0, fz = pz - z0;
-        fz = Maths.Clamp(fz, 0f, 1f);
-        float h00 = Heights[z0 * HeightmapResolution + x0] * scale;
-        float h10 = Heights[z0 * HeightmapResolution + x1] * scale;
-        float h01 = Heights[z1 * HeightmapResolution + x0] * scale;
-        float h11 = Heights[z1 * HeightmapResolution + x1] * scale;
-        return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
+        float f2 = f * f, f3 = f2 * f;
+        w0 = -0.5f * f3 + f2 - 0.5f * f;
+        w1 = 1.5f * f3 - 2.5f * f2 + 1f;
+        w2 = -1.5f * f3 + 2f * f2 + 0.5f * f;
+        w3 = 0.5f * f3 - 0.5f * f2;
+    }
+
+    /// <summary>Normalized height at a sample, clamped to the grid edge like the GPU texelFetch.</summary>
+    private static float HeightTap(short[] heights, int res, int x, int z)
+    {
+        x = Maths.Clamp(x, 0, res - 1);
+        z = Maths.Clamp(z, 0, res - 1);
+        return heights[z * res + x] * (1f / kMaxHeight);
     }
 
     public void ResizeHeightmap(int newRes)
