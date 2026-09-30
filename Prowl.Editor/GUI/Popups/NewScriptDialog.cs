@@ -70,7 +70,7 @@ public static class NewScriptDialog
                        .Width(listWidth).Height(bodyHeight)
                        .BackgroundColor(EditorTheme.Neutral200)
                        .BorderWidth(1).BorderColor(EditorTheme.Neutral100)
-                       .Rounded(4)
+                       .Rounded(Origami.Current.Metrics.ContainerRounding)
                        .Enter())
             {
                 Origami.ScrollView(paper, "scr_tpls_scroll", listWidth, bodyHeight)
@@ -85,7 +85,7 @@ public static class NewScriptDialog
                             bool isSel = i == s_selectedIndex;
 
                             using (paper.Row($"scr_tpl_{i}")
-                                       .Width(UnitValue.Stretch()).Height(28).Rounded(3)
+                                       .Width(UnitValue.Stretch()).Height(28).Rounded(Origami.Current.Metrics.Rounding)
                                        .BackgroundColor(isSel ? EditorTheme.Purple400 : Color.Transparent)
                                        .Hovered.BackgroundColor(isSel ? EditorTheme.Purple400 : EditorTheme.Ink200)
                                        .End()

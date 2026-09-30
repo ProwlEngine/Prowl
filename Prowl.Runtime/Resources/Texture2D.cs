@@ -67,6 +67,9 @@ public sealed class Texture2D : Texture, ISerializable
         EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
+        if (Graphics.Device == null)
+            return;
+
         uint bytes = rectWidth * rectHeight * ImageFormat.GetSizeInBytes();
         Graphics.Device.UpdateTexture(Handle, (nint)ptr, bytes,
             (uint)rectX, (uint)rectY, 0, rectWidth, rectHeight, 1, 0, 0);
@@ -164,6 +167,12 @@ public sealed class Texture2D : Texture, ISerializable
 
         if (_generateMipmaps)
             usage |= TextureUsage.GenerateMipmaps;
+
+        if (Graphics.Device == null)
+        {
+            Handle = null!;
+            return;
+        }
 
         Handle = Graphics.Device.ResourceFactory.CreateTexture(
             TextureDescription.Texture2D(width, height, mipLevels, 1, ImageFormat, usage));
@@ -361,7 +370,8 @@ public sealed class Texture2D : Texture, ISerializable
         using Stream stream = EmbeddedResources.GetStream(resourcePath);
         Texture2D result = FromStream(stream, true);
         result.Name = fileName;
-        result.Handle.Name = fileName;
+        if (result.Handle != null)
+            result.Handle.Name = fileName;
         return result;
     }
 

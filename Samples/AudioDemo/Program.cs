@@ -63,12 +63,6 @@ public sealed class AudioDemoGame : Game
         // Load audio files from executable directory
         LoadAudioFiles();
 
-        // Create directional light
-        GameObject lightGO = new("Directional Light");
-        lightGO.AddComponent<DirectionalLight>();
-        lightGO.Transform.LocalEulerAngles = new Float3(-45, -30, 0);
-        scene.Add(lightGO);
-
         // Create camera with audio listener
         cameraGO = new("Main Camera");
         cameraGO.Tag = "Main Camera";

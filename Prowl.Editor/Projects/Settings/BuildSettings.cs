@@ -136,7 +136,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                 if (i > 0)
                 {
                     paper.Box($"bld_su_{i}")
-                        .Width(18).Height(EditorTheme.RowHeight).Rounded(3)
+                        .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.ArrowUp, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
@@ -149,7 +149,7 @@ public sealed class BuildSettings : ProjectSettingsBase
 
                 // Remove
                 paper.Box($"bld_sr_{i}")
-                    .Width(18).Height(EditorTheme.RowHeight).Rounded(3)
+                    .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
                     .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                     .FontSize(9f).Alignment(TextAlignment.MiddleCenter)

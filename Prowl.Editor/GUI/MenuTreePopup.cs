@@ -120,7 +120,7 @@ public static class MenuTreePopup
             .BackgroundColor(EditorTheme.Popover)
             .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
             .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
-            .Rounded(EditorTheme.Roundness + 2f)
+            .Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(padX, padX, padY, padY)
             .Gap(searchGap)
             .HookToParent()
@@ -179,7 +179,7 @@ public static class MenuTreePopup
             using (paper.Row($"{id}_back")
                 .Height(EditorTheme.RowHeight)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).PaddingLeft(9).PaddingRight(9).Gap(9)
+                .Rounded(EditorTheme.Roundness).PaddingLeft(9).PaddingRight(9).Gap(9)
                 .OnClick(0, (_, _) => state.Nav.RemoveAt(state.Nav.Count - 1))
                 .Enter())
             {
@@ -200,7 +200,7 @@ public static class MenuTreePopup
             using (paper.Row($"{id}_folder_{folder}")
                 .Height(EditorTheme.RowHeight)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                .Rounded(6).PaddingLeft(9).PaddingRight(9).Gap(9)
+                .Rounded(EditorTheme.Roundness).PaddingLeft(9).PaddingRight(9).Gap(9)
                 .OnClick(0, (_, _) => state.Nav.Add(captured))
                 .Enter())
             {
@@ -274,7 +274,7 @@ public static class MenuTreePopup
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Rounded(6).PaddingLeft(9).PaddingRight(9).Gap(9)
+            .Rounded(EditorTheme.Roundness).PaddingLeft(9).PaddingRight(9).Gap(9)
             .OnClick(entry, (e, _) => onPick(e))
             .Enter())
         {

@@ -37,7 +37,7 @@ public sealed class DesktopPlayer : Game, IDisposable
 
         var backend = new PlayerAssetBackend(_manifest.Packaging, "Content");
         AssetDatabase.Current = backend;
-        GameResources.Initialize(backend.ResourcesMap);
+        GameResources.Initialize(backend.ResourceEntries);
         _assets = backend;
 
         string settingsDir = Path.Combine(Application.DataPath, "Content", "Settings");

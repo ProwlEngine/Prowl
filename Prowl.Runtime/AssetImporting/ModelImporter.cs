@@ -80,9 +80,6 @@ public struct ModelImporterSettings
     /// </summary>
     public bool ImportCameras = true;
 
-    /// <summary>Create a light component for every punctual light the file defines.</summary>
-    public bool ImportLights = true;
-
     /// <summary>
     /// Wrap mode given to every imported clip. Model formats carry no looping flag of their own, so
     /// this is a choice the importer has to make rather than read. Loop suits the cycles most

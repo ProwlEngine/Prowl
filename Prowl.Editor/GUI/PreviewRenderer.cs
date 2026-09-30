@@ -13,7 +13,7 @@ namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Renders 3D previews of assets (models, materials, meshes) to a RenderTexture.
-/// Creates an isolated Scene with camera + light for clean rendering.
+/// Creates an isolated Scene with a camera for clean rendering.
 /// Supports orbit camera for interactive previews.
 /// </summary>
 public class PreviewRenderer : IDisposable
@@ -21,19 +21,27 @@ public class PreviewRenderer : IDisposable
     private Scene _scene;
     private GameObject _cameraGo;
     private Camera _camera;
-    private GameObject _lightGo;
     private GameObject? _subjectGo;
     private RenderTexture? _rt;
+    private Mesh? _sphere;
     private string _assetName = "";
 
-    // Previews and thumbnails must not share the scene view's pipeline: the pass state it carries
-    // (notably the sampled depth copy the grid/gizmo shaders read) is sized to whatever surface last
-    // rendered through it. Sharing one instance across differently-sized surfaces in the same frame
-    // thrashes that state and makes the grid/gizmos flicker. Each PreviewRenderer owns an isolated one.
+    // Each preview owns an isolated pipeline so per-surface pass state is never shared with the scene view.
     private readonly DefaultRenderPipeline _pipeline = new();
 
     /// <summary>Whether to draw a grid plane in the preview.</summary>
     public bool ShowGrid { get; set; }
+
+    /// <summary>Clear to transparent instead of the skybox, so only the subject has alpha.</summary>
+    public bool TransparentBackground
+    {
+        get => _camera.ClearFlags == CameraClearFlags.SolidColor;
+        set
+        {
+            _camera.ClearFlags = value ? CameraClearFlags.SolidColor : CameraClearFlags.Skybox;
+            _camera.ClearColor = new Color(0f, 0f, 0f, 0f);
+        }
+    }
 
     // Orbit camera state
     private float _orbitYaw = 30f;
@@ -48,7 +56,7 @@ public class PreviewRenderer : IDisposable
     /// <summary> Gets the height of the preview render target in pixels. </summary>
     public int Height { get; private set; }
 
-    /// <summary> Creates a new PreviewRenderer with the given render target dimensions. Sets up an isolated Scene with a camera and directional light. </summary>
+    /// <summary> Creates a new PreviewRenderer with the given render target dimensions. Sets up an isolated Scene with a camera. </summary>
     public PreviewRenderer(int width = 256, int height = 256)
     {
         Width = width;
@@ -66,15 +74,6 @@ public class PreviewRenderer : IDisposable
         _camera.FarClipPlane = 100f;
         _camera.ClearFlags = CameraClearFlags.Skybox;
         _scene.Add(_cameraGo);
-
-        // Light
-        _lightGo = new GameObject("PreviewLight");
-        _lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        _lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
-        var light = _lightGo.AddComponent<DirectionalLight>();
-        light.Intensity = 1f;
-        light.CastShadows = false;
-        _scene.Add(_lightGo);
 
         _scene.Enable();
 
@@ -134,7 +133,9 @@ public class PreviewRenderer : IDisposable
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
         var renderer = _subjectGo.AddComponent<MeshRenderer>();
-        renderer.Mesh = Mesh.CreateSphere(0.5f, 32, 32);
+        if (_sphere.IsNotValid())
+            _sphere = Mesh.CreateSphere(0.5f, 32, 32);
+        renderer.Mesh = _sphere;
 
         if (material.Shader == null || !material.Shader.IsValid())
             material.Shader = Shader.LoadDefault(DefaultShader.Standard);
@@ -178,11 +179,12 @@ public class PreviewRenderer : IDisposable
         Render();
 
         if (_rt == null || _rt.MainTexture == null) return;
+        float round = Prowl.OrigamiUI.Origami.Current.Metrics.ContainerRounding;
 
         paper.Box(id)
             .Size(width, height)
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 38, 42))
-            .Rounded(4)
+            .Rounded(round)
             .StopEventPropagation()
             .OnDragging((e) =>
             {
@@ -209,7 +211,7 @@ public class PreviewRenderer : IDisposable
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry) *
                     Prowl.Vector.Spatial.Transform2D.CreateScale(rw, rh));
-                canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4, new Color32(255, 255, 255, 255));
+                canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, new Color32(255, 255, 255, 255));
                 canvas.ClearBrushTexture();
             }));
     }
@@ -347,17 +349,18 @@ public class PreviewRenderer : IDisposable
             CollectBoundsRecursive(child, ref min, ref max, ref found);
     }
 
-    /// <summary> Releases all resources held by this PreviewRenderer, including the subject, render texture, scene, camera and light. </summary>
+    /// <summary> Releases all resources held by this PreviewRenderer, including the subject, render texture, scene and camera. </summary>
     public void Dispose()
     {
         ClearSubject();
         if (_rt.IsValid()) _rt.Dispose();
         _rt = null;
+        if (_sphere.IsValid()) _sphere.Dispose();
+        _sphere = null;
 
-        // Disposes every GameObject still in the scene (camera + light), not just disables it.
+        // Disposes every GameObject still in the scene, not just disables it.
         _scene.Dispose();
 
-        // Releases this preview's isolated pipeline pass state (e.g. the depth copy texture).
         _pipeline.Dispose();
     }
 }

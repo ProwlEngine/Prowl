@@ -72,7 +72,7 @@ public sealed class BuildProgressModal : IModal
             .Width(Width).Height(UnitValue.Auto)
             .BackgroundColor(theme.Popover)
             .BorderColor(theme.BorderStrong).BorderWidth(1)
-            .Rounded(13f).Clip()
+            .Rounded(theme.Metrics.ContainerRounding).Clip()
             .DropShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
             .Layer(layer)
             .StopEventPropagation();
@@ -90,7 +90,7 @@ public sealed class BuildProgressModal : IModal
         float headH = theme.Metrics.FontSize + 18f;
 
         using (paper.Row("bpm_head").Width(UnitValue.Stretch()).Height(headH)
-            .BackgroundColor(theme.Glass).RoundedTop(13f)
+            .BackgroundColor(theme.Glass).RoundedTop(theme.Metrics.ContainerRounding)
             .Padding(13, 13, 0, 0).Gap(8).Enter())
         {
             paper.Box("bpm_ico").Width(16).Height(headH).IsNotInteractable()

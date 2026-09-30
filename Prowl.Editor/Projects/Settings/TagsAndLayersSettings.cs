@@ -80,7 +80,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                 if (!isBuiltin)
                 {
                     paper.Box($"tl_tag_del_{i}")
-                        .Width(TagDelW).Height(22).Rounded(3)
+                        .Width(TagDelW).Height(22).Rounded(Origami.Current.Metrics.SmallRounding)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)

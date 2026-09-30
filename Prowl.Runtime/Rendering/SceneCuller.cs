@@ -50,84 +50,20 @@ public interface IRenderable
     public void GetCullingData(out bool isRenderable, out AABB bounds);
 }
 
-public enum LightType
-{
-    Directional,
-    Spot,
-    Point,
-    //Area
-}
-
 /// <summary>
-/// Per-frame light parameters surfaced by every <see cref="IRenderableLight"/>.
-/// </summary>
-public struct ForwardLightData
-{
-    public LightType Type;
-    public Float3 Position;
-    public Float3 Direction;
-    public Float3 Color;
-    public float Intensity;
-    public float Range;
-    public float SpotAngle;       // degrees
-    public float InnerSpotAngle;  // degrees
-
-    // Shadow
-    public bool ShadowEnabled;
-    public float ShadowBias;
-    public float ShadowNormalBias;
-    public float ShadowStrength;
-    public float ShadowQuality;   // 0 = Hard, 1 = Soft
-
-    // Directional cascade data (only for LightType.Directional)
-    public int CascadeCount;
-    public Float4x4[] CascadeShadowMatrices; // [4]
-    public Float4[] CascadeAtlasParams;      // [4]
-
-    // Point shadow data (6 faces)
-    public Float4x4[] PointShadowMatrices; // [6]
-    public Float4[] PointShadowFaceParams; // [6]
-
-    // Spot shadow data (1 matrix)
-    public Float4x4 SpotShadowMatrix;
-    public Float4 SpotShadowAtlasParams;
-}
-
-public interface IRenderableLight
-{
-    public int GetLightID();
-    public int GetLayer();
-    public LightType GetLightType();
-    public Float3 GetLightPosition();
-    public Float3 GetLightDirection();
-    public bool DoCastShadows();
-
-    /// <summary>
-    /// Returns the light's data for forward rendering (position, color, shadow data, etc.)
-    /// </summary>
-    public ForwardLightData GetForwardLightData();
-}
-
-/// <summary>
-/// Per-scene registry that every active <see cref="IRenderable"/>/<see cref="IRenderableLight"/> submits
-/// itself into each frame (see <see cref="MonoBehaviour.OnRenderCollect"/>). A flat collection only - no
-/// frustum/visibility culling happens here yet; the render pipeline reads <see cref="Renderables"/> and
-/// <see cref="Lights"/> directly (see <see cref="Scene.Culler"/>).
+/// Per-scene flat registry every active <see cref="IRenderable"/> submits itself into each frame
+/// (see <see cref="MonoBehaviour.OnRenderCollect"/>). No visibility culling happens here.
 /// </summary>
 public sealed class SceneCuller
 {
     private readonly List<IRenderable> _renderables = new();
-    private readonly List<IRenderableLight> _lights = new();
 
     public IReadOnlyList<IRenderable> Renderables => _renderables;
-    public IReadOnlyList<IRenderableLight> Lights => _lights;
 
     public void Add(IRenderable renderable) => _renderables.Add(renderable);
-    public void Add(IRenderableLight light) => _lights.Add(light);
 
     public void Clear()
     {
         _renderables.Clear();
-        _lights.Clear();
     }
 }

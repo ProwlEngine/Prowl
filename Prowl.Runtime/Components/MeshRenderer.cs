@@ -32,13 +32,6 @@ public class MeshRenderer : MonoBehaviour
         set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
     }
 
-    /// <summary>Index into <c>Scene.BakedLighting.Lightmaps</c>, or -1 if this renderer isn't
-    /// lightmapped. Assigned by the lightmap bake. Lightmap-static is driven by <c>GameObject.IsStatic</c>.</summary>
-    [HideInInspector] public int LightmapIndex = -1;
-
-    /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
-    [HideInInspector] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
-
     // Per-instance property blocks, reused across frames so a static scene collects without allocating.
     // The command buffer snapshots these at encode time, so mutating them next frame is safe.
     [System.NonSerialized] private PropertySet[] _propCache;

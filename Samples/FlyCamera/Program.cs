@@ -56,12 +56,6 @@ public sealed class MyGame : Game
         scene = new Scene();
         SetupInputActions();
 
-        // Create directional light
-        GameObject lightGO = new("Directional Light");
-        lightGO.AddComponent<DirectionalLight>();
-        lightGO.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
-        scene.Add(lightGO);
-
         // Create camera
         cameraGO = new("Main Camera");
         cameraGO.Tag = "Main Camera";

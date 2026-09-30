@@ -34,13 +34,6 @@ public sealed class PhysicsDemo : Game
         //DrawGizmos = true;
         scene = new Scene();
 
-        // Create directional light
-        GameObject lightGO = new("Directional Light");
-        DirectionalLight light = lightGO.AddComponent<DirectionalLight>();
-        light.ShadowQuality = ShadowQuality.Soft;
-        lightGO.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
-        scene.Add(lightGO);
-
         // Create camera
         GameObject cam = new("Main Camera");
         cam.Tag = "Main Camera";

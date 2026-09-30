@@ -27,7 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jitter2" Version="2.8.11" />
+    <PackageReference Include="Jitter2" Version="2.8.13" />
     <PackageReference Include="Prowl.Aperture" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />

@@ -1,9 +1,9 @@
 #!/usr/bin/env dotnet run
 
-#:package Prowl.Echo@3.0.0
-#:package Prowl.Graphite@3.0.0
-#:package Prowl.Graphite.ShaderDef@3.0.0
-#:package Prowl.Graphite.ShaderDef.Compiler@3.0.0
+#:package Prowl.Echo@3.5.0
+#:package Prowl.Graphite@3.5.0
+#:package Prowl.Graphite.ShaderDef@3.5.0
+#:package Prowl.Graphite.ShaderDef.Compiler@3.5.0
 
 #:sdk Microsoft.NET.Sdk
 
@@ -78,6 +78,13 @@ void Compile(string shaderPath, string outputPath)
     VerifyRoundTrip(outputPath, data);
 
     Console.WriteLine($"  wrote {outputPath} ({snapshot.Passes?.Length ?? 0} pass(es))");
+
+    PassSnapshot[] passes = snapshot.Passes ?? [];
+    for (int i = 0; i < passes.Length; i++)
+    {
+        string axes = string.Join(", ", (passes[i].Axes ?? []).Select(a => $"{a.Name}[{a.Values.Count}]"));
+        Console.WriteLine($"    {definition.Passes![i].Name ?? "(unnamed)"}: {passes[i].Variants?.Length ?? 0} variant(s) {axes}");
+    }
 
     Memory<byte>? FileLoader(string name)
     {

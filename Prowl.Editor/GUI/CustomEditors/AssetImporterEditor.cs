@@ -150,14 +150,14 @@ public abstract class AssetImporterEditor
             // Pushes both buttons to the right.
             paper.Box($"{id}_applybar_spacer").Height(1).IsNotInteractable();
 
-            paper.Box($"{id}_revert").Width(UnitValue.Auto).Height(30).Rounded(8).Padding(16, 16, 0, 0)
+            paper.Box($"{id}_revert").Width(UnitValue.Auto).Height(30).Rounded(m.Rounding).Padding(16, 16, 0, 0)
                 .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                 .Hovered.BackgroundColor(EditorTheme.Neutral300).End()
                 .Text(Prowl.Rosetta.Loc.Get("dialog.revert"), font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => RevertPendingChanges(entry, asset));
 
-            paper.Box($"{id}_apply").Width(UnitValue.Auto).Height(30).Rounded(8).Padding(16, 16, 0, 0)
+            paper.Box($"{id}_apply").Width(UnitValue.Auto).Height(30).Rounded(m.Rounding).Padding(16, 16, 0, 0)
                 .BackgroundColor(EditorTheme.Accent)
                 .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
                 .Text($"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}", font)

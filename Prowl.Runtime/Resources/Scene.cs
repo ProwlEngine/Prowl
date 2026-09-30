@@ -42,6 +42,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private static Scene? _pendingScene;
 
+    /// <summary>Whether a <see cref="Load"/> is queued and has not been applied yet, so <see cref="Current"/>
+    /// is still the outgoing scene.</summary>
+    public static bool IsLoadPending => _pendingScene != null;
+
     /// <summary>
     /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
     /// happens at the end of the frame, alongside the destroy queue, so the outgoing scene stays
@@ -197,22 +201,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeField]
     private GameObject[] serializeObj = null;
 
-    /// <summary>
-    /// Parallel to serializeObj stores the original identifier for each GO.
-    /// </summary>
-    [SerializeField]
-    private Guid[] _goIdentifiers = null;
-
-    /// <summary>
-    /// Flat array of component identifiers. _compIdOffsets[i] is the index into this
-    /// array for GO i's first component. Component count = offset[i+1] - offset[i].
-    /// </summary>
-    [SerializeField]
-    private Guid[] _compIdentifiers = null;
-
-    [SerializeField]
-    private int[] _compIdOffsets = null;
-
     [SerializeIgnore]
     private List<GameObject> _allObj = new();
     [SerializeIgnore]
@@ -260,165 +248,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         }
     }
 
-    /// <summary>Registry every active IRenderable/IRenderableLight submits itself into during
+    /// <summary>Registry every active IRenderable submits itself into during
     /// <see cref="CollectRenderables"/>. The render pipeline reads this directly.</summary>
     [field: SerializeIgnore]
     public SceneCuller Culler { get; } = new();
 
     [SerializeIgnore]
     private bool _isActive = false;
-
-    public struct FogParams
-    {
-        public enum FogMode
-        {
-            Off,
-            Linear,
-            Exponential,
-            ExponentialSquared
-        }
-        public FogMode Mode = FogMode.ExponentialSquared;
-        public Color Color = new(0.5f, 0.5f, 0.5f, 1.0f);
-        public float Start = 20;
-        public float End = 100;
-        public float Density = 0.01f;
-
-        public bool IsFogLinear => Mode == FogMode.Linear;
-
-        public FogParams()
-        {
-        }
-    }
-
-    public FogParams Fog = new();
-
-    public struct AmbientLightParams
-    {
-        public enum AmbientMode
-        {
-            Uniform,
-            Hemisphere
-        }
-
-        public AmbientMode Mode = AmbientMode.Uniform;
-
-        public float Strength = 1f;
-
-        // Uniform ambient
-        public Float4 Color = new(0.43f, 0.55f, 0.65f, 1.0f);
-
-        // Hemisphere ambient
-        public Float4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
-        public Float4 GroundColor = new(0.2f, 0.2f, 0.2f, 1.0f);
-
-        public bool UseHemisphere => Mode == AmbientMode.Hemisphere;
-
-        public AmbientLightParams()
-        {
-        }
-    }
-
-    public AmbientLightParams Ambient = new();
-
-    public enum SkyboxMode
-    {
-        Procedural,
-        SolidColor,
-        Gradient,
-        Material
-    }
-
-    public struct SkyboxParams
-    {
-        public SkyboxMode Mode = SkyboxMode.Procedural;
-        public Color SolidColor = new(0.2f, 0.3f, 0.5f, 1f);
-        public Color GradientTop = new(0.4f, 0.6f, 0.9f, 1f);
-        public Color GradientBottom = new(0.8f, 0.8f, 0.7f, 1f);
-        public float GradientExponent = 1f;
-        public AssetRef<Resources.Material> CustomMaterial;
-
-        public SkyboxParams() { }
-    }
-
-    public SkyboxParams Skybox = new();
-
-    /// <summary>Where one renderer's surface sits in the baked atlas.</summary>
-    public struct LightmapPlacement
-    {
-        /// <summary>Which atlas page, indexing <see cref="BakedLightingData.Lightmaps"/>.</summary>
-        public int Index;
-        /// <summary>Scale and offset taking the renderer's UVs into that page.</summary>
-        public Float4 ScaleOffset;
-    }
-
-    /// <summary>Baked lightmaps + light-probe data for this scene, produced by the editor lightmap bake.</summary>
-    public sealed class BakedLightingData
-    {
-        /// <summary>Baked lightmap atlas pages (RGBM-encoded). A placement below selects one.</summary>
-        public List<AssetRef<Texture2D>> Lightmaps = new();
-
-        /// <summary>
-        /// Where each baked renderer landed in the atlas, keyed by the identifier of the object it is on.
-        /// Here rather than on the renderer because it belongs to this scene's bake and to nothing else,
-        /// which is also what stops a prefab instance reading as modified the moment it is baked.
-        /// </summary>
-        public Dictionary<Guid, LightmapPlacement> Placements = new();
-        /// <summary>World-space light-probe positions.</summary>
-        public Float3[] ProbePositions = [];
-        /// <summary>Baked SH per probe, indexed with <see cref="ProbePositions"/>.</summary>
-        public SphericalHarmonicsL2[] ProbeSH = [];
-        /// <summary>Tetrahedralization of the probes: 4 probe indices per tetrahedron.</summary>
-        public int[] ProbeTetrahedra = [];
-        /// <summary>Per-tetra neighbour links: 4 per tetra (across the face opposite vertex i), -1 = hull.</summary>
-        public int[] ProbeTetNeighbours = [];
-
-        public bool HasLightmaps => Lightmaps.Count > 0;
-        public bool HasProbes => ProbeSH.Length > 0;
-
-        /// <summary>Where this object's surface was baked, or nothing if it was not.</summary>
-        public LightmapPlacement? PlacementFor(Guid objectIdentifier)
-            => Placements.TryGetValue(objectIdentifier, out LightmapPlacement placement) ? placement : null;
-
-        /// <summary>Drop every baked lightmap page and placement, leaving the probes alone.</summary>
-        public void ClearLightmaps()
-        {
-            Lightmaps.Clear();
-            Placements.Clear();
-        }
-    }
-
-    public BakedLightingData BakedLighting = new();
-
-    /// <summary>
-    /// Per-scene lightmapper configuration, edited in the editor's Environment panel and consumed by
-    /// the bake. Persisted with the scene (it's a public field) so a bake's settings survive editor
-    /// reloads.
-    /// </summary>
-    public sealed class LightmapBakeSettings
-    {
-        // Atlas / resolution
-        public int AtlasSize = 1024;
-        public float TexelsPerUnit = 20f;
-        public int DilatePixels = 2;          // edge dilation to stop bilinear bleed at seams
-
-        // Quality
-        public int Bounces = 2;
-        public int Samples = 64;              // progressive indirect iterations before finalize
-        public int ProbeSamples = 256;
-        public bool DoBackfaceCull = false;   // cull back faces on all bake rays (matches Prowl's backface-culled rendering)
-
-        // Trace one texel per NxN atlas cell and interpolate the rest. 1 traces everything; higher
-        // values converge far faster and cost fine indirect detail. Contacts and corners always trace.
-        public int SparseStride = 1;
-
-        // Feed the scene's ambient colour in as ray-miss (sky) radiance.
-        public bool BakeSkyLighting = false;
-
-        // Debug: bake every surface as a white Lambertian (isolates light/GI from albedo).
-        public bool IgnoreAlbedo = false;
-    }
-
-    public LightmapBakeSettings LightmapBake = new();
 
     /// <summary> The number of registered, non-disposed objects. </summary>
     public int Count { get { EnsureNotDisposed(); return _allObj.Count(o => !o.IsDisposed); } }
@@ -427,7 +263,19 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public IEnumerable<GameObject> AllObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed); } }
 
     /// <summary> Enumerates all registered objects that are currently active and saveable. </summary>
-    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && !o.HideFlags.HasFlag(HideFlags.DontSave) && !o.HideFlags.HasFlag(HideFlags.HideAndDontSave)); } }
+    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && IsSaveable(o)); } }
+
+    /// <summary>
+    /// False for an object marked <see cref="HideFlags.DontSave"/> or <see cref="HideFlags.HideAndDontSave"/>,
+    /// and for anything under one: a child written out without its parent would load back as a stray root.
+    /// </summary>
+    private static bool IsSaveable(GameObject obj)
+    {
+        for (GameObject? go = obj; go.IsValid(); go = go.Parent)
+            if ((go.HideFlags & (HideFlags.DontSave | HideFlags.HideAndDontSave)) != 0)
+                return false;
+        return true;
+    }
 
     /// <summary> Enumerates all registered objects that are currently active. </summary>
     public IEnumerable<GameObject> ActiveObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.EnabledInHierarchy); } }
@@ -819,59 +667,29 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Remove all identifiers and reference to any possible gameobject that could hold a
         // user-defined script as it might leave the ALC alive
         serializeObj = null;
-        _goIdentifiers = null;
-        _compIdentifiers = null;
-        _compIdOffsets = null;
     }
 
     public void OnBeforeSerialize()
     {
-        serializeObj = [.. AllObjects];
-
-        // Capture identifiers so they can be restored after deserialization
-        _goIdentifiers = new Guid[serializeObj.Length];
-        var compIds = new List<Guid>();
-        _compIdOffsets = new int[serializeObj.Length + 1];
-
-        for (int i = 0; i < serializeObj.Length; i++)
-        {
-            _goIdentifiers[i] = serializeObj[i].Identifier;
-            _compIdOffsets[i] = compIds.Count;
-            foreach (var comp in serializeObj[i].GetComponents<MonoBehaviour>())
-                compIds.Add(comp.Identifier);
-        }
-        _compIdOffsets[serializeObj.Length] = compIds.Count;
-        _compIdentifiers = compIds.ToArray();
+        serializeObj = [.. SaveableObjects];
     }
 
     public void OnAfterDeserialize()
     {
         if (serializeObj == null) return;
 
-        // Restore identifiers GOs and components got fresh IDs during deserialization
-        if (_goIdentifiers != null && _goIdentifiers.Length == serializeObj.Length)
+        // GameObjects and components got fresh identifiers while loading, a scene keeps the stored ones.
+        foreach (GameObject obj in serializeObj)
         {
-            for (int i = 0; i < serializeObj.Length; i++)
-            {
-                // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
-                if (serializeObj[i] == null) continue;
-                serializeObj[i].SetIdentifier(_goIdentifiers[i]);
+            // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
+            if (obj == null) continue;
+            if (obj.LoadedIdentifier != Guid.Empty)
+                obj.SetIdentifier(obj.LoadedIdentifier);
 
-                if (_compIdentifiers != null && _compIdOffsets != null)
-                {
-                    int start = _compIdOffsets[i];
-                    int end = _compIdOffsets[i + 1];
-                    var comps = serializeObj[i].GetComponents<MonoBehaviour>().ToList();
-                    for (int c = 0; c < comps.Count && start + c < end; c++)
-                        comps[c].Identifier = _compIdentifiers[start + c];
-                }
-            }
+            foreach (MonoBehaviour comp in obj.GetComponents<MonoBehaviour>())
+                if (comp.LoadedIdentifier != Guid.Empty)
+                    comp.Identifier = comp.LoadedIdentifier;
         }
-
-        // Clear temp data
-        _goIdentifiers = null;
-        _compIdentifiers = null;
-        _compIdOffsets = null;
 
         foreach (GameObject obj in serializeObj)
             if (obj != null) Add(obj);
@@ -957,6 +775,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>
     /// Collects every Camera on an enabled-in-hierarchy GameObject, sorted by Camera.Depth.
     /// </summary>
+    /// <remarks>
+    /// Cameras on <see cref="HideFlags.HideAndDontSave"/> objects are skipped. Those are editor helpers
+    /// (scene view, previews) that render themselves into their own targets; letting them into the
+    /// game's camera list draws the scene again, and uses shadow atlas space, for nothing.
+    /// </remarks>
     internal List<Camera> GatherActiveCameras()
     {
         var cameras = new List<Camera>();
@@ -965,6 +788,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             GameObject go = _allObj[i];
             if (go.IsDisposed || !go.EnabledInHierarchy) continue;
+            if ((go.HideFlags & HideFlags.HideAndDontSave) != 0) continue; // not HasFlag: it boxes in unoptimized builds
 
             foreach (MonoBehaviour component in go._components)
             {

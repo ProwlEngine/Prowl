@@ -36,7 +36,6 @@ public enum DefaultShader
     Line,
     Invalid,
     UI,
-    Gizmos,
     Blit,
     Particle,
     Terrain,
@@ -45,24 +44,6 @@ public enum DefaultShader
     DefaultUI,
     DefaultText,
     DefaultTextMesh,
-
-    ProceduralSkybox,
-    GradientSkybox,
-    CubemapSkybox,
-    Tonemapper,
-    SSR,
-    FXAA,
-    SMAA,
-    Bloom,
-    BokehDoF,
-    GTAO,
-    Grid,
-    CinematicEffects,
-    VolumetricFog,
-    TAA,
-    MotionBlur,
-    GizmoIcon,
-    AutoExposure
 }
 
 /// <summary>
@@ -130,19 +111,10 @@ public enum DefaultFont
 }
 
 /// <summary>
-/// Default shader include files (GLSL)
+/// Default shader include files (Slang)
 /// </summary>
 public enum DefaultShaderInclude
 {
     ProwlCG,
-    PBR,
-    Random,
-    ShaderVariables,
-    Shadow,
-    VertexAttributes,
-    Lighting,
-    LightBVH,
-    StandardCore,
-    FastNoiseLite,
-    SimplexNoise4D
+    ShaderVariables
 }

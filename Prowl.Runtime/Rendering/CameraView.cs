@@ -42,14 +42,6 @@ public sealed class CameraView : IRenderView
     public RenderTexture? Target;
 
     /// <summary>
-    /// A sampleable copy of the opaque pass's depth buffer, taken after opaque geometry is drawn and
-    /// before its source depth attachment is written to again. Debug overlays (gizmos, grid) that need
-    /// to depth-test against the scene sample this instead of the live depth attachment, since a texture
-    /// can't be bound as a framebuffer's depth target and a shader resource at the same time.
-    /// </summary>
-    public Texture2D? SceneDepthCopy;
-
-    /// <summary>
     /// The shader-side <c>Frame</c> parameter block (see ShaderVariables.slang) for this camera: view/projection
     /// matrices and their inverses, camera position and projection/screen params, merged with the frame-global
     /// <see cref="GlobalUniforms"/>. Built once in <see cref="From"/>; every pass that records camera-relative

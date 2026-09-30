@@ -23,20 +23,9 @@ public sealed class VoxelGame : Game
     private Scene scene = null!;
     private VoxelWorld world = null!;
 
-    private GameObject spot = null!;
-
     public override void Initialize()
     {
         scene = new Scene();
-
-        // Create directional light
-        GameObject lightGO = new("Directional Light");
-        DirectionalLight light = lightGO.AddComponent<DirectionalLight>();
-        lightGO.Transform.Position = new Float3(0, 64, 0);
-        lightGO.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
-        light.ShadowResolution = DirectionalLight.Resolution._4096;
-        light.ShadowDistance = 100f;
-        scene.Add(lightGO);
 
         // Create camera
         cameraGO = new("Main Camera");
@@ -45,13 +34,6 @@ public sealed class VoxelGame : Game
         camera = cameraGO.AddComponent<Camera>();
         camera.Depth = -1;
         camera.HDR = true;
-
-        spot = new GameObject("Spot Light");
-        PointLight sl = spot.AddComponent<PointLight>();
-        sl.Range = 50f;
-        sl.Intensity = 256f;
-        scene.Add(spot);
-
 
         scene.Add(cameraGO);
 
@@ -104,12 +86,6 @@ public sealed class VoxelGame : Game
         {
             Ray ray = camera.ScreenPointToRay((Float2)Input.MousePosition, new Float2(Window.Size.X, Window.Size.Y));
             world.RaycastVoxel(ray, 10f, false);
-        }
-
-        if (Input.GetKey(KeyCode.F))
-        {
-            spot.Transform.Position = cameraGO.Transform.Position;
-            spot.Transform.Rotation = cameraGO.Transform.Rotation;
         }
     }
 }

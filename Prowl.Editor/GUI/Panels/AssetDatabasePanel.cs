@@ -246,12 +246,13 @@ public class AssetDatabasePanel : DockPanel
                 EditorGUI.ToolbarIconBtn(paper, "adb_idle_f", EditorIcons.Hourglass, _showOnlyIdle, () => _showOnlyIdle = !_showOnlyIdle);
                 EditorGUI.ToolbarIconBtn(paper, "adb_lock_f", EditorIcons.Lock, _showOnlyLocked, () => _showOnlyLocked = !_showOnlyLocked);
 
-                Origami.Dropdown(paper, "adb_type_dd",
-                    Math.Max(0, _typeOptions.IndexOf(string.IsNullOrEmpty(_typeFilter) ? "All Types" : _typeFilter)),
-                    v => _typeFilter = v == 0 ? "" : _typeOptions[v],
-                    _typeOptions.ToArray()).Width(120).Show();
+                using (paper.Row("adb_type_wrap").Width(120).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                    Origami.Dropdown(paper, "adb_type_dd",
+                        Math.Max(0, _typeOptions.IndexOf(string.IsNullOrEmpty(_typeFilter) ? "All Types" : _typeFilter)),
+                        v => _typeFilter = v == 0 ? "" : _typeOptions[v],
+                        _typeOptions.ToArray()).Width(120).Show();
 
-                paper.Box("adb_graph").Width(70).Height(20).IsNotInteractable()
+                paper.Box("adb_graph").Width(70).Height(20).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) => DrawSparkline(canvas, r)));
 
                 paper.Box("adb_sp");
@@ -456,7 +457,7 @@ public class AssetDatabasePanel : DockPanel
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 if (hasSubs)
-                    paper.Box($"adb_tag_{id}").Width(UnitValue.Auto).Height(17).Rounded(5).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    paper.Box($"adb_tag_{id}").Width(UnitValue.Auto).Height(17).Rounded(Origami.Current.Metrics.SmallRounding).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                         .BackgroundColor(EditorTheme.Selected).BorderColor(Color.FromArgb(77, EditorTheme.Purple400)).BorderWidth(1)
                         .Text(group.Subs.Count.ToString(), EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.AccentText)
                         .FontSize(11f).Alignment(TextAlignment.MiddleCenter);

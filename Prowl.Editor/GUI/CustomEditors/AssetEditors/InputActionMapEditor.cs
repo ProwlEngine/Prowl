@@ -114,7 +114,7 @@ public class InputActionMapEditor : AssetImporterEditor
         using (paper.Column(id)
             .Width(paper.Percent(28)).MinWidth(120)
             .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.Neutral400).Rounded(4)
+            .BackgroundColor(EditorTheme.Neutral400).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(4, 4, 4, 4)
             .Enter())
         {
@@ -127,7 +127,7 @@ public class InputActionMapEditor : AssetImporterEditor
                     .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box($"{id}_add")
-                    .Width(18).Height(18).Rounded(3)
+                    .Width(18).Height(18).Rounded(Origami.Current.Metrics.SmallRounding)
                     .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Ink400)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
@@ -157,7 +157,7 @@ public class InputActionMapEditor : AssetImporterEditor
                     .Height(EditorTheme.RowHeight)
                     .BackgroundColor(sel ? EditorTheme.Purple400 : Color.Transparent)
                     .Hovered.BackgroundColor(sel ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-                    .Rounded(3)
+                    .Rounded(Origami.Current.Metrics.Rounding)
                     .Text($"  {icon}  {action.Name}", font).TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink500)
                     .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft)
                     .OnClick(action.Name, (n, _) => { _selectedAction = n; _selectedBindingIdx = -1; });
@@ -176,7 +176,7 @@ public class InputActionMapEditor : AssetImporterEditor
         using (paper.Column(id)
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.Neutral400).Rounded(4)
+            .BackgroundColor(EditorTheme.Neutral400).Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(6, 6, 6, 6)
             .Enter())
         {
@@ -326,7 +326,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Height(EditorTheme.RowHeight)
             .BackgroundColor(selected ? Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
             .Hovered.BackgroundColor(selected ? Color.FromArgb(80, EditorTheme.Purple400) : EditorTheme.Ink200).End()
-            .Rounded(3).Margin(0, 0, 0, 1)
+            .Rounded(Origami.Current.Metrics.Rounding).Margin(0, 0, 0, 1)
             .PaddingLeft(8).Gap(4)
             .OnClick(0, (_, _) => onSelect())
             .Enter())
@@ -337,7 +337,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_x")
-                .Width(18).Height(EditorTheme.RowHeight).Rounded(3)
+                .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
@@ -364,7 +364,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .BackgroundColor(selected ? Color.FromArgb(60, EditorTheme.Purple400) : Color.FromArgb(30, EditorTheme.Purple400))
             .Hovered.BackgroundColor(selected ? Color.FromArgb(80, EditorTheme.Purple400) : Color.FromArgb(50, EditorTheme.Purple400)).End()
             .BorderColor(EditorTheme.Purple300).BorderWidth(selected ? 1 : 0)
-            .Rounded(3).Margin(0, 0, 0, 1)
+            .Rounded(Origami.Current.Metrics.Rounding).Margin(0, 0, 0, 1)
             .PaddingLeft(8).Gap(4)
             .OnClick(0, (_, _) => onSelect())
             .Enter())
@@ -375,7 +375,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_x")
-                .Width(18).Height(EditorTheme.RowHeight).Rounded(3)
+                .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
@@ -392,7 +392,7 @@ public class InputActionMapEditor : AssetImporterEditor
         using (paper.Column(id)
             .Height(UnitValue.Auto)
             .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
-            .Rounded(3).Margin(12, 0, 0, 2)
+            .Rounded(Origami.Current.Metrics.Rounding).Margin(12, 0, 0, 2)
             .Padding(8, 8, 6, 6)
             .Enter())
         {
@@ -444,7 +444,7 @@ public class InputActionMapEditor : AssetImporterEditor
         using (paper.Column(id)
             .Height(UnitValue.Auto)
             .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
-            .Rounded(3).Margin(12, 0, 0, 2)
+            .Rounded(Origami.Current.Metrics.Rounding).Margin(12, 0, 0, 2)
             .Padding(8, 8, 6, 6)
             .Enter())
         {
@@ -495,7 +495,7 @@ public class InputActionMapEditor : AssetImporterEditor
             paper.Box($"{id}_btn")
                 .Height(EditorTheme.RowHeight)
                 .BackgroundColor(EditorTheme.Purple300)
-                .Rounded(3)
+                .Rounded(Origami.Current.Metrics.Rounding)
                 .Text("  Press any key...  (Esc to cancel)", font)
                 .TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
@@ -637,7 +637,7 @@ public class InputActionMapEditor : AssetImporterEditor
 
             using (paper.Column($"{id}_p{i}")
                 .Height(UnitValue.Auto)
-                .BackgroundColor(EditorTheme.Neutral300).Rounded(3)
+                .BackgroundColor(EditorTheme.Neutral300).Rounded(Origami.Current.Metrics.Rounding)
                 .Margin(0, 0, 0, 2)
                 .Padding(6, 6, 3, 3)
                 .Enter())
@@ -662,7 +662,7 @@ public class InputActionMapEditor : AssetImporterEditor
                         .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
 
                     paper.Box($"{id}_px{i}")
-                        .Width(18).Height(EditorTheme.RowHeight).Rounded(3)
+                        .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)

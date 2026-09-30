@@ -1,9 +1,9 @@
 #!/usr/bin/env dotnet run
 
-#:package Prowl.Echo@3.0.0
-#:package Prowl.Graphite@3.0.0
-#:package Prowl.Graphite.ShaderDef@3.0.0
-#:package Prowl.Graphite.ShaderDef.Compiler@3.0.0
+#:package Prowl.Echo@3.5.0
+#:package Prowl.Graphite@3.5.0
+#:package Prowl.Graphite.ShaderDef@3.5.0
+#:package Prowl.Graphite.ShaderDef.Compiler@3.5.0
 
 #:sdk Microsoft.NET.Sdk
 

@@ -68,7 +68,7 @@ public static class GameObjectInspector
         var semi = EditorTheme.FontSemiBold ?? font;
         using (paper.Row($"{id}_head").Height(30).Padding(10, 8, 0, 0).Gap(7).Enter())
         {
-            var clickRow = paper.Row($"{id}_hclick").Width(UnitValue.Stretch()).Height(30).Gap(7)
+            var clickRow = paper.Row($"{id}_hclick").Width(UnitValue.Stretch()).Height(30).Gap(7).Rounded(EditorTheme.Roundness)
                 .Hovered.BackgroundColor(Color.FromArgb(13, EditorTheme.Purple400)).End()
                 .OnClick(id, (i, _) => ToggleSection(i));
             if (onDragStart != null)
@@ -96,7 +96,7 @@ public static class GameObjectInspector
     private static void SelDropdown(Paper paper, Prowl.Scribe.FontFile font, string id,
         string? label, string value, string[] options, int current, Action<int> onSelect, bool chevron, UnitValue width)
     {
-        using (paper.Row(id).Width(width).Height(26).Rounded(7).Padding(9, 9, 0, 0).Gap(6)
+        using (paper.Row(id).Width(width).Height(26).Rounded(EditorTheme.Roundness).Padding(9, 9, 0, 0).Gap(6)
             .BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Hovered.BorderColor(EditorTheme.BorderStrong).End()
@@ -262,7 +262,7 @@ public static class GameObjectInspector
             string icon = GetComponentIcon((MonoBehaviour)instances[0]);
 
             using (paper.Row($"{compId}_header")
-                .Height(24).BackgroundColor(EditorTheme.Neutral300).Rounded(3).PaddingLeft(4).Gap(4).Enter())
+                .Height(24).BackgroundColor(EditorTheme.Neutral300).Rounded(EditorTheme.Roundness).PaddingLeft(4).Gap(4).Enter())
             {
                 bool allEn = instances.All(o => ((MonoBehaviour)o).Enabled);
                 Origami.Checkbox(paper, $"{compId}_en", allEn,
@@ -578,7 +578,7 @@ public static class GameObjectInspector
             .Width(GridSize).Height(GridSize)
             .BackgroundColor(EditorTheme.Neutral200)
             .BorderColor(EditorTheme.Ink100).BorderWidth(1)
-            .Rounded(3)
+            .Rounded(Origami.Current.Metrics.SmallRounding)
             .PaddingLeft(GridPad).PaddingRight(GridPad).PaddingTop(GridPad).PaddingBottom(GridPad)
             .Gap(CellGap)
             .Enter())
@@ -614,7 +614,7 @@ public static class GameObjectInspector
             .BackgroundColor(bg)
             .Hovered.BackgroundColor(hoverBg).End()
             .BorderColor(EditorTheme.Ink100).BorderWidth(1)
-            .Rounded(2)
+            .Rounded(Origami.Current.Metrics.SmallRounding)
             .OnClick((go, minPreset, maxPreset), (cap, _) =>
             {
                 var (capGo, capMin, capMax) = cap;
@@ -1074,7 +1074,7 @@ public static class GameObjectInspector
         using (paper.Row("gi_add_comp_row").Height(28).PaddingLeft(20).PaddingRight(20).Enter())
         {
             var trigger = paper.Box("gi_add_comp")
-                .Height(28).Rounded(4)
+                .Height(28).Rounded(EditorTheme.Roundness)
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .OnClick(go, (g, _) => ToggleAddComponentPopup(g))
@@ -1137,7 +1137,7 @@ public static class GameObjectInspector
             .Height(UnitValue.Auto)
             .BackgroundColor(barColor)
             .BorderColor(borderColor).BorderWidth(1)
-            .Rounded(4).Margin(0, 4, 0, 4)
+            .Rounded(Origami.Current.Metrics.ContainerRounding).Margin(0, 4, 0, 4)
             .Padding(4, 4, 4, 4)
             .Enter())
         {
@@ -1206,7 +1206,7 @@ public static class GameObjectInspector
         int count = PrefabUtility.CountOverrides(go);
 
         var trigger = paper.Box("gi_prefab_ov_btn")
-            .Width(110).Height(24).Rounded(4)
+            .Width(110).Height(24).Rounded(EditorTheme.Roundness)
             .BackgroundColor(EditorTheme.Ink100)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .OnClick(go, (g, _) => ToggleOverridesPopup(g));
@@ -1246,7 +1246,7 @@ public static class GameObjectInspector
             .BackgroundColor(EditorTheme.Popover)
             .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
             .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
-            .Rounded(EditorTheme.Roundness + 2f)
+            .Rounded(Origami.Current.Metrics.ContainerRounding)
             .Padding(padding, padding, padding, padding)
             .HookToParent()
             .Layer(Layer.Topmost)
@@ -1308,7 +1308,7 @@ public static class GameObjectInspector
         using (paper.Row($"gi_add_{key}")
             .Height(EditorTheme.RowHeight)
             .BackgroundColor(EditorTheme.Neutral300)
-            .Rounded(3).Margin(0, 0, 0, 1)
+            .Rounded(EditorTheme.Roundness).Margin(0, 0, 0, 1)
             .PaddingLeft(6).Gap(4)
             .Enter())
         {
@@ -1364,7 +1364,7 @@ public static class GameObjectInspector
         using (paper.Row($"gi_ov_{key}")
             .Height(EditorTheme.RowHeight)
             .BackgroundColor(EditorTheme.Neutral300)
-            .Rounded(3).Margin(12, 0, 0, 1)
+            .Rounded(EditorTheme.Roundness).Margin(12, 0, 0, 1)
             .PaddingLeft(6).Gap(4)
             .Enter())
         {
@@ -1419,7 +1419,7 @@ public static class GameObjectInspector
         Guid rootId = root.Identifier;
 
         paper.Box(id)
-            .Width(width).Height(EditorTheme.RowHeight).Rounded(3)
+            .Width(width).Height(EditorTheme.RowHeight).Rounded(EditorTheme.Roundness)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text(label, font).TextColor(EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter)

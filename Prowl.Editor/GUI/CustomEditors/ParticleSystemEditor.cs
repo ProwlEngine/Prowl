@@ -43,7 +43,7 @@ public class ParticleSystemComponentEditor : CustomEditor
             .Height(EditorTheme.RowHeight)
             .PaddingLeft(8)
             .BackgroundColor(EditorTheme.Neutral300)
-            .Rounded(2)
+            .Rounded(Origami.Current.Metrics.Rounding)
             .Margin(UnitValue.Auto, EditorTheme.Spacing)
             .Text("Particle System", font)
             .TextColor(EditorTheme.Ink500)
@@ -231,23 +231,6 @@ public class ParticleSystemComponentEditor : CustomEditor
             BoolRow(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU, v => ps.UV.FlipU = v);
             BoolRow(paper, $"{id}_uv_fv", "Flip V", ps.UV.FlipV, v => ps.UV.FlipV = v);
         });
-
-        // Light: each alive particle pushes a point light into the scene's dynamic BVH.
-        EditorGUI.ModuleSection(paper, $"{id}_lt", EditorIcons.Lightbulb, "Light", ps.Light.Enabled, v => ps.Light.Enabled = v, () =>
-        {
-            BoolRow(paper, $"{id}_lt_upc", "Use Particle Color", ps.Light.UseParticleColor,
-                v => ps.Light.UseParticleColor = v);
-            PropertyGridUtils.DrawField(paper, $"{id}_lt_col", "Tint", typeof(VColor), ps.Light.Color,
-                v => ps.Light.Color = v is VColor c ? c : VColor.White, 0);
-            FloatRow(paper, $"{id}_lt_int", "Intensity", ps.Light.Intensity,
-                v => ps.Light.Intensity = MathF.Max(0f, v));
-            FloatRow(paper, $"{id}_lt_rng", "Range", ps.Light.Range,
-                v => ps.Light.Range = MathF.Max(0.01f, v));
-            BoolRow(paper, $"{id}_lt_srs", "Scale Range By Size", ps.Light.ScaleRangeByParticleSize,
-                v => ps.Light.ScaleRangeByParticleSize = v);
-            BoolRow(paper, $"{id}_lt_fwl", "Fade With Lifetime", ps.Light.FadeWithLifetime,
-                v => ps.Light.FadeWithLifetime = v);
-        });
     }
 
     // -- Origami row helpers --------------------------------------------
@@ -319,7 +302,7 @@ public class ParticleSystemComponentEditor : CustomEditor
 
             using (paper.Column($"{id}_b{i}")
                 .Height(UnitValue.Auto)
-                .BackgroundColor(EditorTheme.Neutral300).Rounded(3)
+                .BackgroundColor(EditorTheme.Neutral300).Rounded(Origami.Current.Metrics.Rounding)
                 .Margin(0, 0, 0, 2)
                 .Padding(6, 6, 3, 3)
                 .Enter())
@@ -332,7 +315,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                         .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
 
                     paper.Box($"{id}_bx{i}")
-                        .Width(18).Height(EditorTheme.RowHeight).Rounded(3)
+                        .Width(18).Height(EditorTheme.RowHeight).Rounded(Origami.Current.Metrics.SmallRounding)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)

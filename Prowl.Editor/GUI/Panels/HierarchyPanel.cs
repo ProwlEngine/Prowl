@@ -95,7 +95,7 @@ public class HierarchyPanel : DockPanel
                 using (paper.Row("hier_prefab_breadcrumb")
                     .Height(24)
                     .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                    .Rounded(3).Margin(4, 4, 4, 0)
+                    .Rounded(Origami.Current.Metrics.SmallRounding).Margin(4, 4, 4, 0)
                     .PaddingLeft(6).Gap(4)
                     .Enter())
                 {
@@ -156,7 +156,7 @@ public class HierarchyPanel : DockPanel
             using (paper.Row("hier_scene_hdr")
                 .Height(EditorTheme.RowHeight)
                 .Margin(6, 6, 0, 2)
-                .Rounded(6).Padding(8, 8, 0, 0).Gap(6)
+                .Rounded(EditorTheme.Roundness).Padding(8, 8, 0, 0).Gap(6)
                 .BackgroundColor(EditorTheme.Glass)
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
@@ -186,7 +186,7 @@ public class HierarchyPanel : DockPanel
                 // glance. Stops propagation so clicking it doesn't also collapse the scene section.
                 float addSize = EditorTheme.RowHeight - 2f;
                 paper.Box("hier_scene_add")
-                    .Width(addSize).Height(addSize).Rounded(6)
+                    .Width(addSize).Height(addSize).Rounded(EditorTheme.Roundness)
                     .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Hovered.BackgroundColor(EditorTheme.Hover).End()
                     .Text(EditorIcons.Plus, font)
@@ -1219,7 +1219,6 @@ public class HierarchyPanel : DockPanel
     private static string GetGameObjectIcon(GameObject go)
     {
         if (go.GetComponent<Camera>() != null) return EditorIcons.Camera;
-        if (go.GetComponent<Light>() != null) return EditorIcons.Sun;
         if (go.GetComponent<MeshRenderer>() != null) return EditorIcons.Cube;
         if (go.GetComponent<SkinnedMeshRenderer>() != null) return EditorIcons.Cubes;
         return EditorIcons.Circle;
@@ -1230,7 +1229,6 @@ public class HierarchyPanel : DockPanel
     {
         var first = go.GetComponents<MonoBehaviour>().FirstOrDefault();
         if (first is Camera)               return (EditorIcons.Camera_I, EditorTheme.Blue400);    // blue
-        if (first is Light)                return (EditorIcons.Lightbulb_I, EditorTheme.Amber400);    // amber
         if (first is SkinnedMeshRenderer)  return (EditorIcons.Cubes_I, EditorTheme.Purple400);    // purple
         if (first is MeshRenderer)         return (EditorIcons.Cube_I, EditorTheme.Purple400);    // purple
         if (first != null)                 return (EditorIcons.FileCode_I, EditorTheme.Green400);   // any other component = green script

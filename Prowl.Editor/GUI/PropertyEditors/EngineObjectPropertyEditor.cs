@@ -20,122 +20,61 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
-
-        // Match the Origami PropertyGrid standard row exactly so custom-typed fields line up with
-        // the reflection-drawn ones (same metrics, muted label, horizontal padding).
-        var m = Origami.Current.Metrics;
-        float rh = m.RowHeight;
-
         var eo = value as EngineObject;
         // Use the declared field type for the selector
         Type fieldType = _lastFieldType ?? typeof(EngineObject);
         _lastFieldType = null; // consume it
 
         bool isAsset = eo != null && eo.AssetID != Guid.Empty;
-        string displayName = PropertyGridUtils.DescribeObjectRef(eo, fieldType);
-        string icon = eo != null ? EditorIcons.Cube : EditorIcons.Circle;
 
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Gap(m.Padding).Enter())
-        {
-            // Label
-            if (!string.IsNullOrEmpty(label))
-                paper.Box($"{id}_lbl")
-                    .Width(m.LabelWidth).Height(rh).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                    .IsNotInteractable()
-                    .Text(label, font).TextColor(Origami.Current.Ink.C300)
-                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
-
-            bool isDragTarget = EditorGUI.IsCompatibleDragTarget(fieldType);
-
-            // Object field row
-            var iconColor = eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300;
-            var fieldEl = paper.Row($"{id}_field")
-                .Height(rh)
-                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Glass)
-                .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-                .Rounded(6).Padding(m.SpacingLarge, m.PaddingSmall, 0, 0).Gap(m.SpacingLarge)
-                .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.BorderSoft).BorderWidth(1)
-                .OnClick((eo, isAsset), (cap, e) =>
-                {
-                    // Single click: ping the asset (highlight without selecting)
-                    if (cap.isAsset && cap.eo != null)
-                        Selection.Ping(cap.eo.AssetID);
-                })
-                .OnDoubleClick((fieldType, onChange, eo), (cap, _) =>
-                {
-                    // Double click: select the instance or open selector
-                    if (cap.eo != null)
-                        Selection.Select(cap.eo);
-                    else
-                        OpenAssetSelector(cap.fieldType, cap.onChange);
-                });
-
-            using (fieldEl.Enter())
+        PropertyGridUtils.ObjectField(paper, id, label,
+            eo != null ? EditorIcons.Cube : EditorIcons.Circle,
+            eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300,
+            PropertyGridUtils.DescribeObjectRef(eo, fieldType),
+            eo != null,
+            EditorGUI.IsCompatibleDragTarget(fieldType),
+            // Single click pings the asset, double click selects the instance or opens the selector.
+            onClick: () => { if (isAsset) Selection.Ping(eo!.AssetID); },
+            onDoubleClick: () =>
             {
-                // Accept asset drop. This editor only handles plain (non-AssetRef) fields,
-                // so assigning an asset here serializes a copy into the scene instead of a
-                // reference. Confirm with the user before committing that copy.
-                var assetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
-                    dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));
-                if (assetDrop != null)
-                {
-                    var droppedAsset = Runtime.AssetDatabase.Get(assetDrop.AssetGuid);
-                    if (droppedAsset != null)
-                        ConfirmAssetCopy(assetDrop.AssetName, droppedAsset, onChange);
-                }
+                if (eo != null) Selection.Select(eo);
+                else OpenAssetSelector(fieldType, onChange);
+            },
+            onPick: () => OpenAssetSelector(fieldType, onChange),
+            acceptDrops: () => HandleDrops(paper, fieldType, onChange));
+    }
 
-                // Accept GameObject drop
-                if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
-                {
-                    var go = goDrop.GameObjects.Length > 0 ? goDrop.GameObjects[0] : null;
-                    if (go != null)
-                    {
-                        if (typeof(GameObject).IsAssignableFrom(fieldType))
-                        {
-                            onChange(go);
-                        }
-                        else if (typeof(MonoBehaviour).IsAssignableFrom(fieldType))
-                        {
-                            // Search GO for matching component
-                            var comp = go.GetComponent(fieldType);
-                            if (comp != null) onChange(comp);
-                        }
-                    }
-                    DragDrop.EndDrag();
-                }
+    private static void HandleDrops(Paper paper, Type fieldType, Action<object?> onChange)
+    {
+        // This editor only handles plain (non-AssetRef) fields, so assigning an asset here serializes a
+        // copy into the scene instead of a reference. Confirm with the user before committing that copy.
+        var assetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
+            dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));
+        if (assetDrop != null)
+        {
+            var droppedAsset = Runtime.AssetDatabase.Get(assetDrop.AssetGuid);
+            if (droppedAsset != null)
+                ConfirmAssetCopy(assetDrop.AssetName, droppedAsset, onChange);
+        }
 
-                // Accept Component drop
-                if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is ComponentDragPayload compDrop)
-                {
-                    if (fieldType.IsAssignableFrom(compDrop.Component.GetType()))
-                        onChange(compDrop.Component);
-                    DragDrop.EndDrag();
-                }
-
-                // Leading type icon (no chip background)
-                paper.Box($"{id}_ico")
-                    .Width(UnitValue.Auto).Height(rh).IsNotInteractable()
-                    .Text(icon, font).TextColor(iconColor)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-
-                // Name
-                paper.Box($"{id}_name")
-                    .Width(UnitValue.Stretch()).Height(rh).Clip()
-                    .IsNotInteractable()
-                    .Text(displayName, font)
-                    .TextColor(eo != null ? EditorTheme.Ink500 : EditorTheme.Ink200)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
-
-                // Picker button
-                paper.Box($"{id}_pick")
-                    .Width(18).Height(18).Rounded(4).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                    .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.Ink200)
-                    .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
-                    .Hovered.BackgroundColor(EditorTheme.Hover).End()
-                    .OnClick((fieldType, onChange), (cap, _) => OpenAssetSelector(cap.Item1, cap.Item2));
+        if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
+        {
+            var go = goDrop.GameObjects.Length > 0 ? goDrop.GameObjects[0] : null;
+            if (go != null)
+            {
+                if (typeof(GameObject).IsAssignableFrom(fieldType))
+                    onChange(go);
+                else if (typeof(MonoBehaviour).IsAssignableFrom(fieldType) && go.GetComponent(fieldType) is { } comp)
+                    onChange(comp);
             }
+            DragDrop.EndDrag();
+        }
+
+        if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is ComponentDragPayload compDrop)
+        {
+            if (fieldType.IsAssignableFrom(compDrop.Component.GetType()))
+                onChange(compDrop.Component);
+            DragDrop.EndDrag();
         }
     }
 

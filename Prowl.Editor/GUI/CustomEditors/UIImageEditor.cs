@@ -113,7 +113,7 @@ public class UIImageEditor : CustomEditor
             .Size(size, size)
             .Margin(UnitValue.Stretch(), EditorTheme.Spacing + 4)
             .BackgroundColor(EditorTheme.Neutral300)
-            .BorderColor(EditorTheme.Neutral500).BorderWidth(1).Rounded(3)
+            .BorderColor(EditorTheme.Neutral500).BorderWidth(1).Rounded(Origami.Current.Metrics.ContainerRounding)
             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float x = (float)r.Min.X + 2;

@@ -78,6 +78,8 @@ Pass "UI"
         uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
         uniform vec2 viewportSize;         // framebuffer size in pixels
         uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
+        uniform sampler2D backdropSharpTexture; // unblurred copy of the scene behind the shape
+        uniform float backdropMix;         // 0 = sharp copy, 1 = blurred copy
         uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
 
         // ============== Canvas functions ==============
@@ -171,7 +173,7 @@ Pass "UI"
             if (backdropBlurAmount > 0.0) {
                 vec2 uv = fragPos / viewportSize;
                 if (backdropFlipY == 1) uv.y = 1.0 - uv.y;
-                vec3 blurred = texture(backdropTexture, uv).rgb;
+                vec3 blurred = mix(texture(backdropSharpTexture, uv).rgb, texture(backdropTexture, uv).rgb, backdropMix);
                 vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
                 finalColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
                 return;
@@ -271,7 +273,7 @@ Pass "BlurUp"
 
         void main()
         {
-            vec2 halfpixel = (0.5 / vec2(textureSize(_MainTex, 0))) * _Offset;
+            vec2 halfpixel = (0.25 / vec2(textureSize(_MainTex, 0))) * _Offset;
 
             vec4 sum = texture(_MainTex, TexCoords + vec2(-halfpixel.x * 2.0, 0.0));
             sum += texture(_MainTex, TexCoords + vec2(-halfpixel.x, halfpixel.y)) * 2.0;

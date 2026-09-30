@@ -17,7 +17,9 @@ public class EditorModelImporter : AssetImporter
 {
     // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
     // 8: normals now come from Clay, which splits vertices on hard edges.
-    private const int BaseVersion = 11;
+    // 12: Clay negates X instead of Z, so models face +Z as authored, and cameras and lights sit on a child.
+    // 13: only cameras and spot lights sit on a turned child, directional and point lights stay on the node.
+    private const int BaseVersion = 13;
     /// <summary> Combined version: the importer's own base version plus the aggregate version from MeshFeatureRegistry, so any change to mesh feature generation invalidates the cache. </summary>
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
@@ -55,7 +57,6 @@ public class EditorModelImporter : AssetImporter
                 importSettings.StrictValidation = s.TryGet("strictValidation", out var sv) && sv.BoolValue;
                 importSettings.SceneIndex = s.TryGet("sceneIndex", out var si) ? si.IntValue : -1;
                 importSettings.ImportCameras = !s.TryGet("importCameras", out var ic) || ic.BoolValue;
-                importSettings.ImportLights = !s.TryGet("importLights", out var il) || il.BoolValue;
                 importSettings.AnimationWrapMode = (AnimationWrapMode)(s.TryGet("animationWrapMode", out var awm) ? awm.IntValue : (int)AnimationWrapMode.Loop);
                 // Off by default (slow; some models ship their own UV2). The importer runs the
                 // unwrap in its post-process so the baked UV2 is captured before serialization.
@@ -146,7 +147,7 @@ public class EditorModelImporter : AssetImporter
         }
     }
 
-    /// <summary> Returns the default import settings as an EchoObject compound, including normals, tangents, UVs, animation wrap mode, camera/light import toggles and mesh feature defaults. </summary>
+    /// <summary> Returns the default import settings as an EchoObject compound, including normals, tangents, UVs, animation wrap mode, camera import toggle and mesh feature defaults. </summary>
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();
@@ -158,7 +159,6 @@ public class EditorModelImporter : AssetImporter
         s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);
         s["importCameras"] = new EchoObject(true);
-        s["importLights"] = new EchoObject(true);
         s["animationWrapMode"] = new EchoObject((int)AnimationWrapMode.Loop);
         s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);

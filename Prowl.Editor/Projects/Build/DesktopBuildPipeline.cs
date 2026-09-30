@@ -709,7 +709,7 @@ public class DesktopBuildPipeline : BuildPipeline
                 subAssets[entry.Guid] = entry.SubAssets.Select(s => s.Guid).ToList();
 
         return ChunkPlanner.Plan(source.Dependencies, request.Scenes,
-            collected.Collection.ResourcesMap.Values.ToList(), collected.Collection.AllAssets, subAssets);
+            collected.Collection.ResourcesMap.Select(r => r.Guid).ToList(), collected.Collection.AllAssets, subAssets);
     }
 
     private Task ExportSettingsStage(IBuildContext context, CancellationToken ct)

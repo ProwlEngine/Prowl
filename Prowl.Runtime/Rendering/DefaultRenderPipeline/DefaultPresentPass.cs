@@ -11,12 +11,8 @@ using RenderTexture = Prowl.Graphite.RenderTexture;
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
-/// The runtime-provided default presenter for <see cref="DefaultRenderPipeline"/>: blits the pipeline's
-/// final content into <see cref="CameraView.Target"/>'s framebuffer when set (an offscreen viewport
-/// render - editor Scene/Game view, a custom render-to-texture camera), or draws it into the swapchain
-/// otherwise (a bare runtime camera with no explicit target). When the pipeline has a
-/// <see cref="DefaultRenderPipeline.UIRenderer"/>, its drawn UI is composited on top only in the
-/// swapchain case - an offscreen render never gets UI drawn onto it, regardless of the flag.
+/// Copies the pipeline's final color into <see cref="CameraView.Target"/> when set, otherwise blits it to
+/// the swapchain and composites the optional UI renderer on top.
 /// </summary>
 public sealed class DefaultPresentPass : IPresentPass<CameraView>
 {
@@ -34,7 +30,7 @@ public sealed class DefaultPresentPass : IPresentPass<CameraView>
 
     public void Setup(PresentContextBuilder builder)
     {
-        _finalHandle = builder.GetInputTexture(DefaultChain.Final);
+        _finalHandle = builder.GetInputTexture(ClearPass.Output);
 
         if (_uiRenderer != null)
             _uiHandle = builder.GetInputTexture(_uiRenderer.SceneResourceId);
@@ -51,9 +47,8 @@ public sealed class DefaultPresentPass : IPresentPass<CameraView>
         Resources.RenderTexture? target = context.View.Target;
         if (target != null)
         {
-            // Offscreen viewport - same size/format by construction (GraphTextureDesc.ViewSized off
-            // the view's own pixel size), so a raw copy is enough, no shader needed. No UI here even
-            // when a UIRenderer is set - only the swapchain-presenting camera gets UI composited in.
+            // Offscreen viewport: same size/format by construction, so a raw copy is enough.
+            // UI is only composited when presenting to the swapchain.
             CommandBuffer copyCmd = context.GetCommandBuffer(Name);
             copyCmd.CopyTexture(source.ColorTextures[0], target.MainTexture.Handle);
             context.SubmitCommandBuffer(copyCmd);

@@ -78,7 +78,15 @@ public abstract class Texture : EngineObject
         // Defer the old sampler's disposal: a filter/wrap change can swap it while an in-flight
         // frame still binds it.
         Graphics.DisposeDeferred(Sampler);
-        Sampler = Graphics.Device.ResourceFactory.CreateSampler(new SamplerDescription
+
+        GraphicsDevice device = Graphics.Device;
+        if (device == null)
+        {
+            Sampler = null!;
+            return;
+        }
+
+        Sampler = device.ResourceFactory.CreateSampler(new SamplerDescription
         {
             AddressModeU = AddressModeU,
             AddressModeV = AddressModeV,
@@ -96,12 +104,6 @@ public abstract class Texture : EngineObject
         Filter = filter;
         RebuildSampler();
     }
-
-    /// <summary>
-    /// No-op compatibility shim: shadow-map depth-compare sampling is a sampler feature that has not
-    /// been ported to the Graphite sampler path yet.
-    /// </summary>
-    public void SetDepthCompareMode(bool enabled) { }
 
     /// <summary>
     /// Sets the texture coordinate wrapping modes for when a texture is sampled outside the [0, 1] range.
@@ -127,7 +129,8 @@ public abstract class Texture : EngineObject
         if (isNotMipmappable)
             throw new InvalidOperationException(string.Concat("This texture type is not mipmappable! Type: ", Type.ToString()));
 
-        Graphics.RequestMipmapGeneration(Handle);
+        if (Graphics.Device != null)
+            Graphics.RequestMipmapGeneration(Handle);
         IsMipmapped = true;
         SetTextureFilters(DefaultMipmapFilter);
     }

@@ -163,8 +163,8 @@ public static class RenderCommandExtensions
     /// <summary>
     /// Pushes a <see cref="ShaderBindMetadata"/> for a bind site that does not go through
     /// <see cref="DrawMesh(CommandBuffer, Mesh, Material, ShaderPass, Float4x4, PropertySet)"/> or the
-    /// <c>Blit</c> helpers above (e.g. <see cref="GizmoRenderer"/>, which calls
-    /// <c>CommandBuffer.SetShader</c> directly). Call right before <c>cmd.SetShader</c>, so the pending
+    /// <c>Blit</c> helpers above (i.e. callers that invoke <c>CommandBuffer.SetShader</c>
+    /// directly). Call right before <c>cmd.SetShader</c>, so the pending
     /// metadata is in place when the resulting RecordPipelineSwitch fires.
     /// </summary>
     internal static void EmitShaderBind(this CommandBuffer cmd, ShaderPass pass, string materialName)

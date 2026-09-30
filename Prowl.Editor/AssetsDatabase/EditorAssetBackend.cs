@@ -211,30 +211,25 @@ public class EditorAssetBackend : AssetBackendBase
     /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>
     public void RefreshResourcesMap()
     {
-        var map = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in _guidToEntry.Values)
-        {
-            string path = entry.Path.Replace('\\', '/');
+        var resources = new List<ResourceEntry>();
+        foreach (var entry in _guidToEntry.Values.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase))
+            AddResourcePaths(resources, entry);
+        Runtime.GameResources.Initialize(resources);
+    }
 
-            // Load path = everything after the last "Resources/" segment (or a leading "Resources/").
-            string? afterResources = null;
-            int idx = path.LastIndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-                afterResources = path[(idx + "/Resources/".Length)..];
-            else if (path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
-                afterResources = path["Resources/".Length..];
+    /// <summary>
+    /// Adds the load paths of <paramref name="entry"/> and its sub assets to <paramref name="resources"/> when it
+    /// lives inside a Resources folder. Shared with the build so the editor and a player resolve alike.
+    /// Callers add entries in asset path order, which decides who wins when load paths clash.
+    /// </summary>
+    internal static void AddResourcePaths(List<ResourceEntry> resources, AssetEntry entry)
+    {
+        string? loadPath = Runtime.GameResources.GetLoadPath(entry.Path);
+        if (loadPath == null) return;
 
-            if (afterResources == null) continue;
-
-            int dotIdx = afterResources.LastIndexOf('.');
-            if (dotIdx >= 0) afterResources = afterResources[..dotIdx];
-            if (string.IsNullOrEmpty(afterResources)) continue;
-
-            if (map.ContainsKey(afterResources))
-                Runtime.Debug.LogWarning($"[Resources] Duplicate load path '{afterResources}': '{entry.Path}' overrides another asset.");
-            map[afterResources] = entry.Guid;
-        }
-        Runtime.GameResources.Initialize(map);
+        resources.Add(new ResourceEntry(loadPath, entry.Guid, entry.MainAssetTypeName ?? ""));
+        foreach (var sub in entry.SubAssets)
+            resources.Add(new ResourceEntry(Runtime.GameResources.GetLoadPath(entry.Path, sub.Name)!, sub.Guid, sub.TypeName));
     }
 
     // ================================================================

@@ -502,9 +502,12 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
     DeviceBuffer? indexBuffer;
 
-    // Zero-filled placeholder bound for shader vertex inputs the mesh doesn't provide.
+    // Placeholders bound for shader vertex inputs the mesh doesn't provide: zeros for every
+    // stream except COLOR0, which gets opaque white so vertex-color multiplies are a no-op.
     private DeviceBuffer? _zeroStream;
     private uint _zeroStreamCapacity;
+    private DeviceBuffer? _whiteStream;
+    private uint _whiteStreamCapacity;
 
     /// <summary>Cached physics bake (see <see cref="PhysicsWorld.BakeMesh"/>).
     internal BakedPhysicsMesh? BakedPhysics;
@@ -664,117 +667,6 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         }
     }
 
-    private DeviceBuffer? _instanceBuffer;
-    private int _instanceBufferCapacity;
-
-    /// <summary>
-    /// Ensures a per-instance <see cref="DeviceBuffer"/> exists with enough capacity for
-    /// <paramref name="instanceCount"/> <see cref="Rendering.InstanceData"/> entries (grows with
-    /// 50 % headroom to amortise repeated resizes). The buffer is written immediately before each
-    /// instanced draw via <c>Device.UpdateBuffer</c> from <see cref="Rendering.RenderPipeline"/>.
-    /// </summary>
-    public DeviceBuffer EnsureInstanceBuffer(int instanceCount)
-    {
-        if (_instanceBuffer != null && instanceCount <= _instanceBufferCapacity)
-            return _instanceBuffer;
-
-        _instanceBufferCapacity = (int)(instanceCount * 1.5f);
-        Graphics.DisposeDeferred(_instanceBuffer!);
-
-        uint sizeBytes = (uint)(_instanceBufferCapacity * Rendering.InstanceData.SizeInBytes);
-        _instanceBuffer = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription
-        {
-            Usage = BufferUsage.VertexBuffer | BufferUsage.Dynamic,
-            SizeInBytes = sizeBytes,
-        });
-        _instanceBuffer.Name = $"{Name} Instance Buffer";
-        return _instanceBuffer;
-    }
-
-    // Graphite has no VAO/vertex-format abstraction; the old pre-Graphite instancing machinery
-    // is preserved below in case it is useful as reference.
-    /*
-    /// <summary>
-    /// Ensures the instanced rendering VAO and buffer exist for this mesh with
-    /// enough capacity for instanceCount instances.
-    /// </summary>
-    public GraphicsVertexArray EnsureInstanceVAO(int instanceCount, out GraphicsBuffer instanceBuf)
-    {
-        EnsureNotDisposed();
-        Upload();
-
-        // Base upload was skipped (invalid geometry), so there is no VAO to instance from. Bail.
-        if (vertexArrayObject == null)
-        {
-            instanceBuf = null;
-            return null;
-        }
-
-        var instanceFormat = new VertexFormat(new[]
-        {
-            new Element((VertexSemantic)8, VertexType.Float, 4, divisor: 1),  // ModelRow0
-            new Element((VertexSemantic)9, VertexType.Float, 4, divisor: 1),  // ModelRow1
-            new Element((VertexSemantic)10, VertexType.Float, 4, divisor: 1), // ModelRow2
-            new Element((VertexSemantic)11, VertexType.Float, 4, divisor: 1), // ModelRow3
-            new Element((VertexSemantic)12, VertexType.Float, 4, divisor: 1), // Color (RGBA)
-            new Element((VertexSemantic)13, VertexType.Float, 4, divisor: 1), // CustomData
-        });
-
-        if (instanceBuffer == null || instanceCount > instanceBufferCapacity)
-        {
-            // Grow with 50% headroom to amortise resizes.
-            instanceBufferCapacity = (int)(instanceCount * 1.5f);
-
-            // Defer-dispose the old buffer: earlier batches in the SAME outer
-            // CommandBuffer hold the old handle in their encoded opcodes, and
-            // would crash if we deleted the GL object before those commands
-            // executed. Graphics.FlushDeferredDisposes() runs at end of frame.
-            if (instanceBuffer != null) Graphics.DeferDispose(instanceBuffer);
-            if (instancedVAO != null) Graphics.DeferDispose(instancedVAO);
-
-            // Create the buffer with placeholder data sized to capacity. Real
-            // per-batch data is uploaded by the caller via cmd.UpdateBuffer.
-            var placeholder = new Rendering.InstanceData[instanceBufferCapacity];
-            instanceBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, placeholder, dynamic: true);
-            instancedVAO = null;
-        }
-
-        if (instancedVAO == null)
-        {
-            var meshFormat = GetVertexLayout(this);
-            instancedVAO = Graphics.CreateVertexArray(
-                meshFormat,
-                vertexBuffer,
-                indexBuffer,
-                instanceFormat,
-                instanceBuffer
-            );
-        }
-
-        instanceBuf = instanceBuffer;
-        return instancedVAO;
-    }
-
-    private bool VertexLayoutMatches(VertexFormat a, VertexFormat b)
-    {
-        if (a == null || b == null) return false;
-        if (a.Size != b.Size) return false;
-        if (a.Elements.Length != b.Elements.Length) return false;
-
-        for (int i = 0; i < a.Elements.Length; i++)
-        {
-            Element elemA = a.Elements[i];
-            Element elemB = b.Elements[i];
-            if (elemA.Semantic != elemB.Semantic ||
-                elemA.Type != elemB.Type ||
-                elemA.Count != elemB.Count)
-                return false;
-        }
-
-        return true;
-    }
-    */
-
     public void RecalculateBounds()
     {
         Float3[] vertices = GetVertexBufferAt<Float3>(STREAM_POSITION);
@@ -864,12 +756,12 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
             float f = 1.0f / det;
 
-            Float3 tangent;
+            Float3 tangent = default;
             tangent.X = f * (deltaUV2.Y * edge1.X - deltaUV1.Y * edge2.X);
             tangent.Y = f * (deltaUV2.Y * edge1.Y - deltaUV1.Y * edge2.Y);
             tangent.Z = f * (deltaUV2.Y * edge1.Z - deltaUV1.Y * edge2.Z);
 
-            Float3 bitangent;
+            Float3 bitangent = default;
             bitangent.X = f * (-deltaUV2.X * edge1.X + deltaUV1.X * edge2.X);
             bitangent.Y = f * (-deltaUV2.X * edge1.Y + deltaUV1.X * edge2.Y);
             bitangent.Z = f * (-deltaUV2.X * edge1.Z + deltaUV1.X * edge2.Z);
@@ -1484,6 +1376,10 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         _zeroStream = null;
         _zeroStreamCapacity = 0;
 
+        _whiteStream?.Dispose();
+        _whiteStream = null;
+        _whiteStreamCapacity = 0;
+
         // Morph delta textures will be rebuilt from CPU blend-shape data on next use.
         DisposeMorphTextures();
         _morphDirty = true;
@@ -1537,6 +1433,8 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
         if (stream >= 0 && _streams[stream].Buffer != null && _streams[stream].UploadedCount > 0)
             binding = new VertexBinding(_streams[stream].Buffer!);
+        else if (stream == STREAM_COLOR)
+            binding = new VertexBinding(GetOrCreateWhiteStream(layout.Stride));
         else
             binding = new VertexBinding(GetOrCreateZeroStream(layout.Stride));
     }
@@ -1552,27 +1450,35 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
     }
 
     private DeviceBuffer GetOrCreateZeroStream(uint stride)
+        => GetOrCreateFillStream(ref _zeroStream, ref _zeroStreamCapacity, stride, 0f, "Zero");
+
+    private DeviceBuffer GetOrCreateWhiteStream(uint stride)
+        => GetOrCreateFillStream(ref _whiteStream, ref _whiteStreamCapacity, stride, 1f, "White");
+
+    private DeviceBuffer GetOrCreateFillStream(ref DeviceBuffer? buffer, ref uint bufferCapacity, uint stride, float fill, string label)
     {
         uint vertices = (uint)Math.Max(1, VertexCount);
         uint required = stride * vertices;
 
-        if (_zeroStream != null && required <= _zeroStreamCapacity)
-            return _zeroStream;
+        if (buffer != null && required <= bufferCapacity)
+            return buffer;
 
-        _zeroStream?.Dispose();
+        buffer?.Dispose();
         uint capacity = (uint)(required * 1.5f);
-        _zeroStream = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription
+        capacity += (4 - capacity % 4) % 4;
+        buffer = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription
         {
             Usage = BufferUsage.VertexBuffer,
             SizeInBytes = capacity,
         });
-        _zeroStream.Name = $"{Name} Zero Stream";
-        _zeroStreamCapacity = capacity;
+        buffer.Name = $"{Name} {label} Stream";
+        bufferCapacity = capacity;
 
-        byte[] zeros = new byte[capacity];
-        Graphics.Device.UpdateBuffer(_zeroStream, 0u, zeros);
+        float[] values = new float[capacity / 4];
+        Array.Fill(values, fill);
+        Graphics.Device.UpdateBuffer(buffer, 0u, values);
 
-        return _zeroStream;
+        return buffer;
     }
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)

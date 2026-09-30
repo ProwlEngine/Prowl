@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Runtime;
+
 namespace Prowl.Editor.Build;
 
 /// <summary>
@@ -9,13 +11,13 @@ namespace Prowl.Editor.Build;
 /// </summary>
 public static class AssetCollector
 {
-    /// <summary> Holds the result of an asset collection: all discovered assets and a map of Resources load paths to their GUIDs. </summary>
+    /// <summary> Holds the result of an asset collection: all discovered assets and the Resources entries in load priority order. </summary>
     public struct CollectionResult
     {
         /// <summary> All assets collected for the build, including scenes, dependencies, Resources assets, and sub-assets. </summary>
         public HashSet<Guid> AllAssets;
-        /// <summary> Maps Resources asset load paths (everything after the last "Resources/" segment, without extension) to their GUIDs. </summary>
-        public Dictionary<string, Guid> ResourcesMap; // load path -> guid
+        /// <summary> Resources load paths (everything after the last "Resources/" segment, without extension) with their GUIDs and types, in load priority order. </summary>
+        public List<ResourceEntry> ResourcesMap;
     }
 
     /// <summary>
@@ -27,7 +29,7 @@ public static class AssetCollector
         ArgumentNullException.ThrowIfNull(db);
 
         var allAssets = new HashSet<Guid>();
-        var resourcesMap = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var resourcesMap = new List<ResourceEntry>();
 
         // Enumerated once: the walk below revisits the set repeatedly, and re-reading the database each
         // pass is the difference between a linear collection and a quadratic one on a large project.
@@ -52,7 +54,7 @@ public static class AssetCollector
 
         // Always include Resources/ folder assets regardless of dependency mode
         var resourceGuids = new List<Guid>();
-        foreach (var entry in entries)
+        foreach (var entry in entries.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase))
         {
             if (!IsResourcesAsset(entry.Path)) continue;
 
@@ -61,14 +63,7 @@ public static class AssetCollector
             foreach (var sub in entry.SubAssets)
                 allAssets.Add(sub.Guid);
 
-            // Build the load path: everything after the last "Resources/" segment, no extension
-            string loadPath = GetResourceLoadPath(entry.Path);
-            if (!string.IsNullOrEmpty(loadPath))
-            {
-                if (resourcesMap.ContainsKey(loadPath))
-                    Runtime.Debug.LogWarning($"[Build] Duplicate Resources load path '{loadPath}': '{entry.Path}' overrides another asset.");
-                resourcesMap[loadPath] = entry.Guid;
-            }
+            EditorAssetBackend.AddResourcePaths(resourcesMap, entry);
         }
 
         // Resources assets are build entry points just like scenes - in DependenciesOnly mode their
@@ -134,8 +129,7 @@ public static class AssetCollector
         } while (grew);
 
         allAssets.ExceptWith(editorOnly.Where(g => !neededEditorOnly.Contains(g)));
-        foreach (var kv in resourcesMap.Where(kv => editorOnly.Contains(kv.Value) && !neededEditorOnly.Contains(kv.Value)).ToList())
-            resourcesMap.Remove(kv.Key);
+        resourcesMap.RemoveAll(e => editorOnly.Contains(e.Guid) && !neededEditorOnly.Contains(e.Guid));
 
         return new CollectionResult { AllAssets = allAssets, ResourcesMap = resourcesMap };
     }
@@ -166,35 +160,5 @@ public static class AssetCollector
     }
 
     /// <summary>Check if an asset path is under a Resources/ folder.</summary>
-    private static bool IsResourcesAsset(string relativePath)
-    {
-        var segments = relativePath.Split('/', '\\');
-        return segments.Any(s => s.Equals("Resources", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    /// Get the load path for a Resources asset.
-    /// "Art/Resources/Textures/Grass.png" -> "Textures/Grass"
-    /// </summary>
-    private static string GetResourceLoadPath(string relativePath)
-    {
-        string normalized = relativePath.Replace('\\', '/');
-        int idx = normalized.LastIndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
-        if (idx < 0)
-        {
-            // Check if it starts with "Resources/"
-            if (normalized.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
-                idx = -1; // will add "/Resources/".Length below
-            else
-                return "";
-        }
-
-        string afterResources = normalized[(idx + "/Resources/".Length)..];
-        // Remove extension
-        int dotIdx = afterResources.LastIndexOf('.');
-        if (dotIdx >= 0)
-            afterResources = afterResources[..dotIdx];
-
-        return afterResources;
-    }
+    private static bool IsResourcesAsset(string relativePath) => Runtime.GameResources.GetLoadPath(relativePath) != null;
 }

@@ -4,6 +4,7 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Theming;
 using Prowl.Graphite;
 using Prowl.OrigamiUI;
@@ -33,7 +34,7 @@ public class GameViewPanel : DockPanel
     public override string Icon => EditorIcons.Gamepad;
 
     private RenderTexture? _rt;
-    private int _resolutionIndex = 0;
+    private int _resolutionIndex = -1; // read from the project on first use, see ResolutionIndex
     private Rect _displayAbsRect; // game-view rect in paper coords, cached for routing UI input next frame
 
     // Separate Paper instance for in-game UI
@@ -82,10 +83,34 @@ public class GameViewPanel : DockPanel
                     for (int i = 0; i < Resolutions.Length; i++)
                     {
                         int idx = i;
-                        sub.Item(Resolutions[i].name, () => { _resolutionIndex = idx; InvalidateRT(); }, on: idx == _resolutionIndex);
+                        sub.Item(Resolutions[i].name, () => SetResolution(idx), on: idx == ResolutionIndex);
                     }
                 }, EditorIcons.Expand);
             }));
+    }
+
+    // The project remembers the last resolution picked, so the next session (or a newly opened Game view)
+    // starts on it. Read on first use rather than at construction, since the default layout builds its
+    // panels before any project's settings are loaded.
+    internal int ResolutionIndex
+    {
+        get
+        {
+            if (_resolutionIndex < 0)
+                _resolutionIndex = Math.Clamp(EditorRegistries.GetSettings<ProjectsEditorSettings>().SelectedResolutionIndex, 0, Resolutions.Length - 1);
+            return _resolutionIndex;
+        }
+    }
+
+    internal void SetResolution(int index)
+    {
+        _resolutionIndex = index;
+        InvalidateRT();
+
+        var settings = EditorRegistries.GetSettings<ProjectsEditorSettings>();
+        if (settings.SelectedResolutionIndex == index) return;
+        settings.SelectedResolutionIndex = index;
+        EditorRegistries.SaveSettings();
     }
 
     private void DrawGameView(Paper paper, Scribe.FontFile font, float width, float height)
@@ -105,7 +130,7 @@ public class GameViewPanel : DockPanel
             }
 
             // Determine render size from resolution/aspect setting
-            var (_, targetW, targetH) = Resolutions[_resolutionIndex];
+            var (_, targetW, targetH) = Resolutions[ResolutionIndex];
             int rtW, rtH;
             if (targetW == 0 && targetH == 0)
             {

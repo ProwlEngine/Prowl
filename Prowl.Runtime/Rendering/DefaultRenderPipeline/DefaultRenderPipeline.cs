@@ -49,20 +49,8 @@ public struct ViewerData
 
 
 /// <summary>
-/// Default graph-driven pipeline, built on Graphite's native <see cref="RenderPipeline{TView}"/>. Sets
-/// up the standard pass chain (shadows -> opaque -> transparents -> volumetrics -> post-processing);
-/// the passes are empty scaffolding that copy textures along the chain to prove the graph plumbing,
-/// draw the skybox in the opaque pass, and (in the editor) draw gizmos and the grid. There is exactly
-/// one instance in normal use (<see cref="RenderPipelineManager.Current"/>); callers that need an
-/// isolated instance (previews/thumbnails rendering to differently-sized surfaces) may still construct
-/// their own and dispatch it directly instead of going through the shared one.
-/// <para>
-/// Presentation is pluggable via <see cref="Presenter"/> so a single pipeline instance/type can be
-/// shared by every camera: the default (<see cref="DefaultPresentPass"/>) just blits the final content to
-/// the view's target (or the swapchain when it has none). A driver (Game/Editor) that wants to layer
-/// extra presentation behavior on top can set this before the pipeline's first dispatch - it is only
-/// read once, the first time <see cref="RenderPipeline{TView}.InitializePasses"/> runs.
-/// </para>
+/// Minimal placeholder pipeline: clears each camera's color/depth target and composites the optional
+/// <see cref="UIRenderer"/> when presenting to the swapchain. It draws no scene geometry.
 /// </summary>
 public class DefaultRenderPipeline : RenderPipeline<CameraView>
 {
@@ -80,31 +68,15 @@ public class DefaultRenderPipeline : RenderPipeline<CameraView>
         return s_blitMaterial!;
     }
 
-    /// <summary>
-    /// Overrides the pipeline's present pass. Must be assigned before this pipeline's first dispatch -
-    /// <see cref="InitializePasses"/> runs once, lazily, on first use. Null uses the runtime-provided
-    /// default (<see cref="DefaultPresentPass"/>).
-    /// </summary>
+    /// <summary>Overrides the present pass. Must be assigned before the pipeline's first dispatch.</summary>
     public IPresentPass<CameraView>? Presenter { get; set; }
 
-    /// <summary>
-    /// Optional Paper/Quill UI pass, injected by a caller (e.g. <see cref="Game"/>) that wants its UI
-    /// drawn as part of this pipeline's own graph instead of dispatching a separate standalone pipeline.
-    /// Must be assigned before this pipeline's first dispatch - <see cref="InitializePasses"/> runs once,
-    /// lazily, on first use. When set, <see cref="DefaultPresentPass"/> composites it over the final
-    /// content only when presenting to the swapchain (a camera with an explicit <see cref="CameraView.Target"/>
-    /// never gets UI composited in - offscreen/editor renders skip it). Null draws no UI (the pipeline's
-    /// existing behavior).
-    /// </summary>
+    /// <summary>Paper UI pass composited over swapchain presents. Must be assigned before the first dispatch.</summary>
     public PaperRenderer<CameraView>? UIRenderer { get; set; }
 
     protected override void InitializePasses()
     {
-        AddPass(new ShadowsPass());
-        AddPass(new OpaquePass());
-        AddPass(new TransparentsPass());
-        AddPass(new VolumetricsPass());
-        AddPass(new PostProcessingPass());
+        AddPass(new ClearPass());
 
         if (UIRenderer != null)
             AddPass(UIRenderer);
