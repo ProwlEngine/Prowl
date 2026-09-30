@@ -53,6 +53,18 @@ public class RenderPipelineTests
         Assert.Equal([1, 2, 3], EncodedObjectIds(cmd));
     }
 
+    // A big scene encodes a few objects per draw into one buffer, well past what 16 bit indices held.
+    [Fact]
+    public void CommandBuffer_EncodesMoreThan65kObjects()
+    {
+        using var cmd = Graphics.GetCommandBuffer("Test");
+
+        for (int i = 0; i < 70_000; i++)
+            cmd.SetRenderTarget(null);
+
+        Assert.Equal(70_000, cmd._objects.Count);
+    }
+
     private sealed class MotionPipeline : RenderPipeline
     {
         public Float4x4 Frame(Camera camera, int objectId, int subMesh, Float4x4 model)

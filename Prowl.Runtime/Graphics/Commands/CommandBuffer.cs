@@ -38,13 +38,13 @@ public sealed class CommandBuffer : IDisposable
 {
     // --- Stream backing ---
     // _stream holds fixed-size payloads packed end-to-end after each CommandHeader.
-    // Object refs are encoded as ushort indices into _objects.
+    // Object refs are encoded as int indices into _objects.
     // Blobs (matrix arrays, upload data) are parked into _store.
     internal byte[] _stream;
     internal int _streamPos;
 
     internal readonly List<object?> _objects = new(64);
-    internal readonly Dictionary<string, ushort> _nameMap = new(32);
+    internal readonly Dictionary<string, int> _nameMap = new(32);
     internal readonly TransientStore _store = new();
 
     // PropertyState snapshots rented from the pool for SetMaterialProperties (and
@@ -901,18 +901,16 @@ public sealed class CommandBuffer : IDisposable
         _stream = next;
     }
 
-    private ushort PushObject(object? obj)
+    private int PushObject(object? obj)
     {
         int idx = _objects.Count;
-        if (idx > ushort.MaxValue)
-            throw new InvalidOperationException("CommandBuffer object reference table exceeded 65k entries.");
         _objects.Add(obj);
-        return (ushort)idx;
+        return idx;
     }
 
-    private ushort InternName(string name)
+    private int InternName(string name)
     {
-        if (_nameMap.TryGetValue(name, out ushort idx)) return idx;
+        if (_nameMap.TryGetValue(name, out int idx)) return idx;
         idx = PushObject(name);
         _nameMap[name] = idx;
         return idx;
