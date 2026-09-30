@@ -36,15 +36,15 @@ public static class Undo
     private class PropertyRecord : UndoRecord
     {
         public Type TargetType;
-        public EchoObject BeforeState;
-        public EchoObject AfterState;
+        public MemoryCopy BeforeState;
+        public MemoryCopy AfterState;
 
         // Identifier-based tracking for MonoBehaviour targets
         public Guid ComponentIdentifier;
         // Fallback for non-MonoBehaviour targets (plain objects)
         public WeakReference<object>? FallbackRef;
 
-        public PropertyRecord(object target, EchoObject before, EchoObject after)
+        public PropertyRecord(object target, MemoryCopy before, MemoryCopy after)
         {
             TargetType = target.GetType();
             BeforeState = before;
@@ -74,8 +74,9 @@ public static class Undo
             return null;
         }
 
-        private void RestoreState(EchoObject state)
+        private void RestoreState(MemoryCopy copy)
         {
+            EchoObject state = copy.Data;
             var target = ResolveTarget();
             if (target == null) return;
 
@@ -145,7 +146,7 @@ public static class Undo
     private static readonly List<UndoStep> _redoStack = new();
 
     // Per-frame pending snapshots: target -> beforeState (captured at start of draw, before any mutations)
-    private static readonly Dictionary<object, EchoObject> _pendingSnapshots = new();
+    private static readonly Dictionary<object, MemoryCopy> _pendingSnapshots = new();
 
     // Immediate action records accumulated this frame (RegisterAction calls)
     private static readonly List<(string description, UndoRecord record)> _pendingActions = new();
@@ -212,9 +213,7 @@ public static class Undo
 
         if (!_pendingSnapshots.ContainsKey(target))
         {
-            var before = Serializer.Serialize(target.GetType(), target);
-            if (before != null)
-                _pendingSnapshots[target] = before;
+            _pendingSnapshots[target] = Capture(target);
         }
     }
 
@@ -676,7 +675,7 @@ public static class Undo
     {
         var saved = new UndoContext(
             [.. _undoStack], [.. _redoStack],
-            new Dictionary<object, EchoObject>(_pendingSnapshots),
+            new Dictionary<object, MemoryCopy>(_pendingSnapshots),
             [.. _pendingActions], [.. _pendingActionGroups], [.. _pendingStructural],
             _isContinuous, _continuousDescription, _continuousStartState);
 
@@ -704,7 +703,7 @@ public static class Undo
     private sealed record UndoContext(
         List<UndoStep> UndoSteps,
         List<UndoStep> RedoSteps,
-        Dictionary<object, EchoObject> Snapshots,
+        Dictionary<object, MemoryCopy> Snapshots,
         List<(string description, UndoRecord record)> Actions,
         List<(UndoStep step, bool coalesce)> ActionGroups,
         List<(GameObject go, string description, bool isCreate)> Structural,
@@ -774,9 +773,9 @@ public static class Undo
         {
             if (target is EngineObject eo && eo.IsDisposed) continue;
 
-            var after = Serializer.Serialize(target.GetType(), target);
+            MemoryCopy after = Capture(target);
 
-            if (!before.Equals(after))
+            if (!before.Data.Equals(after.Data))
                 propertyRecords.Add(new PropertyRecord(target, before, after));
         }
         _pendingSnapshots.Clear();
@@ -829,7 +828,7 @@ public static class Undo
             }
 
             // Continuous edit chain: previous "after" must match new "before"
-            if (!prevPR.AfterState.Equals(newPR.BeforeState)) return false;
+            if (!prevPR.AfterState.Data.Equals(newPR.BeforeState.Data)) return false;
         }
 
         // Coalesce: update AfterState and refresh timestamp
@@ -870,6 +869,13 @@ public static class Undo
     {
         while (stack.Count > MaxSteps)
             stack.RemoveAt(0);
+    }
+
+    // Never leaves memory, so runtime assets are linked rather than copied, and held as long as the copy.
+    private static MemoryCopy Capture(object target)
+    {
+        var context = new DependencySerializationContext { LinkRuntimeAssets = true };
+        return new MemoryCopy(Serializer.Serialize(target.GetType(), target, context), context.LinkedAssets);
     }
 
     // Fields that must never be overwritten by undo they are identity/internal state
