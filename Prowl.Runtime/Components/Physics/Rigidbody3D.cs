@@ -46,10 +46,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeField] private bool useGravity = true;
     [SerializeField] private bool enableGyroscopicForces = false;
     [SerializeField] private float mass = 1;
-    [SerializeField] private float linearDamping = 0.0f;
-    [SerializeField] private float angularDamping = 0.0f;
+    [SerializeField, Range(0, 1)] private float linearDamping = 0.0f;
+    [SerializeField, Range(0, 1)] private float angularDamping = 0.0f;
     [SerializeField] private float friction = 0.2f;
-    [SerializeField] private float restitution = 0;
+    [SerializeField, Range(0, 1)] private float restitution = 0;
     [SerializeField] private float deactivationTime = 1.0f;
     [SerializeField] private float linearSleepThreshold = 0.1f;
     [SerializeField] private float angularSleepThreshold = 0.1f;
@@ -259,7 +259,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         set
         {
             linearSleepThreshold = value;
-            if (_body != null) _body.DeactivationThreshold = (value, _body.DeactivationThreshold.angular);
+            if (_body != null) _body.DeactivationThreshold = (_body.DeactivationThreshold.angular, value);
         }
     }
 
@@ -272,7 +272,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         set
         {
             angularSleepThreshold = value;
-            if (_body != null) _body.DeactivationThreshold = (_body.DeactivationThreshold.linear, value);
+            if (_body != null) _body.DeactivationThreshold = (value, _body.DeactivationThreshold.linear);
         }
     }
 
@@ -596,6 +596,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     internal void UpdateProperties(RigidBody rb)
     {
+        ClampSettings();
         rb.MotionType = motionType;
         rb.EnableSpeculativeContacts = isSpeculative;
         rb.Damping = (linearDamping, angularDamping);
@@ -604,7 +605,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         rb.Restitution = restitution;
         rb.EnableGyroscopicForces = enableGyroscopicForces;
         rb.DeactivationTime = System.TimeSpan.FromSeconds(deactivationTime);
-        rb.DeactivationThreshold = (linearSleepThreshold, angularSleepThreshold);
+        rb.DeactivationThreshold = (angularSleepThreshold, linearSleepThreshold);
         rb.Tag = new RigidBodyUserData()
         {
             Rigidbody = this,
@@ -617,6 +618,20 @@ public sealed class Rigidbody3D : MonoBehaviour
         // the no-collider case.
     }
 
+    // The inspector and serialized data write the fields directly, so bring them into the ranges the physics body accepts.
+    private void ClampSettings()
+    {
+        linearDamping = Math.Clamp(linearDamping, 0f, 1f);
+        angularDamping = Math.Clamp(angularDamping, 0f, 1f);
+        friction = MathF.Max(friction, 0f);
+        restitution = Math.Clamp(restitution, 0f, 1f);
+        deactivationTime = MathF.Max(deactivationTime, 0f);
+        linearSleepThreshold = MathF.Max(linearSleepThreshold, 0f);
+        angularSleepThreshold = MathF.Max(angularSleepThreshold, 0f);
+    }
+
+    private const float MinMass = 0.001f;
+
     /// <summary>
     /// Pushes <see cref="Mass"/> onto the Jitter body, deriving the inertia tensor from its shapes.
     /// Shapes with no volume (the TriangleShapes of a concave MeshCollider) cannot report inertia, so
@@ -627,6 +642,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (!IsSimulated) return;
 
+        mass = MathF.Max(mass, MinMass);
         try
         {
             _body.SetMassInertia(mass);
