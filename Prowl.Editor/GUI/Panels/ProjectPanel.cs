@@ -17,6 +17,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 using Prowl.Vector;
 
 using static Prowl.Editor.GUI.EditorGUI;
@@ -1087,10 +1088,9 @@ public class ProjectPanel : DockPanel
                         foreach (var path in toDelete)
                             db.DeleteAsset(path);
 
-                        if (Directory.Exists(absPath))
-                            Directory.Delete(absPath, true);
+                        Directory.DeleteSafe(absPath);
                         string metaPath = MetaFile.GetMetaPath(absPath);
-                        if (File.Exists(metaPath)) File.Delete(metaPath);
+                        if (File.Exists(metaPath)) File.DeleteSafe(metaPath);
                         db.InvalidateFolderIndex();
                     }
                     if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
