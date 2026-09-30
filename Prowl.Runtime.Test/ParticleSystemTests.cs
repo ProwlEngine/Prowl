@@ -634,7 +634,7 @@ public class ParticleSystemTests : RuntimeTestBase
         var buffer = Array.Empty<InstanceData>();
         AABB bounds = default;
         bool hasBounds = false;
-        int segments = system.Trails.BuildSegments(system, system.TotalTime, ref buffer, ref bounds, ref hasBounds);
+        int segments = system.Trails.BuildSegments(system, ref buffer, ref bounds, ref hasBounds);
         Assert.True(segments > 5, $"segments {segments}");
 
         Run(scene, 0.2f);
@@ -1066,7 +1066,7 @@ public class ParticleSystemTests : RuntimeTestBase
         var buffer = Array.Empty<InstanceData>();
         AABB bounds = default;
         bool hasBounds = false;
-        int segments = system.Trails.BuildSegments(system, system.SimulationTime, ref buffer, ref bounds, ref hasBounds);
+        int segments = system.Trails.BuildSegments(system, ref buffer, ref bounds, ref hasBounds);
         Assert.True(segments >= 5 * 5, $"segments {segments}");
         for (int k = 0; k < segments; k++)
         {
@@ -1095,7 +1095,7 @@ public class ParticleSystemTests : RuntimeTestBase
         var buffer = Array.Empty<InstanceData>();
         AABB bounds = default;
         bool hasBounds = false;
-        int segments = system.Trails.BuildSegments(system, system.SimulationTime, ref buffer, ref bounds, ref hasBounds);
+        int segments = system.Trails.BuildSegments(system, ref buffer, ref bounds, ref hasBounds);
 
         // Segments are written head first, so the last one ends at the tail.
         Assert.True(segments > 5);

@@ -141,6 +141,9 @@ public class ShapeModule : ParticleSystemModule
         if (RandomizeDirection > 0f)
             direction = Float3.NormalizeSafe(Maths.Lerp(direction, ParticleRandom.OnUnitSphere(random), RandomizeDirection), direction);
 
+        if (Position == Float3.Zero && Rotation == Float3.Zero && Scale == Float3.One)
+            return;
+
         Float4x4 m = ShapeMatrix;
         position = (m * new Float4(position, 1f)).XYZ;
         direction = Float3.NormalizeSafe((m * new Float4(direction, 0f)).XYZ, Float3.UnitY);

@@ -15,7 +15,7 @@ namespace Prowl.Runtime.ParticleSystem.Modules;
 [Serializable]
 public class WindModule : ParticleSystemModule
 {
-    /// <summary>Steady world-space wind that blows everywhere, with or without a wind zone.</summary>
+    /// <summary>Steady world space wind that blows everywhere, with or without a wind zone.</summary>
     public Float3 AmbientWind = Float3.Zero;
 
     /// <summary>Scales the whole wind velocity this system feels.</summary>
@@ -28,7 +28,7 @@ public class WindModule : ParticleSystemModule
     /// </summary>
     public float Drag = 1f;
 
-    /// <summary>Extra straight acceleration along the wind. Use for gusty, arcade-feeling pushes.</summary>
+    /// <summary>Extra straight acceleration along the wind. Use for gusty, arcade feeling pushes.</summary>
     public float Force = 0f;
 
     /// <summary>Speed of the swirls layered on top of the wind, in units per second.</summary>

@@ -99,9 +99,8 @@ public class CollisionModule : ParticleSystemModule
     private bool IsWorld => Type == ParticleCollisionType.World;
     private bool IsCached => IsWorld && Quality != ParticleCollisionQuality.High;
 
-    // A particle already touching the surface at the start of the step, or meeting it slower than this,
-    // is resting on it: it is held there and slides along it, but does not count as a collision, so
-    // resting particles do not raise events or lose lifetime every step.
+    // A particle already touching the surface when the step starts, or meeting it slower than this, is
+    // resting on it. It is held there and slides along, but raises no event and loses no lifetime.
     private const float RestingSpeed = 0.1f;
     private const float ContactDistance = 1e-3f;
 
@@ -136,7 +135,7 @@ public class CollisionModule : ParticleSystemModule
 
         Float3 center;
         bool touching;
-        bool hit = Type == ParticleCollisionType.Planes
+        bool hit = IsPlanes
             ? SweepPlanes(from, to, radius, ref collision, out center, out touching)
             : Quality == ParticleCollisionQuality.High
                 ? SweepWorld(physics, from, to, radius, ref collision, out center, out touching)
@@ -151,6 +150,7 @@ public class CollisionModule : ParticleSystemModule
         float restInto = Float3.Dot(rest, normal);
         if (restInto < 0f) rest -= normal * restInto;
         center += rest;
+
         Float3 animated = system.SimVectorToWorld(p.AnimatedVelocity);
         Float3 velocity = system.SimVectorToWorld(p.Velocity);
         float approach = -Float3.Dot(velocity + animated, normal);

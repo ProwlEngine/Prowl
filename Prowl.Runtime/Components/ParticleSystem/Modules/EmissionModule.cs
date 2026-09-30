@@ -120,12 +120,11 @@ public class EmissionModule : ParticleSystemModule
             float interval = MathF.Max(burst.Interval, 0.01f);
             while ((burst.Cycles <= 0 || _cyclesDone[i] < burst.Cycles) && _nextBurstTime[i] < t1 && _nextBurstTime[i] < duration)
             {
-                bool fires = burst.Probability >= 1f || random.NextSingle() < burst.Probability;
-                if (fires)
+                int count = RollBurst(burst, system.MaxParticles, random);
+                if (count > 0)
                 {
-                    BurstRange(burst, system.MaxParticles, out int min, out int max);
-                    int count = min == max ? min : random.Next(min, max + 1);
-                    system.SpawnBatch(count, stepOffset + MathF.Max(0f, _nextBurstTime[i] - t0), stepOffset + MathF.Max(0f, _nextBurstTime[i] - t0));
+                    float at = stepOffset + MathF.Max(0f, _nextBurstTime[i] - t0);
+                    system.SpawnBatch(count, at, at);
                 }
                 _cyclesDone[i]++;
                 _nextBurstTime[i] += interval;
@@ -133,12 +132,18 @@ public class EmissionModule : ParticleSystemModule
         }
     }
 
-    /// <summary>A burst's count range, clamped to what the system can hold so huge counts cannot overflow.</summary>
-    internal static void BurstRange(in ParticleBurst burst, int maxParticles, out int min, out int max)
+    /// <summary>
+    /// One cycle of a burst: 0 when its probability roll fails, otherwise a count from its range, clamped
+    /// to what the system can hold so huge counts cannot overflow.
+    /// </summary>
+    internal static int RollBurst(in ParticleBurst burst, int maxParticles, Random random)
     {
+        if (burst.Probability < 1f && random.NextSingle() >= burst.Probability) return 0;
+
         int cap = Math.Clamp(maxParticles, 0, int.MaxValue - 1);
-        min = Math.Clamp(burst.MinCount, 0, cap);
-        max = Math.Clamp(burst.MaxCount, min, cap);
+        int min = Math.Clamp(burst.MinCount, 0, cap);
+        int max = Math.Clamp(burst.MaxCount, min, cap);
+        return min == max ? min : random.Next(min, max + 1);
     }
 
     // Particles are born at the exact moments the accumulator crosses a whole number.

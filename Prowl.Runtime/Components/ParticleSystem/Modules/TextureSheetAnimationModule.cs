@@ -76,17 +76,17 @@ public class TextureSheetAnimationModule : ParticleSystemModule
         ? new Float4(Columns, Rows, FramesPerCycle, !FrameBlending ? 0f : PlaysOnce ? 2f : 1f)
         : new Float4(1f, 1f, 1f, 0f);
 
-    private bool PlaysOnce => TimeMode == TextureSheetTimeMode.Lifetime && Cycles <= 1;
+    private bool PlaysOnce => IsLifetime && Cycles <= 1;
 
     internal void Apply(ref Particle p, float age, float speed)
     {
-        int frames = FramesPerCycle;
         if (Columns * Rows <= 1)
         {
             p.UVFrame = 0f;
             return;
         }
 
+        int frames = FramesPerCycle;
         int cycles = Math.Max(1, Cycles);
         float position = TimeMode switch
         {

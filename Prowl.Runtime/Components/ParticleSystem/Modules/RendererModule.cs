@@ -173,9 +173,9 @@ public class RendererModule : ParticleSystemModule
         _trailQuad = null;
     }
 
-    private Material? ResolveMaterial(Material? material)
+    private Material? ResolveMaterial(Material? preferred)
     {
-        if (material.IsValid()) return material;
+        if (preferred.IsValid()) return preferred;
         if (Material.IsValid()) return Material;
         if (s_defaultMaterial.IsNotValid())
             s_defaultMaterial = BuiltInAssets.Load<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
@@ -183,11 +183,12 @@ public class RendererModule : ParticleSystemModule
     }
 
     /// <summary>
-    /// Builds this camera's draw data. Returns true when any of it is in view. Particles are only drawn when
-    /// <paramref name="drawParticles"/> is set, trails draw whenever they exist.
+    /// Builds this camera's draw data. Returns true when any of it is in view. Particles draw while this
+    /// module is enabled, trails draw whenever they exist.
     /// </summary>
-    internal bool Collect(ParticleSystemComponent system, Camera camera, List<IRenderable> renderables, TextureSheetAnimationModule sheet, TrailModule trails, double time, bool drawParticles)
+    internal bool Collect(ParticleSystemComponent system, Camera camera, List<IRenderable> renderables)
     {
+        TrailModule trails = system.Trails;
         Float4x4 view = camera.ViewMatrix;
         Float4x4 projection = camera.ProjectionMatrix;
         Frustum frustum = Frustum.FromMatrix(projection * view);
@@ -195,7 +196,7 @@ public class RendererModule : ParticleSystemModule
         Float3 cameraForward = camera.Transform.Forward;
         bool visible = false;
 
-        if (drawParticles && system.ParticleCount > 0 && system.HasBounds)
+        if (Enabled && system.ParticleCount > 0 && system.HasBounds)
         {
             AABB bounds = PadForMinimumSize(system.WorldBounds, projection, cameraPosition);
             if (frustum.Intersects(bounds))
@@ -206,7 +207,7 @@ public class RendererModule : ParticleSystemModule
                 {
                     Mesh mesh = IsMesh && Mesh.IsValid() ? Mesh : ParticleQuad;
                     int count = BuildParticles(system, view, projection, cameraPosition, cameraForward);
-                    ConfigureProperties(_particles.Properties, system, 0, sheet.ShaderParams);
+                    ConfigureProperties(_particles.Properties, system, 0, system.TextureSheet.ShaderParams);
                     _particles.Set(mesh, material, count, bounds, system.GameObject.LayerIndex, SortOffset(bounds, cameraPosition, cameraForward, 0f));
                     renderables.Add(_particles);
                 }
@@ -220,7 +221,7 @@ public class RendererModule : ParticleSystemModule
             {
                 _trailFrame = Time.FrameCount;
                 _hasTrailBounds = false;
-                _trails.Count = trails.BuildSegments(system, time, ref _trailData, ref _trailBounds, ref _hasTrailBounds);
+                _trails.Count = trails.BuildSegments(system, ref _trailData, ref _trailBounds, ref _hasTrailBounds);
             }
 
             if (_trails.Count > 0 && _hasTrailBounds && frustum.Intersects(_trailBounds))
@@ -259,11 +260,16 @@ public class RendererModule : ParticleSystemModule
     {
         if (MinParticleSize <= 0f || IsMesh) return bounds;
 
-        bool orthographic = projection.c3.W > 0.5f;
-        float screenScale = 2f / MathF.Max(MathF.Abs(projection.c1.Y), 1e-6f);
         float farthest = Float3.Distance(cameraPosition, bounds.Center) + Float3.Length(bounds.Extents);
-        float pad = MinParticleSize * screenScale * (orthographic ? 1f : farthest) * 0.75f;
+        float pad = MinParticleSize * ScreenHeight(projection, farthest) * 0.75f;
         return new AABB(bounds.Min - new Float3(pad), bounds.Max + new Float3(pad));
+    }
+
+    /// <summary>World height the screen covers <paramref name="depth"/> in front of the camera.</summary>
+    private static float ScreenHeight(in Float4x4 projection, float depth)
+    {
+        bool orthographic = projection.c3.W > 0.5f;
+        return 2f / MathF.Max(MathF.Abs(projection.c1.Y), 1e-6f) * (orthographic ? 1f : MathF.Max(depth, 1e-4f));
     }
 
     private void ConfigureProperties(PropertyState properties, ParticleSystemComponent system, int mode, Float4 sheet)
@@ -303,9 +309,7 @@ public class RendererModule : ParticleSystemModule
         Float3 cameraRight = new(view.c0.X, view.c1.X, view.c2.X);
         Float3 cameraUp = new(view.c0.Y, view.c1.Y, view.c2.Y);
         Float3 towardCamera = -cameraForward;
-        bool orthographic = projection.c3.W > 0.5f;
-        float screenScale = 2f / MathF.Max(MathF.Abs(projection.c1.Y), 1e-6f);
-        bool clampSize = MinParticleSize > 0f || MaxParticleSize < 1f;
+        bool clampSize = !IsMesh && (MinParticleSize > 0f || MaxParticleSize < 1f);
         Quaternion emitterRotation = system.Transform.Rotation;
         float sizeScale = system.SizeScale;
 
@@ -317,10 +321,9 @@ public class RendererModule : ParticleSystemModule
             Float3 position = _worldPositions[i];
             Float3 size = p.Size * sizeScale;
 
-            if (clampSize && RenderMode != ParticleRenderMode.Mesh)
+            if (clampSize)
             {
-                float depth = orthographic ? 1f : MathF.Max(Float3.Dot(position - cameraPosition, cameraForward), 1e-4f);
-                float screenHeight = screenScale * depth;
+                float screenHeight = ScreenHeight(projection, Float3.Dot(position - cameraPosition, cameraForward));
                 float largest = MathF.Max(MathF.Abs(size.X), MathF.Abs(size.Y));
                 if (largest > 0f)
                 {
@@ -329,16 +332,16 @@ public class RendererModule : ParticleSystemModule
                 }
             }
 
-            Float4x4 matrix = RenderMode == ParticleRenderMode.Mesh
-                ? MeshMatrix(system, in p, position, size, emitterRotation, cameraForward, cameraRight, cameraUp)
-                : BillboardMatrix(system, in p, position, size, cameraPosition, cameraRight, cameraUp, towardCamera);
+            Float4x4 matrix = IsMesh
+                ? MeshMatrix(system, in p, position, size, emitterRotation, cameraForward, cameraUp)
+                : BillboardMatrix(system, in p, position, size, emitterRotation, cameraPosition, cameraRight, cameraUp, towardCamera);
 
             data[n] = new InstanceData(matrix, p.Color, new Float4(p.UVFrame, p.NormalizedAge, p.CustomData.X, p.CustomData.Y));
         }
         return count;
     }
 
-    private Float4x4 BillboardMatrix(ParticleSystemComponent system, in Particle p, Float3 position, Float3 size,
+    private Float4x4 BillboardMatrix(ParticleSystemComponent system, in Particle p, Float3 position, Float3 size, Quaternion emitterRotation,
         Float3 cameraPosition, Float3 cameraRight, Float3 cameraUp, Float3 towardCamera)
     {
         float angle = p.Rotation.Z * Maths.Deg2Rad;
@@ -387,7 +390,7 @@ public class RendererModule : ParticleSystemModule
             {
                 Quaternion q = Quaternion.FromEuler(p.Rotation);
                 if (Alignment == ParticleRenderAlignment.Local)
-                    q = system.Transform.Rotation * q;
+                    q = emitterRotation * q;
                 return Compose(position, q * Float3.UnitX, q * Float3.UnitY, q * Float3.UnitZ, width, height, size, p);
             }
             case ParticleRenderAlignment.Facing:
@@ -424,7 +427,7 @@ public class RendererModule : ParticleSystemModule
     }
 
     private Float4x4 MeshMatrix(ParticleSystemComponent system, in Particle p, Float3 position, Float3 size, Quaternion emitterRotation,
-        Float3 cameraForward, Float3 cameraRight, Float3 cameraUp)
+        Float3 cameraForward, Float3 cameraUp)
     {
         Quaternion q = Quaternion.FromEuler(p.Rotation);
         switch (Alignment)

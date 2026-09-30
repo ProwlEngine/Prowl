@@ -73,7 +73,6 @@ public class TrailModule : ParticleSystemModule
         public int Start;
         public int Count;
         public float Life;
-        public bool Orphan;
         public bool InWorld;
         public Color Color;
         public float Width;
@@ -178,7 +177,6 @@ public class TrailModule : ParticleSystemModule
         }
 
         Push(ref s, slot, s.InWorld ? system.SimPointToWorld(p.Position) : p.Position, time);
-        s.Orphan = true;
         s.Color = TrailColor(in p);
         s.Width = HeadWidth(system, in p);
         _orphans.Add(slot);
@@ -194,7 +192,6 @@ public class TrailModule : ParticleSystemModule
             Expire(ref s, slot, time);
             if (s.Count > 0) continue;
 
-            s.Orphan = false;
             _free.Push(slot);
             _orphans.RemoveAt(i);
         }
@@ -239,7 +236,7 @@ public class TrailModule : ParticleSystemModule
     /// width, tangent, texture coordinate and color) and the particle shader turns it into a camera facing
     /// quad, so neighbouring segments share their edges exactly. Returns how many were written.
     /// </summary>
-    internal int BuildSegments(ParticleSystemComponent system, double time, ref InstanceData[] buffer, ref AABB bounds, ref bool hasBounds)
+    internal int BuildSegments(ParticleSystemComponent system, ref InstanceData[] buffer, ref AABB bounds, ref bool hasBounds)
     {
         int written = 0;
         ReadOnlySpan<Particle> particles = system.Particles;
@@ -251,27 +248,25 @@ public class TrailModule : ParticleSystemModule
 
             ref TrailState s = ref _states[slot];
             Float3 head = s.InWorld ? system.SimPointToWorld(p.Position) : p.Position;
-            written = BuildTrail(system, ref s, slot, head, true, time, TrailColor(in p), HeadWidth(system, in p), ref buffer, written, ref bounds, ref hasBounds);
+            written = BuildTrail(system, in s, slot, head, true, TrailColor(in p), HeadWidth(system, in p), ref buffer, written, ref bounds, ref hasBounds);
         }
 
         foreach (int slot in _orphans)
         {
             ref TrailState s = ref _states[slot];
-            written = BuildTrail(system, ref s, slot, default, false, time, s.Color, s.Width, ref buffer, written, ref bounds, ref hasBounds);
+            written = BuildTrail(system, in s, slot, default, false, s.Color, s.Width, ref buffer, written, ref bounds, ref hasBounds);
         }
         return written;
     }
 
-    private int BuildTrail(ParticleSystemComponent system, ref TrailState s, int slot, Float3 head, bool hasHead, double time,
+    private int BuildTrail(ParticleSystemComponent system, in TrailState s, int slot, Float3 head, bool hasHead,
         Color color, float width, ref InstanceData[] buffer, int written, ref AABB bounds, ref bool hasBounds)
     {
         int count = s.Count + (hasHead ? 1 : 0);
         if (count < 2) return written;
 
         if (_scratchPos.Length < count)
-        {
             _scratchPos = new Float3[count * 2];
-        }
 
         for (int k = 0; k < s.Count; k++)
         {
@@ -279,9 +274,7 @@ public class TrailModule : ParticleSystemModule
             _scratchPos[k] = s.InWorld ? point.Position : system.SimPointToWorld(point.Position);
         }
         if (hasHead)
-        {
             _scratchPos[count - 1] = s.InWorld ? head : system.SimPointToWorld(head);
-        }
 
         int needed = written + count - 1;
         if (buffer.Length < needed)
@@ -294,6 +287,7 @@ public class TrailModule : ParticleSystemModule
         // Walk from the head back to the tail so texture coordinates start at the particle.
         float distanceFromHead = 0f;
         PointData next = MakePoint(count - 1, count, color, width, 0f, totalLength, s.ColorRandom);
+        Encapsulate(ref bounds, ref hasBounds, next.Position, next.Width * 0.5f);
         for (int k = count - 2; k >= 0; k--)
         {
             distanceFromHead += Float3.Distance(_scratchPos[k + 1], _scratchPos[k]);
@@ -309,9 +303,7 @@ public class TrailModule : ParticleSystemModule
                 CustomData = next.Color,
             };
 
-            float pad = MathF.Max(current.Width, next.Width) * 0.5f;
-            Encapsulate(ref bounds, ref hasBounds, current.Position, pad);
-            Encapsulate(ref bounds, ref hasBounds, next.Position, pad);
+            Encapsulate(ref bounds, ref hasBounds, current.Position, current.Width * 0.5f);
             next = current;
         }
         return written;

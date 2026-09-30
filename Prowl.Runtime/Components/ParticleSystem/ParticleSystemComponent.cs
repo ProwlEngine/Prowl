@@ -85,8 +85,8 @@ public struct EmitParams
 /// A CPU simulated particle system drawn with GPU instancing. Settings are grouped into modules, much
 /// like the particle systems artists already know.
 /// <para>
-/// In edit mode a system only simulates while it, or a particle system above it in the hierarchy, is
-/// selected, and it clears again when deselected.
+/// In edit mode a system only simulates while it, or anything above it in the hierarchy, is selected,
+/// and it clears again when deselected.
 /// </para>
 /// </summary>
 [AddComponentMenu("Effects/Particle System")]
@@ -208,7 +208,6 @@ public class ParticleSystemComponent : MonoBehaviour
     private bool _simIsWorld;
     private bool _spacesValid;
     private (SimulationSpace, ParticleScalingMode, GameObject?) _spaceKey;
-    private Float4x4 _lastValidWorldToSim = Float4x4.Identity;
     private Float3 _emitterOriginSim;
     private float _sizeScale = 1f;
 
@@ -401,16 +400,7 @@ public class ParticleSystemComponent : MonoBehaviour
 
         // The whole tree steps together, so sub emitter children receive and simulate their particles
         // at the same moments they would in play.
-        const float step = 1f / 30f;
-        float done = 0f;
-        time = MathF.Max(0f, time);
-        while (done < time - 1e-6f)
-        {
-            float dt = MathF.Min(step, time - done);
-            foreach (ParticleSystemComponent system in systems)
-                system.Advance(dt);
-            done += dt;
-        }
+        StepTogether(systems.ToArray(), time, false);
 
         foreach (ParticleSystemComponent system in systems)
             system._isPaused = true;
@@ -498,19 +488,17 @@ public class ParticleSystemComponent : MonoBehaviour
     }
 
     /// <summary>Fires sub emitter <paramref name="index"/> from every live particle.</summary>
-    public void TriggerSubEmitter(int index)
-    {
-        for (int i = 0; i < _count; i++)
-            TriggerSubEmitter(index, i);
-    }
+    public void TriggerSubEmitter(int index) => TriggerSubEmitter(index, 0, _count);
 
     /// <summary>Fires sub emitter <paramref name="index"/> from one particle.</summary>
-    public void TriggerSubEmitter(int index, int particleIndex)
+    public void TriggerSubEmitter(int index, int particleIndex) => TriggerSubEmitter(index, particleIndex, 1);
+
+    private void TriggerSubEmitter(int index, int first, int count)
     {
-        if ((uint)index >= (uint)SubEmitters.Emitters.Count || (uint)particleIndex >= (uint)_count) return;
+        if ((uint)index >= (uint)SubEmitters.Emitters.Count || first < 0 || first + count > _count) return;
         RefreshSpaces();
-        ref Particle p = ref _particles[particleIndex];
-        QueueSubEmit(index, -1, SimPointToWorld(p.Position), in p);
+        for (int i = first; i < first + count; i++)
+            QueueSubEmit(index, -1, SimPointToWorld(_particles[i].Position), in _particles[i]);
         FlushSubEmitters();
     }
 
@@ -628,7 +616,7 @@ public class ParticleSystemComponent : MonoBehaviour
 
         RefreshSpaces();
 
-        bool visible = Renderer.Collect(this, camera, renderables, TextureSheet, Trails, _simTime, Renderer.Enabled);
+        bool visible = Renderer.Collect(this, camera, renderables);
         if (!visible && CullingMode != ParticleCullingMode.AlwaysSimulate)
         {
             // Nothing drawn yet, so judge by where it can emit, or a culled system could never start.
@@ -699,21 +687,23 @@ public class ParticleSystemComponent : MonoBehaviour
         if (prewarm)
         {
             _prewarming = true;
-            AdvanceInSteps(EffectiveDuration, true);
+            StepTogether([this], EffectiveDuration, true);
             _prewarming = false;
         }
     }
 
-    private void AdvanceInSteps(float time, bool keepEmitterStill)
+    /// <summary>Advances <paramref name="systems"/> side by side in thirtieths of a second. <paramref name="stayStill"/> ignores emitter motion.</summary>
+    private static void StepTogether(ReadOnlySpan<ParticleSystemComponent> systems, float time, bool stayStill)
     {
         const float step = 1f / 30f;
-        float done = 0f;
-        while (done < time - 1e-6f)
+        for (float done = 0f; done < time - 1e-6f; done += step)
         {
             float dt = MathF.Min(step, time - done);
-            if (keepEmitterStill) _hasEmitterHistory = false;
-            Advance(dt);
-            done += dt;
+            foreach (ParticleSystemComponent system in systems)
+            {
+                if (stayStill) system._hasEmitterHistory = false;
+                system.Advance(dt);
+            }
         }
     }
 
@@ -733,22 +723,18 @@ public class ParticleSystemComponent : MonoBehaviour
         if (!_isPlaying || _isEmitting) return;
         if (_count > 0 || Trails.HasOrphans) return;
 
-        // A driven system goes quiet once drained and is woken by its driver. It is not finished, so it
-        // raises nothing and never runs its stop action.
-        if (IsDriven)
-        {
-            _isPlaying = false;
-            _isPaused = false;
-            return;
-        }
-
-        if (SubEmitters.Enabled)
+        bool driven = IsDriven;
+        if (!driven && SubEmitters.Enabled)
             foreach (SubEmitter entry in SubEmitters.Emitters)
                 if (entry.System.IsValid() && !ReferenceEquals(entry.System, this) && entry.System.ParticleCount > 0)
                     return;
 
         _isPlaying = false;
         _isPaused = false;
+
+        // A driven system goes quiet once drained and is woken by its driver. It has not finished, so it
+        // raises nothing and never runs its stop action.
+        if (driven) return;
 
         try { Stopped?.Invoke(this); }
         catch (Exception ex) { Debug.LogError($"[{Name}] Stopped handler threw: {ex.Message}\n{ex.StackTrace}"); }
@@ -901,14 +887,14 @@ public class ParticleSystemComponent : MonoBehaviour
         int guard = 0;
         while (remaining > 1e-7f && _isEmitting && guard++ < 1000)
         {
-            float span = MathF.Min(remaining, duration - _time);
+            float span = MathF.Max(0f, MathF.Min(remaining, duration - _time));
             if (span > 0f && emits)
             {
                 float distance = _frameDt > 0f ? _emitterMoveDistance * (span / _frameDt) : 0f;
                 Emission.Emit(this, _time, _time + span, duration, distance, dt - remaining, _random);
             }
-            _time += MathF.Max(span, 0f);
-            remaining -= MathF.Max(span, 0f);
+            _time += span;
+            remaining -= span;
 
             if (_time >= duration - 1e-6f)
             {
@@ -978,8 +964,8 @@ public class ParticleSystemComponent : MonoBehaviour
             p.Rotation = Quaternion.ToEuler(facing * Quaternion.FromEuler(p.Rotation));
         }
 
-        if (InheritVelocity.Enabled && InheritVelocity.Mode == InheritVelocityMode.Initial)
-            p.Velocity += emitterVelocity * InheritVelocity.Multiplier.Evaluate(time01, p.Random(0xC1));
+        if (InheritVelocity.Enabled)
+            p.Velocity += InheritVelocity.SpawnVelocity(in p, emitterVelocity, time01);
 
         if (TextureSheet.Enabled) TextureSheet.Apply(ref p, 0f, Float3.Length(p.Velocity));
         if (CustomData.Enabled) CustomData.Apply(ref p, 0f);
@@ -1149,26 +1135,18 @@ public class ParticleSystemComponent : MonoBehaviour
             : Float4x4.CreateTRS(position, rotation, scale);
 
         Float4x4 previousSimToWorld = _simToWorld;
-        bool customValid = SimulationSpace == SimulationSpace.Custom && CustomSimulationSpace.IsValid();
-        var key = (SimulationSpace, ScalingMode, customValid ? CustomSimulationSpace : null);
+        GameObject? custom = SimulationSpace == SimulationSpace.Custom && CustomSimulationSpace.IsValid() ? CustomSimulationSpace : null;
+        var key = (SimulationSpace, ScalingMode, custom);
 
-        switch (SimulationSpace)
-        {
-            case SimulationSpace.Local:
-                _simToWorld = ScalingMode == ParticleScalingMode.Shape
-                    ? Float4x4.CreateTRS(position, rotation, Float3.One)
-                    : _emitterToWorld;
-                _simIsWorld = false;
-                break;
-            case SimulationSpace.Custom when CustomSimulationSpace.IsValid():
-                _simToWorld = CustomSimulationSpace.Transform.LocalToWorldMatrix;
-                _simIsWorld = false;
-                break;
-            default:
-                _simToWorld = Float4x4.Identity;
-                _simIsWorld = true;
-                break;
-        }
+        // The transform the simulation space follows, with the scale it uses. Null for world space.
+        Transform? space = SimulationSpace == SimulationSpace.Local ? t : custom.IsValid() ? custom.Transform : null;
+        Float3 spaceScale = custom != null ? space!.LossyScale : ScalingMode == ParticleScalingMode.Shape ? Float3.One : scale;
+
+        _simIsWorld = space == null;
+        _simToWorld = _simIsWorld ? Float4x4.Identity
+            : custom != null || ScalingMode == ParticleScalingMode.Hierarchy ? space!.LocalToWorldMatrix
+            : Float4x4.CreateTRS(position, rotation, spaceScale);
+
         if (_simIsWorld)
         {
             _worldToSim = Float4x4.Identity;
@@ -1176,14 +1154,13 @@ public class ParticleSystemComponent : MonoBehaviour
         else if (Float4x4.Invert(_simToWorld, out Float4x4 inverse) && IsFinite(inverse))
         {
             _worldToSim = inverse;
-            _lastValidWorldToSim = inverse;
         }
         else
         {
             // A zero scale leaves nothing to invert. Squash to a tiny scale instead, so particles keep
             // finite values and come back intact when the scale does.
-            _simToWorld = Float4x4.CreateTRS(position, rotation, SafeScale(scale));
-            _worldToSim = Float4x4.Invert(_simToWorld, out inverse) ? inverse : _lastValidWorldToSim;
+            _simToWorld = Float4x4.CreateTRS(space!.Position, space.Rotation, SafeScale(spaceScale));
+            _worldToSim = _simToWorld.Invert();
         }
 
         _emitterToSim = _worldToSim * _emitterToWorld;
@@ -1266,8 +1243,9 @@ public class ParticleSystemComponent : MonoBehaviour
         bool local = SimulationSpace == SimulationSpace.Local;
         _emitterVelocitySim = local ? Float3.Zero : velocitySim;
         _emitterMoveSim = local ? Float3.Zero : movedSim;
-        // Distance for rate over distance, in world units. A local system measures its travel through
-        // the world, the others measure it through the space their particles live in.
+
+        // Rate over distance counts world units. A local system measures its travel through the world,
+        // the others measure it through the space their particles live in.
         _emitterMoveDistance = Float3.Length(local ? movedWorld : SimVectorToWorld(movedSim));
         _gravitySim = WorldVectorToSim(new Float3(0f, -9.81f, 0f));
     }
@@ -1516,11 +1494,7 @@ public class ParticleSystemComponent : MonoBehaviour
 
         long total = 0;
         foreach (ParticleBurst burst in Emission.Bursts)
-        {
-            if (burst.Probability < 1f && _random.NextSingle() >= burst.Probability) continue;
-            EmissionModule.BurstRange(burst, MaxParticles, out int min, out int max);
-            total += min == max ? min : _random.Next(min, max + 1);
-        }
+            total += EmissionModule.RollBurst(burst, MaxParticles, _random);
         return (int)Math.Min(total, Math.Max(0, MaxParticles));
     }
 

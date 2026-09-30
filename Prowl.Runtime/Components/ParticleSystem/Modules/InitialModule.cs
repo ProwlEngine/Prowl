@@ -49,7 +49,7 @@ public class InitialModule : ParticleSystemModule
 
     public InitialModule() => Enabled = true;
 
-    internal const uint SaltFlip = 0x51A7u;
+    private const uint SaltFlip = 0x51A7u;
 
     internal void Apply(ref Particle p, float systemTime01, System.Random random)
     {

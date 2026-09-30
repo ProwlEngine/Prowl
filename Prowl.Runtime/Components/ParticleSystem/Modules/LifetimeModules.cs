@@ -54,6 +54,7 @@ public class VelocityOverLifetimeModule : ParticleSystemModule
             Float3 turned = Quaternion.AxisAngle(axis, rate * deltaTime) * offset;
             p.AnimatedVelocity += (turned - offset) / deltaTime;
         }
+
         if (radial != 0f)
             p.AnimatedVelocity += Float3.NormalizeSafe(offset, Float3.Zero) * radial;
     }
@@ -123,6 +124,10 @@ public class InheritVelocityModule : ParticleSystemModule
 {
     public InheritVelocityMode Mode = InheritVelocityMode.Initial;
     public MinMaxCurve Multiplier = new(1f);
+
+    /// <summary>Velocity a particle picks up when born, in Initial mode.</summary>
+    internal Float3 SpawnVelocity(in Particle p, Float3 emitterVelocity, float systemTime01)
+        => Mode == InheritVelocityMode.Initial ? emitterVelocity * Multiplier.Evaluate(systemTime01, p.Random(0xC1)) : Float3.Zero;
 
     internal void Apply(ParticleSystemComponent system, ref Particle p, float age)
     {
