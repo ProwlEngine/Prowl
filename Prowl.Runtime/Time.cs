@@ -53,7 +53,7 @@ public static class Time
 
     public static Stack<TimeData> TimeStack { get; } = new();
 
-    public static TimeData CurrentTime => TimeStack.Count > 0 ? TimeStack.Peek() : s_defaultTime;
+    public static TimeData CurrentTime => TimeStack.TryPeek(out TimeData? time) && time != null ? time : s_defaultTime;
 
     public static float UnscaledDeltaTime => CurrentTime.UnscaledDeltaTime;
     public static float UnscaledTotalTime => CurrentTime.UnscaledTotalTime;
