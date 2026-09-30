@@ -101,6 +101,7 @@ public class Animator : MonoBehaviour
     /// <summary>Binds the bones again. Call after the hierarchy under the animator changes.</summary>
     public void Rebind()
     {
+        AssertOwner();
         _animator = null;
         _clips = null;
         _graph = null;
@@ -154,6 +155,7 @@ public class Animator : MonoBehaviour
 
     private void SetParameter(string name, ParameterValue value)
     {
+        AssertOwner();
         if (_graph != null)
         {
             TryWrite(name, value);
@@ -186,6 +188,7 @@ public class Animator : MonoBehaviour
     /// </summary>
     public Pose? GetExternalPose(string name)
     {
+        AssertOwner();
         if (FindExternalPose(name) is not { } node) return null;
         node.HasPose = true;
         _externalPoses[name] = node.Source;
@@ -195,6 +198,7 @@ public class Animator : MonoBehaviour
     /// <summary>Puts the External Pose node of this name back on the reference pose.</summary>
     public void ClearExternalPose(string name)
     {
+        AssertOwner();
         _externalPoses.Remove(name);
         if (FindExternalPose(name) is { } node) node.HasPose = false;
     }
@@ -221,6 +225,7 @@ public class Animator : MonoBehaviour
     /// </summary>
     public void SetGraphSlot(string slot, AnimationGraph? graph)
     {
+        AssertOwner();
         PluggedGraph? plugged = graph.IsValid() ? new PluggedGraph(graph!) : null;
         if (plugged != null) _slots[slot] = plugged;
         else _slots.Remove(slot);
@@ -288,6 +293,7 @@ public class Animator : MonoBehaviour
 
     public void Play(AnimationClip clip)
     {
+        AssertOwner();
         ArgumentNullException.ThrowIfNull(clip);
         if (_graph != null)
             Debug.LogWarningOnce($"Animator.PlayWithGraph.{GameObject.Name}",
@@ -312,6 +318,7 @@ public class Animator : MonoBehaviour
     /// <summary>Blends to a clip over <paramref name="seconds"/>, from whatever is playing now.</summary>
     public void CrossFade(AnimationClip clip, float seconds)
     {
+        AssertOwner();
         ArgumentNullException.ThrowIfNull(clip);
         if (_clips == null || Resolve(clip) is not { } runtime) { Play(clip); return; }
 
@@ -495,6 +502,7 @@ public class Animator : MonoBehaviour
     /// <summary>Rebuilds the graph and rebinds. Call after editing the graph asset.</summary>
     public void RecompileGraph()
     {
+        AssertOwner();
         if (Graph is { } asset) asset.Invalidate();
         Rebind();
     }

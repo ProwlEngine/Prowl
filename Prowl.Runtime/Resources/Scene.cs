@@ -59,6 +59,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             if (_current is null || _current.IsDisposed)
             {
+                // Before anything is created, so a read from another thread cannot leave an inactive scene current.
+                MainThreadContext.AssertMainThread(nameof(Current));
                 _current = new Scene { Name = "Untitled" };
                 _current.Enable();
             }
@@ -70,6 +72,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public static event Action? OnSceneLoaded;
 
     private static Scene? _pendingScene;
+
+    /// <summary>
+    /// Ends the async session at the next scene swap, between the outgoing scene's teardown and the incoming
+    /// scene's start. The editor sets it when entering and leaving play mode.
+    /// </summary>
+    internal static bool EndSessionOnSwap;
 
     /// <summary>Whether a <see cref="Load"/> is queued and has not been applied yet, so <see cref="Current"/>
     /// is still the outgoing scene.</summary>
@@ -230,14 +238,22 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         Scene next = _pendingScene;
         _pendingScene = null;
 
+        bool endSession = EndSessionOnSwap;
+        EndSessionOnSwap = false;
+
         if (next.IsDisposed)
         {
             Debug.LogWarning("[Scene] The scene queued for loading was disposed before the frame ended, so it was skipped.");
+            if (endSession) MainThreadContext.Restart();
             return;
         }
 
         // Loading the scene that is already current would dispose it and then enable the corpse.
-        if (ReferenceEquals(next, _current)) return;
+        if (ReferenceEquals(next, _current))
+        {
+            if (endSession) MainThreadContext.Restart();
+            return;
+        }
 
         // Preserved objects leave before the outgoing scene is disposed, and join the incoming one
         // after it is enabled, so they are never registered with a scene that is being torn down.
@@ -255,6 +271,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 _current.Disable();
             _current.Dispose();
         }
+
+        // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
+        // one starts in a fresh one.
+        if (endSession) MainThreadContext.Restart();
 
         _current = next;
         _current.Enable();
@@ -911,6 +931,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         foreach (GameObject obj in removed)
             obj.Scene = null;
     }
+
+    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
 
     protected override void OnDispose()
     {

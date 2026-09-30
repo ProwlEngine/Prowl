@@ -28,14 +28,42 @@ public class BlockingWaitAnalyzerTests : EditorTestHarness
     [Theory]
     [InlineData("int v = Loader.Load().Result;")]
     [InlineData("Loader.Load().Wait();")]
+    [InlineData("Loader.Load().Wait(100);")]
     [InlineData("int v = Loader.Load().GetAwaiter().GetResult();")]
+    [InlineData("int v = Loader.Load().ConfigureAwait(false).GetAwaiter().GetResult();")]
+    [InlineData("int v = new System.Threading.Tasks.ValueTask<int>(Loader.Load()).Result;")]
     [InlineData("System.Threading.Tasks.Task.WaitAll(Loader.Load());")]
+    [InlineData("int Local() => Loader.Load().Result; Local();")]
+    [InlineData("var t = Loader.Load(); if (t.IsFaulted) { int v = t.Result; }")]
     public void WarnsOnEachWayOfBlockingInAComponent(string body)
     {
         var result = Compile($"public class Comp : Prowl.Runtime.MonoBehaviour {{ public override void Start() {{ {body} }} }}");
 
         Assert.True(result.Success, result.Errors); // a warning, so the compile still succeeds
         Assert.Contains(BlockingWaitAnalyzer.BlockingWaitId, result.Output);
+    }
+
+    [Theory]
+    [InlineData("var t = Loader.Load(); if (t.IsCompleted) { int v = t.Result; }")]
+    [InlineData("var t = Loader.Load(); int v = t.IsCompletedSuccessfully ? t.Result : 0;")]
+    [InlineData("Loader.Load().Wait(0);")]
+    [InlineData("Loader.Load().Wait(System.TimeSpan.Zero);")]
+    public void SaysNothingAboutAReadThatCannotBlock(string body)
+    {
+        var result = Compile($"public class Comp : Prowl.Runtime.MonoBehaviour {{ public override void Start() {{ {body} }} }}");
+
+        Assert.True(result.Success, result.Errors);
+        Assert.DoesNotContain(BlockingWaitAnalyzer.BlockingWaitId, result.Output);
+    }
+
+    /// <summary>A static helper is not tied to the component's thread, so it could be running anywhere.</summary>
+    [Fact]
+    public void SaysNothingInAStaticMethod()
+    {
+        var result = Compile("public class Comp : Prowl.Runtime.MonoBehaviour { static int Get() => Loader.Load().Result; }");
+
+        Assert.True(result.Success, result.Errors);
+        Assert.DoesNotContain(BlockingWaitAnalyzer.BlockingWaitId, result.Output);
     }
 
     [Fact]

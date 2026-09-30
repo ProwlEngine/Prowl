@@ -178,6 +178,7 @@ public sealed class MeshCollider : Collider
     // Rebuild rather than OnValidate, because the Mesh and Convex setters go straight to Rebuild.
     public override void Rebuild()
     {
+        AssertOwner();
         _cachedConvexShape = null;
         _cachedHullTris = null;
         base.Rebuild();

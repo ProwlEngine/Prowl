@@ -1745,9 +1745,6 @@ public class EditorApplication : Game
             return;
         }
 
-        // Async work the edit scene left running belongs to a scene that is about to go away.
-        Runtime.Tasks.MainThreadContext.Restart();
-
         // Set play mode flags BEFORE loading so OnEnable/Start gates pass
         Application.IsPlaying = true;
         Application.IsPaused = false;
@@ -1763,6 +1760,10 @@ public class EditorApplication : Game
         Input.PushHandler(new GameViewInputHandler(Input.Current));
 
         Runtime.Resources.Scene.DestroyPreserved();
+
+        // The swap ends the edit scene's async session once its teardown has run, and the play scene starts
+        // in a fresh one.
+        Runtime.Resources.Scene.EndSessionOnSwap = true;
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
@@ -1791,10 +1792,6 @@ public class EditorApplication : Game
         Application.IsPaused = false;
         Application.StepRequested = false;
 
-        // Ends the play session: its token is cancelled and anything still awaiting never resumes, so it
-        // cannot reach into the edit scene that is about to be restored.
-        Runtime.Tasks.MainThreadContext.Restart();
-
         // Clear selection (play scene references)
         Selection.Clear();
 
@@ -1808,10 +1805,19 @@ public class EditorApplication : Game
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
             if (restoredScene != null)
+            {
+                // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
+                // awaiting can resume against the edit scene.
+                Runtime.Resources.Scene.EndSessionOnSwap = true;
                 Runtime.Resources.Scene.Load(restoredScene);
+            }
             Undo.Clear();
             _savedEditorScene = null;
         }
+
+        // Nothing will swap, so the play session ends here.
+        if (!Runtime.Resources.Scene.EndSessionOnSwap)
+            Runtime.Tasks.MainThreadContext.Restart();
 
         // Don't inherit cursor state the game left behind
         Input.CursorLockState = CursorLockMode.None;
@@ -1968,7 +1974,16 @@ public class EditorApplication : Game
     public static void RunOnMainThread(Action work)
     {
         if (Program.BuildMode || Instance == null) work();
+        else if (s_closing) throw new OperationCanceledException("The editor is closing, so the main thread no longer takes work.");
         else GameTask.Run(work);
+    }
+
+    private static volatile bool s_closing;
+
+    public override void Closing()
+    {
+        s_closing = true;
+        base.Closing();
     }
 
     public override void OnUpdate(Runtime.Resources.Scene? scene)

@@ -1110,6 +1110,8 @@ public partial class GameObject : EngineObject, ISerializable
         return false;
     }
 
+    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
+
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>

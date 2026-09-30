@@ -4,58 +4,68 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 
 namespace Prowl.Editor.Core.Tasks;
 
 /// <summary> Base class for editor tasks that provides a utility to asynchronously wait until a condition is met. </summary>
 public class EditorTask
 {
-    private static readonly List<(Func<bool> Condition, Action Continuation)> s_waiting = new();
+    private static readonly List<IdleAwaitable> s_waiting = new();
 
     /// <summary>
     /// Resumes on the main thread once the condition holds, checked every editor frame. Unlike awaiting a task,
     /// this survives entering and leaving play mode and script reloads, which end the game's async session.
+    /// A condition that throws resumes the wait by rethrowing it.
     /// </summary>
     public IdleAwaitable IdleOnCondition(Func<bool> condition) => new(condition);
 
-    /// <summary>Resumes every wait whose condition now holds. Called once per editor frame.</summary>
+    /// <summary>Resumes every wait whose condition now holds. Called once per editor frame on the main thread.</summary>
     internal static void Poll()
     {
-        for (int i = s_waiting.Count - 1; i >= 0; i--)
+        IdleAwaitable[] waiting;
+        lock (s_waiting)
         {
-            var (condition, continuation) = s_waiting[i];
+            if (s_waiting.Count == 0) return;
+            waiting = [.. s_waiting];
+        }
 
-            bool ready;
-            try { ready = condition(); }
+        foreach (IdleAwaitable wait in waiting)
+        {
+            try
+            {
+                if (!wait.Condition()) continue;
+            }
             catch (Exception ex)
             {
-                Runtime.Debug.LogError($"[EditorTask] A wait condition threw: {ex.Message}\n{ex.StackTrace}");
-                ready = true;
+                wait.Failure = ExceptionDispatchInfo.Capture(ex);
             }
 
-            if (!ready) continue;
+            lock (s_waiting) s_waiting.Remove(wait);
 
-            s_waiting.RemoveAt(i);
-            try { continuation(); }
+            try { wait.Continuation!(); }
             catch (Exception ex) { Runtime.Debug.LogError($"[EditorTask] A continuation threw: {ex.Message}\n{ex.StackTrace}"); }
-
-            // A continuation can add or finish other waits, so the index may now be past the end.
-            if (i > s_waiting.Count) i = s_waiting.Count;
         }
     }
 
-    public readonly struct IdleAwaitable : INotifyCompletion
+    public sealed class IdleAwaitable : INotifyCompletion
     {
-        private readonly Func<bool> _condition;
+        internal readonly Func<bool> Condition;
+        internal Action? Continuation;
+        internal ExceptionDispatchInfo? Failure;
 
-        public IdleAwaitable(Func<bool> condition) => _condition = condition;
+        internal IdleAwaitable(Func<bool> condition) => Condition = condition;
 
         public IdleAwaitable GetAwaiter() => this;
 
-        public bool IsCompleted => _condition();
+        public bool IsCompleted => Condition();
 
-        public void OnCompleted(Action continuation) => s_waiting.Add((_condition, continuation));
+        public void OnCompleted(Action continuation)
+        {
+            Continuation = continuation;
+            lock (s_waiting) s_waiting.Add(this);
+        }
 
-        public void GetResult() { }
+        public void GetResult() => Failure?.Throw();
     }
 }

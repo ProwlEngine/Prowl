@@ -71,6 +71,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => constraints;
         set
         {
+            AssertOwner();
             constraints = value;
             CaptureLockedPose(); // re-pin to wherever the body is now
         }
@@ -95,6 +96,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => interpolation;
         set
         {
+            AssertOwner();
             interpolation = value;
             ResetPose();
         }
@@ -109,6 +111,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => motionType;
         set
         {
+            AssertOwner();
             motionType = value;
             if (_body != null) _body.MotionType = value;
         }
@@ -122,6 +125,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => isSpeculative;
         set
         {
+            AssertOwner();
             isSpeculative = value;
             if (_body != null) _body.EnableSpeculativeContacts = value;
         }
@@ -135,6 +139,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => useGravity;
         set
         {
+            AssertOwner();
             useGravity = value;
             if (_body != null) _body.AffectedByGravity = value;
         }
@@ -148,6 +153,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => mass;
         set
         {
+            AssertOwner();
             if (value <= 0.0)
                 throw new ArgumentException("Mass can not be zero or negative.", nameof(value));
 
@@ -164,6 +170,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => friction;
         set
         {
+            AssertOwner();
             if (value < 0.0)
                 throw new ArgumentOutOfRangeException(nameof(value), "Friction can not be negative.");
 
@@ -180,6 +187,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => restitution;
         set
         {
+            AssertOwner();
             if (value < 0.0 || value > 1.0)
                 throw new ArgumentOutOfRangeException(nameof(value), "Restitution must be between 0 and 1.");
 
@@ -197,6 +205,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => linearDamping;
         set
         {
+            AssertOwner();
             if (value < 0.0 || value > 1.0)
                 throw new ArgumentOutOfRangeException(nameof(value), "Linear damping must be between 0 and 1.");
 
@@ -214,6 +223,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => angularDamping;
         set
         {
+            AssertOwner();
             if (value < 0.0 || value > 1.0)
                 throw new ArgumentOutOfRangeException(nameof(value), "Angular damping must be between 0 and 1.");
 
@@ -231,6 +241,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => enableGyroscopicForces;
         set
         {
+            AssertOwner();
             enableGyroscopicForces = value;
             if (_body != null) _body.EnableGyroscopicForces = value;
         }
@@ -245,6 +256,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => deactivationTime;
         set
         {
+            AssertOwner();
             deactivationTime = value;
             if (_body != null) _body.DeactivationTime = System.TimeSpan.FromSeconds(value);
         }
@@ -258,6 +270,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => linearSleepThreshold;
         set
         {
+            AssertOwner();
             linearSleepThreshold = value;
             if (_body != null) _body.DeactivationThreshold = (_body.DeactivationThreshold.angular, value);
         }
@@ -271,6 +284,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => angularSleepThreshold;
         set
         {
+            AssertOwner();
             angularSleepThreshold = value;
             if (_body != null) _body.DeactivationThreshold = (value, _body.DeactivationThreshold.linear);
         }
@@ -287,7 +301,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public Float3 LinearVelocity
     {
         get => _body == null ? Float3.Zero : _body.Velocity.ToProwl();
-        set { EnsureBody(); if (_body != null) _body.Velocity = new(value.X, value.Y, value.Z); }
+        set { AssertOwner(); EnsureBody(); if (_body != null) _body.Velocity = new(value.X, value.Y, value.Z); }
     }
 
     /// <summary>
@@ -296,7 +310,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public Float3 AngularVelocity
     {
         get => _body == null ? Float3.Zero : _body.AngularVelocity.ToProwl();
-        set { EnsureBody(); if (_body != null) _body.AngularVelocity = new(value.X, value.Y, value.Z); }
+        set { AssertOwner(); EnsureBody(); if (_body != null) _body.AngularVelocity = new(value.X, value.Y, value.Z); }
     }
 
     /// <summary>
@@ -305,7 +319,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public Float3 Torque
     {
         get => _body == null ? Float3.Zero : _body.Torque.ToProwl();
-        set { EnsureBody(); if (_body != null) _body.Torque = value.ToJitter(); }
+        set { AssertOwner(); EnsureBody(); if (_body != null) _body.Torque = value.ToJitter(); }
     }
 
     [SerializeIgnore]
@@ -733,6 +747,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void AddForce(Float3 force, ForceMode mode = ForceMode.Force)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         var jForce = force.ToJitter();
@@ -768,6 +783,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void AddForceAtPosition(Float3 force, Float3 worldPosition, ForceMode mode = ForceMode.Force)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         var jForce = force.ToJitter();
@@ -794,6 +810,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void AddTorque(Float3 torque, ForceMode mode = ForceMode.Force)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         var jTorque = torque.ToJitter();
@@ -837,6 +854,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void SetActive(bool active)
     {
+        AssertOwner();
         if (_body != null)
             _body.SetActivationState(active);
     }
@@ -916,6 +934,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyImpulse(Float3 impulse, Float3 worldPosition)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = impulse.ToJitter();
@@ -933,6 +952,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyImpulse(Float3 impulse)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = impulse.ToJitter();
@@ -946,6 +966,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyAngularImpulse(Float3 angularImpulse)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = angularImpulse.ToJitter();
@@ -959,6 +980,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MovePosition(Float3 position)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         body.Position = position.ToJitter();
@@ -975,6 +997,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MoveRotation(Quaternion rotation)
     {
+        AssertOwner();
         if (!TryGetBody(out RigidBody body)) return;
 
         body.Orientation = rotation.ToJitter();

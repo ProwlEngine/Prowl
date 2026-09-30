@@ -29,10 +29,12 @@ public class EditorThreadingTests : IDisposable
     private sealed class Waiter : EditorTask
     {
         public bool Done;
+        public Exception? Failure;
 
         public async void Start(Func<bool> condition)
         {
-            await IdleOnCondition(condition);
+            try { await IdleOnCondition(condition); }
+            catch (Exception e) { Failure = e; }
             Done = true;
         }
     }
@@ -62,6 +64,28 @@ public class EditorThreadingTests : IDisposable
         Assert.Equal(line, ConsolePanel.LastLog()!.Value.message);
     }
 
+    /// <summary>With no loop every thread counts as the main one, which must not let them write the store together.</summary>
+    [Fact]
+    public void LogsFromManyThreadsAreAllCountedWithoutALoop()
+    {
+        MainThreadContext.Uninstall();
+        ConsolePanel.EnsureSubscribed();
+        string line = $"loopless {Guid.NewGuid()}";
+        const int threads = 8, each = 250;
+
+        int before = ConsolePanel.LogCounts().info;
+
+        Task[] writers = new Task[threads];
+        for (int t = 0; t < threads; t++)
+            writers[t] = Task.Run(() => { for (int i = 0; i < each; i++) Debug.Log(line); });
+
+        Task readers = Task.Run(() => { while (!Task.WhenAll(writers).IsCompleted) ConsolePanel.LogCounts(); });
+        while (!Task.WhenAll(writers).IsCompleted) ConsolePanel.LastLog();
+        readers.Wait();
+
+        Assert.Equal(before + threads * each, ConsolePanel.LogCounts().info);
+    }
+
     [Fact]
     public void AWorkerLogThatArrivedFirstStaysFirst()
     {
@@ -88,6 +112,20 @@ public class EditorThreadingTests : IDisposable
         open = true;
         EditorTask.Poll();
         Assert.True(waiter.Done);
+    }
+
+    [Fact]
+    public void AnEditorWaitWhoseConditionThrowsRethrowsAtTheAwait()
+    {
+        var waiter = new Waiter();
+        bool broken = false;
+
+        waiter.Start(() => broken ? throw new FormatException("bad condition") : false);
+        broken = true;
+        EditorTask.Poll();
+
+        Assert.True(waiter.Done);
+        Assert.IsType<FormatException>(waiter.Failure);
     }
 
     /// <summary>Entering or leaving play mode ends the game's session, which must not strand the editor's own waits.</summary>

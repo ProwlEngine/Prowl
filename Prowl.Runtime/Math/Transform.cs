@@ -264,6 +264,9 @@ public class Transform : ISerializationCallbackReceiver
     [SerializeIgnore] uint _cachedParentWorldVersion;
     [SerializeIgnore] uint _worldVersion;
 
+    /// <summary>Bumped every time the cached world matrix is rebuilt.</summary>
+    internal uint WorldVersion => _worldVersion;
+
     public GameObject GameObject { get; internal set; }
     #endregion
 

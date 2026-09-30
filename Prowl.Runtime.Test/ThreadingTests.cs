@@ -19,6 +19,21 @@ public sealed class ForgetsBaseDispose : MonoBehaviour
     protected override void OnDispose() { }
 }
 
+/// <summary>Records which async session its enable and disable callbacks ran in.</summary>
+public sealed class SessionProbe : MonoBehaviour
+{
+    public CancellationToken EnabledIn, DisabledIn;
+    public bool DisabledInEndedSession;
+
+    public override void OnEnable() => EnabledIn = GameTask.SessionToken;
+
+    public override void OnDisable()
+    {
+        DisabledIn = GameTask.SessionToken;
+        DisabledInEndedSession = DisabledIn.IsCancellationRequested;
+    }
+}
+
 /// <summary>
 /// The main thread model: async sessions on the main thread, moving between threads with GameTask, and the
 /// ownership checks that stop another thread from touching a running scene.
@@ -293,25 +308,22 @@ public class ThreadingTests : RuntimeTestBase
     }
 
     [Fact]
-    public void RunAfterTheLoopStoppedRunsOnTheCallerInsteadOfHanging()
+    public void SendAfterTheLoopStoppedThrowsInsteadOfRunningOnTheCaller()
     {
         MainThreadContext context;
         using (var loop = new LoopScope()) context = loop.Context;
+        bool ran = false;
 
-        bool ran = OffThread(() =>
-        {
-            bool done = false;
-            context.Send(_ => done = true, null);
-            return done;
-        });
+        Assert.Throws<OperationCanceledException>(() => OffThread(() => context.Send(_ => ran = true, null)));
 
-        Assert.True(ran);
+        Assert.False(ran);
         Assert.True(context.IsEnded);
     }
 
     [Fact]
     public void WithoutALoopEveryThreadCountsAsTheMainThread()
     {
+        MainThreadContext.Uninstall();
         Assert.Null(MainThreadContext.Current);
         Assert.True(OffThread(() => GameTask.IsMainThread));
 
@@ -321,7 +333,330 @@ public class ThreadingTests : RuntimeTestBase
         Assert.Equal(CancellationToken.None, GameTask.SessionToken);
     }
 
+    // ---- work that outlives its session -------------------------------------------------------------
+
+    /// <summary>The documented worker pattern, with play stopping while the worker computes.</summary>
+    [Fact]
+    public void AWorkerHoppingBackAfterItsSessionEndedNeverResumes()
+    {
+        using var loop = new LoopScope();
+        var computing = new ManualResetEventSlim(false);
+        var release = new ManualResetEventSlim(false);
+        bool applied = false;
+
+        async Task Work()
+        {
+            await GameTask.WorkerThread();
+            computing.Set();
+            release.Wait();
+            await GameTask.MainThread();
+            applied = true;
+        }
+
+        Work();
+        Assert.True(computing.Wait(5000));
+        MainThreadContext.Restart();
+        release.Set();
+
+        for (int i = 0; i < 20; i++)
+        {
+            loop.Pump();
+            Thread.Sleep(1);
+        }
+        Assert.False(applied);
+    }
+
+    [Fact]
+    public void AWorkerStartedInANewSessionStillGetsBack()
+    {
+        using var loop = new LoopScope();
+        MainThreadContext.Restart();
+        bool applied = false;
+
+        async Task Work()
+        {
+            await GameTask.WorkerThread();
+            await GameTask.MainThread();
+            applied = true;
+        }
+
+        Task work = Work();
+        loop.PumpUntil(() => work.IsCompleted);
+        Assert.True(applied);
+    }
+
+    [Fact]
+    public void AWorkerSeesItsOwnSessionEndEvenAfterANewOneStarted()
+    {
+        using var loop = new LoopScope();
+        var started = new ManualResetEventSlim(false);
+        var release = new ManualResetEventSlim(false);
+        bool posted = false;
+
+        Task<bool> worker = Task.Run(() =>
+        {
+            started.Set();
+            release.Wait();
+            GameTask.Post(() => posted = true);
+            return GameTask.SessionToken.IsCancellationRequested;
+        });
+
+        Assert.True(started.Wait(5000));
+        MainThreadContext.Restart();
+        release.Set();
+
+        Assert.True(worker.GetAwaiter().GetResult());
+        loop.Pump();
+        Assert.False(posted);
+    }
+
+    [Fact]
+    public void FrameWaitsCompleteAsCancelledWhenTheirSessionEnds()
+    {
+        using var loop = new LoopScope();
+
+        Task frames = GameTask.Frames(3);
+        Task delay = GameTask.Delay(10);
+        Task until = GameTask.WaitUntil(() => false);
+        loop.Pump();
+
+        MainThreadContext.Restart();
+
+        Assert.True(frames.IsCanceled);
+        Assert.True(delay.IsCanceled);
+        Assert.True(until.IsCanceled);
+    }
+
+    [Fact]
+    public void AFrameWaitOnAnEndedSessionIsCancelledRatherThanThrowing()
+    {
+        using var loop = new LoopScope();
+        MainThreadContext ended = loop.Context;
+        MainThreadContext.Restart();
+
+        Task wait = ended.NextFrame();
+
+        Assert.True(wait.IsCanceled);
+    }
+
+    [Fact]
+    public void FramesCountsFrames()
+    {
+        using var loop = new LoopScope();
+
+        Task frames = GameTask.Frames(2);
+        loop.Pump();
+        Assert.False(frames.IsCompleted);
+        loop.Pump();
+        Assert.True(frames.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public void AWaitConditionThatThrowsFaultsTheWait()
+    {
+        using var loop = new LoopScope();
+        bool thrown = false;
+
+        Task until = GameTask.WaitUntil(() => thrown ? throw new FormatException("bad") : false);
+        thrown = true;
+        loop.Pump();
+
+        Assert.IsType<FormatException>(until.Exception!.InnerException);
+    }
+
+    [Fact]
+    public void AnAsyncVoidThatFailsAfterItsSessionEndedIsStillReported()
+    {
+        using var loop = new LoopScope();
+        var slow = new TaskCompletionSource();
+        string? logged = null;
+        OnLog capture = (message, _, severity) => { if (severity == LogSeverity.Error && message.Contains("late failure")) logged = message; };
+        Debug.OnLog += capture;
+        try
+        {
+            async void Fails()
+            {
+                await slow.Task.ConfigureAwait(false);
+                throw new FormatException("late failure");
+            }
+
+            Fails();
+            MainThreadContext.Restart();
+            slow.SetResult();
+
+            Assert.True(SpinWait.SpinUntil(() => logged != null, 5000));
+        }
+        finally
+        {
+            Debug.OnLog -= capture;
+        }
+    }
+
+    [Fact]
+    public void BlockedWorkRunsWhenTheLoopStopsWithoutHoldingTheContext()
+    {
+        MainThreadContext context;
+        Task worker;
+        bool reentered = false;
+
+        using (var loop = new LoopScope())
+        {
+            context = loop.Context;
+
+            // The work waits on another thread that needs this same context, which deadlocked while it was held.
+            worker = Task.Run(() => context.Send(_ => reentered = Task.Run(() => { context.NextFrame(); }).Wait(5000), null));
+            Assert.True(SpinWait.SpinUntil(() => context.PendingCount > 0, 5000));
+        }
+
+        Assert.True(worker.Wait(5000));
+        Assert.True(reentered);
+    }
+
+    [Fact]
+    public void InstallingOverALoopCarriesBlockedWorkToTheNewOne()
+    {
+        using var loop = new LoopScope();
+        MainThreadContext first = loop.Context;
+        int ranOn = 0;
+
+        Task worker = Task.Run(() => GameTask.Run(() => ranOn = Environment.CurrentManagedThreadId));
+        Assert.True(SpinWait.SpinUntil(() => first.PendingCount > 0, 5000));
+
+        MainThreadContext.Install();
+        Assert.False(worker.IsCompleted);
+        loop.PumpUntil(() => worker.IsCompleted);
+
+        Assert.Equal(Environment.CurrentManagedThreadId, ranOn);
+    }
+
+    /// <summary>
+    /// The editor ends the session at the scene swap, so the outgoing scene's teardown runs in the session it
+    /// belongs to, and the incoming scene starts in the next one.
+    /// </summary>
+    [Fact]
+    public void EndingTheSessionAtASwapSplitsTheTwoScenesBetweenSessions()
+    {
+        using var loop = new LoopScope();
+
+        Scene first = CreateScene();
+        GameObject oldObject = CreateGameObject("Old");
+        first.Add(oldObject);
+        var outgoing = oldObject.AddComponent<SessionProbe>();
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+        CancellationToken firstSession = GameTask.SessionToken;
+
+        Scene second = CreateScene();
+        GameObject newObject = CreateGameObject("New");
+        second.Add(newObject);
+        var incoming = newObject.AddComponent<SessionProbe>();
+        Scene.EndSessionOnSwap = true;
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+
+        Assert.Equal(firstSession, outgoing.DisabledIn);
+        Assert.False(outgoing.DisabledInEndedSession);
+        Assert.True(firstSession.IsCancellationRequested);
+        Assert.NotEqual(firstSession, incoming.EnabledIn);
+        Assert.False(incoming.EnabledIn.IsCancellationRequested);
+        Assert.False(Scene.EndSessionOnSwap);
+    }
+
+    [Fact]
+    public void ASkippedSwapStillEndsTheSession()
+    {
+        using var loop = new LoopScope();
+        CancellationToken session = GameTask.SessionToken;
+        Scene doomed = CreateScene();
+
+        Scene.EndSessionOnSwap = true;
+        Scene.Load(doomed);
+        doomed.Dispose();
+        Scene.ProcessPendingLoad();
+
+        Assert.True(session.IsCancellationRequested);
+        Assert.False(Scene.EndSessionOnSwap);
+    }
+
     // ---- ownership checks ---------------------------------------------------------------------------
+
+    [Fact]
+    public void DisposingALiveComponentFromAnotherThreadThrowsBeforeTearingAnythingDown()
+    {
+        var (_, go) = LiveObject();
+        var listener = go.AddComponent<PhysicsListener>();
+        CancellationToken token = listener.DestroyCancellationToken;
+        using var loop = new LoopScope();
+
+        Assert.Throws<InvalidOperationException>(() => OffThread(listener.Dispose));
+
+        Assert.False(listener.IsDisposed);
+        Assert.False(token.IsCancellationRequested);
+        Assert.Same(listener, go.GetComponent<PhysicsListener>());
+    }
+
+    [Fact]
+    public void DisposingALiveObjectFromAnotherThreadThrowsBeforeTearingAnythingDown()
+    {
+        var (scene, root) = LiveObject();
+        GameObject child = CreateGameObject("Child");
+        scene.Add(child);
+        child.SetParent(root);
+        var listener = child.AddComponent<PhysicsListener>();
+        using var loop = new LoopScope();
+
+        Assert.Throws<InvalidOperationException>(() => OffThread(child.Dispose));
+        Assert.Throws<InvalidOperationException>(() => OffThread(root.Dispose));
+
+        Assert.False(child.IsDisposed);
+        Assert.False(root.IsDisposed);
+        Assert.False(listener.IsDisposed);
+        Assert.Contains(child, root.Children);
+    }
+
+    [Fact]
+    public void DisposingALiveSceneFromAnotherThreadThrows()
+    {
+        var (scene, _) = LiveObject();
+        using var loop = new LoopScope();
+
+        Assert.Throws<InvalidOperationException>(() => OffThread(scene.Dispose));
+        Assert.False(scene.IsDisposed);
+    }
+
+    [Fact]
+    public void ReadingTheCurrentSceneFromAnotherThreadCannotLeaveAnInactiveOneBehind()
+    {
+        Scene.Shutdown();
+        using var loop = new LoopScope();
+
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => Scene.Current));
+
+        Scene current = Scene.Current;
+        Assert.True(current.IsActive);
+        current.Dispose();
+    }
+
+    [Fact]
+    public void PhysicsAndAnimationComponentsOnALiveObjectAreChecked()
+    {
+        var (_, go) = LiveObject();
+        var body = go.AddComponent<Rigidbody3D>();
+        var box = go.AddComponent<BoxCollider>();
+        var animator = go.AddComponent<Animator>();
+        float mass = body.Mass;
+        using var loop = new LoopScope();
+
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => body.Mass = mass * 2));
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => body.LinearVelocity = Float3.UnitX));
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => body.AddForce(Float3.UnitY)));
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => box.Size = new Float3(3)));
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => animator.SetFloat("Speed", 1)));
+
+        Assert.Equal(mass, body.Mass);
+    }
+
+    // ---- ownership checks, structural ---------------------------------------------------------------
 
     [Fact]
     public void MovingALiveObjectFromAnotherThreadThrowsAndChangesNothing()
@@ -422,8 +757,16 @@ public class ThreadingTests : RuntimeTestBase
         child.Transform.LocalPosition = new Float3(0, 1, 0);
         using var loop = new LoopScope();
 
+        // Stale on purpose, so a cached read would have to rebuild.
+        parent.Transform.Position = new Float3(15, 0, 0);
+        uint parentBuilds = parent.Transform.WorldVersion, childBuilds = child.Transform.WorldVersion;
+
         Float3 seen = OffThread(() => child.Transform.Position);
-        Assert.Equal(new Float3(10, 1, 0), seen);
+        Assert.Equal(new Float3(15, 1, 0), seen);
+
+        // Computed without touching the cache the main thread owns.
+        Assert.Equal(parentBuilds, parent.Transform.WorldVersion);
+        Assert.Equal(childBuilds, child.Transform.WorldVersion);
 
         // The main thread's cache still follows changes after a read from elsewhere.
         parent.Transform.Position = new Float3(20, 0, 0);

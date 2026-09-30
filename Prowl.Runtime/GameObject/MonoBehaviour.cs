@@ -560,10 +560,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// Override to react to freshly loaded values.</summary>
     public virtual void OnAfterDeserialize() { }
 
-    /// <summary>
-    /// Called when the MonoBehaviour will be destroyed.
-    /// This is an override of EngineObject.OnDispose() and is also exposed as a virtual lifecycle method.
-    /// </summary>
+    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(_go, nameof(Dispose));
+
+    /// <summary>Throws when this component's live object is touched from a thread other than the main one.</summary>
+    private protected void AssertOwner([System.Runtime.CompilerServices.CallerMemberName] string member = "")
+        => MainThreadContext.AssertOwner(_go, member);
+
     private protected override void OnDisposed()
     {
         CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
@@ -573,6 +575,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         catch (AggregateException e) { Debug.LogError($"[{Name}/{GetType().Name}] A DestroyCancellationToken callback threw: {e.InnerException?.Message}\n{e.InnerException?.StackTrace}"); }
     }
 
+    /// <summary>
+    /// Called when the MonoBehaviour will be destroyed.
+    /// This is an override of EngineObject.OnDispose() and is also exposed as a virtual lifecycle method.
+    /// </summary>
     protected override void OnDispose()
     {
         // Teardown, not an edit, so it goes through regardless of whether a prefab provided this.

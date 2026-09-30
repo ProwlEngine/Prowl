@@ -36,8 +36,9 @@ public class ConsolePanel : DockPanel
     private static readonly List<LogEntry> _messages = new();
     private static bool _subscribed;
 
-    // Logs from other threads wait here until the main thread, which owns _messages, drains them.
+    // Every log waits here until a reader drains it into _messages, so logging from any thread never touches the list.
     private static readonly ConcurrentQueue<(string Message, DebugStackTrace? StackTrace, LogSeverity Severity, DateTime Time)> s_pending = new();
+    private static readonly object s_messagesLock = new();
 
     // Settings
     private bool _showTime = true;
@@ -107,39 +108,37 @@ public class ConsolePanel : DockPanel
     /// <summary>Total Info / Warning / Error counts (including collapsed repeats).</summary>
     public static (int info, int warn, int err) LogCounts()
     {
-        DrainPending();
-        int info = 0, warn = 0, err = 0;
-        foreach (var m in _messages)
+        lock (s_messagesLock)
         {
-            if (m.Severity == LogSeverity.Warning) warn += m.Count;
-            else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) err += m.Count;
-            else info += m.Count;
+            DrainPending();
+            int info = 0, warn = 0, err = 0;
+            foreach (var m in _messages)
+            {
+                if (m.Severity == LogSeverity.Warning) warn += m.Count;
+                else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) err += m.Count;
+                else info += m.Count;
+            }
+            return (info, warn, err);
         }
-        return (info, warn, err);
     }
 
     /// <summary>The most recent log entry (message, source class, collapse count), or null if none.</summary>
     public static (LogSeverity severity, string message, string? source, int count)? LastLog()
     {
-        DrainPending();
-        if (_messages.Count == 0) return null;
-        var m = _messages[^1];
-        return (m.Severity, m.Message, SourceOf(m), m.Count);
+        lock (s_messagesLock)
+        {
+            DrainPending();
+            if (_messages.Count == 0) return null;
+            var m = _messages[^1];
+            return (m.Severity, m.Message, SourceOf(m), m.Count);
+        }
     }
 
     private static void OnLogMessage(string message, DebugStackTrace? stackTrace, LogSeverity severity)
-    {
-        if (!GameTask.IsMainThread)
-        {
-            s_pending.Enqueue((message, stackTrace, severity, DateTime.Now));
-            return;
-        }
+        => s_pending.Enqueue((message, stackTrace, severity, DateTime.Now));
 
-        DrainPending();
-        Append(message, stackTrace, severity, DateTime.Now);
-    }
-
-    internal static void DrainPending()
+    // Callers hold s_messagesLock.
+    private static void DrainPending()
     {
         while (s_pending.TryDequeue(out var log))
             Append(log.Message, log.StackTrace, log.Severity, log.Time);
@@ -181,7 +180,7 @@ public class ConsolePanel : DockPanel
     // ================================================================
     public override void OnGUI(Paper paper, float width, float height)
     {
-        DrainPending();
+        lock (s_messagesLock) DrainPending();
 
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -224,7 +223,7 @@ public class ConsolePanel : DockPanel
                 using (paper.Row("con_search_wrap").Width(130).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Width(130).Height(24).Show();
 
-                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, false, () => { _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
+                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, false, () => { lock (s_messagesLock) _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
                 ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }

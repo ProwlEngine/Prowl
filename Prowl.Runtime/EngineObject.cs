@@ -49,6 +49,9 @@ public abstract class EngineObject : IDisposable
         if (this is Asset { Registered: true })
             throw new InvalidOperationException($"'{Name}' ({GetType().Name}) belongs to the asset database. Use AssetDatabase.Unload to free its memory.");
 
+        if (IsDisposed) return;
+        AssertCanDispose();
+
         if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
             return;
 
@@ -60,6 +63,9 @@ public abstract class EngineObject : IDisposable
 
     /// <summary>Runs after <see cref="OnDispose"/> even when an override skips base or throws.</summary>
     private protected virtual void OnDisposed() { }
+
+    /// <summary>Throws before anything is torn down when this may not be disposed from the calling thread.</summary>
+    private protected virtual void AssertCanDispose() { }
 
     private static readonly List<EngineObject> s_destroyQueue = [];
 

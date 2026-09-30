@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,12 +25,17 @@ namespace Prowl.Runtime.Tasks;
 /// Each context is one session. The editor ends a session when play starts or stops and when scripts
 /// reload: the session token is cancelled and every continuation still waiting on it is dropped, so a
 /// method that awaited during play never resumes against the edit scene or runs code that was reloaded.
+/// A dropped method simply stops, so its <c>finally</c> blocks do not run. Work that must clean up
+/// watches <see cref="SessionToken"/> instead.
+/// <para/>
+/// Work started from a session stays tied to it across threads, through the execution context, so a
+/// worker that hops back with <c>await GameTask.MainThread()</c> after its session ended is dropped too.
 /// Blocking <see cref="Send"/> calls are the exception and carry over, since a thread is waiting on them.
 /// </remarks>
 public sealed class MainThreadContext : SynchronizationContext
 {
     private readonly record struct Entry(SendOrPostCallback Callback, object? State, bool Carry);
-    private readonly record struct FrameWaiter(TaskCompletionSource Completion, CancellationTokenRegistration Registration);
+    private readonly record struct FrameWaiter(TaskCompletionSource Completion, CancellationTokenRegistration Registration, Func<bool>? Ready);
 
     private readonly ConcurrentQueue<Entry> _queue = new();
     private readonly ConcurrentQueue<FrameWaiter> _frameWaiters = new();
@@ -36,15 +43,33 @@ public sealed class MainThreadContext : SynchronizationContext
     private readonly object _gate = new();
     private readonly int _threadId;
 
+    // This session, once replaced. An uninstalled context points at itself, since nothing follows it.
     private MainThreadContext? _successor;
 
     // Zero when no loop runs. Kept static and separate from Current so the hot path is one field read.
     private static int s_loopThreadId;
 
+    // The session that started the work running on this flow, carried to worker threads with the execution context.
+    private static readonly AsyncLocal<MainThreadContext?> s_origin = new();
+
     private MainThreadContext(int threadId) => _threadId = threadId;
 
     /// <summary>The context the engine installed, or null when no loop is running.</summary>
     public static MainThreadContext? Current { get; private set; }
+
+    /// <summary>
+    /// The session the calling code belongs to: the current one on the main thread, and on a worker the one
+    /// that was current when the work was started. Null when no loop is running.
+    /// </summary>
+    public static MainThreadContext? Origin
+    {
+        get
+        {
+            MainThreadContext? current = Current;
+            if (current == null || current.IsMainThread) return current;
+            return s_origin.Value ?? current;
+        }
+    }
 
     /// <summary>Whether the caller is on the thread the engine pumps.</summary>
     public bool IsMainThread => Environment.CurrentManagedThreadId == _threadId;
@@ -67,14 +92,20 @@ public sealed class MainThreadContext : SynchronizationContext
     /// <summary>Cancelled when this session ends.</summary>
     public CancellationToken SessionToken => _session.Token;
 
-    /// <summary>Whether a newer session has replaced this one.</summary>
+    /// <summary>Whether this session has ended.</summary>
     public bool IsEnded => Volatile.Read(ref _successor) != null;
 
     /// <summary>How much work is waiting for the next pump.</summary>
     public int PendingCount => _queue.Count;
 
     /// <summary>Completes at the start of the next <see cref="Pump"/>, or is cancelled if the session ends first.</summary>
-    public Task NextFrame(CancellationToken cancel = default)
+    public Task NextFrame(CancellationToken cancel = default) => WaitFrames(null, cancel);
+
+    /// <summary>
+    /// Completes at the start of the first <see cref="Pump"/> where <paramref name="ready"/> returns true,
+    /// checked on the main thread once per frame. Cancelled if the session ends first, so it never hangs.
+    /// </summary>
+    public Task WaitFrames(Func<bool>? ready, CancellationToken cancel = default)
     {
         if (cancel.IsCancellationRequested) return Task.FromCanceled(cancel);
 
@@ -87,20 +118,25 @@ public sealed class MainThreadContext : SynchronizationContext
         {
             if (_successor == null)
             {
-                _frameWaiters.Enqueue(new FrameWaiter(completion, registration));
+                _frameWaiters.Enqueue(new FrameWaiter(completion, registration, ready));
                 return completion.Task;
             }
         }
 
         registration.Dispose();
-        return Task.FromCanceled(_session.Token);
+        return Task.FromCanceled(new CancellationToken(true));
     }
 
-    /// <summary>Installs a context bound to the calling thread, which must be the one running the loop.</summary>
+    /// <summary>
+    /// Installs a context bound to the calling thread, which must be the one running the loop. Replaces any
+    /// installed one the way <see cref="Restart"/> does.
+    /// </summary>
     public static void Install()
     {
-        Current?.End(null);
-        Bind(new MainThreadContext(Environment.CurrentManagedThreadId));
+        MainThreadContext? old = Current;
+        var next = new MainThreadContext(Environment.CurrentManagedThreadId);
+        Bind(next);
+        old?.End(next);
     }
 
     /// <summary>
@@ -118,7 +154,10 @@ public sealed class MainThreadContext : SynchronizationContext
         old.End(next);
     }
 
-    /// <summary>Ends the session and removes the context, for when the loop stops.</summary>
+    /// <summary>
+    /// Ends the session and removes the context, for when the loop stops. Blocked <see cref="Send"/> calls
+    /// still queued run here, and any made afterwards throw, since no loop is left to run them.
+    /// </summary>
     public static void Uninstall()
     {
         MainThreadContext? old = Current;
@@ -126,6 +165,7 @@ public sealed class MainThreadContext : SynchronizationContext
 
         Current = null;
         s_loopThreadId = 0;
+        s_origin.Value = null;
         if (ReferenceEquals(SynchronizationContext.Current, old)) SetSynchronizationContext(null);
         old.End(null);
     }
@@ -134,22 +174,25 @@ public sealed class MainThreadContext : SynchronizationContext
     {
         Current = context;
         s_loopThreadId = context._threadId;
+        s_origin.Value = context;
         SetSynchronizationContext(context);
     }
 
     private void End(MainThreadContext? successor)
     {
+        List<Entry>? orphans = null;
+
         lock (_gate)
         {
             _successor = successor ?? this;
 
             // Whoever is blocked in Send is waiting on these, so they move to the new session or, with no
-            // loop left to run them, run here.
+            // loop left to run them, run below once the lock is released.
             while (_queue.TryDequeue(out Entry entry))
             {
                 if (!entry.Carry) continue;
                 if (successor != null) successor._queue.Enqueue(entry);
-                else entry.Callback(entry.State);
+                else (orphans ??= []).Add(entry);
             }
         }
 
@@ -161,24 +204,26 @@ public sealed class MainThreadContext : SynchronizationContext
             waiter.Registration.Dispose();
             waiter.Completion.TrySetCanceled(_session.Token);
         }
-    }
 
-    // Follows the chain of sessions to the live one, for work that must run whichever session it was queued in.
-    private MainThreadContext Live()
-    {
-        MainThreadContext context = this;
-        while (Volatile.Read(ref context._successor) is { } next && !ReferenceEquals(next, context))
-            context = next;
-        return context;
+        if (orphans != null)
+            foreach (Entry entry in orphans)
+                entry.Callback(entry.State);
     }
 
     public override void Post(SendOrPostCallback d, object? state)
     {
         lock (_gate)
         {
-            if (_successor != null) return;
-            _queue.Enqueue(new Entry(d, state, false));
+            if (_successor == null)
+            {
+                _queue.Enqueue(new Entry(d, state, false));
+                return;
+            }
         }
+
+        // An async void method that failed after its session ended still says so, even though it does not resume.
+        if (state is ExceptionDispatchInfo failure)
+            Debug.LogError($"[Tasks] An async method from an ended session threw: {failure.SourceException.Message}\n{failure.SourceException.StackTrace}");
     }
 
     public override void Send(SendOrPostCallback d, object? state)
@@ -200,7 +245,7 @@ public sealed class MainThreadContext : SynchronizationContext
             finally { done.Set(); }
         }, null, true);
 
-        MainThreadContext target = Live();
+        MainThreadContext target = this;
         while (true)
         {
             lock (target._gate)
@@ -212,18 +257,14 @@ public sealed class MainThreadContext : SynchronizationContext
                 }
             }
 
-            MainThreadContext next = target.Live();
+            MainThreadContext next = Volatile.Read(ref target._successor)!;
             if (ReferenceEquals(next, target))
-            {
-                // Uninstalled: no loop will ever pump again, so run it on this thread.
-                entry.Callback(null);
-                break;
-            }
+                throw new OperationCanceledException("The engine loop has stopped, so nothing is left to run this on the main thread.");
             target = next;
         }
 
         done.Wait();
-        if (failure != null) throw failure;
+        if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
     }
 
     public override SynchronizationContext CreateCopy() => this;
@@ -237,10 +278,35 @@ public sealed class MainThreadContext : SynchronizationContext
     /// </remarks>
     public void Pump()
     {
+        // Keeps the main thread's own flow on this session, even if a restart happened inside a continuation
+        // whose execution context was then thrown away.
+        if (!ReferenceEquals(s_origin.Value, this)) s_origin.Value = this;
+
         // First, so a continuation waiting on the frame is queued in time to run in this same pump.
         int waiting = _frameWaiters.Count;
         for (int i = 0; i < waiting && _frameWaiters.TryDequeue(out FrameWaiter waiter); i++)
         {
+            if (waiter.Completion.Task.IsCompleted)
+            {
+                waiter.Registration.Dispose();
+                continue;
+            }
+
+            bool ready;
+            try { ready = waiter.Ready == null || waiter.Ready(); }
+            catch (Exception e)
+            {
+                waiter.Registration.Dispose();
+                waiter.Completion.TrySetException(e);
+                continue;
+            }
+
+            if (!ready)
+            {
+                _frameWaiters.Enqueue(waiter);
+                continue;
+            }
+
             waiter.Registration.Dispose();
             waiter.Completion.TrySetResult();
         }

@@ -154,6 +154,7 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     public virtual void Rebuild()
     {
+        AssertOwner();
         if (_attachedBody == null) return; // not in the world yet, OnEnable will build it
         Reattach();
     }

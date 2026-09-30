@@ -886,6 +886,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void Play()
     {
+        AssertOwner();
         if (_soundGroup.pointer == IntPtr.Zero || _clip == null) return;
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
@@ -952,6 +953,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void PlayProcedural()
     {
+        AssertOwner();
         if (_soundGroup.pointer == IntPtr.Zero) return;
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
@@ -968,6 +970,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void Stop()
     {
+        AssertOwner();
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
         MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
@@ -983,6 +986,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void Pause()
     {
+        AssertOwner();
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
         if (_isPaused || !IsPlaying) return;
 
@@ -1000,6 +1004,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </remarks>
     public void Resume()
     {
+        AssertOwner();
         if (!_isPaused) return;
 
         ulong resumeFrom = _pausedCursor;
@@ -1026,6 +1031,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </remarks>
     public void PlayOneShot(AudioClip clip, float volumeScale = 1.0f)
     {
+        AssertOwner();
         if (_soundGroup.pointer == IntPtr.Zero || clip == null) return;
 
         SourceInfo voice = AcquireOneShotVoice();
@@ -1044,6 +1050,7 @@ public sealed class AudioSource : MonoBehaviour
     /// <summary>Stops every one shot voice this source is sounding. Leaves the main playback alone.</summary>
     public void StopOneShots()
     {
+        AssertOwner();
         foreach (SourceInfo voice in _oneShots)
         {
             if (voice.handle != IntPtr.Zero)
@@ -1229,6 +1236,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void AddEffect(AudioEffect effect)
     {
+        AssertOwner();
         if (effect == null) return;
 
         if (!effect.TryClaim(this))
@@ -1249,6 +1257,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void RemoveEffect(AudioEffect effect)
     {
+        AssertOwner();
         if (effect == null) return;
 
         if (!_effects.Remove(effect)) return;
@@ -1269,6 +1278,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void RemoveEffect(int index)
     {
+        AssertOwner();
         if (index < 0 || index >= _effects.Count) return;
 
         RemoveEffect(_effects[index]);
@@ -1279,6 +1289,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void ClearEffects()
     {
+        AssertOwner();
         AudioEffect[] removed = _effects.ToArray();
         _effects.Clear();
         _chain.Publish(_effects);
@@ -1296,6 +1307,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void RefreshEffects()
     {
+        AssertOwner();
         DropEffectsNoLongerListed();
 
         for (int i = _effects.Count - 1; i >= 0; i--)

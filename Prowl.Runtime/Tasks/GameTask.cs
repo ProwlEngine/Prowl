@@ -25,7 +25,8 @@ namespace Prowl.Runtime;
 /// Apply(result);
 /// </code>
 /// Awaiting in a component resumes on the main thread already. When play stops or scripts reload, the
-/// session ends: <see cref="SessionToken"/> is cancelled and pending continuations are dropped.
+/// session ends: <see cref="SessionToken"/> is cancelled and pending continuations are dropped, including a
+/// worker's hop back to the main thread. Frame waits from an ended session complete as cancelled.
 /// <para/>
 /// When no engine loop is running, such as in a test or a tool, every thread counts as the main thread.
 /// </remarks>
@@ -35,72 +36,82 @@ public static class GameTask
     public static bool IsMainThread => MainThreadContext.OnMainThread;
 
     /// <summary>
-    /// Cancelled when the current session ends: play mode stopping, scripts reloading or the game quitting.
-    /// Pass it to long running work on worker threads, which nothing else can stop.
+    /// Cancelled when the session the calling code belongs to ends: play mode stopping, scripts reloading or
+    /// the game quitting. On a worker that is the session that started the work, so a loop that watches it
+    /// stops even if a new session has begun since. Pass it to long running work, which nothing else can stop.
     /// </summary>
-    public static CancellationToken SessionToken => MainThreadContext.Current?.SessionToken ?? CancellationToken.None;
+    public static CancellationToken SessionToken => MainThreadContext.Origin?.SessionToken ?? CancellationToken.None;
 
-    /// <summary>Resumes on the main thread, at the next frame when coming from another thread.</summary>
+    /// <summary>
+    /// Resumes on the main thread, at the next frame when coming from another thread. Never resumes if the
+    /// session that started the work has ended by then.
+    /// </summary>
     public static MainThreadAwaitable MainThread() => default;
 
     /// <summary>Resumes on a thread pool thread. Continues right away when already off the main thread.</summary>
     public static WorkerThreadAwaitable WorkerThread() => default;
 
     /// <summary>Completes at the start of the next frame.</summary>
-    public static Task NextFrame(CancellationToken cancel = default)
-    {
-        MainThreadContext loop = MainThreadContext.Current
-            ?? throw new InvalidOperationException("GameTask.NextFrame needs a running engine loop.");
-        return loop.NextFrame(cancel);
-    }
+    public static Task NextFrame(CancellationToken cancel = default) => Loop().NextFrame(cancel);
 
     /// <summary>Waits a number of frames.</summary>
-    public static async Task Frames(int count, CancellationToken cancel = default)
+    public static Task Frames(int count, CancellationToken cancel = default)
     {
-        for (int i = 0; i < count; i++) await NextFrame(cancel);
+        MainThreadContext loop = Loop();
+        if (count <= 0) return Task.CompletedTask;
+        int left = count;
+        return loop.WaitFrames(() => --left <= 0, cancel);
     }
 
     /// <summary>Waits for game time, so it slows with <see cref="Time.TimeScale"/> and stops while paused.</summary>
-    public static async Task Delay(float seconds, CancellationToken cancel = default)
+    public static Task Delay(float seconds, CancellationToken cancel = default)
     {
-        while (seconds > 0)
-        {
-            await NextFrame(cancel);
-            seconds -= Time.DeltaTime;
-        }
+        MainThreadContext loop = Loop();
+        if (seconds <= 0) return Task.CompletedTask;
+        return loop.WaitFrames(() => (seconds -= Time.DeltaTime) <= 0, cancel);
     }
 
     /// <summary>Waits for real time, ignoring time scale and pausing.</summary>
-    public static async Task DelayRealtime(float seconds, CancellationToken cancel = default)
+    public static Task DelayRealtime(float seconds, CancellationToken cancel = default)
     {
-        while (seconds > 0)
-        {
-            await NextFrame(cancel);
-            seconds -= Time.UnscaledDeltaTime;
-        }
-    }
-
-    /// <summary>Checks <paramref name="condition"/> once per frame until it holds.</summary>
-    public static async Task WaitUntil(Func<bool> condition, CancellationToken cancel = default)
-    {
-        while (!condition()) await NextFrame(cancel);
+        MainThreadContext loop = Loop();
+        if (seconds <= 0) return Task.CompletedTask;
+        return loop.WaitFrames(() => (seconds -= Time.UnscaledDeltaTime) <= 0, cancel);
     }
 
     /// <summary>
-    /// Queues work for the main thread without waiting for it. Dropped if the session ends first.
-    /// Runs at once when no loop is running.
+    /// Checks <paramref name="condition"/> on the main thread once per frame until it holds. Called on the
+    /// main thread, it is also checked right away.
+    /// </summary>
+    public static Task WaitUntil(Func<bool> condition, CancellationToken cancel = default)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        MainThreadContext loop = Loop();
+        if (loop.IsMainThread && condition()) return Task.CompletedTask;
+        return loop.WaitFrames(condition, cancel);
+    }
+
+    /// <summary>
+    /// Queues work for the main thread without waiting for it. Dropped if the session that started the work
+    /// ends first. Runs at once when no loop is running.
     /// </summary>
     public static void Post(Action work)
     {
         ArgumentNullException.ThrowIfNull(work);
-        MainThreadContext? loop = MainThreadContext.Current;
+        MainThreadContext? loop = MainThreadContext.Origin;
         if (loop == null) work();
         else loop.Post(static s => ((Action)s!)(), work);
     }
 
+    // Every frame wait belongs to the caller's session, so one it outlives completes as cancelled rather than hanging.
+    private static MainThreadContext Loop([CallerMemberName] string member = "")
+        => MainThreadContext.Origin ?? throw new InvalidOperationException($"GameTask.{member} needs a running engine loop.");
+
     /// <summary>
     /// Runs work on the main thread and blocks until it finishes, rethrowing what it threw. Runs at once
-    /// when called on the main thread. Never call it from a thread the main thread is waiting on.
+    /// when called on the main thread or when no loop is running, and carries over a session ending, since
+    /// the caller is waiting. Throws <see cref="OperationCanceledException"/> if the loop stops first.
+    /// Never call it from a thread the main thread is waiting on.
     /// </summary>
     public static void Run(Action work)
     {

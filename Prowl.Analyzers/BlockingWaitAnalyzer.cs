@@ -10,7 +10,8 @@ namespace Prowl.Analyzers;
 /// Flags blocking waits on a task inside a <c>MonoBehaviour</c>: <c>.Result</c>, <c>.Wait()</c> and
 /// <c>GetAwaiter().GetResult()</c>. Component code runs on the main thread, and the engine finishes
 /// asset loads and frame waits from that same thread, so blocking there on one of them never returns.
-/// Code inside a lambda is left alone, since it usually runs on some other thread.
+/// Code inside a lambda or a static method is left alone, since it usually runs on some other thread, and so
+/// is a read that cannot block: <c>.Result</c> behind an <c>IsCompleted</c> check, or a <c>Wait(0)</c> poll.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
@@ -54,14 +55,16 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
     {
         var reference = (IPropertyReferenceOperation)ctx.Operation;
         if (reference.Property.Name != "Result" || !IsTask(reference.Property.ContainingType, tasks)) return;
+        if (IsGuardedByCompletion(reference)) return;
         Report(ctx, monoBehaviour, ".Result");
     }
 
     private static void AnalyzeCall(OperationAnalysisContext ctx, INamedTypeSymbol monoBehaviour, ImmutableArray<INamedTypeSymbol?> tasks)
     {
-        IMethodSymbol method = ((IInvocationOperation)ctx.Operation).TargetMethod;
+        var invocation = (IInvocationOperation)ctx.Operation;
+        IMethodSymbol method = invocation.TargetMethod;
 
-        if (method.Name is "Wait" or "WaitAll" or "WaitAny" && IsTask(method.ContainingType, tasks))
+        if (method.Name is "Wait" or "WaitAll" or "WaitAny" && IsTask(method.ContainingType, tasks) && !IsZeroTimeout(invocation))
             Report(ctx, monoBehaviour, "." + method.Name + "()");
         else if (method.Name == "GetResult" && IsAwaiter(method.ContainingType))
             Report(ctx, monoBehaviour, ".GetAwaiter().GetResult()");
@@ -69,12 +72,44 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
 
     private static void Report(OperationAnalysisContext ctx, INamedTypeSymbol monoBehaviour, string what)
     {
-        if (!DerivesFrom(ctx.ContainingSymbol?.ContainingType, monoBehaviour)) return;
+        ISymbol? member = ctx.ContainingSymbol;
+        while (member is IMethodSymbol { MethodKind: MethodKind.LocalFunction }) member = member.ContainingSymbol;
+        if (member is null || member.IsStatic || !DerivesFrom(member.ContainingType, monoBehaviour)) return;
 
         for (IOperation? op = ctx.Operation.Parent; op is not null; op = op.Parent)
-            if (op is IAnonymousFunctionOperation or ILocalFunctionOperation) return;
+            if (op is IAnonymousFunctionOperation) return;
 
         ctx.ReportDiagnostic(Diagnostic.Create(BlockingWait, ctx.Operation.Syntax.GetLocation(), what));
+    }
+
+    // Inside the true branch of an if or a conditional that checked IsCompleted or IsCompletedSuccessfully on the same task.
+    private static bool IsGuardedByCompletion(IPropertyReferenceOperation result)
+    {
+        string? task = result.Instance?.Syntax.ToString();
+        if (task is null) return false;
+
+        IOperation child = result;
+        for (IOperation? op = result.Parent; op is not null; child = op, op = op.Parent)
+        {
+            if (op is not IConditionalOperation conditional || !ReferenceEquals(conditional.WhenTrue, child)) continue;
+
+            foreach (IOperation check in conditional.Condition.DescendantsAndSelf())
+                if (check is IPropertyReferenceOperation { Property.Name: "IsCompleted" or "IsCompletedSuccessfully" } done
+                    && done.Instance?.Syntax.ToString() == task)
+                    return true;
+        }
+        return false;
+    }
+
+    // Wait(0) and Wait(TimeSpan.Zero) only poll.
+    private static bool IsZeroTimeout(IInvocationOperation invocation)
+    {
+        if (invocation.TargetMethod.Name != "Wait" || invocation.Arguments.Length == 0) return false;
+
+        IOperation value = invocation.Arguments[0].Value;
+        if (value.ConstantValue is { HasValue: true, Value: 0 }) return true;
+        return value is IFieldReferenceOperation { Field.Name: "Zero" } field
+               && field.Field.ContainingType?.ToDisplayString() == "System.TimeSpan";
     }
 
     private static bool IsTask(INamedTypeSymbol? type, ImmutableArray<INamedTypeSymbol?> tasks)
