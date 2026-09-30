@@ -32,9 +32,6 @@ public class EditorAssetBackend : AssetBackend
     // GPU-uploaded thumbnail cache. Main-thread-only (texture creation isn't thread-safe), same
     // as _pathToGuid every UI that shows asset thumbnails shares this instead of keeping its own.
     private readonly Dictionary<Guid, Runtime.Resources.Texture2D?> _thumbnailTextures = new();
-    // Importing (and the file writes / GPU work it implies) stays on the main thread; the
-    // background loader only deserializes already-imported on-disk cache files.
-    private int _mainThreadId = -1;
     // Held only around reading or replacing a cache file, so the loader never reads one mid-replace.
     private readonly object _cacheFileLock = new();
     private IReadOnlyList<ResourceEntry> _resources = [];
@@ -74,8 +71,6 @@ public class EditorAssetBackend : AssetBackend
     /// <summary> Initialize the asset database: set up the instance, register event hooks, load the metadata cache, scan and import assets, start file watchers, and build the shader menu catalog. Idempotent. </summary>
     public void Initialize()
     {
-        _mainThreadId = Thread.CurrentThread.ManagedThreadId;
-
         Instance = this;
         AssetDatabase.Backend = this;
         AssetLoader.SetMainThread();
@@ -2020,7 +2015,7 @@ public class EditorAssetBackend : AssetBackend
     /// </summary>
     public void Refresh()
     {
-        if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
+        if (!AssetLoader.IsMainThread)
         {
             Runtime.Debug.LogWarning("AssetDatabase.Refresh must run on the main thread; ignoring.");
             return;
