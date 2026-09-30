@@ -5,11 +5,12 @@
 // 2^level-th cell of that same grid, which makes each one a strict subset of the cascade inside
 // it: distance thins the field out, it never moves a blade.
 
-// Terrain sources. Declared here rather than by the includer so every scatter consumer samples
+// Terrain sources, included here rather than by the includer so every scatter consumer samples
 // the height field the same way the surface does.
-uniform sampler2D _Heightmap;
+#include "TerrainHeight"
 uniform float _TerrainSize;
-uniform float _TerrainHeight;
+uniform sampler2D _HolesMap;
+uniform int _HasHoles;
 
 uniform vec2 _ScatterOriginCell;   // fine-grid cell index of this ring's lower-left corner
 uniform float _ScatterCellSize;    // world size of one fine cell
@@ -25,56 +26,7 @@ uniform int _DetailChannel;
 // TerrainDetailRenderer.kMaxJitterLevel, which insets the ring radii to match.
 #define SCATTER_MAX_JITTER 3
 
-// Vertex UV -> texel-center UV. Heights are a vertex grid, so sample 0 sits on the terrain edge.
-vec2 scatterHeightUV(vec2 uv)
-{
-    vec2 s = vec2(textureSize(_Heightmap, 0));
-    return uv * (s - 1.0) / s + 0.5 / s;
-}
-
-#ifdef TERRAIN_BICUBIC
-// Same 4-tap Catmull-Rom the terrain surface runs, so blades sit exactly on the ground
-// rather than a curvature error above or below it.
-float scatterSampleHeight(vec2 uv)
-{
-    vec2 texSize = vec2(textureSize(_Heightmap, 0));
-    vec2 invTexSize = 1.0 / texSize;
-
-    vec2 coord = uv * (texSize - 1.0);
-    vec2 f = fract(coord);
-    coord -= f;
-
-    vec2 f2 = f * f; vec2 f3 = f2 * f;
-    vec2 w0 = -0.5 * f3 + f2 - 0.5 * f;
-    vec2 w1 = 1.5 * f3 - 2.5 * f2 + 1.0;
-    vec2 w2 = -1.5 * f3 + 2.0 * f2 + 0.5 * f;
-    vec2 w3 = 0.5 * f3 - 0.5 * f2;
-
-    vec2 s0 = max(w0 + w1, vec2(1e-5));
-    vec2 s1 = max(w2 + w3, vec2(1e-5));
-    vec2 fa = w1 / s0;
-    vec2 fb = w3 / s1;
-
-    vec2 t0 = (coord - 0.5 + fa) * invTexSize;
-    vec2 t1 = (coord + 1.5 + fb) * invTexSize;
-
-    float h00 = texture(_Heightmap, vec2(t0.x, t0.y)).r;
-    float h10 = texture(_Heightmap, vec2(t1.x, t0.y)).r;
-    float h01 = texture(_Heightmap, vec2(t0.x, t1.y)).r;
-    float h11 = texture(_Heightmap, vec2(t1.x, t1.y)).r;
-
-    float row0 = mix(h00, h10, s1.x / (s0.x + s1.x));
-    float row1 = mix(h01, h11, s1.x / (s0.x + s1.x));
-    return mix(row0, row1, s1.y / (s0.y + s1.y)) * _TerrainHeight;
-}
-#else
-float scatterSampleHeight(vec2 uv)
-{
-    return texture(_Heightmap, scatterHeightUV(uv)).r * _TerrainHeight;
-}
-#endif
-
-// Value noise matching TerrainGrassRenderer.NoiseAt so painted variation looks the same on
+// Value noise matching TerrainMeshDetailRenderer.NoiseAt so painted variation looks the same on
 // both paths (broad dry/healthy patches rather than per-blade static).
 float scatterHashN(int x, int z)
 {
@@ -158,6 +110,8 @@ ScatterBlade scatterResolve(int instanceID, float terrainSize, float noiseSpread
 
     vec2 uv = localXZ / terrainSize;
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return blade;
+
+    if (_HasHoles > 0 && texture(_HolesMap, uv).r < 0.5) return blade;
 
     float density = texture(_DetailMap, uv)[_DetailChannel];
     if (keep >= density) return blade;

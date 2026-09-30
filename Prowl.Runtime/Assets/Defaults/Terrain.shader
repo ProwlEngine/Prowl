@@ -75,72 +75,11 @@ Pass "Terrain"
             out vec3 worldNormal;
 
 
-            uniform sampler2D _Heightmap;
+            #include "TerrainHeight"
+
             uniform float _TerrainSize;
-            uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
-
-            // Vertex UV -> texel-center UV remap
-            vec2 hmSampleUV(vec2 uv)
-            {
-                vec2 s = vec2(textureSize(_Heightmap, 0));
-                return uv * (s - 1.0) / s + 0.5 / s;
-            }
-
-#ifdef TERRAIN_BICUBIC
-            // Bicubic B-spline filtering using 4 bilinear taps (GPU-friendly)
-            // Based on the "Fast Cubic Filtering" technique by Sigg & Hadwiger
-            float sampleHeightBicubic(vec2 uv)
-            {
-                vec2 texSize = vec2(textureSize(_Heightmap, 0));
-                vec2 invTexSize = 1.0 / texSize;
-
-                // Transform to sample grid space (heights are a vertex grid)
-                vec2 coord = uv * (texSize - 1.0);
-                vec2 f = fract(coord);
-                coord -= f;
-
-                // Catmull-Rom weights from cubic B-spline
-                vec2 f2 = f * f;
-                vec2 f3 = f2 * f;
-
-                // w0 = -0.5*t^3 + t^2 - 0.5*t
-                // w1 =  1.5*t^3 - 2.5*t^2 + 1
-                // w2 = -1.5*t^3 + 2*t^2 + 0.5*t
-                // w3 =  0.5*t^3 - 0.5*t^2
-                vec2 w0 = -0.5 * f3 + f2 - 0.5 * f;
-                vec2 w1 =  1.5 * f3 - 2.5 * f2 + 1.0;
-                vec2 w2 = -1.5 * f3 + 2.0 * f2 + 0.5 * f;
-                vec2 w3 =  0.5 * f3 - 0.5 * f2;
-
-                // Combine pairs for 4-tap bilinear trick. Both sums reach zero on sample-aligned
-                // coords, so they are floored to keep the tap positions finite.
-                vec2 s0 = max(w0 + w1, vec2(1e-5));
-                vec2 s1 = max(w2 + w3, vec2(1e-5));
-                vec2 f0 = w1 / s0;
-                vec2 f1 = w3 / s1;
-
-                // Texel-center UV of the two bilinear taps per axis
-                vec2 t0 = (coord - 0.5 + f0) * invTexSize;
-                vec2 t1 = (coord + 1.5 + f1) * invTexSize;
-
-                // 4 bilinear taps
-                float h00 = texture(_Heightmap, vec2(t0.x, t0.y)).r;
-                float h10 = texture(_Heightmap, vec2(t1.x, t0.y)).r;
-                float h01 = texture(_Heightmap, vec2(t0.x, t1.y)).r;
-                float h11 = texture(_Heightmap, vec2(t1.x, t1.y)).r;
-
-                // Blend
-                float row0 = mix(h00, h10, s1.x / (s0.x + s1.x));
-                float row1 = mix(h01, h11, s1.x / (s0.x + s1.x));
-                return mix(row0, row1, s1.y / (s0.y + s1.y));
-            }
-
-            float sampleHeight(vec2 uv) { return sampleHeightBicubic(uv) * _TerrainHeight; }
-#else
-            float sampleHeight(vec2 uv) { return texture(_Heightmap, hmSampleUV(uv)).r * _TerrainHeight; }
-#endif
 
             void main()
             {
@@ -154,7 +93,7 @@ Pass "Terrain"
 
                 // Displace: add height along terrain-local Y, transformed back to world
                 // terrainLocal with height applied
-                float height = sampleHeight(terrainUV);
+                float height = terrainHeight(terrainUV);
                 vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
                 vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
@@ -162,10 +101,10 @@ Pass "Terrain"
                 float hmSize = float(textureSize(_Heightmap, 0).x);
                 float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
 
-                float hR = sampleHeight(terrainUV + vec2(vertStep, 0.0));
-                float hL = sampleHeight(terrainUV - vec2(vertStep, 0.0));
-                float hU = sampleHeight(terrainUV + vec2(0.0, vertStep));
-                float hD = sampleHeight(terrainUV - vec2(0.0, vertStep));
+                float hR = terrainHeight(terrainUV + vec2(vertStep, 0.0));
+                float hL = terrainHeight(terrainUV - vec2(vertStep, 0.0));
+                float hU = terrainHeight(terrainUV + vec2(0.0, vertStep));
+                float hD = terrainHeight(terrainUV - vec2(0.0, vertStep));
 
                 float wStep = vertStep * _TerrainSize;
                 float slopeX = (hR - hL) / (wStep * 2.0);
@@ -426,47 +365,11 @@ Pass "TerrainShadow"
             out vec3 worldPos;
             out vec2 texCoord0;
 
-            uniform sampler2D _Heightmap;
+            #include "TerrainHeight"
+
             uniform float _TerrainSize;
-            uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
-
-            vec2 hmSampleUV(vec2 uv)
-            {
-                vec2 s = vec2(textureSize(_Heightmap, 0));
-                return uv * (s - 1.0) / s + 0.5 / s;
-            }
-
-#ifdef TERRAIN_BICUBIC
-            float sampleHeightBicubic(vec2 uv)
-            {
-                vec2 texSize = vec2(textureSize(_Heightmap, 0));
-                vec2 invTexSize = 1.0 / texSize;
-                vec2 coord = uv * (texSize - 1.0);
-                vec2 f = fract(coord);
-                coord -= f;
-                vec2 f2 = f * f; vec2 f3 = f2 * f;
-                vec2 w0 = -0.5*f3 + f2 - 0.5*f;
-                vec2 w1 = 1.5*f3 - 2.5*f2 + 1.0;
-                vec2 w2 = -1.5*f3 + 2.0*f2 + 0.5*f;
-                vec2 w3 = 0.5*f3 - 0.5*f2;
-                vec2 s0 = max(w0+w1, vec2(1e-5)); vec2 s1 = max(w2+w3, vec2(1e-5));
-                vec2 f0 = w1/s0; vec2 f1 = w3/s1;
-                vec2 t0 = (coord-0.5+f0)*invTexSize;
-                vec2 t1 = (coord+1.5+f1)*invTexSize;
-                float h00=texture(_Heightmap,vec2(t0.x,t0.y)).r;
-                float h10=texture(_Heightmap,vec2(t1.x,t0.y)).r;
-                float h01=texture(_Heightmap,vec2(t0.x,t1.y)).r;
-                float h11=texture(_Heightmap,vec2(t1.x,t1.y)).r;
-                float row0=mix(h00,h10,s1.x/(s0.x+s1.x));
-                float row1=mix(h01,h11,s1.x/(s0.x+s1.x));
-                return mix(row0,row1,s1.y/(s0.y+s1.y));
-            }
-            float sampleHeight(vec2 uv) { return sampleHeightBicubic(uv) * _TerrainHeight; }
-#else
-            float sampleHeight(vec2 uv) { return texture(_Heightmap, hmSampleUV(uv)).r * _TerrainHeight; }
-#endif
 
             void main()
             {
@@ -477,7 +380,7 @@ Pass "TerrainShadow"
                 vec2 terrainUV = terrainLocal.xz / _TerrainSize;
                 texCoord0 = terrainUV;
 
-                float height = sampleHeight(terrainUV);
+                float height = terrainHeight(terrainUV);
                 vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
                 vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
@@ -529,47 +432,11 @@ Pass "TerrainPrepass"
             out vec4 vCurrClipNJ;
             out vec4 vPrevClip;
 
-            uniform sampler2D _Heightmap;
+            #include "TerrainHeight"
+
             uniform float _TerrainSize;
-            uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
-
-            vec2 hmSampleUV(vec2 uv)
-            {
-                vec2 s = vec2(textureSize(_Heightmap, 0));
-                return uv * (s - 1.0) / s + 0.5 / s;
-            }
-
-#ifdef TERRAIN_BICUBIC
-            float sampleHeightBicubic(vec2 uv)
-            {
-                vec2 texSize = vec2(textureSize(_Heightmap, 0));
-                vec2 invTexSize = 1.0 / texSize;
-                vec2 coord = uv * (texSize - 1.0);
-                vec2 f = fract(coord);
-                coord -= f;
-                vec2 f2 = f * f; vec2 f3 = f2 * f;
-                vec2 w0 = -0.5*f3 + f2 - 0.5*f;
-                vec2 w1 = 1.5*f3 - 2.5*f2 + 1.0;
-                vec2 w2 = -1.5*f3 + 2.0*f2 + 0.5*f;
-                vec2 w3 = 0.5*f3 - 0.5*f2;
-                vec2 s0 = max(w0+w1, vec2(1e-5)); vec2 s1 = max(w2+w3, vec2(1e-5));
-                vec2 f0 = w1/s0; vec2 f1 = w3/s1;
-                vec2 t0 = (coord-0.5+f0)*invTexSize;
-                vec2 t1 = (coord+1.5+f1)*invTexSize;
-                float h00=texture(_Heightmap,vec2(t0.x,t0.y)).r;
-                float h10=texture(_Heightmap,vec2(t1.x,t0.y)).r;
-                float h01=texture(_Heightmap,vec2(t0.x,t1.y)).r;
-                float h11=texture(_Heightmap,vec2(t1.x,t1.y)).r;
-                float row0=mix(h00,h10,s1.x/(s0.x+s1.x));
-                float row1=mix(h01,h11,s1.x/(s0.x+s1.x));
-                return mix(row0,row1,s1.y/(s0.y+s1.y));
-            }
-            float sampleHeight(vec2 uv) { return sampleHeightBicubic(uv) * _TerrainHeight; }
-#else
-            float sampleHeight(vec2 uv) { return texture(_Heightmap, hmSampleUV(uv)).r * _TerrainHeight; }
-#endif
 
             void main()
             {
@@ -580,16 +447,16 @@ Pass "TerrainPrepass"
                 vec2 terrainUV = terrainLocal.xz / _TerrainSize;
                 texCoord0 = terrainUV;
 
-                float height = sampleHeight(terrainUV);
+                float height = terrainHeight(terrainUV);
                 vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
                 vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
                 float hmSize = float(textureSize(_Heightmap, 0).x);
                 float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
-                float hR = sampleHeight(terrainUV + vec2(vertStep, 0.0));
-                float hL = sampleHeight(terrainUV - vec2(vertStep, 0.0));
-                float hU = sampleHeight(terrainUV + vec2(0.0, vertStep));
-                float hD = sampleHeight(terrainUV - vec2(0.0, vertStep));
+                float hR = terrainHeight(terrainUV + vec2(vertStep, 0.0));
+                float hL = terrainHeight(terrainUV - vec2(vertStep, 0.0));
+                float hU = terrainHeight(terrainUV + vec2(0.0, vertStep));
+                float hD = terrainHeight(terrainUV - vec2(0.0, vertStep));
                 float wStep = vertStep * _TerrainSize;
                 float slopeX = (hR - hL) / (wStep * 2.0);
                 float slopeZ = (hU - hD) / (wStep * 2.0);
