@@ -324,25 +324,19 @@ public class DefaultRenderPipeline : RenderPipeline
                 mainCmd.ClearRenderTarget(ClearFlags.Color, camera.ClearColor);
                 break;
             case CameraClearFlags.Depth:
-                if (target.IsValid())
-                {
-                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                            0, 0, colorRT.Width, colorRT.Height,
-                                            ClearFlags.Color, BlitFilter.Nearest);
-                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
-                }
-                break;
             case CameraClearFlags.Nothing:
-                if (target.IsValid())
-                {
-                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                            0, 0, colorRT.Width, colorRT.Height,
-                                            ClearFlags.Color, BlitFilter.Nearest);
-                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
-                }
+            {
+                // Start from what the target already holds, the backbuffer when there is no target.
+                bool hasTarget = target.IsValid();
+                int srcWidth = hasTarget ? target.Width : Window.InternalWindow.FramebufferSize.X;
+                int srcHeight = hasTarget ? target.Height : Window.InternalWindow.FramebufferSize.Y;
+                mainCmd.SetRenderTargets(colorRT.frameBuffer, hasTarget ? target.frameBuffer : null);
+                mainCmd.BlitFramebuffer(0, 0, srcWidth, srcHeight,
+                                        0, 0, colorRT.Width, colorRT.Height,
+                                        ClearFlags.Color, BlitFilter.Nearest);
+                mainCmd.SetRenderTarget(colorRT.frameBuffer);
                 break;
+            }
         }
 
         // Forward opaques (with PBR lighting inline).
