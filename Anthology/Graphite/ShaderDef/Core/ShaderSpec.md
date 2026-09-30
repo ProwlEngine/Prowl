@@ -41,15 +41,18 @@ Shader "ShaderName"
 | Element          | Required | Notes                                              |
 |------------------|----------|----------------------------------------------------|
 | `Shader "Name"`  | Yes      | Quoted display name for the shader                 |
-| `Properties`     | No       | Exposes default material parameters to the library |
+| `Properties`     | No       | Metadata for engine-side tools; Graphite ignores it |
 | `Pass`           | Yes (≥1) | One block per rendering pass                       |
-| `Fallback`       | Yes      | Name of a fallback shader if this one fails        |
+| `Fallback`       | No       | Metadata for engine-side tools; Graphite ignores it |
 
 ---
 
 ## Properties Block
 
 The `Properties` block declares named default parameters that can be set on a material at runtime.
+
+Graphite parses and stores these on `ShaderDefinition.Properties` but does not use them itself. They
+exist for engine-side consumers such as a material inspector.
 
 ```
 Properties
@@ -291,7 +294,7 @@ characters `R`, `G`, `B`, and `A`.
 ### Polygon Offset — `Offset`
 
 ```
-Offset <factor>, <units>
+Offset <factor> <units>
 ```
 
 Applies a depth bias to rendered polygons to avoid z-fighting (e.g. decals rendered on top of
@@ -302,7 +305,7 @@ another surface).
 | `factor`  | float | Scales the maximum depth slope of the polygon                                |
 | `units`   | float | Adds a constant depth offset in units of the smallest depth-buffer increment |
 
-Example: `Offset -1, -1` pulls a surface slightly towards the camera.
+Example: `Offset -1 -1` pulls a surface slightly towards the camera.
 
 ---
 
@@ -326,6 +329,9 @@ mask, producing anti-aliased transparency edges without sorting. Requires MSAA t
 
 The `Stencil` block is a sub-block of a `Pass` that configures the stencil test. All commands
 inside are optional; front- and back-face stencil operations can be configured independently.
+
+The presence of a `Stencil` block enables the stencil test for the pass. Omit the block to leave
+stencil testing disabled.
 
 ```
 Stencil
@@ -435,8 +441,11 @@ fragment entrypoint by hand.
 Fallback "FallbackShaderName"
 ```
 
-Specifies the name of an alternative shader to use when this shader cannot run on the current
-hardware or render pipeline. The library resolves the fallback by name.
+Optional. Names an alternative shader to use when this shader cannot run on the current hardware or
+render pipeline.
+
+Graphite parses and stores the name on `ShaderDefinition.Fallback` but never resolves it. Resolving
+the name to another shader is up to the engine.
 
 ---
 
@@ -505,7 +514,7 @@ Shader "Example/PBR"
         Cull Back
         ZTest LessEqual
         ZWrite On
-        Blend SrcAlpha OneMinusSrcAlpha
+        Blend SourceAlpha InverseSourceAlpha
 
         SLANGPROGRAM
         [shader("vertex")]
