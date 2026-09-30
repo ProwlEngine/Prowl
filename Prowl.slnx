@@ -1,0 +1,26 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Players/" />
+  <Folder Name="/Players/Desktop/">
+    <Project Path="Players/Desktop/Prowl.Player.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/Samples/">
+    <Project Path="Samples/AudioDemo/AudioDemo.csproj" />
+    <Project Path="Samples/CarPhysicsDemo/CarPhysicsDemo.csproj" />
+    <Project Path="Samples/FlyCamera/FlyCamera.csproj" />
+    <Project Path="Samples/LifecycleTest/LifecycleTest.csproj" />
+    <Project Path="Samples/PhysicsCubes/PhysicsCubes.csproj" />
+    <Project Path="Samples/ShapeCastDemo/ShapeCastDemo.csproj" />
+    <Project Path="Samples/SimpleCube/SimpleCube.csproj" />
+    <Project Path="Samples/VoxelEngine/VoxelEngine.csproj" />
+  </Folder>
+  <Project Path="Prowl.Analyzers/Prowl.Analyzers.csproj" />
+  <Project Path="Prowl.Editor.Test/Prowl.Editor.Test.csproj" />
+  <Project Path="Prowl.Editor/Prowl.Editor.csproj" />
+  <Project Path="Prowl.Runtime.Test/Prowl.Runtime.Test.csproj" />
+  <Project Path="Prowl.Runtime/Prowl.Runtime.csproj" />
+</Solution>
