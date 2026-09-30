@@ -466,7 +466,14 @@ public abstract class RenderPipeline : EngineObject
         public List<int> RenderableIndices;  // Indices of objects in this batch
         public bool IsInstanced;       // True if this batch uses GPU instancing
         public int InstancedRenderableIndex;  // Index of the instanced renderable (if IsInstanced is true)
+        public int Order;              // Creation order, keeps equal sort keys in their original order
     }
+
+    private static readonly Comparison<RenderBatch> s_batchOrder = (a, b) =>
+    {
+        int c = a.SortKey.CompareTo(b.SortKey);
+        return c != 0 ? c : a.Order.CompareTo(b.Order);
+    };
 
     /// <summary>
     /// Renders all given objects with optimized batching. Objects are grouped by (material, mesh, pass)
@@ -484,7 +491,9 @@ public abstract class RenderPipeline : EngineObject
     /// <param name="currentRT">Currently bound color render target, used for the
     /// GrabTexture handshake (read FB for the blit-into-grab-RT). Pass null if no
     /// pass in this batch will request a grab texture.</param>
-    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
+    /// <param name="preserveOrder">Draw in the order of <paramref name="renderables"/>, only merging
+    /// neighbours into one batch. Needed for sorted lists such as back to front transparents.</param>
+    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null, bool preserveOrder = false)
     {
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(shaderTag);
         bool hasSortOffsets = false;
@@ -554,7 +563,8 @@ public abstract class RenderPipeline : EngineObject
                         SortKey = sortKey,
                         IsInstanced = true,
                         InstancedRenderableIndex = renderIndex,
-                        RenderableIndices = null  // Not used for instanced batches
+                        RenderableIndices = null,  // Not used for instanced batches
+                        Order = batches.Count
                     };
                     batches.Add(newBatch);
                 }
@@ -578,7 +588,7 @@ public abstract class RenderPipeline : EngineObject
                 // Found matching pass - add to appropriate batch
                 // Batch key: (material hash, pass index, mesh) ensures each pass gets its own batch
                 var batchKey = (materialHash, passIndex, mesh);
-                if (batchLookup.TryGetValue(batchKey, out int batchIndex))
+                if (batchLookup.TryGetValue(batchKey, out int batchIndex) && (!preserveOrder || batchIndex == batches.Count - 1))
                 {
                     // Batch already exists - add this object to it
                     batches[batchIndex].RenderableIndices.Add(renderIndex);
@@ -599,7 +609,8 @@ public abstract class RenderPipeline : EngineObject
                         PassIndex = passIndex,
                         MaterialHash = materialHash,
                         SortKey = sortKey,
-                        RenderableIndices = indices
+                        RenderableIndices = indices,
+                        Order = batches.Count
                     };
                     batchLookup[batchKey] = batches.Count;
                     batches.Add(newBatch);
@@ -613,7 +624,7 @@ public abstract class RenderPipeline : EngineObject
         // Sort batches by their sort key (respects tag offsets like "Transparent+1000")
         if (hasSortOffsets)
         {
-            batches.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
+            batches.Sort(s_batchOrder);
         }
 
         for (int i = 0; i < batches.Count; i++)

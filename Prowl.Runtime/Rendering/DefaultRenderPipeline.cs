@@ -379,7 +379,7 @@ public class DefaultRenderPipeline : RenderPipeline
         transparentCmd.SetRenderTarget(colorRT.frameBuffer);
         transparentCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
         List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
-        DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT);
+        DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT, preserveOrder: true);
         Graphics.Submit(transparentCmd);
 
         // World-space UI canvases (drawn with the camera matrices, into the scene color).
