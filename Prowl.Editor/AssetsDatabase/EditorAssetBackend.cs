@@ -2093,6 +2093,7 @@ public class EditorAssetBackend : AssetBackend
         if (!cacheMissing && !IsSourceNewerThanImport(entry)) return false;
 
         Reimport(parentGuid);
+        Core.EditorApplication.RunOnMainThread(() => Reimport(parentGuid));
         return true;
     }
 
