@@ -77,7 +77,7 @@ Steps inside `Prepare`:
 
 1. No sets in the program: return false.
 2. Fast path: graphics, render pass already active, same program object, same active-property epoch as the last prepare: return false.
-3. For each set index: resolve, transition, sync, gather offsets ([`ResolveSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L26), [`TransitionResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L9), [`SyncSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L206), [`GatherDynOffsets`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L265)).
+3. For each set index: resolve, check texture layouts, sync, gather offsets ([`ResolveSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L26), [`PrepareResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L7), [`SyncSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L206), [`GatherDynOffsets`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L265)).
 4. Remember the first set whose descriptor handle or dynamic offsets differ from what this command buffer last bound. `EmitBind` binds from that set index to the end in one `vkCmdBindDescriptorSets`.
 
 ### 5. Resolving each element
@@ -111,11 +111,15 @@ Uniform buffers are always created as `UniformBufferDynamic` descriptors. The pe
 
 [`BuildIdentityFromScratch`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L229) builds a `ulong[]` per set: the set index, then per element the raw Vulkan handles: buffer handle plus range (UBO), buffer handle plus offset plus range (storage), image view handle (texture), sampler handle. Dynamic UBO offsets are deliberately excluded.
 
-`SyncSet` compares the identity to the one this command buffer last resolved for this set index; equal means nothing to do. Otherwise it asks `VkDescriptorSetCache.TryGet`. On a miss it allocates a set from the program's pool and writes all descriptors with one `vkUpdateDescriptorSets` ([`WriteDescriptorsFromScratch`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L30)).
+`SyncSet` compares the identity to the one this command buffer last resolved for this set index; equal means nothing to do. Otherwise it asks `VkDescriptorSetCache.TryGet`. On a miss it allocates a set from the program's pool and writes all descriptors with one `vkUpdateDescriptorSets` ([`WriteDescriptorsFromScratch`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L43)).
 
 Descriptor types written: dynamic uniform buffer, storage buffer, sampled image or combined image sampler (layout `ShaderReadOnlyOptimal`), storage image (layout `General`), sampler.
 
-Texture layouts are transitioned in `TransitionResolvedTextures` before the render pass is ensured active: read-only textures to `ShaderReadOnlyOptimal`, read-write to `General`. A storage image that is also `Sampled` is queued so it is flipped back to read-only before a later draw.
+Binding does not own texture layouts. [`PrepareResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L7) computes each bound texture's current layout from the command buffer's graph state (a texture that is not a graph resource is in its resting layout) and checks it against the descriptor:
+
+- A read-only texture must be in `ShaderReadOnlyOptimal`. Anything else throws `RenderException` asking for a `Sampled` declaration.
+- A read-write texture in `General` binds as is.
+- A read-write texture that is resting in another layout (a non-graph `Storage | Sampled` texture) is moved to `General` for one compute dispatch and returned to its resting layout right after it. In a draw, or for a graph texture declared with another kind, it throws `RenderException` asking for a `Storage` declaration.
 
 ### 8. Cache lifetime
 
@@ -156,6 +160,7 @@ Two counters serve different consumers. The command buffer epoch answers "did th
 - `PropertyID.ToString(id)` returns null for IDs never interned from a string.
 - `PropertySet` and `CommandBuffer` are not thread-safe.
 - Missing properties are reported only when `GraphicsDevice.OnMissingProperty` is set; it is null by default.
+- A graph texture can only be bound in the kind its pass declared: sampled needs `Sampled`, storage needs `Storage`.
 
 ## See also
 
@@ -163,4 +168,4 @@ Two counters serve different consumers. The command buffer epoch answers "did th
 - [api/command-buffers.md](../api/command-buffers.md) - `SetProperties`, draws, dispatches
 - [05-programs-and-pipelines.md](05-programs-and-pipelines.md) - where `ResourceLayouts` come from
 - [07-vulkan-backend.md](07-vulkan-backend.md) - descriptor pools and device-wide setup
-- [03-render-graph.md](03-render-graph.md) - where the textures being bound come from
+- [03-render-graph.md](03-render-graph.md) - where the textures being bound come from, and the states they are in

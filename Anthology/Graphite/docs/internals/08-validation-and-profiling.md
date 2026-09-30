@@ -80,7 +80,7 @@ Event sources, grouped by where the call is made:
 | Resource accounting | `Allocate`, `Free`, `AllocateMemory`, `FreeMemory` | `RecordBufferAllocation` in the device partial, `Vk*.Profiling.cs`, and Vk constructors/disposers ([VkTexture.Profiling.cs](../../Graphite/Profiling/Platform/Vulkan/VkTexture.Profiling.cs) stores `_profiledBytes` so the free replays the same number) |
 | Buffer traffic | `Record(BufferOpBin.Map/Unmap/Update/Copy)` | `GraphicsDevice.Map/Unmap/UpdateBuffer/UpdateTexture`, Vulkan copy |
 | Swapchain | `RecordSwap(Present/Resize/Acquire)` | `GraphicsDevice.SwapBuffers`, `VkSwapchain` |
-| Barriers | `RecordBarrier(TextureTransition/BufferTransition/MemoryBarrier)` | `VkTexture`, `VkCommandBuffer`, `VkTransferCommandBuffer` |
+| Barriers | `RecordBarrier(TextureTransition/BufferTransition/MemoryBarrier)` | `VkBarriers` (graph barrier batches and command-local transitions), `VkCommandBuffer` / `VkTransferCommandBuffer` buffer copies |
 | Structure | `BeginView/EndView`, `BeginPass/EndPass`, `RecordPassRead` | `DispatchGraph`, `ExecuteView` |
 | Commands | `RecordPipelineSwitch`, `RecordDraw`, `RecordDispatch`, `RecordResourceSetBind`, `RecordSubmit` | `CommandBuffer.State/Draw`, `VkExecutionTask`, `SubmitAndWait` |
 | Opt-in extras | `RecordPassMetadata`, `RecordDrawMetadata`, `RecordDrawBuffers`, `Capture` | `RenderContext`, `CommandBuffer.Profiling`, `ExecuteView` |

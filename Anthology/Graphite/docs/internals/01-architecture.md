@@ -70,7 +70,7 @@ Both layers are plain partial-class files in the same assembly. There is no cond
 | `ExecutionTask` | `VkExecutionTask` | One in-flight frame: id, ring slot, fence, transient arena |
 | `Fence` | `VkFence` | Wraps a `VkFence` handle |
 | `DeviceBuffer` | `VkBuffer` | Sub-allocated from `VkDeviceMemoryManager` |
-| `Texture` / `TextureView` / `Sampler` | `VkTexture` / `VkTextureView` / `VkSampler` | Texture tracks image layout per subresource |
+| `Texture` / `TextureView` / `Sampler` | `VkTexture` / `VkTextureView` / `VkSampler` | Texture rests in a layout computed from its usage; no layout is stored |
 | `Framebuffer` | `VkFramebufferBase` -> `VkFramebuffer`, `VkSwapchainFramebuffer` | |
 | `Swapchain` | `VkSwapchain` | |
 | `CommandBuffer` | `VkCommandBuffer` | Owns a `VkDescriptorBinder` |

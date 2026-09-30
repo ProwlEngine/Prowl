@@ -6,6 +6,7 @@ How `Platform/Vulkan` brings up Vulkan, submits work, allocates memory, caches d
 - [Initialization](#initialization)
 - [Submission and fences](#submission-and-fences)
 - [Command buffers](#command-buffers)
+- [Image layouts and barriers](#image-layouts-and-barriers)
 - [Memory](#memory)
 - [Descriptors and pipelines](#descriptors-and-pipelines)
 - [Swapchain and present](#swapchain-and-present)
@@ -38,6 +39,7 @@ How `Platform/Vulkan` brings up Vulkan, submits work, allocates memory, caches d
 | `VkBuffer`, `VkTexture`, `VkTextureView`, `VkSampler` | [Platform/Vulkan/](../../Graphite/Platform/Vulkan) | Resource wrappers |
 | `VkSwapchain`, `VkSwapchainFramebuffer` | [VkSwapchain.cs](../../Graphite/Platform/Vulkan/VkSwapchain.cs) | Presentation |
 | `VkFramebuffer`, `VkFramebufferBase` | [VkFramebuffer.cs](../../Graphite/Platform/Vulkan/VkFramebuffer.cs) | Render targets and their render passes |
+| `VkBarriers` | [VkBarriers.cs](../../Graphite/Platform/Vulkan/VkBarriers.cs) | Resting layouts, state to layout/stage/access mapping, barrier recording |
 | `VkFormats` | [VkFormats/](../../Graphite/Platform/Vulkan/VkFormats) | Enum translation tables |
 | `ResourceRefCount` | [ResourceRefCount.cs](../../Graphite/Platform/Vulkan/ResourceRefCount.cs) | Atomic refcount with a dispose callback |
 
@@ -90,9 +92,45 @@ Execution slots themselves (`SlotState`, `BeginExecutionCore`, `IsExecutionCompl
 
 Each `VkCommandBuffer` owns its own `CommandPool` (created with `ResetCommandBufferBit`) and primary command buffer. `Begin` ([source](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.cs#L56)) resets or reallocates the native buffer, starts it with `OneTimeSubmit`, and starts the timing and pipeline-statistics query pools. `VkGraphCommandBufferPool` keeps wrappers on a free list: [Rent](../../Graphite/Platform/Vulkan/VkGraphCommandBufferPool.cs#L28) pops one or allocates; the execution task returns it when its slot is reused, and buffers that were never ended are disposed instead of recycled.
 
-At draw time [PreDrawCommand](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.Draw.cs#L75) does, in order: transition sampled images used by the draw, resolve the graphics pipeline ([ResolveAndBindGraphicsPipeline](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.Draw.cs#L121)), `VkDescriptorBinder.Prepare`, ensure a render pass is active, then emit the bind if anything changed. Compute does the same via `PreDispatchCommand` but first ends any active render pass.
+At draw time [PreDrawCommand](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.Draw.cs#L77) does, in order: resolve the graphics pipeline ([ResolveAndBindGraphicsPipeline](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.Draw.cs#L109)), `VkDescriptorBinder.Prepare` (which checks bound texture layouts), ensure a render pass is active, then emit the bind if anything changed. Compute does the same via `PreDispatchCommand` but first ends any active render pass, and after the dispatch returns any texture it moved to `General` for that dispatch to its resting layout.
 
-`VkFramebuffer` builds three compatible render passes at creation ([CreateRenderPasses](../../Graphite/Platform/Vulkan/VkFramebuffer.cs#L52)): no clear (initial layout), no clear (load existing), and clear. The command buffer picks one depending on whether the framebuffer is cleared or loaded.
+## Image layouts and barriers
+
+The backend stores no image layouts. [VkBarriers](../../Graphite/Platform/Vulkan/VkBarriers.cs) computes them:
+
+| Input | Layout |
+| --- | --- |
+| Resting, swapchain image | `PresentSrcKhr` |
+| Resting, `Sampled` | `ShaderReadOnlyOptimal` |
+| Resting, `Storage` (not sampled) | `General` |
+| Resting, `RenderTarget` / `DepthStencil` only | color / depth-stencil attachment optimal |
+| Resting, anything else | `General` |
+| `Sampled` / `Storage` / `Attachment` / `TransferSrc` / `TransferDst` | `ShaderReadOnlyOptimal` / `General` / attachment optimal / `TransferSrcOptimal` / `TransferDstOptimal` |
+
+Each layout has one stage and access scope. Shader layouts use every shader stage the device enables (vertex, fragment, compute, plus geometry and tessellation when those features exist), attachment layouts use the attachment output and fragment test stages, transfer layouts use the transfer stage. A barrier is skipped only when old and new layouts are equal and read-only (`ShaderReadOnlyOptimal`, `TransferSrcOptimal`, `PresentSrcKhr`); every other pair is emitted, so writes are always ordered.
+
+Where layouts change:
+
+- **Creation.** One immediate submit moves a new image from `Undefined` to its resting layout, clearing render targets and depth targets on the way through `TransferDstOptimal`.
+- **Graph barriers.** The graph's barrier command buffers call `RecordBarriers`, which emits one `vkCmdPipelineBarrier` with an image barrier per texture and at most one global memory barrier for buffers.
+- **Copies, mip generation, resolves.** Each reads the current layout of its textures from the command buffer's graph state (resting for non-graph textures and for immediate uploads), transitions the touched subresources to transfer layouts, and transitions them back.
+- **Storage binds.** A non-graph texture bound read-write whose resting layout is not `General` moves to `General` for one compute dispatch and back.
+
+`VkFramebuffer` builds four compatible render passes at creation ([CreateRenderPass](../../Graphite/Platform/Vulkan/VkFramebuffer.cs#L45)): graph mode or resting mode, each with a load and a clear variant ([GetRenderPass](../../Graphite/Platform/Vulkan/VkFramebuffer.cs#L42)).
+
+```mermaid
+flowchart LR
+    subgraph Graph["Graph mode"]
+        direction LR
+        GA["Attachment"] --> GP["Pass"] --> GB["Attachment"]
+    end
+    subgraph Rest["Resting mode"]
+        direction LR
+        RA["Resting"] --> RP["Pass"] --> RB["Resting"]
+    end
+```
+
+In graph mode every attachment enters and leaves in its attachment layout; the graph's barriers do the rest. In resting mode the attachment enters and leaves in its resting layout, so the render pass itself performs the transitions. Clear variants start from `Undefined`. [ResolveFramebufferMode](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.RenderPass.cs#L121) picks the mode in `SetFramebuffer`: all attachments in the `Attachment` state means graph mode, all resting means resting mode, and anything else throws. The swapchain framebuffer is always resting mode. Both modes carry external subpass dependencies that order attachment access against earlier and later shader, transfer and attachment work.
 
 ## Memory
 
@@ -110,7 +148,7 @@ Who uses which memory:
 | --- | --- | --- |
 | `VkBuffer` with `Dynamic` or `Staging` | HostVisible + HostCoherent, persistently mapped | Staging adds HostCached when a type exists |
 | Other `VkBuffer` | DeviceLocal | Updated through staging buffers and copies |
-| `VkTexture` (not `Staging`) | DeviceLocal, optimal tiling | Image created with mutable format (and cube-compatible for cubemaps), layout tracked per subresource |
+| `VkTexture` (not `Staging`) | DeviceLocal, optimal tiling | Image created with mutable format (and cube-compatible for cubemaps), in its resting layout from creation on |
 | `VkTexture` with `Staging` usage | A linear staging buffer, no image | Size is the sum of all mip levels |
 | Per-slot transient arena | Dynamic uniform `VkBuffer`s | Overflow buffers recycled through a device-wide free list |
 
@@ -160,6 +198,12 @@ Writing a descriptor set the GPU is reading is a hazard, and rewriting sets ever
 ### Why dedicated fences for slots plus a pooled fence list?
 The slot fence tells the ring a whole execution is done. The pooled fences exist for intermediate flushes and transfers that are not tied to a slot. Using two kinds keeps the ring's invariants simple and gives the fence pool a single owner rule (`OwnsFence`).
 
+### Why no layout tracker?
+A tracker updated at record time is only right if record order matches submit order, and it hides which code owns a transition. Layouts are instead a pure function of usage (resting) or of the graph's declared state, so every transition has a known owner and nothing needs to be kept in sync.
+
+### Why keep VkRenderPass instead of dynamic rendering?
+MoltenVK and older Android drivers are targets, so the backend stays on core Vulkan 1.0 render passes. Two layout modes times two load variants are created per framebuffer; they are render-pass compatible, so one framebuffer and one pipeline serve all four.
+
 ### Why one command pool per command buffer?
 Vulkan command pools are externally synchronised, so a pool per buffer means two buffers never share a pool and can be recorded independently. Each wrapper is created with `ResetCommandBufferBit` so its native buffer can be reset and reused. The cost is one pool object per wrapper, which is why `VkGraphCommandBufferPool` recycles the wrappers themselves.
 
@@ -171,6 +215,8 @@ Vulkan command pools are externally synchronised, so a pool per buffer means two
 - `SwapBuffers` blocks on an acquire fence. Presentation throttling therefore shows up as time spent inside it.
 - The driver pipeline cache is created empty and never saved, so pipeline creation cost is paid at every process start.
 - A `VkTexture` with `Staging` usage has no `VkImage` (only a staging buffer).
+- A texture created from a native handle (`ResourceFactory.CreateTexture(ulong, ...)`) is treated like a swapchain image: its resting layout is `PresentSrcKhr` and it is cleared on creation.
+- Binding a framebuffer that mixes graph attachments with non-graph textures, or whose graph texture was declared with a non-`Attachment` kind, throws `RenderException`.
 - Surface lost (`ErrorSurfaceLostKhr`) throws `RenderException`; there is no automatic recovery.
 - The present queue and graphics queue use separate locks only when they differ; code that submits from several threads still serialises on the graphics queue lock.
 
