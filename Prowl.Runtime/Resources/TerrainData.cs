@@ -1134,10 +1134,13 @@ public sealed class TerrainData : Asset, ISerializable
                     MaxHeight = dpo.Get("MaxHeight")?.FloatValue ?? 2f,
                     NoiseSpread = dpo.Get("NoiseSpread")?.FloatValue ?? 0.1f,
                     BendFactor = dpo.Get("BendFactor")?.FloatValue ?? 0.5f,
-                    HealthyColor = Serializer.Deserialize<Color>(dpo.Get("HealthyColor") ?? dpo.Get("Tint"), ctx),
-                    DryColor = Serializer.Deserialize<Color>(dpo.Get("DryColor") ?? dpo.Get("DryTint"), ctx),
                     AlignToNormal = dpo.Get("AlignToNormal")?.BoolValue ?? false,
                 };
+
+                if ((dpo.Get("HealthyColor") ?? dpo.Get("Tint")) is { } healthy)
+                    dp.HealthyColor = Serializer.Deserialize<Color>(healthy, ctx);
+                if ((dpo.Get("DryColor") ?? dpo.Get("DryTint")) is { } dry)
+                    dp.DryColor = Serializer.Deserialize<Color>(dry, ctx);
 
                 var matList = dpo.Get("Materials");
                 if (matList != null)
@@ -1206,7 +1209,7 @@ public sealed class TerrainData : Asset, ISerializable
                     Rotation = tio.Get("Rot")?.FloatValue ?? 0,
                     WidthScale = tio.Get("WS")?.FloatValue ?? tio.Get("Scale")?.FloatValue ?? 1f,
                     HeightScale = tio.Get("HS")?.FloatValue ?? tio.Get("Scale")?.FloatValue ?? 1f,
-                    Tint = Serializer.Deserialize<Color>(tio.Get("Tint"), ctx),
+                    Tint = tio.Get("Tint") is { } tint ? Serializer.Deserialize<Color>(tint, ctx) : Color.White,
                 });
 
         _heightmapDirty = true;
