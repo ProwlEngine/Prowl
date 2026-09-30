@@ -896,6 +896,7 @@ public sealed class TerrainData : Asset, ISerializable
         base.TakeContent(staging);
         _heightsVersion++;
         _detailsVersion++;
+        _holesVersion++;
     }
 
     protected override void OnUnload()
@@ -1058,12 +1059,33 @@ public sealed class TerrainData : Asset, ISerializable
                 heights = new short[HeightmapResolution * HeightmapResolution];
             }
         }
+        // Arrays that disagree with the stored resolution are not this asset's data, and indexing them would run off the end
+        int heightCount = HeightmapResolution * HeightmapResolution;
+        if (heights.Length != heightCount)
+        {
+            Debug.LogWarning($"TerrainData '{Name}' has {heights.Length} heights for a {HeightmapResolution} heightmap, so its heights were reset.");
+            heights = new short[heightCount];
+        }
         Heights = heights;
-        Splats = DeserializeFloatArray(value, "Splats") ?? CreateDefaultSplats();
+
+        int splatCount = SplatmapResolution * SplatmapResolution * Layers.Count;
+        float[]? splats = DeserializeFloatArray(value, "Splats");
+        if (splats != null && splats.Length != splatCount)
+        {
+            Debug.LogWarning($"TerrainData '{Name}' has {splats.Length} splat weights for a {SplatmapResolution} splatmap with {Layers.Count} layers, so its splats were reset.");
+            splats = null;
+        }
+        Splats = splats ?? CreateDefaultSplats();
 
         // Holes
         var holesB64 = value.Get("Holes")?.StringValue;
-        Holes = holesB64 != null ? Convert.FromBase64String(holesB64) : null;
+        byte[]? holes = holesB64 != null ? Convert.FromBase64String(holesB64) : null;
+        if (holes != null && holes.Length != SplatmapResolution * SplatmapResolution)
+        {
+            Debug.LogWarning($"TerrainData '{Name}' has {holes.Length} hole texels for a {SplatmapResolution} splatmap, so its holes were cleared.");
+            holes = null;
+        }
+        Holes = holes;
 
         // Detail system
         DetailResolution = value.Get("DetailResolution")?.IntValue ?? value.Get("GrassmapResolution")?.IntValue ?? 1024;
@@ -1165,6 +1187,7 @@ public sealed class TerrainData : Asset, ISerializable
         _holesDirty = true;
         _heightsVersion++;
         _detailsVersion++;
+        _holesVersion++;
     }
 
     #endregion
