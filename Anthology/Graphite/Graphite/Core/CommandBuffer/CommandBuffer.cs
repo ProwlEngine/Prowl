@@ -57,4 +57,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
 
     /// <summary>Finishes recording, makes buffer executable. Context calls on submit, not passes.</summary>
     internal abstract void End();
+
+    internal abstract void RecordBarriers(System.ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst);
 }

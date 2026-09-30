@@ -14,6 +14,11 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <summary>True if End was called since last Begin.</summary>
     internal bool HasEnded { get; private protected set; }
 
+    internal System.Collections.Generic.Dictionary<Texture, TextureState>? GraphStates { get; set; }
+
+    internal TextureState StateOf(Texture texture)
+        => GraphStates != null && GraphStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
+
     /// <summary>Updates buffer region with a single value. T must be blittable.</summary>
     /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
