@@ -54,8 +54,12 @@ public abstract class EngineObject : IDisposable
 
         // Explicit disposal means a finalizer (if this type has one) has nothing left to do.
         GC.SuppressFinalize(this);
-        OnDispose();
+        try { OnDispose(); }
+        finally { OnDisposed(); }
     }
+
+    /// <summary>Runs after <see cref="OnDispose"/> even when an override skips base or throws.</summary>
+    private protected virtual void OnDisposed() { }
 
     private static readonly List<EngineObject> s_destroyQueue = [];
 
