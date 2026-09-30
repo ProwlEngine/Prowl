@@ -46,6 +46,7 @@ public sealed class SceneLightSystem : IDisposable
     // Per-frame results.
     private IRenderableLight _directional;
     private readonly List<IRenderableLight> _shadowCasters = new();
+    private readonly List<IRenderableLight> _previousCasters = new();
 
     public LightBVH StaticBVH => _staticBVH;
     public LightBVH DynamicBVH => _dynamicBVH;
@@ -123,12 +124,11 @@ public sealed class SceneLightSystem : IDisposable
                     _staticBVH.Add(light, in data);
                     _membership[light] = Membership.Static;
                 }
-                else if (current == Membership.Dynamic)
+                else
                 {
                     // Refit / topology check happens inside Update; unchanged data is a no-op.
-                    _dynamicBVH.Update(light, in data);
+                    (current == Membership.Static ? _staticBVH : _dynamicBVH).Update(light, in data);
                 }
-                // Static + still static: don't update. The BVH should only change on add/remove.
             }
             else
             {
@@ -187,16 +187,18 @@ public sealed class SceneLightSystem : IDisposable
                 bvh.SetShadowSlot(l, slot);
             }
         }
-        // Clear stale slots on lights that were shadow casters last frame but aren't now.
-        for (int i = casterCount; i < localCandidates.Count; i++)
+        // Clear stale slots on lights that were shadow casters last frame but aren't now,
+        // including ones that stopped casting shadows entirely.
+        foreach (var l in _previousCasters)
         {
-            var l = localCandidates[i].light;
-            if (_membership.TryGetValue(l, out var m))
+            if (!_shadowCasters.Contains(l) && _membership.TryGetValue(l, out var m))
                 (m == Membership.Static ? _staticBVH : _dynamicBVH).SetShadowSlot(l, -1);
         }
+        _previousCasters.Clear();
+        _previousCasters.AddRange(_shadowCasters);
 
-        // Build / refit and upload. Static rebuild happens only when add/remove/transition fired
-        // above; dynamic rebuilds when refit invariant breaks.
+        // Build / refit and upload. Either tree rebuilds on add/remove/transition or when a light
+        // escapes its loose bounds.
         _staticBVH.Sync();
         _dynamicBVH.Sync();
         _staticTex.Sync(_staticBVH);
@@ -408,6 +410,7 @@ public sealed class SceneLightSystem : IDisposable
         _membership.Clear();
         _seenThisFrame.Clear();
         _shadowCasters.Clear();
+        _previousCasters.Clear();
         _directional = null;
     }
 }

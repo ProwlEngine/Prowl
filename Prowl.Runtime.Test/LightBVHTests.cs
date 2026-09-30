@@ -366,3 +366,57 @@ public class LightBVHTests
         Assert.True(safety > 0, "rope traversal infinite-looped");
     }
 }
+
+public class SceneLightSystemTests : RuntimeTestBase
+{
+    private sealed class ControlledLight : Light
+    {
+        public ForwardLightData Data;
+
+        public override LightType GetLightType() => LightType.Point;
+        public override Float3 GetLightPosition() => Data.Position;
+        public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables) { }
+        public override ForwardLightData GetForwardLightData() => Data;
+    }
+
+    private ControlledLight CreateLight(bool isStatic)
+    {
+        var go = CreateGameObject("Light");
+        go.IsStatic = isStatic;
+        var light = go.AddComponent<ControlledLight>();
+        light.Data = new ForwardLightData { Type = LightType.Point, Range = 5f, Color = new Float3(1, 1, 1), Intensity = 1f };
+        return light;
+    }
+
+    [Fact]
+    public void StaticLight_PicksUpShadowAndIntensityChanges()
+    {
+        var system = new SceneLightSystem();
+        var light = CreateLight(isStatic: true);
+
+        system.Reconcile([light], Float3.Zero, LayerMask.Everything);
+
+        light.Data.ShadowEnabled = true;
+        light.Data.Intensity = 3f;
+        system.Reconcile([light], Float3.Zero, LayerMask.Everything);
+
+        var slot = system.StaticBVH.Slots[system.StaticBVH.GetSlot(light)];
+        Assert.True(slot.ShadowEnabled);
+        Assert.Equal(3f, slot.Intensity);
+    }
+
+    [Fact]
+    public void LightThatStopsCasting_LosesItsShadowSlot()
+    {
+        var system = new SceneLightSystem();
+        var light = CreateLight(isStatic: true);
+        light.Data.ShadowEnabled = true;
+
+        system.Reconcile([light], Float3.Zero, LayerMask.Everything);
+        Assert.Equal(0, system.StaticBVH.Slots[system.StaticBVH.GetSlot(light)].ShadowSlot);
+
+        light.CastShadows = false;
+        system.Reconcile([light], Float3.Zero, LayerMask.Everything);
+        Assert.Equal(-1, system.StaticBVH.Slots[system.StaticBVH.GetSlot(light)].ShadowSlot);
+    }
+}
