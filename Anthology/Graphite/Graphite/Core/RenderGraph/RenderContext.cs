@@ -250,6 +250,20 @@ public sealed class RenderContext<TView>
         return copy;
     }
 
+    /// <summary>True once this view's history ring holds an earlier execution. False on a view's first execution and after a resize reallocates its ring.</summary>
+    /// <param name="handle">Handle from the builder.</param>
+    public bool IsHistoryValid(BufferHandle handle)
+    {
+        if (!handle.IsValid)
+            throw new ArgumentException("Cannot resolve a default buffer handle.", nameof(handle));
+
+        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
+            throw new InvalidOperationException($"Buffer handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
+
+        return resource is GraphBufferResource buffer
+            && buffer.IsHistoryValid(_view.ViewId, _task.Id, buffer.Description.ToBufferDescription());
+    }
+
     internal bool IsTextureResource(RenderResourceID id)
         => _graph.Resources.TryGetValue(id, out GraphResource? resource)
             && resource is GraphTextureResource or GraphImportedTextureResource;
