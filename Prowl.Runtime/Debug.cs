@@ -205,35 +205,35 @@ public static class Debug
         OnLog?.Invoke(exception.Message + "\n" + (exception.InnerException?.Message ?? ""), trace, LogSeverity.Exception);
     }
 
+    // Color and text are two console calls, so logs from different threads would otherwise swap colors.
+    private static readonly object s_consoleLock = new();
+
     // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.
     // For reference, getting a stack trace on a modern machine takes around 15 μs at a depth of 15.
     public static void Log(string message, LogSeverity logSeverity, DebugStackTrace? customTrace = null)
     {
-        ConsoleColor prevColor = Console.ForegroundColor;
+        DebugStackTrace trace = customTrace ?? (DebugStackTrace)new StackTrace(2, true);
 
-        Console.ForegroundColor = logSeverity switch
+        lock (s_consoleLock)
         {
-            LogSeverity.Success => ConsoleColor.Green,
-            LogSeverity.Warning => ConsoleColor.Yellow,
-            LogSeverity.Error => ConsoleColor.Red,
-            LogSeverity.Exception => ConsoleColor.DarkRed,
-            _ => ConsoleColor.White
-        };
+            ConsoleColor prevColor = Console.ForegroundColor;
 
-        Console.WriteLine(message);
+            Console.ForegroundColor = logSeverity switch
+            {
+                LogSeverity.Success => ConsoleColor.Green,
+                LogSeverity.Warning => ConsoleColor.Yellow,
+                LogSeverity.Error => ConsoleColor.Red,
+                LogSeverity.Exception => ConsoleColor.DarkRed,
+                _ => ConsoleColor.White
+            };
 
-        if (customTrace != null)
-        {
-            Console.WriteLine(customTrace.ToString());
-            OnLog?.Invoke(message, customTrace, logSeverity);
-        }
-        else
-        {
-            StackTrace trace = new(2, true);
-            OnLog?.Invoke(message, (DebugStackTrace)trace, logSeverity);
+            Console.WriteLine(message);
+            if (customTrace != null) Console.WriteLine(customTrace.ToString());
+
+            Console.ForegroundColor = prevColor;
         }
 
-        Console.ForegroundColor = prevColor;
+        OnLog?.Invoke(message, trace, logSeverity);
     }
 
     public static void If(bool condition, string message = "")
