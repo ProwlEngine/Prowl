@@ -49,12 +49,4 @@ internal unsafe partial class VkGraphicsDevice
         VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, layout);
         pool.EndAndSubmit(cb);
     }
-
-    internal void TransitionImageLayout(VkTexture texture, ImageLayout layout)
-    {
-        SharedCommandPool pool = GetFreeCommandPool();
-        Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
-        texture.TransitionImageLayout(cb, 0, texture.MipLevels, 0, texture.ActualArrayLayers, layout);
-        pool.EndAndSubmit(cb);
-    }
 }

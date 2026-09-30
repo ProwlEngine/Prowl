@@ -22,7 +22,6 @@ internal unsafe partial class VkTexture : Texture
     public Format VkFormat { get; }
     public SampleCountFlags VkSampleCount { get; }
 
-    private ImageLayout[] _imageLayouts;
     private readonly bool _isSwapchainTexture;
 
     public ResourceRefCount RefCount { get; }
@@ -97,9 +96,6 @@ internal unsafe partial class VkTexture : Texture
                 default);
             _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
             allocatedSize = memoryRequirements.Size;
-
-            _imageLayouts = new ImageLayout[MipLevels * _actualImageArrayLayers * Depth];
-            Array.Fill(_imageLayouts, ImageLayout.Undefined);
 
         }
         else // isStaging
@@ -195,7 +191,6 @@ internal unsafe partial class VkTexture : Texture
         VkSampleCount = VkFormats.ToVkSampleCount(sampleCount);
         _optimalImage = existingImage;
         _actualImageArrayLayers = arrayLayers;
-        _imageLayouts = [ImageLayout.Undefined];
         _isSwapchainTexture = true;
 
         InitializeLayout();
@@ -251,98 +246,6 @@ internal unsafe partial class VkTexture : Texture
         }
     }
 
-    internal void TransitionImageLayout(
-        Silk.NET.Vulkan.CommandBuffer cb,
-        uint baseMipLevel,
-        uint levelCount,
-        uint baseArrayLayer,
-        uint layerCount,
-        ImageLayout newLayout)
-    {
-        if (_stagingBuffer.Handle != 0)
-        {
-            return;
-        }
-
-        ImageLayout oldLayout = _imageLayouts[CalculateSubresource(baseMipLevel, baseArrayLayer)];
-#if DEBUG
-        for (uint level = 0; level < levelCount; level++)
-        {
-            for (uint layer = 0; layer < layerCount; layer++)
-            {
-                if (_imageLayouts[CalculateSubresource(baseMipLevel + level, baseArrayLayer + layer)] != oldLayout)
-                {
-                    throw new RenderException("Unexpected image layout.");
-                }
-            }
-        }
-#endif
-        if (oldLayout != newLayout)
-        {
-            ImageAspectFlags aspectMask = AspectMask;
-            _gd.Vk.TransitionImageLayout(
-                cb,
-                OptimalDeviceImage,
-                baseMipLevel,
-                levelCount,
-                baseArrayLayer,
-                layerCount,
-                aspectMask,
-                oldLayout,
-                newLayout);
-            _gd.Profiler?.RecordBarrier(BarrierBin.TextureTransition, 1);
-
-            for (uint level = 0; level < levelCount; level++)
-            {
-                for (uint layer = 0; layer < layerCount; layer++)
-                {
-                    _imageLayouts[CalculateSubresource(baseMipLevel + level, baseArrayLayer + layer)] = newLayout;
-                }
-            }
-        }
-    }
-
-    internal void TransitionImageLayoutNonmatching(
-        Silk.NET.Vulkan.CommandBuffer cb,
-        uint baseMipLevel,
-        uint levelCount,
-        uint baseArrayLayer,
-        uint layerCount,
-        ImageLayout newLayout)
-    {
-        if (_stagingBuffer.Handle != 0)
-        {
-            return;
-        }
-
-        for (uint level = baseMipLevel; level < baseMipLevel + levelCount; level++)
-        {
-            for (uint layer = baseArrayLayer; layer < baseArrayLayer + layerCount; layer++)
-            {
-                uint subresource = CalculateSubresource(level, layer);
-                ImageLayout oldLayout = _imageLayouts[subresource];
-
-                if (oldLayout != newLayout)
-                {
-                    ImageAspectFlags aspectMask = AspectMask;
-                    _gd.Vk.TransitionImageLayout(
-                        cb,
-                        OptimalDeviceImage,
-                        level,
-                        1,
-                        layer,
-                        1,
-                        aspectMask,
-                        oldLayout,
-                        newLayout);
-                    _gd.Profiler?.RecordBarrier(BarrierBin.TextureTransition, 1);
-
-                    _imageLayouts[subresource] = newLayout;
-                }
-            }
-        }
-    }
-
     internal ImageAspectFlags AspectMask
     {
         get
@@ -354,11 +257,6 @@ internal unsafe partial class VkTexture : Texture
                 ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
                 : ImageAspectFlags.DepthBit;
         }
-    }
-
-    internal ImageLayout GetImageLayout(uint mipLevel, uint arrayLayer)
-    {
-        return _imageLayouts[CalculateSubresource(mipLevel, arrayLayer)];
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
@@ -402,10 +300,5 @@ internal unsafe partial class VkTexture : Texture
         }
 
         DisposeCore_RecordFree();
-    }
-
-    internal void SetImageLayout(uint mipLevel, uint arrayLayer, ImageLayout layout)
-    {
-        _imageLayouts[CalculateSubresource(mipLevel, arrayLayer)] = layout;
     }
 }

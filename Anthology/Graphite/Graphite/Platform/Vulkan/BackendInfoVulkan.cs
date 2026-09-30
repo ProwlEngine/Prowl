@@ -6,7 +6,6 @@ using Prowl.Graphite.Vk;
 
 using Silk.NET.Vulkan;
 
-using VkImageLayout = Silk.NET.Vulkan.ImageLayout;
 
 namespace Prowl.Graphite;
 
@@ -58,21 +57,6 @@ public class BackendInfoVulkan
     /// <summary>Available Vulkan device extensions.</summary>
     public ReadOnlyCollection<ExtensionProperties> AvailableDeviceExtensions => _deviceExtensions.Value;
 
-    /// <summary>Overrides the tracked layout for a Texture. Use when an external lib creates the VkImage and we need to know its initial layout.</summary>
-    /// <param name="texture">Texture to override.</param>
-    /// <param name="layout">New layout.</param>
-    public void OverrideImageLayout(Texture texture, uint layout)
-    {
-        VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
-        for (uint layer = 0; layer < vkTex.ArrayLayers; layer++)
-        {
-            for (uint level = 0; level < vkTex.MipLevels; level++)
-            {
-                vkTex.SetImageLayout(level, layer, (VkImageLayout)layout);
-            }
-        }
-    }
-
     /// <summary>Gets the VkImage behind a Texture. Not usable on staging textures.</summary>
     /// <param name="texture">Texture to get the VkImage for.</param>
     /// <returns>The VkImage handle.</returns>
@@ -87,14 +71,6 @@ public class BackendInfoVulkan
         }
 
         return vkTexture.OptimalDeviceImage.Handle;
-    }
-
-    /// <summary>Transitions a Texture's VkImage to a new layout.</summary>
-    /// <param name="texture">Texture to transition.</param>
-    /// <param name="layout">New layout.</param>
-    public void TransitionImageLayout(Texture texture, uint layout)
-    {
-        _gd.TransitionImageLayout(Util.AssertSubtype<Texture, VkTexture>(texture), (VkImageLayout)layout);
     }
 
     private unsafe ReadOnlyCollection<ExtensionProperties> EnumerateDeviceExtensions()
