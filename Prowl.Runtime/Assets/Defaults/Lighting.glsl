@@ -183,6 +183,7 @@ float SamplePointShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 world
     int idx = shadowSlot * 6 + faceIndex;
     mat4 shadowMatrix = _PointShadowMatrices[idx];
     vec4 faceParams = _PointShadowFaceParams[idx];
+    if (faceParams.z <= 0.0) return 0.0;
 
     vec3 worldPosBiased = worldPos + normalize(worldNormal) * L.ShadowNormalBias;
     vec4 lightSpacePos = shadowMatrix * vec4(worldPosBiased, 1.0);
