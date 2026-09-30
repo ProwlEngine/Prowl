@@ -95,12 +95,14 @@ public static class ObjectCopy
         var written = new SerializationContext { ExternalReferences = links };
         var read = new SerializationContext { ExternalReferences = links };
 
-        // A lone root is written as the outermost value, so one that is an asset is copied rather than referenced.
-        List<object> copies;
-        if (roots.Count == 1)
-            copies = [Serializer.Deserialize(Serializer.Serialize(typeof(object), roots[0], written), typeof(object), read)!];
-        else
-            copies = Serializer.Deserialize<List<object>>(Serializer.Serialize(typeof(List<object>), roots, written), read)!;
+        // Each root is written as an outermost value, so one that is an asset is copied rather than referenced.
+        var echoes = new List<EchoObject>(roots.Count);
+        foreach (object root in roots)
+            echoes.Add(Serializer.Serialize(typeof(object), root, written));
+
+        var copies = new List<object>(roots.Count);
+        foreach (EchoObject echo in echoes)
+            copies.Add(Serializer.Deserialize(echo, typeof(object), read)!);
 
         map.Ran(written, read);
         return copies;

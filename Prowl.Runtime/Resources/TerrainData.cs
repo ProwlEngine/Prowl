@@ -116,8 +116,8 @@ public sealed class TerrainData : Asset, ISerializable
     private float _size = 1024f;
     private float _height = 100f;
     private TerrainInterpolation _interpolation = TerrainInterpolation.Bicubic;
-    private short[] _heightsField;
-    private float[] _splatsField;
+    private short[]? _heightsField;
+    private float[]? _splatsField;
     private List<TerrainLayer> _layers = [new(), new(), new(), new()];
     private byte[]? _holesField;
     private int _detailResolution = 1024;
@@ -148,13 +148,13 @@ public sealed class TerrainData : Asset, ISerializable
     /// Raw 16-bit heightmap. Values 0..kMaxHeight map to normalized 0..1.
     /// Use GetHeight/SetHeight for float access. Halves memory vs float[].
     /// </summary>
-    public short[] Heights { get { EnsureLoaded(); return _heightsField; } set { EnsureLoaded(); _heightsField = value; } }
+    public short[] Heights { get { EnsureLoaded(); return _heightsField ??= new short[_heightmapResolution * _heightmapResolution]; } set { EnsureLoaded(); _heightsField = value; } }
     /// <summary>
     /// Interleaved splatmap weights. For N layers, each pixel has N floats.
     /// Layout: [pixel0_layer0, pixel0_layer1, ..., pixel0_layerN-1, pixel1_layer0, ...].
     /// Length = SplatmapResolution * SplatmapResolution * LayerCount.
     /// </summary>
-    public float[] Splats { get { EnsureLoaded(); return _splatsField; } set { EnsureLoaded(); _splatsField = value; } }
+    public float[] Splats { get { EnsureLoaded(); return _splatsField ??= CreateDefaultSplats(); } set { EnsureLoaded(); _splatsField = value; } }
 
     /// <summary>Dynamic layer list. Each group of 4 layers maps to one RGBA splatmap texture.</summary>
     public List<TerrainLayer> Layers { get { EnsureLoaded(); return _layers; } set { EnsureLoaded(); _layers = value; } }
@@ -185,7 +185,7 @@ public sealed class TerrainData : Asset, ISerializable
     /// the memory of floats. Use GetDetailDensity/SetDetailDensity for 0-1 access.
     /// Array count matches DetailPrototypes.Count.
     /// </summary>
-    public List<byte[]> DetailLayers { get { EnsureLoaded(); return _detailLayers; } set { EnsureLoaded(); _detailLayers = value; } }
+    public List<byte[]> DetailLayers { get { EnsureLoaded(); AddMissingDetailLayers(); return _detailLayers; } set { EnsureLoaded(); _detailLayers = value; } }
 
     // --- Trees ---
 
@@ -209,25 +209,21 @@ public sealed class TerrainData : Asset, ISerializable
     /// <summary>Bumped on every detail density change. Renderers watch this to rebuild cached data.</summary>
     public int DetailsVersion { get { EnsureLoaded(); return _detailsVersion; } }
 
-    public TerrainData() : base("New TerrainData")
-    {
-        Heights = new short[HeightmapResolution * HeightmapResolution];
-        int lc = Layers.Count;
-        Splats = new float[SplatmapResolution * SplatmapResolution * lc];
-        for (int i = 0; i < Splats.Length; i += lc)
-            Splats[i] = 1f;
-
-        EnsureDetailLayers();
-    }
+    public TerrainData() : base("New TerrainData") { }
 
     /// <summary>Ensure DetailLayers array matches DetailPrototypes count.</summary>
     public void EnsureDetailLayers()
     {
         EnsureLoaded();
-        while (DetailLayers.Count < DetailPrototypes.Count)
-            DetailLayers.Add(new byte[DetailResolution * DetailResolution]);
-        while (DetailLayers.Count > DetailPrototypes.Count)
-            DetailLayers.RemoveAt(DetailLayers.Count - 1);
+        AddMissingDetailLayers();
+        while (_detailLayers.Count > _detailPrototypes.Count)
+            _detailLayers.RemoveAt(_detailLayers.Count - 1);
+    }
+
+    private void AddMissingDetailLayers()
+    {
+        while (_detailLayers.Count < _detailPrototypes.Count)
+            _detailLayers.Add(new byte[_detailResolution * _detailResolution]);
     }
 
     #region Heightmap
@@ -642,7 +638,7 @@ public sealed class TerrainData : Asset, ISerializable
     {
         EnsureLoaded();
         DetailPrototypes.Add(proto);
-        DetailLayers.Add(new byte[DetailResolution * DetailResolution]);
+        EnsureDetailLayers();
         _detailsVersion++;
     }
 
@@ -1044,22 +1040,23 @@ public sealed class TerrainData : Asset, ISerializable
             Layers = [new(), new(), new(), new()]; // Default 4 layers
 
         // Raw data - try new 16-bit format first, fall back to legacy float[]
-        Heights = DeserializeShortArray(value, "Heights16");
-        if (Heights == null)
+        short[]? heights = DeserializeShortArray(value, "Heights16");
+        if (heights == null)
         {
             // Migration: convert old float[] heights to short[]
             float[]? oldHeights = DeserializeFloatArray(value, "Heights");
             if (oldHeights != null)
             {
-                Heights = new short[oldHeights.Length];
+                heights = new short[oldHeights.Length];
                 for (int i = 0; i < oldHeights.Length; i++)
-                    Heights[i] = (short)(Maths.Clamp(oldHeights[i], 0f, 1f) * kMaxHeight);
+                    heights[i] = (short)(Maths.Clamp(oldHeights[i], 0f, 1f) * kMaxHeight);
             }
             else
             {
-                Heights = new short[HeightmapResolution * HeightmapResolution];
+                heights = new short[HeightmapResolution * HeightmapResolution];
             }
         }
+        Heights = heights;
         Splats = DeserializeFloatArray(value, "Splats") ?? CreateDefaultSplats();
 
         // Holes
@@ -1101,7 +1098,7 @@ public sealed class TerrainData : Asset, ISerializable
         }
         if (DetailPrototypes.Count == 0) DetailPrototypes.Add(new());
 
-        DetailLayers = [];
+        var detailLayers = new List<byte[]>();
         int detailCells = DetailResolution * DetailResolution;
         var dlList = value.Get("DetailLayers");
         if (dlList != null)
@@ -1112,9 +1109,10 @@ public sealed class TerrainData : Asset, ISerializable
                     ? Convert.FromBase64String(dlEntry.StringValue)
                     : [];
                 // A layer that does not match the resolution is not this asset's data
-                DetailLayers.Add(arr.Length == detailCells ? arr : new byte[detailCells]);
+                detailLayers.Add(arr.Length == detailCells ? arr : new byte[detailCells]);
             }
         }
+        DetailLayers = detailLayers;
         EnsureDetailLayers();
 
         // Trees

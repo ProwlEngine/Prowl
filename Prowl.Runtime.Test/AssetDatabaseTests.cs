@@ -410,6 +410,37 @@ public class AssetDatabaseTests : RuntimeTestBase
         Assert.Equal(0, crate.Size);
     }
 
+    [Fact]
+    public void AFailedAsset_LoadsOnceItsSourceIsFixedAndReimported()
+    {
+        Guid id = Guid.NewGuid();
+        _backend.Set(id, typeof(Crate), new EchoObject("not a crate"));
+        Crate crate = AssetDatabase.Load<Crate>(id)!;
+        Assert.Equal(AssetState.Failed, crate.State);
+
+        _backend.Add(id, new Crate { Size = 5 });
+        AssetDatabase.Refill(crate, ReloadReason.Reimport);
+        Assert.Equal(AssetState.Unloaded, crate.State);
+
+        crate.Load();
+        Assert.True(crate.IsLoaded);
+        Assert.Equal(5, crate.Size);
+    }
+
+    [Fact]
+    public void CloneAll_CopiesEveryAssetRoot()
+    {
+        Crate a = AssetDatabase.Load<Crate>(AddCrate(1))!;
+        Crate b = AssetDatabase.Load<Crate>(AddCrate(2))!;
+
+        List<Crate> copies = ObjectCopy.CloneAll([a, b]);
+
+        Assert.NotSame(a, copies[0]);
+        Assert.NotSame(b, copies[1]);
+        Assert.Equal(1, copies[0].Size);
+        Assert.Equal(2, copies[1].Size);
+    }
+
     #endregion
 
     #region Serialization

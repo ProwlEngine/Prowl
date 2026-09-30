@@ -73,6 +73,7 @@ internal static class AssetLoader
         {
             if (!s_jobs.TryGetValue(asset, out job!))
             {
+                if (!NeedsLoading(asset, retryFailed: false)) return null;
                 job = new Job { Asset = asset, Generation = asset.ReadGeneration, High = high };
                 s_jobs[asset] = job;
                 asset.SetState(AssetState.Loading);
@@ -108,17 +109,30 @@ internal static class AssetLoader
         }
 
         Job job;
-        bool readHere;
+        bool readHere = false;
+        bool publishing = false;
         lock (s_lock)
         {
             if (!s_jobs.TryGetValue(asset, out job!))
             {
+                if (!NeedsLoading(asset, retryFailed: true)) return;
                 job = new Job { Asset = asset, Generation = asset.ReadGeneration, High = true };
                 s_jobs[asset] = job;
             }
-            asset.SetState(AssetState.Loading);
-            readHere = !job.Started;
-            job.Started = true;
+
+            if (job.Published) publishing = true;
+            else
+            {
+                asset.SetState(AssetState.Loading);
+                readHere = !job.Started;
+                job.Started = true;
+            }
+        }
+
+        if (publishing)
+        {
+            if (!IsMainThread) job.Completion.Task.Wait();
+            return;
         }
 
         if (readHere) Read(job);
@@ -233,14 +247,22 @@ internal static class AssetLoader
             job.Published = true;
         }
 
-        lock (s_lock) s_jobs.Remove(job.Asset);
-
-        // Filled another way, marked missing or retired while this read was in flight, so what it read is out of date.
-        if (job.Asset.State is AssetState.Loaded or AssetState.Missing)
+        try { PublishRead(job); }
+        finally
         {
+            lock (s_lock)
+            {
+                if (s_jobs.TryGetValue(job.Asset, out Job? current) && current == job)
+                    s_jobs.Remove(job.Asset);
+            }
             job.Completion.TrySetResult();
-            return;
         }
+    }
+
+    private static void PublishRead(Job job)
+    {
+        // Filled another way, marked missing or retired while this read was in flight, so what it read is out of date.
+        if (job.Asset.State is AssetState.Loaded or AssetState.Missing) return;
 
         // Its source changed after the read, so read it again.
         if (job.Generation != job.Asset.ReadGeneration)
@@ -252,8 +274,6 @@ internal static class AssetLoader
 
         if (job.Staging != null) AssetDatabase.Publish(job.Asset, job.Staging, ReloadReason.Load);
         else AssetDatabase.PublishFailed(job.Asset);
-
-        job.Completion.TrySetResult();
     }
 
     private static void EnsureStarted()
@@ -299,6 +319,7 @@ internal static class AssetLoader
             if (job == null) continue;
 
             Read(job);
+            if (generation != s_generation) break;
             if (!job.NeedsMainThread) s_completed.Enqueue(job);
         }
     }

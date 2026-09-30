@@ -263,6 +263,7 @@ public sealed class CommandBuffer : IDisposable
 
     public void ClearGlobalTexture(string name)
     {
+        s_boundGlobals.Remove(name);
         WriteHeader(CommandOpcode.ClearGlobalTexture);
         Write(InternName(name));
     }
@@ -351,6 +352,7 @@ public sealed class CommandBuffer : IDisposable
 
     public void ClearAllGlobals()
     {
+        s_boundGlobals.Clear();
         WriteHeader(CommandOpcode.ClearAllGlobals);
     }
 

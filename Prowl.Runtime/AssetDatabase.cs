@@ -226,8 +226,10 @@ public static class AssetDatabase
             return;
         }
 
-        if (asset.State is AssetState.Missing)
+        // Its source exists again, or imports now, so the next use or walk loads it.
+        if (asset.State is AssetState.Missing or AssetState.Failed)
         {
+            asset.ReportedEmpty = false;
             asset.SetState(AssetState.Unloaded);
             return;
         }
@@ -860,14 +862,8 @@ public sealed class AssetWalker
     // A struct is walked where it sits, since boxing gives it a new identity each time.
     private void VisitMember(object member)
     {
-        if (member.GetType().IsValueType)
-        {
-            Plan plan = s_plans[member.GetType()];
-            foreach (FieldInfo field in plan.Fields)
-                if (field.GetValue(member) is { } inner) VisitMember(inner);
-            return;
-        }
-        Visit(member);
+        if (member.GetType().IsValueType) Expand(member);
+        else Visit(member);
     }
 
     /// <summary>The chain of objects the last walk followed to reach <paramref name="target"/>, when paths were recorded.</summary>

@@ -27,6 +27,53 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Throws<ArgumentException>(() => rb.Mass = -5f);
     }
 
+    private static void SetField(Rigidbody3D rb, string name, float value)
+        => typeof(Rigidbody3D).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(rb, value);
+
+    // The inspector writes the fields directly, skipping the setters' checks, then calls OnValidate.
+    [Fact]
+    public void Rigidbody3D_OutOfRangeFields_AreClampedOnValidate()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, Float3.Zero);
+
+        SetField(rb, "angularDamping", 1.5f);
+        SetField(rb, "linearDamping", -1f);
+        SetField(rb, "restitution", 3f);
+        SetField(rb, "friction", -2f);
+        SetField(rb, "deactivationTime", -1f);
+        SetField(rb, "linearSleepThreshold", -1f);
+        SetField(rb, "mass", 0f);
+        rb.OnValidate();
+
+        Assert.Equal(1f, rb.AngularDamping);
+        Assert.Equal(0f, rb.LinearDamping);
+        Assert.Equal(1f, rb.Restitution);
+        Assert.Equal(0f, rb.Friction);
+        Assert.Equal(0f, rb.DeactivationTime);
+        Assert.Equal(0f, rb.LinearSleepThreshold);
+        Assert.True(rb.Mass > 0f);
+        Assert.Equal((0f, 1f), ((float)rb.Native!.Damping.linear, (float)rb.Native.Damping.angular));
+    }
+
+    [Fact]
+    public void Rigidbody3D_SleepThresholds_ReachTheMatchingAxis()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, Float3.Zero);
+
+        SetField(rb, "linearSleepThreshold", 0.25f);
+        SetField(rb, "angularSleepThreshold", 0.75f);
+        rb.OnValidate();
+        Assert.Equal(0.25f, (float)rb.Native!.DeactivationThreshold.linear, 4);
+        Assert.Equal(0.75f, (float)rb.Native.DeactivationThreshold.angular, 4);
+
+        rb.LinearSleepThreshold = 0.5f;
+        rb.AngularSleepThreshold = 1.5f;
+        Assert.Equal(0.5f, (float)rb.Native.DeactivationThreshold.linear, 4);
+        Assert.Equal(1.5f, (float)rb.Native.DeactivationThreshold.angular, 4);
+    }
+
     public override void Dispose()
     {
         // CollisionMatrix is global static state, so put it back to the engine default between tests.
