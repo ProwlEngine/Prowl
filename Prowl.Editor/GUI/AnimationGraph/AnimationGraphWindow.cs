@@ -747,9 +747,6 @@ public class AnimationGraphWindow : DockPanel
         });
     }
 
-    /// <summary>The rig the editor picks bones and clips from. Nothing the graph compiles reads it.</summary>
-    private Avatar? Rig => _graph.IsValid() ? _graph!.Rig : null;
-
     private static bool HasDrivable(AnimationGraphNode type)
     {
         foreach (NodeSetting property in type.Properties)
@@ -1324,7 +1321,7 @@ public class AnimationGraphWindow : DockPanel
             NodeValue value = AnimationGraphView.ValueOf(record, list);
             NodeValue? paired = list.PairedWith is { } other ? AnimationGraphView.ValueOf(record, other) : null;
 
-            ListEditor(paper, id, list.Label, list.Bone, Rig, value.Text,
+            ListEditor(paper, id, list.Label, list.Bone, value.Text,
                 v => Set("Set " + list.Label, () => value.Text = v),
                 paired?.Text, paired == null ? null : v => Set("Set " + list.PairedWith!.Label, () => paired.Text = v));
             return;
@@ -1506,8 +1503,6 @@ public class AnimationGraphWindow : DockPanel
 
             Origami.ScrollView(paper, "ag_paramScroll", width - 2f, height - 31f - footer).Body(() =>
             {
-                AnimationNodeCard.AssetField(paper, "ag_rig", "Rig", _graph!.Rig, v => Set("Set Rig", () => _graph!.Rig = v));
-
                 if (_graph!.Parameters.Count == 0)
                     EditorGUI.Note(paper, "ag_noParams", "Parameters are the values the game sets on the Animator. Add one, then drag it onto the graph to read it.");
 
@@ -1814,7 +1809,7 @@ public class AnimationGraphWindow : DockPanel
         => Math.Abs(weight - 1f) < 0.0001f ? bone : $"{bone}:{weight.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
     /// <summary>A list of names, a row each, with a paired list's number beside each name.</summary>
-    private static void ListEditor(Paper paper, string id, string label, bool bones, Avatar? rig,
+    private static void ListEditor(Paper paper, string id, string label, bool bones,
         string text, Action<string> setter, string? pairedText = null, Action<string>? pairedSetter = null)
     {
         var entries = new List<string>(GraphCompileContext.Split(text));
@@ -1839,7 +1834,7 @@ public class AnimationGraphWindow : DockPanel
             using (paper.Row($"{id}_r{index}").Width(UnitValue.Stretch()).Height(Origami.Current.Metrics.RowHeight)
                 .Margin(0, 0, 0, 4).AlignItems(LayoutAlignment.Center).Enter())
             {
-                DrawEntry(paper, $"{id}_e{index}", bones, rig, entries, index, Write);
+                DrawEntry(paper, $"{id}_e{index}", bones, entries, index, Write);
 
                 if (pairedSetter != null)
                 {
@@ -1865,12 +1860,12 @@ public class AnimationGraphWindow : DockPanel
 
         Origami.Button(paper, $"{id}_add", "Add", () =>
         {
-            entries.Add(bones ? FirstBone(rig) : "Name");
+            entries.Add(bones ? AnimationNodeCard.DefaultBone : "Name");
             Write();
         }).Subtle().Width(UnitValue.Stretch()).Show();
     }
 
-    private static void DrawEntry(Paper paper, string id, bool bones, Avatar? rig,
+    private static void DrawEntry(Paper paper, string id, bool bones,
         List<string> entries, int index, Action write)
     {
         if (!bones)
@@ -1881,19 +1876,13 @@ public class AnimationGraphWindow : DockPanel
         }
 
         (string bone, float weight) = GraphCompileContext.SplitWeight(entries[index]);
-        AnimationNodeCard.BoneField(paper, id, rig, bone, v => { entries[index] = JoinWeight(v, weight); write(); });
+        AnimationNodeCard.BoneField(paper, id, bone, v => { entries[index] = JoinWeight(v, weight); write(); });
 
         Origami.NumericField<float>(paper, $"{id}_w", weight, v =>
         {
             entries[index] = JoinWeight(bone, v);
             write();
         }).Width(60).Show();
-    }
-
-    private static string FirstBone(Avatar? rig)
-    {
-        List<string> options = AnimationNodeCard.BoneOptions(rig);
-        return options.Count > 0 ? options[0] : "bone";
     }
 }
 

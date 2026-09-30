@@ -238,9 +238,6 @@ public sealed class AnimationGraphEditing
 
     public AnimationGraph? Graph => _view.Graph;
 
-    /// <summary>The rig the editor picks bones and clips from.</summary>
-    public Avatar? Rig => _view.Graph.IsValid() ? _view.Graph!.Rig : null;
-
     /// <summary>Makes a change undoable. A rebuild redraws every card after, for a change to what cards show.</summary>
     public void Edit(string description, Action change, bool rebuild = true)
     {
@@ -443,7 +440,7 @@ public sealed class AnimationNodeCard
 
         if (setting is TextSetting { Bone: true, List: false })
         {
-            BoneField(paper, id, editing.Rig, value.Text, v => editing.Edit(edit, () => value.Text = v));
+            BoneField(paper, id, value.Text, v => editing.Edit(edit, () => value.Text = v));
             return;
         }
 
@@ -517,46 +514,40 @@ public sealed class AnimationNodeCard
         }
     }
 
-    /// <summary>The bones a rig offers: its humanoid bones first, then the bones it actually has.</summary>
-    public static List<string> BoneOptions(Avatar? rig)
+    // Every humanoid bone, then Custom, which names a bone of the rig directly.
+    private static readonly string[] BoneChoices = BuildBoneChoices();
+    private static readonly int CustomBone = BoneChoices.Length - 1;
+
+    private static string[] BuildBoneChoices()
     {
-        var options = new List<string>();
-        if (rig.IsNotValid()) return options;
-
-        MotionAvatar? runtime = rig!.Runtime;
-        if (runtime?.Humanoid is { } humanoid)
-            foreach (HumanBodyBone bone in Enum.GetValues<HumanBodyBone>())
-                if (humanoid.HasBone(bone)) options.Add(GraphCompileContext.HumanoidBonePrefix + bone.ToString());
-
-        MotionSkeleton? skeleton = rig.Skeleton;
-        if (skeleton != null)
-            for (int i = 0; i < skeleton.BoneCount; i++)
-                if (skeleton.GetBoneID(i).DebugName is { Length: > 0 } name) options.Add(name);
-
-        return options;
+        HumanBodyBone[] bones = Enum.GetValues<HumanBodyBone>();
+        var choices = new string[bones.Length + 1];
+        for (int i = 0; i < bones.Length; i++)
+            choices[i] = System.Text.RegularExpressions.Regex.Replace(bones[i].ToString(), "(?<=[a-z])(?=[A-Z])", " ");
+        choices[^1] = "Custom";
+        return choices;
     }
 
-    /// <summary>One bone, picked from the rig, or typed when there is no rig.</summary>
-    public static void BoneField(Paper paper, string id, Avatar? rig, string value, Action<string> setter)
+    /// <summary>The bone a new entry starts on.</summary>
+    public static string DefaultBone => GraphCompileContext.HumanoidBonePrefix + nameof(HumanBodyBone.Hips);
+
+    /// <summary>
+    /// One bone: a humanoid bone, found through whatever rig the animator plays on, or Custom, a bone
+    /// named directly. Humanoid bones are stored as "@LeftFoot".
+    /// </summary>
+    public static void BoneField(Paper paper, string id, string value, Action<string> setter)
     {
-        List<string> options = BoneOptions(rig);
-        if (options.Count == 0)
-        {
-            Origami.TextField(paper, id, value, setter).Placeholder("bone").Width(UnitValue.Stretch()).Show();
-            return;
-        }
+        int selected = value.Length > 1 && value[0] == GraphCompileContext.HumanoidBonePrefix
+            && Enum.TryParse(value[1..], true, out HumanBodyBone bone) ? (int)bone : CustomBone;
 
-        // A bone the rig does not have is still what the graph says, so it is offered rather than lost.
-        int selected = options.IndexOf(value);
-        if (selected < 0 && value.Length > 0)
+        using (paper.Row($"{id}_row").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Gap(4).Enter())
         {
-            options.Insert(0, value);
-            selected = 0;
-        }
+            Origami.Dropdown(paper, id, selected, v => setter(v == CustomBone ? "" : GraphCompileContext.HumanoidBonePrefix + ((HumanBodyBone)v).ToString()), BoneChoices)
+                .Searchable("Search bones...").Width(UnitValue.Stretch()).Show();
 
-        string[] items = options.ToArray();
-        Origami.Dropdown(paper, id, Math.Max(0, selected), v => setter(items[v]), items)
-            .Searchable("Search bones...").Width(UnitValue.Stretch()).Show();
+            if (selected == CustomBone)
+                Origami.TextField(paper, $"{id}_name", value, setter).Placeholder("bone name").Width(UnitValue.Stretch()).Show();
+        }
     }
 }
 

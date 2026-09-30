@@ -23,9 +23,6 @@ public sealed class AnimationGraph : Asset
 
     public string RootNode = string.Empty;
 
-    /// <summary>The rig the editor offers bones from. The graph plays on whatever rig the animator has.</summary>
-    public Avatar? Rig;
-
     /// <summary>Boxes and notes for keeping a large graph readable. The compiler ignores both.</summary>
     public List<GraphGroupRecord> Groups = new();
     public List<GraphNoteRecord> Notes = new();
