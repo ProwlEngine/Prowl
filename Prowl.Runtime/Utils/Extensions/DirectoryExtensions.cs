@@ -2,10 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.IO;
-
-#if WINDOWS
-using Microsoft.VisualBasic.FileIO;
-#endif
+using Prowl.Runtime.Core.Platforms;
 
 namespace Prowl.Runtime.Utils;
 
@@ -20,9 +17,11 @@ public static class DirectoryExtensions
         public static void DeleteSafe(string path)
         {
             if (!Directory.Exists(path))
-                return;
+                throw new DirectoryNotFoundException($"The directory '{path}' does not exist.");
 #if WINDOWS
-            FileSystem.DeleteDirectory(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            WindowsPlatform.DeleteSafe(path);
+#elif MACOS
+            MacPlatform.DeleteSafe(path);
 #else
             Directory.Delete(path, recursive);
 #endif
