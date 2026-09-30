@@ -31,6 +31,9 @@ public class ConsolePanel : DockPanel
     public override string Icon => EditorIcons.Terminal;
 
     private const int MaxMessages = 500;
+
+    // Past this many undrained logs the oldest go, so nothing grows while no console or status bar is drawn.
+    private const int MaxPending = 5000;
     private static float RowHeight => EditorTheme.RowHeight + 2f;
 
     private static readonly List<LogEntry> _messages = new();
@@ -135,7 +138,25 @@ public class ConsolePanel : DockPanel
     }
 
     private static void OnLogMessage(string message, DebugStackTrace? stackTrace, LogSeverity severity)
-        => s_pending.Enqueue((message, stackTrace, severity, DateTime.Now));
+    {
+        s_pending.Enqueue((message, stackTrace, severity, DateTime.Now));
+        while (s_pending.Count > MaxPending && s_pending.TryDequeue(out _)) { }
+    }
+
+    internal static int PendingLogCount => s_pending.Count;
+
+    /// <summary>How many times a message was logged, repeats included, among the entries still held.</summary>
+    internal static int CountOf(string message)
+    {
+        lock (s_messagesLock)
+        {
+            DrainPending();
+            int count = 0;
+            foreach (var m in _messages)
+                if (m.FullMessage == message) count += m.Count;
+            return count;
+        }
+    }
 
     // Callers hold s_messagesLock.
     private static void DrainPending()

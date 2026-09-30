@@ -26,7 +26,8 @@ namespace Prowl.Runtime;
 /// </code>
 /// Awaiting in a component resumes on the main thread already. When play stops or scripts reload, the
 /// session ends: <see cref="SessionToken"/> is cancelled and pending continuations are dropped, including a
-/// worker's hop back to the main thread. Frame waits from an ended session complete as cancelled.
+/// worker's hop back to the main thread when the work was started by gameplay code. Frame waits from an ended
+/// session complete as cancelled. Once the loop stops, requests for the main thread are refused.
 /// <para/>
 /// When no engine loop is running, such as in a test or a tool, every thread counts as the main thread.
 /// </remarks>
@@ -116,7 +117,7 @@ public static class GameTask
     public static void Run(Action work)
     {
         ArgumentNullException.ThrowIfNull(work);
-        MainThreadContext? loop = MainThreadContext.Current;
+        MainThreadContext? loop = MainThreadContext.Live;
         if (loop == null) work();
         else loop.Send(static s => ((Action)s!)(), work);
     }

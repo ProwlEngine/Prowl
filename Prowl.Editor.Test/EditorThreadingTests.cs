@@ -51,8 +51,6 @@ public class EditorThreadingTests : IDisposable
         string line = $"threaded {Guid.NewGuid()}";
         const int threads = 8, each = 250;
 
-        int before = ConsolePanel.LogCounts().info;
-
         Task[] writers = new Task[threads];
         for (int t = 0; t < threads; t++)
             writers[t] = Task.Run(() => { for (int i = 0; i < each; i++) Debug.Log(line); });
@@ -60,8 +58,7 @@ public class EditorThreadingTests : IDisposable
         while (!Task.WhenAll(writers).IsCompleted)
             ConsolePanel.LogCounts();
 
-        Assert.Equal(before + threads * each, ConsolePanel.LogCounts().info);
-        Assert.Equal(line, ConsolePanel.LastLog()!.Value.message);
+        Assert.Equal(threads * each, ConsolePanel.CountOf(line));
     }
 
     /// <summary>With no loop every thread counts as the main one, which must not let them write the store together.</summary>
@@ -73,8 +70,6 @@ public class EditorThreadingTests : IDisposable
         string line = $"loopless {Guid.NewGuid()}";
         const int threads = 8, each = 250;
 
-        int before = ConsolePanel.LogCounts().info;
-
         Task[] writers = new Task[threads];
         for (int t = 0; t < threads; t++)
             writers[t] = Task.Run(() => { for (int i = 0; i < each; i++) Debug.Log(line); });
@@ -83,7 +78,20 @@ public class EditorThreadingTests : IDisposable
         while (!Task.WhenAll(writers).IsCompleted) ConsolePanel.LastLog();
         readers.Wait();
 
-        Assert.Equal(before + threads * each, ConsolePanel.LogCounts().info);
+        Assert.Equal(threads * each, ConsolePanel.CountOf(line));
+    }
+
+    /// <summary>Nothing drains while no console or status bar is drawn, so what waits has to stay bounded.</summary>
+    [Fact]
+    public void UndrainedLogsStayBounded()
+    {
+        ConsolePanel.EnsureSubscribed();
+        ConsolePanel.LogCounts();
+
+        for (int i = 0; i < 6000; i++) Debug.Log($"flood {i}");
+
+        Assert.True(ConsolePanel.PendingLogCount <= 5000, $"{ConsolePanel.PendingLogCount} logs waiting");
+        ConsolePanel.LogCounts();
     }
 
     [Fact]
@@ -126,6 +134,47 @@ public class EditorThreadingTests : IDisposable
 
         Assert.True(waiter.Done);
         Assert.IsType<FormatException>(waiter.Failure);
+    }
+
+    /// <summary>
+    /// An editor flow started from gameplay code keeps going after play stops, and from then on follows the
+    /// editor's session, so it can still hop to a worker and back.
+    /// </summary>
+    [Fact]
+    public void AnEditorFlowThatOutlivedItsSessionCanStillHopBack()
+    {
+        MainThreadContext.Install();
+        var waiter = new HoppingWaiter();
+        bool open = false;
+
+        using (MainThreadContext.EnterSession()) waiter.Start(() => open);
+        MainThreadContext.Restart();
+        open = true;
+        EditorTask.Poll();
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!waiter.Done && clock.ElapsedMilliseconds < 5000)
+        {
+            MainThreadContext.Current!.Pump();
+            Thread.Sleep(1);
+        }
+
+        Assert.True(waiter.Done);
+        Assert.False(waiter.SawCancelledSession);
+    }
+
+    private sealed class HoppingWaiter : EditorTask
+    {
+        public bool Done, SawCancelledSession;
+
+        public async void Start(Func<bool> condition)
+        {
+            await IdleOnCondition(condition);
+            await GameTask.WorkerThread();
+            SawCancelledSession = GameTask.SessionToken.IsCancellationRequested;
+            await GameTask.MainThread();
+            Done = true;
+        }
     }
 
     /// <summary>Entering or leaving play mode ends the game's session, which must not strand the editor's own waits.</summary>

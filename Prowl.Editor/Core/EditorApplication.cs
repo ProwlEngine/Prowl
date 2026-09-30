@@ -1815,9 +1815,13 @@ public class EditorApplication : Game
             _savedEditorScene = null;
         }
 
-        // Nothing will swap, so the play session ends here.
+        // Without a restore to swap to, the session still ends at a swap user code queued this frame, and
+        // only with nothing queued does it end here.
         if (!Runtime.Resources.Scene.EndSessionOnSwap)
-            Runtime.Tasks.MainThreadContext.Restart();
+        {
+            if (Runtime.Resources.Scene.IsLoadPending) Runtime.Resources.Scene.EndSessionOnSwap = true;
+            else Runtime.Tasks.MainThreadContext.Restart();
+        }
 
         // Don't inherit cursor state the game left behind
         Input.CursorLockState = CursorLockMode.None;

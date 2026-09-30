@@ -66,6 +66,11 @@ public class EditorTask
             lock (s_waiting) s_waiting.Add(this);
         }
 
-        public void GetResult() => Failure?.Throw();
+        public void GetResult()
+        {
+            // An editor flow outlives the gameplay session it may have started in, so it follows the current one.
+            Runtime.Tasks.MainThreadContext.LeaveSession();
+            Failure?.Throw();
+        }
     }
 }

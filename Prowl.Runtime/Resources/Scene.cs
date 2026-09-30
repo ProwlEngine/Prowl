@@ -262,14 +262,22 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (ReferenceEquals(go.Scene, _current))
                 _current!.Detach(go);
 
+        // A failure in either step below is reported and the swap carries on, so the incoming scene always
+        // becomes current and the session always ends when it was asked to, rather than leaving both half done.
+
         // Everything the incoming scene uses is loaded before any of it enables, so OnEnable never sees an asset still loading.
-        AssetDatabase.LoadEverythingReached();
+        try { AssetDatabase.LoadEverythingReached(); }
+        catch (Exception e) { Debug.LogError($"[Scene] Loading what '{next.Name}' uses threw: {e.Message}\n{e.StackTrace}"); }
 
         if (_current is not null && !_current.IsDisposed)
         {
-            if (_current.IsActive)
-                _current.Disable();
-            _current.Dispose();
+            try
+            {
+                if (_current.IsActive)
+                    _current.Disable();
+                _current.Dispose();
+            }
+            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{_current.Name}' threw: {e.Message}\n{e.StackTrace}"); }
         }
 
         // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
@@ -598,6 +606,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         EnsureNotDisposed();
         MainThreadContext.AssertMainThread();
+        using var session = MainThreadContext.EnterSession();
         if (_isActive) return; // already enabled, nothing to deliver
 
         _isActive = true;
@@ -631,6 +640,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         EnsureNotDisposed();
         MainThreadContext.AssertOwner(this);
+        using var session = MainThreadContext.EnterSession();
         if (!_isActive) return; // already disabled, nothing to deliver
 
         // Create a copy to avoid collection modification during enumeration
@@ -1003,6 +1013,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Update()
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunStart();
 
         // Navigation (crowd steering) advances on the variable update, before component Updates
@@ -1030,6 +1041,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void FixedUpdate()
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _dispatcher.RunStart();
@@ -1051,6 +1063,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunRenderCollect(camera, renderables, lights);
     }
 
@@ -1060,6 +1073,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void DrawGizmos()
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunDrawGizmos();
 
         Flush();
@@ -1072,6 +1086,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void OnGui(Paper paper)
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunOnGui(paper);
 
         Flush();

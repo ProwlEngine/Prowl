@@ -19,6 +19,14 @@ public sealed class ForgetsBaseDispose : MonoBehaviour
     protected override void OnDispose() { }
 }
 
+/// <summary>Runs whatever a test hands it from inside Update, the way gameplay code starts work.</summary>
+public sealed class GameplayHook : MonoBehaviour
+{
+    public static Action? OnUpdate;
+
+    public override void Update() => OnUpdate?.Invoke();
+}
+
 /// <summary>Records which async session its enable and disable callbacks ran in.</summary>
 public sealed class SessionProbe : MonoBehaviour
 {
@@ -353,7 +361,7 @@ public class ThreadingTests : RuntimeTestBase
             applied = true;
         }
 
-        Work();
+        using (MainThreadContext.EnterSession()) Work();
         Assert.True(computing.Wait(5000));
         MainThreadContext.Restart();
         release.Set();
@@ -393,13 +401,17 @@ public class ThreadingTests : RuntimeTestBase
         var release = new ManualResetEventSlim(false);
         bool posted = false;
 
-        Task<bool> worker = Task.Run(() =>
+        Task<bool> worker;
+        using (MainThreadContext.EnterSession())
         {
-            started.Set();
-            release.Wait();
-            GameTask.Post(() => posted = true);
-            return GameTask.SessionToken.IsCancellationRequested;
-        });
+            worker = Task.Run(() =>
+            {
+                started.Set();
+                release.Wait();
+                GameTask.Post(() => posted = true);
+                return GameTask.SessionToken.IsCancellationRequested;
+            });
+        }
 
         Assert.True(started.Wait(5000));
         MainThreadContext.Restart();
@@ -408,6 +420,185 @@ public class ThreadingTests : RuntimeTestBase
         Assert.True(worker.GetAwaiter().GetResult());
         loop.Pump();
         Assert.False(posted);
+    }
+
+    [Fact]
+    public void WorkStartedFromAComponentStaysBoundToItsSession()
+    {
+        var (scene, go) = LiveObject();
+        go.AddComponent<GameplayHook>();
+        using var loop = new LoopScope();
+        var release = new ManualResetEventSlim(false);
+        Task<bool>? worker = null;
+        bool posted = false;
+
+        GameplayHook.OnUpdate = () => worker ??= Task.Run(() =>
+        {
+            release.Wait();
+            GameTask.Post(() => posted = true);
+            return GameTask.SessionToken.IsCancellationRequested;
+        });
+        try { scene.Update(); }
+        finally { GameplayHook.OnUpdate = null; }
+
+        MainThreadContext.Restart();
+        release.Set();
+
+        Assert.True(worker!.GetAwaiter().GetResult());
+        loop.Pump();
+        Assert.False(posted);
+    }
+
+    /// <summary>A service thread started outside gameplay is not play session work, so a play toggle leaves it working.</summary>
+    [Fact]
+    public void AThreadStartedOutsideGameplayFollowsTheCurrentSession()
+    {
+        using var loop = new LoopScope();
+        var release = new ManualResetEventSlim(false);
+        bool posted = false, cancelled = true;
+
+        var thread = new Thread(() =>
+        {
+            release.Wait();
+            cancelled = GameTask.SessionToken.IsCancellationRequested;
+            GameTask.Post(() => posted = true);
+        });
+        thread.Start();
+
+        MainThreadContext.Restart();
+        release.Set();
+        thread.Join();
+        loop.Pump();
+
+        Assert.False(cancelled);
+        Assert.True(posted);
+    }
+
+    [Fact]
+    public void RestartingInsideAQueuedContinuationLeavesTheThreadOnTheNewSession()
+    {
+        using var loop = new LoopScope();
+
+        async Task Restarter()
+        {
+            await GameTask.NextFrame();
+            MainThreadContext.Restart();
+        }
+
+        Restarter();
+        loop.Pump();
+        Assert.Same(MainThreadContext.Current, SynchronizationContext.Current);
+
+        bool resumed = false;
+        async Task After()
+        {
+            await GameTask.NextFrame();
+            resumed = true;
+        }
+
+        After();
+        loop.Pump();
+        loop.Pump();
+        Assert.True(resumed);
+    }
+
+    /// <summary>The runtime puts the thread's context back when async code returns, so the next pump has to fix it.</summary>
+    [Fact]
+    public void RestartingInsideAsyncCodeIsPutRightByTheNextPump()
+    {
+        using var loop = new LoopScope();
+
+        async Task RestartThenReturn()
+        {
+            MainThreadContext.Restart();
+            await Task.CompletedTask;
+        }
+
+        RestartThenReturn().GetAwaiter().GetResult();
+        Assert.NotSame(MainThreadContext.Current, SynchronizationContext.Current);
+
+        loop.Pump();
+        Assert.Same(MainThreadContext.Current, SynchronizationContext.Current);
+    }
+
+    [Fact]
+    public void AfterTheLoopStopsWorkersAreRefusedUntilItIsUninstalled()
+    {
+        var (_, go) = LiveObject();
+        using var loop = new LoopScope();
+        MainThreadContext.Stop();
+        bool ran = false, posted = false;
+
+        Assert.Throws<OperationCanceledException>(() => OffThread(() => GameTask.Run(() => ran = true)));
+        OffThread(() => GameTask.Post(() => posted = true));
+        Assert.Throws<InvalidOperationException>(() => OffThread(() => go.Transform.Position = Float3.One));
+
+        Task<bool> hop = Task.Run(async () =>
+        {
+            await GameTask.MainThread();
+            return true;
+        });
+        Assert.False(hop.Wait(200));
+        Assert.True(OffThread(() => GameTask.NextFrame()).IsCanceled);
+
+        Assert.False(ran);
+        Assert.False(posted);
+
+        MainThreadContext.Uninstall();
+        Assert.True(OffThread(() => GameTask.IsMainThread));
+    }
+
+    [Fact]
+    public void AWaitWhoseCheckEndsTheSessionIsCancelledRatherThanStranded()
+    {
+        using var loop = new LoopScope();
+        int checks = 0;
+
+        Task until = GameTask.WaitUntil(() =>
+        {
+            if (++checks == 2) MainThreadContext.Restart();
+            return false;
+        });
+        loop.Pump();
+
+        Assert.True(until.IsCanceled);
+    }
+
+    [Fact]
+    public void ACancellationThatWasATimeoutIsReportedAndADeliberateOneIsNot()
+    {
+        using var loop = new LoopScope();
+        var errors = new List<string>();
+        OnLog capture = (message, _, severity) => { if (severity == LogSeverity.Error) lock (errors) errors.Add(message); };
+        Debug.OnLog += capture;
+        try
+        {
+            using var cancel = new CancellationTokenSource();
+            cancel.Cancel();
+
+            async void TimesOut()
+            {
+                await Task.Yield();
+                throw new TaskCanceledException("request timed out", new TimeoutException());
+            }
+
+            async void StopsOnPurpose()
+            {
+                await Task.Yield();
+                cancel.Token.ThrowIfCancellationRequested();
+            }
+
+            TimesOut();
+            StopsOnPurpose();
+            for (int i = 0; i < 3; i++) loop.Pump();
+
+            Assert.Contains(errors, m => m.Contains("request timed out"));
+            Assert.DoesNotContain(errors, m => m.Contains("canceled") && !m.Contains("request timed out"));
+        }
+        finally
+        {
+            Debug.OnLog -= capture;
+        }
     }
 
     [Fact]

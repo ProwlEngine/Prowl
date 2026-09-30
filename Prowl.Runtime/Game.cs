@@ -250,8 +250,9 @@ public abstract class Game
             Closing();
 
             // Before anything shuts down, so work blocked on the main thread runs while it still can and
-            // worker loops watching the session token stop.
-            Tasks.MainThreadContext.Uninstall();
+            // worker loops watching the session token stop. Workers asking for the main thread from here
+            // on are refused rather than run alongside the shutdown.
+            Tasks.MainThreadContext.Stop();
 
             // Dispose the current scene so everything in it runs its teardown callbacks.
             Scene.Shutdown();
@@ -260,6 +261,8 @@ public abstract class Game
             AssetDatabase.Shutdown();
 
             AudioContext.Deinitialize();
+
+            Tasks.MainThreadContext.Uninstall();
 
             Debug.Log("Is terminating...");
         };
@@ -339,9 +342,10 @@ public abstract class Game
         {
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
-            Tasks.MainThreadContext.Uninstall();
+            Tasks.MainThreadContext.Stop();
             Scene.Shutdown();
             AssetDatabase.Shutdown();
+            Tasks.MainThreadContext.Uninstall();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
             Application.IsHeadless = false;
         }

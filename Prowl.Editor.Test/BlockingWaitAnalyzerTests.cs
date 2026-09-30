@@ -35,6 +35,11 @@ public class BlockingWaitAnalyzerTests : EditorTestHarness
     [InlineData("System.Threading.Tasks.Task.WaitAll(Loader.Load());")]
     [InlineData("int Local() => Loader.Load().Result; Local();")]
     [InlineData("var t = Loader.Load(); if (t.IsFaulted) { int v = t.Result; }")]
+    [InlineData("var t = Loader.Load(); if (!t.IsCompleted) { int v = t.Result; }")]
+    [InlineData("var t = Loader.Load(); if (t.IsCompleted || System.Environment.TickCount > 0) { int v = t.Result; }")]
+    [InlineData("if (Loader.Load().IsCompleted) { int v = Loader.Load().Result; }")]
+    [InlineData("var t = Loader.Load(); if (t.IsCompleted) { t = Loader.Load(); int v = t.Result; }")]
+    [InlineData("var t = Loader.Load(); if (!t.IsCompleted) { } int v = t.Result;")]
     public void WarnsOnEachWayOfBlockingInAComponent(string body)
     {
         var result = Compile($"public class Comp : Prowl.Runtime.MonoBehaviour {{ public override void Start() {{ {body} }} }}");
@@ -48,6 +53,12 @@ public class BlockingWaitAnalyzerTests : EditorTestHarness
     [InlineData("var t = Loader.Load(); int v = t.IsCompletedSuccessfully ? t.Result : 0;")]
     [InlineData("Loader.Load().Wait(0);")]
     [InlineData("Loader.Load().Wait(System.TimeSpan.Zero);")]
+    [InlineData("var t = Loader.Load(); if (!t.IsCompleted) return; int v = t.Result;")]
+    [InlineData("var t = Loader.Load(); if (t.IsCompleted) t.Wait();")]
+    [InlineData("var t = Loader.Load(); if (t.IsCompleted) { int v = t.GetAwaiter().GetResult(); }")]
+    [InlineData("var t = Loader.Load(); if (t.IsCompleted && t.Result > 0) { }")]
+    [InlineData("System.Threading.Tasks.Task.WaitAll(new System.Threading.Tasks.Task[] { Loader.Load() }, 0);")]
+    [InlineData("static int Local(System.Threading.Tasks.Task<int> t) => t.Result; Local(Loader.Load());")]
     public void SaysNothingAboutAReadThatCannotBlock(string body)
     {
         var result = Compile($"public class Comp : Prowl.Runtime.MonoBehaviour {{ public override void Start() {{ {body} }} }}");

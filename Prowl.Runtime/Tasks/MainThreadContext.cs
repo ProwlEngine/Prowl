@@ -28,8 +28,10 @@ namespace Prowl.Runtime.Tasks;
 /// A dropped method simply stops, so its <c>finally</c> blocks do not run. Work that must clean up
 /// watches <see cref="SessionToken"/> instead.
 /// <para/>
-/// Work started from a session stays tied to it across threads, through the execution context, so a
-/// worker that hops back with <c>await GameTask.MainThread()</c> after its session ended is dropped too.
+/// Gameplay work stays tied to its session across threads: anything started from a scene callback or from
+/// main thread queued work carries the session with its execution context, so a worker that hops back with
+/// <c>await GameTask.MainThread()</c> after its session ended is dropped too. Everything else, such as editor
+/// code, long lived threads and work that suppresses execution context flow, follows the current session.
 /// Blocking <see cref="Send"/> calls are the exception and carry over, since a thread is waiting on them.
 /// </remarks>
 public sealed class MainThreadContext : SynchronizationContext
@@ -43,13 +45,16 @@ public sealed class MainThreadContext : SynchronizationContext
     private readonly object _gate = new();
     private readonly int _threadId;
 
-    // This session, once replaced. An uninstalled context points at itself, since nothing follows it.
+    // This session, once replaced. A stopped context points at itself, since nothing follows it.
     private MainThreadContext? _successor;
 
     // Zero when no loop runs. Kept static and separate from Current so the hot path is one field read.
     private static int s_loopThreadId;
 
-    // The session that started the work running on this flow, carried to worker threads with the execution context.
+    // The last session, kept after Stop until Uninstall so work arriving during shutdown is refused rather than run inline.
+    private static MainThreadContext? s_stopped;
+
+    // The session that started the gameplay work running on this flow, carried to worker threads with the execution context.
     private static readonly AsyncLocal<MainThreadContext?> s_origin = new();
 
     private MainThreadContext(int threadId) => _threadId = threadId;
@@ -59,17 +64,21 @@ public sealed class MainThreadContext : SynchronizationContext
 
     /// <summary>
     /// The session the calling code belongs to: the current one on the main thread, and on a worker the one
-    /// that was current when the work was started. Null when no loop is running.
+    /// that started the gameplay work it is running, falling back to the current one. After <see cref="Stop"/>
+    /// it is the stopped session, so anything asking for the main thread is refused. Null when no loop is running.
     /// </summary>
     public static MainThreadContext? Origin
     {
         get
         {
-            MainThreadContext? current = Current;
+            MainThreadContext? current = Live;
             if (current == null || current.IsMainThread) return current;
             return s_origin.Value ?? current;
         }
     }
+
+    /// <summary>The installed context, or the stopped one while shutdown finishes.</summary>
+    internal static MainThreadContext? Live => Current ?? s_stopped;
 
     /// <summary>Whether the caller is on the thread the engine pumps.</summary>
     public bool IsMainThread => Environment.CurrentManagedThreadId == _threadId;
@@ -135,12 +144,15 @@ public sealed class MainThreadContext : SynchronizationContext
     {
         MainThreadContext? old = Current;
         var next = new MainThreadContext(Environment.CurrentManagedThreadId);
+        s_stopped = null;
         Bind(next);
         old?.End(next);
     }
 
     /// <summary>
     /// Ends the current session and starts a new one on the same thread. Must be called on the main thread.
+    /// Called from inside async code, the thread's synchronization context is put back by the runtime when
+    /// that code returns, so the next <see cref="Pump"/> points it at the new session again.
     /// </summary>
     public static void Restart()
     {
@@ -155,26 +167,33 @@ public sealed class MainThreadContext : SynchronizationContext
     }
 
     /// <summary>
-    /// Ends the session and removes the context, for when the loop stops. Blocked <see cref="Send"/> calls
-    /// still queued run here, and any made afterwards throw, since no loop is left to run them.
+    /// Ends the session for good, for when the loop stops. Blocked <see cref="Send"/> calls still queued run
+    /// here. Until <see cref="Uninstall"/> the ownership checks stay armed and any request for the main thread
+    /// is refused, so a worker cannot run main thread work alongside the shutdown.
     /// </summary>
-    public static void Uninstall()
+    public static void Stop()
     {
         MainThreadContext? old = Current;
         if (old == null) return;
 
         Current = null;
-        s_loopThreadId = 0;
-        s_origin.Value = null;
+        s_stopped = old;
         if (ReferenceEquals(SynchronizationContext.Current, old)) SetSynchronizationContext(null);
         old.End(null);
+    }
+
+    /// <summary>Stops the loop if it is still running and removes it, so every thread counts as the main thread again.</summary>
+    public static void Uninstall()
+    {
+        Stop();
+        s_stopped = null;
+        s_loopThreadId = 0;
     }
 
     private static void Bind(MainThreadContext context)
     {
         Current = context;
         s_loopThreadId = context._threadId;
-        s_origin.Value = context;
         SetSynchronizationContext(context);
     }
 
@@ -208,6 +227,39 @@ public sealed class MainThreadContext : SynchronizationContext
         if (orphans != null)
             foreach (Entry entry in orphans)
                 entry.Callback(entry.State);
+    }
+
+    /// <summary>
+    /// Marks the code run inside the scope as gameplay work of the current session, so what it starts on other
+    /// threads stays tied to that session. Used around the scene callbacks and the main thread queue.
+    /// </summary>
+    internal static SessionScope EnterSession() => new(Current);
+
+    /// <summary>
+    /// Lets the calling flow follow the current session from here on, for editor code that deliberately outlives
+    /// the gameplay session it may have been started in.
+    /// </summary>
+    internal static void LeaveSession()
+    {
+        if (s_origin.Value != null) s_origin.Value = null;
+    }
+
+    internal readonly struct SessionScope : IDisposable
+    {
+        private readonly MainThreadContext? _previous;
+        private readonly bool _changed;
+
+        public SessionScope(MainThreadContext? session)
+        {
+            _previous = s_origin.Value;
+            _changed = session != null && !ReferenceEquals(_previous, session);
+            if (_changed) s_origin.Value = session;
+        }
+
+        public void Dispose()
+        {
+            if (_changed) s_origin.Value = _previous;
+        }
     }
 
     public override void Post(SendOrPostCallback d, object? state)
@@ -278,9 +330,10 @@ public sealed class MainThreadContext : SynchronizationContext
     /// </remarks>
     public void Pump()
     {
-        // Keeps the main thread's own flow on this session, even if a restart happened inside a continuation
-        // whose execution context was then thrown away.
-        if (!ReferenceEquals(s_origin.Value, this)) s_origin.Value = this;
+        // A restart inside async code leaves the thread on the old context once the runtime restores it.
+        if (!ReferenceEquals(SynchronizationContext.Current, this)) SetSynchronizationContext(this);
+
+        using SessionScope session = EnterSession();
 
         // First, so a continuation waiting on the frame is queued in time to run in this same pump.
         int waiting = _frameWaiters.Count;
@@ -292,12 +345,23 @@ public sealed class MainThreadContext : SynchronizationContext
                 continue;
             }
 
-            bool ready;
+            bool ready = false;
+            Exception? failure = null;
             try { ready = waiter.Ready == null || waiter.Ready(); }
-            catch (Exception e)
+            catch (Exception e) { failure = e; }
+
+            // The check itself ended the session, which already cancelled every other waiter.
+            if (IsEnded)
             {
                 waiter.Registration.Dispose();
-                waiter.Completion.TrySetException(e);
+                waiter.Completion.TrySetCanceled(_session.Token);
+                return;
+            }
+
+            if (failure != null)
+            {
+                waiter.Registration.Dispose();
+                waiter.Completion.TrySetException(failure);
                 continue;
             }
 
@@ -313,13 +377,25 @@ public sealed class MainThreadContext : SynchronizationContext
 
         int pending = _queue.Count;
 
-        for (int i = 0; i < pending && !IsEnded && _queue.TryDequeue(out var entry); i++)
+        for (int i = 0; i < pending && _queue.TryDequeue(out var entry); i++)
         {
             try { entry.Callback(entry.State); }
-            catch (OperationCanceledException) { /* work that ended with its session */ }
+            catch (OperationCanceledException e) when (IsDeliberateCancellation(e)) { }
             catch (Exception e) { Debug.LogError($"[Tasks] A queued continuation threw: {e.Message}\n{e.StackTrace}"); }
+
+            // The callback ended this session, and whatever it restarted into owns the thread from here.
+            if (IsEnded)
+            {
+                if (!ReferenceEquals(SynchronizationContext.Current, Current)) SetSynchronizationContext(Current);
+                return;
+            }
         }
     }
+
+    // Code that stopped because a token it was handed got cancelled, as opposed to a timeout or a failure
+    // that happens to surface as a cancellation.
+    private static bool IsDeliberateCancellation(OperationCanceledException e)
+        => e.CancellationToken.IsCancellationRequested && e.InnerException is not TimeoutException;
 
     /// <summary>
     /// Throws when a live scene is touched from a thread other than the main one while a loop is running.
