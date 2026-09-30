@@ -17,6 +17,7 @@ namespace Prowl.Runtime.Resources;
 /// A live world of GameObjects. Its stored form is a <see cref="SceneAsset"/>, and any number of scenes can be
 /// instantiated from one, like the editor's edit copy and play copy.
 /// </summary>
+[CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
 public class Scene : EngineObject, ISerializationCallbackReceiver
 {
     #region Scene Manager

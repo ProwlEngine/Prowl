@@ -137,8 +137,6 @@ public abstract class Texture : Asset
         if (!Registered) Dispose();
     }
 
-    protected internal override long EstimateBytes() => 0;
-
     /// <summary>
     /// Gets whether the specified <see cref="TextureType"/> type is mipmappable.
     /// </summary>
