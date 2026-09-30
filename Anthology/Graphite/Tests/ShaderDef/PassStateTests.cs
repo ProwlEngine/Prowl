@@ -158,6 +158,29 @@ public class PassStateTests
 
 
     [Fact]
+    public void Offset_AppliesDepthBiasToRasterizerState()
+    {
+        PassState s = Parse.State("Offset -1 -1");
+
+        RasterizerStateDescription r = s.ToRasterizerState(RasterizerStateDescription.Default);
+
+        Assert.True(r.DepthBiasEnabled);
+        Assert.Equal(-1f, r.DepthBiasSlopeFactor);
+        Assert.Equal(-1f, r.DepthBiasConstantFactor);
+    }
+
+
+    [Fact]
+    public void NoOffset_LeavesDepthBiasOff()
+    {
+        RasterizerStateDescription r = Parse.State("").ToRasterizerState(RasterizerStateDescription.Default);
+
+        Assert.False(r.DepthBiasEnabled);
+        Assert.Equal(RasterizerStateDescription.Default, r);
+    }
+
+
+    [Fact]
     public void MultipleCommands_Combine()
     {
         PassState s = Parse.State("""

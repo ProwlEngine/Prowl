@@ -126,6 +126,12 @@ public class PassState : IEquatable<PassState>
         if (EnableDepthClamp.HasValue)
             baseState.DepthClipEnabled = !EnableDepthClamp.Value;
 
+        if (EnablePolygonOffsetFill.HasValue)
+            baseState.DepthBiasEnabled = EnablePolygonOffsetFill.Value;
+
+        baseState.DepthBiasSlopeFactor = PolygonOffsetFactor ?? baseState.DepthBiasSlopeFactor;
+        baseState.DepthBiasConstantFactor = PolygonOffsetUnits ?? baseState.DepthBiasConstantFactor;
+
         return baseState;
     }
 

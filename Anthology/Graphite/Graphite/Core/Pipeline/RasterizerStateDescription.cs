@@ -23,6 +23,22 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     /// Scissor test on/off.
     /// </summary>
     public bool ScissorTestEnabled;
+    /// <summary>
+    /// Depth bias on/off.
+    /// </summary>
+    public bool DepthBiasEnabled;
+    /// <summary>
+    /// Constant depth bias added to every fragment.
+    /// </summary>
+    public float DepthBiasConstantFactor;
+    /// <summary>
+    /// Depth bias scaled by the slope of the polygon.
+    /// </summary>
+    public float DepthBiasSlopeFactor;
+    /// <summary>
+    /// Maximum depth bias magnitude, 0 for no clamp.
+    /// </summary>
+    public float DepthBiasClamp;
 
     /// <summary>
     /// New rasterizer state description.
@@ -31,16 +47,28 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     /// <param name="frontFace">Front face winding.</param>
     /// <param name="depthClipEnabled">Depth clip on/off.</param>
     /// <param name="scissorTestEnabled">Scissor test on/off.</param>
+    /// <param name="depthBiasEnabled">Depth bias on/off.</param>
+    /// <param name="depthBiasConstantFactor">Constant depth bias.</param>
+    /// <param name="depthBiasSlopeFactor">Slope scaled depth bias.</param>
+    /// <param name="depthBiasClamp">Maximum depth bias magnitude.</param>
     public RasterizerStateDescription(
         FaceCullMode cullMode,
         FrontFace frontFace,
         bool depthClipEnabled,
-        bool scissorTestEnabled)
+        bool scissorTestEnabled,
+        bool depthBiasEnabled = false,
+        float depthBiasConstantFactor = 0f,
+        float depthBiasSlopeFactor = 0f,
+        float depthBiasClamp = 0f)
     {
         CullMode = cullMode;
         FrontFace = frontFace;
         DepthClipEnabled = depthClipEnabled;
         ScissorTestEnabled = scissorTestEnabled;
+        DepthBiasEnabled = depthBiasEnabled;
+        DepthBiasConstantFactor = depthBiasConstantFactor;
+        DepthBiasSlopeFactor = depthBiasSlopeFactor;
+        DepthBiasClamp = depthBiasClamp;
     }
 
     /// <summary>
@@ -52,6 +80,10 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
         FrontFace = FrontFace.Clockwise,
         DepthClipEnabled = true,
         ScissorTestEnabled = false,
+        DepthBiasEnabled = false,
+        DepthBiasConstantFactor = 0f,
+        DepthBiasSlopeFactor = 0f,
+        DepthBiasClamp = 0f,
     };
 
     /// <summary>
@@ -63,6 +95,10 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
         FrontFace = FrontFace.Clockwise,
         DepthClipEnabled = true,
         ScissorTestEnabled = false,
+        DepthBiasEnabled = false,
+        DepthBiasConstantFactor = 0f,
+        DepthBiasSlopeFactor = 0f,
+        DepthBiasClamp = 0f,
     };
 
     /// <summary>
@@ -75,7 +111,11 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
         return CullMode == other.CullMode
             && FrontFace == other.FrontFace
             && DepthClipEnabled.Equals(other.DepthClipEnabled)
-            && ScissorTestEnabled.Equals(other.ScissorTestEnabled);
+            && ScissorTestEnabled.Equals(other.ScissorTestEnabled)
+            && DepthBiasEnabled.Equals(other.DepthBiasEnabled)
+            && DepthBiasConstantFactor.Equals(other.DepthBiasConstantFactor)
+            && DepthBiasSlopeFactor.Equals(other.DepthBiasSlopeFactor)
+            && DepthBiasClamp.Equals(other.DepthBiasClamp);
     }
 
     /// <summary>
@@ -88,6 +128,10 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
             (int)CullMode,
             (int)FrontFace,
             DepthClipEnabled.GetHashCode(),
-            ScissorTestEnabled.GetHashCode());
+            ScissorTestEnabled.GetHashCode(),
+            DepthBiasEnabled.GetHashCode(),
+            DepthBiasConstantFactor.GetHashCode(),
+            DepthBiasSlopeFactor.GetHashCode(),
+            DepthBiasClamp.GetHashCode());
     }
 }

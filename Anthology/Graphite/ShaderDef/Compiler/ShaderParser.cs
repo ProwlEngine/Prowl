@@ -333,6 +333,7 @@ public static class ShaderParser
             throw Exceptions.UnknownCommand(ParserUtility.Text(ref t, after), after);
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+        states.Add(new() { EnableStencilTest = true });
         return FromSeveral(states);
     }
 

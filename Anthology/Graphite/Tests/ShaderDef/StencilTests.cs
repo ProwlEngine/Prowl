@@ -9,6 +9,23 @@ namespace Prowl.Graphite.ShaderDef.Tests;
 public class StencilTests
 {
     [Fact]
+    public void Block_EnablesStencilTest()
+    {
+        PassState s = Parse.State("""Stencil { Ref 3 }""");
+
+        Assert.True(s.EnableStencilTest);
+        Assert.True(s.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyLessEqual).StencilTestEnabled);
+    }
+
+
+    [Fact]
+    public void NoBlock_LeavesStencilTestUnset()
+    {
+        Assert.Null(Parse.State("").EnableStencilTest);
+    }
+
+
+    [Fact]
     public void Ref_Sets()
     {
         PassState s = Parse.State("""Stencil { Ref 3 }""");

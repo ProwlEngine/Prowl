@@ -59,6 +59,10 @@ internal static unsafe class VkPipelineCacheFactory
         rsCI.PolygonMode = PolygonMode.Fill;
         rsCI.DepthClampEnable = !rsDesc.DepthClipEnabled;
         rsCI.FrontFace = rsDesc.FrontFace == FrontFace.Clockwise ? Silk.NET.Vulkan.FrontFace.Clockwise : Silk.NET.Vulkan.FrontFace.CounterClockwise;
+        rsCI.DepthBiasEnable = rsDesc.DepthBiasEnabled;
+        rsCI.DepthBiasConstantFactor = rsDesc.DepthBiasConstantFactor;
+        rsCI.DepthBiasSlopeFactor = rsDesc.DepthBiasSlopeFactor;
+        rsCI.DepthBiasClamp = rsDesc.DepthBiasClamp;
         rsCI.LineWidth = 1f;
 
         pipelineCI.PRasterizationState = &rsCI;
