@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 using Prowl.Ember;
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -270,6 +271,8 @@ public partial class GameObject : EngineObject, ISerializable
     /// <returns>True if the parent was successfully set, false otherwise.</returns>
     public bool SetParent(GameObject NewParent, bool worldPositionStays = true)
     {
+        MainThreadContext.AssertOwner(this);
+        MainThreadContext.AssertOwner(NewParent);
         if (NewParent == _parent)
             return true;
 
@@ -515,6 +518,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="index">The new index of this GameObject.</param>
     public void SetSiblingIndex(int index)
     {
+        MainThreadContext.AssertOwner(this);
         if (Parent.IsNotValid()) return;
 
         // Remove this object from current position
@@ -556,6 +560,7 @@ public partial class GameObject : EngineObject, ISerializable
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
         HashSet<Type>? pending)
     {
+        MainThreadContext.AssertOwner(this, nameof(AddComponent));
         if (!CanConstruct(type)) return null;
 
         pending ??= [];
@@ -652,6 +657,8 @@ public partial class GameObject : EngineObject, ISerializable
     public void AddComponent(MonoBehaviour comp)
     {
         ArgumentNullException.ThrowIfNull(comp, nameof(comp));
+        MainThreadContext.AssertOwner(this);
+        MainThreadContext.AssertOwner(comp.GameObject);
 
         if (ReferenceEquals(comp.GameObject, this)) return;
 
@@ -777,6 +784,7 @@ public partial class GameObject : EngineObject, ISerializable
     internal void RemoveComponentInternal(MonoBehaviour component)
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
+        MainThreadContext.AssertOwner(this, nameof(RemoveComponent));
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))
@@ -1142,6 +1150,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="state">The new enabled state.</param>
     private void SetEnabled(bool state)
     {
+        MainThreadContext.AssertOwner(this, nameof(Enabled));
         _enabled = state;
         HierarchyStateChanged();
     }

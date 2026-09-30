@@ -202,6 +202,8 @@ public static class ScriptAssemblyManager
         {
             if (TryHotReload(Project.Current!))
             {
+                // Continuations still queued would run the old code, so the async session ends with it.
+                Runtime.Tasks.MainThreadContext.Restart();
                 Runtime.Debug.LogSuccess($"[Scripts] Recompiled and hot reloaded in {elapsedMs}ms.");
                 EditorApplication.Instance?.NotifyScriptsReloaded($"Recompiled and reloaded in {elapsedMs}ms.");
                 return true;

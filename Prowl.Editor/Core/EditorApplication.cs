@@ -1745,6 +1745,9 @@ public class EditorApplication : Game
             return;
         }
 
+        // Async work the edit scene left running belongs to a scene that is about to go away.
+        Runtime.Tasks.MainThreadContext.Restart();
+
         // Set play mode flags BEFORE loading so OnEnable/Start gates pass
         Application.IsPlaying = true;
         Application.IsPaused = false;
@@ -1787,6 +1790,10 @@ public class EditorApplication : Game
         Application.IsPlaying = false;
         Application.IsPaused = false;
         Application.StepRequested = false;
+
+        // Ends the play session: its token is cancelled and anything still awaiting never resumes, so it
+        // cannot reach into the edit scene that is about to be restored.
+        Runtime.Tasks.MainThreadContext.Restart();
 
         // Clear selection (play scene references)
         Selection.Clear();
@@ -1953,8 +1960,6 @@ public class EditorApplication : Game
     /// <summary>
     /// Editor does NOT auto-update the scene. SceneView handles it.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentQueue<(Action Work, System.Threading.Tasks.TaskCompletionSource Done)> s_mainThreadWork = new();
-
     /// <summary>
     /// Runs work on the main thread and waits for it, for a background task that has to touch the open scene or the
     /// asset database. Runs it at once on the main thread, or where no editor frame loop runs, such as a command line
@@ -1962,36 +1967,13 @@ public class EditorApplication : Game
     /// </summary>
     public static void RunOnMainThread(Action work)
     {
-        if (AssetLoader.IsMainThread || Program.BuildMode || Instance == null)
-        {
-            work();
-            return;
-        }
-
-        var done = new System.Threading.Tasks.TaskCompletionSource(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
-        s_mainThreadWork.Enqueue((work, done));
-        done.Task.GetAwaiter().GetResult();
-    }
-
-    private static void RunQueuedMainThreadWork()
-    {
-        while (s_mainThreadWork.TryDequeue(out var queued))
-        {
-            try
-            {
-                queued.Work();
-                queued.Done.SetResult();
-            }
-            catch (Exception ex)
-            {
-                queued.Done.SetException(ex);
-            }
-        }
+        if (Program.BuildMode || Instance == null) work();
+        else GameTask.Run(work);
     }
 
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
-        RunQueuedMainThreadWork();
+        Tasks.EditorTask.Poll();
         PreviewWidget.ReleaseUndrawn();
 
         // Always update lifecycle gating is per-component via ShouldExecuteGameplay.

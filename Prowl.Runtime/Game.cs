@@ -62,7 +62,7 @@ public abstract class Game
         Application.IsPlaying = true;
 
         // Installed on this thread, which is the one the loop runs on, so an await in game code resumes
-        // where the scene actually lives. The editor starts and ends a session per play instead.
+        // where the scene actually lives. The editor restarts the session when play starts and stops.
         Tasks.MainThreadContext.Install();
         InitializeWindow(title, width, height);
 
@@ -260,6 +260,8 @@ public abstract class Game
 
             AudioContext.Deinitialize();
 
+            Tasks.MainThreadContext.Uninstall();
+
             Debug.Log("Is terminating...");
         };
 
@@ -342,6 +344,7 @@ public abstract class Game
             AssetDatabase.Shutdown();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
             Application.IsHeadless = false;
+            Tasks.MainThreadContext.Uninstall();
         }
     }
 
@@ -357,7 +360,7 @@ public abstract class Game
         Scene? currentScene = Scene.Current;
 
         // Before the scene runs, so a continuation resumed this frame sees the same world the rest of
-        // the frame will. Anything left over from a finished play session is dropped here.
+        // the frame will.
         Tasks.MainThreadContext.Current?.Pump();
 
         // Assets that finished loading in the background join at the start of the frame, all at once.

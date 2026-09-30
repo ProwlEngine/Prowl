@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Prowl.Echo;
 using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
@@ -81,6 +82,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static void Load(Scene scene)
     {
+        MainThreadContext.AssertMainThread();
         if (scene == null)
             throw new ArgumentNullException(nameof(scene));
 
@@ -113,6 +115,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static SceneLoad LoadAsync(SceneAsset asset)
     {
+        MainThreadContext.AssertMainThread();
         _pendingLoad?.Cancel();
         DropPendingScene(except: null);
         _pendingLoad = new SceneLoad(asset);
@@ -147,6 +150,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static void DontDestroyOnLoad(GameObject go)
     {
+        MainThreadContext.AssertMainThread();
         if (go.IsNotValid())
         {
             Debug.LogWarning("[Scene] DontDestroyOnLoad on a null or destroyed GameObject does nothing.");
@@ -169,7 +173,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// scene on the next load.
     /// </summary>
     public static void CancelDontDestroyOnLoad(GameObject go)
-        => _preserved.RemoveAll(p => ReferenceEquals(p, go));
+    {
+        MainThreadContext.AssertMainThread();
+        _preserved.RemoveAll(p => ReferenceEquals(p, go));
+    }
 
     /// <summary>
     /// Destroys everything <see cref="DontDestroyOnLoad"/> is holding and empties the registry.
@@ -570,6 +577,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Enable()
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertMainThread();
         if (_isActive) return; // already enabled, nothing to deliver
 
         _isActive = true;
@@ -602,6 +610,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Disable()
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
         if (!_isActive) return; // already disabled, nothing to deliver
 
         // Create a copy to avoid collection modification during enumeration
@@ -634,6 +643,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Add(GameObject obj)
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        MainThreadContext.AssertOwner(obj);
         if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene.Remove(obj);
         AddObject(obj);
     }
@@ -645,6 +656,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void SetRootIndex(GameObject obj, int index)
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
         if (obj.Scene != this || obj.Parent.IsValid()) return;
         int current = _allObj.IndexOf(obj);
         if (current < 0) return;
@@ -687,6 +699,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Remove(GameObject obj)
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
 
         if (object.ReferenceEquals(obj, null))
         {

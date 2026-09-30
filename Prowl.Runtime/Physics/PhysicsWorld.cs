@@ -517,6 +517,7 @@ public class PhysicsWorld
     /// </summary>
     public void SyncTransforms()
     {
+        Tasks.MainThreadContext.AssertMainThread();
         foreach (var body in _syncBodies)
             if (body.IsValid()) body.SyncTransformToBody();
     }
@@ -806,6 +807,8 @@ public class PhysicsWorld
     /// </summary>
     private bool BeginRayQuery(ref Float3 origin, ref Float3 direction, float maxDistance, in QueryFilter filter, string query)
     {
+        // First, since everything after it writes state shared by every query.
+        Tasks.MainThreadContext.AssertMainThread(query);
         if (!ValidateQuery(origin, direction, maxDistance, query)) return false;
 
         direction = Float3.Normalize(direction);
@@ -844,15 +847,14 @@ public class PhysicsWorld
     }
 
     /// <summary>
-    /// Marks a query as running, reporting the two ways the shared scratch state can be violated: a
-    /// query off the engine thread, and a second query overlapping this one. Both are tripwires rather
-    /// than recoveries, since the buffers are already committed by the time we could tell. Always pair
-    /// with <see cref="ExitQuery"/> in a finally.
+    /// Marks a query as running. A query off the engine thread throws before touching the shared scratch
+    /// state, and a second query overlapping this one is reported, since its buffers are already committed
+    /// by the time we could tell. Always pair with <see cref="ExitQuery"/> in a finally.
     /// </summary>
     private void EnterQuery(string query)
     {
-        // Jitter's own traversal is thread-safe; this layer is not, so the rule is Prowl's.
-        Debug.EnsureMainThread(query);
+        // Jitter's own traversal is thread safe, this layer is not, so the rule is Prowl's.
+        Tasks.MainThreadContext.AssertMainThread(query);
 
         // Interlocked so the counter stays balanced even when the rule above is already being broken;
         // a torn count would strand this permanently above zero and report every later query.

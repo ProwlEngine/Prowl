@@ -4,11 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 using Prowl.Ember;
@@ -58,6 +60,28 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
     [SerializeIgnore]
     private bool? _executeAlwaysCached;
+
+    [SerializeIgnore]
+    private CancellationTokenSource? _destroyCancellation;
+
+    /// <summary>
+    /// Cancelled when this component is destroyed. Pass it to async work that should stop with the component.
+    /// </summary>
+    public CancellationToken DestroyCancellationToken
+    {
+        get
+        {
+            CancellationTokenSource? cancellation = Volatile.Read(ref _destroyCancellation);
+            if (cancellation == null && !IsDisposed)
+            {
+                var created = new CancellationTokenSource();
+                cancellation = Interlocked.CompareExchange(ref _destroyCancellation, created, null) ?? created;
+            }
+
+            // Checked after creating too, in case disposal ran in between and never saw the new source.
+            return cancellation == null || IsDisposed ? new CancellationToken(true) : cancellation.Token;
+        }
+    }
 
     // Dispatch state, owned by SceneDispatcher. All four are derived from this component's type or its place
     // in the scene, so all four are opted out of hot reload and re-derived from the new type afterwards. Each
@@ -144,6 +168,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         {
             if (value != _enabled)
             {
+                MainThreadContext.AssertOwner(_go, nameof(Enabled));
                 _enabled = value;
                 HierarchyStateChanged();
             }
@@ -539,6 +564,15 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// Called when the MonoBehaviour will be destroyed.
     /// This is an override of EngineObject.OnDispose() and is also exposed as a virtual lifecycle method.
     /// </summary>
+    private protected override void OnDisposed()
+    {
+        CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
+        if (cancellation == null) return;
+
+        try { cancellation.Cancel(); }
+        catch (AggregateException e) { Debug.LogError($"[{Name}/{GetType().Name}] A DestroyCancellationToken callback threw: {e.InnerException?.Message}\n{e.InnerException?.StackTrace}"); }
+    }
+
     protected override void OnDispose()
     {
         // Teardown, not an edit, so it goes through regardless of whether a prefab provided this.

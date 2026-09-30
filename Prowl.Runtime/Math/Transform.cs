@@ -4,8 +4,11 @@
 using System;
 using System.Collections.Generic;
 
+using System.Runtime.CompilerServices;
+
 using Prowl.Echo;
 using Prowl.Runtime;
+using Prowl.Runtime.Tasks;
 
 namespace Prowl.Vector;
 
@@ -25,6 +28,7 @@ public class Transform : ISerializationCallbackReceiver
         }
         set
         {
+            AssertOwner();
             Float3 newPosition = value;
             if (Parent != null)
                 newPosition = Parent.InverseTransformPoint(newPosition);
@@ -42,6 +46,7 @@ public class Transform : ISerializationCallbackReceiver
         get => MakeSafe(_localPosition);
         set
         {
+            AssertOwner();
             if (!_localPosition.Equals(value))
             {
                 _localPosition = MakeSafe(value);
@@ -67,6 +72,7 @@ public class Transform : ISerializationCallbackReceiver
         }
         set
         {
+            AssertOwner();
             Quaternion newVale;
             if (Parent != null)
                 newVale = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(Parent.Rotation) * value));
@@ -85,6 +91,7 @@ public class Transform : ISerializationCallbackReceiver
         get => MakeSafe(_localRotation);
         set
         {
+            AssertOwner();
             if (_localRotation != value)
             {
                 _localRotation = MakeSafe(value);
@@ -107,6 +114,7 @@ public class Transform : ISerializationCallbackReceiver
         get => MakeSafe(_localRotation.EulerAngles);
         set
         {
+            AssertOwner();
             _localRotation = MakeSafe(Quaternion.FromEuler(value));
             _version++;
         }
@@ -120,6 +128,7 @@ public class Transform : ISerializationCallbackReceiver
         get => MakeSafe(_localScale);
         set
         {
+            AssertOwner();
             if (!_localScale.Equals(value))
             {
                 _localScale = MakeSafe(value);
@@ -184,6 +193,9 @@ public class Transform : ISerializationCallbackReceiver
     {
         get
         {
+            // Other threads compute without the cache, since filling it is a write the main thread would race.
+            if (!MainThreadContext.OnMainThread) return LocalToWorldUncached();
+
             Transform parent = Parent;
             if (parent == null)
             {
@@ -227,7 +239,7 @@ public class Transform : ISerializationCallbackReceiver
     public uint Version
     {
         get => _version;
-        set => _version = value;
+        set { AssertOwner(); _version = value; }
     }
 
     public Transform Root => Parent == null ? this : Parent.Root;
@@ -255,6 +267,15 @@ public class Transform : ISerializationCallbackReceiver
     public GameObject GameObject { get; internal set; }
     #endregion
 
+    private Float4x4 LocalToWorldUncached()
+    {
+        Float4x4 local = Float4x4.CreateTRS(_localPosition, _localRotation, _localScale);
+        return Parent is { } parent ? parent.LocalToWorldMatrix * local : local;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void AssertOwner([CallerMemberName] string member = "") => MainThreadContext.AssertOwner(GameObject, member);
+
     // The cache and the version it is keyed on are not saved, so a read into an existing Transform writes the
     // local position, rotation and scale straight past whatever would have invalidated it.
     void ISerializationCallbackReceiver.OnBeforeSerialize() { }
@@ -262,6 +283,7 @@ public class Transform : ISerializationCallbackReceiver
 
     public void SetLocalTransform(Float3 position, Quaternion rotation, Float3 scale)
     {
+        AssertOwner();
         _localPosition = position;
         _localRotation = rotation;
         _localScale = scale;
@@ -272,7 +294,11 @@ public class Transform : ISerializationCallbackReceiver
     /// Bump <see cref="Version"/> to signal the world transform changed for a reason other than a
     /// local setter (e.g. reparenting under a new parent while keeping local values).
     /// </summary>
-    public void MarkChanged() => _version++;
+    public void MarkChanged()
+    {
+        AssertOwner();
+        _version++;
+    }
 
     private float MakeSafe(float v) => float.IsNaN(v) ? 0 : v;
     private Float3 MakeSafe(Float3 v) => new(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z));
@@ -390,6 +416,7 @@ public class Transform : ISerializationCallbackReceiver
 
     internal void RotateAroundInternal(Float3 worldAxis, float rad)
     {
+        AssertOwner();
         Float3 localAxis = InverseTransformDirection(worldAxis);
         if (Float3.LengthSquared(localAxis) > float.Epsilon)
         {
@@ -499,6 +526,7 @@ public class Transform : ISerializationCallbackReceiver
     /// </summary>
     public void SetPositionAndRotation(Float3 position, Quaternion rotation)
     {
+        AssertOwner();
         if (Parent != null)
         {
             _localPosition = MakeSafe(Parent.InverseTransformPoint(position));
@@ -515,6 +543,7 @@ public class Transform : ISerializationCallbackReceiver
     /// <summary>Local-space counterpart to <see cref="SetPositionAndRotation"/>.</summary>
     public void SetLocalPositionAndRotation(Float3 localPosition, Quaternion localRotation)
     {
+        AssertOwner();
         _localPosition = MakeSafe(localPosition);
         _localRotation = MakeSafe(Quaternion.NormalizeSafe(localRotation));
         _version++;
@@ -526,6 +555,7 @@ public class Transform : ISerializationCallbackReceiver
     /// </summary>
     public void SetWorldTransform(Float3 position, Quaternion rotation, Float3 scale)
     {
+        AssertOwner();
         if (Parent != null)
         {
             _localPosition = MakeSafe(Parent.InverseTransformPoint(position));
@@ -602,6 +632,7 @@ public class Transform : ISerializationCallbackReceiver
     /// </summary>
     public void SetSiblingIndex(int index)
     {
+        AssertOwner();
         var p = Parent;
         if (p == null || p.GameObject == null) return;
         var siblings = p.GameObject.Children;

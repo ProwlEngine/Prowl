@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
@@ -34,6 +35,9 @@ public class ConsolePanel : DockPanel
 
     private static readonly List<LogEntry> _messages = new();
     private static bool _subscribed;
+
+    // Logs from other threads wait here until the main thread, which owns _messages, drains them.
+    private static readonly ConcurrentQueue<(string Message, DebugStackTrace? StackTrace, LogSeverity Severity, DateTime Time)> s_pending = new();
 
     // Settings
     private bool _showTime = true;
@@ -103,6 +107,7 @@ public class ConsolePanel : DockPanel
     /// <summary>Total Info / Warning / Error counts (including collapsed repeats).</summary>
     public static (int info, int warn, int err) LogCounts()
     {
+        DrainPending();
         int info = 0, warn = 0, err = 0;
         foreach (var m in _messages)
         {
@@ -116,12 +121,31 @@ public class ConsolePanel : DockPanel
     /// <summary>The most recent log entry (message, source class, collapse count), or null if none.</summary>
     public static (LogSeverity severity, string message, string? source, int count)? LastLog()
     {
+        DrainPending();
         if (_messages.Count == 0) return null;
         var m = _messages[^1];
         return (m.Severity, m.Message, SourceOf(m), m.Count);
     }
 
     private static void OnLogMessage(string message, DebugStackTrace? stackTrace, LogSeverity severity)
+    {
+        if (!GameTask.IsMainThread)
+        {
+            s_pending.Enqueue((message, stackTrace, severity, DateTime.Now));
+            return;
+        }
+
+        DrainPending();
+        Append(message, stackTrace, severity, DateTime.Now);
+    }
+
+    internal static void DrainPending()
+    {
+        while (s_pending.TryDequeue(out var log))
+            Append(log.Message, log.StackTrace, log.Severity, log.Time);
+    }
+
+    private static void Append(string message, DebugStackTrace? stackTrace, LogSeverity severity, DateTime time)
     {
         string firstLine = message.Contains('\n') ? message.Split('\n')[0] : message;
 
@@ -131,7 +155,7 @@ public class ConsolePanel : DockPanel
             if (last.FullMessage == message && last.Severity == severity)
             {
                 last.Count += 1;
-                last.TimeString = DateTime.Now.ToString("HH:mm:ss");
+                last.TimeString = time.ToString("HH:mm:ss");
                 last.StackTrace = stackTrace ?? last.StackTrace;
                 last.TimeLayout = null;
                 last.CountLayout = null;
@@ -145,7 +169,7 @@ public class ConsolePanel : DockPanel
             Message = firstLine,
             FullMessage = message,
             Severity = severity,
-            TimeString = DateTime.Now.ToString("HH:mm:ss"),
+            TimeString = time.ToString("HH:mm:ss"),
             Count = 1,
             StackTrace = stackTrace,
         });
@@ -157,6 +181,8 @@ public class ConsolePanel : DockPanel
     // ================================================================
     public override void OnGUI(Paper paper, float width, float height)
     {
+        DrainPending();
+
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
