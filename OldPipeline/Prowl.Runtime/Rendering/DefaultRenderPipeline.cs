@@ -649,7 +649,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
             case Scene.SkyboxMode.Material:
             {
-                var customMat = skyParams.CustomMaterial.Res;
+                var customMat = skyParams.CustomMaterial;
                 if (customMat != null)
                     cmd.DrawMesh(s_skyDome, customMat);
                 else

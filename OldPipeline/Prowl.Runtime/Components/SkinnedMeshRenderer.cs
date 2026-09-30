@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -25,10 +24,10 @@ namespace Prowl.Runtime;
 public class SkinnedMeshRenderer : MonoBehaviour
 {
     /// <summary>The mesh to render (may contain submeshes).</summary>
-    public AssetRef<Mesh> SharedMesh;
+    public Mesh? SharedMesh;
 
     /// <summary>Materials array one per submesh. If fewer materials than submeshes, last material is reused.</summary>
-    public List<AssetRef<Material>> Materials = new();
+    public List<Material> Materials = new();
 
     /// <summary>Path to the root bone, relative to this GO's hierarchy root.</summary>
     [SerializeField]
@@ -82,20 +81,20 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// <summary>Number of blend shapes on the shared mesh (0 if none).</summary>
     public int BlendShapeCount
     {
-        get { var mesh = SharedMesh.Res; return mesh.IsValid() ? mesh.BlendShapeCount : 0; }
+        get { var mesh = SharedMesh; return mesh.IsValid() ? mesh.BlendShapeCount : 0; }
     }
 
     /// <summary>Index of a blend shape by name, or -1 if not found.</summary>
     public int GetBlendShapeIndex(string name)
     {
-        var mesh = SharedMesh.Res;
+        var mesh = SharedMesh;
         return mesh.IsValid() ? mesh.GetBlendShapeIndex(name) : -1;
     }
 
     /// <summary>The blend shape's name, or empty if out of range.</summary>
     public string GetBlendShapeName(int index)
     {
-        var mesh = SharedMesh.Res;
+        var mesh = SharedMesh;
         return mesh.IsValid() ? mesh.GetBlendShapeName(index) : string.Empty;
     }
 
@@ -472,7 +471,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        var mesh = SharedMesh.Res;
+        var mesh = SharedMesh;
         if (mesh == null || Materials.Count == 0) return;
 
         Resolve();
@@ -513,20 +512,12 @@ public class SkinnedMeshRenderer : MonoBehaviour
         if (mesh.HasBlendShapes)
             PrepareBlendShapes(mesh);
 
-        // Render each submesh with its material. CollectionsMarshal.AsSpan gives a ref to the
-        // list's real backing elements (List<T>'s indexer would copy a value-type element, so
-        // AssetRef<Material>.Res's internal caching would mutate a throwaway copy and never stick).
+        // Each submesh draws with its material, the last one reused for extra submeshes.
         int subCount = mesh.SubMeshCount;
-        var materials = CollectionsMarshal.AsSpan(Materials);
-        for (int s = 0; s < subCount; s++)
+        for (int s = 0; s < subCount && Materials.Count > 0; s++)
         {
-            Material? mat = null;
-            if (s < materials.Length)
-                mat = materials[s].Res;
-            else if (materials.Length > 0)
-                mat = materials[^1].Res; // Reuse last material for extra submeshes
-
-            if (mat == null) continue;
+            Material? mat = s < Materials.Count ? Materials[s] : Materials[^1];
+            if (mat is not { IsLoaded: true }) continue;
 
             PropertyState props = new();
             props.SetInt("_ObjectID", InstanceID);

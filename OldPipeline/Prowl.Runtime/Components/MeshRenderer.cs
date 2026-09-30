@@ -4,7 +4,6 @@
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using Prowl.Echo.Cloning;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -19,13 +18,13 @@ namespace Prowl.Runtime;
 [ComponentIcon("\uf1b2")] // Cube
 public class MeshRenderer : MonoBehaviour
 {
-    public AssetRef<Mesh> Mesh;
+    public Mesh? Mesh;
 
     /// <summary>Materials array one per submesh. Legacy single-material meshes use index 0.</summary>
-    public List<AssetRef<Material>> Materials = new();
+    public List<Material> Materials = new();
 
     /// <summary>Legacy single-material accessor. Gets/sets Materials[0].</summary>
-    public AssetRef<Material> Material
+    public Material? Material
     {
         get => Materials.Count > 0 ? Materials[0] : default;
         set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
@@ -38,8 +37,9 @@ public class MeshRenderer : MonoBehaviour
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        var mesh = Mesh.Res;
-        if (mesh == null || Materials.Count == 0) return;
+        // Something still loading is skipped this frame rather than waited on.
+        var mesh = Mesh;
+        if (mesh is not { IsLoaded: true } || Materials.Count == 0) return;
 
         int subCount = mesh.SubMeshCount;
         if (_propCache == null || _propCache.Length != subCount)
@@ -53,20 +53,10 @@ public class MeshRenderer : MonoBehaviour
         Float4x4 world = Transform.LocalToWorldMatrix;
         Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
 
-        // AssetRef<T> caches its resolved instance as a side effect of .Res - List<T>'s indexer
-        // returns value-type elements by copy, so Materials[s].Res would mutate a throwaway copy
-        // and never actually cache anything. CollectionsMarshal.AsSpan gives a ref to the real
-        // backing elements so the cache (and the async-load dedup it drives) actually sticks.
-        var materials = CollectionsMarshal.AsSpan(Materials);
         for (int s = 0; s < subCount; s++)
         {
-            Material? mat = null;
-            if (s < materials.Length)
-                mat = materials[s].Res;
-            else if (materials.Length > 0)
-                mat = materials[^1].Res;
-
-            if (mat == null) continue;
+            Material? mat = s < Materials.Count ? Materials[s] : Materials[^1];
+            if (mat is not { IsLoaded: true }) continue;
 
             PropertyState props = _propCache[s];
             props.Clear();
@@ -90,8 +80,8 @@ public class MeshRenderer : MonoBehaviour
     public bool Raycast(Ray worldRay, out float distance)
     {
         distance = float.MaxValue;
-        var mesh = Mesh.Res;
-        if (mesh == null) return false;
+        var mesh = Mesh;
+        if (mesh is not { IsLoaded: true }) return false;
 
         Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
         Float3 localOrigin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);

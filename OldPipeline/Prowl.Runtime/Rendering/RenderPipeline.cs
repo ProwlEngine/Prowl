@@ -506,13 +506,12 @@ public abstract class RenderPipeline : EngineObject
             IRenderable renderable = renderables[renderIndex];
 
             Material material = renderable.GetMaterial();
-            // Skip until the material AND its shader have streamed in (async loading). Accessing
-            // material.Shader (=_shader.Res) queues the shader load; the object pops in once ready.
-            if (material == null || material.Shader.IsNotValid()) continue;
+            // Anything still loading is skipped this frame. The walk has already asked for it.
+            if (material is not { IsLoaded: true } || material.Shader is not { IsLoaded: true }) continue;
 
             // Get rendering data to determine if this is instanced or single-instance rendering
             renderable.GetRenderingData(viewer, out PropertyState _, out Mesh mesh, out Float4x4 _, out InstanceData[]? instanceData);
-            if (mesh == null || mesh.VertexCount <= 0) continue;
+            if (mesh is not { IsLoaded: true } || mesh.VertexCount <= 0) continue;
 
             // Handle instanced renderables - add to batches with proper sorting. Procedural ones
             // have no instance array at all; the vertex shader derives each instance itself.

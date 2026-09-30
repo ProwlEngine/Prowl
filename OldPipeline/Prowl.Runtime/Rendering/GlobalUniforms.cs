@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Runtime.InteropServices;
 
 using Prowl.Vector;
@@ -86,7 +87,7 @@ public static class GlobalUniforms
         if (s_isDirty && s_uniformBuffer != null)
         {
             using var cmd = Graphics.GetCommandBuffer("GlobalUniforms.Upload");
-            cmd.UpdateBuffer<GlobalUniformsData>(s_uniformBuffer, new[] { s_data });
+            cmd.UpdateBuffer<GlobalUniformsData>(s_uniformBuffer, new ReadOnlySpan<GlobalUniformsData>(in s_data));
             Graphics.Submit(cmd);
             s_isDirty = false;
         }

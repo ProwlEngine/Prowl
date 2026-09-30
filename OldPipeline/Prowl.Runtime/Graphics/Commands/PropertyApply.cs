@@ -136,9 +136,8 @@ internal static class PropertyApply
         WalkMatrices(state._matrices, p);
         WalkMatrixArrays(state._matrixArr, p);
         WalkBuffers(state._buffers, state._bufferBindings, p);
-        WalkAssetTextures(state._textures, p, exec);
-        WalkAssetTextures3D(state._textures3D, p, exec);
-        WalkAssetTexturesCube(state._texturesCube, p, exec);
+        foreach (var kv in state._boundTextures)
+            BindTexUniform(p, kv.Key, kv.Value, exec);
     }
 
     public static void ApplyInstance(PropertyState state, GraphicsProgram p, CommandExecutor exec)
@@ -152,7 +151,7 @@ internal static class PropertyApply
     /// setters. Pass <c>null</c> overrides to apply all defaults unconditionally.</summary>
     public static void FillShaderDefaults(Resources.Shader shader, PropertyState? overrides, GraphicsProgram p, CommandExecutor exec)
     {
-        foreach (var prop in shader.Properties)
+        foreach (var prop in shader.LoadedProperties)
         {
             string name = prop.Name;
             switch (prop.PropertyType)
@@ -188,15 +187,15 @@ internal static class PropertyApply
                 case ShaderPropertyType.Texture2D:
                     if (overrides == null || !overrides._textures.ContainsKey(name))
                     {
-                        if (prop.Texture2DValue.IsValid())
-                            BindTexUniform(p, name, prop.Texture2DValue.Handle, exec);
+                        if (prop.Texture2DValue is { IsDisposed: false, HandleIfLoaded: { } handle2D })
+                            BindTexUniform(p, name, handle2D, exec);
                     }
                     break;
                 case ShaderPropertyType.Texture3D:
                     if (overrides == null || !overrides._textures3D.ContainsKey(name))
                     {
-                        if (prop.Texture3DValue.IsValid())
-                            BindTexUniform(p, name, prop.Texture3DValue.Handle, exec);
+                        if (prop.Texture3DValue is { IsDisposed: false, HandleIfLoaded: { } handle3D })
+                            BindTexUniform(p, name, handle3D, exec);
                     }
                     break;
             }
@@ -278,58 +277,12 @@ internal static class PropertyApply
         }
     }
 
-    // Streaming fallback: a material texture override that hasn't loaded yet binds the
-    // built-in white texture this frame (rather than leaving a stale slot) and the access to
-    // .Res above queues the real texture for background load. Cached to avoid a lookup per draw.
-    private static Texture2D? s_whiteFallback;
-
-    private static void WalkAssetTextures(Dictionary<string, AssetRef<Texture2D>> d, GraphicsProgram p, CommandExecutor exec)
-    {
-        // CollectionsMarshal.GetValueRefOrNullRef: a foreach's KeyValuePair.Value is a copy of the
-        // AssetRef, so .Res on it would cache into a throwaway struct instead of the dictionary slot.
-        foreach (var key in d.Keys)
-        {
-            var tex = CollectionsMarshal.GetValueRefOrNullRef(d, key).Res;
-            if (!tex.IsValid())
-            {
-                // Asset is still streaming in (.Res above queued the load). Bind white so the
-                // sampler reads something sane until the real texture arrives.
-                if (s_whiteFallback.IsNotValid())
-                    s_whiteFallback = Texture2D.LoadDefault(DefaultTexture.White);
-                tex = s_whiteFallback;
-                if (!tex.IsValid()) continue;
-            }
-            BindTexUniform(p, key, tex.Handle, exec);
-        }
-    }
-
-    private static void WalkAssetTextures3D(Dictionary<string, AssetRef<Texture3D>> d, GraphicsProgram p, CommandExecutor exec)
-    {
-        foreach (var key in d.Keys)
-        {
-            var tex = CollectionsMarshal.GetValueRefOrNullRef(d, key).Res;
-            if (!tex.IsValid()) continue;
-            BindTexUniform(p, key, tex.Handle, exec);
-        }
-    }
-
-    private static void WalkAssetTexturesCube(Dictionary<string, AssetRef<Cubemap>> d, GraphicsProgram p, CommandExecutor exec)
-    {
-        foreach (var key in d.Keys)
-        {
-            var tex = CollectionsMarshal.GetValueRefOrNullRef(d, key).Res;
-            if (!tex.IsValid()) continue;
-            BindTexUniform(p, key, tex.Handle, exec);
-        }
-    }
-
     private static void WalkGlobalTexturesCube(Dictionary<string, Cubemap> d, GraphicsProgram p, CommandExecutor exec)
     {
         foreach (var kv in d)
         {
-            var tex = kv.Value;
-            if (!tex.IsValid()) continue;
-            BindTexUniform(p, kv.Key, tex.Handle, exec);
+            if (kv.Value is { IsDisposed: false, HandleIfLoaded: { } handle })
+                BindTexUniform(p, kv.Key, handle, exec);
         }
     }
 
@@ -337,9 +290,8 @@ internal static class PropertyApply
     {
         foreach (var kv in d)
         {
-            var tex = kv.Value;
-            if (!tex.IsValid()) continue;
-            BindTexUniform(p, kv.Key, tex.Handle, exec);
+            if (kv.Value is { IsDisposed: false, HandleIfLoaded: { } handle })
+                BindTexUniform(p, kv.Key, handle, exec);
         }
     }
 
@@ -347,9 +299,8 @@ internal static class PropertyApply
     {
         foreach (var kv in d)
         {
-            var tex = kv.Value;
-            if (!tex.IsValid()) continue;
-            BindTexUniform(p, kv.Key, tex.Handle, exec);
+            if (kv.Value is { IsDisposed: false, HandleIfLoaded: { } handle })
+                BindTexUniform(p, kv.Key, handle, exec);
         }
     }
 

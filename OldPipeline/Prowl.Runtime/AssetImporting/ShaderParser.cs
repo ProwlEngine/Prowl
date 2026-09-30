@@ -509,7 +509,7 @@ public static class ShaderParser
                 ShaderPropertyType.Vector4 => Float4.Zero,
                 ShaderPropertyType.Color => Color.White,
                 ShaderPropertyType.Matrix => Float4x4.Identity,
-                ShaderPropertyType.Texture2D => Texture2D.LoadDefault(DefaultTexture.White),
+                ShaderPropertyType.Texture2D => Texture2D.GetDefault(DefaultTexture.White),
                 ShaderPropertyType.Texture3D => Texture3D.White,
                 _ => throw new Exception($"Invalid property type") // Should never execute unless EnumParse() breaks.
             };
@@ -964,13 +964,13 @@ public static class ShaderParser
     {
         return texture switch
         {
-            "white" => Texture2D.LoadDefault(DefaultTexture.White),
-            "gray" or "grey" => Texture2D.LoadDefault(DefaultTexture.Gray18),
-            "grid" => Texture2D.LoadDefault(DefaultTexture.Grid),
-            "black" or "emission" => Texture2D.LoadDefault(DefaultTexture.Emission),
-            "normal" => Texture2D.LoadDefault(DefaultTexture.Normal),
-            "surface" => Texture2D.LoadDefault(DefaultTexture.Surface),
-            "noise" => Texture2D.LoadDefault(DefaultTexture.Noise),
+            "white" => Texture2D.GetDefault(DefaultTexture.White),
+            "gray" or "grey" => Texture2D.GetDefault(DefaultTexture.Gray18),
+            "grid" => Texture2D.GetDefault(DefaultTexture.Grid),
+            "black" or "emission" => Texture2D.GetDefault(DefaultTexture.Emission),
+            "normal" => Texture2D.GetDefault(DefaultTexture.Normal),
+            "surface" => Texture2D.GetDefault(DefaultTexture.Surface),
+            "noise" => Texture2D.GetDefault(DefaultTexture.Noise),
             _ => throw new ParseException("texture 2d", $"unknown texture default: {texture}")
         };
     }

@@ -87,10 +87,10 @@ public sealed class LightmapBakeService
             if (!go.IsStatic || !go.EnabledInHierarchy) continue;
 
             Mesh? mesh;
-            List<AssetRef<Material>> mats;
+            List<Material> mats;
             object renderer;
-            if (go.GetComponent<MeshRenderer>() is { } mr) { mesh = mr.Mesh.Res; mats = mr.Materials; renderer = mr; }
-            else if (go.GetComponent<SkinnedMeshRenderer>() is { } smr) { mesh = smr.SharedMesh.Res; mats = smr.Materials; renderer = smr; }
+            if (go.GetComponent<MeshRenderer>() is { } mr) { mesh = mr.Mesh; mats = mr.Materials; renderer = mr; }
+            else if (go.GetComponent<SkinnedMeshRenderer>() is { } smr) { mesh = smr.SharedMesh; mats = smr.Materials; renderer = smr; }
             else continue;
 
             if (!TryBuildBakeMesh(bake, mesh, mats, $"r{meshKey++}", ref matCounter, out var bm, out bool hasLightmapUV))
@@ -269,7 +269,7 @@ public sealed class LightmapBakeService
         Directory.CreateDirectory(lmFolderAbs);
 
         // Write + import each atlas page (RGBM PNG).
-        var lightmaps = new List<AssetRef<Texture2D>>();
+        var lightmaps = new List<Texture2D>();
         for (int i = 0; i < atlas.Targets.Length; i++)
         {
             var t = atlas.Targets[i];
@@ -277,7 +277,14 @@ public sealed class LightmapBakeService
             string rel = $"{lmFolderRel}/Lightmap-{i}.png";
             WritePng(Path.Combine(lmFolderAbs, $"Lightmap-{i}.png"), rgba, t.Width, t.Height);
             Guid guid = db.ImportFile(rel);
-            lightmaps.Add(new AssetRef<Texture2D>(guid));
+            if (AssetDatabase.Get<Texture2D>(guid) is not { } lightmap)
+            {
+                // Placements address pages by index, so a missing page cannot be skipped.
+                Runtime.Debug.LogError($"[Lightmap] Could not import '{rel}', so the bake was not applied.");
+                Cleanup();
+                return;
+            }
+            lightmaps.Add(lightmap);
         }
         scene.BakedLighting.Lightmaps = lightmaps;
 
@@ -342,7 +349,7 @@ public sealed class LightmapBakeService
 
     // ---- helpers ----
 
-    private bool TryBuildBakeMesh(BakeScene bake, Mesh? mesh, List<AssetRef<Material>> materials,
+    private bool TryBuildBakeMesh(BakeScene bake, Mesh? mesh, List<Material> materials,
                                   string nameKey, ref int matCounter, out BakeMesh result, out bool hasLightmapUV)
     {
         result = null!;
@@ -377,17 +384,16 @@ public sealed class LightmapBakeService
             string matName = $"m{matCounter++}";
             var bmat = bake.CreateMaterial(matName);
             var materialsSpan = CollectionsMarshal.AsSpan(materials);
-            var pm = (s < materialsSpan.Length ? materialsSpan[s] : (materialsSpan.Length > 0 ? materialsSpan[^1] : default)).Res;
+            var pm = (s < materialsSpan.Length ? materialsSpan[s] : (materialsSpan.Length > 0 ? materialsSpan[^1] : default));
             if (pm != null)
             {
                 var c = pm._properties.GetColor("_MainColor");
                 bmat.DiffuseColor = new Float3((float)c.R, (float)c.G, (float)c.B);
 
                 // Feed the diffuse albedo texture so bounced light picks up its colour.
-                var texRef = pm._properties.GetTextureRef("_MainTex");
-                texRef.EnsureLoaded();
-                var tex = texRef.Res;
-                if (tex != null)
+                var tex = pm._properties.GetTexture("_MainTex");
+                if (tex is not null) tex.Load();
+                if (tex is { IsLoaded: true })
                 {
                     var bt = GetOrCreateDiffuse(bake, tex);
                     if (bt != null)

@@ -97,7 +97,9 @@ public class RenderTextureAssetEditor : AssetImporterEditor
                     v => edits.Formats[index] = v).Show());
         }
 
-        using (paper.Row($"{id}_fmt_btns").Height(26).Gap(6).Enter())
+        using (paper.Row($"{id}_fmt_btns").Height(UnitValue.Auto)
+            .Padding(Origami.Current.Metrics.PaddingLarge, Origami.Current.Metrics.PaddingLarge, 0, 0).Gap(Origami.Current.Metrics.Padding)
+            .Margin(0, 0, 0, Origami.Current.Metrics.SpacingLarge).Enter())
         {
             Origami.Button(paper, $"{id}_fmt_add", $"{EditorIcons.Plus}  Add",
                 () => edits.Formats.Add(TextureImageFormat.Color4b)).Width(90).Show();
@@ -122,11 +124,8 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             described.Name = Path.GetFileNameWithoutExtension(entry.Path);
 
             EchoObject echo = Serializer.Serialize(typeof(object), described);
-            File.WriteAllText(Path.Combine(Project.Current!.AssetsPath, entry.Path), echo.WriteToString());
             described.Dispose();
-
-            EditorAssetBackend.Instance?.Reimport(entry.Guid);
-            return true;
+            return EditorAssetBackend.Instance?.SaveAsset(entry.Guid, echo) ?? false;
         }
         catch (Exception ex)
         {

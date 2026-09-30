@@ -207,9 +207,27 @@ public sealed class CommandBuffer : IDisposable
         var snapshot = PropertyStatePool.RentSnapshot(material._properties);
         _rentedSnapshots.Add(snapshot);
 
+        Shader shader = material.Shader;
+        shader.PrepareDefaultTextures();
+
         WriteHeader(CommandOpcode.SetMaterialProperties);
         Write(PushObject(snapshot));
-        Write(PushObject(material.Shader));
+        Write(PushObject(shader));
+    }
+
+    // The render thread binds only handles that exist, so a texture is loaded and its handle made while encoding.
+    private static void ReadyHandle(Texture? tex)
+    {
+        if (tex is { IsDisposed: false }) _ = tex.Handle;
+    }
+
+    // The project textures bound as globals, kept where they are encoded because the render thread owns its own table.
+    [HeldStatic] private static readonly Dictionary<string, Texture> s_boundGlobals = [];
+
+    private static void RecordGlobal(string name, Texture? tex)
+    {
+        if (tex is { IsFromDatabase: true }) s_boundGlobals[name] = tex;
+        else s_boundGlobals.Remove(name);
     }
 
     /// <summary>Clear the bound material properties.</summary>
@@ -236,6 +254,8 @@ public sealed class CommandBuffer : IDisposable
     /// <summary>Set a global texture at execute time. Ordered against draws in this CB.</summary>
     public void SetGlobalTexture(string name, Texture2D? tex)
     {
+        ReadyHandle(tex);
+        RecordGlobal(name, tex);
         WriteHeader(CommandOpcode.SetGlobalTexture);
         Write(InternName(name));
         Write(PushObject(tex));
@@ -313,6 +333,8 @@ public sealed class CommandBuffer : IDisposable
 
     public void SetGlobalTexture3D(string name, Texture3D? tex)
     {
+        ReadyHandle(tex);
+        RecordGlobal(name, tex);
         WriteHeader(CommandOpcode.SetGlobalTexture3D);
         Write(InternName(name));
         Write(PushObject(tex));
@@ -320,6 +342,8 @@ public sealed class CommandBuffer : IDisposable
 
     public void SetGlobalTextureCube(string name, Cubemap? tex)
     {
+        ReadyHandle(tex);
+        RecordGlobal(name, tex);
         WriteHeader(CommandOpcode.SetGlobalTextureCube);
         Write(InternName(name));
         Write(PushObject(tex));
