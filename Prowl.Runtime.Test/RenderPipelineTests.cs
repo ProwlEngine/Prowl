@@ -87,6 +87,20 @@ public class RenderPipelineTests
         Assert.Throws<System.InvalidOperationException>(() => cmd.SetRenderTarget(null));
     }
 
+    // Effects rent width / 2, which is 0 on a 1 pixel viewport; release has to find it again.
+    [Fact]
+    public void TemporaryRT_ZeroSizedRentIsReused()
+    {
+        TextureImageFormat[] format = [TextureImageFormat.Float2];
+        var first = RenderTexture.GetTemporaryRT(0, 7, false, format);
+        RenderTexture.ReleaseTemporaryRT(first);
+
+        var second = RenderTexture.GetTemporaryRT(0, 7, false, format);
+        RenderTexture.ReleaseTemporaryRT(second);
+
+        Assert.Same(first, second);
+    }
+
     private sealed class MotionPipeline : RenderPipeline
     {
         public Float4x4 Frame(Camera camera, int objectId, int subMesh, Float4x4 model)

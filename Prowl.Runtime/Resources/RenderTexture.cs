@@ -211,6 +211,9 @@ public sealed class RenderTexture : Asset, ISerializable
 
     public static RenderTexture GetTemporaryRT(int width, int height, bool hasDepth, TextureImageFormat[] format)
     {
+        // Same clamp the texture applies to itself, so release finds it under the key it was rented with.
+        width = Math.Max(1, width);
+        height = Math.Max(1, height);
         var key = new RenderTextureKey(width, height, hasDepth, format);
 
         RenderTexture renderTexture;
