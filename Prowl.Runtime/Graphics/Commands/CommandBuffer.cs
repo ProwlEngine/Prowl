@@ -559,6 +559,8 @@ public sealed class CommandBuffer : IDisposable
         material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
         material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
         material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
+        material.SetKeyword("BLENDSHAPES", mesh.HasBlendShapes);
+        material.SetKeyword("GPU_INSTANCING", false);
 
         var pass = material.Shader.GetPass(passIndex);
         if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variant) || variant == null)
