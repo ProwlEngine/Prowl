@@ -26,14 +26,14 @@ public class DirectionalLightShadowMatrixTests : RuntimeTestBase
     private DirectionalLight CreateAngledLight()
     {
         GameObject go = CreateGameObject("Directional Light");
-        go.Transform.LocalEulerAngles = new Float3(-50f, 30f, 0f);
+        go.Transform.LocalEulerAngles = new Float3(50f, 210f, 0f);
         return go.AddComponent<DirectionalLight>();
     }
 
     /// <summary>The orthonormal light-space basis GetShadowMatrix builds internally.</summary>
     private static (Float3 right, Float3 up, Float3 forward) LightBasis(DirectionalLight light)
     {
-        Float3 forward = -light.Transform.Forward;
+        Float3 forward = light.Transform.Forward;
         Float3 up = Float3.Normalize(light.Transform.Up);
         Float3 right = Float3.Normalize(Float3.Cross(up, forward));
         up = Float3.Normalize(Float3.Cross(forward, right));

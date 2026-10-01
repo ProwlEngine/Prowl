@@ -83,7 +83,7 @@ public static class EditorSceneManager
         scene.Add(camGo);
 
         var lightGo = new GameObject("Directional Light");
-        lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
+        lightGo.Transform.LocalEulerAngles = new Float3(45, 225, 0);
         var light = lightGo.AddComponent<DirectionalLight>();
         light.Intensity = 1f;
         scene.Add(lightGo);

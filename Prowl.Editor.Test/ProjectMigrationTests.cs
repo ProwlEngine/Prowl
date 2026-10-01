@@ -144,12 +144,37 @@ public class ProjectMigrationTests : IDisposable
 
         Project project = Project.Open(_root);
         var pending = ProjectMigration.PendingSteps(project);
-        Assert.Equal(1, Assert.Single(pending).Index);
+        Assert.Equal(1, pending[0].Index);
+        Assert.All(pending, p => Assert.True(p.Index >= 1));
 
         ProjectMigration.Migrate(project);
 
         Assert.Contains("#include \"ProwlCG\"", File.ReadAllText(shader));
         Assert.True(EchoObject.ReadFromString(File.ReadAllText(scene))["Material"].TryGet("AssetID", out _));
+    }
+
+    [Fact]
+    public void DirectionalLights_AreTurnedToShineAlongForward()
+    {
+        var sun = new Prowl.Runtime.GameObject("Sun");
+        sun.Transform.LocalEulerAngles = new Prowl.Vector.Float3(-50f, 30f, 0f);
+        sun.AddComponent<Prowl.Runtime.DirectionalLight>();
+        var lamp = new Prowl.Runtime.GameObject("Lamp");
+        lamp.Transform.LocalEulerAngles = new Prowl.Vector.Float3(-50f, 30f, 0f);
+        lamp.AddComponent<Prowl.Runtime.SpotLight>();
+        lamp.SetParent(sun);
+        Prowl.Vector.Float3 oldForward = sun.Transform.Forward, oldUp = sun.Transform.Up;
+        Prowl.Vector.Quaternion lampRotation = lamp.Transform.LocalRotation;
+
+        string prefab = WriteAsset("Sun.prefab", Serializer.Serialize(sun).WriteToString(), "PrefabImporter");
+        WriteProwlFile("1.0-preview.5", appliedSteps: 2);
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        var migrated = Serializer.Deserialize<Prowl.Runtime.GameObject>(EchoObject.ReadFromString(File.ReadAllText(prefab)))!;
+        Assert.True(Prowl.Vector.Float3.Distance(-oldForward, migrated.Transform.Forward) < 1e-4f);
+        Assert.True(Prowl.Vector.Float3.Distance(oldUp, migrated.Transform.Up) < 1e-4f);
+        Assert.Equal(lampRotation, migrated.Children[0].Transform.LocalRotation);
     }
 
     [Fact]

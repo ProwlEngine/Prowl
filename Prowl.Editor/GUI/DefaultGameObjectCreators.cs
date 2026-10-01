@@ -83,7 +83,7 @@ internal static class DefaultGameObjectCreators
     static void CreateDirectionalLight()
     {
         var go = HierarchyPanel.CreateGameObject("Directional Light", MenuContext.ActiveGameObject);
-        go.Transform.Rotation = Quaternion.FromEuler(new Float3(-50, 30, 0));
+        go.Transform.Rotation = Quaternion.FromEuler(new Float3(50, 210, 0));
         go.AddComponent<DirectionalLight>();
     }
 

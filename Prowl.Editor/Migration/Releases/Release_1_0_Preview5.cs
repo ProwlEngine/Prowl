@@ -18,9 +18,59 @@ internal sealed class Release_1_0_Preview5 : MigrationRelease
     [
         new("Asset references to $asset", ctx => ctx.RewriteEcho(ConvertAssetReferences)),
         new("Fragment include renamed to ProwlCG", ctx => ctx.RewriteText(s => s_fragmentInclude.Replace(s, "#include \"ProwlCG\""), ".shader", ".glsl")),
+        new("Directional lights shine along Forward", ctx => ctx.RewriteEchoAssets(TurnDirectionalLights)),
     ];
 
     private static readonly Regex s_fragmentInclude = new(@"#include\s+""Fragment""");
+
+    // A directional light used to shine along -Forward. It now shines along Forward like a spot light, so every
+    // saved one is turned half way round its local up axis, which points it the other way and keeps it level.
+    private static EchoObject? TurnDirectionalLights(EchoObject echo)
+    {
+        bool changed = false;
+        TurnDirectionalLights(echo, ref changed);
+        return changed ? echo : null;
+    }
+
+    private static void TurnDirectionalLights(EchoObject tag, ref bool changed)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List)
+                TurnDirectionalLights(item, ref changed);
+            return;
+        }
+
+        if (tag.TagType != EchoType.Compound) return;
+
+        if (HasDirectionalLight(tag)
+            && tag.TryGet("Transform", out EchoObject? transform)
+            && transform!.TryGet("_localRotation", out EchoObject? rotation)
+            && rotation!.TryGet("X", out EchoObject? x) && rotation.TryGet("Y", out EchoObject? y)
+            && rotation.TryGet("Z", out EchoObject? z) && rotation.TryGet("W", out EchoObject? w))
+        {
+            // The rotation times a half turn about Y, written out for the quaternion (0, 1, 0, 0).
+            float qx = x!.FloatValue, qy = y!.FloatValue, qz = z!.FloatValue, qw = w!.FloatValue;
+            rotation["X"] = new EchoObject(-qz);
+            rotation["Y"] = new EchoObject(qw);
+            rotation["Z"] = new EchoObject(qx);
+            rotation["W"] = new EchoObject(-qy);
+            changed = true;
+        }
+
+        foreach (string name in tag.GetNames().ToList())
+            TurnDirectionalLights(tag[name], ref changed);
+    }
+
+    private static bool HasDirectionalLight(EchoObject gameObject)
+    {
+        if (!gameObject.TryGet("Components", out EchoObject? components) || components!.TagType != EchoType.List) return false;
+        foreach (EchoObject component in components.List)
+            if (component.TagType == EchoType.Compound && component.TryGet("$type", out EchoObject? type)
+                && type!.StringValue.StartsWith("Prowl.Runtime.DirectionalLight,", StringComparison.Ordinal))
+                return true;
+        return false;
+    }
 
     private static EchoObject? ConvertAssetReferences(EchoObject echo)
     {

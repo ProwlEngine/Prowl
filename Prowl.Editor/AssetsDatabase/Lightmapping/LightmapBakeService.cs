@@ -494,12 +494,8 @@ public sealed class LightmapBakeService
                 }
             default:
                 {
-                    // Prowl's realtime directional light uses Transform.Forward as the TO-LIGHT
-                    // direction (the sun shines along -Forward), whereas Photonic treats the transform's
-                    // +Z column as the light's TRAVEL direction. Negate +Z so the baked sun matches realtime.
-                    var dirX = xform;
-                    dirX.c2 = new Float4(-xform.c2.X, -xform.c2.Y, -xform.c2.Z, xform.c2.W);
-                    bl = bake.CreateDirectionalLight(light.GameObject.Name, dirX, color);
+                    // Both treat the transform's +Z as the direction the light travels.
+                    bl = bake.CreateDirectionalLight(light.GameObject.Name, xform, color);
                     break;
                 }
         }

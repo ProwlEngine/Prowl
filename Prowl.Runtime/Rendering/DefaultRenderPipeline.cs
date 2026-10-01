@@ -632,8 +632,9 @@ public class DefaultRenderPipeline : RenderPipeline
             case Scene.SkyboxMode.Procedural:
             {
                 var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
-                var sunDir = sun != null ? sun.GetLightDirection() : Float3.Normalize(new Float3(0.5f, -0.7f, 0.5f));
-                s_skybox.SetVector("_SunDir", sunDir);
+                // The sky wants the direction toward the sun, lights report the way they shine.
+                var toSun = sun != null ? -sun.GetLightDirection() : Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f));
+                s_skybox.SetVector("_SunDir", toSun);
                 cmd.DrawMesh(s_skyDome, s_skybox);
                 break;
             }

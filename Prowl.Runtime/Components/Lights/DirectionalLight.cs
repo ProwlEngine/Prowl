@@ -46,7 +46,7 @@ public class DirectionalLight : Light
         var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconLight);
         if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
 
-        Debug.DrawArrow(Transform.Position, -Transform.Forward, Color.Yellow);
+        Debug.DrawArrow(Transform.Position, Transform.Forward, Color.Yellow);
         Debug.DrawWireCircle(Transform.Position, Transform.Forward, 0.5f, Color.Yellow);
 
         //// Create and Draw each Frustum
@@ -81,7 +81,7 @@ public class DirectionalLight : Light
 
     internal void GetShadowMatrix(Float3 focusPosition, int shadowResolution, float cascadeDistance, out Float4x4 view, out Float4x4 projection)
     {
-        Float3 forward = -Transform.Forward;
+        Float3 forward = Transform.Forward;
         // Depth range is a fixed +/- cascadeDistance * 0.5 slab around the (snapped) focus point, not a
         // fit to the scene's casters. Occluders further toward the light than half a cascade get clipped
         // out of the map and stop casting into it.
@@ -129,7 +129,7 @@ public class DirectionalLight : Light
 
 
         // Light direction vectors
-        Float3 forward = -Transform.Forward;
+        Float3 forward = Transform.Forward;
         Float3 right = Transform.Right;
         Float3 up = Transform.Up;
 
@@ -189,7 +189,8 @@ public class DirectionalLight : Light
         {
             Type = LightType.Directional,
             Position = Transform.Position,
-            Direction = Transform.Forward,
+            // The shaders take the direction toward the light, the light itself shines along Forward.
+            Direction = -Transform.Forward,
             Color = new Float3(this.Color.R, this.Color.G, this.Color.B),
             Intensity = Intensity,
             Range = 0,
