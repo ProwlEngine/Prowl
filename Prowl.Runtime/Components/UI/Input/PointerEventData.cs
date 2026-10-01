@@ -38,6 +38,10 @@ public sealed class PointerEventData
     /// <summary>The GameObject the pointer was over at the start of the press.</summary>
     public GameObject? PressedOn;
 
+    /// <summary>The element this press will click: the first one up from <see cref="PressedOn"/> that handles clicks.
+    /// The click fires on release only if the pointer is still over something that resolves to the same element.</summary>
+    public GameObject? ClickTarget;
+
     /// <summary>The GameObject currently being dragged (set after the drag threshold is crossed).</summary>
     public GameObject? Dragging;
 
@@ -73,7 +77,7 @@ public sealed class PointerEventData
     {
         Position = PreviousPosition = Delta = DesignPosition = Float2.Zero;
         ScrollDelta = 0f;
-        Hovered = PressedOn = Dragging = null;
+        Hovered = PressedOn = ClickTarget = Dragging = null;
         PressPosition = Float2.Zero;
         PressTime = 0f;
         IsDragging = false;
