@@ -30,6 +30,7 @@ file readonly struct DispatchView : IRenderView
 file sealed class RecordingPass : IPass<DispatchView>
 {
     private readonly bool _rentTransient;
+    private TextureHandle _scratch;
 
     public RecordingPass(bool rentTransient = false) => _rentTransient = rentTransient;
 
@@ -38,7 +39,11 @@ file sealed class RecordingPass : IPass<DispatchView>
 
     public string Name => "Recording";
 
-    public void Setup(RenderContextBuilder builder) { }
+    public void Setup(RenderContextBuilder builder)
+    {
+        if (_rentTransient)
+            _scratch = builder.GetOutputTexture("Scratch", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
+    }
 
     public void Render(RenderContext<DispatchView> context)
     {
@@ -46,7 +51,7 @@ file sealed class RecordingPass : IPass<DispatchView>
         ViewWidths.Add(context.View.PixelWidth);
 
         if (_rentTransient)
-            context.GetTransientTexture(GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
+            context.GetRenderTexture(_scratch);
     }
 }
 
