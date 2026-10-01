@@ -378,7 +378,7 @@ public class GameCanvas : MonoBehaviour
     /// <summary>Builds the shader clip region for a <see cref="RectMask"/>: its rect in the mask's own
     /// pivot-centered local pixel space (the space the item's inverse-mask matrix maps into) plus radius
     /// and softness. The world->local matrix itself is derived per item from the mask's model.</summary>
-    private static UIClip ComputeClip(RectMask mask)
+    internal static UIClip ComputeClip(RectMask mask)
     {
         RectTransform rt = mask.GameObject.RectTransform!;
         Rect cr = rt.ComputedRect;
