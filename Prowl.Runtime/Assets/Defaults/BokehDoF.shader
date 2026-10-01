@@ -4,8 +4,17 @@ Properties
 {
 }
 
-// Pass 0: Horizontal MRT (outputs to 3 render targets for R, G, B channels)
-Pass "CircularHorizMRT"
+// Bokeh depth of field with a separate near and far field.
+//   Pass 0 CoC        full res   signed circle of confusion in full res pixels (negative = in front of focus)
+//   Pass 1 Prefilter  blur res   color and the strongest nearby CoC; in-focus pixels drop out of the blur
+//   Pass 2 Bokeh      blur res   disk gather; far samples only spread as far as both they and the center
+//                                allow, so sharp foreground can't halo into the blurred background, while
+//                                near samples spread over what is behind them and carry a coverage alpha
+//   Pass 3 Postfilter blur res   small tent to smooth the sample pattern
+//   Pass 4 Combine    full res   far blur by the pixel's own CoC, near blur over everything by its coverage
+//   Pass 5 Focus      1x1        focus distance, eased toward its target over time
+
+Pass "CoC"
 {
     Tags { "RenderOrder" = "Opaque" }
     Blend Override
@@ -31,302 +40,31 @@ Pass "CircularHorizMRT"
 
     Fragment
     {
-        layout(location = 0) out vec4 OutputR;
-        layout(location = 1) out vec4 OutputG;
-        layout(location = 2) out vec4 OutputB;
+        layout(location = 0) out vec4 OutputCoC;
 
         #include "ProwlCG"
 
         in vec2 TexCoords;
 
-        uniform sampler2D _MainTex;
         uniform sampler2D _CameraDepthTexture;
-        uniform vec2 _Resolution;
-        uniform float _FocusStrength;
         uniform sampler2D _FocusTex;    // 1x1, the smoothed focus distance
-        uniform float _MaxBlurRadius;
-
-        // Kernel constants
-        #define KERNEL_RADIUS 8
-        #define KERNEL_COUNT 17
-
-        // Final composition weights for both kernels
-        const vec2 FinalWeights_Kernel0 = vec2(0.411259, -0.548794);
-        const vec2 FinalWeights_Kernel1 = vec2(0.513282, 4.561110);
-
-        // Combined kernel coefficients (xy: Kernel0, zw: Kernel1)
-        const vec4 CombinedKernels[KERNEL_COUNT] = vec4[](
-            vec4( 0.014096, -0.022658, 0.000115, 0.009116),
-            vec4(-0.020612, -0.025574, 0.005324, 0.013416),
-            vec4(-0.038708,  0.006957, 0.013753, 0.016519),
-            vec4(-0.021449,  0.040468, 0.024700, 0.017215),
-            vec4( 0.013015,  0.050223, 0.036693, 0.015064),
-            vec4( 0.042178,  0.038585, 0.047976, 0.010684),
-            vec4( 0.057972,  0.019812, 0.057015, 0.005570),
-            vec4( 0.063647,  0.005252, 0.062782, 0.001529),
-            vec4( 0.064754,  0.000000, 0.064754, 0.000000),
-            vec4( 0.063647,  0.005252, 0.062782, 0.001529),
-            vec4( 0.057972,  0.019812, 0.057015, 0.005570),
-            vec4( 0.042178,  0.038585, 0.047976, 0.010684),
-            vec4( 0.013015,  0.050223, 0.036693, 0.015064),
-            vec4(-0.021449,  0.040468, 0.024700, 0.017215),
-            vec4(-0.038708,  0.006957, 0.013753, 0.016519),
-            vec4(-0.020612, -0.025574, 0.005324, 0.013416),
-            vec4( 0.014096, -0.022658, 0.000115, 0.009116)
-        );
-
-        // Calculate Circle of Confusion
-        float calculateCoC(float depth, float focusPoint)
-        {
-            float normalizedDepthDiff = abs(depth - focusPoint) / max(focusPoint, 1e-3);
-            float cocPixels = normalizedDepthDiff * _FocusStrength * 0.01 * _Resolution.y;
-            float maxBlurPixels = _MaxBlurRadius * 0.01 * _Resolution.y;
-            return min(cocPixels, maxBlurPixels);
-        }
+        uniform float _FocusStrength;
+        uniform float _MaxBlurRadius;   // percent of the screen height
+        uniform vec2 _Resolution;       // full resolution
 
         void main()
         {
-            float focusPoint = texture(_FocusTex, vec2(0.5)).r;
-
+            float focus = max(texture(_FocusTex, vec2(0.5)).r, 1e-3);
             float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
-            float coc = calculateCoC(depth, focusPoint);
-            float radius = coc / _Resolution.x / float(KERNEL_RADIUS);
-
-            vec4 rVal = vec4(0.0);
-            vec4 gVal = vec4(0.0);
-            vec4 bVal = vec4(0.0);
-
-            for (int i = 0; i < KERNEL_COUNT; i++)
-            {
-                int offset = i - KERNEL_RADIUS;
-                vec2 coords = TexCoords + vec2(offset * radius, 0.0);
-                coords = clamp(coords, vec2(0.0), vec2(1.0));
-
-                vec3 image = texture(_MainTex, coords).rgb;
-                vec4 kernels = CombinedKernels[i];
-
-                rVal += image.r * kernels;
-                gVal += image.g * kernels;
-                bVal += image.b * kernels;
-            }
-
-            OutputR = rVal;
-            OutputG = gVal;
-            OutputB = bVal;
+            float maxCoC = _MaxBlurRadius * 0.01 * _Resolution.y;
+            float coc = (depth - focus) / focus * _FocusStrength * 0.01 * _Resolution.y;
+            OutputCoC = vec4(clamp(coc, -maxCoC, maxCoC), 0.0, 0.0, 1.0);
         }
     }
 
     ENDGLSL
 }
 
-// Pass 1: Vertical Composite (reads from 3 inputs, outputs final result)
-Pass "CircularVerticalComposite"
-{
-    Tags { "RenderOrder" = "Opaque" }
-    Blend Override
-    Cull None
-    ZTest Off
-    ZWrite Off
-
-    GLSLPROGRAM
-
-    Vertex
-    {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
-
-        out vec2 TexCoords;
-
-        void main()
-        {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
-        }
-    }
-
-    Fragment
-    {
-        layout(location = 0) out vec4 OutputColor;
-
-        #include "ProwlCG"
-
-        in vec2 TexCoords;
-
-        uniform sampler2D _HorizR;
-        uniform sampler2D _HorizG;
-        uniform sampler2D _HorizB;
-        uniform sampler2D _CameraDepthTexture;
-        uniform vec2 _Resolution;
-        uniform float _FocusStrength;
-        uniform sampler2D _FocusTex;    // 1x1, the smoothed focus distance
-        uniform float _MaxBlurRadius;
-
-        // Kernel constants
-        #define KERNEL_RADIUS 8
-        #define KERNEL_COUNT 17
-
-        // Final composition weights for both kernels
-        const vec2 FinalWeights_Kernel0 = vec2(0.411259, -0.548794);
-        const vec2 FinalWeights_Kernel1 = vec2(0.513282, 4.561110);
-
-        // Combined kernel coefficients (xy: Kernel0, zw: Kernel1)
-        const vec4 CombinedKernels[KERNEL_COUNT] = vec4[](
-            vec4( 0.014096, -0.022658, 0.000115, 0.009116),
-            vec4(-0.020612, -0.025574, 0.005324, 0.013416),
-            vec4(-0.038708,  0.006957, 0.013753, 0.016519),
-            vec4(-0.021449,  0.040468, 0.024700, 0.017215),
-            vec4( 0.013015,  0.050223, 0.036693, 0.015064),
-            vec4( 0.042178,  0.038585, 0.047976, 0.010684),
-            vec4( 0.057972,  0.019812, 0.057015, 0.005570),
-            vec4( 0.063647,  0.005252, 0.062782, 0.001529),
-            vec4( 0.064754,  0.000000, 0.064754, 0.000000),
-            vec4( 0.063647,  0.005252, 0.062782, 0.001529),
-            vec4( 0.057972,  0.019812, 0.057015, 0.005570),
-            vec4( 0.042178,  0.038585, 0.047976, 0.010684),
-            vec4( 0.013015,  0.050223, 0.036693, 0.015064),
-            vec4(-0.021449,  0.040468, 0.024700, 0.017215),
-            vec4(-0.038708,  0.006957, 0.013753, 0.016519),
-            vec4(-0.020612, -0.025574, 0.005324, 0.013416),
-            vec4( 0.014096, -0.022658, 0.000115, 0.009116)
-        );
-
-        // Complex multiplication
-        vec2 mulComplex(vec2 p, vec2 q)
-        {
-            return vec2(p.x * q.x - p.y * q.y, p.x * q.y + p.y * q.x);
-        }
-
-        // Calculate Circle of Confusion
-        float calculateCoC(float depth, float focusPoint)
-        {
-            float normalizedDepthDiff = abs(depth - focusPoint) / max(focusPoint, 1e-3);
-            float cocPixels = normalizedDepthDiff * _FocusStrength * 0.01 * _Resolution.y;
-            float maxBlurPixels = _MaxBlurRadius * 0.01 * _Resolution.y;
-            return min(cocPixels, maxBlurPixels);
-        }
-
-        void main()
-        {
-            float focusPoint = texture(_FocusTex, vec2(0.5)).r;
-
-            float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
-            float coc = calculateCoC(depth, focusPoint);
-            float radius = coc / _Resolution.y / float(KERNEL_RADIUS);
-
-            vec4 rAcc = vec4(0.0);
-            vec4 gAcc = vec4(0.0);
-            vec4 bAcc = vec4(0.0);
-
-            for (int i = 0; i < KERNEL_COUNT; i++)
-            {
-                int offset = i - KERNEL_RADIUS;
-                vec2 coords = TexCoords + vec2(0.0, offset * radius);
-                coords = clamp(coords, vec2(0.0), vec2(1.0));
-
-                vec4 rVal = texture(_HorizR, coords);
-                vec4 gVal = texture(_HorizG, coords);
-                vec4 bVal = texture(_HorizB, coords);
-
-                vec4 kernels = CombinedKernels[i];
-
-                rAcc.xy += mulComplex(rVal.xy, kernels.xy);
-                rAcc.zw += mulComplex(rVal.zw, kernels.zw);
-
-                gAcc.xy += mulComplex(gVal.xy, kernels.xy);
-                gAcc.zw += mulComplex(gVal.zw, kernels.zw);
-
-                bAcc.xy += mulComplex(bVal.xy, kernels.xy);
-                bAcc.zw += mulComplex(bVal.zw, kernels.zw);
-            }
-
-            float r0 = dot(rAcc.xy, FinalWeights_Kernel0);
-            float r1 = dot(rAcc.zw, FinalWeights_Kernel1);
-
-            float g0 = dot(gAcc.xy, FinalWeights_Kernel0);
-            float g1 = dot(gAcc.zw, FinalWeights_Kernel1);
-
-            float b0 = dot(bAcc.xy, FinalWeights_Kernel0);
-            float b1 = dot(bAcc.zw, FinalWeights_Kernel1);
-
-            OutputColor = vec4(r0 + r1, g0 + g1, b0 + b1, 1.0);
-        }
-    }
-
-    ENDGLSL
-}
-
-// Pass 2: Final Combine with original image
-Pass "DoFCombine"
-{
-    Tags { "RenderOrder" = "Opaque" }
-    Blend Override
-    Cull None
-    ZTest Off
-    ZWrite Off
-
-    GLSLPROGRAM
-
-    Vertex
-    {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
-
-        out vec2 TexCoords;
-
-        void main()
-        {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
-        }
-    }
-
-    Fragment
-    {
-        layout(location = 0) out vec4 OutputColor;
-
-        #include "ProwlCG"
-
-        in vec2 TexCoords;
-
-        uniform sampler2D _MainTex;
-        uniform sampler2D _BlurredTex;
-        uniform sampler2D _CameraDepthTexture;
-        uniform float _FocusStrength;
-        uniform sampler2D _FocusTex;    // 1x1, the smoothed focus distance
-        uniform float _MaxBlurRadius;
-        uniform vec2 _Resolution;
-
-        float calculateCoC(float depth, float focusPoint)
-        {
-            float normalizedDepthDiff = abs(depth - focusPoint) / max(focusPoint, 1e-3);
-            float cocPixels = normalizedDepthDiff * _FocusStrength * 0.01 * _Resolution.y;
-            float maxBlurPixels = _MaxBlurRadius * 0.01 * _Resolution.y;
-            return min(cocPixels, maxBlurPixels);
-        }
-
-        void main()
-        {
-            float focusPoint = texture(_FocusTex, vec2(0.5)).r;
-
-            vec4 originalColor = texture(_MainTex, TexCoords);
-            vec4 blurredColor = texture(_BlurredTex, TexCoords);
-
-            float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
-            float coc = calculateCoC(depth, focusPoint);
-
-            // Smooth blend based on CoC
-            float maxBlurPixels = _MaxBlurRadius * 0.005 * _Resolution.y;
-            float blendFactor = smoothstep(0.5, maxBlurPixels * 0.5, coc);
-
-            OutputColor = vec4(mix(originalColor.rgb, blurredColor.rgb, blendFactor), originalColor.a);
-        }
-    }
-
-    ENDGLSL
-}
-
-// Pass 3: Prefilter the scene down to the blur resolution, so quarter and eighth resolution blurs
-// average every source pixel instead of picking one per texel and shimmering.
 Pass "Prefilter"
 {
     Tags { "RenderOrder" = "Opaque" }
@@ -357,17 +95,175 @@ Pass "Prefilter"
 
         in vec2 TexCoords;
 
-        uniform sampler2D _MainTex;
-        uniform float _PrefilterOffset;   // source texels from the center to each tap, a quarter of the downscale
+        uniform sampler2D _MainTex;     // full res scene color
+        uniform sampler2D _CoCTex;      // full res CoC
+        uniform float _Downscale;       // full res pixels per blur pixel
+
+        float MaxComponent(vec3 c) { return max(c.r, max(c.g, c.b)); }
 
         void main()
         {
-            // Four bilinear taps spread across the block of source pixels this output pixel covers.
-            vec2 offset = _PrefilterOffset / vec2(textureSize(_MainTex, 0));
-            vec4 sum = texture(_MainTex, TexCoords + vec2(-offset.x, -offset.y));
-            sum += texture(_MainTex, TexCoords + vec2( offset.x, -offset.y));
-            sum += texture(_MainTex, TexCoords + vec2(-offset.x,  offset.y));
-            sum += texture(_MainTex, TexCoords + vec2( offset.x,  offset.y));
+            // Four taps spread across the block of full res pixels this blur pixel covers.
+            vec2 fullTexel = 1.0 / vec2(textureSize(_MainTex, 0));
+            vec2 spread = fullTexel * max(_Downscale * 0.25, 0.5);
+            vec2 offsets[4] = vec2[](vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0), vec2(1.0, 1.0));
+
+            vec3 color = vec3(0.0);
+            float weightSum = 0.0;
+            float cocMin = 0.0;
+            float cocMax = 0.0;
+            for (int i = 0; i < 4; i++)
+            {
+                vec2 uv = TexCoords + offsets[i] * spread;
+                vec3 c = texture(_MainTex, uv).rgb;
+                // Point sampled CoC: blending a near and a far value would invent one in between.
+                ivec2 cocSize = textureSize(_CoCTex, 0);
+                ivec2 cocPixel = clamp(ivec2(uv * vec2(cocSize)), ivec2(0), cocSize - 1);
+                float coc = texelFetch(_CoCTex, cocPixel, 0).r;
+                cocMin = min(cocMin, coc);
+                cocMax = max(cocMax, coc);
+
+                // Dim the brightest taps so a single hot pixel can't flicker the bokeh.
+                float w = 1.0 / (MaxComponent(c) + 1.0);
+                color += c * w;
+                weightSum += w;
+            }
+            color /= weightSum;
+
+            // The strongest blur of the block, in blur res pixels.
+            float coc = (-cocMin > cocMax ? cocMin : cocMax) / _Downscale;
+
+            // In-focus pixels drop out of the blurred image; the combine takes them sharp from the source.
+            color *= smoothstep(0.0, 2.0, abs(coc));
+
+            OutputColor = vec4(color, coc);
+        }
+    }
+
+    ENDGLSL
+}
+
+Pass "Bokeh"
+{
+    Tags { "RenderOrder" = "Opaque" }
+    Blend Override
+    Cull None
+    ZTest Off
+    ZWrite Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        layout(location = 0) out vec4 OutputColor;
+
+        in vec2 TexCoords;
+
+        #define MAX_KERNEL 71
+
+        uniform sampler2D _MainTex;         // prefiltered: rgb, a = CoC in blur res pixels
+        uniform vec2 _Kernel[MAX_KERNEL];   // unit disk sample offsets
+        uniform int _KernelCount;
+        uniform float _MaxCoC;              // largest CoC in blur res pixels
+
+        void main()
+        {
+            vec2 texel = 1.0 / vec2(textureSize(_MainTex, 0));
+            vec4 center = texture(_MainTex, TexCoords);
+
+            // A soft margin on each sample's reach so the bokeh edge isn't a hard step.
+            const float margin = 2.0;
+
+            vec4 far = vec4(0.0);
+            vec4 near = vec4(0.0);
+            int count = min(_KernelCount, MAX_KERNEL);
+            for (int i = 0; i < count; i++)
+            {
+                vec2 disp = _Kernel[i] * _MaxCoC;
+                float dist = length(disp);
+                vec4 s = texture(_MainTex, TexCoords + disp * texel);
+
+                // Far field: a sample reaches only as far as the smaller of its CoC and the center's, so a
+                // sharp pixel nearby can't be pulled into this pixel's blur.
+                float farCoC = max(min(center.a, s.a), 0.0);
+                float farWeight = clamp((farCoC - dist + margin) / margin, 0.0, 1.0);
+
+                // Near field: a blurred foreground sample spreads over whatever is behind it.
+                float nearWeight = clamp((-s.a - dist + margin) / margin, 0.0, 1.0);
+                // In-focus samples were dimmed by the prefilter, so keep them out of the near field.
+                nearWeight *= step(1.0, -s.a);
+
+                far += vec4(s.rgb, 1.0) * farWeight;
+                near += vec4(s.rgb, 1.0) * nearWeight;
+            }
+
+            far.rgb /= far.a + (far.a == 0.0 ? 1.0 : 0.0);
+            near.rgb /= near.a + (near.a == 0.0 ? 1.0 : 0.0);
+
+            // How much of this pixel the near field covers: a sample count turned into an area fraction.
+            float nearAlpha = clamp(near.a * 3.14159265 / float(max(count, 1)), 0.0, 1.0);
+
+            OutputColor = vec4(mix(far.rgb, near.rgb, nearAlpha), nearAlpha);
+        }
+    }
+
+    ENDGLSL
+}
+
+Pass "Postfilter"
+{
+    Tags { "RenderOrder" = "Opaque" }
+    Blend Override
+    Cull None
+    ZTest Off
+    ZWrite Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        layout(location = 0) out vec4 OutputColor;
+
+        in vec2 TexCoords;
+
+        uniform sampler2D _MainTex;
+
+        void main()
+        {
+            // Four bilinear taps half a texel out: a 3x3 tent that smooths the gather's sample pattern.
+            vec2 h = 0.5 / vec2(textureSize(_MainTex, 0));
+            vec4 sum = texture(_MainTex, TexCoords + vec2(-h.x, -h.y));
+            sum += texture(_MainTex, TexCoords + vec2( h.x, -h.y));
+            sum += texture(_MainTex, TexCoords + vec2(-h.x,  h.y));
+            sum += texture(_MainTex, TexCoords + vec2( h.x,  h.y));
             OutputColor = sum * 0.25;
         }
     }
@@ -375,8 +271,58 @@ Pass "Prefilter"
     ENDGLSL
 }
 
-// Pass 4: Resolve the focus distance into a 1x1 target, easing toward the new value over time so
-// autofocus glides instead of snapping as things pass the center of the screen.
+Pass "Combine"
+{
+    Tags { "RenderOrder" = "Opaque" }
+    Blend Override
+    Cull None
+    ZTest Off
+    ZWrite Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        layout(location = 0) out vec4 OutputColor;
+
+        in vec2 TexCoords;
+
+        uniform sampler2D _MainTex;     // full res scene color
+        uniform sampler2D _BlurredTex;  // rgb = blurred, a = near field coverage
+        uniform sampler2D _CoCTex;      // full res CoC
+        uniform float _Downscale;
+
+        void main()
+        {
+            vec4 original = texture(_MainTex, TexCoords);
+            vec4 dof = texture(_BlurredTex, TexCoords);
+            float coc = texture(_CoCTex, TexCoords).r;
+
+            // Far field shows where this pixel itself is behind focus; the near field covers everything.
+            float farAlpha = smoothstep(_Downscale, _Downscale * 2.0, coc);
+            float alpha = farAlpha + dof.a - farAlpha * dof.a;
+
+            OutputColor = vec4(mix(original.rgb, dof.rgb, alpha), original.a);
+        }
+    }
+
+    ENDGLSL
+}
+
 Pass "Focus"
 {
     Tags { "RenderOrder" = "Opaque" }
