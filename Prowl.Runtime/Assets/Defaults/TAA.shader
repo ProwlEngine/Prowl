@@ -46,6 +46,7 @@ Pass "Resolve"
         uniform vec2 _Jitter;               // Current frame jitter in pixels
         uniform float _HistoryValid;        // 0 or 1
         uniform float _BlendFactor;         // Feedback weight (0.9-0.97 typical)
+        uniform float _MotionBlendFactor;   // Feedback weight for fast moving pixels
         uniform float _MotionScale;         // Scale for motion-based rejection
         uniform float _Sharpness;           // Sharpening amount (0-1)
 
@@ -205,9 +206,10 @@ Pass "Resolve"
             vec3 clippedHistory = clamp(historyYCoCg, aabbMin, aabbMax);
             historyColor = InverseTonemap(YCoCgToRGB(clippedHistory));
 
-            // Adaptive blend factor: reduce history weight with fast motion
-            float blendFactor = _BlendFactor;
-            blendFactor = mix(blendFactor, 0.0, saturate(motionLength * 0.1));
+            // Ease toward the motion weight as the pixel moves faster. History never drops out entirely:
+            // the current frame is jittered, so without any history a fast pan shows the raw jitter.
+            // Stale history under motion is handled by the tighter clamp above.
+            float blendFactor = mix(_BlendFactor, _MotionBlendFactor, saturate(motionLength * 0.1));
 
             // Blend in tonemapped space for HDR stability
             vec3 currentTM = Tonemap(currentColor);

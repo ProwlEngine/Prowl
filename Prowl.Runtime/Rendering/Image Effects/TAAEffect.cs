@@ -31,6 +31,10 @@ public sealed class TAAEffect : ImageEffect
     /// <summary>How much of the history to keep (0..0.99). Higher = smoother but ghosts more.</summary>
     public float BlendFactor = 0.95f;
 
+    /// <summary>How much history to keep where the image moves fast (0..0.99). Lower trails less on
+    /// fast pans; it stays above zero so moving pixels are still anti-aliased instead of shimmering.</summary>
+    public float MotionBlendFactor = 0.85f;
+
     /// <summary>Scale for motion-based neighborhood tightening. Higher = more aggressive ghosting rejection.</summary>
     public float MotionScale = 2.0f;
 
@@ -132,6 +136,7 @@ public sealed class TAAEffect : ImageEffect
         _mat.SetVector("_Jitter", _jitter);
         _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
         _mat.SetFloat("_BlendFactor", Maths.Clamp(BlendFactor, 0.0f, 0.99f));
+        _mat.SetFloat("_MotionBlendFactor", Maths.Clamp(MotionBlendFactor, 0.0f, 0.99f));
         _mat.SetFloat("_MotionScale", Math.Max(0.0f, MotionScale));
         _mat.SetFloat("_Sharpness", Maths.Clamp(Sharpness, 0.0f, 1.0f));
         _mat.SetTexture("_HistoryTex", _history.MainTexture);
