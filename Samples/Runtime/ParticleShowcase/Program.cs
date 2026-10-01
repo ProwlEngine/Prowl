@@ -21,6 +21,7 @@
 //   WASD, Q/E   Fly, hold Right Mouse to look, Shift to go faster
 //   Space       Restart every system
 //   P           Pause or resume every system
+//   F1          Hide the HUD
 //
 
 using Prowl.Runtime;
@@ -28,12 +29,12 @@ using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
-using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
+using Prowl.Samples;
 using Prowl.Vector;
 
+using static Prowl.Samples.Sample;
+
 using Gradient = Prowl.Vector.Gradient;
-using MouseButton = Prowl.Runtime.MouseButton;
 
 namespace ParticleShowcase;
 
@@ -45,19 +46,12 @@ internal class Program
     }
 }
 
-public sealed class ParticleShowcaseGame : Game
+public sealed class ParticleShowcaseGame : StationGame
 {
     private const float StationSpacing = 24f;
 
-    private sealed record Station(string Name, string Description, Float3 Center, Float3 View, float LookHeight);
-
-    private Scene _scene = null!;
-    private GameObject _camera = null!;
-    private ShowcaseHud _hud = null!;
-    private readonly List<Station> _stations = new();
     private readonly List<GameObject> _roots = new();
     private readonly List<ParticleSystemComponent> _systems = new();
-    private int _current;
 
     private Material _dotAlpha = null!;
     private Material _dotAdditive = null!;
@@ -67,18 +61,22 @@ public sealed class ParticleShowcaseGame : Game
     private Material _ring = null!;
     private Material _solid = null!;
 
-    private InputActionMap _cameraMap = null!;
-    private InputAction _move = null!;
-    private InputAction _look = null!;
-    private InputAction _lookEnable = null!;
-    private InputAction _flyUp = null!;
-    private InputAction _flyDown = null!;
-    private InputAction _sprint = null!;
+    protected override string ExtraKeys => "Space  restart    P  pause";
 
-    public override void Initialize()
+    public override string Stats
     {
-        _scene = new Scene();
-        SetupInput();
+        get
+        {
+            int particles = 0;
+            foreach (ParticleSystemComponent system in _systems)
+                foreach (ParticleSystemComponent child in system.GetComponentsInChildren<ParticleSystemComponent>())
+                    particles += child.ParticleCount;
+            return $"{particles:N0} live particles";
+        }
+    }
+
+    protected override void Build()
+    {
         CreateMaterials();
         CreateEnvironment();
 
@@ -94,18 +92,12 @@ public sealed class ParticleShowcaseGame : Game
         BuildFlipbooks(StationCenter(9));
 
         foreach (GameObject root in _roots)
-            _scene.Add(root);
-
-        CreateHud();
-        GoToStation(0);
-        Scene.Load(_scene);
+            Add(root);
     }
 
-    private static Float3 StationCenter(int index) => new(index * StationSpacing, 0f, 0f);
+    private static readonly Float3 DefaultView = new(0f, 5f, -17f);
 
-    /// <summary>Registers a station. <paramref name="view"/> is where the camera sits relative to its center.</summary>
-    private void AddStation(string name, string description, Float3 center, Float3? view = null, float lookHeight = 3f)
-        => _stations.Add(new Station(name, description, center, view ?? new Float3(0f, 5f, -17f), lookHeight));
+    private static Float3 StationCenter(int index) => new(index * StationSpacing, 0f, 0f);
 
     // ----------------------------------------------------------------
     //  Scene
@@ -120,19 +112,14 @@ public sealed class ParticleShowcaseGame : Game
         light.Transform.LocalEulerAngles = new Float3(-50f, 30f, 0f);
         _roots.Add(light);
 
-        _camera = new GameObject("Main Camera") { Tag = "Main Camera" };
-        Camera camera = _camera.AddComponent<Camera>();
-        camera.ClearFlags = CameraClearFlags.SolidColor;
-        camera.ClearColor = new Color(0.02f, 0.025f, 0.045f, 1f);
-        camera.HDR = true;
-        camera.Depth = -1;
-        camera.Effects =
+        MainCamera.ClearFlags = CameraClearFlags.SolidColor;
+        MainCamera.ClearColor = new Color(0.02f, 0.025f, 0.045f, 1f);
+        MainCamera.Effects =
         [
             new BloomEffect { Intensity = 0.6f, Threshold = 1.0f },
             new FXAAEffect(),
             new TonemapperEffect(),
         ];
-        _roots.Add(_camera);
 
         // One long floor under every station, with a collider for the world collision stations.
         float length = StationSpacing * 10f + 20f;
@@ -166,37 +153,13 @@ public sealed class ParticleShowcaseGame : Game
         return material;
     }
 
-    private void CreateHud()
-    {
-        GameObject hud = new("HUD");
-        _hud = hud.AddComponent<ShowcaseHud>();
-        _hud.Systems = _systems;
-        _scene.Add(hud);
-    }
-
-    private void GoToStation(int index)
-    {
-        _current = Math.Clamp(index, 0, _stations.Count - 1);
-        Station station = _stations[_current];
-        _camera.Transform.Position = station.Center + station.View;
-        _camera.Transform.LookAt(station.Center + new Float3(0f, station.LookHeight, 0f));
-        UpdateHud();
-    }
-
-    private void UpdateHud()
-    {
-        Station station = _stations[_current];
-        _hud.Title = $"{(_current + 1) % 10}  {station.Name}";
-        _hud.Description = station.Description;
-    }
-
     // ----------------------------------------------------------------
     //  Stations
     // ----------------------------------------------------------------
 
     private void BuildFountain(Float3 c)
     {
-        AddStation("Fountain", "Cone emission with gravity. Particles bounce off the physics floor and lose lifetime on every hit.", c);
+        AddStation("Fountain", "Cone emission with gravity. Particles bounce off the physics floor and lose lifetime on every hit.", c, DefaultView, 3f);
 
         var ps = CreateSystem("Fountain", c + new Float3(0f, 0.2f, 0f), _dotAlpha);
         ps.MaxParticles = 3000;
@@ -333,7 +296,7 @@ public sealed class ParticleShowcaseGame : Game
 
     private void BuildFireworks(Float3 c)
     {
-        AddStation("Fireworks", "Timed bursts launch shells with trails. Each shell's death fires a sub emitter that inherits its color, with drag slowing the sparks.", c);
+        AddStation("Fireworks", "Timed bursts launch shells with trails. Each shell's death fires a sub emitter that inherits its color, with drag slowing the sparks.", c, DefaultView, 3f);
 
         Gradient rainbow = Grad(
             [(0f, new Color(3f, 0.4f, 0.4f, 1f)), (0.25f, new Color(3f, 2.5f, 0.3f, 1f)), (0.5f, new Color(0.4f, 3f, 0.6f, 1f)),
@@ -458,7 +421,7 @@ public sealed class ParticleShowcaseGame : Game
 
     private void BuildVortex(Float3 c)
     {
-        AddStation("Vortex", "Particles orbit and fall inward with orbital and radial velocity. Their size pulses between two random curves and a few carry lights.", c);
+        AddStation("Vortex", "Particles orbit and fall inward with orbital and radial velocity. Their size pulses between two random curves and a few carry lights.", c, DefaultView, 3f);
 
         var vortex = CreateSystem("Vortex", c + new Float3(0f, 0.3f, 0f), _dotAdditive);
         vortex.Initial.StartLifetime = new MinMaxCurve(4f, 6f);
@@ -522,7 +485,7 @@ public sealed class ParticleShowcaseGame : Game
 
     private void BuildSnow(Float3 c)
     {
-        AddStation("Snow", "A wide box emits flakes that a wind zone and turbulence push around. They settle on a collision plane. Culling is Pause And Catch Up, so it fast forwards when you look back.", c);
+        AddStation("Snow", "A wide box emits flakes that a wind zone and turbulence push around. They settle on a collision plane. Culling is Pause And Catch Up, so it fast forwards when you look back.", c, DefaultView, 3f);
 
         var zone = new GameObject("Wind Zone");
         WindZone wind = zone.AddComponent<WindZone>();
@@ -568,7 +531,7 @@ public sealed class ParticleShowcaseGame : Game
 
     private void BuildDebris(Float3 c)
     {
-        AddStation("Debris", "Mesh particles with full 3D rotation, lit by the scene. A burst every loop, tumbling and bouncing on the physics floor.", c);
+        AddStation("Debris", "Mesh particles with full 3D rotation, lit by the scene. A burst every loop, tumbling and bouncing on the physics floor.", c, DefaultView, 3f);
 
         var debris = CreateSystem("Debris", c + new Float3(0f, 0.5f, 0f), _solid);
         debris.Duration = 3f;
@@ -721,25 +684,8 @@ public sealed class ParticleShowcaseGame : Game
     }
 
     // ----------------------------------------------------------------
-    //  Curves and gradients
-    // ----------------------------------------------------------------
-
-    private static AnimationCurve Curve(params (float time, float value)[] keys)
-        => new(keys.Select(k => new Keyframe(k.time, k.value)).ToArray());
-
-    private static Gradient Grad((float time, Color color)[] colors, (float time, float alpha)[] alphas)
-        => new(colors.Select(k => new GradientColorKey(k.time, k.color)), alphas.Select(k => new GradientAlphaKey(k.time, k.alpha)));
-
-    // ----------------------------------------------------------------
     //  Procedural textures
     // ----------------------------------------------------------------
-
-    private static Texture2D SoftDot() => Texture(64, (u, v) =>
-    {
-        float r = Distance(u, v, 0.5f, 0.5f) * 2f;
-        float a = MathF.Pow(Saturate(1f - r), 1.6f);
-        return new Color(1f, 1f, 1f, a);
-    });
 
     private static Texture2D Ring() => Texture(128, (u, v) =>
     {
@@ -799,59 +745,12 @@ public sealed class ParticleShowcaseGame : Game
         return new Color(color.R, color.G, color.B, Saturate(MathF.Max(ring, spoke * tip)));
     });
 
-    private static Texture2D Texture(int size, Func<float, float, Color> pixel)
-        => Sheet(size, 1, 1, (_, u, v) => pixel(u, v));
-
-    /// <summary>
-    /// Builds a sprite sheet with frame 0 in the top left. Texture rows are stored bottom first, which
-    /// is what the particle shader expects when it picks a frame.
-    /// </summary>
-    private static Texture2D Sheet(int frameSize, int columns, int rows, Func<int, float, float, Color> pixel)
-    {
-        int width = frameSize * columns, height = frameSize * rows;
-        var pixels = new Color32[width * height];
-        for (int frame = 0; frame < columns * rows; frame++)
-        {
-            int column = frame % columns;
-            int rowFromBottom = rows - 1 - frame / columns;
-            for (int y = 0; y < frameSize; y++)
-                for (int x = 0; x < frameSize; x++)
-                {
-                    Color c = pixel(frame, (x + 0.5f) / frameSize, (y + 0.5f) / frameSize);
-                    int px = column * frameSize + x;
-                    int py = rowFromBottom * frameSize + y;
-                    pixels[py * width + px] = new Color32(ToByte(c.R), ToByte(c.G), ToByte(c.B), ToByte(c.A));
-                }
-        }
-
-        var texture = new Texture2D((uint)width, (uint)height);
-        texture.SetData(new Memory<Color32>(pixels));
-        texture.GenerateMipmaps();
-        texture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
-        texture.SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
-        return texture;
-    }
-
-    private static float Saturate(float x) => Math.Clamp(x, 0f, 1f);
-    private static float Distance(float x0, float y0, float x1, float y1) => MathF.Sqrt((x0 - x1) * (x0 - x1) + (y0 - y1) * (y0 - y1));
-    private static byte ToByte(float x) => (byte)(Saturate(x) * 255f + 0.5f);
-
     // ----------------------------------------------------------------
     //  Input
     // ----------------------------------------------------------------
 
-    private static readonly KeyCode[] StationKeys =
-    [
-        KeyCode.Number1, KeyCode.Number2, KeyCode.Number3, KeyCode.Number4, KeyCode.Number5,
-        KeyCode.Number6, KeyCode.Number7, KeyCode.Number8, KeyCode.Number9, KeyCode.Number0,
-    ];
-
-    public override void BeginUpdate()
+    protected override void Tick()
     {
-        for (int i = 0; i < StationKeys.Length && i < _stations.Count; i++)
-            if (Input.GetKeyDown(StationKeys[i]))
-                GoToStation(i);
-
         if (Input.GetKeyDown(KeyCode.Space))
         {
             foreach (ParticleSystemComponent system in _systems)
@@ -869,110 +768,6 @@ public sealed class ParticleShowcaseGame : Game
                 if (anyPlaying) system.Pause();
                 else system.Play();
             }
-        }
-
-        FlyCamera();
-    }
-
-    private void FlyCamera()
-    {
-        Float2 movement = _move.ReadValue<Float2>();
-        float speed = (_sprint.IsPressed() ? 20f : 7f) * Time.UnscaledDeltaTime;
-        Transform t = _camera.Transform;
-        t.Position += t.Forward * movement.Y * speed + t.Right * movement.X * speed;
-
-        float upDown = (_flyUp.IsPressed() ? 1f : 0f) - (_flyDown.IsPressed() ? 1f : 0f);
-        t.Position += Float3.UnitY * upDown * speed;
-
-        Float2 look = _look.ReadValue<Float2>();
-        if (_lookEnable.IsPressed())
-            t.LocalEulerAngles += new Float3(look.Y, look.X, 0f);
-    }
-
-    private void SetupInput()
-    {
-        _cameraMap = new InputActionMap("Camera");
-
-        _move = _cameraMap.AddAction("Move", InputActionType.Value);
-        _move.ExpectedValueType = typeof(Float2);
-        _move.AddBinding(new Vector2CompositeBinding(
-            InputBinding.CreateKeyBinding(KeyCode.W),
-            InputBinding.CreateKeyBinding(KeyCode.S),
-            InputBinding.CreateKeyBinding(KeyCode.A),
-            InputBinding.CreateKeyBinding(KeyCode.D),
-            true));
-
-        _lookEnable = _cameraMap.AddAction("LookEnable", InputActionType.Button);
-        _lookEnable.AddBinding(MouseButton.Right);
-
-        _look = _cameraMap.AddAction("Look", InputActionType.Value);
-        _look.ExpectedValueType = typeof(Float2);
-        var mouse = new DualAxisCompositeBinding(
-            InputBinding.CreateMouseAxisBinding(0),
-            InputBinding.CreateMouseAxisBinding(1));
-        mouse.Processors.Add(new ScaleProcessor(0.1f));
-        _look.AddBinding(mouse);
-
-        _flyUp = _cameraMap.AddAction("FlyUp", InputActionType.Button);
-        _flyUp.AddBinding(KeyCode.E);
-        _flyDown = _cameraMap.AddAction("FlyDown", InputActionType.Button);
-        _flyDown.AddBinding(KeyCode.Q);
-
-        _sprint = _cameraMap.AddAction("Sprint", InputActionType.Button);
-        _sprint.AddBinding(KeyCode.ShiftLeft);
-
-        Input.RegisterActionMap(_cameraMap);
-        _cameraMap.Enable();
-    }
-}
-
-/// <summary>Draws the station name, what it shows, the live particle count and the controls with Paper.</summary>
-public sealed class ShowcaseHud : MonoBehaviour
-{
-    public string Title = string.Empty;
-    public string Description = string.Empty;
-    public List<ParticleSystemComponent> Systems = new();
-
-    private static readonly Color Panel = new(0.02f, 0.03f, 0.06f, 0.72f);
-    private static readonly Color Bright = new(0.95f, 0.96f, 1f, 1f);
-    private static readonly Color Dim = new(0.62f, 0.68f, 0.8f, 1f);
-    private static readonly Color Accent = new(1f, 0.72f, 0.35f, 1f);
-
-    public override void OnGui(Paper paper)
-    {
-        Prowl.Scribe.FontFile? font = FontAsset.LoadDefault().FontFile;
-        if (font == null) return;
-
-        int particles = 0;
-        foreach (ParticleSystemComponent system in Systems)
-            foreach (ParticleSystemComponent child in system.GetComponentsInChildren<ParticleSystemComponent>())
-                particles += child.ParticleCount;
-
-        using (paper.Column("hud")
-            .PositionType(PositionType.SelfDirected)
-            .Left(20).Top(20).Width(640).Height(UnitValue.Auto)
-            .BackgroundColor(Panel).Rounded(10)
-            .Padding(16, 16, 12, 14).Gap(6)
-            .Enter())
-        {
-            paper.Box("hud_title").Height(30)
-                .Text(Title, font).FontSize(24).TextColor(Accent)
-                .Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box("hud_desc").Height(UnitValue.Auto)
-                .Text(Description, font).FontSize(16).TextColor(Bright)
-                .Wrap(Prowl.Scribe.TextWrapMode.Wrap)
-                .Alignment(TextAlignment.Left);
-
-            paper.Box("hud_count").Height(22)
-                .Text($"{particles:N0} live particles", font).FontSize(14).TextColor(Dim)
-                .Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box("hud_keys").Height(UnitValue.Auto)
-                .Text("1 to 9, 0  stations    WASD Q E  fly    Right Mouse  look    Shift  faster    Space  restart    P  pause", font)
-                .FontSize(14).TextColor(Dim)
-                .Wrap(Prowl.Scribe.TextWrapMode.Wrap)
-                .Alignment(TextAlignment.Left);
         }
     }
 }

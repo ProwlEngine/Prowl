@@ -1,0 +1,727 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+//
+// Shared scaffolding for the runtime samples.
+//
+// StationGame lays a sample out as a row of stations. Number keys or the bar along the bottom
+// jump the camera to a station, and the fly camera roams between them. SampleHud draws the
+// title, description, a live stat line and the key help with Paper, and samples add their own
+// controls to the panel on the right through Sample.Button, Sample.Toggle and Sample.Slider.
+//
+
+using System.IO.Compression;
+
+using Prowl.PaperUI;
+using Prowl.PaperUI.Events;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
+using Prowl.Scribe;
+using Prowl.Vector;
+
+using Gradient = Prowl.Vector.Gradient;
+using MouseButton = Prowl.Runtime.MouseButton;
+using TextAlignment = Prowl.PaperUI.TextAlignment;
+
+namespace Prowl.Samples;
+
+public abstract class StationGame : Game
+{
+    public sealed record Station(string Name, string Description, Float3 Center, Float3 View, float LookHeight);
+
+    protected Scene SampleScene = null!;
+    protected GameObject CameraObject = null!;
+    protected Camera MainCamera = null!;
+    protected SampleHud Hud = null!;
+    public readonly List<Station> Stations = new();
+    public int CurrentStation { get; private set; }
+
+    /// <summary>Key help for the sample's own controls, shown after the shared ones.</summary>
+    protected virtual string ExtraKeys => string.Empty;
+
+    private string? _captureFolder;
+    private int _captureFrames = 120;
+    private int _captureCounter;
+    private bool _captureNow;
+
+    private static readonly KeyCode[] StationKeys =
+    [
+        KeyCode.Number1, KeyCode.Number2, KeyCode.Number3, KeyCode.Number4, KeyCode.Number5,
+        KeyCode.Number6, KeyCode.Number7, KeyCode.Number8, KeyCode.Number9, KeyCode.Number0,
+    ];
+
+    public override void Initialize()
+    {
+        ReadCaptureArguments();
+
+        SampleScene = new Scene();
+
+        CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
+        MainCamera = CameraObject.AddComponent<Camera>();
+        MainCamera.HDR = true;
+        MainCamera.FarClipPlane = 500f;
+        MainCamera.Effects =
+        [
+            new BloomEffect { Intensity = 0.4f, Threshold = 1.0f },
+            new TonemapperEffect(),
+            new FXAAEffect(),
+        ];
+        CameraObject.AddComponent<FlyCamera>();
+        SampleScene.Add(CameraObject);
+
+        var hud = new GameObject("HUD");
+        Hud = hud.AddComponent<SampleHud>();
+        Hud.Game = this;
+        SampleScene.Add(hud);
+
+        Build();
+
+        GoToStation(0);
+        Scene.Load(SampleScene);
+    }
+
+    /// <summary>Creates the sample's content. Called once, before the scene loads.</summary>
+    protected abstract void Build();
+
+    /// <summary>Called every frame before the scene updates.</summary>
+    protected virtual void Tick() { }
+
+    /// <summary>Called when the camera jumps to a station.</summary>
+    protected virtual void OnStationChanged(int index) { }
+
+    /// <summary>Draws the sample's own controls into the panel on the right. Leave empty for no panel.</summary>
+    public virtual void DrawControls(Paper paper, FontFile font) { }
+
+    public bool HasControls => _hasControls ??= GetType().GetMethod(nameof(DrawControls))!.DeclaringType != typeof(StationGame);
+    private bool? _hasControls;
+
+    /// <summary>The live stat line under the description.</summary>
+    public virtual string Stats => string.Empty;
+
+    public string KeyHelp
+    {
+        get
+        {
+            string keys = "1 to 9, 0  stations    WASD Q E  fly    Right Mouse  look    Shift  faster";
+            return string.IsNullOrEmpty(ExtraKeys) ? keys : keys + "    " + ExtraKeys;
+        }
+    }
+
+    /// <summary>Registers a station. <paramref name="view"/> is where the camera sits relative to its center.</summary>
+    protected void AddStation(string name, string description, Float3 center, Float3? view = null, float lookHeight = 1.5f)
+        => Stations.Add(new Station(name, description, center, view ?? new Float3(0f, 5f, -12f), lookHeight));
+
+    /// <summary>Adds a root object to the sample scene and returns it.</summary>
+    protected GameObject Add(GameObject go)
+    {
+        SampleScene.Add(go);
+        return go;
+    }
+
+    public void GoToStation(int index)
+    {
+        if (Stations.Count == 0) return;
+        CurrentStation = Math.Clamp(index, 0, Stations.Count - 1);
+        Station station = Stations[CurrentStation];
+        CameraObject.Transform.Position = station.Center + station.View;
+        CameraObject.Transform.LookAt(station.Center + new Float3(0f, station.LookHeight, 0f));
+        OnStationChanged(CurrentStation);
+    }
+
+    public override void BeginUpdate()
+    {
+        for (int i = 0; i < StationKeys.Length && i < Stations.Count; i++)
+            if (Input.GetKeyDown(StationKeys[i]))
+                GoToStation(i);
+
+        Tick();
+        AdvanceCapture();
+    }
+
+    public override void BeginRender() => RenderStats.BeginFrame();
+    public override void EndRender() => RenderStats.EndFrame();
+
+    public override void AfterGui(Scene? scene)
+    {
+        if (!_captureNow) return;
+        _captureNow = false;
+
+        Station station = Stations[CurrentStation];
+        string file = Path.Combine(_captureFolder!, $"{CurrentStation + 1:00} {station.Name}.png");
+        SaveScreenshot(file);
+
+        if (CurrentStation + 1 < Stations.Count)
+            GoToStation(CurrentStation + 1);
+        else
+            Quit();
+    }
+
+    private void ReadCaptureArguments()
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        int at = Array.IndexOf(args, "--capture");
+        if (at < 0 || at + 1 >= args.Length) return;
+
+        _captureFolder = Path.GetFullPath(args[at + 1]);
+        Directory.CreateDirectory(_captureFolder);
+        if (at + 2 < args.Length && int.TryParse(args[at + 2], out int frames))
+            _captureFrames = frames;
+    }
+
+    private void AdvanceCapture()
+    {
+        if (_captureFolder == null || Stations.Count == 0) return;
+        if (++_captureCounter < _captureFrames) return;
+        _captureCounter = 0;
+        _captureNow = true;
+    }
+
+    /// <summary>Writes the window's current contents to a PNG file.</summary>
+    public static void SaveScreenshot(string file)
+    {
+        Texture2D shot = Graphics.Screenshot();
+        int width = (int)shot.Width, height = (int)shot.Height;
+        var pixels = new Color32[width * height];
+        shot.GetData(new Memory<Color32>(pixels));
+        shot.Dispose();
+
+        // PNG rows are top first and each starts with a filter byte, the texture is bottom first.
+        var raw = new byte[height * (width * 3 + 1)];
+        for (int y = 0; y < height; y++)
+        {
+            int row = y * (width * 3 + 1);
+            int source = (height - 1 - y) * width;
+            for (int x = 0; x < width; x++)
+            {
+                Color32 c = pixels[source + x];
+                raw[row + 1 + x * 3] = c.R;
+                raw[row + 2 + x * 3] = c.G;
+                raw[row + 3 + x * 3] = c.B;
+            }
+        }
+
+        using var compressed = new MemoryStream();
+        using (var zlib = new ZLibStream(compressed, CompressionLevel.Fastest, true))
+            zlib.Write(raw);
+
+        using var stream = File.Create(file);
+        stream.Write([137, 80, 78, 71, 13, 10, 26, 10]);
+        var header = new byte[13];
+        WriteBigEndian(header, 0, (uint)width);
+        WriteBigEndian(header, 4, (uint)height);
+        header[8] = 8;
+        header[9] = 2;
+        WriteChunk(stream, "IHDR", header);
+        WriteChunk(stream, "IDAT", compressed.ToArray());
+        WriteChunk(stream, "IEND", []);
+    }
+
+    private static void WriteChunk(Stream stream, string type, byte[] data)
+    {
+        var buffer = new byte[4];
+        WriteBigEndian(buffer, 0, (uint)data.Length);
+        stream.Write(buffer);
+        byte[] typeBytes = System.Text.Encoding.ASCII.GetBytes(type);
+        stream.Write(typeBytes);
+        stream.Write(data);
+        uint crc = Crc(Crc(0xFFFFFFFFu, typeBytes), data) ^ 0xFFFFFFFFu;
+        WriteBigEndian(buffer, 0, crc);
+        stream.Write(buffer);
+    }
+
+    private static uint Crc(uint crc, byte[] data)
+    {
+        foreach (byte b in data)
+        {
+            crc ^= b;
+            for (int k = 0; k < 8; k++)
+                crc = (crc & 1) != 0 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
+        }
+        return crc;
+    }
+
+    private static void WriteBigEndian(byte[] buffer, int offset, uint value)
+    {
+        buffer[offset] = (byte)(value >> 24);
+        buffer[offset + 1] = (byte)(value >> 16);
+        buffer[offset + 2] = (byte)(value >> 8);
+        buffer[offset + 3] = (byte)value;
+    }
+}
+
+/// <summary>WASD and Q E to fly, hold Right Mouse to look, Shift to go faster. Gamepad sticks work too.</summary>
+public sealed class FlyCamera : MonoBehaviour
+{
+    public float Speed = 7f;
+    public float FastSpeed = 20f;
+
+    private InputActionMap _map = null!;
+    private InputAction _move = null!;
+    private InputAction _look = null!;
+    private InputAction _lookEnable = null!;
+    private InputAction _up = null!;
+    private InputAction _down = null!;
+    private InputAction _sprint = null!;
+
+    public override void OnEnable()
+    {
+        _map = new InputActionMap("Fly Camera");
+
+        _move = _map.AddAction("Move", InputActionType.Value);
+        _move.ExpectedValueType = typeof(Float2);
+        _move.AddBinding(new Vector2CompositeBinding(
+            InputBinding.CreateKeyBinding(KeyCode.W),
+            InputBinding.CreateKeyBinding(KeyCode.S),
+            InputBinding.CreateKeyBinding(KeyCode.A),
+            InputBinding.CreateKeyBinding(KeyCode.D),
+            true));
+        var leftStick = InputBinding.CreateGamepadAxisBinding(0);
+        leftStick.Processors.Add(new DeadzoneProcessor(0.15f));
+        _move.AddBinding(leftStick);
+
+        _lookEnable = _map.AddAction("Look Enable", InputActionType.Button);
+        _lookEnable.AddBinding(MouseButton.Right);
+
+        _look = _map.AddAction("Look", InputActionType.Value);
+        _look.ExpectedValueType = typeof(Float2);
+        var mouse = new DualAxisCompositeBinding(
+            InputBinding.CreateMouseAxisBinding(0),
+            InputBinding.CreateMouseAxisBinding(1));
+        mouse.Processors.Add(new ScaleProcessor(0.1f));
+        _look.AddBinding(mouse);
+
+        _up = _map.AddAction("Up", InputActionType.Button);
+        _up.AddBinding(KeyCode.E);
+        _up.AddBinding(GamepadButton.A);
+        _down = _map.AddAction("Down", InputActionType.Button);
+        _down.AddBinding(KeyCode.Q);
+        _down.AddBinding(GamepadButton.B);
+
+        _sprint = _map.AddAction("Sprint", InputActionType.Button);
+        _sprint.AddBinding(KeyCode.ShiftLeft);
+        _sprint.AddBinding(GamepadButton.LeftStick);
+
+        Input.RegisterActionMap(_map);
+        _map.Enable();
+    }
+
+    public override void OnDisable()
+    {
+        _map.Disable();
+        Input.UnregisterActionMap(_map);
+    }
+
+    public override void Update()
+    {
+        Float2 move = _move.ReadValue<Float2>();
+        float speed = (_sprint.IsPressed() ? FastSpeed : Speed) * Time.UnscaledDeltaTime;
+        float upDown = (_up.IsPressed() ? 1f : 0f) - (_down.IsPressed() ? 1f : 0f);
+        Transform.Position += Transform.Forward * move.Y * speed + Transform.Right * move.X * speed + Float3.UnitY * upDown * speed;
+
+        Float2 stick = Input.GetGamepadRightStick();
+        if (Maths.Abs(stick.X) < 0.15f) stick.X = 0f;
+        if (Maths.Abs(stick.Y) < 0.15f) stick.Y = 0f;
+
+        Float2 look = _lookEnable.IsPressed() ? _look.ReadValue<Float2>() : Float2.Zero;
+        look += stick * 120f * Time.UnscaledDeltaTime;
+        if (look.X != 0f || look.Y != 0f)
+        {
+            Float3 euler = Transform.LocalEulerAngles + new Float3(look.Y, look.X, 0f);
+            euler.X = Maths.Clamp(euler.X, -89f, 89f);
+            Transform.LocalEulerAngles = euler;
+        }
+    }
+}
+
+/// <summary>Draws the station title, description, stats, key help, the station bar and the sample's controls.</summary>
+public sealed class SampleHud : MonoBehaviour
+{
+    public StationGame Game = null!;
+    public bool Visible = true;
+
+    public static readonly Color Panel = new(0.02f, 0.03f, 0.06f, 0.72f);
+    public static readonly Color Bright = new(0.95f, 0.96f, 1f, 1f);
+    public static readonly Color Dim = new(0.62f, 0.68f, 0.8f, 1f);
+    public static readonly Color Accent = new(1f, 0.72f, 0.35f, 1f);
+    public static readonly Color Control = new(1f, 1f, 1f, 0.08f);
+    public static readonly Color ControlHover = new(1f, 1f, 1f, 0.16f);
+
+    public override void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.F1))
+            Visible = !Visible;
+    }
+
+    public override void OnGui(Paper paper)
+    {
+        FontFile? font = FontAsset.LoadDefault().FontFile;
+        if (font == null || !Visible || Game.Stations.Count == 0) return;
+
+        int index = Game.CurrentStation;
+        StationGame.Station station = Game.Stations[index];
+
+        using (paper.Column("hud")
+            .PositionType(PositionType.SelfDirected)
+            .AnchorLeft(20).AnchorTop(20).Width(560).Height(UnitValue.Auto)
+            .BackgroundColor(Panel).Rounded(10)
+            .Padding(16, 16, 12, 14).Gap(6)
+            .Enter())
+        {
+            paper.Box("title").Height(30)
+                .Text($"{(index + 1) % 10}  {station.Name}", font).FontSize(24).TextColor(Accent)
+                .Alignment(TextAlignment.MiddleLeft);
+
+            paper.Box("description").Height(UnitValue.Auto)
+                .Text(station.Description, font).FontSize(16).TextColor(Bright)
+                .Wrap(TextWrapMode.Wrap)
+                .Alignment(TextAlignment.Left);
+
+            string stats = Game.Stats;
+            if (!string.IsNullOrEmpty(stats))
+                paper.Box("stats").Height(UnitValue.Auto)
+                    .Text(stats, font).FontSize(14).TextColor(Dim)
+                    .Wrap(TextWrapMode.Wrap)
+                    .Alignment(TextAlignment.Left);
+
+            paper.Box("keys").Height(UnitValue.Auto)
+                .Text(Game.KeyHelp + "    F1  hide", font).FontSize(14).TextColor(Dim)
+                .Wrap(TextWrapMode.Wrap)
+                .Alignment(TextAlignment.Left);
+        }
+
+        if (Game.HasControls)
+        {
+            using (paper.Column("controls")
+                .PositionType(PositionType.SelfDirected)
+                .AnchorRight(20).AnchorTop(20).Width(300).Height(UnitValue.Auto)
+                .BackgroundColor(Panel).Rounded(10)
+                .Padding(14).Gap(6)
+                .Enter())
+            {
+                Game.DrawControls(paper, font);
+            }
+        }
+
+        using (paper.Row("stations")
+            .PositionType(PositionType.SelfDirected)
+            .AnchorLeft(20).AnchorRight(20).AnchorBottom(20).Height(34)
+            .Gap(6)
+            .Enter())
+        {
+            for (int i = 0; i < Game.Stations.Count; i++)
+            {
+                int target = i;
+                bool current = i == index;
+                paper.Box("station", i)
+                    .Width(UnitValue.Stretch()).Height(34)
+                    .BackgroundColor(current ? Accent : Panel).Rounded(8)
+                    .Hovered.BackgroundColor(current ? Accent : ControlHover).End()
+                    .Text($"{(i + 1) % 10}  {Game.Stations[i].Name}", font).FontSize(14)
+                    .TextColor(current ? new Color(0.05f, 0.05f, 0.08f, 1f) : Bright)
+                    .Alignment(TextAlignment.MiddleCenter)
+                    .TextTruncate()
+                    .Cursor(PaperCursor.Pointer)
+                    .OnClick(_ => Game.GoToStation(target));
+            }
+        }
+    }
+}
+
+/// <summary>Small helpers every sample uses: materials, meshes, curves, procedural textures and Paper widgets.</summary>
+public static class Sample
+{
+    // ----------------------------------------------------------------
+    //  Objects and materials
+    // ----------------------------------------------------------------
+
+    /// <summary>
+    /// A Standard material. Roughness and metallic come from the surface texture's green and blue
+    /// channels times these factors, so a white surface texture makes the factors the final values.
+    /// </summary>
+    public static Material Lit(Color color, float metallic = 0f, float roughness = 0.6f, DefaultShader shader = DefaultShader.Standard)
+    {
+        var material = new Material(Shader.LoadDefault(shader));
+        material.SetColor("_MainColor", color);
+        material.SetTexture("_SurfaceTex", Texture2D.LoadDefault(DefaultTexture.White));
+        material.SetFloat("_Metallic", metallic);
+        material.SetFloat("_Roughness", roughness);
+        return material;
+    }
+
+    /// <summary>Makes a Standard material glow. Intensity above 1 feeds bloom.</summary>
+    public static Material Emissive(this Material material, Color color, float intensity)
+    {
+        material.SetTexture("_EmissionTex", Texture2D.LoadDefault(DefaultTexture.White));
+        material.SetColor("_EmissiveColor", color);
+        material.SetFloat("_EmissionIntensity", intensity);
+        return material;
+    }
+
+    public static Material Unlit(Color color)
+    {
+        var material = new Material(Shader.LoadDefault(DefaultShader.Unlit));
+        material.SetColor("_MainColor", color);
+        return material;
+    }
+
+    /// <summary>A GameObject with a MeshRenderer.</summary>
+    public static GameObject Model(string name, Mesh mesh, Material material, Float3 position, Float3? euler = null, Float3? scale = null)
+    {
+        var go = new GameObject(name);
+        var renderer = go.AddComponent<MeshRenderer>();
+        renderer.Mesh = mesh;
+        renderer.Material = material;
+        go.Transform.Position = position;
+        if (euler.HasValue) go.Transform.LocalEulerAngles = euler.Value;
+        if (scale.HasValue) go.Transform.LocalScale = scale.Value;
+        return go;
+    }
+
+    /// <summary>A flat rectangle in the XZ plane facing up, one sided, with UVs across it.</summary>
+    public static Mesh Plane(float width, float depth)
+    {
+        float x = width * 0.5f, z = depth * 0.5f;
+        var mesh = new Mesh();
+        mesh.Vertices = [new(-x, 0f, -z), new(x, 0f, -z), new(x, 0f, z), new(-x, 0f, z)];
+        mesh.Normals = [Float3.UnitY, Float3.UnitY, Float3.UnitY, Float3.UnitY];
+        mesh.UV = [new(0f, 0f), new(1f, 0f), new(1f, 1f), new(0f, 1f)];
+        mesh.Indices = [0, 2, 1, 0, 3, 2];
+        mesh.RecalculateBounds();
+        mesh.RecalculateTangents();
+        return mesh;
+    }
+
+    /// <summary>A box with a matching static collider, for floors and walls.</summary>
+    public static GameObject Block(string name, Float3 size, Material material, Float3 position, Float3? euler = null)
+    {
+        GameObject go = Model(name, Mesh.CreateCube(size), material, position, euler);
+        go.AddComponent<BoxCollider>().Size = size;
+        return go;
+    }
+
+    // ----------------------------------------------------------------
+    //  Curves and gradients
+    // ----------------------------------------------------------------
+
+    public static AnimationCurve Curve(params (float time, float value)[] keys)
+        => new(keys.Select(k => new Keyframe(k.time, k.value)).ToArray());
+
+    public static Gradient Grad((float time, Color color)[] colors, (float time, float alpha)[] alphas)
+        => new(colors.Select(k => new GradientColorKey(k.time, k.color)), alphas.Select(k => new GradientAlphaKey(k.time, k.alpha)));
+
+    // ----------------------------------------------------------------
+    //  Procedural textures
+    // ----------------------------------------------------------------
+
+    public static Texture2D Texture(int size, Func<float, float, Color> pixel, bool repeat = false)
+        => Sheet(size, 1, 1, (_, u, v) => pixel(u, v), repeat);
+
+    /// <summary>
+    /// Builds a sprite sheet with frame 0 in the top left. Texture rows are stored bottom first, which
+    /// is what the particle shader expects when it picks a frame.
+    /// </summary>
+    public static Texture2D Sheet(int frameSize, int columns, int rows, Func<int, float, float, Color> pixel, bool repeat = false)
+    {
+        int width = frameSize * columns, height = frameSize * rows;
+        var pixels = new Color32[width * height];
+        for (int frame = 0; frame < columns * rows; frame++)
+        {
+            int column = frame % columns;
+            int rowFromBottom = rows - 1 - frame / columns;
+            for (int y = 0; y < frameSize; y++)
+                for (int x = 0; x < frameSize; x++)
+                {
+                    Color c = pixel(frame, (x + 0.5f) / frameSize, (y + 0.5f) / frameSize);
+                    int px = column * frameSize + x;
+                    int py = rowFromBottom * frameSize + y;
+                    pixels[py * width + px] = new Color32(ToByte(c.R), ToByte(c.G), ToByte(c.B), ToByte(c.A));
+                }
+        }
+
+        var texture = new Texture2D((uint)width, (uint)height);
+        texture.SetData(new Memory<Color32>(pixels));
+        texture.GenerateMipmaps();
+        texture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
+        TextureWrap wrap = repeat ? TextureWrap.Repeat : TextureWrap.ClampToEdge;
+        texture.SetWrapModes(wrap, wrap);
+        return texture;
+    }
+
+    public static Texture2D SoftDot() => Texture(64, (u, v) =>
+    {
+        float r = Distance(u, v, 0.5f, 0.5f) * 2f;
+        return new Color(1f, 1f, 1f, MathF.Pow(Saturate(1f - r), 1.6f));
+    });
+
+    public static Texture2D Checker(int cells, Color a, Color b) => Texture(256, (u, v) =>
+        ((int)(u * cells) + (int)(v * cells)) % 2 == 0 ? a : b, true);
+
+    /// <summary>Thin grid lines over a base color, handy for showing scale on floors.</summary>
+    public static Texture2D Grid(Color background, Color line, int cells = 4) => Texture(256, (u, v) =>
+    {
+        float fu = u * cells % 1f, fv = v * cells % 1f;
+        float edge = MathF.Min(MathF.Min(fu, 1f - fu), MathF.Min(fv, 1f - fv));
+        float t = Saturate(1f - edge / 0.02f);
+        return Lerp(background, line, t);
+    }, true);
+
+    /// <summary>Tileable value noise in 0 to 1.</summary>
+    public static float Noise(float x, float y, int period)
+    {
+        int x0 = (int)MathF.Floor(x), y0 = (int)MathF.Floor(y);
+        float fx = x - x0, fy = y - y0;
+        fx = fx * fx * (3f - 2f * fx);
+        fy = fy * fy * (3f - 2f * fy);
+        float a = Hash(x0, y0, period), b = Hash(x0 + 1, y0, period);
+        float c = Hash(x0, y0 + 1, period), d = Hash(x0 + 1, y0 + 1, period);
+        return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+    }
+
+    /// <summary>Several octaves of <see cref="Noise"/>, still tileable.</summary>
+    public static float Fractal(float u, float v, int baseCells, int octaves)
+    {
+        float sum = 0f, amplitude = 0.5f, total = 0f;
+        int cells = baseCells;
+        for (int i = 0; i < octaves; i++)
+        {
+            sum += Noise(u * cells, v * cells, cells) * amplitude;
+            total += amplitude;
+            amplitude *= 0.5f;
+            cells *= 2;
+        }
+        return sum / total;
+    }
+
+    /// <summary>A tangent space normal map from a height function, tileable when the height is.</summary>
+    public static Texture2D NormalMap(int size, Func<float, float, float> height, float strength)
+    {
+        float step = 1f / size;
+        return Texture(size, (u, v) =>
+        {
+            float dx = (height(u + step, v) - height(u - step, v)) * strength;
+            float dy = (height(u, v + step) - height(u, v - step)) * strength;
+            Float3 n = Float3.Normalize(new Float3(-dx, -dy, 1f));
+            return new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, 1f);
+        }, true);
+    }
+
+    private static float Hash(int x, int y, int period)
+    {
+        x = ((x % period) + period) % period;
+        y = ((y % period) + period) % period;
+        uint h = (uint)(x * 374761393 + y * 668265263);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return (h ^ (h >> 16)) / (float)uint.MaxValue;
+    }
+
+    public static Color Lerp(Color a, Color b, float t)
+        => new(a.R + (b.R - a.R) * t, a.G + (b.G - a.G) * t, a.B + (b.B - a.B) * t, a.A + (b.A - a.A) * t);
+
+    public static Color Hsv(float hue, float saturation, float value, float alpha = 1f)
+    {
+        float h = (hue % 1f + 1f) % 1f * 6f;
+        float c = value * saturation;
+        float x = c * (1f - MathF.Abs(h % 2f - 1f));
+        float m = value - c;
+        (float r, float g, float b) = (int)h switch
+        {
+            0 => (c, x, 0f),
+            1 => (x, c, 0f),
+            2 => (0f, c, x),
+            3 => (0f, x, c),
+            4 => (x, 0f, c),
+            _ => (c, 0f, x),
+        };
+        return new Color(r + m, g + m, b + m, alpha);
+    }
+
+    public static float Saturate(float x) => Math.Clamp(x, 0f, 1f);
+    public static float Distance(float x0, float y0, float x1, float y1) => MathF.Sqrt((x0 - x1) * (x0 - x1) + (y0 - y1) * (y0 - y1));
+    private static byte ToByte(float x) => (byte)(Saturate(x) * 255f + 0.5f);
+
+    // ----------------------------------------------------------------
+    //  Paper widgets for the controls panel
+    // ----------------------------------------------------------------
+
+    public static void Header(Paper paper, FontFile font, string text, int id = 0)
+    {
+        paper.Box("header " + text, id).Height(24)
+            .Text(text, font).FontSize(16).TextColor(SampleHud.Accent)
+            .Alignment(TextAlignment.MiddleLeft);
+    }
+
+    public static void Label(Paper paper, FontFile font, string text, int id = 0)
+    {
+        paper.Box("label " + text, id).Height(UnitValue.Auto)
+            .Text(text, font).FontSize(14).TextColor(SampleHud.Dim)
+            .Wrap(TextWrapMode.Wrap)
+            .Alignment(TextAlignment.Left);
+    }
+
+    public static void Button(Paper paper, FontFile font, string text, Action onClick, int id = 0)
+    {
+        paper.Box("button " + text, id).Height(28)
+            .BackgroundColor(SampleHud.Control).Rounded(6)
+            .Hovered.BackgroundColor(SampleHud.ControlHover).End()
+            .Text(text, font).FontSize(14).TextColor(SampleHud.Bright)
+            .Alignment(TextAlignment.MiddleCenter)
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(_ => onClick());
+    }
+
+    /// <summary>A checkbox row. <paramref name="onChange"/> receives the flipped value when clicked.</summary>
+    public static void Toggle(Paper paper, FontFile font, string text, bool value, Action<bool> onChange, int id = 0)
+    {
+        using (paper.Row("toggle " + text, id).Height(26).Gap(8)
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(_ => onChange(!value))
+            .Enter())
+        {
+            paper.Box("box").Width(18).Height(18).Top(4)
+                .Rounded(4).BorderWidth(2).BorderColor(value ? SampleHud.Accent : SampleHud.Dim)
+                .BackgroundColor(value ? SampleHud.Accent : new Color(0f, 0f, 0f, 0f))
+                .IsNotInteractable();
+            paper.Box("text").Width(UnitValue.Stretch())
+                .Text(text, font).FontSize(14).TextColor(SampleHud.Bright)
+                .Alignment(TextAlignment.MiddleLeft)
+                .IsNotInteractable();
+        }
+    }
+
+    /// <summary>A labelled horizontal slider between <paramref name="min"/> and <paramref name="max"/>.</summary>
+    public static void Slider(Paper paper, FontFile font, string text, float value, float min, float max, Action<float> onChange, string format = "0.00", int id = 0)
+    {
+        float t = Saturate((value - min) / (max - min));
+        using (paper.Column("slider " + text, id).Height(UnitValue.Auto).Gap(2).Enter())
+        {
+            paper.Box("label").Height(18)
+                .Text($"{text}  {value.ToString(format)}", font).FontSize(14).TextColor(SampleHud.Bright)
+                .Alignment(TextAlignment.MiddleLeft);
+
+            void Set(ElementEvent e) => onChange(min + Saturate(e.NormalizedPosition.X) * (max - min));
+
+            using (paper.Box("track").Height(14)
+                .BackgroundColor(SampleHud.Control).Rounded(7)
+                .Hovered.BackgroundColor(SampleHud.ControlHover).End()
+                .Cursor(PaperCursor.Pointer)
+                .OnPress(e => Set(e))
+                .OnDragging(e => Set(e))
+                .Enter())
+            {
+                paper.Box("fill").Width(UnitValue.Percentage(t * 100f)).Height(14)
+                    .BackgroundColor(SampleHud.Accent).Rounded(7)
+                    .IsNotInteractable();
+            }
+        }
+    }
+
+    /// <summary>Cycles through the values of an enum on click.</summary>
+    public static void Cycle<T>(Paper paper, FontFile font, string text, T value, Action<T> onChange, int id = 0) where T : struct, Enum
+    {
+        T[] values = Enum.GetValues<T>();
+        int next = (Array.IndexOf(values, value) + 1) % values.Length;
+        Button(paper, font, $"{text}: {value}", () => onChange(values[next]), id);
+    }
+}
