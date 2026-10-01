@@ -44,4 +44,17 @@ public class MaterialTests
         a.SetKeyword("SOME_FEATURE", false);
         Assert.Equal(b.GetStateHash(), a.GetStateHash());
     }
+
+    // A reimport reads new values straight into the existing material.
+    [Fact]
+    public void StateHash_RefreshesAfterDeserializeInPlace()
+    {
+        var material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        ulong before = material.GetStateHash();
+
+        material._properties.SetFloat("_Metallic", 0.75f);
+        material.OnAfterDeserialize();
+
+        Assert.NotEqual(before, material.GetStateHash());
+    }
 }

@@ -301,6 +301,9 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
         // _overrides populated, but their _properties dictionary holds values the
         // user actually set. Treat every existing entry as an override so saved
         // values are preserved when the override-aware code paths take over.
+        // A reimport reads into this same instance, so the cached batch hash is stale.
+        MarkDirty();
+
         if (_overrides == null) _overrides = new HashSet<string>();
         if (_overrides.Count == 0 && _properties != null)
         {

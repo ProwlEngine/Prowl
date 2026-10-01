@@ -65,9 +65,6 @@ public static class MaterialPropertyDrawer
                     .OnClick(0, (_, _) =>
                     {
                         material.RevertProperty(prop.Name);
-                        // Drop the stored value too otherwise it'd still get uploaded
-                        // by ApplyMaterialUniformsWithDefaults even though the flag is gone.
-                        material._properties.RemoveProperty(prop.Name);
                         onChanged?.Invoke();
                     });
             }
