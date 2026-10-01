@@ -144,7 +144,6 @@ public sealed class TAAEffect : ImageEffect
 
         // Set uniforms
         _mat.SetVector("_Resolution", new Float2(w, h));
-        _mat.SetVector("_Jitter", _jitter);
         _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
         _mat.SetFloat("_BlendFactor", Maths.Clamp(BlendFactor, 0.0f, 0.99f));
         _mat.SetFloat("_MotionBlendFactor", Maths.Clamp(MotionBlendFactor, 0.0f, 0.99f));

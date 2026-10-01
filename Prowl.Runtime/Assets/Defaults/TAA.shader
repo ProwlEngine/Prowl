@@ -43,7 +43,6 @@ Pass "Resolve"
         uniform sampler2D _CameraDepthTexture;
 
         uniform vec2 _Resolution;
-        uniform vec2 _Jitter;               // Current frame jitter in pixels
         uniform float _HistoryValid;        // 0 or 1
         uniform float _BlendFactor;         // Feedback weight (0.9-0.97 typical)
         uniform float _MotionBlendFactor;   // Feedback weight for fast moving pixels
@@ -110,9 +109,12 @@ Pass "Resolve"
             return c / (1.0 + luminance(c));
         }
 
+        // A clamped history can land at or past the tonemap's ceiling of 1, where the inverse explodes
+        // into a single blinding pixel. The floor caps that at roughly 1000x.
         vec3 InverseTonemap(vec3 c)
         {
-            return c / max(1.0 - luminance(c), 1e-6);
+            c = max(c, vec3(0.0));
+            return c / max(1.0 - luminance(c), 1e-3);
         }
 
         // Find closest depth in 3x3 neighborhood for motion vector sampling
@@ -141,9 +143,6 @@ Pass "Resolve"
         void main()
         {
             vec2 texelSize = 1.0 / _Resolution;
-
-            // Unjitter the current sample position
-            vec2 unjitteredUV = TexCoords;
 
             // Sample current color (from jittered render)
             vec3 currentColor = texture(_MainTex, TexCoords).rgb;
