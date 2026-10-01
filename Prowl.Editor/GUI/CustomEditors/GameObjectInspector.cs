@@ -494,7 +494,9 @@ public static class GameObjectInspector
         paper.Box("gi_rt_header").Height(22).PaddingLeft(8)
             .Text($"{EditorIcons.VectorSquare}  Rect Transform", font)
             .TextColor(EditorTheme.Ink500)
-            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft)
+            .OnRightClick(rt, (r, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y,
+                b => AddRemoveComponentItem(b, go, r)));
 
         // Top block: 4x4 anchor preset grid on the left, position + size fields filling the rest.
         using (paper.Row("gi_rt_top").Height(UnitValue.Auto).Gap(8).Margin(4, 4, 2, 2).Enter())
@@ -963,6 +965,21 @@ public static class GameObjectInspector
         go.RemoveComponent(comp);
     }
 
+    private static void AddRemoveComponentItem(ContextBuilder builder, GameObject go, MonoBehaviour comp)
+    {
+        builder.Item(Loc.Get("inspector.remove_component"), () =>
+        {
+            if (PrefabUtility.NeedsBreaking(comp))
+            {
+                MonoBehaviour target = comp;
+                PrefabUtility.BreakThenRun([go], () => RemoveComponentWithUndo(target));
+                return;
+            }
+
+            RemoveComponentWithUndo(comp);
+        }, icon: EditorIcons.Trash, enabled: comp.CanDestroy());
+    }
+
     private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
     {
         // On an instance, what this component is supposed to be is whatever the prefab says, so Reset
@@ -986,17 +1003,7 @@ public static class GameObjectInspector
 
         // Nothing records the removal of a component the prefab provides, so the next refresh would put
         // it back. Removing one therefore asks first and unlinks the instance.
-        builder.Item(Loc.Get("inspector.remove_component"), () =>
-        {
-            if (PrefabUtility.NeedsBreaking(comp))
-            {
-                MonoBehaviour target = comp;
-                PrefabUtility.BreakThenRun([go], () => RemoveComponentWithUndo(target));
-                return;
-            }
-
-            RemoveComponentWithUndo(comp);
-        }, icon: EditorIcons.Trash, enabled: comp.CanDestroy());
+        AddRemoveComponentItem(builder, go, comp);
 
 
         builder.Separator();
