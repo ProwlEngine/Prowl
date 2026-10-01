@@ -1402,20 +1402,28 @@ public class Mesh : Asset, ISerializable
 
         int baseStart = 2; // First base vertex index
 
+        // The cap gets its own ring so its flat normals don't blend into the sides
+        int capStart = vertices.Count;
+        for (int i = 0; i <= slices; i++)
+        {
+            vertices.Add(vertices[baseStart + i]);
+            uvs.Add(uvs[baseStart + i]);
+        }
+
         // Generate indices for cone sides (from apex to base)
         for (int i = 0; i < slices; i++)
         {
             indices.Add((uint)apexIndex);
-            indices.Add((uint)(baseStart + i));
             indices.Add((uint)(baseStart + i + 1));
+            indices.Add((uint)(baseStart + i));
         }
 
         // Generate indices for base cap (circle at bottom)
         for (int i = 0; i < slices; i++)
         {
             indices.Add((uint)baseCenterIndex);
-            indices.Add((uint)(baseStart + i + 1));
-            indices.Add((uint)(baseStart + i));
+            indices.Add((uint)(capStart + i));
+            indices.Add((uint)(capStart + i + 1));
         }
 
         mesh.vertices = [.. vertices];
