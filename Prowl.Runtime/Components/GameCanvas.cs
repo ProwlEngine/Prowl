@@ -344,30 +344,31 @@ public class GameCanvas : MonoBehaviour
             Rect? childScissor = canvasScissor;
             UIClip? childClip = activeClip;
             RectMask? rectMask = child.GetComponent<RectMask>();
-            if (rectMask != null && rectMask.EnabledInHierarchy && child.RectTransform != null)
+            if (rectMask != null && rectMask.EnabledInHierarchy && child.RectTransform is { } maskRt)
             {
-                Rect mr = rectMask.GetClipRectInCanvasPixels();
+                // The innermost mask supplies the shader clip; nested masks still intersect for the cull.
+                childClip = ComputeClip(rectMask);
+                Float4 cr = childClip.Value.Rect;
+                Rect mr = DesignBounds(maskRt, new AABB(new Float3(cr.X, cr.Y, 0f), new Float3(cr.Z, cr.W, 0f)));
                 childScissor = canvasScissor is null ? mr : IntersectRect(canvasScissor.Value, mr);
                 // Empty scissor -> whole subtree contributes nothing. Skip it.
                 if (childScissor!.Value.Size.X <= 0f || childScissor.Value.Size.Y <= 0f)
                     continue;
-                // The innermost mask supplies the shader clip; nested masks still intersect for the cull.
-                childClip = ComputeClip(rectMask);
             }
 
-            // Coarse cull: if the layout rect can't intersect the active mask rect, skip the subtree.
-            if (childScissor is { } cs && !RectsIntersect(cs, childRect))
-                continue;
-
-            // (Re)bake every UIBehaviour that produces geometry, then add a UIRenderItem.
+            // (Re)bake every UIBehaviour that produces geometry, then add a UIRenderItem. An item whose drawn
+            // bounds miss the active mask is culled, but its children still get a look, since they can sit
+            // anywhere regardless of their parent's rect.
             foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
             {
                 if (!ui.EnabledInHierarchy) continue;
 
                 EnsureBaked(ui, childCtx);
                 if (ui.IsContentPending) _contentPending = true;
-                if (ui.CachedMesh is { } mesh)
-                    EmitItem(ui, mesh, dfsIndex++, childClip);
+                if (ui.CachedMesh is not { } mesh) continue;
+                if (childScissor is { } cs && child.RectTransform is { } itemRt && !RectsIntersect(cs, DesignBounds(itemRt, mesh.bounds)))
+                    continue;
+                EmitItem(ui, mesh, dfsIndex++, childClip);
             }
 
             BuildRecursive(child, childRect, childCtx, childScissor, childClip, ref dfsIndex);
@@ -460,6 +461,14 @@ public class GameCanvas : MonoBehaviour
         long canvasDisc = InstanceID & 0x1FFFFF;
         long dfs = (uint)dfsIndex & 0x1FFFFF;
         return ((long)SortOrder << 42) + (canvasDisc << 21) + dfs;
+    }
+
+    // Canvas design space bounds of an element-local box, through the element's rotation, scale and parents.
+    // Rotation only grows an axis aligned box, so culling against it never drops anything visible.
+    private Rect DesignBounds(RectTransform rt, AABB local)
+    {
+        AABB b = local.TransformBy(BuildRectModel(rt));
+        return new Rect(b.Min.X, b.Min.Y, b.Max.X, b.Max.Y);
     }
 
     private static Rect IntersectRect(Rect a, Rect b)

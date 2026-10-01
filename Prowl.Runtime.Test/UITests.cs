@@ -139,6 +139,43 @@ public class UITests : RuntimeTestBase
         Assert.True(LayoutUtility.GetPreferredSize(go).Y > unwrapped.Y);
     }
 
+    private sealed class Box : Graphic
+    {
+        public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx) => b.AddQuad(GameObject.RectTransform!.Rect, Color, Float2.Zero, Float2.One);
+    }
+
+    // A child can sit inside a mask even when its parent's rect is outside it.
+    [Fact]
+    public void MaskCull_KeepsChildrenOfAnElementOutsideTheMask()
+    {
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
+        try
+        {
+            Scene scene = CreateScene(enable: true);
+            var canvasGo = CreateGameObject("Canvas");
+            scene.Add(canvasGo);
+            var canvas = canvasGo.AddComponent<GameCanvas>();
+
+            var mask = CreateUIObject("Mask", scene, canvasGo);
+            mask.AddComponent<RectMask>();
+
+            var holder = CreateUIObject("Holder", scene, mask);
+            holder.RectTransform!.SizeDelta = Float2.Zero;
+            holder.RectTransform.AnchoredPosition = new Float2(300f, 0f);
+
+            var inside = CreateUIObject("Inside", scene, holder);
+            inside.RectTransform!.SizeDelta = new Float2(50f, 50f);
+            inside.RectTransform.AnchoredPosition = new Float2(-300f, 0f);
+            var box = inside.AddComponent<Box>();
+
+            canvas.RebuildIfDirty();
+
+            Assert.Contains(canvas.Tree.Items, item => ReferenceEquals(item.Owner, box));
+        }
+        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
+    }
+
     // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()
