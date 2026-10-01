@@ -6,6 +6,13 @@ using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
 
 namespace Prowl.Graphite.Vk;
 
+internal enum FramebufferMode
+{
+    Resting,
+    Graph,
+    GraphDepthReadOnly,
+}
+
 internal abstract class VkFramebufferBase : Framebuffer
 {
     public VkFramebufferBase(
@@ -34,6 +41,6 @@ internal abstract class VkFramebufferBase : Framebuffer
     protected abstract void DestroyNative();
 
     public abstract VkFramebufferHandle CurrentFramebuffer { get; }
-    public abstract RenderPass GetRenderPass(bool graphMode, bool clear);
+    public abstract RenderPass GetRenderPass(FramebufferMode mode, bool clear);
     public abstract uint AttachmentCount { get; }
 }

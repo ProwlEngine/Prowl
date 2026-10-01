@@ -10,6 +10,7 @@ internal enum TextureState : byte
     Attachment,
     TransferSrc,
     TransferDst,
+    DepthReadOnly,
 }
 
 [Flags]

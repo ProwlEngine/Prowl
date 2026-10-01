@@ -26,13 +26,17 @@ public sealed class RenderTexture : IDisposable
 
         ResourceFactory factory = device.ResourceFactory;
 
+        TextureUsage colorUsage = TextureUsage.RenderTarget | TextureUsage.Sampled;
+        if (desc.Storage)
+            colorUsage |= TextureUsage.Storage;
+
         ColorTextures = new Texture[desc.ColorFormats.Length];
         for (int i = 0; i < ColorTextures.Length; i++)
         {
             ColorTextures[i] = factory.CreateTexture(TextureDescription.Texture2D(
                 desc.Width, desc.Height, 1, 1,
                 desc.ColorFormats[i],
-                TextureUsage.RenderTarget | TextureUsage.Sampled,
+                colorUsage,
                 desc.SampleCount));
         }
 

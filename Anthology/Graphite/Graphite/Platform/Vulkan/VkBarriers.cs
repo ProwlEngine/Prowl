@@ -78,6 +78,7 @@ internal static unsafe class VkBarriers
         TextureState.Attachment => AttachmentLayout(texture),
         TextureState.TransferSrc => ImageLayout.TransferSrcOptimal,
         TextureState.TransferDst => ImageLayout.TransferDstOptimal,
+        TextureState.DepthReadOnly => ImageLayout.DepthStencilReadOnlyOptimal,
         _ => RestingLayout(texture),
     };
 
@@ -105,6 +106,10 @@ internal static unsafe class VkBarriers
                 stages = PipelineStageFlags.EarlyFragmentTestsBit | PipelineStageFlags.LateFragmentTestsBit;
                 access = AccessFlags.DepthStencilAttachmentReadBit | AccessFlags.DepthStencilAttachmentWriteBit;
                 break;
+            case ImageLayout.DepthStencilReadOnlyOptimal:
+                stages = AllShaderStages(gd) | PipelineStageFlags.EarlyFragmentTestsBit | PipelineStageFlags.LateFragmentTestsBit;
+                access = AccessFlags.ShaderReadBit | AccessFlags.DepthStencilAttachmentReadBit;
+                break;
             case ImageLayout.TransferSrcOptimal:
                 stages = PipelineStageFlags.TransferBit;
                 access = AccessFlags.TransferReadBit;
@@ -121,7 +126,8 @@ internal static unsafe class VkBarriers
     }
 
     private static bool IsReadOnly(ImageLayout layout)
-        => layout is ImageLayout.ShaderReadOnlyOptimal or ImageLayout.TransferSrcOptimal or ImageLayout.PresentSrcKhr;
+        => layout is ImageLayout.ShaderReadOnlyOptimal or ImageLayout.TransferSrcOptimal
+            or ImageLayout.DepthStencilReadOnlyOptimal or ImageLayout.PresentSrcKhr;
 
     private static bool NeedsBarrier(ImageLayout oldLayout, ImageLayout newLayout)
         => oldLayout != newLayout || !IsReadOnly(oldLayout);

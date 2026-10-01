@@ -27,7 +27,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     public override VkFramebufferHandle CurrentFramebuffer => _scFramebuffers[(int)_currentImageIndex].CurrentFramebuffer;
 
-    public override RenderPass GetRenderPass(bool graphMode, bool clear) => _scFramebuffers[0].GetRenderPass(graphMode, clear);
+    public override RenderPass GetRenderPass(FramebufferMode mode, bool clear) => _scFramebuffers[0].GetRenderPass(mode, clear);
 
     public override IReadOnlyList<FramebufferAttachment> ColorTargets => _scColorTextures[(int)_currentImageIndex];
 

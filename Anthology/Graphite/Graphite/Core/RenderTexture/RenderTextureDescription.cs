@@ -33,6 +33,11 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     public TextureSampleCount SampleCount { get; }
 
     /// <summary>
+    /// Color attachments also get Storage usage.
+    /// </summary>
+    public bool Storage { get; }
+
+    /// <summary>
     /// New desc.
     /// </summary>
     /// <param name="width">Width in texels.</param>
@@ -40,18 +45,21 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     /// <param name="colorFormats">Color format per attachment. Null/empty = depth-only.</param>
     /// <param name="depth">Has depth attachment.</param>
     /// <param name="sampleCount">Sample count, all attachments.</param>
+    /// <param name="storage">Color attachments also get Storage usage.</param>
     public RenderTextureDescription(
         uint width,
         uint height,
         PixelFormat[] colorFormats,
         bool depth,
-        TextureSampleCount sampleCount = TextureSampleCount.Count1)
+        TextureSampleCount sampleCount = TextureSampleCount.Count1,
+        bool storage = false)
     {
         Width = width;
         Height = height;
         ColorFormats = colorFormats ?? Array.Empty<PixelFormat>();
         Depth = depth;
         SampleCount = sampleCount;
+        Storage = storage;
     }
 
     /// <summary>
@@ -62,18 +70,20 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     /// <param name="colorFormat">Color attachment format.</param>
     /// <param name="depth">Has depth attachment.</param>
     /// <param name="sampleCount">Sample count, all attachments.</param>
+    /// <param name="storage">Color attachment also gets Storage usage.</param>
     public RenderTextureDescription(
         uint width,
         uint height,
         PixelFormat colorFormat,
         bool depth,
-        TextureSampleCount sampleCount = TextureSampleCount.Count1)
-        : this(width, height, new[] { colorFormat }, depth, sampleCount)
+        TextureSampleCount sampleCount = TextureSampleCount.Count1,
+        bool storage = false)
+        : this(width, height, new[] { colorFormat }, depth, sampleCount, storage)
     {
     }
 
     /// <summary>
-    /// Equal if dims, samples, depth flag, and color formats all match.
+    /// Equal if dims, samples, depth and storage flags, and color formats all match.
     /// </summary>
     /// <param name="other">Other instance.</param>
     /// <returns>True if equal.</returns>
@@ -83,6 +93,7 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
             || Height != other.Height
             || Depth != other.Depth
             || SampleCount != other.SampleCount
+            || Storage != other.Storage
             || ColorFormats.Length != other.ColorFormats.Length)
         {
             return false;
@@ -115,6 +126,7 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
         hash.Add(Height);
         hash.Add(Depth);
         hash.Add(SampleCount);
+        hash.Add(Storage);
         foreach (PixelFormat format in ColorFormats)
             hash.Add((int)format);
         return hash.ToHashCode();

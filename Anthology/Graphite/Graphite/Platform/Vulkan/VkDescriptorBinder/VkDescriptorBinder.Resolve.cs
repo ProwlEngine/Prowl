@@ -21,6 +21,7 @@ internal unsafe sealed partial class VkDescriptorBinder
         public VkTextureView View;   // texture view
         public VkSampler Sampler;    // sampler element, or combined-image-sampler's sampler
         public bool Combined;
+        public ImageLayout Layout;
     }
 
     private void ResolveSet(

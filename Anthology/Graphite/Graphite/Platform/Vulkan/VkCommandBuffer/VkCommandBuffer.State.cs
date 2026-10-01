@@ -12,7 +12,7 @@ internal unsafe partial class VkCommandBuffer
     private VkFramebufferBase _currentFramebuffer;
     private bool _currentFramebufferEverActive;
     private RenderPass _activeRenderPass;
-    private bool _currentFramebufferGraphMode;
+    private FramebufferMode _currentFramebufferMode;
 
     private VkGraphicsProgram _currentShaderProgram;
     private VkComputeProgram _currentComputeProgram;

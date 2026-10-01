@@ -17,15 +17,17 @@ internal unsafe sealed partial class VkDescriptorBinder
 
             if (r.Kind == ResourceKind.TextureReadOnly)
             {
-                if (current != ImageLayout.ShaderReadOnlyOptimal)
+                if (current != ImageLayout.ShaderReadOnlyOptimal && current != ImageLayout.DepthStencilReadOnlyOptimal)
                 {
                     throw new RenderException(
                         $"Texture '{tex.Name}' is bound for sampling while in layout {current}. " +
-                        "Declare it as a Sampled input of the pass.");
+                        "Declare it as a Sampled input of the pass, or transition it to Sampled.");
                 }
+                r.Layout = current;
                 continue;
             }
 
+            r.Layout = ImageLayout.General;
             if (current == ImageLayout.General || _cbOwner.IsTemporaryStorage(tex))
                 continue;
 
@@ -112,7 +114,7 @@ internal unsafe sealed partial class VkDescriptorBinder
                 imgInfos[imgIdx] = new DescriptorImageInfo
                 {
                     ImageView = r.View.ImageView,
-                    ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                    ImageLayout = r.Layout,
                     Sampler = r.Combined ? r.Sampler.DeviceSampler : default,
                 };
                 write.DescriptorType = r.Combined ? DescriptorType.CombinedImageSampler : DescriptorType.SampledImage;

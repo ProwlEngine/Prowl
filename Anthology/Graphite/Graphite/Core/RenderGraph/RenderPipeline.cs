@@ -120,7 +120,8 @@ public abstract class RenderPipeline<TView> : IDisposable
                     }
                 }
 
-                context.SetCurrentPass(passInfo, node.DeclaredOutputs);
+                context.SetCurrentPass(passInfo, node.DeclaredOutputs, node.Accesses, node.Pass.Name);
+                context.TransitionForAccesses(node.Pass.Name, node.Accesses);
                 node.Pass.Render(context);
                 context.SetCurrentPass(null);
 
@@ -140,8 +141,12 @@ public abstract class RenderPipeline<TView> : IDisposable
                     CapturePassOutputs(context, profiler, passInfo, node);
             }
 
+            context.SetCurrentPass(null, null, graph.PresentAccesses, PresentPass.Name);
+            context.TransitionForAccesses(PresentPass.Name, graph.PresentAccesses);
             PresentPass.Present(context);
+            context.SetCurrentPass(null);
             context.ReclaimUnsubmittedCommandBuffers(PresentPass.Name);
+            context.RestoreRestingStates(PresentPass.Name);
         }
         finally
         {

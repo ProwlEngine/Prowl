@@ -251,6 +251,7 @@ internal unsafe sealed partial class VkDescriptorBinder
                 case ResourceKind.TextureReadOnly:
                 case ResourceKind.TextureReadWrite:
                     dst[n++] = r.View.ImageView.Handle;
+                    dst[n++] = (ulong)r.Layout;
                     break;
 
                 case ResourceKind.Sampler:

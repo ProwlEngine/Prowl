@@ -12,7 +12,8 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkFramebufferHandle _deviceFramebuffer;
-    private readonly RenderPass[] _renderPasses = new RenderPass[4];
+    private readonly RenderPass[] _renderPasses = new RenderPass[6];
+    private readonly uint _colorAttachmentCount;
     private readonly List<ImageView> _attachmentViews = [];
 
     public override VkFramebufferHandle CurrentFramebuffer => _deviceFramebuffer;
@@ -28,9 +29,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         _gd = gd;
 
         uint colorAttachmentCount = (uint)ColorTargets.Count;
-
-        for (int i = 0; i < _renderPasses.Length; i++)
-            _renderPasses[i] = CreateRenderPass(colorAttachmentCount, graphMode: (i & 2) != 0, clear: (i & 1) != 0);
+        _colorAttachmentCount = colorAttachmentCount;
 
         CreateDeviceFramebuffer(ref description, colorAttachmentCount, out _deviceFramebuffer);
 
@@ -39,11 +38,20 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
     }
 
-    public override RenderPass GetRenderPass(bool graphMode, bool clear)
-        => _renderPasses[(graphMode ? 2 : 0) | (clear ? 1 : 0)];
-
-    private RenderPass CreateRenderPass(uint colorAttachmentCount, bool graphMode, bool clear)
+    public override RenderPass GetRenderPass(FramebufferMode mode, bool clear)
     {
+        int index = (int)mode * 2 + (clear ? 1 : 0);
+        lock (_renderPasses)
+        {
+            if (_renderPasses[index].Handle == default)
+                _renderPasses[index] = CreateRenderPass(_colorAttachmentCount, mode, clear);
+            return _renderPasses[index];
+        }
+    }
+
+    private RenderPass CreateRenderPass(uint colorAttachmentCount, FramebufferMode mode, bool clear)
+    {
+        bool graphMode = mode != FramebufferMode.Resting;
         AttachmentLoadOp loadOp = clear ? AttachmentLoadOp.Clear : AttachmentLoadOp.Load;
 
         AttachmentDescription* attachments = stackalloc AttachmentDescription[(int)colorAttachmentCount + 1];
@@ -73,17 +81,20 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         {
             VkTexture vkDepthTex = Util.AssertSubtype<Texture, VkTexture>(DepthTarget.Value.Target);
             bool hasStencil = FormatHelpers.IsStencilFormat(vkDepthTex.Format);
-            ImageLayout outside = graphMode ? ImageLayout.DepthStencilAttachmentOptimal : VkBarriers.RestingLayout(vkDepthTex);
-            depthAttachmentRef = new AttachmentReference(attachmentCount, ImageLayout.DepthStencilAttachmentOptimal);
+            bool readOnly = mode == FramebufferMode.GraphDepthReadOnly;
+            ImageLayout inside = readOnly ? ImageLayout.DepthStencilReadOnlyOptimal : ImageLayout.DepthStencilAttachmentOptimal;
+            ImageLayout outside = graphMode ? inside : VkBarriers.RestingLayout(vkDepthTex);
+            AttachmentLoadOp depthLoadOp = readOnly ? AttachmentLoadOp.Load : loadOp;
+            depthAttachmentRef = new AttachmentReference(attachmentCount, inside);
             attachments[attachmentCount++] = new AttachmentDescription
             {
                 Format = vkDepthTex.VkFormat,
                 Samples = vkDepthTex.VkSampleCount,
-                LoadOp = loadOp,
+                LoadOp = depthLoadOp,
                 StoreOp = AttachmentStoreOp.Store,
-                StencilLoadOp = hasStencil ? loadOp : AttachmentLoadOp.DontCare,
+                StencilLoadOp = hasStencil ? depthLoadOp : AttachmentLoadOp.DontCare,
                 StencilStoreOp = hasStencil ? AttachmentStoreOp.Store : AttachmentStoreOp.DontCare,
-                InitialLayout = clear ? ImageLayout.Undefined : outside,
+                InitialLayout = clear && !readOnly ? ImageLayout.Undefined : outside,
                 FinalLayout = outside,
             };
         }
@@ -201,7 +212,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         fbCI.AttachmentCount = fbAttachmentsCount;
         fbCI.PAttachments = fbAttachments;
         fbCI.Layers = 1;
-        fbCI.RenderPass = _renderPasses[0];
+        fbCI.RenderPass = GetRenderPass(FramebufferMode.Resting, clear: false);
 
         _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out deviceFramebuffer).CheckResult();
     }
@@ -212,7 +223,10 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
     {
         _gd.Vk.DestroyFramebuffer(_gd.Device, _deviceFramebuffer, null);
         foreach (RenderPass renderPass in _renderPasses)
-            _gd.Vk.DestroyRenderPass(_gd.Device, renderPass, null);
+        {
+            if (renderPass.Handle != default)
+                _gd.Vk.DestroyRenderPass(_gd.Device, renderPass, null);
+        }
         foreach (ImageView view in _attachmentViews)
         {
             _gd.Vk.DestroyImageView(_gd.Device, view, null);

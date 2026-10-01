@@ -21,12 +21,15 @@ public sealed class RenderGraph<TView> : IDisposable
 
         internal readonly GraphResource[] DeclaredOutputs;
 
-        internal PassNode(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, GraphResource[] declaredOutputs)
+        internal readonly ResourceAccess[] Accesses;
+
+        internal PassNode(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, GraphResource[] declaredOutputs, ResourceAccess[] accesses)
         {
             Pass = pass;
             Inputs = inputs;
             Outputs = outputs;
             DeclaredOutputs = declaredOutputs;
+            Accesses = accesses;
         }
     }
 
@@ -42,15 +45,19 @@ public sealed class RenderGraph<TView> : IDisposable
     /// <summary>True if present pass wants the window's swapchain target.</summary>
     public bool PresentRequestsSwapchain { get; }
 
+    internal ResourceAccess[] PresentAccesses { get; }
+
     private RenderGraph(
         PassNode[] ordered,
         Dictionary<RenderResourceID, GraphResource> resources,
         RenderResourceID[] presentInputs,
+        ResourceAccess[] presentAccesses,
         bool presentRequestsSwapchain)
     {
         OrderedPasses = ordered;
         Resources = resources;
         PresentInputs = presentInputs;
+        PresentAccesses = presentAccesses;
         PresentRequestsSwapchain = presentRequestsSwapchain;
     }
 
@@ -99,7 +106,7 @@ public sealed class RenderGraph<TView> : IDisposable
                 resources.TryAdd(output.Id, output);
             }
 
-            nodes[i] = new PassNode(pass, inputs, outputs, declared);
+            nodes[i] = new PassNode(pass, inputs, outputs, declared, builder.Accesses.ToArray());
         }
 
         var presentBuilder = new PresentContextBuilder();
@@ -109,6 +116,9 @@ public sealed class RenderGraph<TView> : IDisposable
 
         ValidateInputsHaveProducers(nodes, presentPass.Name, presentInputs, resources);
 
+        ResourceAccess[] presentAccesses = presentBuilder.Accesses.ToArray();
+        ApplyStorageUsage(nodes, presentPass.Name, presentAccesses, resources);
+
         int[] ordered = TopologicalSort(nodes);
 
         var orderedNodes = new PassNode[ordered.Length];
@@ -116,7 +126,52 @@ public sealed class RenderGraph<TView> : IDisposable
             orderedNodes[i] = nodes[ordered[i]];
 
         return new RenderGraph<TView>(
-            orderedNodes, resources, presentInputs, presentBuilder.RequestsSwapchain);
+            orderedNodes, resources, presentInputs, presentAccesses, presentBuilder.RequestsSwapchain);
+    }
+
+    private static void ApplyStorageUsage(
+        PassNode[] nodes,
+        string presentPassName,
+        ResourceAccess[] presentAccesses,
+        Dictionary<RenderResourceID, GraphResource> resources)
+    {
+        foreach (PassNode node in nodes)
+        {
+            foreach (ResourceAccess access in node.Accesses)
+                ApplyStorageUsage(node.Pass.Name, access, resources);
+        }
+
+        foreach (ResourceAccess access in presentAccesses)
+            ApplyStorageUsage(presentPassName, access, resources);
+    }
+
+    private static void ApplyStorageUsage(string passName, in ResourceAccess access, Dictionary<RenderResourceID, GraphResource> resources)
+    {
+        GraphResource resource = resources[access.Id];
+        if (access.IsTexture != (resource is GraphTextureResource or GraphImportedTextureResource))
+            throw new InvalidOperationException(
+                $"Pass '{passName}' declares resource '{RenderResourceID.ToString(access.Id)}' as a " +
+                $"{(access.IsTexture ? "texture" : "buffer")}, but it is a {(access.IsTexture ? "buffer" : "texture")}.");
+
+        if (!access.IsTexture || (access.TextureUsage & TextureUsageKind.Storage) == 0)
+            return;
+
+        switch (resource)
+        {
+            case GraphTextureResource texture:
+                texture.Storage = true;
+                break;
+
+            case GraphImportedTextureResource imported:
+                foreach (Texture color in imported.Texture.ColorTextures)
+                {
+                    if ((color.Usage & TextureUsage.Storage) == 0)
+                        throw new InvalidOperationException(
+                            $"Pass '{passName}' declares imported texture '{RenderResourceID.ToString(access.Id)}' as Storage, " +
+                            "but its color textures were not created with TextureUsage.Storage.");
+                }
+                break;
+        }
     }
 
     private static void ValidateInputsHaveProducers(

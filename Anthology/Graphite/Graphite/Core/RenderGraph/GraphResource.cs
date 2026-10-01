@@ -134,6 +134,8 @@ public sealed class GraphTextureResource : GraphResource
     /// <summary>Load/store ops applied when bound as a raster target.</summary>
     public TargetLoadStoreOps Ops { get; }
 
+    internal bool Storage { get; set; }
+
     private readonly TextureRings _rings;
 
     internal GraphTextureResource(RenderResourceID id, in GraphTextureDesc desc, int historyDepth = 0, TargetLoadStoreOps? ops = null) : base(id)
@@ -227,7 +229,7 @@ public sealed class GraphBufferResource : GraphResource
 
 /// <summary>
 /// Externally-owned texture imported into the graph. Caller keeps ownership, graph never disposes it.
-/// Backend transitions it implicitly on first use, respecting incoming layout.
+/// Must be in its resting layout when the execution starts; the graph returns it there when the view ends.
 /// </summary>
 public sealed class GraphImportedTextureResource : GraphResource
 {

@@ -56,6 +56,9 @@ internal unsafe partial class VkCommandBuffer
 
         if (_activeRenderPass.Handle != default)
         {
+            if (_currentFramebufferMode == FramebufferMode.GraphDepthReadOnly)
+                throw new RenderException("Cannot clear a depth attachment the current pass declared DepthReadOnly.");
+
             ImageAspectFlags aspect = FormatHelpers.IsStencilFormat(_currentFramebuffer.DepthTarget!.Value.Target.Format)
                 ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
                 : ImageAspectFlags.DepthBit;
@@ -102,7 +105,6 @@ internal unsafe partial class VkCommandBuffer
         VkFramebufferBase vkFB = Util.AssertSubtype<Framebuffer, VkFramebufferBase>(fb);
         _currentFramebuffer = vkFB;
         _currentFramebufferEverActive = false;
-        _currentFramebufferGraphMode = ResolveFramebufferMode(vkFB);
         _hasResolvedPipeline = false;
         Util.EnsureArrayMinimumSize(ref _scissorRects, Math.Max(1, (uint)vkFB.ColorTargets.Count));
         Util.EnsureArrayMinimumSize(ref _viewports, Math.Max(1, (uint)vkFB.ColorTargets.Count));
@@ -118,14 +120,15 @@ internal unsafe partial class VkCommandBuffer
         }
     }
 
-    private bool ResolveFramebufferMode(VkFramebufferBase fb)
+    private FramebufferMode ResolveFramebufferMode(VkFramebufferBase fb)
     {
         int total = 0;
         int graph = 0;
+        bool depthReadOnly = false;
         foreach (FramebufferAttachment attachment in fb.ColorTargets)
-            CountAttachment(attachment.Target, ref total, ref graph);
+            CountAttachment(attachment.Target, isDepth: false, ref total, ref graph, ref depthReadOnly);
         if (fb.DepthTarget is FramebufferAttachment depth)
-            CountAttachment(depth.Target, ref total, ref graph);
+            CountAttachment(depth.Target, isDepth: true, ref total, ref graph, ref depthReadOnly);
 
         if (graph != 0 && graph != total)
         {
@@ -133,27 +136,32 @@ internal unsafe partial class VkCommandBuffer
                 "A framebuffer cannot mix graph attachments declared by the current pass with textures outside the graph.");
         }
 
-        return graph != 0;
+        if (graph == 0)
+            return FramebufferMode.Resting;
+        return depthReadOnly ? FramebufferMode.GraphDepthReadOnly : FramebufferMode.Graph;
     }
 
-    private void CountAttachment(Texture texture, ref int total, ref int graph)
+    private void CountAttachment(Texture texture, bool isDepth, ref int total, ref int graph, ref bool depthReadOnly)
     {
         total++;
         TextureState state = StateOf(texture);
-        if (state == TextureState.Attachment)
+        if (state == TextureState.Attachment || (isDepth && state == TextureState.DepthReadOnly))
         {
             graph++;
+            depthReadOnly |= state == TextureState.DepthReadOnly;
         }
         else if (state != TextureState.Resting)
         {
             throw new RenderException(
-                $"Texture '{texture.Name}' is declared as {state} by the current pass and cannot be a framebuffer attachment. " +
-                "Declare it as an Attachment output.");
+                $"Texture '{texture.Name}' is in state {state} for the current pass and cannot be a framebuffer attachment. " +
+                "Declare it as an Attachment (or DepthReadOnly depth), or transition it first.");
         }
     }
 
     internal override void RecordBarriers(ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst)
     {
+        if (_activeRenderPass.Handle == default && !_currentFramebufferEverActive && _currentFramebuffer != null)
+            BeginCurrentRenderPass();
         EnsureNoRenderPass();
         VkBarriers.Record(_gd, _cb, textures, bufferSrc, bufferDst);
     }
@@ -179,6 +187,10 @@ internal unsafe partial class VkCommandBuffer
         Debug.Assert(_activeRenderPass.Handle == default);
         Debug.Assert(_currentFramebuffer != null);
         _currentFramebufferEverActive = true;
+
+        _currentFramebufferMode = ResolveFramebufferMode(_currentFramebuffer);
+        if (_currentFramebufferMode == FramebufferMode.GraphDepthReadOnly && _depthClearValue.HasValue)
+            throw new RenderException("Cannot clear a depth attachment the current pass declared DepthReadOnly.");
 
         bool haveAnyAttachments = _currentFramebuffer.ColorTargets.Count > 0 || _currentFramebuffer.DepthTarget != null;
         SurveyQueuedClearValues(out bool haveAllClearValues, out bool haveAnyClearValues);
@@ -218,7 +230,7 @@ internal unsafe partial class VkCommandBuffer
     // queued are replayed as CmdClearAttachments once it is open.
     private void BeginRenderPassLoading(ref RenderPassBeginInfo renderPassBI, bool haveAnyClearValues)
     {
-        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferGraphMode, clear: false);
+        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, clear: false);
         _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
         _activeRenderPass = renderPassBI.RenderPass;
 
@@ -247,7 +259,7 @@ internal unsafe partial class VkCommandBuffer
     // Every attachment has a queued clear value, so the render pass itself can do the clearing.
     private void BeginRenderPassClearing(ref RenderPassBeginInfo renderPassBI)
     {
-        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferGraphMode, clear: true);
+        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, clear: true);
 
         fixed (ClearValue* clearValuesPtr = &_clearValues[0])
         {
