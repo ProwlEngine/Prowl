@@ -207,6 +207,29 @@ public class UITests : RuntimeTestBase
         finally { GameCanvas.ScreenSizeOverride = prevOverride; }
     }
 
+    // Children the group doesn't control keep their own width, and alignment centers the run.
+    [Fact]
+    public void HorizontalGroup_RespectsChildControlWidthAndAlignment()
+    {
+        Scene scene = CreateScene(enable: true);
+        var row = CreateUIObject("Row", scene);
+        var group = row.AddComponent<HorizontalLayoutGroup>();
+        group.ChildControlWidth = false;
+        group.ChildForceExpandWidth = true;
+        group.ChildAlignment = TextAlignment.CenterMiddle;
+
+        var a = CreateUIObject("A", scene, row);
+        a.RectTransform!.SizeDelta = new Float2(50f, 20f);
+        var b = CreateUIObject("B", scene, row);
+        b.RectTransform!.SizeDelta = new Float2(50f, 20f);
+
+        LayoutUtility.InvalidateCache();
+        group.Arrange(new Rect(0f, 0f, 400f, 100f));
+
+        Assert.Equal(new Rect(150f, 0f, 200f, 100f), a.RectTransform.ComputedRect);
+        Assert.Equal(new Rect(200f, 0f, 250f, 100f), b.RectTransform.ComputedRect);
+    }
+
     // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()
