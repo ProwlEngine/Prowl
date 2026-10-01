@@ -109,7 +109,7 @@ public sealed class ParticleShowcaseGame : StationGame
         DirectionalLight directional = light.AddComponent<DirectionalLight>();
         directional.Color = new Color(0.65f, 0.72f, 1f, 1f);
         directional.Intensity = 0.35f;
-        light.Transform.LocalEulerAngles = new Float3(-50f, 30f, 0f);
+        light.Transform.LocalEulerAngles = new Float3(50f, 210f, 0f);
         _roots.Add(light);
 
         MainCamera.ClearFlags = CameraClearFlags.SolidColor;

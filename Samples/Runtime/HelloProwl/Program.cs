@@ -40,7 +40,7 @@ public sealed class HelloProwlGame : Game
         // A light, angled down like an afternoon sun.
         var sun = new GameObject("Sun");
         sun.AddComponent<DirectionalLight>();
-        sun.Transform.LocalEulerAngles = new Float3(-50f, 210f, 0f);
+        sun.Transform.LocalEulerAngles = new Float3(50f, 30f, 0f);
         scene.Add(sun);
 
         // The camera the game renders through. The "Main Camera" tag marks it as the one to use.

@@ -13,11 +13,14 @@
     <Project Path="Samples/CarPhysicsDemo/CarPhysicsDemo.csproj" />
     <Project Path="Samples/FlyCamera/FlyCamera.csproj" />
     <Project Path="Samples/LifecycleTest/LifecycleTest.csproj" />
-    <Project Path="Samples/ParticleShowcase/ParticleShowcase.csproj" />
     <Project Path="Samples/PhysicsCubes/PhysicsCubes.csproj" />
     <Project Path="Samples/ShapeCastDemo/ShapeCastDemo.csproj" />
     <Project Path="Samples/SimpleCube/SimpleCube.csproj" />
     <Project Path="Samples/VoxelEngine/VoxelEngine.csproj" />
+  </Folder>
+  <Folder Name="/Samples/Runtime/">
+    <Project Path="Samples/Runtime/HelloProwl/HelloProwl.csproj" />
+    <Project Path="Samples/Runtime/ParticleShowcase/ParticleShowcase.csproj" />
   </Folder>
   <Project Path="Prowl.Analyzers/Prowl.Analyzers.csproj" />
   <Project Path="Prowl.Editor.Test/Prowl.Editor.Test.csproj" />
