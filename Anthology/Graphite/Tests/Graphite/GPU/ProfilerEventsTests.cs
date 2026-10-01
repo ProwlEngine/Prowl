@@ -113,7 +113,7 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
 
     public string Name => "ProfilerCopy";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetInputTexture(_id);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.GetInputTexture(_id, TextureUsageKind.TransferSrc);
 
     public void Render(RenderContext<ProfilerView> context)
     {
@@ -267,12 +267,12 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerClear" && r.Resource.Equals(id));
         Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerCopy" && r.Resource.Equals(id));
 
-        // Both passes submit exactly one graphics command buffer each.
-        Assert.Equal(2, profiler.Submits.Count);
+        Assert.Equal(
+            new[] { "ProfilerClear Barriers", "ProfilerClear", "ProfilerCopy Barriers", "ProfilerCopy", "Present Barriers" },
+            profiler.Submits.ConvertAll(s => s.Info.Name));
         Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 
         Assert.Contains(profiler.Barriers, b => b.Kind == BarrierBin.TextureTransition);
-        Assert.Contains(profiler.Barriers, b => b.Kind == BarrierBin.MemoryBarrier);
     }
 
     [Fact]
