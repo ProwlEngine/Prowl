@@ -102,6 +102,24 @@ public class UITests : RuntimeTestBase
         Assert.Equal(1, clicks());
     }
 
+    [Fact]
+    public void LayoutIntrinsicSize_IgnoresSizeDeltaOnStretchedAxes()
+    {
+        Scene scene = CreateScene(enable: true);
+        var fixedGo = CreateUIObject("Fixed", scene);
+        fixedGo.RectTransform!.SizeDelta = new Float2(50f, 30f);
+
+        var stretchedGo = CreateUIObject("Stretched", scene);
+        RectTransform rt = stretchedGo.RectTransform!;
+        rt.AnchorMin = new Float2(0f, 0.5f);
+        rt.AnchorMax = new Float2(1f, 0.5f);
+        rt.SizeDelta = new Float2(-16f, 30f);
+
+        LayoutUtility.InvalidateCache();
+        Assert.Equal(new Float2(50f, 30f), LayoutUtility.GetPreferredSize(fixedGo));
+        Assert.Equal(new Float2(0f, 30f), LayoutUtility.GetPreferredSize(stretchedGo));
+    }
+
     // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()
