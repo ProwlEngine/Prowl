@@ -120,6 +120,25 @@ public class UITests : RuntimeTestBase
         Assert.Equal(new Float2(0f, 30f), LayoutUtility.GetPreferredSize(stretchedGo));
     }
 
+    [Fact]
+    public void TextPreferredSize_FollowsTextAndWrapsAtWidth()
+    {
+        Scene scene = CreateScene(enable: true);
+        var go = CreateUIObject("Text", scene);
+        var text = go.AddComponent<TextComponent>();
+        text.Text = "Some words that wrap";
+
+        LayoutUtility.InvalidateCache();
+        Float2 unwrapped = LayoutUtility.GetPreferredSize(go);
+        Assert.True(unwrapped.X > 0f && unwrapped.Y > 0f);
+
+        // Narrower than the text, so the wrapped height is taller than one line.
+        RectTransform rt = go.RectTransform!;
+        rt.ComputedRect = new Rect(0f, 0f, unwrapped.X * 0.4f, unwrapped.Y);
+        LayoutUtility.InvalidateCache();
+        Assert.True(LayoutUtility.GetPreferredSize(go).Y > unwrapped.Y);
+    }
+
     // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()
