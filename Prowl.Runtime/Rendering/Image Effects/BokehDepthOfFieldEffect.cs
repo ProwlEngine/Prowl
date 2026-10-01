@@ -20,7 +20,8 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
     }
 
     public bool UseAutoFocus = true;
-    public float ManualFocusPoint = 0.5f;
+    /// <summary>Focus distance in world units from the camera, used when <see cref="UseAutoFocus"/> is off.</summary>
+    public float ManualFocusPoint = 10f;
     // Retuned for a circle of confusion measured in linear view depth. The old values were set
     // against raw depth-buffer samples, where the same difference meant something very different.
     public float FocusStrength = 1.0f;
@@ -52,7 +53,7 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
 
         // Set common shader properties
         _mat.SetFloat("_FocusStrength", FocusStrength);
-        _mat.SetFloat("_ManualFocusPoint", ManualFocusPoint);
+        _mat.SetFloat("_ManualFocusPoint", System.MathF.Max(ManualFocusPoint, 0.01f));
         _mat.SetFloat("_MaxBlurRadius", MaxBlurRadius);
         _mat.SetKeyword("AUTOFOCUS", UseAutoFocus);
 

@@ -78,7 +78,7 @@ Pass "CircularHorizMRT"
         // Calculate Circle of Confusion
         float calculateCoC(float depth, float focusPoint)
         {
-            float normalizedDepthDiff = abs(depth - focusPoint) / focusPoint;
+            float normalizedDepthDiff = abs(depth - focusPoint) / max(focusPoint, 1e-3);
             float cocPixels = normalizedDepthDiff * _FocusStrength * 0.01 * _Resolution.y;
             float maxBlurPixels = _MaxBlurRadius * 0.01 * _Resolution.y;
             return min(cocPixels, maxBlurPixels);
@@ -203,7 +203,7 @@ Pass "CircularVerticalComposite"
         // Calculate Circle of Confusion
         float calculateCoC(float depth, float focusPoint)
         {
-            float normalizedDepthDiff = abs(depth - focusPoint) / focusPoint;
+            float normalizedDepthDiff = abs(depth - focusPoint) / max(focusPoint, 1e-3);
             float cocPixels = normalizedDepthDiff * _FocusStrength * 0.01 * _Resolution.y;
             float maxBlurPixels = _MaxBlurRadius * 0.01 * _Resolution.y;
             return min(cocPixels, maxBlurPixels);
@@ -306,7 +306,7 @@ Pass "DoFCombine"
 
         float calculateCoC(float depth, float focusPoint)
         {
-            float normalizedDepthDiff = abs(depth - focusPoint) / focusPoint;
+            float normalizedDepthDiff = abs(depth - focusPoint) / max(focusPoint, 1e-3);
             float cocPixels = normalizedDepthDiff * _FocusStrength * 0.01 * _Resolution.y;
             float maxBlurPixels = _MaxBlurRadius * 0.01 * _Resolution.y;
             return min(cocPixels, maxBlurPixels);
