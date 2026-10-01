@@ -198,14 +198,14 @@ A bundle of color textures, an optional depth texture and the framebuffer that r
 | Member | Signature | Description |
 |--------|-----------|-------------|
 | `Desc` | `RenderTextureDescription` | The description it was made from |
-| `ColorTextures` | `Texture[]` | One per color format. Usage `RenderTarget | Sampled` |
+| `ColorTextures` | `Texture[]` | One per color format. Usage `RenderTarget | Sampled`, plus `Storage` when `Desc.Storage` is set |
 | `DepthTexture` | `Texture?` | Usage `DepthStencil | Sampled`, or null |
 | `Framebuffer` | `Framebuffer` | Framebuffer over these attachments |
 | `Name` | `string { set; }` | Names the framebuffer and each attachment |
 | `ResolveDepthFormat` | `static PixelFormat ResolveDepthFormat(GraphicsDevice device)` | `D24_UNorm_S8_UInt` if usable as sampled depth, else `D32_Float_S8_UInt`. Cached process-wide |
 | `Dispose` | `void Dispose()` | Disposes framebuffer and textures |
 
-`RenderTextureDescription` is a readonly struct: `Width`, `Height`, `ColorFormats` (empty for depth-only), `Depth`, `SampleCount`. Constructors take either a `PixelFormat[]` or a single `PixelFormat`, plus `bool depth` and an optional sample count. Equal descriptions compare equal, which is what the transient pool keys on.
+`RenderTextureDescription` is a readonly struct: `Width`, `Height`, `ColorFormats` (empty for depth-only), `Depth`, `SampleCount`, `Storage`. Constructors take either a `PixelFormat[]` or a single `PixelFormat`, plus `bool depth`, an optional sample count and an optional `storage` flag. Equal descriptions compare equal, which is what the transient pool keys on. The render graph sets `Storage` for a graph texture that some pass declares with `TextureUsageKind.Storage`.
 
 Two ways to get one:
 

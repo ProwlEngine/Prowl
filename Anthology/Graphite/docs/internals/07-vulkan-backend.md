@@ -105,18 +105,18 @@ The backend stores no image layouts. [VkBarriers](../../Graphite/Platform/Vulkan
 | Resting, `Storage` (not sampled) | `General` |
 | Resting, `RenderTarget` / `DepthStencil` only | color / depth-stencil attachment optimal |
 | Resting, anything else | `General` |
-| `Sampled` / `Storage` / `Attachment` / `TransferSrc` / `TransferDst` | `ShaderReadOnlyOptimal` / `General` / attachment optimal / `TransferSrcOptimal` / `TransferDstOptimal` |
+| `Sampled` / `Storage` / `Attachment` / `TransferSrc` / `TransferDst` / `DepthReadOnly` | `ShaderReadOnlyOptimal` / `General` / attachment optimal / `TransferSrcOptimal` / `TransferDstOptimal` / `DepthStencilReadOnlyOptimal` |
 
-Each layout has one stage and access scope. Shader layouts use every shader stage the device enables (vertex, fragment, compute, plus geometry and tessellation when those features exist), attachment layouts use the attachment output and fragment test stages, transfer layouts use the transfer stage. A barrier is skipped only when old and new layouts are equal and read-only (`ShaderReadOnlyOptimal`, `TransferSrcOptimal`, `PresentSrcKhr`); every other pair is emitted, so writes are always ordered.
+Each layout has one stage and access scope. Shader layouts use every shader stage the device enables (vertex, fragment, compute, plus geometry and tessellation when those features exist), attachment layouts use the attachment output and fragment test stages, transfer layouts use the transfer stage. A barrier is skipped only when old and new layouts are equal and read-only (`ShaderReadOnlyOptimal`, `TransferSrcOptimal`, `DepthStencilReadOnlyOptimal`, `PresentSrcKhr`); every other pair is emitted, so writes are always ordered.
 
 Where layouts change:
 
 - **Creation.** One immediate submit moves a new image from `Undefined` to its resting layout, clearing render targets and depth targets on the way through `TransferDstOptimal`.
-- **Graph barriers.** The graph's barrier command buffers call `RecordBarriers`, which emits one `vkCmdPipelineBarrier` with an image barrier per texture and at most one global memory barrier for buffers.
+- **Graph barriers.** The graph's barrier command buffers, and `RenderContext.Transition` on a pass's own command buffer, call `RecordBarriers`. It first applies clears still queued on the bound framebuffer, ends any open render pass, then emits one `vkCmdPipelineBarrier` with an image barrier per texture and at most one global memory barrier for buffers.
 - **Copies, mip generation, resolves.** Each reads the current layout of its textures from the command buffer's graph state (resting for non-graph textures and for immediate uploads), transitions the touched subresources to transfer layouts, and transitions them back.
 - **Storage binds.** A non-graph texture bound read-write whose resting layout is not `General` moves to `General` for one compute dispatch and back.
 
-`VkFramebuffer` builds four compatible render passes at creation ([CreateRenderPass](../../Graphite/Platform/Vulkan/VkFramebuffer.cs#L45)): graph mode or resting mode, each with a load and a clear variant ([GetRenderPass](../../Graphite/Platform/Vulkan/VkFramebuffer.cs#L42)).
+`VkFramebuffer` creates compatible render passes on first use ([GetRenderPass](../../Graphite/Platform/Vulkan/VkFramebuffer.cs#L41), [CreateRenderPass](../../Graphite/Platform/Vulkan/VkFramebuffer.cs#L52)): one per `FramebufferMode` (`Resting`, `Graph`, `GraphDepthReadOnly`), each with a load and a clear variant. The resting load pass is created with the framebuffer, which needs a render pass to be created against.
 
 ```mermaid
 flowchart LR
@@ -130,7 +130,7 @@ flowchart LR
     end
 ```
 
-In graph mode every attachment enters and leaves in its attachment layout; the graph's barriers do the rest. In resting mode the attachment enters and leaves in its resting layout, so the render pass itself performs the transitions. Clear variants start from `Undefined`. [ResolveFramebufferMode](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.RenderPass.cs#L121) picks the mode in `SetFramebuffer`: all attachments in the `Attachment` state means graph mode, all resting means resting mode, and anything else throws. The swapchain framebuffer is always resting mode. Both modes carry external subpass dependencies that order attachment access against earlier and later shader, transfer and attachment work.
+In graph mode every attachment enters and leaves in its attachment layout; the graph's barriers do the rest. `GraphDepthReadOnly` is graph mode with the depth attachment in `DepthStencilReadOnlyOptimal` for the whole pass, always loaded. In resting mode the attachment enters and leaves in its resting layout, so the render pass itself performs the transitions. Clear variants start from `Undefined`. [ResolveFramebufferMode](../../Graphite/Platform/Vulkan/VkCommandBuffer/VkCommandBuffer.RenderPass.cs#L123) picks the mode each time a render pass begins, so a `Transition` between two draws is seen: color in `Attachment` and depth in `Attachment` or `DepthReadOnly` means graph mode, all resting means resting mode, and anything else throws. A depth clear, queued or immediate, throws in `GraphDepthReadOnly`. The swapchain framebuffer is always resting mode. Both modes carry external subpass dependencies that order attachment access against earlier and later shader, transfer and attachment work.
 
 ## Memory
 
@@ -202,7 +202,7 @@ The slot fence tells the ring a whole execution is done. The pooled fences exist
 A tracker updated at record time is only right if record order matches submit order, and it hides which code owns a transition. Layouts are instead a pure function of usage (resting) or of the graph's declared state, so every transition has a known owner and nothing needs to be kept in sync.
 
 ### Why keep VkRenderPass instead of dynamic rendering?
-MoltenVK and older Android drivers are targets, so the backend stays on core Vulkan 1.0 render passes. Two layout modes times two load variants are created per framebuffer; they are render-pass compatible, so one framebuffer and one pipeline serve all four.
+MoltenVK and older Android drivers are targets, so the backend stays on core Vulkan 1.0 render passes. Up to three layout modes times two load variants exist per framebuffer; they are render-pass compatible, so one framebuffer and one pipeline serve all of them.
 
 ### Why one command pool per command buffer?
 Vulkan command pools are externally synchronised, so a pool per buffer means two buffers never share a pool and can be recorded independently. Each wrapper is created with `ResetCommandBufferBit` so its native buffer can be reset and reused. The cost is one pool object per wrapper, which is why `VkGraphCommandBufferPool` recycles the wrappers themselves.

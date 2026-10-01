@@ -77,7 +77,7 @@ Steps inside `Prepare`:
 
 1. No sets in the program: return false.
 2. Fast path: graphics, render pass already active, same program object, same active-property epoch as the last prepare: return false.
-3. For each set index: resolve, check texture layouts, sync, gather offsets ([`ResolveSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L26), [`PrepareResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L7), [`SyncSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L206), [`GatherDynOffsets`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L265)).
+3. For each set index: resolve, check texture layouts, sync, gather offsets ([`ResolveSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L26), [`PrepareResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L7), [`SyncSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L206), [`GatherDynOffsets`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L266)).
 4. Remember the first set whose descriptor handle or dynamic offsets differ from what this command buffer last bound. `EmitBind` binds from that set index to the end in one `vkCmdBindDescriptorSets`.
 
 ### 5. Resolving each element
@@ -95,7 +95,7 @@ Missing textures, buffers and UBOs are reported through `GraphicsDevice.OnMissin
 
 ### 6. Uniform buffers and loose uniforms
 
-[`ResolveUboRange`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L98) handles three cases, in order:
+[`ResolveUboRange`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L99) handles three cases, in order:
 
 1. A buffer entry with `readOnly: true`: bind that range as is. Scalar writes are ignored.
 2. The element declares loose uniform fields (plain `float`/`matrix` globals the shader compiler packed into a block): values are packed from `Uniform` entries.
@@ -111,13 +111,13 @@ Uniform buffers are always created as `UniformBufferDynamic` descriptors. The pe
 
 [`BuildIdentityFromScratch`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L229) builds a `ulong[]` per set: the set index, then per element the raw Vulkan handles: buffer handle plus range (UBO), buffer handle plus offset plus range (storage), image view handle (texture), sampler handle. Dynamic UBO offsets are deliberately excluded.
 
-`SyncSet` compares the identity to the one this command buffer last resolved for this set index; equal means nothing to do. Otherwise it asks `VkDescriptorSetCache.TryGet`. On a miss it allocates a set from the program's pool and writes all descriptors with one `vkUpdateDescriptorSets` ([`WriteDescriptorsFromScratch`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L43)).
+`SyncSet` compares the identity to the one this command buffer last resolved for this set index; equal means nothing to do. Otherwise it asks `VkDescriptorSetCache.TryGet`. On a miss it allocates a set from the program's pool and writes all descriptors with one `vkUpdateDescriptorSets` ([`WriteDescriptorsFromScratch`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L45)).
 
-Descriptor types written: dynamic uniform buffer, storage buffer, sampled image or combined image sampler (layout `ShaderReadOnlyOptimal`), storage image (layout `General`), sampler.
+Descriptor types written: dynamic uniform buffer, storage buffer, sampled image or combined image sampler (layout `ShaderReadOnlyOptimal`, or `DepthStencilReadOnlyOptimal` for a depth texture declared `DepthReadOnly`), storage image (layout `General`), sampler. A texture's identity entry is its image view handle followed by the layout, so the same view in two layouts gets two cached sets.
 
 Binding does not own texture layouts. [`PrepareResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L7) computes each bound texture's current layout from the command buffer's graph state (a texture that is not a graph resource is in its resting layout) and checks it against the descriptor:
 
-- A read-only texture must be in `ShaderReadOnlyOptimal`. Anything else throws `RenderException` asking for a `Sampled` declaration.
+- A read-only texture must be in `ShaderReadOnlyOptimal` or `DepthStencilReadOnlyOptimal`; that layout is what the descriptor records. Anything else throws `RenderException` asking for a `Sampled` declaration or a transition.
 - A read-write texture in `General` binds as is.
 - A read-write texture that is resting in another layout (a non-graph `Storage | Sampled` texture) is moved to `General` for one compute dispatch and returned to its resting layout right after it. In a draw, or for a graph texture declared with another kind, it throws `RenderException` asking for a `Storage` declaration.
 
