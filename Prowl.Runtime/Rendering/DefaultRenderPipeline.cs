@@ -279,171 +279,176 @@ public class DefaultRenderPipeline : RenderPipeline
             TextureImageFormat.Short4,
         ]);
 
-        // ─── Pre-pass + opaque CB ───
-        using var mainCmd = Graphics.GetCommandBuffer("ColorPass");
-
-        // Single MRT prepass: depth + view-space normals + motion + roughness/metallic.
-        // Cleared to zero so sky/background reads zero motion (and the unwritten normal/material
-        // is only ever sampled by effects that gate on depth < 1, so its value there is moot).
-        // updatePreviousMatrices = true so prowl_PrevObjectToWorld is bound per object for motion.
-        mainCmd.SetRenderTarget(prepass.frameBuffer);
-        mainCmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0, 0, 0, 0));
-        DrawRenderables(mainCmd, renderables, "LightMode", "Prepass", new ViewerData(css), culledRenderableIndices, true);
-
-        // Expose depth + normals + motion as globals AFTER the prepass draws have been encoded
-        // into mainCmd. Using cmd.SetGlobalTexture (not the static directly) means the executor
-        // mutates the global at the right point in submit order setting the static here would
-        // expose the textures as sampler inputs while they are still bound FBO attachments for
-        // the prepass draws above (GL undefined behavior).
-        mainCmd.SetGlobalTexture("_CameraDepthTexture", prepass.InternalDepth);
-        mainCmd.SetGlobalTexture("_CameraNormalsTexture", prepass.InternalTextures[0]);
-        mainCmd.SetGlobalTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
-
-        // Copy depth from prepass into colorRT so the opaque pass can ZTest LEqual against it.
-        mainCmd.SetRenderTargets(colorRT.frameBuffer, prepass.frameBuffer);
-        mainCmd.BlitFramebuffer(0, 0, prepass.Width, prepass.Height,
-                                 0, 0, colorRT.Width, colorRT.Height,
-                                 ClearFlags.Depth, BlitFilter.Nearest);
-
-        // Switch back to colorRT for the opaque draws.
-        mainCmd.SetRenderTarget(colorRT.frameBuffer);
-        mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
-
-        // Camera clear flags
-        switch (camera.ClearFlags)
+        try
         {
-            case CameraClearFlags.Skybox:
+            // ─── Pre-pass + opaque CB ───
+            using var mainCmd = Graphics.GetCommandBuffer("ColorPass");
+
+            // Single MRT prepass: depth + view-space normals + motion + roughness/metallic.
+            // Cleared to zero so sky/background reads zero motion (and the unwritten normal/material
+            // is only ever sampled by effects that gate on depth < 1, so its value there is moot).
+            // updatePreviousMatrices = true so prowl_PrevObjectToWorld is bound per object for motion.
+            mainCmd.SetRenderTarget(prepass.frameBuffer);
+            mainCmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0, 0, 0, 0));
+            DrawRenderables(mainCmd, renderables, "LightMode", "Prepass", new ViewerData(css), culledRenderableIndices, true);
+
+            // Expose depth + normals + motion as globals AFTER the prepass draws have been encoded
+            // into mainCmd. Using cmd.SetGlobalTexture (not the static directly) means the executor
+            // mutates the global at the right point in submit order setting the static here would
+            // expose the textures as sampler inputs while they are still bound FBO attachments for
+            // the prepass draws above (GL undefined behavior).
+            mainCmd.SetGlobalTexture("_CameraDepthTexture", prepass.InternalDepth);
+            mainCmd.SetGlobalTexture("_CameraNormalsTexture", prepass.InternalTextures[0]);
+            mainCmd.SetGlobalTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
+
+            // Copy depth from prepass into colorRT so the opaque pass can ZTest LEqual against it.
+            mainCmd.SetRenderTargets(colorRT.frameBuffer, prepass.frameBuffer);
+            mainCmd.BlitFramebuffer(0, 0, prepass.Width, prepass.Height,
+                                     0, 0, colorRT.Width, colorRT.Height,
+                                     ClearFlags.Depth, BlitFilter.Nearest);
+
+            // Switch back to colorRT for the opaque draws.
+            mainCmd.SetRenderTarget(colorRT.frameBuffer);
+            mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
+
+            // Camera clear flags
+            switch (camera.ClearFlags)
             {
-                var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
-                    ? css.Scene.Skybox.SolidColor : camera.ClearColor;
-                mainCmd.ClearRenderTarget(ClearFlags.Color, skyColor);
-                RenderSkybox(mainCmd, css, lights);
-                break;
+                case CameraClearFlags.Skybox:
+                {
+                    var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
+                        ? css.Scene.Skybox.SolidColor : camera.ClearColor;
+                    mainCmd.ClearRenderTarget(ClearFlags.Color, skyColor);
+                    RenderSkybox(mainCmd, css, lights);
+                    break;
+                }
+                case CameraClearFlags.SolidColor:
+                    mainCmd.ClearRenderTarget(ClearFlags.Color, camera.ClearColor);
+                    break;
+                case CameraClearFlags.Depth:
+                case CameraClearFlags.Nothing:
+                {
+                    // Start from what the target already holds, the backbuffer when there is no target.
+                    bool hasTarget = target.IsValid();
+                    int srcWidth = hasTarget ? target.Width : Window.InternalWindow.FramebufferSize.X;
+                    int srcHeight = hasTarget ? target.Height : Window.InternalWindow.FramebufferSize.Y;
+                    mainCmd.SetRenderTargets(colorRT.frameBuffer, hasTarget ? target.frameBuffer : null);
+                    mainCmd.BlitFramebuffer(0, 0, srcWidth, srcHeight,
+                                            0, 0, colorRT.Width, colorRT.Height,
+                                            ClearFlags.Color, BlitFilter.Nearest);
+                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
+                    break;
+                }
             }
-            case CameraClearFlags.SolidColor:
-                mainCmd.ClearRenderTarget(ClearFlags.Color, camera.ClearColor);
-                break;
-            case CameraClearFlags.Depth:
-            case CameraClearFlags.Nothing:
+
+            // Forward opaques (with PBR lighting inline).
+            RenderStats.BeginColorPass();
+            DrawRenderables(mainCmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
+
+            // Submit so image effects see all the rendering above. Motion vectors were already
+            // produced jitter-free in the unified prepass (via PROWL_MATRIX_VP_NONJITTERED), so no
+            // separate pass or mid-frame matrix swap is needed here.
+            Graphics.Submit(mainCmd);
+
+            // ─── AfterOpaques image effects ───
+            // Image effects rent + submit their own CommandBuffers internally.
+            RenderStats.BeginPostFx();
+            if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
             {
-                // Start from what the target already holds, the backbuffer when there is no target.
-                bool hasTarget = target.IsValid();
-                int srcWidth = hasTarget ? target.Width : Window.InternalWindow.FramebufferSize.X;
-                int srcHeight = hasTarget ? target.Height : Window.InternalWindow.FramebufferSize.Y;
-                mainCmd.SetRenderTargets(colorRT.frameBuffer, hasTarget ? target.frameBuffer : null);
-                mainCmd.BlitFramebuffer(0, 0, srcWidth, srcHeight,
-                                        0, 0, colorRT.Width, colorRT.Height,
-                                        ClearFlags.Color, BlitFilter.Nearest);
-                mainCmd.SetRenderTarget(colorRT.frameBuffer);
-                break;
+                var afterContext = new RenderContext
+                {
+                    DepthNormals = prepass,
+                    MotionVectors = prepass.InternalTextures[1],
+                    SceneColor = colorRT,
+                    Camera = camera,
+                    Width = (int)css.PixelWidth,
+                    Height = (int)css.PixelHeight,
+                    CurrentStage = RenderStage.AfterOpaques
+                };
+                ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
             }
-        }
+            RenderStats.EndPostFx();
 
-        // Forward opaques (with PBR lighting inline).
-        RenderStats.BeginColorPass();
-        DrawRenderables(mainCmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
+            // ─── Transparents CB ───
+            using var transparentCmd = Graphics.GetCommandBuffer("Transparents");
+            transparentCmd.SetRenderTarget(colorRT.frameBuffer);
+            transparentCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
+            List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
+            DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT, preserveOrder: true);
+            Graphics.Submit(transparentCmd);
 
-        // Submit so image effects see all the rendering above. Motion vectors were already
-        // produced jitter-free in the unified prepass (via PROWL_MATRIX_VP_NONJITTERED), so no
-        // separate pass or mid-frame matrix swap is needed here.
-        Graphics.Submit(mainCmd);
+            // World-space UI canvases (drawn with the camera matrices, into the scene color).
+            RenderUIQueue(css, colorRT, UISurface.World, data);
 
-        // ─── AfterOpaques image effects ───
-        // Image effects rent + submit their own CommandBuffers internally.
-        RenderStats.BeginPostFx();
-        if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
-        {
-            var afterContext = new RenderContext
+            RenderStats.EndColorPass();
+
+            // ─── PostProcess image effects ───
+            RenderStats.BeginPostFx();
+            if (effectsByStage[RenderStage.PostProcess].Count > 0)
             {
-                DepthNormals = prepass,
-                MotionVectors = prepass.InternalTextures[1],
-                SceneColor = colorRT,
-                Camera = camera,
-                Width = (int)css.PixelWidth,
-                Height = (int)css.PixelHeight,
-                CurrentStage = RenderStage.AfterOpaques
-            };
-            ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
-        }
-        RenderStats.EndPostFx();
+                var postContext = new RenderContext
+                {
+                    DepthNormals = prepass,
+                    MotionVectors = prepass.InternalTextures[1],
+                    SceneColor = colorRT,
+                    Camera = camera,
+                    Width = (int)css.PixelWidth,
+                    Height = (int)css.PixelHeight,
+                    CurrentStage = RenderStage.PostProcess
+                };
 
-        // ─── Transparents CB ───
-        using var transparentCmd = Graphics.GetCommandBuffer("Transparents");
-        transparentCmd.SetRenderTarget(colorRT.frameBuffer);
-        transparentCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
-        List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
-        DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT, preserveOrder: true);
-        Graphics.Submit(transparentCmd);
+                ExecuteImageEffects(postContext, effectsByStage[RenderStage.PostProcess]);
 
-        // World-space UI canvases (drawn with the camera matrices, into the scene color).
-        RenderUIQueue(css, colorRT, UISurface.World, data);
-
-        RenderStats.EndColorPass();
-
-        // ─── PostProcess image effects ───
-        RenderStats.BeginPostFx();
-        if (effectsByStage[RenderStage.PostProcess].Count > 0)
-        {
-            var postContext = new RenderContext
-            {
-                DepthNormals = prepass,
-                MotionVectors = prepass.InternalTextures[1],
-                SceneColor = colorRT,
-                Camera = camera,
-                Width = (int)css.PixelWidth,
-                Height = (int)css.PixelHeight,
-                CurrentStage = RenderStage.PostProcess
-            };
-
-            ExecuteImageEffects(postContext, effectsByStage[RenderStage.PostProcess]);
-
-            var replacedRTs = postContext.GetReplacedRTs();
-            if (replacedRTs.Count > 0)
-            {
-                colorRT = postContext.SceneColor;
-                foreach (var oldRT in replacedRTs)
-                    RenderTexture.ReleaseTemporaryRT(oldRT);
+                var replacedRTs = postContext.GetReplacedRTs();
+                if (replacedRTs.Count > 0)
+                {
+                    colorRT = postContext.SceneColor;
+                    foreach (var oldRT in replacedRTs)
+                        RenderTexture.ReleaseTemporaryRT(oldRT);
+                }
             }
-        }
-        RenderStats.EndPostFx();
+            RenderStats.EndPostFx();
 
-        // ─── Gizmos + final blit CB ───
-        using var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
-        if (data.DisplayGizmos)
+            // ─── Gizmos + final blit CB ───
+            using var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
+            if (data.DisplayGizmos)
+            {
+                finalCmd.SetRenderTarget(colorRT.frameBuffer);
+                finalCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
+                RenderGizmos(finalCmd, css);
+            }
+
+            finalCmd.Blit(colorRT, target, null, 0, false, false);
+            Graphics.Submit(finalCmd);
+
+            // ─── Screen-space UI (Overlay surface) on top of the final image (into target) ───
+            RenderUIQueue(css, target, UISurface.Overlay, data);
+
+            // Save previous VP for next frame's motion vectors.
+            camera.SavePreviousViewProjectionMatrix();
+        }
+        finally
         {
-            finalCmd.SetRenderTarget(colorRT.frameBuffer);
-            finalCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
-            RenderGizmos(finalCmd, css);
+            // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.). MUST run after the
+            // overlay pass, which binds `target` - otherwise the editor's UI draws into the game RT and the
+            // window goes black.
+            using var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
+            resetCmd.SetRenderTarget(null);
+            resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+            // These point at this render's pooled targets; every other global stays set for the next render.
+            resetCmd.ClearGlobalTexture("_CameraDepthTexture");
+            resetCmd.ClearGlobalTexture("_CameraNormalsTexture");
+            resetCmd.ClearGlobalTexture("_CameraMotionVectorsTexture");
+            Graphics.Submit(resetCmd);
+
+            // Runs even after a failed render, since effects like TAA undo their camera changes here.
+            foreach (ImageEffect effect in allEffects)
+                try { effect.OnPostRender(camera); }
+                catch (Exception ex) { LogEffectSkipped(effect, "OnPostRender", ex); }
+
+            RenderTexture.ReleaseTemporaryRT(prepass);
+            RenderTexture.ReleaseTemporaryRT(colorRT);
         }
-
-        finalCmd.Blit(colorRT, target, null, 0, false, false);
-        Graphics.Submit(finalCmd);
-
-        // ─── Screen-space UI (Overlay surface) on top of the final image (into target) ───
-        RenderUIQueue(css, target, UISurface.Overlay, data);
-
-        // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.). MUST run after the
-        // overlay pass, which binds `target` - otherwise the editor's UI draws into the game RT and the
-        // window goes black.
-        using var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
-        resetCmd.SetRenderTarget(null);
-        resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-        // These point at this render's pooled targets; every other global stays set for the next render.
-        resetCmd.ClearGlobalTexture("_CameraDepthTexture");
-        resetCmd.ClearGlobalTexture("_CameraNormalsTexture");
-        resetCmd.ClearGlobalTexture("_CameraMotionVectorsTexture");
-        Graphics.Submit(resetCmd);
-
-        // Save previous VP for next frame's motion vectors.
-        camera.SavePreviousViewProjectionMatrix();
-
-        foreach (ImageEffect effect in allEffects)
-            try { effect.OnPostRender(camera); }
-            catch (Exception ex) { LogEffectSkipped(effect, "OnPostRender", ex); }
-
-        // Cleanup
-        RenderTexture.ReleaseTemporaryRT(prepass);
-        RenderTexture.ReleaseTemporaryRT(colorRT);
     }
 
     private static void UploadFogUniforms(Scene scene)
