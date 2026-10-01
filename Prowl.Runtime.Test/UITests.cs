@@ -176,6 +176,37 @@ public class UITests : RuntimeTestBase
         finally { GameCanvas.ScreenSizeOverride = prevOverride; }
     }
 
+    // A mask rotated 45 degrees clips to a diamond; clicks must follow the diamond, not the unrotated rect.
+    [Fact]
+    public void Raycast_FollowsRotatedMask()
+    {
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
+        try
+        {
+            Scene scene = CreateScene(enable: true);
+            var canvasGo = CreateGameObject("Canvas");
+            scene.Add(canvasGo);
+            canvasGo.AddComponent<GameCanvas>();
+
+            var mask = CreateUIObject("Mask", scene, canvasGo);
+            mask.AddComponent<RectMask>();
+            mask.RectTransform!.LocalRotation = Quaternion.AxisAngle(Float3.UnitZ, MathF.PI / 4f);
+
+            var content = CreateUIObject("Content", scene, mask);
+            content.RectTransform!.SizeDelta = new Float2(300f, 300f);
+            content.AddComponent<Box>();
+
+            Float2 window = new(1000f, 1000f);
+            // Inside the unrotated 100x100 rect around (500, 500) but outside the diamond.
+            Assert.False(UIRaycaster.TryPick(scene, new Float2(545f, 455f), window, out _));
+            // Outside the unrotated rect but inside the diamond.
+            Assert.True(UIRaycaster.TryPick(scene, new Float2(565f, 500f), window, out var hit));
+            Assert.Same(content, hit.GameObject);
+        }
+        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
+    }
+
     // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()
