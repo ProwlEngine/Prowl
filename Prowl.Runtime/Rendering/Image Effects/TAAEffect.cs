@@ -167,8 +167,11 @@ public sealed class TAAEffect : ImageEffect
         cmd.Blit(resolved, _history, null, 0);
         _historyValid = true;
 
-        // Copy resolved back to scene color
-        cmd.Blit(resolved, context.SceneColor, null, 0);
+        // Sharpen on the way back to scene color, after the history copy so it never feeds back.
+        if (Sharpness > 0f)
+            cmd.Blit(resolved, context.SceneColor, _mat, 1);
+        else
+            cmd.Blit(resolved, context.SceneColor, null, 0);
         Graphics.Submit(cmd);
         RenderTexture.ReleaseTemporaryRT(resolved);
     }

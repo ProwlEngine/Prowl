@@ -84,7 +84,7 @@ Pass "Resolve"
             return max(result, vec4(0.0));
         }
 
-        // YCoCg color space for better neighborhood clamping
+        // YCoCg color space for better neighborhood clipping
         vec3 RGBToYCoCg(vec3 rgb)
         {
             return vec3(
@@ -103,19 +103,21 @@ Pass "Resolve"
             );
         }
 
-        // Tonemap/inverse for stable blending in HDR
-        vec3 Tonemap(vec3 c)
+        float MaxChannel(vec3 c) { return max(c.r, max(c.g, c.b)); }
+
+        // Dividing by the largest channel keeps every channel below 1, so bright HDR pixels can't
+        // dominate the blend and the inverse below stays finite.
+        vec3 Tonemap(vec3 c) { return c / (1.0 + MaxChannel(c)); }
+        vec3 InverseTonemap(vec3 c) { return c / max(1.0 - MaxChannel(c), 1e-4); }
+
+        // NaN or infinite input would otherwise live forever in the history.
+        vec3 Sanitize(vec3 c)
         {
-            return c / (1.0 + luminance(c));
+            if (any(isnan(c)) || any(isinf(c))) return vec3(0.0);
+            return max(c, vec3(0.0));
         }
 
-        // A clamped history can land at or past the tonemap's ceiling of 1, where the inverse explodes
-        // into a single blinding pixel. The floor caps that at roughly 1000x.
-        vec3 InverseTonemap(vec3 c)
-        {
-            c = max(c, vec3(0.0));
-            return c / max(1.0 - luminance(c), 1e-3);
-        }
+        vec3 SampleCurrent(vec2 uv) { return RGBToYCoCg(Tonemap(Sanitize(texture(_MainTex, uv).rgb))); }
 
         // Find closest depth in 3x3 neighborhood for motion vector sampling
         vec2 GetClosestMotionVector(vec2 uv, vec2 texelSize)
@@ -144,92 +146,125 @@ Pass "Resolve"
         {
             vec2 texelSize = 1.0 / _Resolution;
 
-            // Sample current color (from jittered render)
-            vec3 currentColor = texture(_MainTex, TexCoords).rgb;
+            // Everything below works on tonemapped YCoCg and converts back once at the end.
+            vec3 m1 = vec3(0.0);
+            vec3 m2 = vec3(0.0);
+            vec3 boxMin = vec3(1e9);
+            vec3 boxMax = vec3(-1e9);
+            vec3 current = vec3(0.0);
+            for (int y = -1; y <= 1; y++)
+            {
+                for (int x = -1; x <= 1; x++)
+                {
+                    vec3 s = SampleCurrent(TexCoords + vec2(float(x), float(y)) * texelSize);
+                    if (x == 0 && y == 0) current = s;
+                    m1 += s;
+                    m2 += s * s;
+                    boxMin = min(boxMin, s);
+                    boxMax = max(boxMax, s);
+                }
+            }
 
-            // If no valid history, just output current frame
             if (_HistoryValid < 0.5)
             {
-                OutputColor = vec4(currentColor, 1.0);
+                OutputColor = vec4(InverseTonemap(max(YCoCgToRGB(current), vec3(0.0))), 1.0);
                 return;
             }
 
             // Get motion vector from closest depth neighbor (reduces edge artifacts)
             vec2 motionVector = GetClosestMotionVector(TexCoords, texelSize);
-
-            // Reproject to find history UV
             vec2 historyUV = TexCoords - motionVector;
 
-            // Check if reprojection is within screen bounds
-            bool validReproject = historyUV.x >= 0.0 && historyUV.x <= 1.0 &&
-                                  historyUV.y >= 0.0 && historyUV.y <= 1.0;
-
-            if (!validReproject)
+            if (historyUV.x < 0.0 || historyUV.x > 1.0 || historyUV.y < 0.0 || historyUV.y > 1.0)
             {
-                OutputColor = vec4(currentColor, 1.0);
+                OutputColor = vec4(InverseTonemap(max(YCoCgToRGB(current), vec3(0.0))), 1.0);
                 return;
             }
 
-            // Sample history with Catmull-Rom for sharpness
-            vec3 historyColor = SampleHistoryCatmullRom(_HistoryTex, historyUV, texelSize).rgb;
+            // Catmull-Rom keeps the history sharp; its overshoot is clamped away below.
+            vec3 history = RGBToYCoCg(Tonemap(Sanitize(SampleHistoryCatmullRom(_HistoryTex, historyUV, texelSize).rgb)));
 
-            // Neighborhood clamping in YCoCg space (variance clip)
-            // Sample 3x3 neighborhood of current frame
-            vec3 m1 = vec3(0.0);
-            vec3 m2 = vec3(0.0);
-
-            for (int y = -1; y <= 1; y++)
-            {
-                for (int x = -1; x <= 1; x++)
-                {
-                    vec3 s = RGBToYCoCg(Tonemap(texture(_MainTex, TexCoords + vec2(float(x), float(y)) * texelSize).rgb));
-                    m1 += s;
-                    m2 += s * s;
-                }
-            }
-
-            // Variance-based AABB clip
+            // Variance box around the neighborhood, tighter when moving. The color channels and the darkest
+            // brightness also stay inside what the neighborhood actually holds: next to a very bright edge the
+            // variance reaches far below it, and the history's overshoot comes back as a dark or tinted fringe.
             m1 /= 9.0;
             m2 /= 9.0;
             vec3 sigma = sqrt(max(m2 - m1 * m1, vec3(0.0)));
-
-            // Tighter clamping when motion is detected
             float motionLength = length(motionVector * _Resolution);
-            float gammaScale = mix(1.0, 0.5, saturate(motionLength * _MotionScale));
-
-            vec3 aabbMin = m1 - gammaScale * sigma;
-            vec3 aabbMax = m1 + gammaScale * sigma;
-
-            // Clip history to AABB
-            vec3 historyYCoCg = RGBToYCoCg(Tonemap(historyColor));
-            vec3 clippedHistory = clamp(historyYCoCg, aabbMin, aabbMax);
-            historyColor = InverseTonemap(YCoCgToRGB(clippedHistory));
+            float gamma = mix(1.25, 0.75, saturate(motionLength * _MotionScale));
+            vec3 clampMin = max(m1 - gamma * sigma, boxMin);
+            vec3 clampMax = m1 + gamma * sigma;
+            clampMax.yz = min(clampMax.yz, boxMax.yz);
+            history = clamp(history, clampMin, clampMax);
 
             // Ease toward the motion weight as the pixel moves faster. History never drops out entirely:
             // the current frame is jittered, so without any history a fast pan shows the raw jitter.
-            // Stale history under motion is handled by the tighter clamp above.
             float blendFactor = mix(_BlendFactor, _MotionBlendFactor, saturate(motionLength * 0.1));
 
-            // Blend in tonemapped space for HDR stability
-            vec3 currentTM = Tonemap(currentColor);
-            vec3 historyTM = Tonemap(historyColor);
-            vec3 result = InverseTonemap(mix(currentTM, historyTM, blendFactor));
+            // Blending in tonemapped space is what makes edges of very bright surfaces visibly smooth. A linear
+            // average there stays far past white and the edge looks as aliased as without TAA.
+            vec3 result = YCoCgToRGB(mix(current, history, blendFactor));
+            OutputColor = vec4(InverseTonemap(max(result, vec3(0.0))), 1.0);
+        }
+    }
 
-            // Optional sharpening (negative lobe)
-            if (_Sharpness > 0.0)
-            {
-                vec3 blur = vec3(0.0);
-                blur += texture(_MainTex, TexCoords + vec2(-texelSize.x, 0.0)).rgb;
-                blur += texture(_MainTex, TexCoords + vec2( texelSize.x, 0.0)).rgb;
-                blur += texture(_MainTex, TexCoords + vec2(0.0, -texelSize.y)).rgb;
-                blur += texture(_MainTex, TexCoords + vec2(0.0,  texelSize.y)).rgb;
-                blur *= 0.25;
+    ENDGLSL
+}
 
-                result += (result - blur) * _Sharpness;
-                result = max(result, vec3(0.0));
-            }
+Pass "Sharpen"
+{
+    Tags { "RenderOrder" = "Opaque" }
 
-            OutputColor = vec4(result, 1.0);
+    Blend Off
+    Cull None
+    ZTest Off
+    ZWrite Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        layout(location = 0) out vec4 OutputColor;
+
+        in vec2 TexCoords;
+
+        uniform sampler2D _MainTex;   // Resolved frame
+        uniform vec2 _Resolution;
+        uniform float _Sharpness;
+
+        float MaxChannel(vec3 c) { return max(c.r, max(c.g, c.b)); }
+        vec3 Tonemap(vec3 c) { return c / (1.0 + MaxChannel(c)); }
+        vec3 InverseTonemap(vec3 c) { return c / max(1.0 - MaxChannel(c), 1e-4); }
+        float Luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+        // Sharpens brightness only, in tonemapped space, after the resolve was stored as history. Working
+        // on linear HDR color let one very bright neighbor pull a single channel down and tint the edge.
+        void main()
+        {
+            vec2 texel = 1.0 / _Resolution;
+            vec3 center = Tonemap(texture(_MainTex, TexCoords).rgb);
+            float blur = (Luma(Tonemap(texture(_MainTex, TexCoords + vec2(-texel.x, 0.0)).rgb)) +
+                          Luma(Tonemap(texture(_MainTex, TexCoords + vec2( texel.x, 0.0)).rgb)) +
+                          Luma(Tonemap(texture(_MainTex, TexCoords + vec2(0.0, -texel.y)).rgb)) +
+                          Luma(Tonemap(texture(_MainTex, TexCoords + vec2(0.0,  texel.y)).rgb))) * 0.25;
+            float luma = Luma(center);
+            float sharpened = max(luma + (luma - blur) * _Sharpness, 0.0);
+            vec3 result = luma > 1e-5 ? center * (sharpened / luma) : center;
+            OutputColor = vec4(InverseTonemap(min(result, vec3(0.999))), 1.0);
         }
     }
 
