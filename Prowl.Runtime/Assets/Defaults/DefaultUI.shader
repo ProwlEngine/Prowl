@@ -81,7 +81,8 @@ Pass "DefaultUI"
 			void main()
 			{
 				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
-				fragColor = albedo * uiClipCoverage(worldPos);
+				// Straight alpha blending scales color by alpha itself, so the clip only goes into alpha.
+				fragColor = vec4(albedo.rgb, albedo.a * uiClipCoverage(worldPos));
 			}
 		}
 	ENDGLSL
