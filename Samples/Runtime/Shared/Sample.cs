@@ -94,8 +94,17 @@ public abstract class StationGame : Game
     /// <summary>Draws the sample's own controls into the panel on the right. Leave empty for no panel.</summary>
     public virtual void DrawControls(Paper paper, FontFile font) { }
 
-    public bool HasControls => _hasControls ??= GetType().GetMethod(nameof(DrawControls))!.DeclaringType != typeof(StationGame);
-    private bool? _hasControls;
+    /// <summary>Draws controls that apply to the whole sample into a panel under the station's own. Leave empty for no panel.</summary>
+    public virtual void DrawSceneControls(Paper paper, FontFile font) { }
+
+    public bool HasControls => _hasControls ??= Overrides(nameof(DrawControls));
+
+    /// <summary>Whether the current station has controls to show. Override to hide the panel for stations without any.</summary>
+    public virtual bool HasStationControls => HasControls;
+    public bool HasSceneControls => _hasSceneControls ??= Overrides(nameof(DrawSceneControls));
+    private bool? _hasControls, _hasSceneControls;
+
+    private bool Overrides(string method) => GetType().GetMethod(method)!.DeclaringType != typeof(StationGame);
 
     /// <summary>The live stat line under the description.</summary>
     public virtual string Stats => string.Empty;
@@ -104,7 +113,8 @@ public abstract class StationGame : Game
     {
         get
         {
-            string keys = "1 to 9, 0  stations    WASD Q E  fly    Right Mouse  look    Shift  faster";
+            string range = Stations.Count >= 10 ? "1 to 9, 0" : $"1 to {Stations.Count}";
+            string keys = $"{range}  stations    WASD Q E  fly    Right Mouse  look    Shift  faster";
             return string.IsNullOrEmpty(ExtraKeys) ? keys : keys + "    " + ExtraKeys;
         }
     }
@@ -289,7 +299,7 @@ public sealed class FlyCamera : MonoBehaviour
         var mouse = new DualAxisCompositeBinding(
             InputBinding.CreateMouseAxisBinding(0),
             InputBinding.CreateMouseAxisBinding(1));
-        mouse.Processors.Add(new ScaleProcessor(0.1f));
+        mouse.Processors.Add(new ScaleProcessor(0.25f));
         _look.AddBinding(mouse);
 
         _up = _map.AddAction("Up", InputActionType.Button);
@@ -311,10 +321,18 @@ public sealed class FlyCamera : MonoBehaviour
     {
         _map.Disable();
         Input.UnregisterActionMap(_map);
+        if (Input.CursorLocked)
+            Input.UnlockCursor();
     }
 
     public override void Update()
     {
+        // The cursor is hidden and held in place while looking around.
+        if (_lookEnable.WasPressedThisFrame())
+            Input.LockCursor();
+        else if (_lookEnable.WasReleasedThisFrame())
+            Input.UnlockCursor();
+
         Float2 move = _move.ReadValue<Float2>();
         float speed = (_sprint.IsPressed() ? FastSpeed : Speed) * Time.UnscaledDeltaTime;
         float upDown = (_up.IsPressed() ? 1f : 0f) - (_down.IsPressed() ? 1f : 0f);
@@ -328,9 +346,12 @@ public sealed class FlyCamera : MonoBehaviour
         look += stick * 120f * Time.UnscaledDeltaTime;
         if (look.X != 0f || look.Y != 0f)
         {
-            Float3 euler = Transform.LocalEulerAngles + new Float3(look.Y, look.X, 0f);
-            euler.X = Maths.Clamp(euler.X, -89f, 89f);
-            Transform.LocalEulerAngles = euler;
+            // Read the angles back from Forward, since Euler angles come back wrapped into 0 to 360.
+            Float3 forward = Transform.Forward;
+            float pitch = -MathF.Asin(Maths.Clamp(forward.Y, -1f, 1f)) * Maths.Rad2Deg;
+            float yaw = MathF.Atan2(forward.X, forward.Z) * Maths.Rad2Deg;
+            pitch = Maths.Clamp(pitch + look.Y, -89f, 89f);
+            Transform.LocalEulerAngles = new Float3(pitch, yaw + look.X, 0f);
         }
     }
 }
@@ -348,10 +369,18 @@ public sealed class SampleHud : MonoBehaviour
     public static readonly Color Control = new(1f, 1f, 1f, 0.08f);
     public static readonly Color ControlHover = new(1f, 1f, 1f, 0.16f);
 
+    // Frame times in milliseconds, oldest first from _frameIndex.
+    private readonly float[] _frameTimes = new float[240];
+    private int _frameIndex;
+    private float _graphScale = 20f;
+
     public override void Update()
     {
         if (Input.GetKeyDown(KeyCode.F1))
             Visible = !Visible;
+
+        _frameTimes[_frameIndex] = Time.UnscaledDeltaTime * 1000f;
+        _frameIndex = (_frameIndex + 1) % _frameTimes.Length;
     }
 
     public override void OnGui(Paper paper)
@@ -362,9 +391,39 @@ public sealed class SampleHud : MonoBehaviour
         int index = Game.CurrentStation;
         StationGame.Station station = Game.Stations[index];
 
-        using (paper.Column("hud")
+        using (paper.Column("left")
             .PositionType(PositionType.SelfDirected)
             .AnchorLeft(20).AnchorTop(20).Width(560).Height(UnitValue.Auto)
+            .Gap(10)
+            .Enter())
+        {
+            Info(paper, font, station, index);
+
+            if (Game.HasSceneControls)
+                using (paper.Column("scene controls").Width(300).Height(UnitValue.Auto).BackgroundColor(Panel).Rounded(10).Padding(14).Gap(6).Enter())
+                    Game.DrawSceneControls(paper, font);
+        }
+
+        using (paper.Column("right")
+            .PositionType(PositionType.SelfDirected)
+            .AnchorRight(20).AnchorTop(20).Width(300).Height(UnitValue.Auto)
+            .Gap(10)
+            .Enter())
+        {
+            Performance(paper, font);
+
+            if (Game.HasStationControls)
+                using (paper.Column("controls").Height(UnitValue.Auto).BackgroundColor(Panel).Rounded(10).Padding(14).Gap(6).Enter())
+                    Game.DrawControls(paper, font);
+        }
+
+        StationBar(paper, font, index);
+    }
+
+    /// <summary>The station's title, description, live stats and the key help.</summary>
+    private void Info(Paper paper, FontFile font, StationGame.Station station, int index)
+    {
+        using (paper.Column("info").Height(UnitValue.Auto)
             .BackgroundColor(Panel).Rounded(10)
             .Padding(16, 16, 12, 14).Gap(6)
             .Enter())
@@ -390,20 +449,11 @@ public sealed class SampleHud : MonoBehaviour
                 .Wrap(TextWrapMode.Wrap)
                 .Alignment(TextAlignment.Left);
         }
+    }
 
-        if (Game.HasControls)
-        {
-            using (paper.Column("controls")
-                .PositionType(PositionType.SelfDirected)
-                .AnchorRight(20).AnchorTop(20).Width(300).Height(UnitValue.Auto)
-                .BackgroundColor(Panel).Rounded(10)
-                .Padding(14).Gap(6)
-                .Enter())
-            {
-                Game.DrawControls(paper, font);
-            }
-        }
-
+    /// <summary>One button per station along the bottom edge.</summary>
+    private void StationBar(Paper paper, FontFile font, int index)
+    {
         using (paper.Row("stations")
             .PositionType(PositionType.SelfDirected)
             .AnchorLeft(20).AnchorRight(20).AnchorBottom(20).Height(34)
@@ -426,6 +476,100 @@ public sealed class SampleHud : MonoBehaviour
                     .OnClick(_ => Game.GoToStation(target));
             }
         }
+    }
+
+    /// <summary>The frame rate readout and its graph, drawn straight onto Paper's Quill canvas.</summary>
+    private void Performance(Paper paper, FontFile font)
+    {
+        float sum = 0f, best = float.MaxValue, worst = 0f;
+        foreach (float ms in _frameTimes)
+        {
+            sum += ms;
+            if (ms > 0f) best = MathF.Min(best, ms);
+            worst = MathF.Max(worst, ms);
+        }
+        float average = sum / _frameTimes.Length;
+        float fps = average > 0f ? 1000f / average : 0f;
+
+        using (paper.Column("performance").Height(UnitValue.Auto).BackgroundColor(Panel).Rounded(10).Padding(14).Gap(6).Enter())
+        {
+            using (paper.Row("readout").Height(30).Enter())
+            {
+                paper.Box("fps").Width(UnitValue.Stretch())
+                    .Text($"{fps:0} FPS", font).FontSize(24).TextColor(Accent)
+                    .Alignment(TextAlignment.MiddleLeft);
+                paper.Box("frame time").Width(UnitValue.Stretch())
+                    .Text($"{average:0.00} ms", font).FontSize(14).TextColor(Dim)
+                    .Alignment(TextAlignment.MiddleRight);
+            }
+
+            using (paper.Box("graph").Height(96).Enter())
+                paper.Draw((canvas, rect) => DrawGraph(canvas, rect, font, worst));
+
+            paper.Box("range").Height(18)
+                .Text($"best {best:0.0} ms    worst {worst:0.0} ms", font).FontSize(13).TextColor(Dim)
+                .Alignment(TextAlignment.MiddleLeft);
+        }
+    }
+
+    private void DrawGraph(Prowl.Quill.Canvas canvas, Rect rect, FontFile font, float worst)
+    {
+        float x = rect.Min.X, y = rect.Min.Y, w = rect.Size.X, h = rect.Size.Y;
+        int count = _frameTimes.Length;
+
+        // Ease the vertical scale toward the worst recent frame so spikes don't make it jump.
+        _graphScale += (MathF.Max(20f, worst * 1.2f) - _graphScale) * 0.05f;
+        float Y(float ms) => y + h - 4f - MathF.Min(ms / _graphScale, 1f) * (h - 8f);
+        float X(int i) => x + i / (float)(count - 1) * w;
+        float Sample(int i) => _frameTimes[(_frameIndex + i) % count];
+
+        canvas.RoundedRectFilled(x, y, w, h, 6f, new Color(0f, 0f, 0f, 0.35f));
+
+        // Reference lines for 120, 60 and 30 frames per second, where they fit.
+        foreach ((float ms, string label) in new[] { (1000f / 120f, "120"), (1000f / 60f, "60"), (1000f / 30f, "30") })
+        {
+            if (ms > _graphScale) continue;
+            float ly = Y(ms);
+            canvas.BeginPath();
+            canvas.MoveTo(x + 4f, ly);
+            canvas.LineTo(x + w - 4f, ly);
+            canvas.SetStrokeColor(new Color(1f, 1f, 1f, 0.12f));
+            canvas.SetStrokeWidth(1f);
+            canvas.Stroke();
+            canvas.DrawText(label, x + w - 6f, ly - 2f, new Color(1f, 1f, 1f, 0.35f), 10f, font, origin: new Float2(1f, 1f));
+        }
+
+        // The area under the curve, fading out toward the bottom.
+        canvas.BeginPath();
+        canvas.MoveTo(x, y + h);
+        for (int i = 0; i < count; i++)
+            canvas.LineTo(X(i), Y(Sample(i)));
+        canvas.LineTo(x + w, y + h);
+        canvas.ClosePath();
+        canvas.SetFillColor(Color.White);
+        canvas.SetLinearBrush(x, y, x, y + h, new Color(Accent.R, Accent.G, Accent.B, 0.45f), new Color(Accent.R, Accent.G, Accent.B, 0f));
+        canvas.FillComplex();
+        canvas.ClearBrush();
+
+        // The curve itself.
+        canvas.BeginPath();
+        canvas.MoveTo(X(0), Y(Sample(0)));
+        for (int i = 1; i < count; i++)
+            canvas.LineTo(X(i), Y(Sample(i)));
+        canvas.SetStrokeColor(Accent);
+        canvas.SetStrokeWidth(1.5f);
+        canvas.SetStrokeJoint(Prowl.Quill.JointStyle.Round);
+        canvas.Stroke();
+
+        // Frames slower than 30 per second get a red marker.
+        for (int i = 0; i < count; i++)
+            if (Sample(i) > 1000f / 30f)
+                canvas.CircleFilled(X(i), Y(Sample(i)), 2.5f, new Color(1f, 0.3f, 0.25f, 1f));
+
+        // A glowing dot on the newest frame.
+        float headX = X(count - 1), headY = Y(Sample(count - 1));
+        canvas.CircleFilled(headX, headY, 7f, new Color(Accent.R, Accent.G, Accent.B, 0.2f));
+        canvas.CircleFilled(headX, headY, 3.5f, Accent);
     }
 }
 
