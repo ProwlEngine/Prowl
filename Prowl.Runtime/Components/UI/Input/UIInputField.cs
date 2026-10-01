@@ -270,7 +270,7 @@ public class UIInputField : Selectable,
         {
             ProcessKeyboard();
 
-            _blinkTimer += Time.DeltaTime;
+            _blinkTimer += Time.UnscaledDeltaTime;
             if (_blinkTimer >= BlinkRate) { _blinkTimer -= BlinkRate; _blinkOn = !_blinkOn; }
 
             UpdateCaretVisual();
@@ -325,7 +325,7 @@ public class UIInputField : Selectable,
         if (Input.GetKeyDown(key)) { _repeatKey = key; _repeatDelay = InitialRepeatDelay; return true; }
         if (_repeatKey == key && Input.GetKey(key))
         {
-            _repeatDelay -= Time.DeltaTime;
+            _repeatDelay -= Time.UnscaledDeltaTime;
             if (_repeatDelay <= 0f) { _repeatDelay = RepeatInterval; return true; }
         }
         return false;

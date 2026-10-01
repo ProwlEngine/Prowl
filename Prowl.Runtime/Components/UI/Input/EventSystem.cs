@@ -116,7 +116,7 @@ public sealed class EventSystem : MonoBehaviour
         // Reclaim the role if the active system went away, so a surviving instance keeps input alive.
         if (s_current is null || s_current.IsDisposed) s_current = this;
         if (!ReferenceEquals(s_current, this)) return;
-        Tick(Time.TimeSinceStartup);
+        Tick(Time.UnscaledTotalTime);
     }
 
     private void ClearState()

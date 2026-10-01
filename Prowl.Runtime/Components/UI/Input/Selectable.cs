@@ -224,7 +224,7 @@ public class Selectable : UIBehaviour,
             return;
         }
 
-        _transitionElapsed += Time.DeltaTime;
+        _transitionElapsed += Time.UnscaledDeltaTime;
         float t = Maths.Clamp(_transitionElapsed / dur, 0f, 1f);
         _displayedColor = Color.Lerp(_fromColor, _toColor, t);
         TargetGraphic.Color = _displayedColor;

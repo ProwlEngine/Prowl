@@ -102,6 +102,28 @@ public class UITests : RuntimeTestBase
         Assert.Equal(1, clicks());
     }
 
+    // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
+    [Fact]
+    public void SelectableTint_AdvancesWhileGameIsPaused()
+    {
+        Scene scene = CreateScene(enable: true);
+        var go = CreateUIObject("Button", scene);
+        var image = go.AddComponent<UIImage>();
+        var button = go.AddComponent<UIButton>();
+        button.HighlightedColor = new Color(0.5f, 0.6f, 0.7f, 1f);
+
+        var paused = new TimeData { DeltaTime = 0f, UnscaledDeltaTime = 0.05f };
+        Time.TimeStack.Push(paused);
+        try
+        {
+            button.OnPointerEnter(new PointerEventData());
+            for (int i = 0; i < 4; i++) button.Update();
+        }
+        finally { Time.TimeStack.Pop(); }
+
+        Assert.Equal(button.HighlightedColor, image.Color);
+    }
+
     // Inside something draggable (a scroll view) the move is a drag, which cancels the click.
     [Fact]
     public void Click_IsCancelledWhenAnAncestorDrags()
