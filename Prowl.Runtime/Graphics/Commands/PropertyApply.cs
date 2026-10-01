@@ -306,6 +306,10 @@ internal static class PropertyApply
 
     private static void BindTexUniform(GraphicsProgram p, string name, GraphicsTexture tex, CommandExecutor exec)
     {
+        // Textures the program doesn't sample take no unit.
+        int loc = LocationOf(p, name);
+        if (loc < 0) return;
+
         int slot = exec.AllocateTextureSlot();
         exec.BindTextureToUnit(slot, tex);
         // Sampler slot uniforms cannot use the int cache: PrepareDraw resets the
@@ -313,8 +317,6 @@ internal static class PropertyApply
         // different slot value next time. A cache hit would skip the Uniform1
         // update and the shader would sample whatever texture is at the stale
         // slot. Always write directly.
-        int loc = LocationOf(p, name);
-        if (loc < 0) return;
         Graphics.GL.Uniform1(loc, slot);
     }
 
