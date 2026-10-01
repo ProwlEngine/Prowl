@@ -33,6 +33,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/R7B4280JI3)
 
 <img width="100%" alt="image 5" src="https://i.imgur.com/hDXtuv5.png" />
 
@@ -244,4 +245,5 @@ Distributed under the MIT License. See [LICENSE](https://github.com/ProwlEngine/
 ### [Join our Discord server! 🎉](https://discord.gg/BqnJ9Rn4sn)
 [![Discord](https://img.shields.io/discord/1151582593519722668?logo=discord
 )](https://discord.gg/BqnJ9Rn4sn)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/R7B4280JI3)
 
