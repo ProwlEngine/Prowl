@@ -67,6 +67,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material? s_iconMaterial;
     private static Mesh? s_iconQuad;
     private static Mesh s_gridMesh;
+    private static readonly List<IRenderable> s_shadowCasters = new();
     private static Material s_gridMaterial;
 
     public static DefaultRenderPipeline Default { get; } = new();
@@ -255,8 +256,19 @@ public class DefaultRenderPipeline : RenderPipeline
             Graphics.Submit(shadowSetup);
         }
 
+        // Anything the camera's culling mask hides casts no shadow in its view either.
+        IReadOnlyList<IRenderable> shadowCasters = renderables;
+        if (css.CullingMask != LayerMask.Everything)
+        {
+            s_shadowCasters.Clear();
+            foreach (IRenderable renderable in renderables)
+                if (css.CullingMask.HasLayer(renderable.GetLayer()))
+                    s_shadowCasters.Add(renderable);
+            shadowCasters = s_shadowCasters;
+        }
+
         RenderStats.BeginShadowPass();
-        lightSystem.RenderShadows(this, css.ShadowFocusPosition, renderables);
+        lightSystem.RenderShadows(this, css.ShadowFocusPosition, shadowCasters);
         RenderStats.EndShadowPass();
 
         AssignCameraMatrices(css.View, css.Projection);
