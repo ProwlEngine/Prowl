@@ -184,22 +184,23 @@ Pass "Resolve"
             // Catmull-Rom keeps the history sharp; its overshoot is clamped away below.
             vec3 history = RGBToYCoCg(Tonemap(Sanitize(SampleHistoryCatmullRom(_HistoryTex, historyUV, texelSize).rgb)));
 
-            // Variance box around the neighborhood, tighter when moving. The color channels and the darkest
-            // brightness also stay inside what the neighborhood actually holds: next to a very bright edge the
-            // variance reaches far below it, and the history's overshoot comes back as a dark or tinted fringe.
             m1 /= 9.0;
             m2 /= 9.0;
             vec3 sigma = sqrt(max(m2 - m1 * m1, vec3(0.0)));
             float motionLength = length(motionVector * _Resolution);
             float gamma = mix(1.25, 0.75, saturate(motionLength * _MotionScale));
-            vec3 clampMin = max(m1 - gamma * sigma, boxMin);
+            vec3 clampMin = m1 - gamma * sigma;
             vec3 clampMax = m1 + gamma * sigma;
+            clampMin.yz = max(clampMin.yz, boxMin.yz);
             clampMax.yz = min(clampMax.yz, boxMax.yz);
             history = clamp(history, clampMin, clampMax);
 
             // Ease toward the motion weight as the pixel moves faster. History never drops out entirely:
             // the current frame is jittered, so without any history a fast pan shows the raw jitter.
             float blendFactor = mix(_BlendFactor, _MotionBlendFactor, saturate(motionLength * 0.1));
+
+            float lumaDifference = abs(current.x - history.x) / max(max(current.x, history.x), 0.2);
+            blendFactor = mix(blendFactor, max(blendFactor, 0.98), (1.0 - lumaDifference) * (1.0 - lumaDifference));
 
             // Blending in tonemapped space is what makes edges of very bright surfaces visibly smooth. A linear
             // average there stays far past white and the edge looks as aliased as without TAA.
