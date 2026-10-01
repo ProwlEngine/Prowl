@@ -139,6 +139,9 @@ public sealed class TAAEffect : ImageEffect
 
         if (_history.IsNotValid()) _history = new RenderTexture(w, h, false, [format]);
 
+        // A camera cut (Camera.ResetMotionHistory) or a freshly enabled camera has nothing to reproject from.
+        if (!context.Camera.HasPreviousViewProjectionMatrix) _historyValid = false;
+
         // Set uniforms
         _mat.SetVector("_Resolution", new Float2(w, h));
         _mat.SetVector("_Jitter", _jitter);
