@@ -8,7 +8,7 @@ Pass "FXAA"
 {
     Tags { "RenderOrder" = "Opaque" }
     
-    Blend Alpha
+    Blend Off
     Cull None
     ZTest Off
     ZWrite Off

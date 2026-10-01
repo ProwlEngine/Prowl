@@ -9,7 +9,7 @@ Pass "Tonemapper"
     Tags { "RenderOrder" = "Opaque" }
 
     // Rasterizer culling mode
-    Blend Alpha
+    Blend Off
     Cull None
     ZTest Off
     ZWrite Off
@@ -302,7 +302,7 @@ Pass "Tonemapper"
 			// Gamma Correct
             color = linearToGammaSpace(color);
 
-			OutputColor = contrastMatrix() * saturationMatrix() * vec4(color, base.a);
+			OutputColor = vec4((contrastMatrix() * saturationMatrix() * vec4(color, 1.0)).rgb, 1.0);
 		}
 	}
 
