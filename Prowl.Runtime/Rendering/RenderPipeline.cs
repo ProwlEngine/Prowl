@@ -409,7 +409,8 @@ public abstract class RenderPipeline : EngineObject
         GlobalUniforms.SetTime(new Float4(Time.TimeSinceStartup * 0.5f, Time.TimeSinceStartup, Time.TimeSinceStartup * 2, Time.FrameCount));
         GlobalUniforms.SetSinTime(new Float4(Maths.Sin(Time.TimeSinceStartup / 8), Maths.Sin(Time.TimeSinceStartup / 4), Maths.Sin(Time.TimeSinceStartup / 2), Maths.Sin(Time.TimeSinceStartup)));
         GlobalUniforms.SetCosTime(new Float4(Maths.Cos(Time.TimeSinceStartup / 8), Maths.Cos(Time.TimeSinceStartup / 4), Maths.Cos(Time.TimeSinceStartup / 2), Maths.Cos(Time.TimeSinceStartup)));
-        GlobalUniforms.SetDeltaTime(new Float4(Time.DeltaTime, 1.0f / Time.DeltaTime, Time.SmoothDeltaTime, 1.0f / Time.SmoothDeltaTime));
+        float dt = Time.DeltaTime, smoothDt = Time.SmoothDeltaTime;
+        GlobalUniforms.SetDeltaTime(new Float4(dt, dt > 0 ? 1.0f / dt : 0f, smoothDt, smoothDt > 0 ? 1.0f / smoothDt : 0f));
 
         // Upload the global uniform buffer
         GlobalUniforms.Upload();
