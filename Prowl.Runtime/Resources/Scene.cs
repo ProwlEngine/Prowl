@@ -1127,8 +1127,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Renders all cameras in this scene, sorted by depth.
     /// </summary>
     /// <param name="target">Optional render target to render into</param>
+    /// <param name="displayGizmos">Draw the gizmos and Debug.Draw shapes queued this frame on top</param>
     /// <returns>True if any cameras were rendered, false otherwise</returns>
-    public bool Render(RenderTexture? target = null)
+    public bool Render(RenderTexture? target = null, bool displayGizmos = false)
     {
         if (IsDisposed) return false;
         // Renderables are now collected per-camera inside pipeline.Render()
@@ -1150,7 +1151,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 // A camera with its own Target asset draws there; everything else draws into `target`
                 // (null for the backbuffer). Nothing on the camera is touched, so there is nothing to
                 // restore and nothing a scene save could catch mid-render.
-                pipeline.Render(cam, new RenderingData { FallbackTarget = target });
+                pipeline.Render(cam, new RenderingData { FallbackTarget = target, DisplayGizmos = displayGizmos });
             }
             catch (Exception ex)
             {
