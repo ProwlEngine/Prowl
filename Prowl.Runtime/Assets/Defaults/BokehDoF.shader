@@ -43,7 +43,7 @@ Pass "CircularHorizMRT"
         uniform sampler2D _CameraDepthTexture;
         uniform vec2 _Resolution;
         uniform float _FocusStrength;
-        uniform float _ManualFocusPoint;
+        uniform sampler2D _FocusTex;    // 1x1, the smoothed focus distance
         uniform float _MaxBlurRadius;
 
         // Kernel constants
@@ -86,11 +86,7 @@ Pass "CircularHorizMRT"
 
         void main()
         {
-        #ifdef AUTOFOCUS
-            float focusPoint = linearizeDepthFromProjection(texture(_CameraDepthTexture, vec2(0.5, 0.5)).x);
-        #else
-            float focusPoint = _ManualFocusPoint;
-        #endif
+            float focusPoint = texture(_FocusTex, vec2(0.5)).r;
 
             float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
             float coc = calculateCoC(depth, focusPoint);
@@ -162,7 +158,7 @@ Pass "CircularVerticalComposite"
         uniform sampler2D _CameraDepthTexture;
         uniform vec2 _Resolution;
         uniform float _FocusStrength;
-        uniform float _ManualFocusPoint;
+        uniform sampler2D _FocusTex;    // 1x1, the smoothed focus distance
         uniform float _MaxBlurRadius;
 
         // Kernel constants
@@ -211,11 +207,7 @@ Pass "CircularVerticalComposite"
 
         void main()
         {
-        #ifdef AUTOFOCUS
-            float focusPoint = linearizeDepthFromProjection(texture(_CameraDepthTexture, vec2(0.5, 0.5)).x);
-        #else
-            float focusPoint = _ManualFocusPoint;
-        #endif
+            float focusPoint = texture(_FocusTex, vec2(0.5)).r;
 
             float depth = linearizeDepthFromProjection(texture(_CameraDepthTexture, TexCoords).x);
             float coc = calculateCoC(depth, focusPoint);
@@ -300,7 +292,7 @@ Pass "DoFCombine"
         uniform sampler2D _BlurredTex;
         uniform sampler2D _CameraDepthTexture;
         uniform float _FocusStrength;
-        uniform float _ManualFocusPoint;
+        uniform sampler2D _FocusTex;    // 1x1, the smoothed focus distance
         uniform float _MaxBlurRadius;
         uniform vec2 _Resolution;
 
@@ -314,11 +306,7 @@ Pass "DoFCombine"
 
         void main()
         {
-        #ifdef AUTOFOCUS
-            float focusPoint = linearizeDepthFromProjection(texture(_CameraDepthTexture, vec2(0.5, 0.5)).x);
-        #else
-            float focusPoint = _ManualFocusPoint;
-        #endif
+            float focusPoint = texture(_FocusTex, vec2(0.5)).r;
 
             vec4 originalColor = texture(_MainTex, TexCoords);
             vec4 blurredColor = texture(_BlurredTex, TexCoords);
@@ -330,7 +318,118 @@ Pass "DoFCombine"
             float maxBlurPixels = _MaxBlurRadius * 0.005 * _Resolution.y;
             float blendFactor = smoothstep(0.5, maxBlurPixels * 0.5, coc);
 
-            OutputColor = mix(originalColor, blurredColor, blendFactor);
+            OutputColor = vec4(mix(originalColor.rgb, blurredColor.rgb, blendFactor), originalColor.a);
+        }
+    }
+
+    ENDGLSL
+}
+
+// Pass 3: Prefilter the scene down to the blur resolution, so quarter and eighth resolution blurs
+// average every source pixel instead of picking one per texel and shimmering.
+Pass "Prefilter"
+{
+    Tags { "RenderOrder" = "Opaque" }
+    Blend Override
+    Cull None
+    ZTest Off
+    ZWrite Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        layout(location = 0) out vec4 OutputColor;
+
+        in vec2 TexCoords;
+
+        uniform sampler2D _MainTex;
+        uniform float _PrefilterOffset;   // source texels from the center to each tap, a quarter of the downscale
+
+        void main()
+        {
+            // Four bilinear taps spread across the block of source pixels this output pixel covers.
+            vec2 offset = _PrefilterOffset / vec2(textureSize(_MainTex, 0));
+            vec4 sum = texture(_MainTex, TexCoords + vec2(-offset.x, -offset.y));
+            sum += texture(_MainTex, TexCoords + vec2( offset.x, -offset.y));
+            sum += texture(_MainTex, TexCoords + vec2(-offset.x,  offset.y));
+            sum += texture(_MainTex, TexCoords + vec2( offset.x,  offset.y));
+            OutputColor = sum * 0.25;
+        }
+    }
+
+    ENDGLSL
+}
+
+// Pass 4: Resolve the focus distance into a 1x1 target, easing toward the new value over time so
+// autofocus glides instead of snapping as things pass the center of the screen.
+Pass "Focus"
+{
+    Tags { "RenderOrder" = "Opaque" }
+    Blend Override
+    Cull None
+    ZTest Off
+    ZWrite Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        layout(location = 0) out vec4 OutputColor;
+
+        #include "ProwlCG"
+
+        in vec2 TexCoords;
+
+        uniform sampler2D _CameraDepthTexture;
+        uniform sampler2D _PrevFocusTex;
+        uniform float _UseAutoFocus;
+        uniform float _ManualFocusPoint;
+        uniform float _FocusBlend;          // how far to move toward the new focus this frame
+        uniform float _FocusHistoryValid;   // 0 = jump straight to the new focus
+
+        void main()
+        {
+            float target = _ManualFocusPoint;
+            if (_UseAutoFocus > 0.5)
+            {
+                // The nearest of a small cross around the center, so a thin object there still holds focus.
+                vec2 taps[5] = vec2[](vec2(0.5, 0.5), vec2(0.48, 0.5), vec2(0.52, 0.5), vec2(0.5, 0.48), vec2(0.5, 0.52));
+                target = 1e30;
+                for (int i = 0; i < 5; i++)
+                    target = min(target, linearizeDepthFromProjection(texture(_CameraDepthTexture, taps[i]).x));
+            }
+
+            float focus = _FocusHistoryValid > 0.5 ? mix(texture(_PrevFocusTex, vec2(0.5)).r, target, _FocusBlend) : target;
+            OutputColor = vec4(focus, 0.0, 0.0, 1.0);
         }
     }
 

@@ -28,7 +28,21 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
     public float MaxBlurRadius = 2.0f;
     public ResolutionMode Resolution = ResolutionMode.Half;
 
+    /// <summary>How quickly the focus distance follows its target, per second. Higher snaps faster;
+    /// 0 or less jumps straight to it.</summary>
+    public float FocusSpeed = 4f;
+
+    private const int PrefilterPass = 3;
+    private const int FocusPass = 4;
+    private static readonly TextureImageFormat[] FocusFormat = [TextureImageFormat.Float];
+
     private Material _mat;
+
+    // The focus distance lives on the GPU in two 1x1 targets, read from one and written to the other
+    // each frame so it can ease toward its target.
+    private readonly RenderTexture?[] _focus = new RenderTexture?[2];
+    private int _focusIndex;
+    private bool _focusValid;
 
     public override void OnRenderEffect(RenderContext context)
     {
@@ -37,8 +51,8 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         int fullWidth = context.Width;
         int fullHeight = context.Height;
         int divisor = (int)Resolution;
-        int blurWidth = fullWidth / divisor;
-        int blurHeight = fullHeight / divisor;
+        int blurWidth = System.Math.Max(1, fullWidth / divisor);
+        int blurHeight = System.Math.Max(1, fullHeight / divisor);
 
         // Create MRT render texture for horizontal pass (3 color attachments for R, G, B)
         // Use floating point format to store complex number values (can be negative)
@@ -53,17 +67,45 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
 
         // Set common shader properties
         _mat.SetFloat("_FocusStrength", FocusStrength);
-        _mat.SetFloat("_ManualFocusPoint", System.MathF.Max(ManualFocusPoint, 0.01f));
         _mat.SetFloat("_MaxBlurRadius", MaxBlurRadius);
-        _mat.SetKeyword("AUTOFOCUS", UseAutoFocus);
+
+        using var cmd = Graphics.GetCommandBuffer("BokehDoF");
+
+        // Pass 4: Focus - ease the 1x1 focus distance toward this frame's target. A camera cut starts fresh.
+        if (!context.Camera.HasPreviousViewProjectionMatrix) _focusValid = false;
+        for (int i = 0; i < 2; i++)
+            if (_focus[i].IsNotValid()) { _focus[i] = new RenderTexture(1, 1, false, FocusFormat); _focusValid = false; }
+
+        RenderTexture prevFocus = _focus[_focusIndex]!;
+        _focusIndex ^= 1;
+        RenderTexture focus = _focus[_focusIndex]!;
+
+        float speed = FocusSpeed;
+        _mat.SetFloat("_UseAutoFocus", UseAutoFocus ? 1f : 0f);
+        _mat.SetFloat("_ManualFocusPoint", System.MathF.Max(ManualFocusPoint, 0.01f));
+        _mat.SetFloat("_FocusBlend", speed > 0f ? 1f - System.MathF.Exp(-speed * Time.UnscaledDeltaTime) : 1f);
+        _mat.SetFloat("_FocusHistoryValid", _focusValid ? 1f : 0f);
+        _mat.SetTexture("_PrevFocusTex", prevFocus.MainTexture);
+        cmd.Blit(focus, _mat, FocusPass);
+        _focusValid = true;
+        _mat.SetTexture("_FocusTex", focus.MainTexture);
 
         // Set resolution for blur passes
         _mat.SetVector("_Resolution", new Float2(blurWidth, blurHeight));
 
-        using var cmd = Graphics.GetCommandBuffer("BokehDoF");
+        // Pass 3: Prefilter - average the scene down to the blur resolution so it doesn't alias there.
+        RenderTexture? prefiltered = null;
+        Texture2D blurSource = context.SceneColor.MainTexture;
+        if (divisor > 1)
+        {
+            prefiltered = RenderTexture.GetTemporaryRT(blurWidth, blurHeight, false, [context.SceneColor.MainTexture.ImageFormat]);
+            _mat.SetFloat("_PrefilterOffset", divisor * 0.25f);
+            cmd.Blit(context.SceneColor, prefiltered, _mat, PrefilterPass);
+            blurSource = prefiltered.MainTexture;
+        }
 
         // Pass 0: Horizontal MRT - outputs to 3 render targets (R, G, B channels)
-        _mat.SetTexture("_MainTex", context.SceneColor.MainTexture);
+        _mat.SetTexture("_MainTex", blurSource);
         cmd.Blit(horizontalMRT, _mat, 0);
 
         // Pass 1: Vertical Composite - reads from 3 horizontal textures and combines
@@ -85,11 +127,18 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         // Clean up MRT
         RenderTexture.ReleaseTemporaryRT(horizontalMRT);
         RenderTexture.ReleaseTemporaryRT(verticalResult);
+        if (prefiltered != null) RenderTexture.ReleaseTemporaryRT(prefiltered);
     }
 
     public override void OnDisable()
     {
         if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
+        for (int i = 0; i < 2; i++)
+        {
+            if (_focus[i].IsValid()) _focus[i]!.Dispose();
+            _focus[i] = null;
+        }
+        _focusValid = false;
     }
 }
