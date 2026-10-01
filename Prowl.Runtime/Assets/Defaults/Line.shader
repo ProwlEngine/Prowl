@@ -10,8 +10,9 @@ Properties
 Pass "Line"
 {
     Tags { "RenderOrder" = "Transparent" }
-    Cull Off
     Blend Alpha
+    ZWrite Off
+    Cull Off
 
 	GLSLPROGRAM
 		Vertex
@@ -21,22 +22,13 @@ Pass "Line"
 
 			out vec2 texCoord0;
 			out vec3 worldPos;
-			out vec4 currentPos;
-			out vec4 previousPos;
-			out float fogCoord;
 			out vec4 vColor;
 
 			void main()
 			{
-				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
-				fogCoord = gl_Position.z;
-				currentPos = gl_Position;
+				gl_Position = TransformClip(vertexPosition);
 				texCoord0 = vertexTexCoord0;
-
-				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
-				previousPos = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
-
-				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
+				worldPos = TransformPosition(vertexPosition);
 				vColor = vertexColor;
 			}
 		}
@@ -44,40 +36,22 @@ Pass "Line"
 		Fragment
 		{
             #include "ProwlCG"
+            #include "Lighting"
 
-			layout (location = 0) out vec4 gAlbedo;
-			layout (location = 1) out vec4 gMotionVector;
-			layout (location = 2) out vec4 gNormal;
-			layout (location = 3) out vec4 gSurface;
+			layout (location = 0) out vec4 fragColor;
 
 			in vec2 texCoord0;
 			in vec3 worldPos;
-			in vec4 currentPos;
-			in vec4 previousPos;
-			in float fogCoord;
 			in vec4 vColor;
 
 			uniform sampler2D _MainTex;
 
 			void main()
 			{
-				vec2 curNDC = (currentPos.xy / currentPos.w) - _CameraJitter;
-				vec2 prevNDC = (previousPos.xy / previousPos.w) - _CameraPreviousJitter;
-			    gMotionVector = vec4((curNDC - prevNDC) * 0.5, 0.0, 1.0);
-
-				vec4 albedo = texture(_MainTex, texCoord0) * vColor;
-
-				// Lines don't have meaningful normals in billboarded mode
-                gNormal = vec4(0.0, 0.0, 1.0, 1.0);
-
-				// Unlit surface properties
-				gSurface = vec4(1.0, 0.0, 0.0, 1.0);
-
-				vec3 baseColor = albedo.rgb;
-				baseColor.rgb = gammaToLinearSpace(baseColor.rgb);
-
-				gAlbedo = vec4(baseColor, albedo.a);
-				gAlbedo.rgb = ApplyFog(fogCoord, gAlbedo.rgb);
+				vec4 texel = texture(_MainTex, texCoord0);
+				vec3 baseColor = gammaToLinearSpace(texel.rgb) * vColor.rgb;
+				baseColor = ApplyFog(baseColor, worldPos);
+				fragColor = vec4(baseColor, texel.a * vColor.a);
 			}
 		}
 	ENDGLSL
