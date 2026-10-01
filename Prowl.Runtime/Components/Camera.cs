@@ -240,7 +240,8 @@ public class Camera : MonoBehaviour
         var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconCamera);
         if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
 
-        float aspect = 1280 / 720;
+        // The aspect of the camera's last render, 16:9 before it has rendered.
+        float aspect = _aspect > 0 ? _aspect : 16f / 9f;
         Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * GetViewMatrix();
 
         Frustum frustum = Frustum.FromMatrix(viewProjectionMatrix);
