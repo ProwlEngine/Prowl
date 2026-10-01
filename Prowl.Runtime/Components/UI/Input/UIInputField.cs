@@ -287,12 +287,13 @@ public class UIInputField : Selectable,
     private void ProcessKeyboard()
     {
         bool shift = Input.IsShiftPressed;
-        bool ctrl = Input.IsCtrlPressed;
+        // AltGr reports as Ctrl+Alt on Windows and types characters, so only Ctrl without Alt is a shortcut.
+        bool shortcut = Input.IsCtrlPressed && !Input.IsAltPressed;
 
         if (_repeatKey != KeyCode.Unknown && !Input.GetKey(_repeatKey))
             _repeatKey = KeyCode.Unknown;
 
-        if (ctrl)
+        if (shortcut)
         {
             if (Input.GetKeyDown(KeyCode.A)) SelectAll();
             if (Input.GetKeyDown(KeyCode.C)) Copy();
@@ -308,8 +309,8 @@ public class UIInputField : Selectable,
         if (Repeat(KeyCode.Delete))    DeleteForward();
 
         // Typed characters come from Input.InputString, which is read non-destructively so Paper and the
-        // UI don't fight over the input queue. Control combos and non-printables are ignored.
-        if (!ctrl)
+        // UI don't fight over the input queue. Shortcuts and non-printables are ignored.
+        if (!shortcut)
         {
             foreach (char ch in Input.InputString)
             {
