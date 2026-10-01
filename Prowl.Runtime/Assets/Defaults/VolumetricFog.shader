@@ -77,6 +77,8 @@ Pass "FogMarch"
         uniform float _FogVolumeConeAngle[MAX_FOG_VOLUMES];
 
         // ── Phase function ──
+        // cosTheta is between the view ray and the direction to the light: light heading toward the
+        // camera has scattered straight on, so with g > 0 the glow sits around the light, not behind you.
         float HenyeyGreenstein(float cosTheta, float g)
         {
             float g2 = g * g;
@@ -333,7 +335,7 @@ Pass "FogMarch"
             int  enableShadow = isPoint ? _FogEnablePointShadows : _FogEnableSpotShadows;
             if (enableType == 0) return vec3(0.0);
 
-            float phase = HenyeyGreenstein(dot(viewDir, -toLight), _FogScattering);
+            float phase = HenyeyGreenstein(dot(viewDir, toLight), _FogScattering);
             vec3 contrib = L.Color * (L.Intensity * 8.0) * phase * att;
 
             if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0 && enableShadow != 0) {
@@ -352,11 +354,21 @@ Pass "FogMarch"
             // Directional. _DirectionalLightDirection already points surface->sun.
             if (_DirectionalLightEnabled != 0 && _FogEnableDirectional != 0) {
                 vec3 toLight = normalize(_DirectionalLightDirection);
-                float phase = HenyeyGreenstein(dot(viewDir, -toLight), _FogScattering);
+                float phase = HenyeyGreenstein(dot(viewDir, toLight), _FogScattering);
                 vec3 contrib = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0) * phase;
                 if (_DirectionalLightShadowEnabled != 0 && _FogEnableDirectionalShadows != 0)
                     contrib *= (1.0 - VolDirShadow(worldPos));
                 scatter += contrib * volColor;
+            }
+
+            // The other directional lights, which have no shadows.
+            if (_FogEnableDirectional != 0) {
+                int extraCount = min(_ExtraDirectionalLightCount, MAX_EXTRA_DIRECTIONAL_LIGHTS);
+                for (int i = 0; i < extraCount; i++) {
+                    vec3 toLight = normalize(_ExtraDirectionalLightDirection[i]);
+                    float phase = HenyeyGreenstein(dot(viewDir, toLight), _FogScattering);
+                    scatter += _ExtraDirectionalLightColor[i] * 8.0 * phase * volColor;
+                }
             }
 
             // Static BVH.
@@ -432,8 +444,15 @@ Pass "FogMarch"
                     vec3 inscatter = (lightInscatter + ambient) * density;
                     inscatter *= _FogColorTint.rgb;
 
-                    float stepTransmittance = exp(-density * _FogExtinction * stepSize);
-                    accum += transmittance * inscatter * stepSize;
+                    // Integrate the scattering across the step with the light it loses on the way out,
+                    // rather than as if the whole step were seen through the transmittance at its start.
+                    // The plain sum over-brightens dense fog and long steps.
+                    float extinction = density * _FogExtinction;
+                    float stepTransmittance = exp(-extinction * stepSize);
+                    vec3 stepScatter = extinction > 1e-4
+                        ? inscatter * (1.0 - stepTransmittance) / extinction
+                        : inscatter * stepSize;
+                    accum += transmittance * stepScatter;
                     transmittance *= stepTransmittance;
 
                     if (transmittance < 0.01) break;
@@ -442,10 +461,11 @@ Pass "FogMarch"
                 t += stepSize;
             }
 
-            // Color dithering small per-pixel random shift to break up banding bands.
+            // Color dithering small per-pixel random shift to break up banding bands. Scaled by how much
+            // fog the ray met so clear air gets no noise, and kept from pushing the color below zero.
             if (_FogDithering > 0.0) {
                 float dither = (Hash13(vec3(gl_FragCoord.xy, _Time.y)) - 0.5) * _FogDithering;
-                accum += vec3(dither);
+                accum = max(accum + vec3(dither) * (1.0 - transmittance), vec3(0.0));
             }
 
             OutputColor = vec4(accum, transmittance);

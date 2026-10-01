@@ -129,6 +129,7 @@ public class DefaultRenderPipeline : RenderPipeline
         var effectsByStage = new Dictionary<RenderStage, List<ImageEffect>>
         {
             { RenderStage.AfterOpaques, new List<ImageEffect>() },
+            { RenderStage.AfterTransparents, new List<ImageEffect>() },
             { RenderStage.PostProcess, new List<ImageEffect>() }
         };
 
@@ -388,6 +389,24 @@ public class DefaultRenderPipeline : RenderPipeline
             List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
             DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT, preserveOrder: true);
             Graphics.Submit(transparentCmd);
+
+            // ─── AfterTransparents image effects ───
+            if (effectsByStage[RenderStage.AfterTransparents].Count > 0)
+            {
+                RenderStats.BeginPostFx();
+                var transparentContext = new RenderContext
+                {
+                    DepthNormals = prepass,
+                    MotionVectors = prepass.InternalTextures[1],
+                    SceneColor = colorRT,
+                    Camera = camera,
+                    Width = (int)css.PixelWidth,
+                    Height = (int)css.PixelHeight,
+                    CurrentStage = RenderStage.AfterTransparents
+                };
+                ExecuteImageEffects(transparentContext, effectsByStage[RenderStage.AfterTransparents]);
+                RenderStats.EndPostFx();
+            }
 
             // World-space UI canvases (drawn with the camera matrices, into the scene color).
             RenderUIQueue(css, colorRT, UISurface.World, data);

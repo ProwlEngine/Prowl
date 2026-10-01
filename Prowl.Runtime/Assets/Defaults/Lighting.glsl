@@ -400,9 +400,9 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
 //  Directional evaluator
 // ============================================================
 
-// Prowl convention: a directional light's Transform.Forward points FROM the surface TO
-// the sun, so it already IS the surface-to-light "L" vector. The shadow camera flips it
-// separately (it wants the shining direction). Don't negate it.
+// Directional lights shine along their Transform.Forward, and the direction uploaded to the
+// shaders is -Forward: it points FROM the surface TO the light, so it already IS the
+// surface-to-light "L" vector. Don't negate it.
 
 float MainDirectionalShadowFactor(vec3 worldPos, vec3 worldNormal)
 {
