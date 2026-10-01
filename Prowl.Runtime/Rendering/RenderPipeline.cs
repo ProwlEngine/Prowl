@@ -838,7 +838,7 @@ public abstract class RenderPipeline : EngineObject
         }
         else
         {
-            cmd.DrawIndexedInstanced(vao, Topology.Triangles, (uint)indexCount, (uint)instanceCount, 0, 0, useIndex32);
+            cmd.DrawIndexedInstanced(vao, mesh.MeshTopology, (uint)indexCount, (uint)instanceCount, 0, 0, useIndex32);
         }
 
         material.SetKeyword("GPU_INSTANCING", false);
