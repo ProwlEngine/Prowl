@@ -37,9 +37,9 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
     public bool UseAutoFocus = true;
     /// <summary>Focus distance in world units from the camera, used when <see cref="UseAutoFocus"/> is off.</summary>
     public float ManualFocusPoint = 10f;
-    // Retuned for a circle of confusion measured in linear view depth. The old values were set
-    // against raw depth-buffer samples, where the same difference meant something very different.
-    public float FocusStrength = 1.0f;
+    /// <summary>Blur of something infinitely far away, in percent of the screen height. Blur grows toward
+    /// that behind the focus point and keeps growing in front of it, both capped by <see cref="MaxBlurRadius"/>.</summary>
+    public float FocusStrength = 2.0f;
     /// <summary>Largest blur, in percent of the screen height.</summary>
     public float MaxBlurRadius = 2.0f;
     public ResolutionMode Resolution = ResolutionMode.Half;
@@ -60,6 +60,8 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
     private static readonly TextureImageFormat[] CoCFormat = [TextureImageFormat.Short];
     // Signed CoC rides in alpha, so the blur targets need a float format even when the scene is LDR.
     private static readonly TextureImageFormat[] BlurFormat = [TextureImageFormat.Short4];
+    // Far field and near field (with its coverage) side by side.
+    private static readonly TextureImageFormat[] FieldsFormat = [TextureImageFormat.Short4, TextureImageFormat.Short4];
 
     private Material _mat;
     private KernelQuality? _uploadedKernel;
@@ -85,11 +87,13 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         int blurWidth = Math.Max(1, fullWidth / divisor);
         int blurHeight = Math.Max(1, fullHeight / divisor);
 
-        _mat.SetFloat("_FocusStrength", FocusStrength);
+        _mat.SetFloat("_FocusStrength", Math.Max(0f, FocusStrength));
         _mat.SetFloat("_MaxBlurRadius", Math.Max(0f, MaxBlurRadius));
         _mat.SetVector("_Resolution", new Float2(fullWidth, fullHeight));
-        _mat.SetFloat("_Downscale", divisor);
-        _mat.SetFloat("_MaxCoC", Math.Max(0f, MaxBlurRadius) * 0.01f * fullHeight / divisor);
+        // The real ratio, which drifts from the divisor when the size doesn't divide evenly.
+        float downscale = fullHeight / (float)blurHeight;
+        _mat.SetFloat("_Downscale", downscale);
+        _mat.SetFloat("_MaxCoC", Math.Max(0f, MaxBlurRadius) * 0.01f * fullHeight / downscale);
 
         using var cmd = Graphics.GetCommandBuffer("BokehDoF");
 
@@ -121,14 +125,17 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         RenderTexture prefiltered = RenderTexture.GetTemporaryRT(blurWidth, blurHeight, false, BlurFormat);
         cmd.Blit(context.SceneColor, prefiltered, _mat, PrefilterPass);
 
-        RenderTexture bokeh = RenderTexture.GetTemporaryRT(blurWidth, blurHeight, false, BlurFormat);
+        RenderTexture bokeh = RenderTexture.GetTemporaryRT(blurWidth, blurHeight, false, FieldsFormat);
         cmd.Blit(prefiltered, bokeh, _mat, BokehPass);
 
-        RenderTexture smoothed = RenderTexture.GetTemporaryRT(blurWidth, blurHeight, false, BlurFormat);
-        cmd.Blit(bokeh, smoothed, _mat, PostfilterPass);
+        RenderTexture smoothed = RenderTexture.GetTemporaryRT(blurWidth, blurHeight, false, FieldsFormat);
+        _mat.SetTexture("_FarTex", bokeh.InternalTextures[0]);
+        _mat.SetTexture("_NearTex", bokeh.InternalTextures[1]);
+        cmd.Blit(smoothed, _mat, PostfilterPass);
 
         // Combine at full resolution.
-        _mat.SetTexture("_BlurredTex", smoothed.MainTexture);
+        _mat.SetTexture("_FarTex", smoothed.InternalTextures[0]);
+        _mat.SetTexture("_NearTex", smoothed.InternalTextures[1]);
         var temp = RenderTexture.GetTemporaryRT(fullWidth, fullHeight, false, [context.SceneColor.MainTexture.ImageFormat]);
         cmd.Blit(context.SceneColor, temp, _mat, CombinePass);
         cmd.Blit(temp, context.SceneColor, null, 0);
