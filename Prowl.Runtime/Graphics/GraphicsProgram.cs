@@ -45,6 +45,15 @@ public class GraphicsProgram : IDisposable
     internal readonly Dictionary<string, int> uniformLocations = [];
     internal readonly Dictionary<string, uint> blockIndices = [];
 
+    // Every sampler the program declares, with the empty unit it falls back to when a draw binds
+    // nothing to it, and the draw that last bound it.
+    internal (int Location, int EmptyUnit)[] samplers = [];
+    internal int[] samplerBoundDraw = [];
+    internal readonly Dictionary<int, int> samplerIndexByLocation = [];
+
+    // Units kept free of textures, one per sampler type, since two sampler types on one unit is an error.
+    internal const int FirstEmptyUnit = 40;
+
     public bool IsDisposed { get; protected set; }
 
     public uint Handle { get; internal set; }
@@ -159,12 +168,47 @@ public class GraphicsProgram : IDisposable
                     info + "\n\nStatus Code: " + statusCode.ToString());
         }
 
+        FindSamplers();
+
         Graphics.GL.Flush();
 
         // Release sources we won't recompile.
         _fragmentSource = null;
         _vertexSource = null;
         _geometrySource = null;
+    }
+
+    private void FindSamplers()
+    {
+        Graphics.GL.GetProgram(Handle, ProgramPropertyARB.ActiveUniforms, out int count);
+        var found = new List<(int Location, int EmptyUnit)>();
+        for (uint i = 0; i < count; i++)
+        {
+            string name = Graphics.GL.GetActiveUniform(Handle, i, out int size, out UniformType type);
+            int emptyUnit = type switch
+            {
+                UniformType.Sampler2D or UniformType.IntSampler2D or UniformType.UnsignedIntSampler2D => FirstEmptyUnit,
+                UniformType.Sampler2DShadow => FirstEmptyUnit + 1,
+                UniformType.Sampler3D => FirstEmptyUnit + 2,
+                UniformType.SamplerCube => FirstEmptyUnit + 3,
+                UniformType.Sampler2DArray => FirstEmptyUnit + 4,
+                _ => -1,
+            };
+            if (emptyUnit < 0) continue;
+
+            // Arrays report their first element as "name[0]", the rest are looked up one by one.
+            string baseName = name.EndsWith("[0]") ? name[..^3] : name;
+            for (int element = 0; element < size; element++)
+            {
+                int location = Graphics.GL.GetUniformLocation(Handle, size > 1 ? $"{baseName}[{element}]" : name);
+                if (location < 0) continue;
+                samplerIndexByLocation[location] = found.Count;
+                found.Add((location, emptyUnit));
+            }
+        }
+
+        samplers = [.. found];
+        samplerBoundDraw = new int[samplers.Length];
     }
 
     public static GraphicsProgram? currentProgram = null;

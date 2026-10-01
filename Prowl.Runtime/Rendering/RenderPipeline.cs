@@ -534,9 +534,10 @@ public abstract class RenderPipeline : EngineObject
                     if (hasRenderOrder && !pass.HasTag(shaderTag, tagValue))
                         continue;
 
-                    // Compute sort key for this pass (same as non-instanced)
-                    int sortKey = hasRenderOrder ? instancedPassIndex + pass.GetTagSortOffset(shaderTag) : instancedPassIndex;
-                    hasSortOffsets |= sortKey != instancedPassIndex;
+                    // Only the tag offset orders batches. Pass indices belong to their own shader, and the
+                    // creation order already keeps one material's passes in sequence.
+                    int sortKey = hasRenderOrder ? pass.GetTagSortOffset(shaderTag) : 0;
+                    hasSortOffsets |= sortKey != 0;
 
                     // Create batch for instanced renderable
                     // Each instanced renderable gets its own batch since it draws all instances in one call
@@ -581,9 +582,8 @@ public abstract class RenderPipeline : EngineObject
                 }
                 else
                 {
-                    // Compute sort key for this pass
-                    int sortKey = hasRenderOrder ? passIndex + pass.GetTagSortOffset(shaderTag) : passIndex;
-                    hasSortOffsets |= sortKey != passIndex;
+                    int sortKey = hasRenderOrder ? pass.GetTagSortOffset(shaderTag) : 0;
+                    hasSortOffsets |= sortKey != 0;
 
                     // Create new batch for this unique material+pass+mesh combination
                     List<int> indices = RentIndexList();
@@ -676,10 +676,10 @@ public abstract class RenderPipeline : EngineObject
                 // Restore both targets back to the original RT.
                 cmd.SetRenderTarget(currentRT.frameBuffer);
 
+                // The grab target comes from the shared pool, so the mipmapped filter is set in the
+                // command buffer and put back below before anything else can borrow the target.
                 cmd.GenerateMipmap(grabRT.MainTexture);
-                // Filter is a sticky texture property; setting it directly is fine and
-                // doesn't need to go through the CB (no ordering constraint vs draws).
-                grabRT.MainTexture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
+                cmd.EncodeSetTextureFilters(grabRT.MainTexture.Handle, TextureMin.LinearMipmapLinear, TextureMag.Linear);
 
                 // Encode the global set as a CB opcode so it's ordered against the
                 // draws below at EXECUTE time. Writing PropertyState.SetGlobalTexture
@@ -748,6 +748,7 @@ public abstract class RenderPipeline : EngineObject
                 cmd.ClearGlobalTexture(pass.GrabTextureName);
                 if (pass.HasGrabDepth)
                     cmd.ClearGlobalTexture(pass.GrabDepthTextureName);
+                cmd.EncodeSetTextureFilters(grabRT.MainTexture.Handle, grabRT.MainTexture.MinFilter, grabRT.MainTexture.MagFilter);
                 RenderTexture.ReleaseTemporaryRT(grabRT);
                 grabRT = null;
             }

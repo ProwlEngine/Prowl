@@ -903,6 +903,7 @@ internal sealed class CommandExecutor
         if (_boundProgram == null) return;
 
         _texSlotCounter = 0;
+        DrawNumber++;
 
         // GlobalUniforms UBO must be bound on every draw shaders that read camera
         // matrices, time, screen size, etc. expect block 0 to hold this buffer.
@@ -934,12 +935,21 @@ internal sealed class CommandExecutor
         for (int i = 0; i < _pendingDirectTextures.Count; i++)
         {
             var (name, tex) = _pendingDirectTextures[i];
-            int slot = AllocateTextureSlot();
-            BindTextureToUnit(slot, tex);
-            PropertyApply.SetIntCached(_boundProgram, name, slot);
+            PropertyApply.BindTexUniform(_boundProgram, name, tex, this);
         }
         _pendingDirectTextures.Clear();
+
+        // A sampler nothing bound this draw still holds the unit it had last time, and that unit now
+        // holds whatever an earlier draw left there. Point it at an empty unit so it reads nothing.
+        var samplers = _boundProgram.samplers;
+        var boundDraw = _boundProgram.samplerBoundDraw;
+        for (int i = 0; i < samplers.Length; i++)
+            if (boundDraw[i] != DrawNumber)
+                Graphics.GL.Uniform1(samplers[i].Location, samplers[i].EmptyUnit);
     }
+
+    /// <summary>Counts draws, so a program can tell which of its samplers this draw has bound.</summary>
+    internal int DrawNumber { get; private set; }
 
     // ─────────────────────── Texture slot management ───────────────────────
 

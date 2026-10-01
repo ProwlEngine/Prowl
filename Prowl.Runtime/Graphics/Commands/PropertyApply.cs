@@ -304,11 +304,14 @@ internal static class PropertyApply
         }
     }
 
-    private static void BindTexUniform(GraphicsProgram p, string name, GraphicsTexture tex, CommandExecutor exec)
+    internal static void BindTexUniform(GraphicsProgram p, string name, GraphicsTexture tex, CommandExecutor exec)
     {
         // Textures the program doesn't sample take no unit.
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+
+        if (p.samplerIndexByLocation.TryGetValue(loc, out int sampler))
+            p.samplerBoundDraw[sampler] = exec.DrawNumber;
 
         int slot = exec.AllocateTextureSlot();
         exec.BindTextureToUnit(slot, tex);
