@@ -165,6 +165,37 @@ public class GameCanvas : MonoBehaviour
     /// </summary>
     public void MarkDirty(UIDirtyFlags flags) => _isDirty = true;
 
+    /// <summary>Elements whose vertices changed without anything that moves layout, re-baked in place.</summary>
+    [SerializeIgnore] private readonly List<UIBehaviour> _rebake = new();
+
+    /// <summary>
+    /// Requests a re-bake of just <paramref name="ui"/>'s mesh, for a change that touches its vertices but
+    /// not its rect, alpha or presence (a color change). Its render item keeps the same mesh object, so the
+    /// tree and layout need no rebuild.
+    /// </summary>
+    internal void MarkRebake(UIBehaviour ui)
+    {
+        if (!_rebake.Contains(ui)) _rebake.Add(ui);
+    }
+
+    private void RebakeInPlace()
+    {
+        foreach (UIBehaviour ui in _rebake)
+        {
+            if (ui.IsNotValid() || !ui.EnabledInHierarchy) continue;
+
+            // Never baked, or its mesh would appear or vanish: the tree has to change, so fall back to a rebuild.
+            bool hadMesh = ui.CachedMesh.IsValid();
+            if (!hadMesh || float.IsNaN(ui.LastBakeAlpha)) { _isDirty = true; break; }
+
+            UIContext ctx = UIContext.Default;
+            ctx.Alpha = ui.LastBakeAlpha;
+            EnsureBaked(ui, ctx);
+            if (ui.CachedMesh.IsNotValid()) { _isDirty = true; break; }
+        }
+        _rebake.Clear();
+    }
+
     /// <summary>
     /// Backing-field setter for this canvas's properties: assigns only on a real change and
     /// marks <paramref name="flags"/> dirty when it does. Mirrors <see cref="UIBehaviour.SetField{T}"/>
@@ -252,7 +283,9 @@ public class GameCanvas : MonoBehaviour
             _lastBuildWorldSpace = currentWorldSpace;
         }
 
+        if (!_isDirty && _rebake.Count > 0) RebakeInPlace();
         if (!_isDirty) return;
+        _rebake.Clear(); // the full rebuild below re-bakes everything that's dirty
 
         // Recompute scale factor against the current screen size *before* layout - Update()
         // can't do this reliably because it runs without ScreenSizeOverride set. Assign the backing

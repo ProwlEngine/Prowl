@@ -230,6 +230,46 @@ public class UITests : RuntimeTestBase
         Assert.Equal(new Rect(200f, 0f, 250f, 100f), b.RectTransform.ComputedRect);
     }
 
+    private sealed class ArrangeCounter : LayoutGroup
+    {
+        public int Arranges;
+        public override void Arrange(Rect rect) => Arranges++;
+        public override float MinWidth => 0f;
+        public override float PreferredWidth => 0f;
+        public override float MinHeight => 0f;
+        public override float PreferredHeight => 0f;
+    }
+
+    // A tint fade sets Color every frame; that must re-bake the one mesh, not lay the canvas out again.
+    [Fact]
+    public void ColorChange_RebakesWithoutRelayout()
+    {
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
+        try
+        {
+            Scene scene = CreateScene(enable: true);
+            var canvasGo = CreateGameObject("Canvas");
+            scene.Add(canvasGo);
+            var canvas = canvasGo.AddComponent<GameCanvas>();
+            var panel = CreateUIObject("Panel", scene, canvasGo);
+            var counter = panel.AddComponent<ArrangeCounter>();
+            var boxGo = CreateUIObject("Box", scene, panel);
+            boxGo.RectTransform!.SizeDelta = new Float2(50f, 50f);
+            var box = boxGo.AddComponent<Box>();
+
+            canvas.RebuildIfDirty();
+            int arranges = counter.Arranges;
+
+            box.Color = new Color(1f, 0f, 0f, 1f);
+            canvas.RebuildIfDirty();
+
+            Assert.Equal(arranges, counter.Arranges);
+            Assert.Equal(new Color32(255, 0, 0, 255), box.CachedMesh!.Colors32[0]);
+        }
+        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
+    }
+
     // A pause menu runs at a time scale of 0, and its buttons still have to show hover.
     [Fact]
     public void SelectableTint_AdvancesWhileGameIsPaused()

@@ -43,7 +43,16 @@ public abstract class Graphic : UIBehaviour
     public Color Color
     {
         get => _color;
-        set => SetField(ref _color, value, UIDirtyFlags.Vertices);
+        set
+        {
+            // Color only changes this element's vertices, so it re-bakes in place instead of rebuilding the
+            // canvas. Selectable tint fades set it every frame.
+            if (_color == value) return;
+            _color = value;
+            DirtyFlags |= UIDirtyFlags.Vertices;
+            GameCanvas? canvas = GetCanvas();
+            if (canvas.IsValid()) canvas.MarkRebake(this);
+        }
     }
 
     /// <summary>The material used when no override is assigned.</summary>
