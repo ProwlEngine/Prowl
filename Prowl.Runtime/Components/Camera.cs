@@ -173,6 +173,12 @@ public class Camera : MonoBehaviour
         }
     }
 
+    /// <summary>True when <see cref="ProjectionMatrix"/> was set by hand rather than computed from the field of view and clip planes.</summary>
+    public bool HasCustomProjectionMatrix => _customProjectionMatrix;
+
+    /// <summary>True when <see cref="NonJitteredProjectionMatrix"/> was set by hand.</summary>
+    public bool HasCustomNonJitteredProjectionMatrix => _customNonJitteredProjectionMatrix;
+
     public Float4x4 ViewMatrix { get; private set; }
 
     /// <summary>

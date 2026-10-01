@@ -153,4 +153,40 @@ public class RenderPipelineTests
 
         Assert.Equal(before, pipeline.Frame(gameCamera, 7, -1, after));
     }
+
+    private static Camera CreateSizedCamera()
+    {
+        Camera camera = CreateCamera();
+        camera.UpdateRenderData(new RenderTexture(64, 64, true, [TextureImageFormat.Color4b]));
+        return camera;
+    }
+
+    // An oblique clip plane for water, say, is set by hand and must survive TAA's per frame jitter.
+    [Fact]
+    public void TAA_KeepsHandSetProjection()
+    {
+        Camera camera = CreateSizedCamera();
+        Float4x4 custom = Float4x4.CreatePerspectiveFov(1f, 1f, 0.5f, 50f);
+        camera.ProjectionMatrix = custom;
+
+        var taa = new TAAEffect();
+        taa.OnPreCull(camera);
+        taa.OnPostRender(camera);
+
+        Assert.True(camera.HasCustomProjectionMatrix);
+        Assert.Equal(custom, camera.ProjectionMatrix);
+    }
+
+    [Fact]
+    public void TAA_LeavesComputedProjectionComputed()
+    {
+        Camera camera = CreateSizedCamera();
+
+        var taa = new TAAEffect();
+        taa.OnPreCull(camera);
+        taa.OnPostRender(camera);
+
+        Assert.False(camera.HasCustomProjectionMatrix);
+        Assert.False(camera.HasCustomNonJitteredProjectionMatrix);
+    }
 }

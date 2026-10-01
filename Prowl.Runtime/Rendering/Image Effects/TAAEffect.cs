@@ -50,6 +50,8 @@ public sealed class TAAEffect : ImageEffect
     private int _frameIndex;
     private Float2 _jitter;
     private Float2 _previousJitter;
+    private Float4x4? _userProjection;
+    private Float4x4? _userNonJitteredProjection;
 
     /// <summary>
     /// Current sub-pixel jitter offset in pixel coordinates.
@@ -72,6 +74,10 @@ public sealed class TAAEffect : ImageEffect
 
         // Map from [0,1] to [-0.5, 0.5] pixel offset
         _jitter = new Float2(haltonX - 0.5f, haltonY - 0.5f);
+
+        // Remember any projection the user set by hand so OnPostRender can put it back.
+        _userProjection = camera.HasCustomProjectionMatrix ? camera.ProjectionMatrix : null;
+        _userNonJitteredProjection = camera.HasCustomNonJitteredProjectionMatrix ? camera.NonJitteredProjectionMatrix : null;
 
         // Save the unjittered projection before applying jitter.
         // NonJitteredProjectionMatrix is used by the pipeline for motion vectors.
@@ -109,8 +115,10 @@ public sealed class TAAEffect : ImageEffect
     public override void OnPostRender(Camera camera)
     {
         // Reset the projection matrix back to unjittered so other systems
-        // (picking, gizmos, etc.) don't see the jittered matrix.
+        // (picking, gizmos, etc.) don't see the jittered matrix, keeping one the user set by hand.
         camera.ResetProjectionMatrix();
+        if (_userProjection is { } projection) camera.ProjectionMatrix = projection;
+        if (_userNonJitteredProjection is { } nonJittered) camera.NonJitteredProjectionMatrix = nonJittered;
     }
 
     public override void OnRenderEffect(RenderContext context)
