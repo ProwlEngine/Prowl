@@ -438,17 +438,15 @@ public class InputAction
                         }
                     }
                 }
-                else if (state.WasActuated && !state.TapCompleted)
+                else if (state.WasActuated)
                 {
                     // Released quickly enough
-                    float heldDuration = currentTime - state.PressStartTime;
-                    if (heldDuration <= binding.MaxTapDuration)
+                    state.WasActuated = false;
+                    if (!state.TapCompleted && currentTime - state.PressStartTime <= binding.MaxTapDuration)
                     {
                         value = GetActuatedValue();
-                        state.WasActuated = false;
                         return true;
                     }
-                    state.WasActuated = false;
                 }
                 break;
 
