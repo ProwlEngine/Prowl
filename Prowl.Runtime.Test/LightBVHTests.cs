@@ -373,7 +373,7 @@ public class SceneLightSystemTests : RuntimeTestBase
     {
         public ForwardLightData Data;
 
-        public override LightType GetLightType() => LightType.Point;
+        public override LightType GetLightType() => Data.Type;
         public override Float3 GetLightPosition() => Data.Position;
         public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables) { }
         public override ForwardLightData GetForwardLightData() => Data;
@@ -418,5 +418,44 @@ public class SceneLightSystemTests : RuntimeTestBase
         light.CastShadows = false;
         system.Reconcile([light], Float3.Zero, LayerMask.Everything);
         Assert.Equal(-1, system.StaticBVH.Slots[system.StaticBVH.GetSlot(light)].ShadowSlot);
+    }
+
+    private ControlledLight CreateDirectional(float intensity)
+    {
+        var light = CreateLight(isStatic: false);
+        light.Data.Type = LightType.Directional;
+        light.Data.Intensity = intensity;
+        return light;
+    }
+
+    [Fact]
+    public void BrightestDirectional_IsMain_OthersAreExtras()
+    {
+        var system = new SceneLightSystem();
+        var dim = CreateDirectional(1f);
+        var bright = CreateDirectional(3f);
+        var mid = CreateDirectional(2f);
+
+        system.Reconcile([dim, bright, mid], Float3.Zero, LayerMask.Everything);
+
+        Assert.Same(bright, system.Directional);
+        Assert.Equal(2, system.ExtraDirectionals.Count);
+        Assert.Contains(dim, system.ExtraDirectionals);
+        Assert.Contains(mid, system.ExtraDirectionals);
+    }
+
+    [Fact]
+    public void ExtraDirectionals_AreCappedKeepingTheBrightest()
+    {
+        var system = new SceneLightSystem();
+        var lights = new List<IRenderableLight>();
+        for (int i = 0; i < SceneLightSystem.MaxExtraDirectionalLights + 3; i++)
+            lights.Add(CreateDirectional(i + 1));
+
+        system.Reconcile(lights, Float3.Zero, LayerMask.Everything);
+
+        Assert.Equal(SceneLightSystem.MaxExtraDirectionalLights, system.ExtraDirectionals.Count);
+        Assert.DoesNotContain(lights[0], system.ExtraDirectionals);
+        Assert.DoesNotContain(lights[1], system.ExtraDirectionals);
     }
 }
