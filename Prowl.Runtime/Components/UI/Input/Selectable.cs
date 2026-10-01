@@ -251,6 +251,8 @@ public class Selectable : UIBehaviour,
     {
         if (e.Button != MouseButton.Left) return;
 
+        // The press belongs to the innermost widget, so an enclosing one doesn't show pressed too.
+        e.Use();
         if (!IsInteractable()) return;
 
         _isPressed = true;

@@ -23,6 +23,8 @@ public class UIButton : Selectable, IPointerClickHandler, ISubmitHandler
     public void OnPointerClick(PointerEventData e)
     {
         if (e.Button != MouseButton.Left) return;
+        // A button owns its click even when disabled, so an enclosing clickable (a dropdown around its items) never sees it.
+        e.Use();
         if (!IsInteractable()) return;
         HandleClick();
     }

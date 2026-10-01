@@ -185,7 +185,7 @@ public sealed class EventSystem : MonoBehaviour
     /// <see cref="PointerEventData.Used"/>. Used for pointer events that may want to be observed by
     /// ancestors regardless of whether a leaf handled them.
     /// </summary>
-    private static GameObject? Bubble<TInterface>(GameObject? root, PointerEventData e, Action<TInterface, PointerEventData> action)
+    internal static GameObject? Bubble<TInterface>(GameObject? root, PointerEventData e, Action<TInterface, PointerEventData> action)
         where TInterface : class
     {
         if (root == null || action == null) return null;
