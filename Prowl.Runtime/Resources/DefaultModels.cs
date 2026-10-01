@@ -24,7 +24,6 @@ public static class DefaultModels
             DefaultModel.Sphere => "Sphere.obj",
             DefaultModel.Cylinder => "Cylinder.obj",
             DefaultModel.Plane => "Plane.obj",
-            DefaultModel.SkyDome => "SkyDome.obj",
             _ => throw new ArgumentException($"Unknown default model: {model}")
         };
 

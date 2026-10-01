@@ -59,7 +59,7 @@ public class DefaultRenderPipeline : RenderPipeline
     #region Static Resources
 
     private static Mesh s_quadMesh;
-    private static Mesh s_skyDome;
+    private static Mesh s_skyCube;
     private static Material s_defaultMaterial;
     private static Material s_skybox;
     private static Material s_gradientSkybox;
@@ -95,11 +95,11 @@ public class DefaultRenderPipeline : RenderPipeline
         if (s_skybox.IsNotValid()) s_skybox = new Material(Shader.LoadDefault(DefaultShader.ProceduralSkybox));
         if (s_gizmo.IsNotValid()) s_gizmo = new Material(Shader.LoadDefault(DefaultShader.Gizmos));
 
-        if (s_skyDome.IsNotValid())
+        if (s_skyCube.IsNotValid())
         {
-            using var stream = EmbeddedResources.GetStream("Assets/Defaults/SkyDome.obj");
-            var skyImport = new AssetImporting.ModelImporter().Import(stream, "SkyDome.obj");
-            s_skyDome = skyImport.Meshes.Count > 0 ? skyImport.Meshes[0] : new Resources.Mesh { Name = "SkyDome" };
+            using var stream = EmbeddedResources.GetStream("Assets/Defaults/Cube.obj");
+            var skyImport = new AssetImporting.ModelImporter().Import(stream, "Cube.obj");
+            s_skyCube = skyImport.Meshes.Count > 0 ? skyImport.Meshes[0] : new Resources.Mesh { Name = "SkyCube" };
         }
 
         // Pre-compute and upload BRDF integration LUT for PBR
@@ -642,14 +642,8 @@ public class DefaultRenderPipeline : RenderPipeline
         switch (skyParams.Mode)
         {
             case Scene.SkyboxMode.Procedural:
-            {
-                var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
-                // The sky wants the direction toward the sun, lights report the way they shine.
-                var toSun = sun != null ? -sun.GetLightDirection() : Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f));
-                s_skybox.SetVector("_SunDir", toSun);
-                cmd.DrawMesh(s_skyDome, s_skybox);
+                DrawProcedural();
                 break;
-            }
 
             case Scene.SkyboxMode.SolidColor:
                 // Camera clear already filled with color nothing more to do.
@@ -661,7 +655,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 s_gradientSkybox.SetColor("_TopColor", skyParams.GradientTop);
                 s_gradientSkybox.SetColor("_BottomColor", skyParams.GradientBottom);
                 s_gradientSkybox.SetFloat("_Exponent", skyParams.GradientExponent);
-                cmd.DrawMesh(s_skyDome, s_gradientSkybox);
+                cmd.DrawMesh(s_skyCube, s_gradientSkybox);
                 break;
             }
 
@@ -669,11 +663,20 @@ public class DefaultRenderPipeline : RenderPipeline
             {
                 var customMat = skyParams.CustomMaterial;
                 if (customMat != null)
-                    cmd.DrawMesh(s_skyDome, customMat);
+                    cmd.DrawMesh(s_skyCube, customMat);
                 else
-                    cmd.DrawMesh(s_skyDome, s_skybox);
+                    DrawProcedural();
                 break;
             }
+        }
+
+        void DrawProcedural()
+        {
+            var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
+            // The sky wants the direction toward the sun, lights report the way they shine.
+            var toSun = sun != null ? -sun.GetLightDirection() : Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f));
+            ProceduralSky.Apply(s_skybox, toSun);
+            cmd.DrawMesh(s_skyCube, s_skybox);
         }
     }
 
