@@ -22,16 +22,15 @@ Only Vulkan is implemented. `GraphicsBackend` has one value: `Vulkan`.
 ## Quick example
 
 ```csharp
-GraphicsDeviceOptions options = new(debug: false, swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt, syncToVerticalBlank: true);
+GraphicsDeviceOptions options = new() { Debug = false };
 
 SwapchainDescription swapchain = new()
 {
     Source = SwapchainSource.CreateVulkan(window.VkSurface!),
     Width = (uint)window.FramebufferSize.X,
     Height = (uint)window.FramebufferSize.Y,
-    DepthFormat = options.SwapchainDepthFormat,
-    SyncToVerticalBlank = options.SyncToVerticalBlank,
-    ColorSrgb = options.SwapchainSrgbFormat
+    DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+    SyncToVerticalBlank = true
 };
 
 GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchain);
@@ -46,17 +45,13 @@ device.Dispose();
 
 ## GraphicsDeviceOptions
 
-[`GraphicsDeviceOptions`](../../Graphite/Core/GraphicsDevice/GraphicsDeviceOptions.cs#L6) is a struct of public fields. Two constructors exist: `GraphicsDeviceOptions(bool debug)` for a device with no swapchain, and `GraphicsDeviceOptions(bool debug, PixelFormat? swapchainDepthFormat, bool syncToVerticalBlank = false, bool preferDepthRangeZeroToOne = false, bool preferStandardClipSpaceYDirection = false, bool swapchainSrgbFormat = false)` which also sets `HasMainSwapchain = true`. The object initializer form used in the samples leaves `HasMainSwapchain` false; swapchain creation is driven by the `SwapchainDescription` passed to `CreateVulkan`.
+[`GraphicsDeviceOptions`](../../Graphite/Core/GraphicsDevice/GraphicsDeviceOptions.cs#L6) is a struct of public fields. It has one constructor, `GraphicsDeviceOptions(bool debug)`, and the object initializer form is the usual way to build it. Swapchain settings do not live here; they are set on the `SwapchainDescription` passed to `CreateVulkan`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `Debug` | `bool` | false | Enable Vulkan debug report and validation layers if installed |
-| `HasMainSwapchain` | `bool` | false | Set by the swapchain constructor overload |
-| `SwapchainDepthFormat` | `PixelFormat?` | null | Depth format of the swapchain framebuffer. Null means no depth attachment |
-| `SyncToVerticalBlank` | `bool` | false | Vsync on the main swapchain |
 | `PreferDepthRangeZeroToOne` | `bool` | false | Request 0..1 depth range |
 | `PreferStandardClipSpaceYDirection` | `bool` | false | Request bottom-to-top clip space Y. Not the Vulkan default and not always available; check `IsClipSpaceYInverted` afterwards |
-| `SwapchainSrgbFormat` | `bool` | false | Use an sRGB swapchain format. An explicit `SwapchainDescription.ColorSrgb` wins |
 | `MaxFramesInFlight` | `uint` | 0 (3) | Execution ring size |
 | `TransientBufferInitialSize` | `uint` | 0 (4 MB) | Initial size of each slot's transient bump buffer |
 | `TransientBufferSoftCapBytes` | `uint` | 0 (64 MB) | Warn once past this many transient bytes in one execution |

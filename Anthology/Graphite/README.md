@@ -93,9 +93,16 @@ Creating a device and dispatching the pipeline each frame:
 GraphicsDeviceOptions options = new()
 {
     Debug = false,
-    SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-    SyncToVerticalBlank = false,
     PreferStandardClipSpaceYDirection = true
+};
+
+SwapchainDescription swapchainDescription = new()
+{
+    Source = SwapchainSource.CreateVulkan(window.VkSurface!),
+    Width = (uint)window.FramebufferSize.X,
+    Height = (uint)window.FramebufferSize.Y,
+    DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+    SyncToVerticalBlank = false
 };
 
 GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescription, vulkanOptions);

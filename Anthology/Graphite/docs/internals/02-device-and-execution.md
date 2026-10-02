@@ -164,7 +164,7 @@ Orphaning keeps the `DeviceBuffer` identity (so property sets and cached binding
 - `TransientWrites = true` disables all write-hazard tracking. Writing such a buffer while the GPU reads it is undefined behavior.
 - `WaitForIdle` resets all slots, including ones a caller is still recording into. Calling it between `BeginExecution` and `CompleteExecution` is invalid.
 - `SwapBuffers` and `ResizeMainWindow` throw if the device was created without a main swapchain.
-- Only the swapchain depth format is optional: a `null` `SwapchainDepthFormat` gives a framebuffer with no depth attachment.
+- Only the swapchain depth format is optional: a `null` `SwapchainDescription.DepthFormat` gives a framebuffer with no depth attachment.
 
 ## See also
 

@@ -219,15 +219,14 @@ internal sealed class TriangleApp : IDisposable
     {
         GraphicsDeviceOptions options = new()
         {
-            Debug = true,
-            SyncToVerticalBlank = true
+            Debug = true
         };
 
         SwapchainDescription swapchain = new()
         {
             Width = width,
             Height = height,
-            SyncToVerticalBlank = options.SyncToVerticalBlank,
+            SyncToVerticalBlank = true,
             Source = SwapchainSource.CreateVulkan(surface)
         };
 
