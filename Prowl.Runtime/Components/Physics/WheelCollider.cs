@@ -297,8 +297,7 @@ public sealed class WheelCollider : MonoBehaviour
             JVector suspImpulse = _upJ * (load * dt);
             car.ApplyImpulse(suspImpulse, _mountJ);
             car.SetActivationState(true);
-            if (groundBody != null && groundBody.MotionType != MotionType.Static)
-                groundBody.ApplyImpulse(-suspImpulse, _contactJ);
+            PushGround(-suspImpulse, _contactJ, dt);
 
             // ---- Tyre friction at the COM-height point (measured there too, so it's dissipative) ----
             JVector cn = contactNormal.ToJitter();
@@ -338,14 +337,7 @@ public sealed class WheelCollider : MonoBehaviour
             car.ApplyImpulse(frictionForce * dt, forcePoint);
             car.SetActivationState(true);
 
-            if (groundBody != null && groundBody.MotionType != MotionType.Static)
-            {
-                float maxImp = 500.0f * (float)groundBody.Mass * dt;
-                JVector imp = frictionForce * dt;
-                if (imp.LengthSquared() > maxImp * maxImp) imp *= maxImp / imp.Length();
-                groundBody.SetActivationState(true);
-                groundBody.ApplyImpulse(-imp, _contactJ);
-            }
+            PushGround(-frictionForce * dt, _contactJ, dt);
         }
         else _fLong = _fLat = 0.0f;
 
@@ -491,11 +483,23 @@ public sealed class WheelCollider : MonoBehaviour
         JVector impulse = normal * j;
         car.ApplyImpulse(impulse, _mountJ);
         car.SetActivationState(true);
-        if (groundBody != null && groundBody.MotionType != MotionType.Static)
-        {
-            groundBody.SetActivationState(true);
-            groundBody.ApplyImpulse(-impulse, point);
-        }
+        PushGround(-impulse, point, dt);
+    }
+
+    // Pushing back with the full reaction would hand a light body under the wheel the whole car's load
+    // and tyre grip, launching it. Capping the velocity change keeps heavy ground bodies (a platform, a
+    // ferry) fully reactive while a crate is only shoved.
+    private const float MaxGroundAcceleration = 25.0f;
+
+    private void PushGround(JVector impulse, JVector point, float dt)
+    {
+        if (groundBody == null || groundBody.MotionType != MotionType.Dynamic) return;
+
+        float max = MaxGroundAcceleration * (float)groundBody.Mass * dt;
+        if (impulse.LengthSquared() > max * max) impulse *= max / impulse.Length();
+
+        groundBody.SetActivationState(true);
+        groundBody.ApplyImpulse(impulse, point);
     }
 
     public override void DrawGizmos()
