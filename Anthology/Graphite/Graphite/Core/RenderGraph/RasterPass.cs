@@ -1,7 +1,5 @@
 using System;
 
-using Prowl.Vector;
-
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
@@ -50,20 +48,9 @@ public abstract class RasterPass<TView> : IPass<TView>
         => SetTarget(builder, id, mrtDesc, history, ops);
 
     /// <summary>
-    /// Binds the declared target and applies load ops. Clears color to opaque black, depth to 1.
+    /// Binds the declared target and applies its load ops, clearing with the values the declaration carries.
     /// </summary>
     protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd)
-        => BindTarget(context, cmd, default, 1f, 0);
-
-    /// <summary>
-    /// Binds the declared target and applies load ops, clearing with the given values.
-    /// </summary>
-    /// <param name="context">Render context.</param>
-    /// <param name="cmd">Command buffer.</param>
-    /// <param name="clearColor">Clear color for Clear-load attachments.</param>
-    /// <param name="depthClear">Clear depth.</param>
-    /// <param name="stencilClear">Clear stencil.</param>
-    protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd, Color clearColor, float depthClear = 1f, byte stencilClear = 0)
     {
         if (!_hasTarget)
             throw new InvalidOperationException($"RasterPass '{Name}' called BindTarget without declaring a target in Setup via SetTarget or SetTargets.");
@@ -77,10 +64,10 @@ public abstract class RasterPass<TView> : IPass<TView>
         {
             int colorCount = target.Framebuffer.ColorTargets.Count;
             for (uint i = 0; i < colorCount; i++)
-                cmd.ClearColorTarget(i, clearColor);
+                cmd.ClearColorTarget(i, ops.Color.ClearColor);
         }
 
         if (ops.Depth.Load == LoadAction.Clear && target.Framebuffer.DepthTarget != null)
-            cmd.ClearDepthStencil(depthClear, stencilClear);
+            cmd.ClearDepthStencil(ops.Depth.ClearDepth, ops.Depth.ClearStencil);
     }
 }
