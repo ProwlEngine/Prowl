@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 public abstract partial class CommandBuffer
 {
     /// <summary>
-    /// Sets active shader. Must match bound framebuffer/buffers. Invalidates bound resource sets, rebind after.
+    /// Sets active shader. Must match bound framebuffer/buffers. Merged properties stay bound; no need to reapply them.
     /// </summary>
     /// <param name="program">Shader to set.</param>
     public void SetShader(GraphicsProgram program)
@@ -29,7 +29,7 @@ public abstract partial class CommandBuffer
 
     private protected abstract void SetShaderCore(GraphicsProgram program);
 
-    /// <summary>Sets active compute shader. Invalidates bound compute resource sets.</summary>
+    /// <summary>Sets active compute shader. Merged properties stay bound; no need to reapply them.</summary>
     /// <param name="program">Compute shader to set.</param>
     public void SetComputeShader(ComputeProgram program)
     {
@@ -51,7 +51,6 @@ public abstract partial class CommandBuffer
     {
         SetVertexSource_CheckNonNull(source);
         _currentVertexSource = source;
-        SetVertexSourceCore(source);
     }
 
     /// <summary>
@@ -94,10 +93,10 @@ public abstract partial class CommandBuffer
     {
         _activeProperties.Clear();
         _lastAppliedSource = null;
+        _lastAppliedSourceVersion = 0;
         _mergedSourceVersions.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
-        _lastAppliedSourceVersion = 0;
         unchecked { _activePropertiesEpoch++; }
         ClearPropertiesCore();
     }
