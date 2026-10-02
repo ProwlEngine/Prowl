@@ -20,74 +20,83 @@ public static class ProceduralSky
     const float OzoneColumn = 15000f, OzoneK = 0.0078f;
     const float DepressionScale = 28.2f;
 
-    const float TwilightFade = 0.5178f;
-    const float TwilightFadeCurve = 0.11575f;
-    const float TwilightAwayFade = -0.25244f;
-    const float TwilightAwayCurve = 0.61539f;
-    const float TwilightHighFade = -0.069529f;
-    const float TwilightHeightFade = -0.022207f;
-    const float TwilightHeightCurve = 0.3201f;
-    const float TwilightAirTint = 1225f;
-    const float TwilightHighTint = 1503.2f;
-    const float TwilightOzoneTint = 124360f;
-    const float TwilightGlowFade = 4.8709f;
+    const float TwilightFade = 0.63387f;
+    const float TwilightFadeCurve = 0.04601f;
+    const float TwilightAwayFade = -0.2021f;
+    const float TwilightAwayCurve = 0.36965f;
+    const float TwilightHighFade = -0.12966f;
+    const float TwilightHeightFade = -0.4545f;
+    const float TwilightHeightCurve = 0.51252f;
+    const float TwilightAirTint = 4548.9f;
+    const float TwilightOzoneTint = 146070.0f;
+    const float TwilightGlowFade = 2.6332f;
 
-    const float SunAirSharpness = 0.66032f;
-    const float SunFarShift = 0.0039793f;
+    const float SunFarShift = 0.0054133f;
 
-    const float ShadowRise = 0.069179f;
-    const float ShadowRiseCurve = 0.015505f;
-    const float ShadowSoftness = 0.0018812f;
-    const float ShadowSoftening = 0.023835f;
-    const float ShadowRamp = 0.43425f;
-    const float BeltFade = 0.072108f;
+    const float ShadowLead = 0.010715f;
+    const float ShadowRise = 0.033052f;
+    const float ShadowRiseCurve = 0.026484f;
+    const float ShadowSoftening = 0.019543f;
+    const float ShadowSpread = 0.25126f;
+    const float ShadowRamp = 0.85012f;
 
-    static readonly Float3 BouncePerSun = new(0.053082f, 0.058143f, 0.085042f);
-    static readonly Float3 BounceAtSunset = new(0.0024572f, 0.0014576f, 0.0039399f);
-    const float BounceFade = 1.196f;
-    const float BounceFadeCurve = 0.065588f;
-    const float BounceAirTint = 9009.4f;
+    static readonly Float3 BouncePerSun = new(0.052731f, 0.058156f, 0.071765f);
+    static readonly Float3 BounceAtSunset = new(0.0021935f, 0.0011957f, 0.0034828f);
+    const float BounceFade = 1.019f;
+    const float BounceFadeCurve = 0.076588f;
+    const float BounceAirTint = 8951.8f;
+    const float BounceSide = 0.15057f;
+    const float BounceSunsetRedden = 0.043247f;
+    const float BounceSunsetReddenFade = 19.827f;
+    const float BounceTwilightRedden = 0.024638f;
 
     /// <summary>Sets every sun dependent uniform of the sky material, toSun is the unit direction toward the sun.</summary>
     public static void Apply(Material material, Float3 toSun)
     {
         float sunUp = MathF.Max(toSun.Y, 0);
         float depression = MathF.Max(-toSun.Y, 0) * DepressionScale;
+        float shadowDepth = MathF.Max(ShadowLead - toSun.Y, 0) * DepressionScale;
         float flatLength = MathF.Sqrt(MathF.Max(toSun.X * toSun.X + toSun.Z * toSun.Z, 1e-12f));
 
-        float rayleighK = RayleighK * SunAirSharpness, mieK = MieK * SunAirSharpness;
-        Float3 depth = Rayleigh * (RayleighHeight * AirMass(sunUp, rayleighK))
-            + new Float3(MieExtinction * MieHeight * AirMass(sunUp, mieK))
-            + Ozone * (OzoneColumn / MathF.Sqrt(sunUp * sunUp + OzoneK));
-        Float3 depthSlope = (Rayleigh * (RayleighHeight * AirMassSlope(sunUp, rayleighK))
-            + new Float3(MieExtinction * MieHeight * AirMassSlope(sunUp, mieK))) * SunFarShift;
+        Float3 depth = Rayleigh * (RayleighHeight * AirMass(sunUp, RayleighK)) + new Float3(MieExtinction * MieHeight * AirMass(sunUp, MieK));
+        Float3 depthSlope = (Rayleigh * (RayleighHeight * AirMassSlope(sunUp, RayleighK))
+            + new Float3(MieExtinction * MieHeight * AirMassSlope(sunUp, MieK))) * SunFarShift;
 
+        // The ozone layer sits above nearly all the air, so it filters the sunlight the same for every point on the view.
+        Float3 transmittance = Exp(-depth);
+        Float3 ozone = Exp(-Ozone * (OzoneColumn / MathF.Sqrt(sunUp * sunUp + OzoneK)));
+        float mieScale = MieScatter * (1 - MieG * MieG) / (4 * MathF.PI) * MathF.Exp(-TwilightGlowFade * depression);
+
+        Float3 bounceRedden = Rayleigh * (BounceSunsetRedden / (1 + BounceSunsetReddenFade * sunUp) + BounceTwilightRedden * depression);
         Float3 bounceFade = new Float3(BounceFade + BounceFadeCurve * depression) + Rayleigh * BounceAirTint;
-        Float3 bounce = Rayleigh * (BouncePerSun * sunUp + BounceAtSunset) * Exp(-bounceFade * depression);
+        Float3 bounce = Rayleigh * (BouncePerSun * sunUp + BounceAtSunset) * Exp(bounceRedden * RayleighHeight - bounceFade * depression);
 
-        float awayFade = 0.5f * (TwilightAwayFade + TwilightAwayCurve * depression) * depression;
+        float awayFade = (TwilightAwayFade + TwilightAwayCurve * depression) * depression;
         Float3 fadeBase = (new Float3(TwilightFade + TwilightFadeCurve * depression) + Rayleigh * TwilightAirTint + Ozone * TwilightOzoneTint) * depression
             + new Float3(awayFade);
 
         material.SetVector("_SkySunDir", toSun);
         material.SetVector("_SkySunFlat", new Float2(toSun.X / flatLength, toSun.Z / flatLength));
         material.SetVector("_SkySunDepth", depth);
-        material.SetVector("_SkySunTransmittance", Exp(-depth));
+        material.SetVector("_SkySunTransmittance", transmittance);
+        material.SetVector("_SkySunColor", transmittance * ozone);
         material.SetVector("_SkySunDepthSlope", depthSlope);
-        material.SetFloat("_SkyMieScale", MieScatter * (1 - MieG * MieG) / (4 * MathF.PI) * MathF.Exp(-TwilightGlowFade * depression));
+        material.SetVector("_SkyRayleighScale", Rayleigh * ozone * (3 / (16 * MathF.PI)));
+        material.SetVector("_SkyMieScale", ozone * mieScale);
         material.SetVector("_SkyBounce", bounce);
+        material.SetVector("_SkyBounceRedden", bounceRedden);
+        material.SetFloat("_SkyBounceSide", BounceSide * depression);
 
-        material.SetFloat("_SkyTwilight", toSun.Y < 0 ? 1 : 0);
+        material.SetFloat("_SkyTwilight", shadowDepth > 0 ? 1 : 0);
         material.SetVector("_SkyFadeBase", fadeBase);
         material.SetFloat("_SkyAwayFade", awayFade);
         material.SetFloat("_SkyHighFade", TwilightHighFade * depression);
         material.SetFloat("_SkyHeightFade", (TwilightHeightFade + TwilightHeightCurve * depression) * depression);
-        material.SetFloat("_SkyHighTint", TwilightHighTint * depression);
 
-        material.SetFloat("_SkyShadowRise", (ShadowRise + ShadowRiseCurve * depression) * depression);
-        material.SetFloat("_SkyInverseShadowWidth", 1 / (ShadowSoftness + ShadowSoftening * depression + 1e-4f));
-        material.SetFloat("_SkyInverseBeltWidth", 1 / BeltFade);
-        material.SetFloat("_SkyShadowRamp", SmoothStep(0, ShadowRamp, depression));
+        material.SetFloat("_SkyShadowRise", (ShadowRise + ShadowRiseCurve * shadowDepth) * shadowDepth);
+        material.SetFloat("_SkyInverseShadowWidth", 1 / (ShadowSoftening * shadowDepth + 1e-4f));
+        material.SetFloat("_SkyRampStart", (shadowDepth - ShadowSpread) / ShadowRamp);
+        material.SetFloat("_SkyRampSpread", ShadowSpread / ShadowRamp);
     }
 
     /// <summary>Air along a direction relative to straight up, with the earth's curve.</summary>
@@ -99,12 +108,6 @@ public static class ProceduralSky
         float root = MathF.Sqrt(0.128567f * mu * mu + k);
         float mass = 1 / (0.641433f * mu + root);
         return (0.641433f + 0.128567f * mu / root) * mass * mass;
-    }
-
-    static float SmoothStep(float a, float b, float x)
-    {
-        float t = Math.Clamp((x - a) / (b - a), 0, 1);
-        return t * t * (3 - 2 * t);
     }
 
     static Float3 Exp(Float3 v) => new(MathF.Exp(v.X), MathF.Exp(v.Y), MathF.Exp(v.Z));

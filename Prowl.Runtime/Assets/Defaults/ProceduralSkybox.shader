@@ -48,21 +48,22 @@ Pass "Skybox"
             uniform vec2 _SkySunFlat;
             uniform vec3 _SkySunDepth;
             uniform vec3 _SkySunTransmittance;
+            uniform vec3 _SkySunColor;
             uniform vec3 _SkySunDepthSlope;
-            uniform float _SkyMieScale;
+            uniform vec3 _SkyRayleighScale;
+            uniform vec3 _SkyMieScale;
             uniform vec3 _SkyBounce;
+            uniform vec3 _SkyBounceRedden;
+            uniform float _SkyBounceSide;
             uniform float _SkyTwilight;
             uniform vec3 _SkyFadeBase;
             uniform float _SkyAwayFade;
             uniform float _SkyHighFade;
             uniform float _SkyHeightFade;
-            uniform float _SkyHighTint;
             uniform float _SkyShadowRise;
             uniform float _SkyInverseShadowWidth;
-            uniform float _SkyInverseBeltWidth;
-            uniform float _SkyShadowRamp;
-
-            #define PI 3.14159265
+            uniform float _SkyRampStart;
+            uniform float _SkyRampSpread;
 
             const vec3 RAYLEIGH = vec3(5.802e-6, 13.558e-6, 33.1e-6);
             const float MIE_EXTINCTION = 4.44e-6;
@@ -70,9 +71,10 @@ Pass "Skybox"
             const float RAYLEIGH_HEIGHT = 8000.0, RAYLEIGH_K = 8.0e-4;
             const float MIE_HEIGHT = 1200.0, MIE_K = 1.2e-4;
 
-            const float SUN_FAR_FADE = 20.192;        // how fast the far air sun shift fades with view height
-            const float BELT_REDDENING = 162650.0;    // extra air the sunlight crosses to reach the pink band
-            const float BOUNCE_VIEW_SCALE = 1.2543;   // how quickly the bounce light levels off along long views
+            const float SUN_FAR_FADE = 11.998;       // how fast the far air sun shift fades with view height
+            const float BELT_REDDENING = 144350.0;   // extra air the sunlight crosses to reach the pink band
+            const float BELT_FADE = 0.06963;        // how softly the pink band fades out above the shadow edge
+            const float BOUNCE_SIDE_FADE = 2.542;    // how fast the bounce light's lean toward the sun fades looking up
 
             const float EXPOSURE = 40.0;
             const float SUN_DISK = 2000.0;
@@ -100,28 +102,29 @@ Pass "Skybox"
                 vec3 d = viewDepth - _SkySunDepth;
                 vec3 lit = mix((_SkySunTransmittance - viewTransmittance) / d, 0.5 * (_SkySunTransmittance + viewTransmittance), lessThan(abs(d), vec3(1e-3)));
 
-                float horizontal = sqrt(max(1.0 - view.y * view.y, 1e-6));
-                float cosAzimuth = clamp(dot(view.xz, _SkySunFlat) / horizontal, -1.0, 1.0) * smoothstep(0.0, 0.3, horizontal);
+                float cosAzimuth = dot(view.xz, _SkySunFlat);
 
-                lit *= exp(_SkySunDepthSlope * cosAzimuth / (1.0 + SUN_FAR_FADE * viewMu));
+                lit *= max(1.0 + _SkySunDepthSlope * cosAzimuth / (1.0 + SUN_FAR_FADE * viewMu), 0.0);
 
                 float mieSpread = inversesqrt(1.0 + MIE_G * MIE_G - 2.0 * MIE_G * cosToSun);
-                vec3 single = (RAYLEIGH * (3.0 / (16.0 * PI) * viewRayleigh * (1.0 + cosToSun * cosToSun))
+                vec3 single = (_SkyRayleighScale * (viewRayleigh * (1.0 + cosToSun * cosToSun))
                              + _SkyMieScale * (viewMie * mieSpread * mieSpread * mieSpread)) * lit;
 
                 if (_SkyTwilight > 0.5)
                 {
                     float above = viewMu + _SkyShadowRise * cosAzimuth;
                     float sunlit = sigmoid(above * _SkyInverseShadowWidth);
-                    float belt = sunlit * (1.0 - sigmoid(above * _SkyInverseBeltWidth));
+                    float belt = sunlit * (1.0 - sigmoid(above * (1.0 / BELT_FADE)));
+                    float strength = smoothstep(0.0, 1.0, _SkyRampStart - _SkyRampSpread * cosAzimuth);
 
                     float fade = viewMu * (_SkyHighFade + cosAzimuth * _SkyHeightFade) - cosAzimuth * _SkyAwayFade;
-                    vec3 depth = _SkyFadeBase + fade + RAYLEIGH * (_SkyHighTint * viewMu + BELT_REDDENING * _SkyShadowRamp * belt);
-                    single *= exp(-depth) * (1.0 - _SkyShadowRamp * (1.0 - sunlit));
+                    vec3 depth = _SkyFadeBase + fade + RAYLEIGH * (BELT_REDDENING * strength * belt);
+                    single *= exp(-depth) * (1.0 - strength * (1.0 - sunlit));
                 }
 
-                vec3 seen = viewDepth * BOUNCE_VIEW_SCALE;
-                vec3 multiple = _SkyBounce * viewRayleigh * (1.0 - exp(-seen)) / seen;
+                vec3 multiple = _SkyBounce * viewRayleigh * (1.0 - viewTransmittance) / viewDepth
+                              * (1.0 + _SkyBounceSide * cosAzimuth / (1.0 + BOUNCE_SIDE_FADE * viewMu))
+                              * exp(-_SkyBounceRedden * viewRayleigh);
 
                 return single + multiple;
             }
@@ -140,7 +143,7 @@ Pass "Skybox"
 
                 // Sun disk, and a darker ground below the horizon
                 float disk = smoothstep(0.99985, 0.99999, dot(view, _SkySunDir)) * step(0.0, view.y);
-                color += disk * SUN_DISK * _SkySunTransmittance;
+                color += disk * SUN_DISK * _SkySunColor;
                 color = mix(color, color * 0.25, smoothstep(0.0, -0.02, view.y));
 
                 fragColor = vec4(jodieReinhardTonemap(color * EXPOSURE), 1.0);
