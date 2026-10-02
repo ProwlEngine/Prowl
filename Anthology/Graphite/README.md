@@ -92,7 +92,7 @@ Creating a device and dispatching the pipeline each frame:
 ```cs
 GraphicsDeviceOptions options = new()
 {
-    Debug = false,
+    VulkanValidationLayers = false,
     PreferStandardClipSpaceYDirection = true
 };
 
@@ -151,7 +151,7 @@ One MSBuild property controls backend trimming. It can be set on the command lin
 Graphite ships two optional layers that mirror the core source tree, toggled at runtime through
 `GraphicsDeviceOptions` rather than at compile time:
 
-- **Validation** (`GraphicsDeviceOptions.EnableValidation`, defaults to enabled when `null`): extra
+- **Validation** (`GraphicsDeviceOptions.GraphiteValidation`, defaults to true): extra
   argument and state checks that throw descriptive exceptions on misuse. Validation lives under
   `Graphite/ValidationLayers`, mirroring the structure of `Graphite/Core` and `Graphite/Platform`,
   and every check is gated behind `GraphicsDevice.ValidationEnabled`.
@@ -161,7 +161,7 @@ Graphite ships two optional layers that mirror the core source tree, toggled at 
   structure, and every counter is gated behind `GraphicsDevice.ProfilingEnabled`.
 
 Both settings are read once at device creation and apply for the device's lifetime. Leave
-`EnableValidation` on during development; disable it for release builds where the extra checks
+`GraphiteValidation` on during development; disable it for release builds where the extra checks
 aren't needed. `EnableProfiling` stays off unless you're actively reading `GetProfile()`.
 
 ## API Differences

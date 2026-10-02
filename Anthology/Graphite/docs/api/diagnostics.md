@@ -21,10 +21,10 @@ Graphite has four diagnostic channels, all configured through [`GraphicsDeviceOp
 
 | Channel | Turn on with | Output |
 |---------|--------------|--------|
-| Validation layer | `EnableValidation` (on by default) | `RenderException` thrown at the bad call |
+| Validation layer | `GraphiteValidation` (on by default) | `RenderException` thrown at the bad call |
 | Profiler | `Profiler` option or `SetProfiler` | callbacks on your `IProfiler` |
 | Device warnings | `OnWarning` (on by default, writes to `Console.Error`) | non-fatal messages |
-| Driver validation | `Debug = true` | Vulkan validation layer messages, errors rethrown as `RenderException` |
+| Driver validation | `VulkanValidationLayers = true` | Vulkan validation layer messages, errors rethrown as `RenderException` |
 
 Internals are in [Validation and profiling internals](../internals/08-validation-and-profiling.md).
 
@@ -72,7 +72,7 @@ DrawCounter counter = new();
 
 GraphicsDeviceOptions options = new(debug: false, swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt)
 {
-    EnableValidation = true,
+    GraphiteValidation = true,
     Profiler = counter
 };
 ```
@@ -83,8 +83,8 @@ Pass `options` to `GraphicsDevice.CreateVulkan` as shown in [Getting started](ge
 
 | Field | Type | Default | Effect |
 |-------|------|---------|--------|
-| `Debug` | `bool` | `false` | Enables the Vulkan debug-report extension and any installed validation layers |
-| `EnableValidation` | `bool?` | `null` (treated as true) | Turns the Graphite validation layer on or off |
+| `VulkanValidationLayers` | `bool` | `false` | Enables the Vulkan debug-report extension and any installed validation layers |
+| `GraphiteValidation` | `bool` | `true` | Turns the Graphite validation layer on or off |
 | `Profiler` | `IProfiler?` | `null` | Initial profiler. No implementation ships with Graphite |
 | `TransientBufferSoftCapBytes` | `uint` | 0 (64 MB) | Over this, `OnWarning` fires once per device |
 | `TransientBufferHardCapBytes` | `uint` | 0 (256 MB) | Over this, a `RenderException` is thrown (only while validation is on) |
@@ -106,7 +106,7 @@ The validation layer is a fixed set of checks inside the library. There is no pu
 ```csharp
 GraphicsDeviceOptions release = new(debug: false, swapchainDepthFormat: null)
 {
-    EnableValidation = false
+    GraphiteValidation = false
 };
 ```
 
@@ -122,7 +122,7 @@ What it catches, by area:
 | Lifetime | referencing a disposed resource |
 | Transient memory | exceeding `TransientBufferHardCapBytes` |
 
-All failures are `RenderException`. Validation is on unless `EnableValidation` is `false`.
+All failures are `RenderException`. Validation is on unless `GraphiteValidation` is `false`.
 
 ## Profiling (IProfiler)
 
@@ -239,23 +239,23 @@ The missing-property handler is the quickest way to find a typo in a property na
 
 `CommandBuffer.PushDebugGroup(string)`, `PopDebugGroup()` and `InsertDebugMarker(string)` label regions for tools such as RenderDoc. Every push needs a pop. See [command buffers](command-buffers.md).
 
-Setting `GraphicsDeviceOptions.Debug = true` enables the Vulkan debug-report extension plus the standard or Khronos validation layer if the system has one installed. Errors are stored by the driver callback and rethrown as `RenderException` on the next submit or `WaitForIdle`, so the stack trace may point slightly after the offending call. Resource `Name` values appear in driver messages.
+Setting `GraphicsDeviceOptions.VulkanValidationLayers = true` enables the Vulkan debug-report extension plus the standard or Khronos validation layer if the system has one installed. Errors are stored by the driver callback and rethrown as `RenderException` on the next submit or `WaitForIdle`, so the stack trace may point slightly after the offending call. Resource `Name` values appear in driver messages.
 
 ## Common patterns
 
-- Development build: `Debug = true`, validation on, an `OnWarning` that logs with a stack trace, and an `OnMissingProperty` that logs.
-- Release build: `Debug = false`, `EnableValidation = false`, `Profiler = null`. The checks reduce to a static bool read.
+- Development build: `VulkanValidationLayers = true`, validation on, an `OnWarning` that logs with a stack trace, and an `OnMissingProperty` that logs.
+- Release build: `VulkanValidationLayers = false`, `GraphiteValidation = false`, `Profiler = null`. The checks reduce to a static bool read.
 - In-game overlay: set `RequestGPUStatistics = true`, accumulate `RecordExecutionTime` per `CommandBufferInfo.Name`, and read the totals from the UI thread.
 - Toggle a profiler at runtime with `device.SetProfiler(x)` between `DispatchGraph` calls.
 
 ## Pitfalls
 
-- `EnableValidation` is process-wide. The last device you create decides the setting for all devices.
+- `GraphiteValidation` is process-wide. The last device you create decides the setting for all devices.
 - GPU time arrives late. Key by `CommandBufferInfo.Id` or `Name`, not by "the current frame".
 - The command buffer and framebuffers handed to `Capture` are invalid after it returns.
 - `RequestCapture` and `RequestGPUStatistics` add real work while they return true.
 - `SetProfiler` is not safe to call from another thread mid-frame.
-- `Debug = true` and `EnableValidation` are independent. One controls the Vulkan driver layers, the other Graphite's own checks.
+- `VulkanValidationLayers = true` and `GraphiteValidation` are independent. One controls the Vulkan driver layers, the other Graphite's own checks.
 - With validation off, nulls and bad arguments fail later and less clearly, and the transient hard cap is not enforced.
 
 ## See also

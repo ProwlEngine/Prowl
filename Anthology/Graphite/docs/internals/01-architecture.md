@@ -56,7 +56,7 @@ Both layers are plain partial-class files in the same assembly. There is no cond
 
 | Layer | Mechanism | Off switch |
 | --- | --- | --- |
-| Validation | `*_Check*` helper methods that begin with `if (!GraphicsDevice.ValidationEnabled) return;` | `GraphicsDeviceOptions.EnableValidation = false` (validation is on unless it is `false`) |
+| Validation | `*_Check*` helper methods that begin with `if (!GraphicsDevice.ValidationEnabled) return;` | `GraphicsDeviceOptions.GraphiteValidation = false` (validation is on unless it is `false`) |
 | Profiling | `Profiler` property, each hook starts with `if (Profiler is not { } profiler) return;` or uses `Profiler?.Record...` | `GraphicsDeviceOptions.Profiler = null` (default) |
 
 [ValidationEnabled](../../Graphite/ValidationLayers/Core/GraphicsDevice/GraphicsDevice.Validation.cs#L8) is a static field written once in `InitializeFrameOptions`. [SetProfiler](../../Graphite/Profiling/Core/GraphicsDevice/GraphicsDevice.Profiling.cs) swaps the profiler at any time. The two layers do not depend on each other. See [08-validation-and-profiling.md](08-validation-and-profiling.md).
@@ -102,7 +102,7 @@ A decorator would wrap every resource and double the object count. Partial class
 
 ## Gotchas
 
-- `ValidationEnabled` is a static field. With two devices created with different `EnableValidation` values, the last constructed device wins for both.
+- `ValidationEnabled` is a static field. With two devices created with different `GraphiteValidation` values, the last constructed device wins for both.
 - Backend classes are `internal`; `VkBuffer` and `VkGraphicsDevice` are implementation, not API. `GraphicsDevice.GetVulkanInfo` exposes native handles.
 - `DispatchGraph` only presents if a pass called `RenderContext.Present()`. A pipeline whose present pass returns early (for example because `SwapchainTarget` is null) renders nothing on screen and does not swap.
 - Dispose order matters. The device does `WaitForIdle` and disposes its pools and default resources, but child resources created by the application must be disposed before the device.

@@ -219,7 +219,7 @@ internal sealed class TriangleApp : IDisposable
     {
         GraphicsDeviceOptions options = new()
         {
-            Debug = true
+            VulkanValidationLayers = true
         };
 
         SwapchainDescription swapchain = new()
@@ -286,7 +286,7 @@ public static class Program
 
 ## How it works
 
-**Device.** `GraphicsDevice.CreateVulkan` takes a `GraphicsDeviceOptions`, a `SwapchainDescription` and optional Vulkan options. The description tells the device how to build the main swapchain: its size and a `SwapchainSource` wrapping your window's Vulkan surface. Pass no description and you get a headless device for compute or offscreen work. `Debug = true` enables the Vulkan debug report and validation layers if installed ([GraphicsDevice API](graphics-device.md), [internals: device and execution](../internals/02-device-and-execution.md)).
+**Device.** `GraphicsDevice.CreateVulkan` takes a `GraphicsDeviceOptions`, a `SwapchainDescription` and optional Vulkan options. The description tells the device how to build the main swapchain: its size and a `SwapchainSource` wrapping your window's Vulkan surface. Pass no description and you get a headless device for compute or offscreen work. `VulkanValidationLayers = true` enables the Vulkan debug report and validation layers if installed ([GraphicsDevice API](graphics-device.md), [internals: device and execution](../internals/02-device-and-execution.md)).
 
 **Shader.** ShaderDef wraps a Slang program in a small markup that carries the fixed-function state. `ShaderParser.Parse` produces a `ShaderDefinition`, and `Create` binds it to the device and a `SlangShaderCompiler`. The fallback `Variant` argument is required; an empty `new Variant()` serves shaders without keyword variants. `CompileMode.All` compiles every variant up front, so the session can end right after and nothing compiles mid-frame. `cmd.SetShader(pass)` then resolves the pass into a `GraphicsProgram` using the state from the markup ([Shader programs](shader-programs.md), [internals: shader compiler](../internals/06-shader-compiler.md)).
 

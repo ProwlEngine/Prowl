@@ -41,7 +41,7 @@ Neither layer is a separate assembly or a `#if`. Both work through `partial` cla
 
 Every backend constructor calls [`InitializeFrameOptions`](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L210). After it sizes the execution ring and transient caps, it calls two partial methods:
 
-- `InitializeFrameOptions_SetValidationEnabled` sets `ValidationEnabled = options.EnableValidation ?? true`. Validation is on unless `EnableValidation` is `false`.
+- `InitializeFrameOptions_SetValidationEnabled` sets `ValidationEnabled = options.GraphiteValidation`. Validation is on unless `GraphiteValidation` is `false`.
 - `InitializeFrameOptions_InitializeProfiling` copies `options.Profiler` into the `Profiler` property.
 
 ### 2. Validation: check-then-act at the public boundary
@@ -113,7 +113,7 @@ flowchart LR
 
 ### 5. The third layer: Vulkan's own validation
 
-`GraphicsDeviceOptions.Debug` is unrelated to `EnableValidation`. When `Debug` is true, the Vulkan instance enables `VK_EXT_debug_report` and whichever of the standard or Khronos validation layers are installed ([Init.cs](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Init.cs#L88)). The driver callback cannot throw across the unmanaged boundary, so it stores the last error string and returns; the next call to [`FlushValidationErrors`](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.DebugMarkers.cs#L77) (after a submit, after `WaitForIdle`) turns it into a `RenderException`. Warnings are printed to the console immediately.
+`GraphicsDeviceOptions.VulkanValidationLayers` is unrelated to `GraphiteValidation`. When `VulkanValidationLayers` is true, the Vulkan instance enables `VK_EXT_debug_report` and whichever of the standard or Khronos validation layers are installed ([Init.cs](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Init.cs#L88)). The driver callback cannot throw across the unmanaged boundary, so it stores the last error string and returns; the next call to [`FlushValidationErrors`](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.DebugMarkers.cs#L77) (after a submit, after `WaitForIdle`) turns it into a `RenderException`. Warnings are printed to the console immediately.
 
 ## Design decisions
 
@@ -139,7 +139,7 @@ The profiler receives events whether or not validation is on, and validation nev
 
 ## Gotchas
 
-- `ValidationEnabled` is `static`. Creating a second device with a different `EnableValidation` overwrites the setting for every device in the process.
+- `ValidationEnabled` is `static`. Creating a second device with a different `GraphiteValidation` overwrites the setting for every device in the process.
 - With validation off, bad input is not rejected: a null where `RequireNotNull` would have thrown surfaces later as a `NullReferenceException`, and the transient buffer hard cap is no longer enforced (the soft-cap warning still fires).
 - Not every exception comes from the validation layer. `UpdateBuffer` range checks, `SwapBuffers` without a swapchain, and `RenderTexture` with no attachments throw regardless of the flag.
 - `SetProfiler` replaces the profiler immediately, with no locking. Call it between executions.

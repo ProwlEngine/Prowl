@@ -22,7 +22,7 @@ Only Vulkan is implemented. `GraphicsBackend` has one value: `Vulkan`.
 ## Quick example
 
 ```csharp
-GraphicsDeviceOptions options = new() { Debug = false };
+GraphicsDeviceOptions options = new() { VulkanValidationLayers = false };
 
 SwapchainDescription swapchain = new()
 {
@@ -49,14 +49,14 @@ device.Dispose();
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Debug` | `bool` | false | Enable Vulkan debug report and validation layers if installed |
+| `VulkanValidationLayers` | `bool` | false | Enable Vulkan debug report and validation layers if installed |
 | `PreferDepthRangeZeroToOne` | `bool` | false | Request 0..1 depth range |
 | `PreferStandardClipSpaceYDirection` | `bool` | false | Request bottom-to-top clip space Y. Not the Vulkan default and not always available; check `IsClipSpaceYInverted` afterwards |
 | `MaxFramesInFlight` | `uint` | 0 (3) | Execution ring size |
 | `TransientBufferInitialSize` | `uint` | 0 (4 MB) | Initial size of each slot's transient bump buffer |
 | `TransientBufferSoftCapBytes` | `uint` | 0 (64 MB) | Warn once past this many transient bytes in one execution |
 | `TransientBufferHardCapBytes` | `uint` | 0 (256 MB) | Throw past this many transient bytes (validation on) |
-| `EnableValidation` | `bool?` | null (on) | Graphite's own checks |
+| `GraphiteValidation` | `bool` | true | Graphite's own checks |
 | `Profiler` | `IProfiler?` | null | See [Diagnostics](diagnostics.md) |
 
 The caps are clamped so that soft >= initial and hard >= soft ([InitializeFrameOptions](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L210)).

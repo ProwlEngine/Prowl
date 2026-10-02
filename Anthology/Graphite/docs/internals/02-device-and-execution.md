@@ -38,7 +38,7 @@ Options that matter here (zero means "use default"):
 | `TransientBufferInitialSize` | 4 MB | Primary transient uniform buffer per slot |
 | `TransientBufferSoftCapBytes` | 64 MB | One-time warning when a slot's total grows past this |
 | `TransientBufferHardCapBytes` | 256 MB | Exception (with validation on) past this |
-| `EnableValidation` | on | See [08-validation-and-profiling.md](08-validation-and-profiling.md) |
+| `GraphiteValidation` | on | See [08-validation-and-profiling.md](08-validation-and-profiling.md) |
 | `Profiler` | null | Optional `IProfiler` |
 
 The defaults and clamping (soft cap raised to at least the initial size, hard cap to at least the soft cap) are in [InitializeFrameOptions](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L210).
