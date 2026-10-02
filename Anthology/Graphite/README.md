@@ -55,12 +55,12 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override string Name => "Triangle";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
     public override void Render(RenderContext<SceneView> context)
     {
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
@@ -344,7 +344,7 @@ declarative graph of passes over a `RenderPipeline<TView>`:
 - **Load/store ops** - an output declaration carries `TargetLoadStoreOps` (per-attachment `LoadAction`
   Clear/Load/DontCare and `StoreAction` Store/DontCare). The default follows lifetime: transient
   targets Clear, persistent/history/imported targets Load. `RasterPass.BindTarget` applies them; clear
-  values are supplied at record time.
+  values live on the declaration (`TargetLoadStoreOps.Clear(color, depth, stencil)`).
 - **History and imported resources** - `DeclareOutputTexture(id, desc, history: N)` (and the buffer form)
   makes a persistent versioned resource: the graph keeps a ring of `N+1` physical copies and rotates
   the current one each execution. Resolve by age with `context.GetRenderTexture(handle, framesAgo: k)`
