@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Coverage for graph buffer resources (Phase B): GetOutputBuffer / GetInputBuffer declarations, the
+// Coverage for graph buffer resources (Phase B): DeclareOutputBuffer / DeclareInputBuffer declarations, the
 // BufferHandle resolution/caching seam through RenderContext.GetRenderBuffer, cross-pass sharing of one
 // transient buffer, and a compute pass writing a graph buffer that is copied back for verification.
 
@@ -38,7 +38,7 @@ file sealed class BufferWriterPass : IPass<BufferView>
     public string Name => "Writer";
     public DeviceBuffer? Resolved { get; private set; }
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetOutputBuffer(_id, _desc);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
     public void Render(RenderContext<BufferView> context) => Resolved = context.GetRenderBuffer(_handle);
 }
@@ -53,7 +53,7 @@ file sealed class BufferReaderPass : IPass<BufferView>
     public string Name => "Reader";
     public DeviceBuffer? Resolved { get; private set; }
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetInputBuffer(_id);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputBuffer(_id);
 
     public void Render(RenderContext<BufferView> context) => Resolved = context.GetRenderBuffer(_handle);
 }
@@ -89,7 +89,7 @@ file sealed class ComputeWriteReadbackPass : IPass<BufferView>
 
     public string Name => "ComputeWriteReadback";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetOutputBuffer(_id, _desc);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
     public void Render(RenderContext<BufferView> context)
     {
@@ -129,7 +129,7 @@ file sealed class BufferHistoryPass : IPass<BufferView>
     public string Name => "History";
 
     public void Setup(RenderContextBuilder builder)
-        => _handle = builder.GetOutputBuffer(_id, GraphBufferDesc.Structured(_sizeInBytes / 4, 4), history: 1);
+        => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(_sizeInBytes / 4, 4), history: 1);
 
     public void Render(RenderContext<BufferView> context)
     {

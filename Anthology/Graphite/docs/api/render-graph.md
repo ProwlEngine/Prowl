@@ -178,11 +178,11 @@ Passed to `IPass.Setup`. Every call records a read or write. Source: [RenderCont
 
 | Member | Signature | Description |
 |--------|-----------|-------------|
-| `GetInputTexture` | `TextureHandle GetInputTexture(RenderResourceID id, TextureUsageKind usage = Sampled, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture this pass reads. The producer owns the description. `usage` combines `Sampled`, `Storage` and `TransferSrc`. |
-| `GetOutputTexture` | `TextureHandle GetOutputTexture(RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null, TextureUsageKind usage = Attachment, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture this pass writes. `history > 0` keeps that many prior executions readable. `usage` must include `Attachment`, `Storage` or `TransferDst`. |
-| `ImportTexture` | `TextureHandle ImportTexture(RenderResourceID id, RenderTexture existing, TextureUsageKind usage = Attachment, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Registers an externally owned render texture as an output. The graph never disposes it. |
-| `GetInputBuffer` | `BufferHandle GetInputBuffer(RenderResourceID id, BufferUsageKind usage = AnyRead)` | Declares a buffer this pass reads. `usage` may combine read kinds only. |
-| `GetOutputBuffer` | `BufferHandle GetOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferUsageKind usage = Storage)` | Declares a buffer this pass writes. `usage` must include `Storage` or `TransferDst`. |
+| `DeclareInputTexture` | `TextureHandle DeclareInputTexture(RenderResourceID id, TextureUsageKind usage = Sampled, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture this pass reads. The producer owns the description. `usage` combines `Sampled`, `Storage` and `TransferSrc`. |
+| `DeclareOutputTexture` | `TextureHandle DeclareOutputTexture(RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null, TextureUsageKind usage = Attachment, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture this pass writes. `history > 0` keeps that many prior executions readable. `usage` must include `Attachment`, `Storage` or `TransferDst`. |
+| `DeclareImportedTexture` | `TextureHandle DeclareImportedTexture(RenderResourceID id, RenderTexture existing, TextureUsageKind usage = Attachment, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Registers an externally owned render texture as an output. The graph never disposes it. |
+| `DeclareInputBuffer` | `BufferHandle DeclareInputBuffer(RenderResourceID id, BufferUsageKind usage = AnyRead)` | Declares a buffer this pass reads. `usage` may combine read kinds only. |
+| `DeclareOutputBuffer` | `BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferUsageKind usage = Storage)` | Declares a buffer this pass writes. `usage` must include `Storage` or `TransferDst`. |
 
 A usage kind that does not fit the declaration (for example `Attachment` on an input) throws `ArgumentException` from the builder.
 
@@ -192,8 +192,8 @@ Passed to `IPresentPass.Setup`. Source: [PresentContextBuilder.cs](../../Graphit
 
 | Member | Signature | Description |
 |--------|-----------|-------------|
-| `GetInputTexture` | `TextureHandle GetInputTexture(RenderResourceID id, TextureUsageKind usage = Sampled, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture read |
-| `GetInputBuffer` | `BufferHandle GetInputBuffer(RenderResourceID id, BufferUsageKind usage = AnyRead)` | Declares a buffer read |
+| `DeclareInputTexture` | `TextureHandle DeclareInputTexture(RenderResourceID id, TextureUsageKind usage = Sampled, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture read |
+| `DeclareInputBuffer` | `BufferHandle DeclareInputBuffer(RenderResourceID id, BufferUsageKind usage = AnyRead)` | Declares a buffer read |
 | `RequestSwapchain` | `void RequestSwapchain()` | Makes `context.SwapchainTarget` non-null |
 
 ## Usage kinds and barriers
@@ -233,8 +233,8 @@ Because the state follows recording order, a pass that calls `Transition` must s
 public override void Setup(RenderContextBuilder builder)
 {
     const TextureUsageKind both = TextureUsageKind.Attachment | TextureUsageKind.Sampled;
-    _a = builder.GetOutputTexture("BlurA", desc, usage: both, initial: TextureUsageKind.Sampled);
-    _b = builder.GetOutputTexture("BlurB", desc, usage: both, initial: TextureUsageKind.Attachment);
+    _a = builder.DeclareOutputTexture("BlurA", desc, usage: both, initial: TextureUsageKind.Sampled);
+    _b = builder.DeclareOutputTexture("BlurB", desc, usage: both, initial: TextureUsageKind.Attachment);
 }
 
 public override void Render(RenderContext<SceneView> context)
@@ -350,7 +350,7 @@ Several formats make a multiple-render-target G-buffer; they share one resource 
 | `AttachmentOps` | `Load`, `Store`; statics `Cleared`, `Loaded`, `Discard` |
 | `TargetLoadStoreOps` | `Color`, `Depth`; ctor `(AttachmentOps color, AttachmentOps depth)`; `static ForLifetime(bool persistent)` |
 
-Defaults: a `history = 0` output uses `ForLifetime(false)` (clear, store). A history output or an imported texture uses `ForLifetime(true)` (load, store). Pass `ops` to `GetOutputTexture` or `SetTarget` to override per declaring pass.
+Defaults: a `history = 0` output uses `ForLifetime(false)` (clear, store). A history output or an imported texture uses `ForLifetime(true)` (load, store). Pass `ops` to `DeclareOutputTexture` or `SetTarget` to override per declaring pass.
 
 ### Handles and IDs
 
@@ -449,7 +449,7 @@ internal sealed class BlitPresentPass : IPresentPass<SceneView>
 
     public void Setup(PresentContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture("Scene");
+        _sceneHandle = builder.DeclareInputTexture("Scene");
         builder.RequestSwapchain();
     }
 
@@ -512,7 +512,7 @@ With more passes, the sample adds `BloomDownsample` (reads "Scene", writes "Bloo
 ```csharp
 public override void Setup(RenderContextBuilder builder)
 {
-    _color = builder.GetOutputTexture("TaaColor", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R16_G16_B16_A16_Float), history: 1);
+    _color = builder.DeclareOutputTexture("TaaColor", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R16_G16_B16_A16_Float), history: 1);
 }
 
 public override void Render(RenderContext<SceneView> context)
@@ -529,7 +529,7 @@ History outputs default to load/store so the previous contents survive. `IsHisto
 
 ```csharp
 public override void Setup(RenderContextBuilder builder)
-    => _scene = builder.GetOutputTexture("Scene", desc,
+    => _scene = builder.DeclareOutputTexture("Scene", desc,
         ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded),
         depthUsage: TextureUsageKind.DepthReadOnly);
 ```
@@ -540,10 +540,10 @@ The pass binds the "Scene" framebuffer and samples `scene.DepthTexture` in the s
 
 ```csharp
 public override void Setup(RenderContextBuilder builder)
-    => _field = builder.GetOutputTexture("Field", GraphTextureDesc.Sized(256, 256, false, PixelFormat.R32_G32_B32_A32_Float), usage: TextureUsageKind.Storage);
+    => _field = builder.DeclareOutputTexture("Field", GraphTextureDesc.Sized(256, 256, false, PixelFormat.R32_G32_B32_A32_Float), usage: TextureUsageKind.Storage);
 ```
 
-A later pass declares `builder.GetInputTexture("Field")` and samples it. The graph adds the storage-write to shader-read barrier between the two passes.
+A later pass declares `builder.DeclareInputTexture("Field")` and samples it. The graph adds the storage-write to shader-read barrier between the two passes.
 
 ### Shared resource declared on the pipeline
 
@@ -564,7 +564,7 @@ Passes still declare reads and writes of "GBuffer" to be ordered, but the descri
 ```csharp
 public override void Setup(RenderContextBuilder builder)
 {
-    _target = builder.ImportTexture("External", _renderTexture);
+    _target = builder.DeclareImportedTexture("External", _renderTexture);
 }
 ```
 

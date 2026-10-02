@@ -13,7 +13,7 @@ file sealed class CountingPass : IPass<TestView>
     public void Setup(RenderContextBuilder builder)
     {
         SetupCount++;
-        builder.GetOutputTexture("pipeline_counting_out", Desc.Color());
+        builder.DeclareOutputTexture("pipeline_counting_out", Desc.Color());
     }
 
     public void Render(RenderContext<TestView> context) { }

@@ -40,7 +40,7 @@ file sealed class ViewHistoryPass : IPass<HistoryView>
     public Dictionary<int, List<RenderTexture>> Previous { get; } = new();
     public Dictionary<int, List<bool>> Valid { get; } = new();
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetOutputTexture(_id, _desc, history: 1);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
 
     public void Render(RenderContext<HistoryView> context)
     {
@@ -71,7 +71,7 @@ file sealed class ViewBufferHistoryPass : IPass<HistoryView>
     public Dictionary<int, List<DeviceBuffer>> Previous { get; } = new();
 
     public void Setup(RenderContextBuilder builder)
-        => _handle = builder.GetOutputBuffer(_id, GraphBufferDesc.Structured(16, 16), history: 1);
+        => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(16, 16), history: 1);
 
     public void Render(RenderContext<HistoryView> context)
     {

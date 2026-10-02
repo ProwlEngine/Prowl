@@ -42,7 +42,7 @@ file sealed class RecordingPass : IPass<DispatchView>
     public void Setup(RenderContextBuilder builder)
     {
         if (_rentTransient)
-            _scratch = builder.GetOutputTexture("Scratch", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
+            _scratch = builder.DeclareOutputTexture("Scratch", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
     }
 
     public void Render(RenderContext<DispatchView> context)

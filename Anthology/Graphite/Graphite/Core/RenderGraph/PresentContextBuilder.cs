@@ -13,7 +13,7 @@ public sealed class PresentContextBuilder
     internal bool RequestsSwapchain;
 
     /// <summary>Declares a texture this pass reads.</summary>
-    public TextureHandle GetInputTexture(
+    public TextureHandle DeclareInputTexture(
         RenderResourceID id,
         TextureUsageKind usage = TextureUsageKind.Sampled,
         TextureUsageKind? initial = null,
@@ -25,7 +25,7 @@ public sealed class PresentContextBuilder
     }
 
     /// <summary>Declares a buffer this pass reads.</summary>
-    public BufferHandle GetInputBuffer(RenderResourceID id, BufferUsageKind usage = BufferUsageKind.AnyRead)
+    public BufferHandle DeclareInputBuffer(RenderResourceID id, BufferUsageKind usage = BufferUsageKind.AnyRead)
     {
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: false));
         Inputs.Add(id);

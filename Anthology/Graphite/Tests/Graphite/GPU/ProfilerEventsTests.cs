@@ -113,7 +113,7 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
 
     public string Name => "ProfilerCopy";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetInputTexture(_id, TextureUsageKind.TransferSrc);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureUsageKind.TransferSrc);
 
     public void Render(RenderContext<ProfilerView> context)
     {

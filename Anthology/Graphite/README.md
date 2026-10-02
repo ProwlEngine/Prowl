@@ -309,9 +309,9 @@ Rendering is no longer "record commands into a `CommandBuffer` yourself each fra
 declarative graph of passes over a `RenderPipeline<TView>`:
 
 - **`IPass<TView>`** - a single offscreen pass. `Setup(RenderContextBuilder)` runs once (lazily, on
-  first use) and declares the resources the pass reads and writes: `GetInputTexture(id)` /
-  `GetInputBuffer(id)` reference a resource by ID only (the producer owns the description), while
-  `GetOutputTexture(id, desc)` / `GetOutputBuffer(id, desc)` declare a resource this pass produces.
+  first use) and declares the resources the pass reads and writes: `DeclareInputTexture(id)` /
+  `DeclareInputBuffer(id)` reference a resource by ID only (the producer owns the description), while
+  `DeclareOutputTexture(id, desc)` / `DeclareOutputBuffer(id, desc)` declare a resource this pass produces.
   `Render(RenderContext<TView>)` runs every dispatch and records the pass's actual work.
 - **`RasterPass<TView>`** - a convenience base for the common raster pass. Declare the render target in
   `Setup` with `SetTarget(builder, id, desc)` (or `SetTargets` for a multi-format MRT target), then in
@@ -342,11 +342,11 @@ declarative graph of passes over a `RenderPipeline<TView>`:
   Clear/Load/DontCare and `StoreAction` Store/DontCare). The default follows lifetime: transient
   targets Clear, persistent/history/imported targets Load. `RasterPass.BindTarget` applies them; clear
   values are supplied at record time.
-- **History and imported resources** - `GetOutputTexture(id, desc, history: N)` (and the buffer form)
+- **History and imported resources** - `DeclareOutputTexture(id, desc, history: N)` (and the buffer form)
   makes a persistent versioned resource: the graph keeps a ring of `N+1` physical copies and rotates
   the current one each execution. Resolve by age with `context.GetRenderTexture(handle, framesAgo: k)`
   (`framesAgo: 0` is the current write target) - the basis for TAA history and temporal reprojection.
-  `builder.ImportTexture(id, existing)` brings an externally-owned render target into the graph; the
+  `builder.DeclareImportedTexture(id, existing)` brings an externally-owned render target into the graph; the
   caller keeps ownership.
 - **`TextureHandle` / `BufferHandle`** - the opaque handles a pass gets back from the builder during
   setup; resolve them to a real `RenderTexture` / `DeviceBuffer` during rendering via

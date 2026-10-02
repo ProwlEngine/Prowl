@@ -50,7 +50,7 @@ file sealed class ResolvingPass : IPass<ResourceView>
     public List<RenderTexture> Resolved { get; } = new();
 
     public void Setup(RenderContextBuilder builder)
-        => _handle = _isOutput ? builder.GetOutputTexture(_id, _desc) : builder.GetInputTexture(_id);
+        => _handle = _isOutput ? builder.DeclareOutputTexture(_id, _desc) : builder.DeclareInputTexture(_id);
 
     public void Render(RenderContext<ResourceView> context)
     {
@@ -97,8 +97,8 @@ file sealed class TwoOutputPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder)
     {
-        builder.GetOutputTexture(_a, _desc);
-        builder.GetOutputTexture(_b, _desc);
+        builder.DeclareOutputTexture(_a, _desc);
+        builder.DeclareOutputTexture(_b, _desc);
     }
 
     public void Render(RenderContext<ResourceView> context) { }
@@ -132,7 +132,7 @@ file sealed class HistoryResolvingPass : IPass<ResourceView>
     public List<RenderTexture> Current { get; } = new();
     public List<RenderTexture> Previous { get; } = new();
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetOutputTexture(_id, _desc, history: 1);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
 
     public void Render(RenderContext<ResourceView> context)
     {
@@ -156,7 +156,7 @@ file sealed class ImportingPass : IPass<ResourceView>
     public string Name => "Import";
     public RenderTexture? Resolved { get; private set; }
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.ImportTexture(_id, _external);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareImportedTexture(_id, _external);
 
     public void Render(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
 }
@@ -208,7 +208,7 @@ file sealed class ReadingPresentPass : IPresentPass<ResourceView>
 
     public RenderTexture? Resolved { get; private set; }
 
-    public void Setup(PresentContextBuilder builder) => _handle = builder.GetInputTexture(_id);
+    public void Setup(PresentContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
     public void Present(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
 }
@@ -449,7 +449,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     }
 
     [Fact]
-    public void ImportTexture_ResolvesToTheExternalTexture()
+    public void DeclareImportedTexture_ResolvesToTheExternalTexture()
     {
         RenderTexture external = RF.CreateRenderTexture(new RenderTextureDescription(
             64, 64, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, false, TextureSampleCount.Count1));

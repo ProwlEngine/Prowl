@@ -29,7 +29,7 @@ public abstract class RasterPass<TView> : IPass<TView>
     /// </summary>
     protected TextureHandle SetTarget(RenderContextBuilder builder, RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null)
     {
-        _target = builder.GetOutputTexture(id, desc, history, ops);
+        _target = builder.DeclareOutputTexture(id, desc, history, ops);
         _hasTarget = true;
         return _target;
     }

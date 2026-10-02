@@ -142,9 +142,9 @@ Three lifetimes exist, decided by how a resource is declared.
 
 | Kind | Declared by | Backing storage | Freed when | Default ops |
 |------|-------------|-----------------|------------|-------------|
-| Transient | `GetOutputTexture(id, desc)` with `history = 0`, or `DeclareTexture` / `DeclareBuffer` | Rented from the device's transient pool on first `GetRender*` in a view | Returned to the pool once the execution's fence signals | Clear + Store |
-| History | `GetOutputTexture(id, desc, history: N)` | `N+1`-slot ring per view, owned by the graph | Ring disposed after 120 unused executions, on resize, or when the graph is disposed | Load + Store |
-| Imported | `ImportTexture(id, rt)` | Caller's `RenderTexture` | Never by the graph | Load + Store |
+| Transient | `DeclareOutputTexture(id, desc)` with `history = 0`, or `DeclareTexture` / `DeclareBuffer` | Rented from the device's transient pool on first `GetRender*` in a view | Returned to the pool once the execution's fence signals | Clear + Store |
+| History | `DeclareOutputTexture(id, desc, history: N)` | `N+1`-slot ring per view, owned by the graph | Ring disposed after 120 unused executions, on resize, or when the graph is disposed | Load + Store |
+| Imported | `DeclareImportedTexture(id, rt)` | Caller's `RenderTexture` | Never by the graph | Load + Store |
 
 "Shared" in the sense of this page means a resource declared once centrally on the pipeline and referenced by ID from several passes. It is still transient or history by lifetime; the central declaration only decides who owns the description.
 
@@ -193,7 +193,7 @@ History depth `N` allocates `N+1` copies per view ([HistoryRings.Resolve](../../
 
 ### Imported resources
 
-An imported resource resolves to the caller's `RenderTexture` directly. Requesting `framesAgo != 0` throws. The graph never disposes it. It must be in its resting layout when the execution starts, and the graph returns it there when the view ends. `ImportTexture` takes a usage kind like any output, `Attachment` by default.
+An imported resource resolves to the caller's `RenderTexture` directly. Requesting `framesAgo != 0` throws. The graph never disposes it. It must be in its resting layout when the execution starts, and the graph returns it there when the view ends. `DeclareImportedTexture` takes a usage kind like any output, `Attachment` by default.
 
 ## Design decisions
 
@@ -248,7 +248,7 @@ A pass may rent several command buffers and submit them in any order. Recording 
 - Command buffers are submitted through `context.SubmitCommandBuffer`. A rented-but-unsubmitted buffer produces a warning and is discarded.
 - A texture is in one state at a time. To render into it and later sample it in the same pass, declare both kinds and call `Transition` between the draws.
 - Two passes that ping-pong between the same two IDs form a cycle and fail to build; loop inside one pass with `Transition` instead.
-- Resolving a resource the running pass did not declare throws. Declare everything a pass touches, including history reads (`GetInputTexture` on the history ID).
+- Resolving a resource the running pass did not declare throws. Declare everything a pass touches, including history reads (`DeclareInputTexture` on the history ID).
 - The profiler sees the graph's `"<pass> Barriers"` command buffers as ordinary graphics submits.
 - `InvalidateGraph` disposes history rings and reruns `InitializePasses` on next access; it throws if called while a view executes.
 - `IPresentPass.Setup` cannot declare outputs, so nothing can consume the present pass's work through the graph.

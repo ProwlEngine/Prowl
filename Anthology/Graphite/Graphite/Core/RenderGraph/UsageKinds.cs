@@ -104,7 +104,7 @@ internal readonly struct ResourceAccess
         if (isOutput && (usage & TextureWrites) == 0)
             throw new ArgumentException($"Texture output usage {usage} must include Attachment, Storage or TransferDst.", nameof(usage));
         if (!isOutput && (usage & ~TextureReads) != 0)
-            throw new ArgumentException($"Texture usage {usage} writes, declare it with GetOutputTexture.", nameof(usage));
+            throw new ArgumentException($"Texture usage {usage} writes, declare it with DeclareOutputTexture.", nameof(usage));
 
         TextureUsageKind start;
         if (initial is TextureUsageKind explicitInitial)
@@ -140,7 +140,7 @@ internal readonly struct ResourceAccess
         if (usage == 0)
             throw new ArgumentException("Buffer usage must name at least one kind.", nameof(usage));
         if (!isOutput && (usage & writes) != 0)
-            throw new ArgumentException($"Buffer usage {usage} writes, declare it with GetOutputBuffer.", nameof(usage));
+            throw new ArgumentException($"Buffer usage {usage} writes, declare it with DeclareOutputBuffer.", nameof(usage));
         if (isOutput && (usage & writes) == 0)
             throw new ArgumentException($"Buffer output usage {usage} must include Storage or TransferDst.", nameof(usage));
 

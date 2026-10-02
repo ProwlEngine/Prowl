@@ -62,7 +62,7 @@ file sealed class CopyReadbackPass : IPass<RasterView>
 
     public string Name => "CopyReadback";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetInputTexture(_id);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
     public void Render(RenderContext<RasterView> context)
     {

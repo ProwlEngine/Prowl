@@ -68,7 +68,7 @@ file static class BarrierPasses
         TextureHandle handle = default;
         return new LambdaPass(
             "Readback",
-            builder => handle = builder.GetInputTexture(id, TextureUsageKind.TransferSrc),
+            builder => handle = builder.DeclareInputTexture(id, TextureUsageKind.TransferSrc),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("Readback");
@@ -195,7 +195,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle uploadHandle = default;
         LambdaPass upload = new(
             "Upload",
-            builder => uploadHandle = builder.GetOutputTexture(id, desc, usage: TextureUsageKind.TransferDst),
+            builder => uploadHandle = builder.DeclareOutputTexture(id, desc, usage: TextureUsageKind.TransferDst),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("Upload");
@@ -206,7 +206,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle loadHandle = default;
         LambdaPass load = new(
             "Load",
-            builder => loadHandle = builder.GetOutputTexture(id, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded)),
+            builder => loadHandle = builder.DeclareOutputTexture(id, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded)),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("Load");
@@ -258,7 +258,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle writeHandle = default;
         LambdaPass write = new(
             "WriteHistory",
-            builder => writeHandle = builder.GetOutputTexture(historyId, desc, history: 1),
+            builder => writeHandle = builder.DeclareOutputTexture(historyId, desc, history: 1),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("WriteHistory");
@@ -273,8 +273,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "SampleHistory",
             builder =>
             {
-                historyHandle = builder.GetInputTexture(historyId);
-                outputHandle = builder.GetOutputTexture(outputId, desc);
+                historyHandle = builder.DeclareInputTexture(historyId);
+                outputHandle = builder.DeclareOutputTexture(outputId, desc);
             },
             context =>
             {
@@ -322,7 +322,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle storageHandle = default;
         LambdaPass generate = new(
             "Generate",
-            builder => storageHandle = builder.GetOutputTexture(storageId, desc, usage: TextureUsageKind.Storage),
+            builder => storageHandle = builder.DeclareOutputTexture(storageId, desc, usage: TextureUsageKind.Storage),
             context =>
             {
                 PropertySet props = new();
@@ -340,8 +340,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "Sample",
             builder =>
             {
-                sampledHandle = builder.GetInputTexture(storageId);
-                outputHandle = builder.GetOutputTexture(outputId, desc);
+                sampledHandle = builder.DeclareInputTexture(storageId);
+                outputHandle = builder.DeclareOutputTexture(outputId, desc);
             },
             context =>
             {
@@ -393,7 +393,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         BufferHandle writeHandle = default;
         LambdaPass generate = new(
             "GenerateVertices",
-            builder => writeHandle = builder.GetOutputBuffer(verticesId, GraphBufferDesc.Structured(4, stride)),
+            builder => writeHandle = builder.DeclareOutputBuffer(verticesId, GraphBufferDesc.Structured(4, stride)),
             context =>
             {
                 PropertySet props = new();
@@ -411,8 +411,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "DrawVertices",
             builder =>
             {
-                readHandle = builder.GetInputBuffer(verticesId, BufferUsageKind.ShaderRead);
-                outputHandle = builder.GetOutputTexture(outputId, GraphTextureDesc.Sized((int)size, (int)size, false, Format));
+                readHandle = builder.DeclareInputBuffer(verticesId, BufferUsageKind.ShaderRead);
+                outputHandle = builder.DeclareOutputTexture(outputId, GraphTextureDesc.Sized((int)size, (int)size, false, Format));
             },
             context =>
             {
@@ -448,7 +448,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle depthHandle = default;
         LambdaPass depth = new(
             "WriteDepth",
-            builder => depthHandle = builder.GetOutputTexture(id, desc),
+            builder => depthHandle = builder.DeclareOutputTexture(id, desc),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("WriteDepth");
@@ -461,7 +461,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle fogHandle = default;
         LambdaPass fog = new(
             "Fog",
-            builder => fogHandle = builder.GetOutputTexture(
+            builder => fogHandle = builder.DeclareOutputTexture(
                 id, desc,
                 ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded),
                 depthUsage: TextureUsageKind.DepthReadOnly),
@@ -505,7 +505,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         List<Exception> errors = new();
         LambdaPass pass = new(
             "ClearReadOnlyDepth",
-            builder => handle = builder.GetOutputTexture(id, desc, depthUsage: TextureUsageKind.DepthReadOnly),
+            builder => handle = builder.DeclareOutputTexture(id, desc, depthUsage: TextureUsageKind.DepthReadOnly),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("ClearReadOnlyDepth");
@@ -542,7 +542,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle seedHandle = default;
         LambdaPass seed = new(
             "Seed",
-            builder => seedHandle = builder.GetOutputTexture(a, desc),
+            builder => seedHandle = builder.DeclareOutputTexture(a, desc),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("Seed");
@@ -557,9 +557,9 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "PingPong",
             builder =>
             {
-                aHandle = builder.GetOutputTexture(a, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded),
+                aHandle = builder.DeclareOutputTexture(a, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded),
                     usage: both, initial: TextureUsageKind.Sampled);
-                bHandle = builder.GetOutputTexture(b, desc, usage: both, initial: TextureUsageKind.Attachment);
+                bHandle = builder.DeclareOutputTexture(b, desc, usage: both, initial: TextureUsageKind.Attachment);
             },
             context =>
             {
@@ -583,7 +583,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle readHandle = default;
         LambdaPass readback = new(
             "Readback",
-            builder => readHandle = builder.GetInputTexture(b, TextureUsageKind.TransferSrc),
+            builder => readHandle = builder.DeclareInputTexture(b, TextureUsageKind.TransferSrc),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("Readback");
@@ -608,7 +608,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         List<Exception> errors = new();
         LambdaPass pass = new(
             "Order",
-            builder => handle = builder.GetOutputTexture(id, desc,
+            builder => handle = builder.DeclareOutputTexture(id, desc,
                 usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled, initial: TextureUsageKind.Attachment),
             context =>
             {
@@ -644,7 +644,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         List<Exception> errors = new();
         LambdaPass pass = new(
             "BadKind",
-            builder => handle = builder.GetOutputTexture(id, desc),
+            builder => handle = builder.DeclareOutputTexture(id, desc),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("BadKind");
@@ -675,7 +675,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         TextureHandle handle = default;
         LambdaPass write = new(
             "Write",
-            builder => handle = builder.GetOutputTexture(id, desc),
+            builder => handle = builder.DeclareOutputTexture(id, desc),
             context =>
             {
                 CommandBuffer cmd = context.GetCommandBuffer("Write");

@@ -40,10 +40,10 @@ internal sealed class TestPass : IPass<TestView>
     public void Setup(RenderContextBuilder builder)
     {
         foreach (string name in _inputs)
-            builder.GetInputTexture(name);
+            builder.DeclareInputTexture(name);
 
         foreach ((string name, GraphTextureDesc desc) in _outputs)
-            builder.GetOutputTexture(name, desc);
+            builder.DeclareOutputTexture(name, desc);
     }
 
     public void Render(RenderContext<TestView> context) { }
@@ -69,10 +69,10 @@ internal sealed class TestBufferPass : IPass<TestView>
     public void Setup(RenderContextBuilder builder)
     {
         foreach (string name in _inputs)
-            builder.GetInputBuffer(name);
+            builder.DeclareInputBuffer(name);
 
         foreach ((string name, GraphBufferDesc desc) in _outputs)
-            builder.GetOutputBuffer(name, desc);
+            builder.DeclareOutputBuffer(name, desc);
     }
 
     public void Render(RenderContext<TestView> context) { }
@@ -111,7 +111,7 @@ internal sealed class TestPresentPass : IPresentPass<TestView>
     public void Setup(PresentContextBuilder builder)
     {
         foreach (string name in _inputs)
-            builder.GetInputTexture(name);
+            builder.DeclareInputTexture(name);
 
         if (_requestSwapchain)
             builder.RequestSwapchain();

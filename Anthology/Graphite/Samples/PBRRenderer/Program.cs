@@ -96,7 +96,7 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture("Scene");
+        _sceneHandle = builder.DeclareInputTexture("Scene");
         _bloomHalfHandle = SetTarget(builder, "BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
     }
 
@@ -143,7 +143,7 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder)
     {
-        _bloomHalfHandle = builder.GetInputTexture("BloomHalf");
+        _bloomHalfHandle = builder.DeclareInputTexture("BloomHalf");
         _bloomFullHandle = SetTarget(builder, "BloomFull", GraphTextureDesc.ViewSized(false, 1f));
     }
 
@@ -189,8 +189,8 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView>
 
     public void Setup(PresentContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture("Scene");
-        _bloomFullHandle = builder.GetInputTexture("BloomFull");
+        _sceneHandle = builder.DeclareInputTexture("Scene");
+        _bloomFullHandle = builder.DeclareInputTexture("BloomFull");
         builder.RequestSwapchain();
     }
 
