@@ -417,10 +417,16 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <param name="paper"></param>
     public virtual void OnGui(Paper paper) { }
 
-    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> begins touching another.</summary>
+    /// <summary>
+    /// Called after the physics step in which a collider on this GameObject, or one owned by its
+    /// <see cref="Rigidbody3D"/>, begins touching another collider. Both sides receive it.
+    /// </summary>
     public virtual void OnCollisionBegin(Collision collision) { }
 
-    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> stops touching another.</summary>
+    /// <summary>Called after every physics step the contact persists, following <see cref="OnCollisionBegin"/>.</summary>
+    public virtual void OnCollisionStay(Collision collision) { }
+
+    /// <summary>Called after the physics step in which the contact ended, or when either side left the world.</summary>
     public virtual void OnCollisionEnd(Collision collision) { }
 
     /// <summary>Called once when <paramref name="other"/> first enters a <see cref="TriggerVolume"/> on this GameObject.</summary>
@@ -504,6 +510,13 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         if (!ShouldExecuteGameplay) return;
         try { OnCollisionBegin(collision); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionBegin() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnCollisionStay(in Collision collision)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnCollisionStay(collision); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionStay() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     internal void InternalOnCollisionEnd(in Collision collision)

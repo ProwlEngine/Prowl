@@ -365,66 +365,11 @@ public sealed class Rigidbody3D : MonoBehaviour
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
         var scene = GameObject.IsValid() ? GameObject.Scene : null;
-        if (scene.IsValid()) scene.Physics?.RegisterBody(this);
-
-        // Hook up collision events
-        _body.BeginCollide += OnJitterBeginCollide;
-        _body.EndCollide += OnJitterEndCollide;
+        PhysicsWorld physics = scene.IsValid() ? scene.Physics : null;
+        physics?.RegisterBody(this);
+        physics?.RebindConstraints(this);
 
         return _body;
-    }
-
-    private void OnJitterBeginCollide(Arbiter arbiter)
-    {
-        RigidBody otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
-        var userData = otherBody.Tag as RigidBodyUserData;
-
-        Collider collider = ResolveOtherCollider(arbiter, otherBody);
-
-        // Contact data lives in unmanaged memory that is valid only while the arbiter is.
-        ref ContactData data = ref arbiter.Handle.Data;
-        JVector normal = data.Contact0.Normal;
-        JVector worldPos = otherBody.Position + data.Contact0.RelativePosition2;
-
-        SceneDispatcher.CollisionBegin(GameObject, new Collision(
-            userData?.Rigidbody, collider,
-            worldPos.ToProwl(),
-            normal.ToProwl(),
-            data.Contact0.Impulse));
-    }
-
-    private void OnJitterEndCollide(Arbiter arbiter)
-    {
-        RigidBody otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
-        var userData = otherBody.Tag as RigidBodyUserData;
-
-        // Jitter keeps the arbiter valid during EndCollide, so its shape ids can still resolve the
-        // collider directly. Contact details remain zero because an end event has no contact point.
-        Collider collider = ResolveOtherCollider(arbiter, otherBody);
-
-        SceneDispatcher.CollisionEnd(GameObject, new Collision(
-            userData?.Rigidbody, collider.IsValid() ? collider : null, Float3.Zero, Float3.Zero, 0.0f));
-    }
-
-    /// <summary>
-    /// Which <see cref="Collider"/> on the other body this contact is against. Static colliders share
-    /// one body per layer, so the body alone cannot say what was hit; the arbiter names the two shapes
-    /// by id, and the physics world maps those back to the colliders that created them.
-    /// </summary>
-    private Collider ResolveOtherCollider(Arbiter arbiter, RigidBody otherBody)
-    {
-        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
-        if (physics == null) return null;
-
-        ArbiterKey key = arbiter.Handle.Data.Key;
-
-        Collider first = physics.GetShapeOwner(key.Key1);
-        if (first.IsValid() && first.AttachedBody == otherBody) return first;
-
-        Collider second = physics.GetShapeOwner(key.Key2);
-        if (second.IsValid() && second.AttachedBody == otherBody) return second;
-
-        return null;
     }
 
     public override void OnValidate()
@@ -611,10 +556,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         foreach (Collider collider in colliders)
             if (collider.IsValid()) collider.Detach();
 
-        // Unhook collision events before removing the body.
-        _body.BeginCollide -= OnJitterBeginCollide;
-        _body.EndCollide -= OnJitterEndCollide;
-
         GameObject.Scene.Physics.UnregisterBody(this);
         GameObject.Scene.Physics.World?.Remove(_body);
 
@@ -753,6 +694,13 @@ public sealed class Rigidbody3D : MonoBehaviour
     internal void SyncTransformToBody()
     {
         if (!IsSimulated) return;
+
+        if (_body.Tag is RigidBodyUserData data && data.Layer != GameObject.LayerIndex)
+        {
+            data.Layer = GameObject.LayerIndex;
+            if (GameObject.Scene.IsValid()) GameObject.Scene.Physics?.MarkContactFiltersChanged();
+        }
+
         if (Transform.Version == _lastSyncedTransformVersion) return;
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version;

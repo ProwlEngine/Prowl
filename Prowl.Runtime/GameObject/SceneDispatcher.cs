@@ -33,6 +33,7 @@ internal enum SceneCallbacks
     TriggerEnter = 1 << 9,
     TriggerStay = 1 << 10,
     TriggerExit = 1 << 11,
+    CollisionStay = 1 << 12,
 
     /// <summary>Everything the per-frame loops dispatch. A component with none of these is never registered.</summary>
     AnyFrame = Start | Update | LateUpdate | FixedUpdate | RenderCollect | DrawGizmos | OnGui,
@@ -83,6 +84,7 @@ internal sealed class SceneDispatcher
         if (Overrides(type, nameof(MonoBehaviour.OnGui))) callbacks |= SceneCallbacks.OnGui;
 
         if (Overrides(type, nameof(MonoBehaviour.OnCollisionBegin))) callbacks |= SceneCallbacks.CollisionBegin;
+        if (Overrides(type, nameof(MonoBehaviour.OnCollisionStay))) callbacks |= SceneCallbacks.CollisionStay;
         if (Overrides(type, nameof(MonoBehaviour.OnCollisionEnd))) callbacks |= SceneCallbacks.CollisionEnd;
         if (Overrides(type, nameof(MonoBehaviour.OnTriggerEnter))) callbacks |= SceneCallbacks.TriggerEnter;
         if (Overrides(type, nameof(MonoBehaviour.OnTriggerStay))) callbacks |= SceneCallbacks.TriggerStay;
@@ -400,6 +402,18 @@ internal sealed class SceneDispatcher
         if (count == 1) { single.InternalOnCollisionBegin(collision); return; }
 
         try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionBegin(collision); }
+        finally { Release(many!, count); }
+    }
+
+    public static void CollisionStay(GameObject go, in Collision collision)
+    {
+        if (go is null) return;
+
+        int count = Collect(go, SceneCallbacks.CollisionStay, out MonoBehaviour single, out MonoBehaviour[]? many);
+        if (count == 0) return;
+        if (count == 1) { single.InternalOnCollisionStay(collision); return; }
+
+        try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionStay(collision); }
         finally { Release(many!, count); }
     }
 

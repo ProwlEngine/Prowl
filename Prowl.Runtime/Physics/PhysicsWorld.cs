@@ -395,7 +395,12 @@ public class PhysicsWorld
         }
     }
 
-    internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
+    internal void RegisterBody(Rigidbody3D body)
+    {
+        _syncBodies.Add(body);
+        if (body.IsSimulated) HookContacts(body.Native);
+    }
+
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
 
     internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider)
@@ -692,6 +697,9 @@ public class PhysicsWorld
         // between. Driven from here rather than a per-body event to keep it one pass with no delegates.
         foreach (var body in _syncBodies)
             if (body.IsValid()) body.CapturePose();
+
+        DispatchCollisions();
+        InvokeStepEvent(StepFinished, Time.FixedDeltaTime, nameof(StepFinished));
     }
 
     /// <summary>
@@ -1645,6 +1653,285 @@ public class PhysicsWorld
     }
 
     #endregion
+
+    #region Collision Events
+
+    // A touching pair of colliders, or a collider and terrain. One pair can span many shape arbiters at
+    // once (a compound collider, or the triangles of a concave mesh), so it begins when its first arbiter
+    // appears and ends when its last one is gone.
+    private sealed class ContactPair
+    {
+        public ContactSide A, B;
+        public readonly List<(ArbiterKey Key, bool Body1IsB)> Arbiters = [];
+        public bool Begun;
+    }
+
+    private struct ContactSide
+    {
+        public object Owner;
+        public Collider Collider;
+        public Rigidbody3D Rigidbody;
+        public GameObject ColliderObject;
+        public GameObject RigidbodyObject;
+
+        public readonly GameObject Identity => RigidbodyObject.IsValid() ? RigidbodyObject : ColliderObject;
+    }
+
+    private readonly struct OwnerPair(object a, object b) : IEquatable<OwnerPair>
+    {
+        private readonly object _a = a, _b = b;
+
+        public bool Equals(OwnerPair other) =>
+            (ReferenceEquals(_a, other._a) && ReferenceEquals(_b, other._b)) ||
+            (ReferenceEquals(_a, other._b) && ReferenceEquals(_b, other._a));
+
+        public override bool Equals(object obj) => obj is OwnerPair other && Equals(other);
+
+        public override int GetHashCode() => RuntimeHelpers.GetHashCode(_a) ^ RuntimeHelpers.GetHashCode(_b);
+    }
+
+    private readonly Dictionary<OwnerPair, ContactPair> _contactPairs = [];
+    private readonly Dictionary<ArbiterKey, ContactPair> _arbiterPairs = [];
+    private readonly List<ContactPair> _dispatchPairs = [];
+    private readonly Dictionary<TerrainCollisionFilter, ITerrainHeightProvider> _terrainFilters = [];
+
+    private void HookContacts(Jitter2.Dynamics.RigidBody body)
+    {
+        body.BeginCollide -= OnBeginCollide;
+        body.BeginCollide += OnBeginCollide;
+    }
+
+    // Raised inside the step, once for each body of the arbiter, so it only records. Everything a
+    // handler might do runs from DispatchCollisions once the step is over.
+    private void OnBeginCollide(Arbiter arbiter)
+    {
+        ArbiterKey key = arbiter.Handle.Data.Key;
+        if (_arbiterPairs.ContainsKey(key)) return;
+
+        object first = ResolveContactOwner(key.Key1);
+        object second = ResolveContactOwner(key.Key2);
+
+        bool firstIsBody1;
+        if (first is Collider firstCollider) firstIsBody1 = firstCollider.AttachedBody == arbiter.Body1;
+        else if (first != null) firstIsBody1 = arbiter.Body1 == World.NullBody;
+        else firstIsBody1 = !(second is Collider secondCollider && secondCollider.AttachedBody == arbiter.Body1);
+
+        first ??= firstIsBody1 ? arbiter.Body1 : arbiter.Body2;
+        second ??= firstIsBody1 ? arbiter.Body2 : arbiter.Body1;
+
+        var owners = new OwnerPair(first, second);
+        if (!_contactPairs.TryGetValue(owners, out ContactPair pair))
+        {
+            pair = new ContactPair();
+            pair.A.Owner = first;
+            pair.B.Owner = second;
+            _contactPairs[owners] = pair;
+        }
+
+        bool firstIsA = ReferenceEquals(pair.A.Owner, first);
+        pair.Arbiters.Add((key, firstIsBody1 != firstIsA));
+        _arbiterPairs[key] = pair;
+    }
+
+    private object ResolveContactOwner(ulong id)
+    {
+        if (_shapeOwnersById.TryGetValue(id, out Collider collider) && collider.IsValid()) return collider;
+
+        foreach ((TerrainCollisionFilter filter, ITerrainHeightProvider provider) in _terrainFilters)
+            if (filter.OwnsId(id)) return provider;
+
+        return null;
+    }
+
+    private void DispatchCollisions()
+    {
+        if (_contactPairs.Count == 0) return;
+
+        _dispatchPairs.Clear();
+        _dispatchPairs.AddRange(_contactPairs.Values);
+
+        foreach (ContactPair pair in _dispatchPairs)
+        {
+            DropDeadArbiters(pair);
+
+            if (pair.Arbiters.Count == 0)
+            {
+                _contactPairs.Remove(new OwnerPair(pair.A.Owner, pair.B.Owner));
+                if (pair.Begun) RaiseCollision(pair, SceneCallbacks.CollisionEnd, default, default, 0.0f);
+                continue;
+            }
+
+            RefreshSide(ref pair.A);
+            RefreshSide(ref pair.B);
+
+            SceneCallbacks kind = pair.Begun ? SceneCallbacks.CollisionStay : SceneCallbacks.CollisionBegin;
+            pair.Begun = true;
+
+            if (kind == SceneCallbacks.CollisionStay && IsAsleep(pair)) continue;
+            if (!HasRecipient(pair.A, kind) && !HasRecipient(pair.B, kind)) continue;
+
+            ReadContacts(pair, out Float3 point, out Float3 normal, out float impulse);
+            RaiseCollision(pair, kind, point, normal, impulse);
+        }
+
+        _dispatchPairs.Clear();
+    }
+
+    private void DropDeadArbiters(ContactPair pair)
+    {
+        for (int i = pair.Arbiters.Count - 1; i >= 0; i--)
+        {
+            ArbiterKey key = pair.Arbiters[i].Key;
+            if (World.GetArbiter(key.Key1, key.Key2, out _)) continue;
+
+            pair.Arbiters.RemoveAt(i);
+            _arbiterPairs.Remove(key);
+        }
+    }
+
+    private static void RefreshSide(ref ContactSide side)
+    {
+        switch (side.Owner)
+        {
+            case Collider collider when collider.IsValid():
+                side.Collider = collider;
+                side.ColliderObject = collider.GameObject;
+                side.Rigidbody = collider.AttachedRigidbody;
+                side.RigidbodyObject = side.Rigidbody.IsValid() ? side.Rigidbody.GameObject : null;
+                break;
+
+            case MonoBehaviour terrain when terrain.IsValid():
+                side.ColliderObject = terrain.GameObject;
+                break;
+
+            case Jitter2.Dynamics.RigidBody body when body.Tag is Rigidbody3D.RigidBodyUserData data && data.Rigidbody.IsValid():
+                side.Rigidbody = data.Rigidbody;
+                side.RigidbodyObject = data.Rigidbody.GameObject;
+                break;
+        }
+    }
+
+    private bool IsAsleep(ContactPair pair)
+    {
+        foreach ((ArbiterKey key, _) in pair.Arbiters)
+            if (World.GetArbiter(key.Key1, key.Key2, out Arbiter arbiter) && (arbiter.Body1.IsActive || arbiter.Body2.IsActive))
+                return false;
+
+        return true;
+    }
+
+    private static bool HasRecipient(in ContactSide side, SceneCallbacks kind)
+        => SceneDispatcher.HasRecipient(side.ColliderObject, kind) ||
+           (side.RigidbodyObject != side.ColliderObject && SceneDispatcher.HasRecipient(side.RigidbodyObject, kind));
+
+    /// <summary>Averages every live contact point of the pair, weighted by impulse, with the normal pointing from B to A.</summary>
+    private void ReadContacts(ContactPair pair, out Float3 point, out Float3 normal, out float impulse)
+    {
+        JVector pointSum = JVector.Zero, normalSum = JVector.Zero;
+        float weightSum = 0.0f, impulseSum = 0.0f;
+
+        foreach ((ArbiterKey key, bool body1IsB) in pair.Arbiters)
+        {
+            if (!World.GetArbiter(key.Key1, key.Key2, out Arbiter arbiter)) continue;
+
+            ref ContactData data = ref arbiter.Handle.Data;
+            JVector position1 = arbiter.Body1.Position;
+            JVector position2 = arbiter.Body2.Position;
+            // Jitter's normal points from Body1 toward Body2, as its solver pushes Body2 along it.
+            float sign = body1IsB ? 1.0f : -1.0f;
+
+            for (int i = 0; i < 4; i++)
+            {
+                if ((data.UsageMask & (ContactData.MaskContact0 << i)) == 0) continue;
+
+                ref ContactData.Contact contact = ref ContactAt(ref data, i);
+                float weight = MathF.Max(contact.Impulse, 1e-6f);
+                JVector world = (position1 + contact.RelativePosition1 + position2 + contact.RelativePosition2) * 0.5f;
+                pointSum += world * weight;
+                normalSum += contact.Normal * (sign * weight);
+                weightSum += weight;
+                impulseSum += contact.Impulse;
+            }
+        }
+
+        impulse = impulseSum;
+        point = weightSum > 0.0f ? (pointSum * (1.0f / weightSum)).ToProwl() : Float3.Zero;
+        normal = normalSum.LengthSquared() > 0.0f ? JVector.Normalize(normalSum).ToProwl() : Float3.Zero;
+    }
+
+    private static ref ContactData.Contact ContactAt(ref ContactData data, int index)
+    {
+        switch (index)
+        {
+            case 0: return ref data.Contact0;
+            case 1: return ref data.Contact1;
+            case 2: return ref data.Contact2;
+            default: return ref data.Contact3;
+        }
+    }
+
+    private static void RaiseCollision(ContactPair pair, SceneCallbacks kind, Float3 point, Float3 normal, float impulse)
+    {
+        ContactSide a = pair.A, b = pair.B;
+        Raise(kind, a, new Collision(b.Rigidbody, b.Collider, a.Collider, b.Identity, point, normal, impulse));
+        Raise(kind, b, new Collision(a.Rigidbody, a.Collider, b.Collider, a.Identity, point, -normal, impulse));
+    }
+
+    private static void Raise(SceneCallbacks kind, in ContactSide side, in Collision collision)
+    {
+        Send(kind, side.ColliderObject, collision);
+        if (side.RigidbodyObject != side.ColliderObject) Send(kind, side.RigidbodyObject, collision);
+    }
+
+    private static void Send(SceneCallbacks kind, GameObject go, in Collision collision)
+    {
+        if (go.IsNotValid()) return;
+
+        switch (kind)
+        {
+            case SceneCallbacks.CollisionBegin: SceneDispatcher.CollisionBegin(go, collision); break;
+            case SceneCallbacks.CollisionStay: SceneDispatcher.CollisionStay(go, collision); break;
+            case SceneCallbacks.CollisionEnd: SceneDispatcher.CollisionEnd(go, collision); break;
+        }
+    }
+
+    // Filters only decide which new contacts form, so a pair that stops colliding while it already
+    // touches has its contacts removed here, or the solver would keep resolving them.
+    private bool _contactFiltersChanged;
+    private uint _collisionMatrixVersion = CollisionMatrix.Version;
+    private readonly HashSet<Arbiter> _filteredArbiters = [];
+
+    internal void MarkContactFiltersChanged() => _contactFiltersChanged = true;
+
+    private void RemoveFilteredContacts()
+    {
+        uint matrixVersion = CollisionMatrix.Version;
+        if (!_contactFiltersChanged && matrixVersion == _collisionMatrixVersion) return;
+
+        _contactFiltersChanged = false;
+        _collisionMatrixVersion = matrixVersion;
+
+        foreach (Rigidbody3D body in _syncBodies)
+        {
+            if (!body.IsValid() || !body.IsSimulated) continue;
+
+            foreach (Arbiter arbiter in body.Native.Contacts)
+                if (!_layerFilter.BodiesCollide(arbiter.Body1, arbiter.Body2))
+                    _filteredArbiters.Add(arbiter);
+        }
+
+        foreach (Arbiter arbiter in _filteredArbiters)
+        {
+            if (arbiter.Body1.MotionType == MotionType.Dynamic) arbiter.Body1.SetActivationState(true);
+            if (arbiter.Body2.MotionType == MotionType.Dynamic) arbiter.Body2.SetActivationState(true);
+            World.Remove(arbiter);
+        }
+
+        _filteredArbiters.Clear();
+    }
+
+    #endregion
+
 
     #region Terrain Collision
 
