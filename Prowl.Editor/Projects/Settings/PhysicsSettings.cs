@@ -23,11 +23,11 @@ public class PhysicsSettings : ProjectSettingsBase
 
     // Solver
     /// <summary> Number of solver iterations per frame. Higher values improve constraint accuracy at the cost of performance. Range 1-32. </summary>
-    public int SolverIterations = 8;
+    public int SolverIterations = 12;
     /// <summary> Number of relaxation iterations per frame. Higher values improve joint stability. Range 1-16. </summary>
     public int RelaxIterations = 4;
     /// <summary> Number of sub-steps per frame. Higher values improve simulation accuracy. Range 1-16. </summary>
-    public int SubSteps = 2;
+    public int SubSteps = 3;
 
     // Behavior
     /// <summary> Enables the physics sleep optimization, allowing idle rigid bodies to skip simulation. </summary>
@@ -98,9 +98,9 @@ public class PhysicsSettings : ProjectSettingsBase
     public override void ResetToDefaults()
     {
         GravityX = 0; GravityY = -9.81f; GravityZ = 0;
-        SolverIterations = 8;
+        SolverIterations = 12;
         RelaxIterations = 4;
-        SubSteps = 2;
+        SubSteps = 3;
         AllowSleep = true;
         UseMultithreading = true;
         AutoSyncTransforms = true;

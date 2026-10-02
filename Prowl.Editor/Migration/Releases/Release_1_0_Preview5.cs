@@ -19,7 +19,66 @@ internal sealed class Release_1_0_Preview5 : MigrationRelease
         new("Asset references to $asset", ctx => ctx.RewriteEcho(ConvertAssetReferences)),
         new("Fragment include renamed to ProwlCG", ctx => ctx.RewriteText(s => s_fragmentInclude.Replace(s, "#include \"ProwlCG\""), ".shader", ".glsl")),
         new("Directional lights shine along Forward", ctx => ctx.RewriteEchoAssets(TurnDirectionalLights)),
+        new("Joint motors and limits measured along their own body", ctx => ctx.RewriteEchoAssets(FlipJointDirections)),
     ];
+
+    // Joint motors, hinge angles and slider distances used to be measured from the connected body's side, so a
+    // positive motor moved this body backwards along its axis. They now mean this body along +axis, so each
+    // saved range is mirrored and each motor speed negated to keep the same motion.
+    private static readonly (string Type, string[] Ranges, string[] Speeds)[] s_jointFields =
+    [
+        ("Prowl.Runtime.HingeJoint,", ["minAngleDegrees", "maxAngleDegrees"], ["motorTargetVelocity"]),
+        ("Prowl.Runtime.PrismaticJoint,", ["minDistance", "maxDistance"], ["motorTargetVelocity"]),
+        ("Prowl.Runtime.HingeAngleConstraint,", ["minAngle", "maxAngle"], []),
+        ("Prowl.Runtime.UniversalJoint,", [], ["motorTargetVelocity"]),
+        ("Prowl.Runtime.LinearMotorConstraint,", [], ["targetVelocity"]),
+        ("Prowl.Runtime.AngularMotorConstraint,", [], ["targetVelocity"]),
+    ];
+
+    private static EchoObject? FlipJointDirections(EchoObject echo)
+    {
+        bool changed = false;
+        FlipJointDirections(echo, ref changed);
+        return changed ? echo : null;
+    }
+
+    private static void FlipJointDirections(EchoObject tag, ref bool changed)
+    {
+        if (tag.TagType == EchoType.List)
+        {
+            foreach (EchoObject item in tag.List)
+                FlipJointDirections(item, ref changed);
+            return;
+        }
+
+        if (tag.TagType != EchoType.Compound) return;
+
+        if (tag.TryGet("$type", out EchoObject? type) && type!.TagType == EchoType.String)
+        {
+            foreach ((string name, string[] ranges, string[] speeds) in s_jointFields)
+            {
+                if (!type.StringValue.StartsWith(name, StringComparison.Ordinal)) continue;
+
+                if (ranges.Length == 2 && tag.TryGet(ranges[0], out EchoObject? min) && tag.TryGet(ranges[1], out EchoObject? max))
+                {
+                    float low = min!.FloatValue, high = max!.FloatValue;
+                    tag[ranges[0]] = new EchoObject(-high);
+                    tag[ranges[1]] = new EchoObject(-low);
+                    changed = true;
+                }
+
+                foreach (string speed in speeds)
+                {
+                    if (!tag.TryGet(speed, out EchoObject? value)) continue;
+                    tag[speed] = new EchoObject(-value!.FloatValue);
+                    changed = true;
+                }
+            }
+        }
+
+        foreach (string child in tag.GetNames().ToList())
+            FlipJointDirections(tag[child], ref changed);
+    }
 
     private static readonly Regex s_fragmentInclude = new(@"#include\s+""Fragment""");
 
