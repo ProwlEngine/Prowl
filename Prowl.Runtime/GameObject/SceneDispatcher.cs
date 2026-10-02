@@ -417,6 +417,21 @@ internal sealed class SceneDispatcher
         finally { Release(many!, count); }
     }
 
+    /// <summary>Whether any live component on the GameObject listens for the callback.</summary>
+    public static bool HasRecipient(GameObject go, SceneCallbacks which)
+    {
+        if (go is null) return false;
+
+        List<MonoBehaviour> components = go._components;
+        for (int i = 0; i < components.Count; i++)
+        {
+            MonoBehaviour c = components[i];
+            if ((CallbacksOf(c) & which) != 0 && !c.IsDisposed && c.EnabledInHierarchy) return true;
+        }
+
+        return false;
+    }
+
     public static void CollisionEnd(GameObject go, in Collision collision)
     {
         if (go is null) return;
