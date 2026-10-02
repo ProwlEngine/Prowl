@@ -10,18 +10,6 @@ public struct GraphicsDeviceOptions
     /// </summary>
     public bool Debug;
     /// <summary>
-    /// True = device gets a main Swapchain. Then must use a ctor overload that gives swapchain source info.
-    /// </summary>
-    public bool HasMainSwapchain;
-    /// <summary>
-    /// Depth buffer format for the swapchain. Null = no depth buffer.
-    /// </summary>
-    public PixelFormat? SwapchainDepthFormat;
-    /// <summary>
-    /// Sync main Swapchain to vblank.
-    /// </summary>
-    public bool SyncToVerticalBlank;
-    /// <summary>
     /// Prefer 0-to-1 depth range.
     /// </summary>
     public bool PreferDepthRangeZeroToOne;
@@ -29,10 +17,6 @@ public struct GraphicsDeviceOptions
     /// Prefer bottom-to-top clip space Y. Not default on Vulkan, not always available.
     /// </summary>
     public bool PreferStandardClipSpaceYDirection;
-    /// <summary>
-    /// Use sRGB for main Swapchain. Only applies when swapchain isn't explicitly described elsewhere; an explicit ColorSrgb wins.
-    /// </summary>
-    public bool SwapchainSrgbFormat;
 
     /// <summary>
     /// Max frames in flight on GPU. Must be > 0; 0 means default 3.
@@ -71,33 +55,5 @@ public struct GraphicsDeviceOptions
     public GraphicsDeviceOptions(bool debug)
     {
         Debug = debug;
-    }
-
-    /// <summary>
-    /// Options for a device with a main Swapchain.
-    /// </summary>
-    /// <param name="debug">Enable debug features if host supports them.</param>
-    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
-    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
-    /// <param name="preferDepthRangeZeroToOne">Prefer 0-to-1 depth range.</param>
-    /// <param name="preferStandardClipSpaceYDirection">Prefer bottom-to-top clip space Y. Not default on Vulkan, not always
-    /// available.</param>
-    /// <param name="swapchainSrgbFormat">Use sRGB for main Swapchain. Only applies when swapchain isn't explicitly described
-    /// elsewhere; an explicit ColorSrgb wins.</param>
-    public GraphicsDeviceOptions(
-        bool debug,
-        PixelFormat? swapchainDepthFormat,
-        bool syncToVerticalBlank = false,
-        bool preferDepthRangeZeroToOne = false,
-        bool preferStandardClipSpaceYDirection = false,
-        bool swapchainSrgbFormat = false)
-    {
-        Debug = debug;
-        HasMainSwapchain = true;
-        SwapchainDepthFormat = swapchainDepthFormat;
-        SyncToVerticalBlank = syncToVerticalBlank;
-        PreferDepthRangeZeroToOne = preferDepthRangeZeroToOne;
-        PreferStandardClipSpaceYDirection = preferStandardClipSpaceYDirection;
-        SwapchainSrgbFormat = swapchainSrgbFormat;
     }
 }
