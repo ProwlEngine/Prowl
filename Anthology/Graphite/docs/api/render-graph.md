@@ -392,24 +392,6 @@ internal sealed class ScenePass : RasterPass<SceneView>
     }
 }
 
-internal sealed class FullscreenSource : IVertexSource
-{
-    public static readonly FullscreenSource Instance = new();
-
-    public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-    public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-        => binding = default;
-
-    public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-    {
-        buffer = null!;
-        format = IndexFormat.UInt32;
-        indexCount = 0;
-        return false;
-    }
-}
-
 internal sealed class BlitPass : RasterPass<SceneView>
 {
     private readonly GraphicsProgram _blitShader;
@@ -439,7 +421,7 @@ internal sealed class BlitPass : RasterPass<SceneView>
         BindTarget(context, cmd);
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
         cmd.SetShader(_blitShader);
-        cmd.SetVertexSource(FullscreenSource.Instance);
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);

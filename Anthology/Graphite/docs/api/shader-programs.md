@@ -204,7 +204,7 @@ private static readonly Keyword UpsampleOn = new("Upsample", "true");
 
 _bloomShader.SetKeyword(UpsampleOff);
 cmd.SetShader(_bloomShader);
-cmd.SetVertexSource(_fullscreenSource);
+cmd.SetVertexSource(VertexSource.None);
 cmd.SetProperties(_properties);
 cmd.Draw(3);
 ```

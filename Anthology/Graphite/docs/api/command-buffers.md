@@ -108,7 +108,7 @@ Argument structs:
 | `IndirectDrawIndexedArguments` | `IndexCount`, `InstanceCount`, `FirstIndex`, `VertexOffset`, `FirstInstance` |
 | `IndirectDispatchArguments` | `GroupCountX`, `GroupCountY`, `GroupCountZ` |
 
-A full-screen triangle with no vertex buffers is `cmd.Draw(3)` with an `IVertexSource` whose `ResolveSlot` returns `default`; see [IVertexSource](#ivertexsource).
+A full-screen triangle with no vertex buffers is `cmd.Draw(3)` with `VertexSource.None`; see [IVertexSource](#ivertexsource).
 
 A compute pass:
 
@@ -120,7 +120,7 @@ cmd.Dispatch((count + 63) / 64, 1, 1);
 context.SubmitCommandBuffer(cmd);
 ```
 
-When validation is enabled (`GraphicsDevice.ValidationEnabled`), a draw throws `RenderException` unless a graphics program, a framebuffer and a vertex source are all bound, and indexed draws also need the source to return an index buffer. A draw with no vertex data still needs an empty `IVertexSource`; `null` is never allowed. Dispatch does not require a framebuffer; the backend ends any active render pass before dispatching.
+When validation is enabled (`GraphicsDevice.ValidationEnabled`), a draw throws `RenderException` unless a graphics program, a framebuffer and a vertex source are all bound, and indexed draws also need the source to return an index buffer. A draw with no vertex data still needs a source, use `VertexSource.None`; `null` is never allowed. Dispatch does not require a framebuffer; the backend ends any active render pass before dispatching.
 
 ## Transfers on a command buffer
 
@@ -169,29 +169,14 @@ Supplies vertex buffers, an optional index buffer and the topology. You implemen
 
 `Topology` is read on every draw. `TryGetIndexBuffer` is called on every indexed draw. `ResolveSlot` is called when the bound source or program differs from the previous draw on the same command buffer; otherwise the resolved vertex buffers are reused. The comparison is by reference, so keep one long-lived instance per mesh.
 
-Implement `IVertexSource` on a class. `SetVertexSource` takes the interface, so a struct is boxed into a new object on every call, which allocates and also defeats the vertex buffer reuse above. A shader with no vertex inputs still needs a source; share one instance:
+Implement `IVertexSource` on a class. `SetVertexSource` takes the interface, so a struct is boxed into a new object on every call, which allocates and also defeats the vertex buffer reuse above.
+
+Most code does not need to implement it. `VertexSource` is a ready-made class: `new VertexSource(topology).SetBuffer("POSITION0", buffer).SetIndexBuffer(indices, IndexFormat.UInt16, count)` matches buffers to layout slots by the first element name. `VertexSource.None` is the shared source for shaders that generate vertices from `SV_VertexID` and declare no vertex layout slots:
 
 ```csharp
-internal sealed class FullscreenSource : IVertexSource
-{
-    public static readonly FullscreenSource Instance = new();
-
-    public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-    public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-        => binding = default;
-
-    public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-    {
-        buffer = null!;
-        format = IndexFormat.UInt32;
-        indexCount = 0;
-        return false;
-    }
-}
+cmd.SetVertexSource(VertexSource.None);
+cmd.Draw(3);
 ```
-
-That source is only valid for a shader that generates its vertices from `SV_VertexID` and so declares no vertex layout slots.
 
 ## TransferCommandBuffer
 

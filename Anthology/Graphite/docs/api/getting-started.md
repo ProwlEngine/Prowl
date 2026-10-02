@@ -111,10 +111,12 @@ internal readonly struct SceneView : IRenderView
 }
 
 
-internal sealed class TriangleMesh : IVertexSource, IDisposable
+internal sealed class TriangleMesh : IDisposable
 {
     private readonly DeviceBuffer _positions;
     private readonly DeviceBuffer _colors;
+
+    public VertexSource Source { get; }
 
     public TriangleMesh(GraphicsDevice device)
     {
@@ -139,22 +141,10 @@ internal sealed class TriangleMesh : IVertexSource, IDisposable
 
         device.UpdateBuffer(_positions, 0, positions);
         device.UpdateBuffer(_colors, 0, colors);
-    }
 
-    public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-    public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-    {
-        VertexAttributeID name = layout.Elements[0].Name;
-        binding = new VertexBinding(name == "POSITION0" ? _positions : _colors);
-    }
-
-    public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-    {
-        buffer = null!;
-        format = IndexFormat.UInt16;
-        indexCount = 0;
-        return false;
+        Source = new VertexSource()
+            .SetBuffer("POSITION0", _positions)
+            .SetBuffer("COLOR0", _colors);
     }
 
     public void Dispose()
@@ -185,7 +175,7 @@ internal sealed class TrianglePass : RasterPass<SceneView>
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
         BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
-        cmd.SetVertexSource(_mesh);
+        cmd.SetVertexSource(_mesh.Source);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
     }
@@ -284,7 +274,7 @@ public static class Program
 
 **Shader.** ShaderDef wraps a Slang program in a small markup that carries the fixed-function state. `ShaderParser.Parse` produces a `ShaderDefinition`, and `Create` binds it to the device and a `SlangShaderCompiler`. The fallback `Variant` argument is required; an empty `new Variant()` serves shaders without keyword variants. `CompileMode.All` compiles every variant up front, so the session can end right after and nothing compiles mid-frame. `cmd.SetShader(pass)` then resolves the pass into a `GraphicsProgram` using the state from the markup ([Shader programs](shader-programs.md), [internals: shader compiler](../internals/06-shader-compiler.md)).
 
-**Vertex data.** A command buffer asks an `IVertexSource` for one buffer per vertex layout slot of the bound shader. The reflected layouts here are `POSITION0` and `COLOR0`, each in its own slot, so `ResolveSlot` picks a buffer by the name of the slot's first element. Returning `false` from `TryGetIndexBuffer` makes the draw non-indexed. Buffers are created through the `ResourceFactory` and filled with `UpdateBuffer` ([Buffers and textures](buffers-and-textures.md), [Command buffers](command-buffers.md)).
+**Vertex data.** A command buffer asks an `IVertexSource` for one buffer per vertex layout slot of the bound shader. The reflected layouts here are `POSITION0` and `COLOR0`, each in its own slot, so a `VertexSource` with a buffer set under each name serves both. Without `SetIndexBuffer` the draw is non-indexed. Implement `IVertexSource` yourself only for custom resolution. Buffers are created through the `ResourceFactory` and filled with `UpdateBuffer` ([Buffers and textures](buffers-and-textures.md), [Command buffers](command-buffers.md)).
 
 **Render graph.** All drawing goes through a render graph, even for a single pass. A view (`SceneView`) describes what is being rendered and how large it is. A `RenderPipeline` owns the passes; this one adds a single pass that declares the default backbuffer as its target in `Setup` and records its draw in `Render`. `BindTarget` binds the backbuffer and applies its clear. Command buffers come from `context.GetCommandBuffer`, already begun, and are handed back with `SubmitCommandBuffer`. Because a pass wrote the backbuffer, the device presents it once the dispatch finishes ([Render graph](render-graph.md), [internals: render graph](../internals/03-render-graph.md)).
 
