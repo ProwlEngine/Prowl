@@ -465,4 +465,31 @@ public class WheelTests : RuntimeTestBase
         Assert.True(maxSpeed < 60f, $"car launched off the rigidbody, peak speed {maxSpeed} m/s");
         Assert.True(maxUp < 15f, $"car launched upward off the rigidbody, peak vy {maxUp} m/s");
     }
+
+    // The wheel pushes back on a dynamic body it stands on. A light crate used to take the whole
+    // car's load and tyre friction and be launched across the map.
+    [Theory]
+    [InlineData(0.5f)]
+    [InlineData(2f)]
+    public void Car_DrivingOverLightCrates_DoesNotFlingThem(float crateMass)
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
+        var crates = new List<Rigidbody3D>();
+        for (int i = 0; i < 6; i++)
+            crates.Add(AddDynamicBox(scene, new Float3((i % 2 == 0 ? -0.7f : 0.7f), 0.2f, 5f + i * 1.5f), new Float3(0.4f, 0.4f, 0.4f), crateMass));
+        var (rb, wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
+
+        float maxCrate = 0f;
+        for (int i = 0; i < 300; i++)
+        {
+            wheels[2].MotorTorque = 1200f; wheels[3].MotorTorque = 1200f;
+            Tick(scene, 1);
+            foreach (var crate in crates)
+                maxCrate = Maths.Max(maxCrate, (float)Float3.Length(crate.LinearVelocity));
+        }
+
+        float carSpeed = (float)Float3.Length(rb.LinearVelocity);
+        Assert.True(maxCrate < Maths.Max(carSpeed * 2.5f, 8f), $"a crate was flung at {maxCrate} m/s, car at {carSpeed} m/s");
+    }
 }
