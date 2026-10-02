@@ -9,7 +9,7 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 - A Vulkan backend, with macOS support via MoltenVK (Vulkan-over-Metal translation).
 - A monolithic `ShaderProgram` model that bundles shader and pipeline state, with per-backend shader compilation handled internally.
 - A string/id-driven `PropertySet` resource binding system that hides per-backend binding rules.
-- A declarative render graph (`RenderPipeline`, `IPass`, `IPresentPass`) that orders passes from their
+- A declarative render graph (`RenderPipeline`, `IPass`) that orders passes from their
   declared texture and buffer reads/writes and resolves shared, transient, and history resources
   automatically.
 - A frame-less `ExecutionTask` ring for CPU/GPU synchronization, with per-execution transient
@@ -25,9 +25,9 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 
 ## Quick Start
 
-Rendering is built around a render graph: a `RenderPipeline` owns a list of `IPass`es plus one required
-`IPresentPass`, and a `GraphicsDevice` dispatches that pipeline against a list of views. The simplest
-possible pipeline has no offscreen passes at all, and draws straight into the swapchain from its present pass:
+Rendering is built around a render graph: a `RenderPipeline` owns a list of `IPass`es, and a
+`GraphicsDevice` dispatches that pipeline against a list of views. The simplest possible pipeline is one
+pass that writes the default backbuffer, which presents the frame:
 
 ```cs
 internal readonly struct SceneView : IRenderView
@@ -42,48 +42,40 @@ internal readonly struct SceneView : IRenderView
     public uint PixelHeight { get; }
 }
 
-internal sealed class TrianglePresentPass : IPresentPass<SceneView>
+internal sealed class TrianglePass : RasterPass<SceneView>
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
 
-    public TrianglePresentPass(Mesh triangle, GraphicsProgram shader)
+    public TrianglePass(Mesh triangle, GraphicsProgram shader)
     {
         _triangle = triangle;
         _shader = shader;
     }
 
-    public string Name => "Present";
+    public override string Name => "Triangle";
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
-        // The command buffer is already begun; submitting it ends and queues it.
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        cmd.SetFramebuffer(target);
-        cmd.ClearDepthStencil(1, 0);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
 
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
 }
 
 internal sealed class TrianglePipeline : RenderPipeline<SceneView>
 {
-    private readonly IPresentPass<SceneView> _present;
+    private readonly TrianglePass _pass;
 
-    public TrianglePipeline(IPresentPass<SceneView> present) => _present = present;
+    public TrianglePipeline(TrianglePass pass) => _pass = pass;
 
-    protected override void InitializePasses() => SetPresentPass(_present);
+    protected override void InitializePasses() => AddPass(_pass);
 }
 ```
 
@@ -109,11 +101,11 @@ GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescriptio
 
 GraphicsProgram shader = /* load + create a ShaderProgram */;
 Mesh triangle = /* create vertex/index buffers */;
-TrianglePipeline pipeline = new(new TrianglePresentPass(triangle, shader));
+TrianglePipeline pipeline = new(new TrianglePass(triangle, shader));
 SceneView[] views = { new SceneView(600, 600) };
 
 // Per-frame render loop: builds an ExecutionTask internally, runs the pipeline for every view, and
-// swaps buffers if any view's present pass requested it.
+// swaps buffers if any pass wrote the backbuffer.
 device.DispatchGraph(pipeline, views);
 ```
 
@@ -324,12 +316,13 @@ declarative graph of passes over a `RenderPipeline<TView>`:
   `Setup` with `SetTarget(builder, id, desc)` (or `SetTargets` for a multi-format MRT target), then in
   `Render` rent a command buffer, call `BindTarget(context, cmd)` to bind the target and apply its
   declared load/clear ops, record draws, and submit. Raw `IPass` remains the low-level escape hatch.
-- **`IPresentPass<TView>`** - the one required, terminal pass. `Setup(PresentContextBuilder)` declares
-  the resources it reads from the graph and whether it needs the window's swapchain this run
-  (`RequestSwapchain()`). `Present(...)` runs after every other pass; grab `context.SwapchainTarget`,
-  draw into it, and call `context.Present()` to arm the present. Do nothing to stay offscreen.
+- **The backbuffer** - `builder.DeclareBackbuffer()` (or `SetBackbufferTarget` in a `RasterPass`) declares a
+  write to the device's main swapchain image. It is an ordinary graph texture: the graph moves it in
+  and out of attachment layout, orders the writing pass after the passes it reads from, and presents
+  after dispatch if and only if some pass wrote it. A graph with no backbuffer writer stays offscreen.
+  Declaring it on a device with no main swapchain throws when the pass is reached.
 - **`RenderPipeline<TView>`** - subclass and override `InitializePasses()` to call `AddPass` for each
-  `IPass` and `SetPresentPass` once. It may also declare shared resources centrally with
+  `IPass`. It may also declare shared resources centrally with
   `DeclareTexture(id, desc)` / `DeclareBuffer(id, desc)` so many passes can reference them by ID
   without one owning the description. The pipeline lazily solves the declared passes into a
   `RenderGraph` the first time it runs: passes are topologically sorted so readers run after their
@@ -372,20 +365,19 @@ Dispatch a pipeline against a list of views with `GraphicsDevice.DispatchGraph`:
 device.DispatchGraph(pipeline, views, profiler: null);
 ```
 
-This opens one `ExecutionTask`, runs `RenderPipeline.ExecuteView` (ordered passes, then the present
-pass) for every view, completes the execution, and calls `SwapBuffers()` if any view's present pass
-requested a present.
+This opens one `ExecutionTask`, runs `RenderPipeline.ExecuteView` (the ordered passes) for every view, completes
+the execution, and calls `SwapBuffers()` if any view's graph writes the backbuffer.
 
 ## Samples
 
 Runnable samples live under [`Samples/`](Samples) and share common setup (windowing, shader and
 model loading) through the `Shared` project:
 
-- `HelloTriangle` - the minimal render loop: one present pass, no offscreen passes.
+- `HelloTriangle` - the minimal render loop: one pass writing the backbuffer, no offscreen passes.
 - `TexturedQuad` - texture and sampler binding.
 - `Cube` / `CubeGrid` - 3D transforms and instancing-style draws.
 - `PBRRenderer` - a multi-pass render graph: an offscreen "Scene" pass, a two-step bloom
-  (downsample/upsample), and a present pass that composites Scene + bloom to the swapchain. The
+  (downsample/upsample), and a composite pass that writes Scene + bloom to the backbuffer. The
   graph orders the four passes from their declared texture reads/writes.
 
 Run one with, for example:
