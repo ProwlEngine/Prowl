@@ -314,6 +314,11 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
+    /// Where the simulation has the body right now. The Transform is interpolated between steps and
+    /// trails this, so anything acting on the body at a point should measure from here.
+    /// </summary>
+    public Float3 Position => IsSimulated ? _body.Position.ToProwl() : Transform.Position;
+    /// <summary>
     /// Gets or sets the Torque of this Rigidbody3D.
     /// </summary>
     public Float3 Torque
