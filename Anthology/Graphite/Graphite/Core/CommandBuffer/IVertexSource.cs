@@ -1,7 +1,8 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// User-supplied vertex buffers, index buffer, and topology for the backend. Bound via SetVertexSource; queried on every draw, never cached.
+/// User-supplied vertex buffers, index buffer, and topology for the backend. Bound via SetVertexSource.
+/// Implement on a class and reuse the instance; a struct is boxed on every SetVertexSource call.
 /// </summary>
 public interface IVertexSource
 {

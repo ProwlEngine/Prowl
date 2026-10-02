@@ -323,8 +323,8 @@ The first resolve in a view rents (or fetches from the history ring); later reso
 
 | Member | Signature | Description |
 |--------|-----------|-------------|
-| `ViewSized` | `static GraphTextureDesc ViewSized(bool depth = true, float scale = 1f, params PixelFormat[] formats)` | Size is `scale` times the view; empty `formats` means `R8_G8_B8_A8_UNorm` |
-| `Sized` | `static GraphTextureDesc Sized(int width, int height, bool depth = true, params PixelFormat[] formats)` | Fixed size |
+| `ViewSized` | `static GraphTextureDesc ViewSized(bool depth = false, float scale = 1f, params PixelFormat[] formats)` | Size is `scale` times the view; empty `formats` means `R8_G8_B8_A8_UNorm`. No depth attachment unless `depth` is true |
+| `Sized` | `static GraphTextureDesc Sized(int width, int height, bool depth = false, params PixelFormat[] formats)` | Fixed size. No depth attachment unless `depth` is true |
 | `Resolve` | `(int width, int height) Resolve(uint viewWidth, uint viewHeight)` | Concrete size, never below 1 |
 | Fields | `SizeMode`, `Scale`, `Width`, `Height`, `ColorFormats`, `EnableDepth` | Plain public fields |
 
@@ -399,7 +399,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
     public void Advance(float dt) => _angle += dt * 0.5f;
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized());
+        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true));
 
     public override void Render(RenderContext<SceneView> context)
     {
@@ -418,14 +418,16 @@ internal sealed class ScenePass : RasterPass<SceneView>
     }
 }
 
-internal readonly struct FullscreenSource : IVertexSource
+internal sealed class FullscreenSource : IVertexSource
 {
-    public readonly PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
+    public static readonly FullscreenSource Instance = new();
 
-    public readonly void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
+    public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
+
+    public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
         => binding = default;
 
-    public readonly bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
+    public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
     {
         buffer = null!;
         format = IndexFormat.UInt32;
@@ -439,7 +441,6 @@ internal sealed class BlitPresentPass : IPresentPass<SceneView>
     private readonly GraphicsProgram _blitShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
-    private readonly FullscreenSource _fullscreen = new();
     private TextureHandle _sceneHandle;
 
     public BlitPresentPass(GraphicsProgram blitShader, Sampler sampler)
@@ -468,7 +469,7 @@ internal sealed class BlitPresentPass : IPresentPass<SceneView>
         cmd.SetFramebuffer(target);
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
         cmd.SetShader(_blitShader);
-        cmd.SetVertexSource(_fullscreen);
+        cmd.SetVertexSource(FullscreenSource.Instance);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);

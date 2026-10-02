@@ -108,7 +108,7 @@ Argument structs:
 | `IndirectDrawIndexedArguments` | `IndexCount`, `InstanceCount`, `FirstIndex`, `VertexOffset`, `FirstInstance` |
 | `IndirectDispatchArguments` | `GroupCountX`, `GroupCountY`, `GroupCountZ` |
 
-A full-screen triangle with no vertex buffers is `cmd.Draw(3)` with an `IVertexSource` whose `ResolveSlot` returns `default`, as in [PBRRenderer](../../Samples/PBRRenderer/Program.cs#L224).
+A full-screen triangle with no vertex buffers is `cmd.Draw(3)` with an `IVertexSource` whose `ResolveSlot` returns `default`; see [IVertexSource](#ivertexsource).
 
 A compute pass:
 
@@ -167,17 +167,21 @@ Supplies vertex buffers, an optional index buffer and the topology. You implemen
 
 `VertexBinding` is `new VertexBinding(DeviceBuffer buffer, uint offset)`. The buffer must never be null and must have vertex buffer usage; stride lives in the program's layout, not the binding. `layout` is passed in full so implementations can dispatch on the semantic of what the slot holds rather than the slot index.
 
-Both methods are called on every draw and nothing is cached by the command buffer. A `readonly struct` implementation avoids allocation:
+`Topology` is read on every draw. `TryGetIndexBuffer` is called on every indexed draw. `ResolveSlot` is called when the bound source or program differs from the previous draw on the same command buffer; otherwise the resolved vertex buffers are reused. The comparison is by reference, so keep one long-lived instance per mesh.
+
+Implement `IVertexSource` on a class. `SetVertexSource` takes the interface, so a struct is boxed into a new object on every call, which allocates and also defeats the vertex buffer reuse above. A shader with no vertex inputs still needs a source; share one instance:
 
 ```csharp
-internal readonly struct CanvasFullscreenSource : IVertexSource
+internal sealed class FullscreenSource : IVertexSource
 {
-    public readonly PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
+    public static readonly FullscreenSource Instance = new();
 
-    public readonly void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
+    public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
+
+    public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
         => binding = default;
 
-    public readonly bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
+    public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
     {
         buffer = null!;
         format = IndexFormat.UInt32;
@@ -187,7 +191,7 @@ internal readonly struct CanvasFullscreenSource : IVertexSource
 }
 ```
 
-That struct is only valid for a shader that generates its vertices from `SV_VertexID` and so declares no vertex layout slots.
+That source is only valid for a shader that generates its vertices from `SV_VertexID` and so declares no vertex layout slots.
 
 ## TransferCommandBuffer
 
@@ -249,6 +253,7 @@ Preconditions are checked before `GetCommandBuffer`, as the present pass does wi
 - `SetFramebuffer` resets viewports and scissors, so custom ones follow it.
 - `ClearColorTarget` and `ClearDepthStencil` require a framebuffer to be set first, and `ClearDepthStencil` requires a depth attachment.
 - `SetVertexSource` replaces the previous source completely.
+- An `IVertexSource` struct is boxed on every `SetVertexSource` call. Implement it on a class and reuse the instance.
 - `Begin` clears properties, so each rented buffer starts empty.
 - `GraphicsDevice.SubmitAndWait` blocks the CPU until the GPU finishes.
 - Indirect argument buffers must carry the `IndirectBuffer` usage flag.

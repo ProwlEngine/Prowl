@@ -78,7 +78,7 @@ Every draw goes through `ResolveAndBindGraphicsPipeline` ([source](../../Graphit
 4. Call `VkGraphicsProgram.GetOrAddPipeline(key)` ([source](../../Graphite/Platform/Vulkan/VkGraphicsProgram.cs#L59)). Under a lock it returns the cached entry or calls `VkPipelineCacheFactory.Build`.
 5. `vkCmdBindPipeline`.
 
-The one-entry fast path is invalidated (`_hasResolvedPipeline = false`) by `SetShaderCore`, `SetVertexSourceCore`, setting a framebuffer, and `ClearGraphicsState`.
+The one-entry fast path is invalidated (`_hasResolvedPipeline = false`) by `SetShaderCore`, setting a framebuffer, and `ClearGraphicsState`. Changing the vertex source does not invalidate it; a source with a different topology misses the topology check in step 2.
 
 ### 5. Building a pipeline
 

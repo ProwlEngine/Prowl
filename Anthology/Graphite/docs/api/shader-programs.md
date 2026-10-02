@@ -78,7 +78,7 @@ Each `ResourceLayoutDescription` has a `Set` index and an `Elements` array. Each
 | `RasterizerState` | `RasterizerStateDescription RasterizerState { get; }` | Cull mode, front face, depth clip, depth bias. |
 | `VertexLayouts` | `IReadOnlyList<VertexLayoutDescription> VertexLayouts { get; }` | Vertex input layouts the shader expects, one per vertex buffer slot. |
 
-Bind it with `CommandBuffer.SetShader(GraphicsProgram)` ([source](../../Graphite/Core/CommandBuffer/CommandBuffer.State.cs#L11)). Binding the instance that is already bound is a no-op. Binding a new one invalidates bound resource sets.
+Bind it with `CommandBuffer.SetShader(GraphicsProgram)` ([source](../../Graphite/Core/CommandBuffer/CommandBuffer.State.cs#L11)). Binding the instance that is already bound is a no-op. Binding a new one keeps the merged properties from `SetProperties`; the next draw resolves them against the new program's layouts, so properties never need to be reapplied after a shader switch.
 
 ## ComputeProgram
 
@@ -246,7 +246,7 @@ One `ShaderPass` serves several draws: `SetKeyword` before each `SetShader`. The
 - Creating programs does not deduplicate. Two calls with the same description yield two programs, two sets of shader modules and two pipeline caches.
 - A fresh `(framebuffer outputs, topology)` combination compiles a pipeline on the first draw, which causes a one-time hitch.
 - The compiler output carries no fixed-function state. A hand-built program with default state draws with depth test and blending off.
-- `SetShader` after `SetProperties` loses the bound resource sets.
+- `SetShader` keeps the merged properties. Reapplying them after every shader switch is wasted work.
 - `SetKeyword` mutates the pass, not the command buffer, so render graph passes that share one `ShaderPass` share its keyword state.
 - Bool keyword values are lowercase `"true"` and `"false"`. `"True"` is not a value; if the name is right but the value is wrong, `SetKeyword` does not throw and selects the nearest variant by matching slots instead.
 
