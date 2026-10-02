@@ -318,6 +318,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// trails this, so anything acting on the body at a point should measure from here.
     /// </summary>
     public Float3 Position => IsSimulated ? _body.Position.ToProwl() : Transform.Position;
+
+    /// <summary>The simulated orientation, without the interpolation the Transform shows. See <see cref="Position"/>.</summary>
+    public Quaternion Rotation => IsSimulated ? _body.Orientation.ToProwl() : Transform.Rotation;
+
     /// <summary>
     /// Gets or sets the Torque of this Rigidbody3D.
     /// </summary>
