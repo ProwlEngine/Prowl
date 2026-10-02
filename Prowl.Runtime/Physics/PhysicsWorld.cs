@@ -43,20 +43,27 @@ public class PhysicsWorld
     /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
     /// pair is scoped to this world and is dropped when the world is cleared.
     /// </summary>
-    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.SetCollisionsBetween([(bodyA, bodyB)], false);
+    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => IgnoreCollisionsBetween([(bodyA, bodyB)]);
 
     /// <summary>Undoes <see cref="IgnoreCollisionBetween"/> for a pair.</summary>
     public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.SetCollisionsBetween([(bodyA, bodyB)], true);
 
     /// <summary><see cref="IgnoreCollisionBetween"/> for many pairs at once.</summary>
-    public void IgnoreCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs) => _layerFilter.SetCollisionsBetween(pairs, false);
+    public void IgnoreCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs)
+    {
+        _layerFilter.SetCollisionsBetween(pairs, false);
+        _contactFiltersChanged = true;
+    }
 
     /// <summary><see cref="EnableCollisionBetween"/> for many pairs at once.</summary>
     public void EnableCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs) => _layerFilter.SetCollisionsBetween(pairs, true);
 
     /// <summary>Lets the two bodies of a constraint collide with each other, or keeps them apart.</summary>
     internal void SetCollidesConnected(Jitter2.Dynamics.Constraints.Constraint constraint, bool collides)
-        => _layerFilter.SetCollidesConnected(constraint, collides);
+    {
+        _layerFilter.SetCollidesConnected(constraint, collides);
+        _contactFiltersChanged = true;
+    }
 
     /// <summary>Forgets every pair passed to <see cref="IgnoreCollisionBetween"/>.</summary>
     public void ClearIgnoredCollisions() => _layerFilter.ClearIgnoredCollisions();
@@ -347,22 +354,31 @@ public class PhysicsWorld
         private readonly TShape _shape;
         private readonly JQuaternion _orientation;
         private readonly JVector _position;
+        private readonly JBoundingBox _bounds;
         private readonly List<ShapeCastHit> _hits;
         private readonly QueryFilter _filter;
 
         public OverlapSink(PhysicsWorld world, TShape shape, JQuaternion orientation,
-            JVector position, List<ShapeCastHit> hits, QueryFilter filter)
+            JVector position, JBoundingBox bounds, List<ShapeCastHit> hits, QueryFilter filter)
         {
             _world = world;
             _shape = shape;
             _orientation = orientation;
             _position = position;
+            _bounds = bounds;
             _hits = hits;
             _filter = filter;
         }
 
         public void Add(in IDynamicTreeProxy proxy)
         {
+            if (proxy is TerrainHeightmapProxy terrainProxy)
+            {
+                if (_world.TerrainAccepted(terrainProxy, _filter))
+                    _world.OverlapTerrain(_shape, _orientation, _position, terrainProxy, _bounds, _hits);
+                return;
+            }
+
             if (proxy is not RigidBodyShape targetShape || !_world.Accepts(targetShape, _filter))
                 return;
 
@@ -402,6 +418,31 @@ public class PhysicsWorld
     }
 
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
+
+    // Jitter removes a body's constraints along with it, and a constraint created before its connected
+    // body existed fell back to the world. Either way it has to be rebuilt when the body comes back.
+    private readonly HashSet<PhysicsConstraint> _constraints = [];
+    private readonly List<PhysicsConstraint> _rebindConstraints = [];
+
+    internal void RegisterConstraint(PhysicsConstraint constraint) => _constraints.Add(constraint);
+    internal void UnregisterConstraint(PhysicsConstraint constraint) => _constraints.Remove(constraint);
+
+    internal void RebindConstraints(Rigidbody3D body)
+    {
+        foreach (PhysicsConstraint constraint in _constraints)
+            if (constraint.IsValid() && constraint.EnabledInHierarchy && constraint.Connects(body))
+                _rebindConstraints.Add(constraint);
+
+        try
+        {
+            foreach (PhysicsConstraint constraint in _rebindConstraints)
+                constraint.Rebind();
+        }
+        finally
+        {
+            _rebindConstraints.Clear();
+        }
+    }
 
     internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider)
     {
@@ -572,6 +613,12 @@ public class PhysicsWorld
     public event Action<float> PostStep;
 
     /// <summary>
+    /// Raised once the step has fully returned and collision events are out, so handlers may freely
+    /// add, remove or move bodies. Trigger volumes report from here.
+    /// </summary>
+    public event Action<float> StepFinished;
+
+    /// <summary>
     /// Event triggered before each physics substep, with the substep duration (FixedDeltaTime / Substep).
     /// Use this for sub-stepped force/impulse models (e.g. vehicle tyres) that need the body's
     /// re-integrated velocity each substep.
@@ -613,6 +660,11 @@ public class PhysicsWorld
         // Create a new static rigidbody for this layer
         staticBody = World.CreateRigidBody();
         staticBody.MotionType = MotionType.Static;
+
+        // Jitter combines materials by taking the larger value, so anything above zero here would put a
+        // floor under the friction and bounce of every body touching static geometry.
+        staticBody.Friction = 0.0f;
+        staticBody.Restitution = 0.0f;
         staticBody.Tag = new Rigidbody3D.RigidBodyUserData()
         {
             Rigidbody = null, // No Rigidbody3D component associated with this
@@ -659,6 +711,9 @@ public class PhysicsWorld
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
+        _contactPairs.Clear();
+        _arbiterPairs.Clear();
+        _terrainFilters.Clear();
 
         // World.Clear drops every dynamic tree proxy, terrain included, so the terrain filters would be
         // left chained onto the broad phase testing against proxies that no longer exist. Reset the
@@ -690,6 +745,7 @@ public class PhysicsWorld
         // Push any user Transform edits into the bodies before stepping (always - this is the
         // "sync prior to the physics step" that happens regardless of AutoSyncTransforms).
         SyncTransforms();
+        RemoveFilteredContacts();
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
 
@@ -1060,6 +1116,71 @@ public class PhysicsWorld
     }
 
     /// <summary>
+    /// Overlaps a shape against the terrain triangles under its bounds, reporting the deepest one.
+    /// </summary>
+    private void OverlapTerrain<TShape>(TShape shape, JQuaternion jOrientation, JVector jPosition,
+        TerrainHeightmapProxy terrainProxy, JBoundingBox bounds, List<ShapeCastHit> hits)
+        where TShape : ISupportMappable
+    {
+        if (!_terrainProxies.TryGetValue(terrainProxy, out ITerrainHeightProvider hp))
+            return;
+
+        if (!hp.TryGetCellRange(bounds, out int minX, out int minZ, out int maxX, out int maxZ))
+            return;
+
+        float bestPenetration = 0.0f;
+        JVector bestNormal = JVector.Zero;
+        JVector bestPointA = JVector.Zero;
+        JVector bestPointB = JVector.Zero;
+
+        for (int x = minX; x < maxX; x++)
+        {
+            for (int z = minZ; z < maxZ; z++)
+            {
+                if (!hp.IsValidCell(x, z) || hp.IsCellHole(x, z)) continue;
+
+                if (!hp.TryGetWorldCorners(x, z, out JVector a, out JVector b, out JVector c, out JVector d))
+                    continue;
+
+                for (int tri = 0; tri < 2; tri++)
+                {
+                    CollisionTriangle triangle;
+                    triangle.A = a;
+                    triangle.B = tri == 0 ? c : d;
+                    triangle.C = tri == 0 ? b : c;
+
+                    bool overlaps = NarrowPhase.MprEpa(
+                        shape, triangle,
+                        jOrientation, JQuaternion.Identity,
+                        jPosition, JVector.Zero,
+                        out JVector pA, out JVector pB, out JVector n, out float penetration);
+
+                    if (!overlaps || !(penetration > bestPenetration)) continue;
+
+                    bestPenetration = penetration;
+                    bestNormal = n;
+                    bestPointA = pA;
+                    bestPointB = pB;
+                }
+            }
+        }
+
+        if (bestPenetration <= 0.0f) return;
+
+        var terrain = hp as MonoBehaviour;
+        hits.Add(new ShapeCastHit
+        {
+            Hit = true,
+            Fraction = 0,
+            Penetration = bestPenetration,
+            Normal = -(bestNormal.ToProwl()),
+            Point = bestPointA.ToProwl(),
+            HitPoint = bestPointB.ToProwl(),
+            Transform = terrain.IsValid() && terrain.GameObject.IsValid() ? terrain.GameObject.Transform : null,
+        });
+    }
+
+    /// <summary>
     /// Generic shape cast that returns all hits with default layer mask.
     /// </summary>
     public int ShapeCastAll(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits)
@@ -1411,7 +1532,7 @@ public class PhysicsWorld
         // Create a bounding box for the shape
         var jOrientation = orientation.ToJitter();
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jPosition, out JBoundingBox shapeBounds);
-        var sink = new OverlapSink<TShape>(this, shape, jOrientation, jPosition, hits, filter);
+        var sink = new OverlapSink<TShape>(this, shape, jOrientation, jPosition, shapeBounds, hits, filter);
         World.DynamicTree.Query(ref sink, in shapeBounds);
 
         return hits.Count;
@@ -1951,6 +2072,7 @@ public class PhysicsWorld
         _compositeBroadPhaseFilter.AddFilter(collisionFilter);
 
         _terrainProxies[heightmapProxy] = heightProvider;
+        _terrainFilters[collisionFilter] = heightProvider;
     }
 
     /// <summary>
@@ -1976,6 +2098,7 @@ public class PhysicsWorld
             return;
 
         _terrainProxies.Remove(heightmapProxy);
+        _terrainFilters.Remove(collisionFilter);
 
         if (heightmapProxy.SetIndex != -1)
         {

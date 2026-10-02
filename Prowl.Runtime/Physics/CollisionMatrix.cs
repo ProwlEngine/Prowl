@@ -140,5 +140,14 @@ public static class CollisionMatrix
     // Mutate a private copy, then swap it in, so no reader ever sees a partial update.
     private static uint[] Snapshot() => (uint[])Volatile.Read(ref s_rows).Clone();
 
-    private static void Publish(uint[] rows) => Volatile.Write(ref s_rows, rows);
+    private static void Publish(uint[] rows)
+    {
+        Volatile.Write(ref s_rows, rows);
+        Interlocked.Increment(ref s_version);
+    }
+
+    private static int s_version;
+
+    /// <summary>Changes every time the matrix is written.</summary>
+    public static uint Version => (uint)Volatile.Read(ref s_version);
 }

@@ -22,6 +22,7 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
     private readonly TerrainHeightmapProxy _heightmapProxy;
     private readonly ITerrainHeightProvider _heightProvider;
     private readonly ulong _minTriangleIndex;
+    private readonly ulong _triangleCount;
 
     /// <summary>
     /// Creates a new terrain collision filter.
@@ -39,7 +40,11 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
         // whose data has not sized itself yet would ask for zero, which Jitter rejects outright.
         int totalTriangles = Maths.Max(1, _heightProvider.Width * _heightProvider.Height * 2);
         (_minTriangleIndex, _) = World.RequestId(totalTriangles);
+        _triangleCount = (ulong)totalTriangles;
     }
+
+    /// <summary>Whether a contact id names one of this terrain's triangles.</summary>
+    internal bool OwnsId(ulong id) => id >= _minTriangleIndex && id - _minTriangleIndex < _triangleCount;
 
     /// <summary>
     /// Filters collision between two proxies.

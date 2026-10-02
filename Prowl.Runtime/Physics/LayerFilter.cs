@@ -107,28 +107,29 @@ public class LayerFilter : IBroadPhaseFilter
     public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
     {
         if (proxyA is RigidBodyShape rbsA && proxyB is RigidBodyShape rbsB)
-        {
-            // Bodies joined by a constraint do not collide, unless it says they should.
-            if (AreConstrainedTogether(rbsA.RigidBody, rbsB.RigidBody))
-                return false;
-
-            if (rbsA.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udA ||
-                rbsB.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udB)
-                return true;
-
-            bool isIgnored = false;
-            HashSet<Pair> ignore = Volatile.Read(ref _ignore);
-            Rigidbody3D bodyA = udA.Rigidbody;
-            Rigidbody3D bodyB = udB.Rigidbody;
-            if (ignore.Count > 0 && TryOrderPair(ref bodyA, ref bodyB))
-                isIgnored = ignore.Contains(new Pair(bodyA, bodyB));
-
-            bool canCollide = CollisionMatrix.GetLayerCollision(udA.Layer, udB.Layer);
-
-            return canCollide && !isIgnored;
-        }
+            return BodiesCollide(rbsA.RigidBody, rbsB.RigidBody);
 
         // If not both RigidBodyShapes, let other filters handle it (e.g., terrain collision)
         return true;
+    }
+
+    internal bool BodiesCollide(RigidBody a, RigidBody b)
+    {
+        // Bodies joined by a constraint do not collide, unless it says they should.
+        if (AreConstrainedTogether(a, b))
+            return false;
+
+        if (a.Tag is not Rigidbody3D.RigidBodyUserData udA ||
+            b.Tag is not Rigidbody3D.RigidBodyUserData udB)
+            return true;
+
+        bool isIgnored = false;
+        HashSet<Pair> ignore = Volatile.Read(ref _ignore);
+        Rigidbody3D bodyA = udA.Rigidbody;
+        Rigidbody3D bodyB = udB.Rigidbody;
+        if (ignore.Count > 0 && TryOrderPair(ref bodyA, ref bodyB))
+            isIgnored = ignore.Contains(new Pair(bodyA, bodyB));
+
+        return CollisionMatrix.GetLayerCollision(udA.Layer, udB.Layer) && !isIgnored;
     }
 }
