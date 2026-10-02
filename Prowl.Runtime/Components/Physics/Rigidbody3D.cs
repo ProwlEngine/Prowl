@@ -301,7 +301,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public Float3 LinearVelocity
     {
         get => _body == null ? Float3.Zero : _body.Velocity.ToProwl();
-        set { AssertOwner(); EnsureBody(); if (_body != null) _body.Velocity = new(value.X, value.Y, value.Z); }
+        set { AssertOwner(); if (TryGetMovingBody(out RigidBody body)) body.Velocity = value.ToJitter(); }
     }
 
     /// <summary>
@@ -310,7 +310,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public Float3 AngularVelocity
     {
         get => _body == null ? Float3.Zero : _body.AngularVelocity.ToProwl();
-        set { AssertOwner(); EnsureBody(); if (_body != null) _body.AngularVelocity = new(value.X, value.Y, value.Z); }
+        set { AssertOwner(); if (TryGetMovingBody(out RigidBody body)) body.AngularVelocity = value.ToJitter(); }
     }
 
     /// <summary>
@@ -319,7 +319,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public Float3 Torque
     {
         get => _body == null ? Float3.Zero : _body.Torque.ToProwl();
-        set { AssertOwner(); EnsureBody(); if (_body != null) _body.Torque = value.ToJitter(); }
+        set { AssertOwner(); if (TryGetMovingBody(out RigidBody body)) body.Torque = value.ToJitter(); }
     }
 
     [SerializeIgnore]
@@ -755,7 +755,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public void AddForce(Float3 force, ForceMode mode = ForceMode.Force)
     {
         AssertOwner();
-        if (!TryGetBody(out RigidBody body)) return;
+        if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jForce = force.ToJitter();
         float inverseMass = body.Data.InverseMass;
@@ -791,7 +791,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public void AddForceAtPosition(Float3 force, Float3 worldPosition, ForceMode mode = ForceMode.Force)
     {
         AssertOwner();
-        if (!TryGetBody(out RigidBody body)) return;
+        if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jForce = force.ToJitter();
         var jPosition = worldPosition.ToJitter();
@@ -818,7 +818,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public void AddTorque(Float3 torque, ForceMode mode = ForceMode.Force)
     {
         AssertOwner();
-        if (!TryGetBody(out RigidBody body)) return;
+        if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jTorque = torque.ToJitter();
 
@@ -944,7 +944,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public void ApplyImpulse(Float3 impulse, Float3 worldPosition)
     {
         AssertOwner();
-        if (!TryGetBody(out RigidBody body)) return;
+        if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jImpulse = impulse.ToJitter();
         var jPosition = worldPosition.ToJitter();
@@ -962,7 +962,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public void ApplyImpulse(Float3 impulse)
     {
         AssertOwner();
-        if (!TryGetBody(out RigidBody body)) return;
+        if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jImpulse = impulse.ToJitter();
         body.Velocity += jImpulse * body.Data.InverseMass;
@@ -976,7 +976,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     public void ApplyAngularImpulse(Float3 angularImpulse)
     {
         AssertOwner();
-        if (!TryGetBody(out RigidBody body)) return;
+        if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jImpulse = angularImpulse.ToJitter();
         body.AngularVelocity += JVector.Transform(jImpulse, body.Data.InverseInertiaWorld);
