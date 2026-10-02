@@ -63,11 +63,6 @@ internal unsafe partial class VkCommandBuffer
         _ibCacheValid = false;
     }
 
-    private protected override void SetVertexSourceCore(IVertexSource source)
-    {
-        _hasResolvedPipeline = false;
-    }
-
     private protected override void SetShaderCore(GraphicsProgram program)
     {
         VkGraphicsProgram sp = Util.AssertSubtype<GraphicsProgram, VkGraphicsProgram>(program);
