@@ -498,6 +498,31 @@ public class PhysicsTests : RuntimeTestBase
 
     private static TriggerRecorder Recorder(TriggerVolume trigger) => trigger.GetComponent<TriggerRecorder>()!;
 
+    private sealed class DisableOnEnter : MonoBehaviour
+    {
+        public override void OnTriggerEnter(Rigidbody3D other) => other.Enabled = false;
+    }
+
+    [Fact]
+    public void Trigger_HandlersMayRemoveBodies()
+    {
+        var scene = CreatePhysicsScene();
+        var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
+        trigger.GameObject.AddComponent<DisableOnEnter>();
+        var a = AddDynamicBox(scene, new Float3(-1, 0, 0), gravity: false);
+        var b = AddDynamicBox(scene, new Float3(1, 0, 0), gravity: false);
+
+        int errors = 0;
+        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity == LogSeverity.Error) errors++; }
+        Debug.OnLog += Count;
+        try { StepPhysics(scene, 3); }
+        finally { Debug.OnLog -= Count; }
+
+        Assert.Equal(0, errors);
+        Assert.False(a.Enabled);
+        Assert.False(b.Enabled);
+    }
+
     [Fact]
     public void Trigger_Entered_FiresForRigidbodyInside()
     {
@@ -676,9 +701,11 @@ public class PhysicsTests : RuntimeTestBase
     private sealed class CollisionRecorder : MonoBehaviour
     {
         public readonly List<Collision> Begins = [];
+        public readonly List<Collision> Stays = [];
         public readonly List<Collision> Ends = [];
 
         public override void OnCollisionBegin(Collision collision) => Begins.Add(collision);
+        public override void OnCollisionStay(Collision collision) => Stays.Add(collision);
         public override void OnCollisionEnd(Collision collision) => Ends.Add(collision);
     }
 
@@ -723,6 +750,496 @@ public class PhysicsTests : RuntimeTestBase
 
         Assert.NotEmpty(recorder.Ends);
         Assert.Same(floor, recorder.Ends[0].Collider.GameObject);
+    }
+
+    private GameObject AddStaticRigidbodyFloor(Scene scene, out Rigidbody3D floorBody)
+    {
+        var floor = CreateGameObject("Floor");
+        floor.Transform.Position = new Float3(0, -0.5f, 0);
+        floorBody = floor.AddComponent<Rigidbody3D>();
+        floorBody.MotionType = Jitter2.Dynamics.MotionType.Static;
+        floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        scene.Add(floor);
+        return floor;
+    }
+
+    [Fact]
+    public void Collision_BothSidesGetTheirOwnNormalAndTheRealContactPoint()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticRigidbodyFloor(scene, out Rigidbody3D floorBody);
+        var floorRecorder = floor.AddComponent<CollisionRecorder>();
+
+        var box = AddDynamicBox(scene, new Float3(3, 1, 0.5f), gravity: true);
+        var boxRecorder = box.GameObject.AddComponent<CollisionRecorder>();
+
+        Tick(scene, 120);
+
+        Collision boxHit = Assert.Single(boxRecorder.Begins);
+        Collision floorHit = Assert.Single(floorRecorder.Begins);
+
+        Assert.True(boxHit.Normal.Y > 0.99f, $"box normal {boxHit.Normal}");
+        Assert.True(floorHit.Normal.Y < -0.99f, $"floor normal {floorHit.Normal}");
+        Assert.InRange(boxHit.Point.Y, -0.05f, 0.05f);
+        Assert.InRange(boxHit.Point.X, 2.5f, 3.5f);
+        Assert.InRange(boxHit.Point.Z, 0.0f, 1.0f);
+        Assert.True(boxHit.ImpulseMagnitude > 0.0f, "the impulse is read after the solver ran");
+
+        Assert.Same(floorBody, boxHit.Rigidbody);
+        Assert.Same(box, floorHit.Rigidbody);
+        Assert.Same(box.GameObject, floorHit.GameObject);
+        Assert.Same(box.GameObject, boxHit.ThisCollider.GameObject);
+        Assert.Same(floor, floorHit.ThisCollider.GameObject);
+    }
+
+    [Fact]
+    public void Collision_StaticColliderAndChildColliderObjectsReceiveEvents()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+        var floorRecorder = floor.AddComponent<CollisionRecorder>();
+
+        var root = CreateGameObject("Root");
+        root.Transform.Position = new Float3(0, 2, 0);
+        var rb = root.AddComponent<Rigidbody3D>();
+        var rootRecorder = root.AddComponent<CollisionRecorder>();
+        var child = CreateGameObject("Child");
+        child.SetParent(root);
+        child.Transform.LocalPosition = new Float3(0, -1, 0);
+        var childCollider = child.AddComponent<BoxCollider>();
+        var childRecorder = child.AddComponent<CollisionRecorder>();
+        scene.Add(root);
+
+        Tick(scene, 120);
+
+        Collision floorHit = Assert.Single(floorRecorder.Begins);
+        Assert.Same(rb, floorHit.Rigidbody);
+        Assert.Same(childCollider, floorHit.Collider);
+        Assert.Same(root, floorHit.GameObject);
+
+        Assert.Same(childCollider, Assert.Single(childRecorder.Begins).ThisCollider);
+        Assert.Same(childCollider, Assert.Single(rootRecorder.Begins).ThisCollider);
+    }
+
+    [Fact]
+    public void Collision_StayFiresWhileTouching_ThenEnd()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+
+        var rb = AddDynamicBox(scene, new Float3(0, 1, 0), gravity: true);
+        rb.DeactivationTime = 1000f;
+        var recorder = rb.GameObject.AddComponent<CollisionRecorder>();
+
+        Tick(scene, 60);
+        Assert.Single(recorder.Begins);
+        Assert.True(recorder.Stays.Count > 30, $"stays {recorder.Stays.Count}");
+        Assert.True(recorder.Stays[^1].Normal.Y > 0.99f);
+
+        rb.AffectedByGravity = false;
+        rb.LinearVelocity = new Float3(0, 40, 0);
+        Tick(scene, 30);
+
+        Assert.Single(recorder.Ends);
+        Assert.Single(recorder.Begins);
+    }
+
+    private sealed class DisableOnBegin : MonoBehaviour
+    {
+        public override void OnCollisionBegin(Collision collision) => GetComponent<Rigidbody3D>().Enabled = false;
+    }
+
+    [Fact]
+    public void Collision_ChangingPhysicsInsideACallback_DoesNotBreakTheStep()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+
+        var lower = AddDynamicBox(scene, new Float3(0, 3, 0), gravity: false);
+        lower.GameObject.AddComponent<DisableOnBegin>();
+
+        var upper = AddDynamicBox(scene, new Float3(0, 6, 0), gravity: true);
+        var upperRecorder = upper.GameObject.AddComponent<CollisionRecorder>();
+
+        int errors = 0;
+        void Count(string message, DebugStackTrace? trace, LogSeverity severity) { if (severity == LogSeverity.Error) errors++; }
+        Debug.OnLog += Count;
+        try { Tick(scene, 120); }
+        finally { Debug.OnLog -= Count; }
+
+        Assert.Equal(0, errors);
+        Assert.False(lower.Enabled);
+        Assert.True(upperRecorder.Begins.Count >= 1);
+        Assert.Equal(upperRecorder.Begins.Count, upperRecorder.Ends.Count + 1);
+    }
+
+    [Fact]
+    public void Collision_EndFires_WhenTheOtherBodyIsDisabledOrDestroyed()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+        var floorRecorder = floor.AddComponent<CollisionRecorder>();
+
+        var a = AddDynamicBox(scene, new Float3(-3, 1, 0), gravity: true);
+        var b = AddDynamicBox(scene, new Float3(3, 1, 0), gravity: true);
+        Tick(scene, 60);
+        Assert.Equal(2, floorRecorder.Begins.Count);
+
+        a.Enabled = false;
+        b.GameObject.Destroy();
+        Tick(scene, 2);
+
+        Assert.Equal(2, floorRecorder.Ends.Count);
+    }
+
+    [Fact]
+    public void Collision_MovingAStaticCollider_DoesNotRestartTheContact()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+
+        var rb = AddDynamicBox(scene, new Float3(0, 1, 0), gravity: true);
+        var recorder = rb.GameObject.AddComponent<CollisionRecorder>();
+        Tick(scene, 60);
+        Assert.Single(recorder.Begins);
+
+        for (int i = 0; i < 30; i++)
+        {
+            floor.Transform.Position += new Float3(0.001f, 0, 0);
+            Tick(scene, 1);
+        }
+
+        Assert.Single(recorder.Begins);
+        Assert.Empty(recorder.Ends);
+    }
+
+    // A convex MeshCollider used to hand the raw mesh triangles to ConvexHullShape, which needs points
+    // already on a valid hull. A lumpy, non-convex mesh broke its support walk and fell through floors.
+    [Fact]
+    public void ConvexMeshCollider_OfANonConvexMesh_RestsOnTheFloor()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(40, 1, 40));
+
+        var rocks = new List<Rigidbody3D>();
+        for (int i = 0; i < 6; i++)
+        {
+            Mesh mesh = Mesh.CreateSphere(0.55f, 6, 8);
+            Float3[] v = mesh.Vertices;
+            for (int k = 0; k < v.Length; k++)
+                v[k] *= 0.75f + 0.45f * (MathF.Sin(v[k].X * 13 + i) * MathF.Cos(v[k].Z * 11 + v[k].Y * 7) + 1) * 0.5f;
+            mesh.Vertices = v;
+            mesh.RecalculateBounds();
+
+            var go = CreateGameObject("Rock");
+            go.Transform.Position = new Float3(i * 2, 3, 0);
+            go.Transform.Rotation = Quaternion.FromEuler(new Float3(i * 40, i * 70, i * 20));
+            rocks.Add(go.AddComponent<Rigidbody3D>());
+            var collider = go.AddComponent<MeshCollider>();
+            collider.Convex = true;
+            collider.Mesh = mesh;
+            scene.Add(go);
+        }
+
+        Tick(scene, 240);
+
+        foreach (Rigidbody3D rock in rocks)
+            Assert.True(rock.Transform.Position.Y > 0.2f, $"a rock sank to {rock.Transform.Position}");
+    }
+
+    // ---------------------------------------------------------------------
+    // Constraint lifecycle
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void Constraint_ConnectedBodyEnabledLater_IsBoundToIt()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        var socket = anchorGo.AddComponent<BallSocketConstraint>();
+
+        var bobGo = CreateGameObject("Bob");
+        bobGo.Transform.Position = new Float3(1, 0, 0);
+        var bob = bobGo.AddComponent<Rigidbody3D>();
+        bobGo.AddComponent<SphereCollider>();
+        socket.ConnectedBody = bob;
+
+        scene.Add(anchorGo);
+        scene.Add(bobGo);
+        Tick(scene, 120);
+
+        Assert.True(Float3.Length(bob.Transform.Position) < 1.2f, $"bob fell to {bob.Transform.Position}");
+    }
+
+    [Fact]
+    public void Constraint_SurvivesItsRigidbodyBeingDisabledAndEnabled()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        scene.Add(anchorGo);
+
+        var armGo = CreateGameObject("Arm");
+        armGo.Transform.Position = new Float3(1, 0, 0);
+        var arm = armGo.AddComponent<Rigidbody3D>();
+        armGo.AddComponent<SphereCollider>();
+        var joint = armGo.AddComponent<HingeJoint>();
+        joint.ConnectedBody = anchor;
+        scene.Add(armGo);
+        Tick(scene, 2);
+
+        arm.Enabled = false;
+        Assert.False(joint.Active);
+        arm.Enabled = true;
+        Assert.True(joint.Active);
+
+        Tick(scene, 120);
+        Assert.True(Float3.Length(arm.Transform.Position) < 1.5f, $"arm fell to {arm.Transform.Position}");
+
+        anchor.Enabled = false;
+        anchor.Enabled = true;
+        Assert.True(joint.Active, "re-enabling the connected body rebinds too");
+    }
+
+    [Fact]
+    public void ConstraintReadouts_AreSafeAfterTheirBodyIsDisabled()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        scene.Add(anchorGo);
+
+        var armGo = CreateGameObject("Arm");
+        armGo.Transform.Position = new Float3(1, 0, 0);
+        var arm = armGo.AddComponent<Rigidbody3D>();
+        var socket = armGo.AddComponent<BallSocketConstraint>();
+        var distance = armGo.AddComponent<DistanceLimitConstraint>();
+        var cone = armGo.AddComponent<ConeLimitConstraint>();
+        var hingeAngle = armGo.AddComponent<HingeAngleConstraint>();
+        var twist = armGo.AddComponent<TwistAngleConstraint>();
+        var fixedAngle = armGo.AddComponent<FixedAngleConstraint>();
+        var line = armGo.AddComponent<PointOnLineConstraint>();
+        var plane = armGo.AddComponent<PointOnPlaneConstraint>();
+        var linearMotor = armGo.AddComponent<LinearMotorConstraint>();
+        var angularMotor = armGo.AddComponent<AngularMotorConstraint>();
+        var hinge = armGo.AddComponent<HingeJoint>();
+        foreach (PhysicsConstraint c in armGo.GetComponents<PhysicsConstraint>()) c.ConnectedBody = anchor;
+        scene.Add(armGo);
+        Tick(scene, 2);
+
+        arm.Enabled = false;
+
+        _ = socket.Impulse;
+        _ = distance.CurrentDistance;
+        _ = distance.Impulse;
+        _ = cone.Angle;
+        _ = cone.Impulse;
+        _ = hingeAngle.Angle;
+        _ = hingeAngle.Impulse;
+        _ = twist.Angle;
+        _ = twist.Impulse;
+        _ = fixedAngle.Impulse;
+        _ = line.Distance;
+        _ = line.Impulse;
+        _ = plane.Impulse;
+        _ = linearMotor.Impulse;
+        _ = angularMotor.LocalAxis1;
+        _ = angularMotor.LocalAxis2;
+        Assert.False(hinge.Active);
+    }
+
+    [Fact]
+    public void DistanceLimit_HoldsTheTargetByDefault_AndAllowsItsRange()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        scene.Add(anchorGo);
+
+        Rigidbody3D AddArm(float x, out DistanceLimitConstraint limit)
+        {
+            var go = CreateGameObject("Arm");
+            go.Transform.Position = new Float3(x, 0, 5);
+            var rb = go.AddComponent<Rigidbody3D>();
+            go.AddComponent<SphereCollider>().Radius = 0.1f;
+            limit = go.AddComponent<DistanceLimitConstraint>();
+            limit.ConnectedBody = anchor;
+            limit.ConnectedAnchor = new Float3(0, 0, 5);
+            return rb;
+        }
+
+        AddArm(1, out DistanceLimitConstraint rod);
+        AddArm(-1, out DistanceLimitConstraint rope);
+        rope.MinDistance = 0;
+        rope.MaxDistance = 3;
+        foreach (GameObject go in new[] { rod.GameObject, rope.GameObject }) scene.Add(go);
+
+        Tick(scene, 180);
+
+        Assert.Equal(1.0, rod.CurrentDistance, 1);
+        Assert.InRange(rope.CurrentDistance, 2.5f, 3.1f);
+    }
+
+    [Fact]
+    public void PointOnPlane_HoldsThePointOnThePlaneByDefault()
+    {
+        var scene = CreatePhysicsScene();
+
+        var go = CreateGameObject("Slider");
+        go.Transform.Position = new Float3(0, 5, 0);
+        var rb = go.AddComponent<Rigidbody3D>();
+        go.AddComponent<SphereCollider>();
+        var plane = go.AddComponent<PointOnPlaneConstraint>();
+        plane.Anchor2 = new Float3(0, 5, 0);
+        scene.Add(go);
+
+        Tick(scene, 120);
+
+        Assert.Equal(5.0, rb.Transform.Position.Y, 1);
+    }
+
+    // ---------------------------------------------------------------------
+    // Rigidbody wiring
+    // ---------------------------------------------------------------------
+
+    private sealed class MoveOnce : MonoBehaviour
+    {
+        public Float3 Target;
+        private bool _moved;
+
+        public override void Update()
+        {
+            if (_moved) return;
+            _moved = true;
+            Transform.Position = Target;
+        }
+    }
+
+    [Fact]
+    public void Rigidbody_TransformEditsSurvive_WhateverTheComponentOrder()
+    {
+        var scene = CreatePhysicsScene();
+
+        var go = CreateGameObject("Moved");
+        var mover = go.AddComponent<MoveOnce>();
+        mover.Target = new Float3(10, 0, 0);
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        go.AddComponent<BoxCollider>();
+        scene.Add(go);
+
+        Tick(scene, 3);
+
+        Assert.Equal(10.0, rb.Transform.Position.X, 3);
+        Assert.Equal(10.0, rb.Native!.Position.X, 3);
+    }
+
+    [Fact]
+    public void Rigidbody_LayerChange_ReachesQueries()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        Tick(scene, 1);
+
+        rb.GameObject.LayerIndex = 3;
+
+        Assert.True(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(3)));
+        Assert.False(scene.Physics.Raycast(new Float3(0, 5, 0), new Float3(0, -1, 0), 10f, OnlyLayer(0)));
+    }
+
+    [Fact]
+    public void IgnoreCollisionBetween_SeparatesBodiesAlreadyTouching()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticRigidbodyFloor(scene, out Rigidbody3D floorBody);
+        var rb = AddDynamicBox(scene, new Float3(0, 0.5f, 0), gravity: true);
+        Tick(scene, 60);
+        Assert.True(rb.Transform.Position.Y > 0.4f);
+
+        scene.Physics.IgnoreCollisionBetween(rb, floorBody);
+        Tick(scene, 60);
+
+        Assert.True(rb.Transform.Position.Y < -1f, $"box stayed at y={rb.Transform.Position.Y}");
+    }
+
+    [Fact]
+    public void CollisionMatrixChange_SeparatesBodiesAlreadyTouching()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(20, 1, 20), layer: 1);
+        var rb = AddDynamicBox(scene, new Float3(0, 0.5f, 0), gravity: true, layer: 2);
+        Tick(scene, 60);
+        Assert.True(rb.Transform.Position.Y > 0.4f);
+
+        CollisionMatrix.SetLayerCollision(1, 2, false);
+        Tick(scene, 60);
+
+        Assert.True(rb.Transform.Position.Y < -1f, $"box stayed at y={rb.Transform.Position.Y}");
+    }
+
+    [Fact]
+    public void ZeroFriction_SlidesFreelyOverStaticGeometry()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
+        var rb = AddDynamicBox(scene, new Float3(0, 0.5f, 0), gravity: true);
+        rb.Friction = 0f;
+        Tick(scene, 30);
+
+        rb.LinearVelocity = new Float3(5, 0, 0);
+        Tick(scene, 60);
+
+        Assert.True(rb.LinearVelocity.X > 4.9f, $"puck slowed to {rb.LinearVelocity.X}");
+    }
+
+    [Fact]
+    public void StaticRigidbody_IgnoresVelocityAndImpulses()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticRigidbodyFloor(scene, out Rigidbody3D floorBody);
+        Tick(scene, 1);
+
+        floorBody.LinearVelocity = new Float3(1, 0, 0);
+        floorBody.AngularVelocity = new Float3(1, 0, 0);
+        floorBody.AddForce(new Float3(1, 0, 0), ForceMode.Impulse);
+        floorBody.AddForce(new Float3(1, 0, 0), ForceMode.VelocityChange);
+        floorBody.AddTorque(new Float3(1, 0, 0), ForceMode.Impulse);
+        floorBody.ApplyImpulse(new Float3(1, 0, 0));
+        floorBody.ApplyImpulse(new Float3(1, 0, 0), Float3.Zero);
+        floorBody.ApplyAngularImpulse(new Float3(1, 0, 0));
+
+        Assert.Equal(Float3.Zero, floorBody.LinearVelocity);
+    }
+
+    [Fact]
+    public void AddTorque_Acceleration_IsInWorldSpace_ForARotatedBody()
+    {
+        var scene = CreatePhysicsScene();
+
+        var go = CreateGameObject("Plank");
+        go.Transform.Rotation = Quaternion.FromEuler(new Float3(0, 0, 90));
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        go.AddComponent<BoxCollider>().Size = new Float3(4, 1, 1);
+        scene.Add(go);
+        StepPhysics(scene, 1);
+
+        rb.AddTorque(new Float3(0, 6, 0), ForceMode.Acceleration);
+        StepPhysics(scene, 2); // Jitter integrates queued forces on the step after they are added
+
+        Float3 spin = rb.AngularVelocity;
+        Assert.Equal(6.0 * Time.FixedDeltaTime, spin.Y, 2);
+        Assert.Equal(0.0, spin.X, 2);
+        Assert.Equal(0.0, spin.Z, 2);
     }
 
     [Fact]
@@ -1118,24 +1635,147 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Equal(collide, gap > 0.9f);
     }
 
-    // Jitter measures a hinge's angle as the connected body's turn relative to this one, so this body
-    // turning positively about the axis reads as a negative angle.
+    // Jitter measures a hinge from the connected body's side. Prowl reverses that, so the angle, its
+    // limits and the motor all mean this body turning about its own +axis.
     [Theory]
     [InlineData(1f, true)]
     [InlineData(-1f, false)]
-    public void HingeJoint_APositiveTurnOfItsBody_IsANegativeAngle(float spin, bool allowed)
+    public void HingeJoint_APositiveTurnOfItsBody_IsAPositiveAngle(float spin, bool allowed)
     {
         var scene = CreatePhysicsScene();
         Rigidbody3D body = AddDynamicBox(scene, Float3.Zero, gravity: false);
         var hinge = body.GameObject.AddComponent<HingeJoint>();
         hinge.Axis = Float3.UnitX;
-        hinge.MinAngle = -90f;
-        hinge.MaxAngle = 0f;
+        hinge.MinAngle = 0f;
+        hinge.MaxAngle = 90f;
         StepPhysics(scene, 1);
 
         body.AngularVelocity = new Float3(spin * 2f, 0f, 0f);
         StepPhysics(scene, 20);
 
-        Assert.Equal(allowed, hinge.CurrentAngleDegrees < -10f);
+        Assert.Equal(allowed, hinge.CurrentAngleDegrees > 10f);
+    }
+
+    private Rigidbody3D AddFloatingBody(Scene scene)
+    {
+        var go = CreateGameObject("Driven");
+        go.Transform.Position = new Float3(0, 5, 0);
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        go.AddComponent<BoxCollider>();
+        return rb;
+    }
+
+    // A positive motor moves its own body along its +axis, for every kind of motor.
+    [Fact]
+    public void LinearMotor_PositiveVelocity_MovesItsBodyAlongTheAxis()
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D body = AddFloatingBody(scene);
+        var motor = body.GameObject.AddComponent<LinearMotorConstraint>();
+        motor.Axis1 = Float3.UnitY;
+        motor.Axis2 = Float3.UnitY;
+        motor.MaximumForce = 1000f;
+        motor.TargetVelocity = 1f;
+        scene.Add(body.GameObject);
+
+        Tick(scene, 30);
+
+        Assert.Equal(1.0, body.LinearVelocity.Y, 1);
+    }
+
+    [Fact]
+    public void AngularMotor_PositiveVelocity_TurnsItsBodyAboutTheAxis()
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D body = AddFloatingBody(scene);
+        body.GameObject.AddComponent<BallSocketConstraint>();
+        var motor = body.GameObject.AddComponent<AngularMotorConstraint>();
+        motor.Axis1 = Float3.UnitY;
+        motor.Axis2 = Float3.UnitY;
+        motor.MaximumForce = 1000f;
+        motor.TargetVelocity = 1f;
+        scene.Add(body.GameObject);
+
+        Tick(scene, 30);
+
+        Assert.Equal(1.0, body.AngularVelocity.Y, 1);
+    }
+
+    [Fact]
+    public void HingeJointMotor_PositiveVelocity_TurnsItsBodyAboutTheAxis_AndReadsAPositiveAngle()
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D body = AddFloatingBody(scene);
+        var hinge = body.GameObject.AddComponent<HingeJoint>();
+        hinge.Axis = Float3.UnitY;
+        hinge.HasMotor = true;
+        hinge.MotorMaxForce = 1000f;
+        hinge.MotorTargetVelocity = 1f;
+        scene.Add(body.GameObject);
+
+        Tick(scene, 30);
+
+        Assert.Equal(1.0, body.AngularVelocity.Y, 1);
+        Assert.True(hinge.CurrentAngleDegrees > 10f, $"angle {hinge.CurrentAngleDegrees}");
+    }
+
+    [Fact]
+    public void PrismaticJointMotor_PositiveVelocity_MovesItsBodyAlongTheAxis_AndReadsAPositiveDistance()
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D body = AddFloatingBody(scene);
+        var slider = body.GameObject.AddComponent<PrismaticJoint>();
+        slider.Axis = Float3.UnitY;
+        slider.MinDistance = -5f;
+        slider.MaxDistance = 5f;
+        slider.HasMotor = true;
+        slider.MotorMaxForce = 1000f;
+        slider.MotorTargetVelocity = 1f;
+        scene.Add(body.GameObject);
+
+        Tick(scene, 30);
+
+        Assert.Equal(1.0, body.LinearVelocity.Y, 1);
+        Assert.True(slider.CurrentDistance > 0.3f, $"distance {slider.CurrentDistance}");
+    }
+
+    // Jitter leaves a sleeping body asleep when a motor on it changes, so an elevator that paused at the
+    // top long enough to sleep never came back down.
+    [Fact]
+    public void ChangingAMotor_WakesASleepingBody()
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D body = AddFloatingBody(scene);
+        body.DeactivationTime = 0.1f;
+        var motor = body.GameObject.AddComponent<LinearMotorConstraint>();
+        motor.Axis1 = Float3.UnitY;
+        motor.Axis2 = Float3.UnitY;
+        motor.MaximumForce = 1000f;
+        scene.Add(body.GameObject);
+        Tick(scene, 60);
+        Assert.False(body.IsActive);
+
+        motor.TargetVelocity = 1f;
+        Tick(scene, 10);
+
+        Assert.True(body.LinearVelocity.Y > 0.5f, $"velocity {body.LinearVelocity}");
+    }
+
+    [Fact]
+    public void PrismaticJoint_Limits_AreMeasuredAlongItsOwnAxis()
+    {
+        var scene = CreatePhysicsScene();
+        Rigidbody3D body = AddFloatingBody(scene);
+        body.AffectedByGravity = true;
+        var slider = body.GameObject.AddComponent<PrismaticJoint>();
+        slider.Axis = Float3.UnitY;
+        slider.MinDistance = -1f;
+        slider.MaxDistance = 0f;
+        scene.Add(body.GameObject);
+
+        Tick(scene, 120);
+
+        Assert.Equal(4.0, body.Transform.Position.Y, 1);
     }
 }
