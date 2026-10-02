@@ -153,7 +153,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             cl.SetProperties(props);
@@ -195,7 +195,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
             for (int i = 0; i < 6; i++)
@@ -236,7 +236,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             for (int i = 0; i < 5; i++)

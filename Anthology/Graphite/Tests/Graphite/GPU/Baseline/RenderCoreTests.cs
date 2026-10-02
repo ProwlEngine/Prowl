@@ -58,7 +58,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(framebuffer);
             cl.ClearColorTarget(0, new Color(0, 0, 0, 1));
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(source);
             cl.SetProperties(props);

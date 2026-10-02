@@ -45,7 +45,7 @@ public sealed class BenchPass : IPass<BenchView>
         cmd.SetFramebuffer(_scene.Framebuffer);
         if (_index == 0)
             cmd.ClearColorTarget(0, Color.Black);
-        cmd.SetFullViewports();
+        cmd.SetFullViewport();
 
         _record(cmd, _index);
 

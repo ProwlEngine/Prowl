@@ -150,7 +150,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
 
         cmd.SetFramebuffer(target);
         cmd.ClearColorTarget(0, Color.Black);
-        cmd.SetFullViewports();
+        cmd.SetFullViewport();
         cmd.SetShader(program);
         cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(props);
@@ -169,7 +169,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             CommandBuffer cmd = context.GetCommandBuffer();
             cmd.CopyTexture(source, target);
             cmd.SetFramebuffer(fb);
-            cmd.SetFullViewports();
+            cmd.SetFullViewport();
             context.SubmitCommandBuffer(cmd);
         });
         GD.WaitForIdle();
@@ -204,7 +204,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             {
                 CommandBuffer cmd = context.GetCommandBuffer("Load");
                 cmd.SetFramebuffer(context.GetRenderTexture(loadHandle).Framebuffer);
-                cmd.SetFullViewports();
+                cmd.SetFullViewport();
                 context.SubmitCommandBuffer(cmd);
             });
 
@@ -414,7 +414,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 CommandBuffer cmd = context.GetCommandBuffer("DrawVertices");
                 cmd.SetFramebuffer(context.GetRenderTexture(outputHandle).Framebuffer);
                 cmd.ClearColorTarget(0, Color.Black);
-                cmd.SetFullViewports();
+                cmd.SetFullViewport();
                 cmd.SetShader(graphics);
                 cmd.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
                 cmd.SetProperties(props);
@@ -467,7 +467,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
 
                 CommandBuffer cmd = context.GetCommandBuffer("Fog");
                 cmd.SetFramebuffer(scene.Framebuffer);
-                cmd.SetFullViewports();
+                cmd.SetFullViewport();
                 cmd.SetShader(program);
                 cmd.SetVertexSource(VertexSource.None);
                 cmd.SetProperties(props);
@@ -750,7 +750,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 CommandBuffer first = context.GetCommandBuffer("LoadFirst");
                 CommandBuffer second = context.GetCommandBuffer("LoadSecond");
                 second.SetFramebuffer(context.GetRenderTexture(loadHandle).Framebuffer);
-                second.SetFullViewports();
+                second.SetFullViewport();
                 context.SubmitCommandBuffer(second);
                 context.SubmitCommandBuffer(first);
             });

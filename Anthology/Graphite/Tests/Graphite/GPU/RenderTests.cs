@@ -183,7 +183,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         {
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(source);
             cl.SetProperties(props);
@@ -269,7 +269,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         {
             cl.SetFramebuffer(fb);
             cl.ClearDepthStencil(0f);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(props);
@@ -411,7 +411,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         {
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, clear);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             cl.SetProperties(props);
@@ -452,7 +452,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             // Pass 1: sample target2 into target1.
             cl.SetFramebuffer(fb1);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(texProgram);
             cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(texProps);
@@ -520,7 +520,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         {
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(props);
