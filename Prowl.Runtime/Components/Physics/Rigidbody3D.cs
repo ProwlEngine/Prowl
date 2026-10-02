@@ -449,6 +449,13 @@ public sealed class Rigidbody3D : MonoBehaviour
         // independent of AutoSyncTransforms, which only governs the transform->body direction.)
         if (motionType == MotionType.Static) return;
 
+        // Something moved the Transform since the last sync, so it wins over the simulated pose.
+        if (Transform.Version != _lastSyncedTransformVersion)
+        {
+            SyncTransformToBody();
+            return;
+        }
+
         Float3 position;
         Quaternion rotation;
 
