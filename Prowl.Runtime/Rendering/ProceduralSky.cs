@@ -20,38 +20,38 @@ public static class ProceduralSky
     const float OzoneColumn = 15000f, OzoneK = 0.0078f;
     const float DepressionScale = 28.2f;
 
-    const float TwilightFade = 0.61172f;
-    const float TwilightFadeCurve = 0.040113f;
-    const float TwilightAwayFade = -0.18102f;
-    const float TwilightAwayCurve = 0.3826f;
-    const float TwilightHighFade = -0.13711f;
-    const float TwilightHeightFade = -0.44557f;
-    const float TwilightHeightCurve = 0.53126f;
-    const float TwilightAirTint = 4239.3f;
-    const float TwilightOzoneTint = 144770.0f;
-    const float TwilightGlowCurve = 0.035289f;
-    const float GlowSoftening = 0.045142f;
-    const float TwilightGlowFade = 1.7157f;
+    const float TwilightFade = 0.60506f;
+    const float TwilightFadeCurve = 0.040319f;
+    const float TwilightAwayFade = -0.17945f;
+    const float TwilightAwayCurve = 0.37947f;
+    const float TwilightHighFade = -0.15305f;
+    const float TwilightHeightFade = -0.39662f;
+    const float TwilightHeightCurve = 0.52442f;
+    const float TwilightAirTint = 4722.0f;
+    const float TwilightOzoneTint = 154760.0f;
+    const float TwilightGlowCurve = 0.05689f;
+    const float GlowSoftening = 0.050376f;
+    const float TwilightGlowFade = 1.9201f;
 
-    const float SunFarShift = 0.005083f;
+    const float SunFarShift = 0.0064929f;
 
-    const float ShadowLead = 0.0077169f;
-    const float ShadowRise = 0.033087f;
-    const float ShadowRiseCurve = 0.027632f;
-    const float ShadowSoftening = 0.01849f;
-    const float ShadowSpread = 0.28058f;
-    const float ShadowRamp = 0.79053f;
+    const float ShadowLead = 0.0087919f;
+    const float ShadowRise = 0.032056f;
+    const float ShadowRiseCurve = 0.027638f;
+    const float ShadowSoftening = 0.018293f;
+    const float ShadowSpread = 0.33688f;
+    const float ShadowRamp = 0.74222f;
 
-    static readonly Float3 BouncePerSun = new(0.052524f, 0.05829f, 0.071902f);
-    static readonly Float3 BounceAtSunset = new(0.0022233f, 0.0012501f, 0.0034871f);
-    const float BounceFade = 1.0157f;
-    const float BounceFadeCurve = 0.076503f;
-    const float BounceAirTint = 8758.3f;
-    const float BounceSide = 0.15012f;
-    const float BounceSunsetRedden = 0.045581f;
-    const float BounceSunsetReddenFade = 26.027f;
-    const float BounceReddenCurve = 0.0065451f;
-    const float BounceTwilightRedden = 0.0082749f;
+    static readonly Float3 BouncePerSun = new(0.052379f, 0.058014f, 0.072611f);
+    static readonly Float3 BounceAtSunset = new(0.0023202f, 0.0012746f, 0.0032897f);
+    const float BounceFade = 1.02f;
+    const float BounceFadeCurve = 0.079448f;
+    const float BounceAirTint = 7703.4f;
+    const float BounceSide = 0.14362f;
+    const float BounceSunsetRedden = 0.059398f;
+    const float BounceSunsetReddenFade = 14.371f;
+    const float BounceReddenCurve = 0.0063403f;
+    const float BounceTwilightRedden = 0.0057261f;
 
     /// <summary>Sets every sun dependent uniform of the sky material, toSun is the unit direction toward the sun.</summary>
     public static void Apply(Material material, Float3 toSun)

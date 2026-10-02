@@ -71,11 +71,11 @@ Pass "Skybox"
             const float RAYLEIGH_HEIGHT = 8000.0, RAYLEIGH_K = 8.0e-4;
             const float MIE_HEIGHT = 1200.0, MIE_K = 1.2e-4;
 
-            const float SUN_FAR_FADE = 14.731;       // how fast the far air sun shift fades with view height
-            const float BELT_REDDENING = 167320.0;   // extra air the sunlight crosses to reach the pink band
-            const float BELT_FADE = 0.059246;        // how softly the pink band fades out above the shadow edge
-            const float SUN_FAR_ASYMMETRY = -0.35683;  // how much weaker the far air shift is toward the sun
-            const float BOUNCE_SIDE_FADE = 2.8823;    // how fast the bounce light's lean toward the sun fades looking up
+            const float SUN_FAR_FADE = 12.266;       // how fast the far air sun shift fades with view height
+            const float BELT_REDDENING = 142550.0;   // extra air the sunlight crosses to reach the pink band
+            const float BELT_FADE = 0.055559;        // how softly the pink band fades out above the shadow edge
+            const float SUN_FAR_ASYMMETRY = -0.39738;  // how much weaker the far air shift is toward the sun
+            const float BOUNCE_SIDE_FADE = 2.5771;    // how fast the bounce light's lean toward the sun fades looking up
 
             const float EXPOSURE = 40.0;
             const float SUN_DISK = 2000.0;
