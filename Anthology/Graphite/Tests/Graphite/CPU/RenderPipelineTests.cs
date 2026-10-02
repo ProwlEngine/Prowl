@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Collections.Generic;
 using Xunit;
 
 namespace Prowl.Graphite.RenderGraph.Tests;
@@ -43,8 +44,39 @@ file sealed class ReconfigurablePipeline : RenderPipeline<TestView>
     public void PublicInvalidateGraph() => InvalidateGraph();
 }
 
+file sealed class ComposedInvalidatable : RenderPipeline<TestView>
+{
+    public ComposedInvalidatable(IEnumerable<IPass<TestView>> passes) : base(passes) { }
+
+    public void PublicInvalidateGraph() => InvalidateGraph();
+}
+
 public class RenderPipelineTests
 {
+    [Fact]
+    public void Composed_BuildsGraphFromPassList()
+    {
+        CountingPass pass = new();
+        RenderPipeline<TestView> pipeline = new([pass]);
+
+        _ = pipeline.Graph;
+
+        Assert.Equal(1, pass.SetupCount);
+    }
+
+    [Fact]
+    public void Composed_InvalidateGraph_ReaddsPasses()
+    {
+        CountingPass pass = new();
+        ComposedInvalidatable pipeline = new([pass]);
+
+        _ = pipeline.Graph;
+        pipeline.PublicInvalidateGraph();
+        _ = pipeline.Graph;
+
+        Assert.Equal(2, pass.SetupCount);
+    }
+
     [Fact]
     public void Graph_AccessedMultipleTimes_BuildsOnlyOnce()
     {
