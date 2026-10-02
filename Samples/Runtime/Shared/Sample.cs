@@ -38,6 +38,9 @@ public abstract class StationGame : Game
     public readonly List<Station> Stations = new();
     public int CurrentStation { get; private set; }
 
+    /// <summary>Key help for moving around, shown after the station keys.</summary>
+    protected virtual string MoveKeys => "WASD Q E  fly    Right Mouse  look    Shift  faster";
+
     /// <summary>Key help for the sample's own controls, shown after the shared ones.</summary>
     protected virtual string ExtraKeys => string.Empty;
 
@@ -69,6 +72,7 @@ public abstract class StationGame : Game
             new FXAAEffect(),
         ];
         CameraObject.AddComponent<FlyCamera>();
+        CameraObject.AddComponent<PhysicsGrabber>().Game = this;
         SampleScene.Add(CameraObject);
 
         var hud = new GameObject("HUD");
@@ -114,7 +118,7 @@ public abstract class StationGame : Game
         get
         {
             string range = Stations.Count >= 10 ? "1 to 9, 0" : $"1 to {Stations.Count}";
-            string keys = $"{range}  stations    WASD Q E  fly    Right Mouse  look    Shift  faster";
+            string keys = Stations.Count > 1 ? $"{range}  stations    {MoveKeys}" : MoveKeys;
             return string.IsNullOrEmpty(ExtraKeys) ? keys : keys + "    " + ExtraKeys;
         }
     }
@@ -142,7 +146,7 @@ public abstract class StationGame : Game
 
     public override void BeginUpdate()
     {
-        for (int i = 0; i < StationKeys.Length && i < Stations.Count; i++)
+        for (int i = 0; i < StationKeys.Length && Stations.Count > 1 && i < Stations.Count; i++)
             if (Input.GetKeyDown(StationKeys[i]))
                 GoToStation(i);
 
@@ -356,6 +360,181 @@ public sealed class FlyCamera : MonoBehaviour
     }
 }
 
+/// <summary>
+/// Follows a target. Holding Right Mouse orbits it, the wheel zooms, and when following a vehicle the
+/// camera swings back behind it on its own.
+/// </summary>
+public sealed class ChaseCamera : MonoBehaviour
+{
+    public Transform? Target;
+    public bool FollowHeading;
+    public float Distance = 8f;
+    public float Yaw;
+    public float Pitch = 18f;
+
+    private float _sinceLook = 10f;
+
+    public override void LateUpdate()
+    {
+        if (Target == null) return;
+        float dt = Time.DeltaTime;
+
+        if (Input.GetMouseButton(1))
+        {
+            Float2 delta = Input.MouseDelta;
+            Yaw += delta.X * 0.25f;
+            Pitch = Maths.Clamp(Pitch + delta.Y * 0.25f, -10f, 75f);
+            _sinceLook = 0f;
+        }
+        else _sinceLook += dt;
+
+        Distance = Maths.Clamp(Distance - Input.MouseWheelDelta * 0.8f, 3f, 25f);
+
+        if (FollowHeading && _sinceLook > 1.5f)
+        {
+            Float3 forward = Target.Forward;
+            if (forward.X * forward.X + forward.Z * forward.Z > 1e-4f)
+            {
+                float heading = MathF.Atan2(forward.X, forward.Z) * 180f / MathF.PI;
+                float delta = ((heading - Yaw) % 360f + 540f) % 360f - 180f;
+                Yaw += delta * MathF.Min(1f, dt * 3f);
+            }
+        }
+
+        float yaw = Yaw * MathF.PI / 180f, pitch = Pitch * MathF.PI / 180f;
+        Float3 back = new(-MathF.Sin(yaw) * MathF.Cos(pitch), MathF.Sin(pitch), -MathF.Cos(yaw) * MathF.Cos(pitch));
+        Float3 focus = Target.Position + new Float3(0f, 1.3f, 0f);
+        Float3 goal = focus + back * Distance;
+
+        Transform.Position += (goal - Transform.Position) * MathF.Min(1f, dt * 10f);
+        Transform.LookAt(focus);
+    }
+}
+
+/// <summary>Collects quads for a procedural mesh, winding each one to face the given direction.</summary>
+public sealed class MeshBuilder
+{
+    private readonly List<Float3> _vertices = new();
+    private readonly List<Float2> _uvs = new();
+    private readonly List<uint> _indices = new();
+
+    public void Quad(Float3 a, Float3 b, Float3 c, Float3 d, Float2 ua, Float2 ub, Float2 uc, Float2 ud, Float3 facing)
+    {
+        uint i = (uint)_vertices.Count;
+        _vertices.AddRange([a, b, c, d]);
+        _uvs.AddRange([ua, ub, uc, ud]);
+
+        bool flip = Float3.Dot(Float3.Cross(b - a, c - a), facing) < 0f;
+        if (flip) _indices.AddRange([i, i + 2, i + 1, i, i + 3, i + 2]);
+        else _indices.AddRange([i, i + 1, i + 2, i, i + 2, i + 3]);
+    }
+
+    public Mesh Build()
+    {
+        var mesh = new Mesh { Vertices = _vertices.ToArray(), UV = _uvs.ToArray(), Indices = _indices.ToArray() };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        mesh.RecalculateTangents();
+        return mesh;
+    }
+}
+
+/// <summary>
+/// Left click and drag any dynamic body. Each step the grabbed point is given a velocity toward the
+/// mouse, so the body still collides and spins about where it is held. The mouse wheel pulls it closer
+/// or pushes it away.
+/// </summary>
+public sealed class PhysicsGrabber : MonoBehaviour
+{
+    public Game Game = null!;
+
+    /// <summary>How much of the gap to the mouse is closed per second.</summary>
+    public float Stiffness = 12f;
+
+    /// <summary>The hardest the grab may accelerate a body, so heavy bodies feel heavy.</summary>
+    public float MaxAcceleration = 60f;
+
+    private Rigidbody3D? _held;
+    private Float3 _localAnchor;
+    private float _distance;
+    private Float3 _target;
+    private LineRenderer _line = null!;
+
+    public bool IsHolding => _held.IsValid();
+
+    private void CreateLine()
+    {
+        _line = AddComponent<LineRenderer>();
+        _line.Material = new Material(Shader.LoadDefault(DefaultShader.Line));
+        _line.StartWidth = 0.03f;
+        _line.EndWidth = 0.03f;
+        _line.StartColor = SampleHud.Accent;
+        _line.EndColor = new Color(1f, 1f, 1f, 0.8f);
+    }
+
+    public override void Update()
+    {
+        if (_line == null) CreateLine();
+        Camera camera = GetComponent<Camera>()!;
+        var size = Window.InternalWindow.Size;
+        Ray ray = camera.ScreenPointToRay(new Float2(Input.MousePosition.X, Input.MousePosition.Y), new Float2(size.X, size.Y));
+
+        bool overUi = Game.PaperInstance != null && Game.PaperInstance.WantsCapturePointer;
+        if (Input.GetMouseButtonDown(0) && !overUi)
+            TryGrab(ray);
+        else if (!Input.GetMouseButton(0))
+            _held = null;
+
+        _line.Points.Clear();
+        if (!IsHolding) return;
+
+        _distance = Maths.Clamp(_distance + Input.MouseWheelDelta * 0.5f, 1f, 80f);
+        _target = ray.Origin + ray.Direction * _distance;
+        _line.Points.Add(WorldAnchor());
+        _line.Points.Add(_target);
+    }
+
+    private void TryGrab(Ray ray)
+    {
+        PhysicsWorld physics = GameObject.Scene.Physics;
+        if (!physics.Raycast(ray.Origin, ray.Direction, out RaycastHit hit, 200f, QueryFilter.Default)) return;
+
+        Rigidbody3D body = hit.Rigidbody;
+        if (body.IsNotValid() || body.MotionType != Jitter2.Dynamics.MotionType.Dynamic) return;
+
+        _held = body;
+        _localAnchor = Quaternion.Inverse(body.Rotation) * (hit.Point - body.Position);
+        _distance = hit.Distance;
+        _target = hit.Point;
+    }
+
+    private Float3 WorldAnchor() => _held!.Transform.Position + _held.Transform.Rotation * _localAnchor;
+
+    public override void FixedUpdate()
+    {
+        if (!IsHolding) return;
+
+        Rigidbody3D body = _held!;
+        float dt = Time.FixedDeltaTime;
+        Float3 anchor = body.Position + body.Rotation * _localAnchor;
+
+        // The velocity the grabbed point should have to close the gap, minus what it already has. Gravity
+        // is added back since the step will take it away again.
+        Float3 wanted = (_target - anchor) * Stiffness;
+        Float3 change = wanted - body.GetPointVelocity(anchor);
+        if (body.AffectedByGravity) change -= GameObject.Scene.Physics.Gravity * dt;
+
+        float limit = MaxAcceleration * dt;
+        float length = Float3.Length(change);
+        if (length > limit) change *= limit / length;
+
+        // Half the change per step: pushing off centre also spins the body, which moves the point more
+        // than its mass alone would say, and asking for all of it at once overshoots.
+        body.ApplyImpulse(change * (body.Mass * 0.5f), anchor);
+        body.AngularVelocity *= 1f - MathF.Min(1f, 3f * dt);
+    }
+}
+
 /// <summary>Draws the station title, description, stats, key help, the station bar and the sample's controls.</summary>
 public sealed class SampleHud : MonoBehaviour
 {
@@ -417,7 +596,8 @@ public sealed class SampleHud : MonoBehaviour
                     Game.DrawControls(paper, font);
         }
 
-        StationBar(paper, font, index);
+        // A sample that is one world to walk around has nowhere else to go.
+        if (Game.Stations.Count > 1) StationBar(paper, font, index);
     }
 
     /// <summary>The station's title, description, live stats and the key help.</summary>
@@ -429,7 +609,7 @@ public sealed class SampleHud : MonoBehaviour
             .Enter())
         {
             paper.Box("title").Height(30)
-                .Text($"{(index + 1) % 10}  {station.Name}", font).FontSize(24).TextColor(Accent)
+                .Text(Game.Stations.Count > 1 ? $"{(index + 1) % 10}  {station.Name}" : station.Name, font).FontSize(24).TextColor(Accent)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box("description").Height(UnitValue.Auto)
