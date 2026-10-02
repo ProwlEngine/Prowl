@@ -53,7 +53,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
     public void Advance(float dt) => _angle += dt * 0.5f;
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized());
+        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true));
 
     public override void Render(RenderContext<SceneView> context)
     {
