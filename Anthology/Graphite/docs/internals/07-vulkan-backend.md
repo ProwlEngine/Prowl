@@ -113,7 +113,7 @@ Each layout has one stage and access scope. Shader layouts use every shader stag
 Where layouts change:
 
 - **Creation.** One immediate submit moves a new image from `Undefined` to its resting layout, clearing render targets and depth targets on the way through `TransferDstOptimal`.
-- **Graph barriers.** The graph's barrier command buffers, and `RenderContext.Transition` on a pass's own command buffer, call `RecordBarriers`. It first applies clears still queued on the bound framebuffer, ends any open render pass, then emits one `vkCmdPipelineBarrier` with an image barrier per texture and at most one global memory barrier for buffers. A barrier out of `PresentSrcKhr` uses `ColorAttachmentOutput | Transfer` as its source stage so it chains with the acquire semaphore wait.
+- **Graph barriers.** The graph's pass barriers (appended to the execution's open tail command buffer), and `RenderContext.Transition` on a pass's own command buffer, call `RecordBarriers`. It first applies clears still queued on the bound framebuffer, ends any open render pass, then emits one `vkCmdPipelineBarrier` with an image barrier per texture and at most one global memory barrier for buffers. A barrier out of `PresentSrcKhr` uses `ColorAttachmentOutput | Transfer` as its source stage so it chains with the acquire semaphore wait.
 - **Copies, mip generation, resolves.** Each reads the current layout of its textures from the command buffer's graph state (resting for non-graph textures and for immediate uploads), transitions the touched subresources to transfer layouts, and transitions them back.
 - **Storage binds.** A non-graph texture bound read-write whose resting layout is not `General` moves to `General` for one compute dispatch and back.
 

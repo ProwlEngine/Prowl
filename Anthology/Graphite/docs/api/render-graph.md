@@ -198,7 +198,9 @@ Passed to `IPresentPass.Setup`. Source: [PresentContextBuilder.cs](../../Graphit
 
 ## Usage kinds and barriers
 
-Every declaration names how the pass uses the resource. Before a pass renders, the graph records the barriers that move each declared resource into its start state, in a command buffer submitted ahead of the pass's own. Inside the pass, `context.Transition` switches a texture between the kinds it declared. After the present pass the graph returns every texture it touched to its resting layout. You never write a barrier.
+Every declaration names how the pass uses the resource. Before a pass renders, the graph records the barriers that move each declared resource into its start state at the end of the command buffer submitted last, so they run after earlier passes and before anything this pass submits. Inside the pass, `context.Transition` switches a texture between the kinds it declared. After the present pass the graph returns every texture it touched to its resting layout. You never write a barrier.
+
+When nothing has been submitted yet in the execution (the first pass), or right after a transfer flush, the barriers go at the start of the first command buffer the pass rents instead. In that pass, submit the first rented command buffer before the others; submitting another one first throws `InvalidOperationException`.
 
 ### TextureUsageKind
 
@@ -223,9 +225,10 @@ A graph texture declared `Storage` by any pass is created with `TextureUsage.Sto
 
 ```csharp
 public void Transition(CommandBuffer cmd, TextureHandle handle, TextureUsageKind usage)
+public void Transition(TextureHandle handle, TextureUsageKind usage)
 ```
 
-Records the barrier that moves the current texture of `handle` to `usage` into `cmd` and updates the graph's state for it. `usage` must be a single kind the running pass declared for that ID, and `cmd` must be a command buffer the pass rented and has not submitted. Any open render pass on `cmd` ends, and clears queued on its framebuffer are applied first. Where the texture ends up is where the next pass starts from.
+Records the barrier that moves the current texture of `handle` to `usage` into `cmd` and updates the graph's state for it. The overload without `cmd` records into the only command buffer the pass has rented and not submitted; it throws `InvalidOperationException` when the pass holds none or several, and the explicit overload is needed then. `usage` must be a single kind the running pass declared for that ID, and `cmd` must be a command buffer the pass rented and has not submitted. Any open render pass on `cmd` ends, and clears queued on its framebuffer are applied first. Where the texture ends up is where the next pass starts from.
 
 Because the state follows recording order, a pass that calls `Transition` must submit its command buffers in the order it rented them; submitting out of order throws `InvalidOperationException`.
 
@@ -245,8 +248,8 @@ public override void Render(RenderContext<SceneView> context)
     for (int i = 0; i < _iterations; i++)
     {
         Blur(cmd, context.GetRenderTexture(source), context.GetRenderTexture(target));
-        context.Transition(cmd, source, TextureUsageKind.Attachment);
-        context.Transition(cmd, target, TextureUsageKind.Sampled);
+        context.Transition(source, TextureUsageKind.Attachment);
+        context.Transition(target, TextureUsageKind.Sampled);
         (source, target) = (target, source);
     }
     context.SubmitCommandBuffer(cmd);
@@ -282,11 +285,11 @@ The per-view object handed to `Render` and `Present`. A new one is created for e
 | `View` | `TView View { get; }` | The view being rendered |
 | `Task` | `ExecutionTask Task { get; }` | The execution everything records into |
 | `GetCommandBuffer` | `CommandBuffer GetCommandBuffer(string name = "")` | Rents a command buffer that is already begun |
-| `SubmitCommandBuffer` | `void SubmitCommandBuffer(CommandBuffer cmd)` | Ends it and queues it for this execution |
+| `SubmitCommandBuffer` | `void SubmitCommandBuffer(CommandBuffer cmd)` | Queues it for this execution. The graph ends it later; do not record into it after submitting |
 | `GetTransferCommandBuffer` | `TransferCommandBuffer GetTransferCommandBuffer(string name = "")` | Creates a transfer command buffer (not yet begun) |
 | `SubmitTransferCommandBuffer` | `void SubmitTransferCommandBuffer(TransferCommandBuffer cmd)` | Flushes pending submissions then submits the transfer without blocking |
 | `GetRenderTexture` | `RenderTexture GetRenderTexture(TextureHandle handle)` | Resolves a handle to the physical target for this view. Throws if the running pass did not declare it. |
-| `Transition` | `void Transition(CommandBuffer cmd, TextureHandle handle, TextureUsageKind usage)` | Moves a declared texture to another of its declared kinds mid-pass. See [Transition](#transition). |
+| `Transition` | `void Transition(CommandBuffer cmd, TextureHandle handle, TextureUsageKind usage)` / `(TextureHandle handle, TextureUsageKind usage)` | Moves a declared texture to another of its declared kinds mid-pass. The second form uses the pass's only open command buffer. See [Transition](#transition). |
 | `GetRenderTexture` | `RenderTexture GetRenderTexture(TextureHandle handle, int framesAgo)` | Resolves by age; 0 is current, up to the declared history depth |
 | `GetRenderBuffer` | `DeviceBuffer GetRenderBuffer(BufferHandle handle)` / `(handle, int framesAgo)` | Same for buffers |
 | `IsHistoryValid` | `bool IsHistoryValid(TextureHandle)` / `(BufferHandle)` | True once the view's ring holds an earlier execution |
@@ -298,7 +301,7 @@ The per-view object handed to `Render` and `Present`. A new one is created for e
 | `WantsMetadata` | `bool WantsMetadata { get; }` | True if the profiler wants metadata |
 | `RecordPassMetadata` | `void RecordPassMetadata(object metadata)` | Attaches metadata to the running pass |
 
-Command buffer lifecycle: `GetCommandBuffer` begins it and `SubmitCommandBuffer` ends and submits it; passes never call `Begin` or `End`. One rented but never submitted triggers `GraphicsDevice.OnWarning` and is discarded. See [command-buffers.md](command-buffers.md).
+Command buffer lifecycle: `GetCommandBuffer` begins it and `SubmitCommandBuffer` queues it; passes never call `Begin` or `End`. The last submitted buffer stays open so the graph can append the next pass's barriers to it, and is ended when another buffer is submitted, a transfer is submitted, or the execution completes. One rented but never submitted triggers `GraphicsDevice.OnWarning` and is discarded. See [command-buffers.md](command-buffers.md).
 
 ### Resolving handles
 
@@ -593,7 +596,8 @@ If the present pass returns without calling `context.Present()`, nothing is pres
 - Ping-pong between two IDs across separate passes is a dependency cycle; use `Transition` inside one pass or give each iteration its own ID.
 - Every graph resource a pass touches must be declared by that pass, including the history resource it reads with `framesAgo > 0`.
 - Scratch textures are declared as outputs like any other graph texture; there is no undeclared scratch rental on the context.
-- Profilers see one extra graphics command buffer named `"<pass> Barriers"` ahead of each pass that changes state, and one after the present pass.
+- Pass barriers are appended to the previous pass's last submitted command buffer, so profilers attribute their (small) cost to it. A separate `"<pass> Barriers"` command buffer appears only when a pass with pending barriers rents no command buffer or never submits its first one.
+- In the first pass of an execution, submit the first rented command buffer before the others.
 
 ## See also
 

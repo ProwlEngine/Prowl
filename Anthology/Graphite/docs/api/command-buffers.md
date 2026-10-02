@@ -17,7 +17,7 @@ Reference for `CommandBuffer` (draw, dispatch, state) and `TransferCommandBuffer
 
 ## Overview
 
-A `CommandBuffer` records GPU work: bind a shader, a framebuffer, vertex data and properties, then draw or dispatch. In the render graph you do not create or begin them. `RenderContext.GetCommandBuffer` hands you one that is already recording, and `RenderContext.SubmitCommandBuffer` ends it and queues it for the current execution. `TransferCommandBuffer` is a separate, smaller type for one-off uploads and readback outside the frame flow.
+A `CommandBuffer` records GPU work: bind a shader, a framebuffer, vertex data and properties, then draw or dispatch. In the render graph you do not create or begin them. `RenderContext.GetCommandBuffer` hands you one that is already recording, and `RenderContext.SubmitCommandBuffer` queues it for the current execution. `TransferCommandBuffer` is a separate, smaller type for one-off uploads and readback outside the frame flow.
 
 Both derive from `CommandBufferBase`, which carries the copy and update operations.
 
@@ -41,7 +41,7 @@ context.SubmitCommandBuffer(cmd);
 |------|-----|-------|
 | Rent and begin | `RenderContext.GetCommandBuffer(name)` | Begin resets all cached state: framebuffer, shaders, vertex source, merged properties |
 | Record | You | Not thread-safe. |
-| End and submit | `RenderContext.SubmitCommandBuffer(cmd)` | Ends it and adds it to the execution |
+| Submit | `RenderContext.SubmitCommandBuffer(cmd)` | Closes any open render pass and adds it to the execution. It stays open as the execution's tail so the next pass's barriers can be appended, and is ended when the next buffer or a transfer is submitted, or the execution completes |
 | Recycle | Device | When the execution's ring slot is reused |
 
 `Begin` and `End` on `CommandBuffer` are internal. A buffer that is rented and never submitted triggers a warning through `GraphicsDevice.OnWarning` after the pass and is dropped.

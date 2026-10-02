@@ -268,7 +268,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerCopy" && r.Resource.Equals(id));
 
         Assert.Equal(
-            new[] { "ProfilerClear Barriers", "ProfilerClear", "ProfilerCopy Barriers", "ProfilerCopy", "Present Barriers" },
+            new[] { "ProfilerClear", "ProfilerCopy" },
             profiler.Submits.ConvertAll(s => s.Info.Name));
         Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 

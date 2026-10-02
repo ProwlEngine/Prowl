@@ -23,6 +23,28 @@ public abstract partial class ExecutionTask
     /// <param name="commandList">Buffer to submit.</param>
     internal abstract void SubmitCommandsInternal(CommandBuffer commandList);
 
+    private CommandBuffer? _openTail;
+
+    internal CommandBuffer? OpenTail => _openTail;
+
+    internal void QueueOpen(CommandBuffer commandBuffer)
+    {
+        CloseTail();
+        commandBuffer.SealRenderPass();
+        _openTail = commandBuffer;
+    }
+
+    internal void CloseTail()
+    {
+        CommandBuffer? tail = _openTail;
+        if (tail == null)
+            return;
+
+        _openTail = null;
+        tail.End();
+        SubmitCommandsInternal(tail);
+    }
+
     /// <summary>
     /// Submits everything queued so far, so later work on the queue is ordered after it.
     /// </summary>

@@ -109,7 +109,7 @@ flowchart LR
         direction LR
         subgraph Pass["Each pass"]
             direction LR
-            A["Declared kinds"] --> B["Barrier batch"] --> C["Barrier CB"] --> R["Render"]
+            A["Declared kinds"] --> B["Barrier batch"] --> C["Open tail CB"] --> R["Render"]
         end
         Pass --> P["Present"] --> E["Restore to rest"]
     end
@@ -120,15 +120,19 @@ flowchart LR
 - **Textures.** Each declared resource is resolved (renting it if needed). Every color texture moves to the declaration's start kind (`initial`, or the only declared kind). The depth texture moves to `depthUsage` when given, else follows the color kind, except that `Storage` leaves it alone. A barrier is added when the state changes, or when the target state writes (`Storage`, `Attachment`, `TransferDst`) so back-to-back writers are ordered. When a pass declares the same ID as input and output, the output declaration wins.
 - **Buffers.** Buffers have no layout, so one global memory barrier covers them. Each graph buffer tracks its last write access, the reads since that write, and the reads the last barrier already made visible. A write adds the last write and the reads since it to the source scope; a read adds the last write only if the read kind is not visible yet. A buffer seen for the first time in a view assumes a prior shader or transfer write and prior reads of every kind.
 
-If anything is needed, the context rents a command buffer named `"<pass> Barriers"`, records the batch through the internal `CommandBuffer.RecordBarriers`, and submits it before the pass renders. Being submitted first makes the order of the pass's own command buffers irrelevant. The state dictionary is updated only after the batch is recorded.
+If anything is needed, the batch is recorded through the internal `CommandBuffer.RecordBarriers` into the execution's open tail, and the state dictionary is updated after it.
+
+The open tail is the command buffer most recently submitted through `SubmitCommandBuffer`. Submitting a buffer closes any open render pass on it (applying queued clears) but defers `End`: the buffer stays open as the execution's tail, so the next pass's barriers are appended to it and run after everything already queued and before anything the next pass submits. Submitting another buffer, a transfer flush (`SubmitTransferCommandBuffer`) and `CompleteExecution` end the tail and queue it. The tail carries over between views of one dispatch.
+
+When there is no tail (the first pass of an execution, or the first pass after a transfer flush), the batch is deferred and recorded at the start of the first command buffer the pass rents. That buffer must then be submitted before the pass's other buffers, otherwise [`SubmitCommandBuffer`](../../Graphite/Core/RenderGraph/RenderContext.cs#L288) throws `InvalidOperationException`; submitting a transfer before it throws as well. If the pass rents nothing, or never submits that buffer, the batch goes into a separate command buffer named `"<pass> Barriers"` after the pass.
 
 ### In-pass transitions
 
-[`Transition`](../../Graphite/Core/RenderGraph/RenderContext.cs#L114) lets a pass move a texture between the kinds it declared. It checks the kind against the pass's declaration, builds the same kind of barrier batch for the current texture of that ID (depth follows only when `depthUsage` was not given), records it into the pass's own command buffer, then commits the new states. The next pass's barriers start from wherever the texture was left.
+[`Transition`](../../Graphite/Core/RenderGraph/RenderContext.cs#L114) lets a pass move a texture between the kinds it declared. It checks the kind against the pass's declaration, builds the same kind of barrier batch for the current texture of that ID (depth follows only when `depthUsage` was not given), records it into the pass's own command buffer, then commits the new states. The next pass's barriers start from wherever the texture was left. The overload without a command buffer records into the pass's only open command buffer and throws when the pass holds none or several.
 
 Since the state now follows recording order, a pass that has transitioned must submit in rent order: [`SubmitCommandBuffer`](../../Graphite/Core/RenderGraph/RenderContext.cs#L288) throws if the buffer being submitted is not the oldest one the pass still holds. The flag resets when the next pass starts.
 
-`RestoreRestingStates` runs after the present pass and moves every non-resting texture back to `Resting` in one final `"<present> Barriers"` command buffer. Because of this, pooled transient textures, history rings and imported textures need no stored layout between executions.
+`RestoreRestingStates` runs after the present pass and moves every non-resting texture back to `Resting` with one final batch, appended to the open tail (or a `"<present> Barriers"` command buffer when there is none). Because of this, pooled transient textures, history rings and imported textures need no stored layout between executions.
 
 Every command buffer rented through the context (graphics and transfer) points at the same state dictionary, so backend commands that need a specific layout (copies, mip generation, resolves) start from the texture's current state and return to it. A texture that is not a graph resource is always `Resting` for them.
 
@@ -233,9 +237,9 @@ A declaration with several kinds has no natural start state, and a hidden priori
 
 Graph textures are always one mip and one layer, so a whole-image state is exact. Per-mip or per-layer work (mip generation, resolves) happens inside a single command, which transitions its own subresources and returns them to the texture's current state.
 
-### Why a separate barrier command buffer?
+### Why append barriers to the open tail?
 
-A pass may rent several command buffers and submit them in any order. Recording the pass's barriers into a buffer that is submitted before the pass renders guarantees they execute first. The extra buffers join the same queue submission batch.
+A pass may rent several command buffers and submit them in any order, so the start of the pass's own first buffer is not a safe place for its barriers in general. The end of the last buffer already submitted is: it precedes, in queue order, everything the pass will submit. Appending there avoids a dedicated command buffer per pass (and its begin, end and profiler queries) without restricting the pass. Only when nothing has been submitted yet does the batch fall back to the pass's first rented buffer, and only then does submit order matter.
 
 ## Gotchas and pitfalls
 
@@ -249,7 +253,8 @@ A pass may rent several command buffers and submit them in any order. Recording 
 - A texture is in one state at a time. To render into it and later sample it in the same pass, declare both kinds and call `Transition` between the draws.
 - Two passes that ping-pong between the same two IDs form a cycle and fail to build; loop inside one pass with `Transition` instead.
 - Resolving a resource the running pass did not declare throws. Declare everything a pass touches, including history reads (`DeclareInputTexture` on the history ID).
-- The profiler sees the graph's `"<pass> Barriers"` command buffers as ordinary graphics submits.
+- Pass barriers are recorded at the end of the previous pass's last submitted command buffer, so profiler timings for that buffer include them. A `"<pass> Barriers"` command buffer appears only when a pass with pending barriers rents no command buffer or never submits its first one.
+- In the first pass of an execution, and in the first pass after a transfer flush, the first rented command buffer carries the pass's barriers and must be submitted before the pass's other command buffers.
 - `InvalidateGraph` disposes history rings and reruns `InitializePasses` on next access; it throws if called while a view executes.
 - `IPresentPass.Setup` cannot declare outputs, so nothing can consume the present pass's work through the graph.
 - Present is skipped entirely (no `SwapBuffers`) unless some view's present pass called `context.Present()`. `SwapchainTarget` is null unless the present pass called `RequestSwapchain()`.

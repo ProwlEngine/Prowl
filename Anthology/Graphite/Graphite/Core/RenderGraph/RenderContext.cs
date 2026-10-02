@@ -26,6 +26,10 @@ public sealed class RenderContext<TView>
     private ResourceAccess[]? _currentAccesses;
     private string? _currentScopeName;
     private bool _scopeTransitioned;
+    private TextureBarrier[]? _deferredBarriers;
+    private BufferAccess _deferredBufferSrc;
+    private BufferAccess _deferredBufferDst;
+    private CommandBuffer? _barrierHost;
 
     private static long s_nextCommandBufferRentalId;
 
@@ -106,6 +110,24 @@ public sealed class RenderContext<TView>
         _textureStates.Clear();
         RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
     }
+        FlushDeferredBarriers(scopeName);
+    }
+
+    /// <summary>
+    /// Moves a declared texture to another of its declared kinds mid-pass, recording into the pass's only open command buffer.
+    /// Throws if the pass holds zero or several open command buffers; use the overload taking a command buffer then.
+    /// </summary>
+    public void Transition(TextureHandle handle, TextureUsageKind usage)
+    {
+        if (_currentAccesses == null)
+            throw new InvalidOperationException("Transition is only valid while a pass or the present pass is rendering.");
+        if (_pendingCommandBuffers.Count != 1)
+        {
+            throw new InvalidOperationException(
+                $"Pass '{_currentScopeName}' holds {_pendingCommandBuffers.Count} open command buffers, so the transition target is ambiguous. Use Transition(cmd, handle, usage).");
+        }
+
+        Transition(_pendingCommandBuffers[0], handle, usage);
 
     /// <summary>
     /// Moves a declared texture to another of its declared kinds mid-pass, recording the barrier into cmd.
@@ -219,10 +241,25 @@ public sealed class RenderContext<TView>
         if (_barriers.Count == 0 && bufferSrc == BufferAccess.None)
             return;
 
-        CommandBuffer cb = GetCommandBuffer($"{scopeName} Barriers");
-        cb.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), bufferSrc, bufferDst);
+        if (_task.OpenTail is { } tail)
+        {
+            tail.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), bufferSrc, bufferDst);
+            CommitBarrierStates();
+            return;
+        }
+
+        _deferredBarriers = _barriers.ToArray();
+        _deferredBufferSrc = bufferSrc;
+        _deferredBufferDst = bufferDst;
         CommitBarrierStates();
-        SubmitCommandBuffer(cb);
+    }
+
+    private void FlushDeferredBarriers(string scopeName)
+    {
+        if (_deferredBarriers == null || _barrierHost != null)
+            return;
+
+        SubmitCommandBuffer(GetCommandBuffer($"{scopeName} Barriers"));
     }
 
     private void CheckDeclared(RenderResourceID id)
@@ -283,7 +320,13 @@ public sealed class RenderContext<TView>
         return cb;
     }
 
-    /// <summary>Ends a command buffer rented here and queues it for this execution's submit.</summary>
+        if (_deferredBarriers != null && _barrierHost == null)
+        {
+            cb.RecordBarriers(_deferredBarriers, _deferredBufferSrc, _deferredBufferDst);
+            _barrierHost = cb;
+        }
+
+    /// <summary>Queues a command buffer rented here for this execution's submit. Do not record into it afterwards.</summary>
     /// <param name="cmd">Command buffer to submit.</param>
     public void SubmitCommandBuffer(CommandBuffer cmd)
     {
@@ -294,8 +337,19 @@ public sealed class RenderContext<TView>
         }
 
         _pendingCommandBuffers.Remove(cmd);
-        cmd.End();
-        _task.SubmitCommandsInternal(cmd);
+        _task.QueueOpen(cmd);
+        if (_barrierHost != null)
+        {
+            if (!ReferenceEquals(_barrierHost, cmd))
+            {
+                throw new InvalidOperationException(
+                    $"Pass '{_currentScopeName}' must submit its first rented command buffer first, because it carries the barriers the pass starts with.");
+            }
+
+            _barrierHost = null;
+            _deferredBarriers = null;
+        }
+
     }
 
     /// <summary>
@@ -315,6 +369,8 @@ public sealed class RenderContext<TView>
         }
 
         _pendingCommandBuffers.Clear();
+        _barrierHost = null;
+        FlushDeferredBarriers(scopeName);
     }
 
     /// <summary>Rents a transfer command buffer, copies only.</summary>
@@ -334,7 +390,14 @@ public sealed class RenderContext<TView>
     /// <param name="cmd">Transfer command buffer to submit.</param>
     public void SubmitTransferCommandBuffer(TransferCommandBuffer cmd)
     {
-        // The transfer goes straight to the queue, so anything recorded before it has to go first.
+        if (_barrierHost != null)
+        {
+            throw new InvalidOperationException(
+                $"Pass '{_currentScopeName}' must submit its first rented command buffer before a transfer, because it carries the barriers the pass starts with.");
+        }
+
+        FlushDeferredBarriers(_currentScopeName ?? "Transfer");
+        _task.CloseTail();
         _task.FlushSubmissions();
         _device.SubmitTransfer(cmd);
     }

@@ -63,6 +63,20 @@ file sealed class BarrierPipeline : RenderPipeline<BarrierView>
 
 file static class BarrierPasses
 {
+    public static LambdaPass Upload(RenderResourceID id, GraphTextureDesc desc, Texture source)
+    {
+        TextureHandle handle = default;
+        return new LambdaPass(
+            "Upload",
+            builder => handle = builder.DeclareOutputTexture(id, desc, usage: TextureUsageKind.TransferDst),
+            context =>
+            {
+                CommandBuffer cmd = context.GetCommandBuffer("Upload");
+                cmd.CopyTexture(source, context.GetRenderTexture(handle).ColorTextures[0]);
+                context.SubmitCommandBuffer(cmd);
+            });
+    }
+
     public static LambdaPass Readback(RenderResourceID id, Texture staging)
     {
         TextureHandle handle = default;
@@ -701,6 +715,154 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             });
 
         using BarrierPipeline pipeline = new(write, thief);
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
+        GD.WaitForIdle();
+
+        Assert.Single(errors);
+    }
+
+    [Fact]
+    public void FirstPass_SubmitsOutOfOrder_Throws()
+    {
+        RenderResourceID id = RenderResourceID.Intern("barrier_first_order");
+        GraphTextureDesc desc = GraphTextureDesc.Sized(4, 4, false, Format);
+
+        List<Exception> errors = new();
+        LambdaPass pass = new(
+            "FirstOrder",
+            builder => builder.DeclareOutputTexture(id, desc),
+            context =>
+            {
+                CommandBuffer first = context.GetCommandBuffer("First");
+                CommandBuffer second = context.GetCommandBuffer("Second");
+                try
+                {
+                    context.SubmitCommandBuffer(second);
+                }
+                catch (InvalidOperationException e)
+                {
+                    errors.Add(e);
+                }
+                context.SubmitCommandBuffer(first);
+                context.SubmitCommandBuffer(second);
+            });
+
+        using BarrierPipeline pipeline = new(pass);
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
+        GD.WaitForIdle();
+
+        Assert.Single(errors);
+    }
+
+    [Fact]
+    public void LaterPass_SubmitsOutOfOrder_KeepsTexels()
+    {
+        Texture source = CreateSourceTexels();
+        Texture staging = CreateStaging(4, 1);
+        RenderResourceID id = RenderResourceID.Intern("barrier_later_order");
+        GraphTextureDesc desc = GraphTextureDesc.Sized(4, 1, false, Format);
+
+        TextureHandle loadHandle = default;
+        LambdaPass load = new(
+            "Load",
+            builder => loadHandle = builder.DeclareOutputTexture(id, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded)),
+            context =>
+            {
+                CommandBuffer first = context.GetCommandBuffer("LoadFirst");
+                CommandBuffer second = context.GetCommandBuffer("LoadSecond");
+                second.SetFramebuffer(context.GetRenderTexture(loadHandle).Framebuffer);
+                second.SetFullViewports();
+                context.SubmitCommandBuffer(second);
+                context.SubmitCommandBuffer(first);
+            });
+
+        using BarrierPipeline pipeline = new(BarrierPasses.Upload(id, desc, source), load, BarrierPasses.Readback(id, staging));
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
+        GD.WaitForIdle();
+
+        AssertTexels(staging);
+    }
+
+    [Fact]
+    public void FirstPass_WithoutCommandBuffers_StillRecordsItsBarriers()
+    {
+        Texture source = CreateSourceTexels();
+        Texture staging = CreateStaging(4, 1);
+        RenderResourceID id = RenderResourceID.Intern("barrier_idle_first");
+        GraphTextureDesc desc = GraphTextureDesc.Sized(4, 1, false, Format);
+
+        LambdaPass idle = new(
+            "Idle",
+            builder => builder.DeclareOutputTexture(id, desc),
+            context => { });
+
+        using BarrierPipeline pipeline = new(idle, BarrierPasses.Upload(id, desc, source), BarrierPasses.Readback(id, staging));
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
+        GD.WaitForIdle();
+
+        AssertTexels(staging);
+    }
+
+    [Fact]
+    public void ImplicitTransition_RecordsIntoTheOnlyOpenBuffer()
+    {
+        const uint size = 4;
+        Texture staging = CreateStaging(size, size);
+        RenderResourceID id = RenderResourceID.Intern("barrier_implicit");
+        GraphTextureDesc desc = GraphTextureDesc.Sized((int)size, (int)size, false, Format);
+
+        TextureHandle handle = default;
+        LambdaPass pass = new(
+            "Implicit",
+            builder => handle = builder.DeclareOutputTexture(id, desc,
+                usage: TextureUsageKind.Attachment | TextureUsageKind.TransferSrc, initial: TextureUsageKind.Attachment),
+            context =>
+            {
+                RenderTexture target = context.GetRenderTexture(handle);
+                CommandBuffer cmd = context.GetCommandBuffer("Implicit");
+                cmd.SetFramebuffer(target.Framebuffer);
+                cmd.ClearColorTarget(0, Color.Green);
+                context.Transition(handle, TextureUsageKind.TransferSrc);
+                cmd.CopyTexture(target.ColorTextures[0], staging);
+                context.SubmitCommandBuffer(cmd);
+            });
+
+        using BarrierPipeline pipeline = new(pass);
+        GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
+        GD.WaitForIdle();
+
+        AssertUniform(staging, size, size, Color.Green);
+    }
+
+    [Fact]
+    public void ImplicitTransition_WithTwoOpenBuffers_Throws()
+    {
+        RenderResourceID id = RenderResourceID.Intern("barrier_implicit_ambiguous");
+        GraphTextureDesc desc = GraphTextureDesc.Sized(4, 4, false, Format);
+
+        TextureHandle handle = default;
+        List<Exception> errors = new();
+        LambdaPass pass = new(
+            "Ambiguous",
+            builder => handle = builder.DeclareOutputTexture(id, desc,
+                usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled, initial: TextureUsageKind.Attachment),
+            context =>
+            {
+                CommandBuffer first = context.GetCommandBuffer("First");
+                CommandBuffer second = context.GetCommandBuffer("Second");
+                try
+                {
+                    context.Transition(handle, TextureUsageKind.Sampled);
+                }
+                catch (InvalidOperationException e)
+                {
+                    errors.Add(e);
+                }
+                context.SubmitCommandBuffer(first);
+                context.SubmitCommandBuffer(second);
+            });
+
+        using BarrierPipeline pipeline = new(pass);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
         GD.WaitForIdle();
 
