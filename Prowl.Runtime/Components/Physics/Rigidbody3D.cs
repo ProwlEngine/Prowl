@@ -829,9 +829,8 @@ public sealed class Rigidbody3D : MonoBehaviour
                 break;
 
             case ForceMode.Acceleration:
-                // Cancelling the inertia means asking for a torque of I*alpha.
-                if (JMatrix.Inverse(body.InverseInertia, out JMatrix inertia))
-                    body.Torque += JVector.Transform(jTorque, inertia);
+                // Cancelling the inertia means asking for a torque of I*alpha, both in world space.
+                body.Torque += JVector.Transform(jTorque, WorldInertia);
                 break;
 
             case ForceMode.Impulse:
