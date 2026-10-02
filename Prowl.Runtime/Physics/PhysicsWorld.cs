@@ -116,9 +116,9 @@ public class PhysicsWorld
     internal readonly Dictionary<TerrainHeightmapProxy, ITerrainHeightProvider> _terrainProxies = [];
 
     private Float3 _gravity = new(0, -9.81f, 0);
-    private int _solverIterations = 8;
+    private int _solverIterations = 12;
     private int _relaxIterations = 4;
-    private int _substep = 2;
+    private int _substep = 3;
     private float _speculativeRelaxationFactor = 0.9f;
 
     /// <summary>Acceleration applied to every body with <see cref="Rigidbody3D.AffectedByGravity"/>.</summary>
