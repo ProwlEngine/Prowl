@@ -61,7 +61,6 @@ All in `CommandBuffer.State`. Source: [CommandBuffer.State.cs](../../Graphite/Co
 | `ClearProperties` | `void ClearProperties()` | Empties the merged properties. No GPU work. |
 | `SetFramebuffer` | `void SetFramebuffer(Framebuffer fb)` | Sets the render target and resets viewports and scissors to full size |
 | `SetFramebuffer` | `void SetFramebuffer(RenderTexture renderTexture)` | Uses the render texture's framebuffer |
-| `SetRenderTarget` | `void SetRenderTarget(Framebuffer fb)` / `(RenderTexture rt)` | Aliases of `SetFramebuffer` |
 | `ClearColorTarget` | `void ClearColorTarget(uint index, Color clearColor)` | Clears one color attachment. Framebuffer must be set. |
 | `ClearDepthStencil` | `void ClearDepthStencil(float depth)` / `(float depth, byte stencil)` | Clears depth (stencil defaults to 0). Needs a depth attachment. |
 | `SetViewport` | `void SetViewport(uint index, Viewport viewport)` / `(uint index, ref Viewport viewport)` | Sets one viewport |

@@ -127,16 +127,6 @@ public abstract partial class CommandBuffer
     public void SetFramebuffer(RenderTexture renderTexture)
         => SetFramebuffer(renderTexture.Framebuffer);
 
-    /// <summary>Sets render texture's framebuffer as render target.</summary>
-    /// <param name="renderTexture">Render texture.</param>
-    public void SetRenderTarget(RenderTexture renderTexture)
-        => SetFramebuffer(renderTexture.Framebuffer);
-
-    /// <summary>Sets framebuffer as render target.</summary>
-    /// <param name="fb">Framebuffer to set.</param>
-    public void SetRenderTarget(Framebuffer fb)
-        => SetFramebuffer(fb);
-
     /// <summary>Clears one color target. Index must be within framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
     /// <param name="clearColor">Clear value.</param>
