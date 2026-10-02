@@ -33,7 +33,7 @@ internal sealed class PropertyEntry
 
     public UniformPayload Uniform;
 
-    /// <summary>Bumped on every uniform write; lets binders skip repacking unchanged blocks.</summary>
+    /// <summary>Bumped on every write; lets binders skip repacking or re-resolving unchanged entries.</summary>
     public uint Version;
 
     public DeviceBufferRange? Buffer;
@@ -59,6 +59,7 @@ internal sealed class PropertyEntry
         Texture = null;
         TextureView = null;
         Sampler = null;
+        unchecked { Version++; }
     }
 
 
@@ -69,6 +70,7 @@ internal sealed class PropertyEntry
         TextureView = view;
         Sampler = sampler;
         Buffer = null;
+        unchecked { Version++; }
     }
 
 
@@ -79,5 +81,6 @@ internal sealed class PropertyEntry
         Texture = null;
         TextureView = null;
         Buffer = null;
+        unchecked { Version++; }
     }
 }

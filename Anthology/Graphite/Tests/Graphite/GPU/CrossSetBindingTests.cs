@@ -1,3 +1,5 @@
+using Prowl.Graphite.Vk;
+
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
@@ -384,6 +386,98 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         Assert.Equal(11u, result[0]);
         Assert.Equal(321u, result[2]);
+    }
+
+    [SkippableFact]
+    public void FrameAndItemSets_AlternatingInOneRecording_EachDispatchSeesItsValues()
+    {
+        Skip.IfNot(GD.Features.ComputeShader);
+
+        const int n = 8;
+        DeviceBuffer input = CreateInput(555);
+        Texture texture = CreateSolidTexture(128);
+        ComputeProgram program = CreateProgram();
+
+        PropertySet frame = new();
+        frame.SetInt("valueB", 202);
+        frame.SetInt("valueC", 303);
+        frame.SetBuffer("Input", input, readOnly: true);
+        frame.SetTexture("Tex", texture, GD.LinearSampler);
+
+        DeviceBuffer[] outputs = new DeviceBuffer[n];
+        PropertySet[] items = new PropertySet[n];
+        for (int i = 0; i < n; i++)
+        {
+            outputs[i] = CreateOutput();
+            items[i] = new PropertySet();
+            items[i].SetInt("valueA", 10 + i);
+            items[i].SetBuffer("Output", outputs[i], readOnly: false);
+        }
+        items[2].SetInt("valueC", 999);
+
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.SetComputeShader(program);
+            for (int i = 0; i < n; i++)
+            {
+                if (i == 5)
+                    frame.SetInt("valueB", 404);
+
+                cl.SetProperties(frame);
+                cl.SetProperties(items[i]);
+                cl.Dispatch(1, 1, 1);
+            }
+            context.SubmitCommandBuffer(cl);
+        });
+        GD.WaitForIdle();
+
+        for (int i = 0; i < n; i++)
+        {
+            uint[] result = Read(outputs[i]);
+            Assert.Equal((uint)(10 + i), result[0]);
+            Assert.Equal(i >= 5 ? 404u : 202u, result[1]);
+            Assert.Equal(555u, result[2]);
+            Assert.Equal(i == 2 ? 999u : 303u, result[3]);
+            Assert.Equal(128u, result[4]);
+        }
+    }
+
+    [Fact]
+    public void ReapplyingUnchangedActiveSet_KeepsThePropertyEpoch()
+    {
+        DeviceBuffer output = CreateOutput();
+        PropertySet frame = new();
+        frame.SetInt("valueB", 1);
+        PropertySet item = new();
+        item.SetInt("valueA", 2);
+        item.SetBuffer("Output", output, readOnly: false);
+
+        uint afterItem = 0;
+        uint afterReapply = 0;
+        uint afterOverride = 0;
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.SetProperties(frame);
+            cl.SetProperties(item);
+            afterItem = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
+
+            cl.SetProperties(frame);
+            afterReapply = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
+
+            PropertySet overriding = new();
+            overriding.SetInt("valueB", 3);
+            cl.SetProperties(overriding);
+            cl.SetProperties(frame);
+            afterOverride = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
+
+            context.SubmitCommandBuffer(cl);
+        });
+        GD.WaitForIdle();
+
+        Assert.Equal(afterItem, afterReapply);
+        Assert.Equal(afterItem + 2, afterOverride);
     }
 }
 

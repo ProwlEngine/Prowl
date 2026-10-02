@@ -108,8 +108,8 @@ public sealed class RenderContext<TView>
         }
 
         _textureStates.Clear();
+        CommandBufferBase.BumpGraphStateVersion();
         RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
-    }
         FlushDeferredBarriers(scopeName);
     }
 
@@ -128,6 +128,7 @@ public sealed class RenderContext<TView>
         }
 
         Transition(_pendingCommandBuffers[0], handle, usage);
+    }
 
     /// <summary>
     /// Moves a declared texture to another of its declared kinds mid-pass, recording the barrier into cmd.
@@ -204,6 +205,8 @@ public sealed class RenderContext<TView>
     {
         foreach (TextureBarrier barrier in _barriers)
             _textureStates[barrier.Texture] = barrier.After;
+        if (_barriers.Count > 0)
+            CommandBufferBase.BumpGraphStateVersion();
         _barriers.Clear();
     }
 
@@ -317,14 +320,14 @@ public sealed class RenderContext<TView>
         cb.GraphStates = _textureStates;
         _pendingCommandBuffers.Add(cb);
 
-        return cb;
-    }
-
         if (_deferredBarriers != null && _barrierHost == null)
         {
             cb.RecordBarriers(_deferredBarriers, _deferredBufferSrc, _deferredBufferDst);
             _barrierHost = cb;
         }
+
+        return cb;
+    }
 
     /// <summary>Queues a command buffer rented here for this execution's submit. Do not record into it afterwards.</summary>
     /// <param name="cmd">Command buffer to submit.</param>
@@ -336,8 +339,6 @@ public sealed class RenderContext<TView>
                 $"Pass '{_currentScopeName}' called Transition, so its command buffers must be submitted in the order they were rented.");
         }
 
-        _pendingCommandBuffers.Remove(cmd);
-        _task.QueueOpen(cmd);
         if (_barrierHost != null)
         {
             if (!ReferenceEquals(_barrierHost, cmd))
@@ -350,6 +351,8 @@ public sealed class RenderContext<TView>
             _deferredBarriers = null;
         }
 
+        _pendingCommandBuffers.Remove(cmd);
+        _task.QueueOpen(cmd);
     }
 
     /// <summary>
@@ -358,9 +361,6 @@ public sealed class RenderContext<TView>
     /// <param name="scopeName">Pass name for the warning.</param>
     internal void ReclaimUnsubmittedCommandBuffers(string scopeName)
     {
-        if (_pendingCommandBuffers.Count == 0)
-            return;
-
         foreach (CommandBuffer cb in _pendingCommandBuffers)
         {
             _device.OnWarning?.Invoke(

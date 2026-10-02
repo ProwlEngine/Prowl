@@ -57,7 +57,7 @@ All in `CommandBuffer.State`. Source: [CommandBuffer.State.cs](../../Graphite/Co
 | `SetShader` | `void SetShader(GraphicsProgram program)` | Sets the graphics program. No-op if it is already current. Must match the framebuffer's outputs. |
 | `SetComputeShader` | `void SetComputeShader(ComputeProgram program)` | Sets the compute program |
 | `SetVertexSource` | `void SetVertexSource(IVertexSource source)` | Replaces the vertex and index source. Must not be null; an empty source means no vertex data. |
-| `SetProperties` | `void SetProperties(PropertySet properties)` | Merges the set into the bound properties. Unchanged same set twice in a row is a no-op. |
+| `SetProperties` | `void SetProperties(PropertySet properties)` | Merges the set into the bound properties. No-op when the set is unchanged since its last merge into this buffer and none of its names were overridden since. |
 | `ClearProperties` | `void ClearProperties()` | Empties the merged properties. No GPU work. |
 | `SetFramebuffer` | `void SetFramebuffer(Framebuffer fb)` | Sets the render target and resets viewports and scissors to full size |
 | `SetFramebuffer` | `void SetFramebuffer(RenderTexture renderTexture)` | Uses the render texture's framebuffer |

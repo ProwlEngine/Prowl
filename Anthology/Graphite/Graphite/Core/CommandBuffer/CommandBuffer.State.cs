@@ -56,19 +56,27 @@ public abstract partial class CommandBuffer
 
     /// <summary>
     /// Merges properties into bind table, last write wins, sticks until ClearProperties or Begin.
-    /// <para>Same unchanged set twice in a row is a no-op.</para>
+    /// <para>No-op when the set is unchanged and its entries are still the active ones.</para>
     /// </summary>
     /// <param name="properties">Set to merge in.</param>
     public void SetProperties(PropertySet properties)
     {
         ValidationHelpers.RequireNotNull(properties, nameof(properties), nameof(SetProperties));
 
-        // Re-applying the very same set with no changes since is a no-op: the merge is idempotent
-        // when nothing else was applied in between, so skip it and leave the epoch untouched.
         if (ReferenceEquals(properties, _lastAppliedSource) && properties.Version == _lastAppliedSourceVersion)
             return;
 
-        _activeProperties.ApplyOther(properties);
+        if (_mergedSourceVersions.TryGetValue(properties, out uint mergedVersion)
+            && mergedVersion == properties.Version
+            && properties.EntriesActiveIn(_activeProperties))
+        {
+            _lastAppliedSource = properties;
+            _lastAppliedSourceVersion = properties.Version;
+            return;
+        }
+
+        _activeProperties.MergeFrom(properties, _changedPropertyKeys);
+        _mergedSourceVersions[properties] = properties.Version;
         _lastAppliedSource = properties;
         _lastAppliedSourceVersion = properties.Version;
         unchecked { _activePropertiesEpoch++; }
@@ -84,8 +92,11 @@ public abstract partial class CommandBuffer
     /// </summary>
     public void ClearProperties()
     {
-        _activeProperties.Clear();     // bump merged resource version
+        _activeProperties.Clear();
         _lastAppliedSource = null;
+        _mergedSourceVersions.Clear();
+        _changedPropertyKeys.Clear();
+        _allPropertiesChanged = true;
         _lastAppliedSourceVersion = 0;
         unchecked { _activePropertiesEpoch++; }
         ClearPropertiesCore();

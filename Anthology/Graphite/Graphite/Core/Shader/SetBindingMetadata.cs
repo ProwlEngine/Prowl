@@ -24,12 +24,33 @@ internal sealed class SetBindingMetadata
     /// <summary>Packed byte size of each element's loose uniform block, 0 if it declares none.</summary>
     public readonly uint[] UniformBlockSizes;
 
-    private SetBindingMetadata(int[] sortedUboElementIndices, bool[] hasSameNamedTexture, int[] uniformBlockSlots, uint[] uniformBlockSizes)
+    /// <summary>Every property name the set reads: element names plus loose uniform field names.</summary>
+    public readonly System.Collections.Generic.HashSet<PropertyID> Names;
+
+    /// <summary>True if any element is a read-write texture, which can need a per-dispatch layout move.</summary>
+    public readonly bool HasStorageTexture;
+
+    private SetBindingMetadata(
+        int[] sortedUboElementIndices, bool[] hasSameNamedTexture, int[] uniformBlockSlots, uint[] uniformBlockSizes,
+        System.Collections.Generic.HashSet<PropertyID> names, bool hasStorageTexture)
     {
         SortedUboElementIndices = sortedUboElementIndices;
         HasSameNamedTexture = hasSameNamedTexture;
         UniformBlockSlots = uniformBlockSlots;
         UniformBlockSizes = uniformBlockSizes;
+        Names = names;
+        HasStorageTexture = hasStorageTexture;
+    }
+
+    /// <summary>True if any of the keys is a name this set reads.</summary>
+    public bool ReadsAny(System.Collections.Generic.List<PropertyID> keys)
+    {
+        foreach (PropertyID key in keys)
+        {
+            if (Names.Contains(key))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Build metadata one per set, parallel to layouts.</summary>
@@ -90,7 +111,21 @@ internal sealed class SetBindingMetadata
                 blockSizes[i] = UniformBlockSize(fields);
             }
 
-            result[s] = new SetBindingMetadata(sortedUbo, hasSameNamedTexture, blockSlots, blockSizes);
+            System.Collections.Generic.HashSet<PropertyID> names = new();
+            bool hasStorageTexture = false;
+            foreach (ResourceLayoutElementDescription element in elements)
+            {
+                names.Add(element.Name);
+                if (element.Kind == ResourceKind.TextureReadWrite)
+                    hasStorageTexture = true;
+                if (element.UniformFields != null)
+                {
+                    foreach (UniformBlockField field in element.UniformFields)
+                        names.Add(field.Name);
+                }
+            }
+
+            result[s] = new SetBindingMetadata(sortedUbo, hasSameNamedTexture, blockSlots, blockSizes, names, hasStorageTexture);
         }
 
         return result;
