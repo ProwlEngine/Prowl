@@ -59,16 +59,16 @@ All in `CommandBuffer.State`. Source: [CommandBuffer.State.cs](../../Graphite/Co
 | `SetVertexSource` | `void SetVertexSource(IVertexSource source)` | Replaces the vertex and index source. Must not be null; an empty source means no vertex data. |
 | `SetProperties` | `void SetProperties(PropertySet properties)` | Merges the set into the bound properties. No-op when the set is unchanged since its last merge into this buffer and none of its names were overridden since. |
 | `ClearProperties` | `void ClearProperties()` | Empties the merged properties. No GPU work. |
-| `SetFramebuffer` | `void SetFramebuffer(Framebuffer fb)` | Sets the render target and resets viewports and scissors to full size |
+| `SetFramebuffer` | `void SetFramebuffer(Framebuffer fb)` | Sets the render target and resets viewport 0 and scissor 0 to full size |
 | `SetFramebuffer` | `void SetFramebuffer(RenderTexture renderTexture)` | Uses the render texture's framebuffer |
 | `ClearColorTarget` | `void ClearColorTarget(uint index, Color clearColor)` | Clears one color attachment. Framebuffer must be set. |
 | `ClearDepthStencil` | `void ClearDepthStencil(float depth)` / `(float depth, byte stencil)` | Clears depth (stencil defaults to 0). Needs a depth attachment. |
-| `SetViewport` | `void SetViewport(uint index, Viewport viewport)` / `(uint index, ref Viewport viewport)` | Sets one viewport |
-| `SetFullViewports` | `void SetFullViewports()` | All viewports cover the framebuffer |
-| `SetFullViewport` | `void SetFullViewport(uint index)` | One viewport covers the framebuffer |
-| `SetScissorRect` | `void SetScissorRect(uint index, uint x, uint y, uint width, uint height)` | Sets one scissor rectangle |
-| `SetFullScissorRects` | `void SetFullScissorRects()` | All scissors cover the framebuffer |
-| `SetFullScissorRect` | `void SetFullScissorRect(uint index)` | One scissor covers the framebuffer |
+| `SetViewport` | `void SetViewport(Viewport viewport)` / `(ref Viewport viewport)` | Sets viewport 0 |
+| `SetViewport` | `void SetViewport(uint index, Viewport viewport)` / `(uint index, ref Viewport viewport)` | Sets one viewport. Index above 0 needs multi-viewport. |
+| `SetFullViewport` | `void SetFullViewport()` / `(uint index)` | Viewport covers the framebuffer |
+| `SetScissorRect` | `void SetScissorRect(uint x, uint y, uint width, uint height)` | Sets scissor rectangle 0 |
+| `SetScissorRect` | `void SetScissorRect(uint index, uint x, uint y, uint width, uint height)` | Sets one scissor rectangle. Index above 0 needs multi-viewport. |
+| `SetFullScissorRect` | `void SetFullScissorRect()` / `(uint index)` | Scissor covers the framebuffer |
 
 `Viewport` is `new Viewport(x, y, width, height, minDepth, maxDepth)`.
 
@@ -78,8 +78,8 @@ All in `CommandBuffer.State`. Source: [CommandBuffer.State.cs](../../Graphite/Co
 cmd.SetFramebuffer(target.Framebuffer);
 cmd.ClearColorTarget(0, new Color(0, 0, 0, 1));
 cmd.ClearDepthStencil(1f, 0);
-cmd.SetViewport(0, new Viewport(0, 0, 640, 360, 0f, 1f));
-cmd.SetScissorRect(0, 0, 0, 640, 360);
+cmd.SetViewport(new Viewport(0, 0, 640, 360, 0f, 1f));
+cmd.SetScissorRect(0, 0, 640, 360);
 ```
 
 ## Draw and dispatch
