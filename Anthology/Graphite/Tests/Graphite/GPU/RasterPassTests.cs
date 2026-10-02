@@ -73,13 +73,6 @@ file sealed class CopyReadbackPass : IPass<RasterView>
     }
 }
 
-file sealed class NoOpRasterPresentPass : IPresentPass<RasterView>
-{
-    public string Name => "Present";
-    public void Setup(PresentContextBuilder builder) { }
-    public void Present(RenderContext<RasterView> context) { }
-}
-
 file sealed class RasterTestPipeline : RenderPipeline<RasterView>
 {
     private readonly IPass<RasterView>[] _passes;
@@ -90,7 +83,6 @@ file sealed class RasterTestPipeline : RenderPipeline<RasterView>
     {
         foreach (IPass<RasterView> pass in _passes)
             AddPass(pass);
-        SetPresentPass(new NoOpRasterPresentPass());
     }
 }
 

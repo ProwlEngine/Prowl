@@ -84,38 +84,22 @@ internal static class Desc
     public static GraphBufferDesc Storage() => GraphBufferDesc.Structured(16, 4);
 }
 
-/// <summary>No-op present pass, for tests that only need to build a graph, not present.</summary>
-internal sealed class NoOpTestPresentPass : IPresentPass<TestView>
-{
-    public string Name => "TestNoOpPresent";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<TestView> context) { }
-}
-
-/// <summary>Test present pass, for testing declared present inputs and swapchain requests.</summary>
-internal sealed class TestPresentPass : IPresentPass<TestView>
+/// <summary>Test pass that writes the backbuffer and reads the named textures.</summary>
+internal sealed class TestBackbufferPass : IPass<TestView>
 {
     private readonly string[] _inputs;
-    private readonly bool _requestSwapchain;
 
-    public TestPresentPass(bool requestSwapchain = false, string[]? inputs = null)
-    {
-        _requestSwapchain = requestSwapchain;
-        _inputs = inputs ?? Array.Empty<string>();
-    }
+    public TestBackbufferPass(string[]? inputs = null) => _inputs = inputs ?? Array.Empty<string>();
 
-    public string Name => "TestPresent";
+    public string Name => "TestBackbuffer";
 
-    public void Setup(PresentContextBuilder builder)
+    public void Setup(RenderContextBuilder builder)
     {
         foreach (string name in _inputs)
             builder.DeclareInputTexture(name);
 
-        if (_requestSwapchain)
-            builder.RequestSwapchain();
+        builder.DeclareBackbuffer();
     }
 
-    public void Present(RenderContext<TestView> context) { }
+    public void Render(RenderContext<TestView> context) { }
 }

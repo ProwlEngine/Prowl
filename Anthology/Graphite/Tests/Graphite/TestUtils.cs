@@ -19,22 +19,13 @@ public readonly struct TestRenderView : IRenderView
     public int ViewId => 0;
 }
 
-internal sealed class NoOpTestPresentPass : IPresentPass<TestRenderView>
-{
-    public string Name => "TestNoOpPresent";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<TestRenderView> context) { }
-}
-
 public static class TestGraphExtensions
 {
     public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView>> record)
     {
         ExecutionTask task = gd.BeginExecution();
         RenderGraph<TestRenderView> graph = RenderGraph<TestRenderView>.Build(
-            Array.Empty<IPass<TestRenderView>>(), new NoOpTestPresentPass());
+            Array.Empty<IPass<TestRenderView>>());
         var context = new RenderContext<TestRenderView>(gd, task, graph, default);
 
         try

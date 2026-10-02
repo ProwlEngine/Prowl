@@ -37,29 +37,22 @@ file sealed class BufferWritePass : IPass<SubmitBatchingView>
     }
 }
 
-file sealed class NoOpSubmitBatchingPresentPass : IPresentPass<SubmitBatchingView>
-{
-    public string Name => "SubmitBatchingPresent";
-    public void Setup(PresentContextBuilder builder) { }
-    public void Present(RenderContext<SubmitBatchingView> context) { }
-}
-
-file sealed class MidExecutionTransferPresentPass : IPresentPass<SubmitBatchingView>
+file sealed class MidExecutionTransferPass : IPass<SubmitBatchingView>
 {
     private readonly DeviceBuffer _source;
     private readonly DeviceBuffer _staging;
 
-    public MidExecutionTransferPresentPass(DeviceBuffer source, DeviceBuffer staging)
+    public MidExecutionTransferPass(DeviceBuffer source, DeviceBuffer staging)
     {
         _source = source;
         _staging = staging;
     }
 
-    public string Name => "TransferPresent";
+    public string Name => "Transfer";
 
-    public void Setup(PresentContextBuilder builder) { }
+    public void Setup(RenderContextBuilder builder) { }
 
-    public void Present(RenderContext<SubmitBatchingView> context)
+    public void Render(RenderContext<SubmitBatchingView> context)
     {
         TransferCommandBuffer transfer = context.GetTransferCommandBuffer("MidExecutionTransfer");
         transfer.Begin();
@@ -72,19 +65,13 @@ file sealed class MidExecutionTransferPresentPass : IPresentPass<SubmitBatchingV
 file sealed class SubmitBatchingPipeline : RenderPipeline<SubmitBatchingView>
 {
     private readonly IPass<SubmitBatchingView>[] _passes;
-    private readonly IPresentPass<SubmitBatchingView> _present;
 
-    public SubmitBatchingPipeline(IPresentPass<SubmitBatchingView> present, params IPass<SubmitBatchingView>[] passes)
-    {
-        _present = present;
-        _passes = passes;
-    }
+    public SubmitBatchingPipeline(params IPass<SubmitBatchingView>[] passes) => _passes = passes;
 
     protected override void InitializePasses()
     {
         foreach (IPass<SubmitBatchingView> pass in _passes)
             AddPass(pass);
-        SetPresentPass(_present);
     }
 }
 
@@ -108,7 +95,6 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
 
         using SubmitBatchingPipeline pipeline = new(
-            new NoOpSubmitBatchingPresentPass(),
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
             new BufferWritePass("PassC", sourceC, destination));
@@ -130,7 +116,6 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
 
         using SubmitBatchingPipeline pipeline = new(
-            new NoOpSubmitBatchingPresentPass(),
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
             new BufferWritePass("PassC", sourceC, destination));
@@ -154,8 +139,8 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer staging = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.Staging));
 
         using SubmitBatchingPipeline pipeline = new(
-            new MidExecutionTransferPresentPass(destination, staging),
-            new BufferWritePass("PassA", source, destination));
+            new BufferWritePass("PassA", source, destination),
+            new MidExecutionTransferPass(destination, staging));
 
         GD.DispatchGraph(pipeline, new SubmitBatchingView[] { new() });
         GD.WaitForIdle();

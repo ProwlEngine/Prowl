@@ -161,56 +161,37 @@ file sealed class ImportingPass : IPass<ResourceView>
     public void Render(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
 }
 
-file sealed class RequestingPresentPass : IPresentPass<ResourceView>
+file sealed class BackbufferResolvingPass : IPass<ResourceView>
 {
-    public bool SawSwapchainTarget { get; private set; }
+    private TextureHandle _backbuffer;
 
-    public string Name => "RequestingPresent";
+    public bool SawFramebuffer { get; private set; }
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public string Name => "BackbufferResolving";
 
-    public void Present(RenderContext<ResourceView> context)
-        => SawSwapchainTarget = context.SwapchainTarget != null;
+    public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareBackbuffer();
+
+    public void Render(RenderContext<ResourceView> context)
+        => SawFramebuffer = context.GetRenderTexture(_backbuffer).Framebuffer != null;
 }
 
-file sealed class NonRequestingPresentPass : IPresentPass<ResourceView>
-{
-    public bool SawSwapchainTarget { get; private set; }
-
-    public string Name => "NonRequestingPresent";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<ResourceView> context)
-        => SawSwapchainTarget = context.SwapchainTarget != null;
-}
-
-file sealed class NoOpPresentPass : IPresentPass<ResourceView>
-{
-    public string Name => "Present";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<ResourceView> context) { }
-}
-
-file sealed class ReadingPresentPass : IPresentPass<ResourceView>
+file sealed class ReadingPass : IPass<ResourceView>
 {
     private readonly RenderResourceID _id;
     private TextureHandle _handle;
 
-    public ReadingPresentPass(RenderResourceID id)
+    public ReadingPass(RenderResourceID id)
     {
         _id = id;
     }
 
-    public string Name => "ReadingPresent";
+    public string Name => "Reading";
 
     public RenderTexture? Resolved { get; private set; }
 
-    public void Setup(PresentContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
-    public void Present(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
+    public void Render(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
 }
 
 file sealed class RecordingProfiler : IProfiler
@@ -260,23 +241,14 @@ file sealed class RecordingProfiler : IProfiler
 
 file sealed class ResourceTestPipeline : RenderPipeline<ResourceView>
 {
-    private readonly IPresentPass<ResourceView> _present;
     private readonly IPass<ResourceView>[] _passes;
 
-    public ResourceTestPipeline(params IPass<ResourceView>[] passes) : this(new NoOpPresentPass(), passes) { }
-
-    public ResourceTestPipeline(IPresentPass<ResourceView> present, params IPass<ResourceView>[] passes)
-    {
-        _present = present;
-        _passes = passes;
-    }
+    public ResourceTestPipeline(params IPass<ResourceView>[] passes) => _passes = passes;
 
     protected override void InitializePasses()
     {
         foreach (IPass<ResourceView> pass in _passes)
             AddPass(pass);
-
-        SetPresentPass(_present);
     }
 }
 
@@ -463,45 +435,33 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     }
 
     [Fact]
-    public void PresentPass_DeclaresInputInSetup_ResolvesToSameInstanceAsWriter()
+    public void ReadingPass_DeclaresInputInSetup_ResolvesToSameInstanceAsWriter()
     {
         RenderResourceID id = RenderResourceID.Intern("resourcetest_present_reads_graph");
         ResolvingPass writer = new("Writer", id, ColorDesc());
-        ReadingPresentPass present = new(id);
-        using ResourceTestPipeline pipeline = new(present, writer);
+        ReadingPass reader = new(id);
+        using ResourceTestPipeline pipeline = new(reader, writer);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();
 
-        Assert.NotNull(present.Resolved);
-        Assert.Same(writer.Resolved[0], present.Resolved);
+        Assert.NotNull(reader.Resolved);
+        Assert.Same(writer.Resolved[0], reader.Resolved);
     }
 }
 
 public abstract class RenderContextResourcePresentTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void SwapchainTarget_PresentPassRequestedItInSetup_IsResolvedDuringPresent()
+    public void Backbuffer_PassDeclaredItInSetup_ResolvesToSwapchainFramebuffer()
     {
-        RequestingPresentPass present = new();
-        using ResourceTestPipeline pipeline = new(present);
+        BackbufferResolvingPass pass = new();
+        using ResourceTestPipeline pipeline = new(pass);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();
 
-        Assert.True(present.SawSwapchainTarget);
-    }
-
-    [Fact]
-    public void SwapchainTarget_PresentPassDidNotRequestItInSetup_IsNullEvenWithAWindow()
-    {
-        NonRequestingPresentPass present = new();
-        using ResourceTestPipeline pipeline = new(present);
-
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
-        GD.WaitForIdle();
-
-        Assert.False(present.SawSwapchainTarget);
+        Assert.True(pass.SawFramebuffer);
     }
 }
 

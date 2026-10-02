@@ -40,13 +40,6 @@ file sealed class LambdaPass : IPass<BarrierView>
     public void Render(RenderContext<BarrierView> context) => _render(context);
 }
 
-file sealed class NoOpBarrierPresentPass : IPresentPass<BarrierView>
-{
-    public string Name => "Present";
-    public void Setup(PresentContextBuilder builder) { }
-    public void Present(RenderContext<BarrierView> context) { }
-}
-
 file sealed class BarrierPipeline : RenderPipeline<BarrierView>
 {
     private readonly IPass<BarrierView>[] _passes;
@@ -57,7 +50,6 @@ file sealed class BarrierPipeline : RenderPipeline<BarrierView>
     {
         foreach (IPass<BarrierView> pass in _passes)
             AddPass(pass);
-        SetPresentPass(new NoOpBarrierPresentPass());
     }
 }
 

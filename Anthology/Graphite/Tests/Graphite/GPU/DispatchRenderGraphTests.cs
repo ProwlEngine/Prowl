@@ -1,5 +1,6 @@
 #nullable enable
 
+using System;
 using System.Collections.Generic;
 
 using Prowl.Graphite.RenderGraph;
@@ -10,8 +11,8 @@ namespace Prowl.Graphite.Tests;
 
 // Coverage for the high-level GraphicsDevice.DispatchRenderGraph entry point: one graph execution per
 // dispatch, the pass loop running once per view against a fresh per-view context, the returned task
-// completing, transient acquisition through the context surviving many dispatches, and the present
-// pass arming the swap only when a swapchain target is available. The armed-present path runs on the
+// completing, transient acquisition through the context surviving many dispatches, and the
+// backbuffer declaration deciding whether the dispatch presents. The present path runs on the
 // windowed creator; everything else runs headless.
 
 file readonly struct DispatchView : IRenderView
@@ -67,56 +68,34 @@ file sealed class LeakingCommandBufferPass : IPass<DispatchView>
     }
 }
 
-file sealed class RecordingPresentPass : IPresentPass<DispatchView>
+file sealed class BackbufferPass : IPass<DispatchView>
 {
-    private readonly bool _arm;
-    private readonly bool _requestSwapchain;
+    private TextureHandle _backbuffer;
 
-    public RecordingPresentPass(bool arm, bool requestSwapchain = true)
+    public int RenderCount { get; private set; }
+    public bool SawFramebuffer { get; private set; }
+
+    public string Name => "Backbuffer";
+
+    public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareBackbuffer();
+
+    public void Render(RenderContext<DispatchView> context)
     {
-        _arm = arm;
-        _requestSwapchain = requestSwapchain;
-    }
-
-    public int PresentCount { get; private set; }
-    public bool SawSwapchainTarget { get; private set; }
-
-    public string Name => "Present";
-
-    public void Setup(PresentContextBuilder builder)
-    {
-        if (_requestSwapchain)
-            builder.RequestSwapchain();
-    }
-
-    public void Present(RenderContext<DispatchView> context)
-    {
-        PresentCount++;
-        Framebuffer? target = context.SwapchainTarget;
-        SawSwapchainTarget = target != null;
-
-        if (_arm && target != null)
-            context.Present();
+        RenderCount++;
+        SawFramebuffer = context.GetRenderTexture(_backbuffer).Framebuffer != null;
     }
 }
 
 file sealed class TestPipeline : RenderPipeline<DispatchView>
 {
-    private readonly IPresentPass<DispatchView> _present;
     private readonly IPass<DispatchView>[] _passes;
 
-    public TestPipeline(IPresentPass<DispatchView> present, params IPass<DispatchView>[] passes)
-    {
-        _present = present;
-        _passes = passes;
-    }
+    public TestPipeline(params IPass<DispatchView>[] passes) => _passes = passes;
 
     protected override void InitializePasses()
     {
         foreach (IPass<DispatchView> pass in _passes)
             AddPass(pass);
-
-        SetPresentPass(_present);
     }
 }
 
@@ -127,7 +106,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         RecordingPass passA = new();
         RecordingPass passB = new();
-        using TestPipeline pipeline = new(new RecordingPresentPass(arm: false), passA, passB);
+        using TestPipeline pipeline = new(passA, passB);
         DispatchView[] views = { new(64, 64), new(80, 48), new(32, 32) };
 
         GD.DispatchGraph(pipeline, views);
@@ -140,7 +119,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void Dispatch_ReturnsTaskThatCompletes()
     {
-        using TestPipeline pipeline = new(new RecordingPresentPass(arm: false), new RecordingPass());
+        using TestPipeline pipeline = new(new RecordingPass());
 
         ExecutionTask task = GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
         GD.WaitForExecution(task);
@@ -152,7 +131,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     public void Dispatch_EachViewSeesItsOwnContext()
     {
         RecordingPass pass = new();
-        using TestPipeline pipeline = new(new RecordingPresentPass(arm: false), pass);
+        using TestPipeline pipeline = new(pass);
         DispatchView[] views = { new(64, 64), new(128, 96), new(32, 200) };
 
         GD.DispatchGraph(pipeline, views);
@@ -162,24 +141,19 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     [Fact]
-    public void Dispatch_OffscreenPresentPass_NeverArmsSwapchain()
+    public void Dispatch_BackbufferDeclaredWithoutMainSwapchain_Throws()
     {
-        RecordingPresentPass present = new(arm: true);
-        using TestPipeline pipeline = new(present, new RecordingPass());
-        DispatchView[] views = { new(64, 64), new(64, 64) };
+        using TestPipeline pipeline = new(new BackbufferPass());
 
-        GD.DispatchGraph(pipeline, views);
+        Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) }));
         GD.WaitForIdle();
-
-        Assert.Equal(views.Length, present.PresentCount);
-        Assert.False(present.SawSwapchainTarget);
     }
 
     [Fact]
     public void Dispatch_TransientThroughContext_ReclaimsAcrossManyDispatches()
     {
         RecordingPass pass = new(rentTransient: true);
-        using TestPipeline pipeline = new(new RecordingPresentPass(arm: false), pass);
+        using TestPipeline pipeline = new(pass);
         DispatchView[] views = { new(64, 64) };
 
         uint iterations = GD.MaxExecutingTasks * 2 + 1;
@@ -200,7 +174,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         GD.OnWarning = message => warnings.Add(message);
         try
         {
-            using TestPipeline pipeline = new(new RecordingPresentPass(arm: false), new LeakingCommandBufferPass());
+            using TestPipeline pipeline = new(new LeakingCommandBufferPass());
             GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
             GD.WaitForIdle();
         }
@@ -216,7 +190,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void Dispatch_ManyTimes_NeverExceedsMaxExecutingGraphs()
     {
-        using TestPipeline pipeline = new(new RecordingPresentPass(arm: false), new RecordingPass());
+        using TestPipeline pipeline = new(new RecordingPass());
         DispatchView[] views = { new(64, 64) };
 
         uint max = GD.MaxExecutingTasks;
@@ -233,31 +207,29 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
 public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void Dispatch_ArmedPresentPass_AcquiresSwapchainAndPresents()
+    public void Dispatch_BackbufferPass_ResolvesSwapchainAndPresents()
     {
-        RecordingPresentPass present = new(arm: true);
-        using TestPipeline pipeline = new(present, new RecordingPass());
+        BackbufferPass pass = new();
+        using TestPipeline pipeline = new(new RecordingPass(), pass);
         DispatchView[] views = { new(64, 64) };
 
         GD.DispatchGraph(pipeline, views);
         GD.WaitForIdle();
 
-        Assert.Equal(1, present.PresentCount);
-        Assert.True(present.SawSwapchainTarget);
+        Assert.Equal(1, pass.RenderCount);
+        Assert.True(pass.SawFramebuffer);
     }
 
     [Fact]
-    public void Dispatch_PresentPassDidNotRequestSwapchainInSetup_SwapchainTargetIsNullEvenWithAWindow()
+    public void Dispatch_NoPassDeclaresBackbuffer_RunsWithoutPresenting()
     {
-        RecordingPresentPass present = new(arm: true, requestSwapchain: false);
-        using TestPipeline pipeline = new(present, new RecordingPass());
-        DispatchView[] views = { new(64, 64) };
+        RecordingPass pass = new();
+        using TestPipeline pipeline = new(pass);
 
-        GD.DispatchGraph(pipeline, views);
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
         GD.WaitForIdle();
 
-        Assert.Equal(1, present.PresentCount);
-        Assert.False(present.SawSwapchainTarget);
+        Assert.Equal(1, pass.RenderCount);
     }
 }
 

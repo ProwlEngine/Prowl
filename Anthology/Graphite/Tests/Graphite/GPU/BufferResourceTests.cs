@@ -58,13 +58,6 @@ file sealed class BufferReaderPass : IPass<BufferView>
     public void Render(RenderContext<BufferView> context) => Resolved = context.GetRenderBuffer(_handle);
 }
 
-file sealed class NoOpBufferPresentPass : IPresentPass<BufferView>
-{
-    public string Name => "Present";
-    public void Setup(PresentContextBuilder builder) { }
-    public void Present(RenderContext<BufferView> context) { }
-}
-
 file sealed class ComputeWriteReadbackPass : IPass<BufferView>
 {
     private readonly RenderResourceID _id;
@@ -154,7 +147,6 @@ file sealed class BufferTestPipeline : RenderPipeline<BufferView>
         foreach (IPass<BufferView> pass in _passes)
             AddPass(pass);
 
-        SetPresentPass(new NoOpBufferPresentPass());
     }
 }
 

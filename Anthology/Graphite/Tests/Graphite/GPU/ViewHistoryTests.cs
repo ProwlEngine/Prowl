@@ -86,15 +86,6 @@ file sealed class ViewBufferHistoryPass : IPass<HistoryView>
     }
 }
 
-file sealed class NoOpPresentPass : IPresentPass<HistoryView>
-{
-    public string Name => "Present";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<HistoryView> context) { }
-}
-
 file sealed class HistoryTestPipeline : RenderPipeline<HistoryView>
 {
     private readonly IPass<HistoryView> _pass;
@@ -104,7 +95,6 @@ file sealed class HistoryTestPipeline : RenderPipeline<HistoryView>
     protected override void InitializePasses()
     {
         AddPass(_pass);
-        SetPresentPass(new NoOpPresentPass());
     }
 }
 

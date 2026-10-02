@@ -60,15 +60,6 @@ public sealed class BenchPass : IPass<BenchView>
     }
 }
 
-public sealed class BenchPresentPass : IPresentPass<BenchView>
-{
-    public string Name => "BenchPresent";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<BenchView> context) { }
-}
-
 public sealed class BenchPipeline : RenderPipeline<BenchView>
 {
     private readonly BenchScene _scene;
@@ -88,7 +79,5 @@ public sealed class BenchPipeline : RenderPipeline<BenchView>
     {
         for (int i = 0; i < _passCount; i++)
             AddPass(new BenchPass(_scene, i, _record, _stats));
-
-        SetPresentPass(new BenchPresentPass());
     }
 }

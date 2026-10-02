@@ -20,35 +20,38 @@ file readonly struct SwapchainView : IRenderView
     public int ViewId => 0;
 }
 
-file sealed class ClearSwapchainPresentPass : IPresentPass<SwapchainView>
+file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
 {
-    public bool PresentThisFrame { get; set; } = true;
+    public override string Name => "ClearSwapchain";
 
-    public string Name => "Present";
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
-
-    public void Present(RenderContext<SwapchainView> context)
+    public override void Render(RenderContext<SwapchainView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         CommandBuffer cmd = context.GetCommandBuffer("ClearSwapchain");
-        cmd.SetFramebuffer(target);
-        cmd.ClearColorTarget(0, Color.Blue);
+        BindTarget(context, cmd, Color.Blue);
         context.SubmitCommandBuffer(cmd);
-
-        if (PresentThisFrame)
-            context.Present();
     }
+}
+
+file sealed class OffscreenPass : IPass<SwapchainView>
+{
+    public string Name => "Offscreen";
+
+    public void Setup(RenderContextBuilder builder)
+        => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
+
+    public void Render(RenderContext<SwapchainView> context) { }
 }
 
 file sealed class ClearSwapchainPipeline : RenderPipeline<SwapchainView>
 {
-    public ClearSwapchainPresentPass PresentStep { get; } = new();
+    protected override void InitializePasses() => AddPass(new ClearSwapchainPass());
+}
 
-    protected override void InitializePasses() => SetPresentPass(PresentStep);
+file sealed class OffscreenPipeline : RenderPipeline<SwapchainView>
+{
+    protected override void InitializePasses() => AddPass(new OffscreenPass());
 }
 
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These
@@ -88,13 +91,13 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
     {
-        using ClearSwapchainPipeline pipeline = new();
+        using ClearSwapchainPipeline presenting = new();
+        using OffscreenPipeline offscreen = new();
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height)];
 
         for (int frame = 0; frame < 12; frame++)
         {
-            pipeline.PresentStep.PresentThisFrame = frame % 4 != 3;
-            GD.DispatchGraph(pipeline, views);
+            GD.DispatchGraph(frame % 4 != 3 ? presenting : offscreen, views);
         }
 
         GD.ResizeMainWindow(128, 96);
@@ -102,8 +105,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
 
         for (int frame = 0; frame < 12; frame++)
         {
-            pipeline.PresentStep.PresentThisFrame = true;
-            GD.DispatchGraph(pipeline, views);
+            GD.DispatchGraph(presenting, views);
         }
 
         GD.WaitForIdle();

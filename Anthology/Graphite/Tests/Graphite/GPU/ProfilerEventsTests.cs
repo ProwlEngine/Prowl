@@ -124,13 +124,6 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
     }
 }
 
-file sealed class NoOpProfilerPresentPass : IPresentPass<ProfilerView>
-{
-    public string Name => "Present";
-    public void Setup(PresentContextBuilder builder) { }
-    public void Present(RenderContext<ProfilerView> context) { }
-}
-
 file sealed class ProfilerTestPipeline : RenderPipeline<ProfilerView>
 {
     private readonly IPass<ProfilerView>[] _passes;
@@ -141,7 +134,6 @@ file sealed class ProfilerTestPipeline : RenderPipeline<ProfilerView>
     {
         foreach (IPass<ProfilerView> pass in _passes)
             AddPass(pass);
-        SetPresentPass(new NoOpProfilerPresentPass());
     }
 }
 
