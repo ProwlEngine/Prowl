@@ -855,6 +855,9 @@ public sealed class Rigidbody3D : MonoBehaviour
         return body?.IsValid == true;
     }
 
+    /// <summary>As <see cref="TryGetBody"/>, but false for a static body, which has no velocity to change.</summary>
+    private bool TryGetMovingBody(out RigidBody body) => TryGetBody(out body) && motionType != MotionType.Static;
+
     /// <summary>
     /// Sets the activation state of this rigidbody (awake or sleeping).
     /// </summary>
