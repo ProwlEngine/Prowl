@@ -115,7 +115,7 @@ public class ConeLimitConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return 0.0f;
+            if (!IsLive(constraint)) return 0.0f;
             return constraint.Angle.Degree;
         }
     }
@@ -123,7 +123,7 @@ public class ConeLimitConstraint : PhysicsConstraint
     /// <summary>
     /// Gets the accumulated impulse applied by this constraint.
     /// </summary>
-    public float Impulse => constraint?.Impulse ?? 0.0f;
+    public float Impulse => IsLive(constraint) ? constraint.Impulse : 0.0f;
 
     // Jitter only takes a range within 0 to 180 degrees, so a stray inspector value is clamped into it.
     private float ClampedMinAngle => Maths.Clamp(minAngle, 0.0f, 180.0f);

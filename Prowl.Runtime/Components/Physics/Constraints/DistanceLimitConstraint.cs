@@ -14,6 +14,9 @@ namespace Prowl.Runtime;
 /// <summary>
 /// Constrains the distance between two anchor points on two rigidbodies.
 /// Can be used to create rope-like connections or maintain a specific distance.
+/// <para/>
+/// When <see cref="MaxDistance"/> is above <see cref="MinDistance"/> the distance may move freely
+/// within that range. Otherwise the anchors are held at exactly <see cref="TargetDistance"/>.
 /// </summary>
 [AddComponentMenu("Physics/Constraints/Distance Limit")]
 public class DistanceLimitConstraint : PhysicsConstraint
@@ -21,8 +24,8 @@ public class DistanceLimitConstraint : PhysicsConstraint
     [SerializeField] private Float3 anchor = Float3.Zero;
     [SerializeField] private Float3 connectedAnchor = Float3.Zero;
     [SerializeField] private float targetDistance = 1.0f;
-    [SerializeField] private float minDistance = float.NegativeInfinity;
-    [SerializeField] private float maxDistance = float.PositiveInfinity;
+    [SerializeField] private float minDistance = 1.0f;
+    [SerializeField] private float maxDistance = 1.0f;
     [SerializeField] private float softness = 0.001f;
     [SerializeField] private float biasFactor = 0.2f;
 
@@ -55,7 +58,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
     }
 
     /// <summary>
-    /// The target distance to maintain between the anchors.
+    /// The distance the anchors are held at when no range is set.
     /// </summary>
     public float TargetDistance
     {
@@ -63,12 +66,12 @@ public class DistanceLimitConstraint : PhysicsConstraint
         set
         {
             targetDistance = value;
-            if (IsLive(constraint)) constraint.TargetDistance = value;
+            RecreateConstraint();
         }
     }
 
     /// <summary>
-    /// Minimum allowed distance. Use float.NegativeInfinity for no minimum.
+    /// Minimum allowed distance between the anchors. Use float.NegativeInfinity for no minimum.
     /// </summary>
     public float MinDistance
     {
@@ -81,7 +84,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
     }
 
     /// <summary>
-    /// Maximum allowed distance. Use float.PositiveInfinity for no maximum.
+    /// Maximum allowed distance between the anchors. Use float.PositiveInfinity for no maximum.
     /// </summary>
     public float MaxDistance
     {
@@ -122,12 +125,12 @@ public class DistanceLimitConstraint : PhysicsConstraint
     /// <summary>
     /// Gets the current distance between the anchors.
     /// </summary>
-    public float CurrentDistance => constraint?.Distance ?? 0.0f;
+    public float CurrentDistance => IsLive(constraint) ? constraint.Distance : 0.0f;
 
     /// <summary>
     /// Gets the accumulated impulse applied by this constraint.
     /// </summary>
-    public float Impulse => constraint?.Impulse ?? 0.0f;
+    public float Impulse => IsLive(constraint) ? constraint.Impulse : 0.0f;
 
     protected override Constraint GetConstraint() => constraint;
 
@@ -140,7 +143,10 @@ public class DistanceLimitConstraint : PhysicsConstraint
 
         constraint = world.CreateConstraint<DistanceLimit>(body1, body2);
 
-        var limit = new LinearLimit(minDistance, maxDistance);
+        // Jitter measures the limit as an offset from the target distance.
+        LinearLimit limit = minDistance < maxDistance
+            ? new LinearLimit(minDistance - targetDistance, maxDistance - targetDistance)
+            : LinearLimit.Fixed;
         constraint.Initialize(worldAnchor1, worldAnchor2, limit);
         constraint.TargetDistance = targetDistance;
         constraint.Softness = softness;

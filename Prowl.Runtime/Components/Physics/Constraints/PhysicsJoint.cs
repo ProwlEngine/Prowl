@@ -27,7 +27,7 @@ public abstract class PhysicsJoint : PhysicsConstraint
         if (joint == null) yield break;
 
         foreach (Constraint constraint in joint.Constraints)
-            yield return constraint;
+            if (IsLive(constraint)) yield return constraint;
     }
 
     /// <summary>

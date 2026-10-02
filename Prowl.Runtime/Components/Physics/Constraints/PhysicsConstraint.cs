@@ -79,15 +79,28 @@ public abstract class PhysicsConstraint : MonoBehaviour
         }
     }
 
+    private PhysicsWorld _registeredWorld;
+
     public override void OnEnable()
     {
+        Resources.Scene scene = GameObject.Scene;
+        _registeredWorld = scene.IsValid() ? scene.Physics : null;
+        _registeredWorld?.RegisterConstraint(this);
         RecreateConstraint();
     }
 
     public override void OnDisable()
     {
+        _registeredWorld?.UnregisterConstraint(this);
+        _registeredWorld = null;
         DestroyConstraint();
     }
+
+    /// <summary>Whether this constraint attaches to the given rigidbody, on either end.</summary>
+    internal bool Connects(Rigidbody3D body) => body == connectedBody || body == Body1;
+
+    /// <summary>Rebuilds the constraint against the bodies as they are now, after one of them was recreated.</summary>
+    internal void Rebind() => RecreateConstraint();
 
     public override void OnValidate()
     {
@@ -130,6 +143,19 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// and writing through an invalid constraint would access unavailable state.
     /// </summary>
     protected static bool IsLive(Constraint constraint) => constraint?.IsValid == true;
+
+    /// <summary>
+    /// Wakes the bodies this constraint joins. A sleeping body ignores a motor whose speed or strength
+    /// changed until something else disturbs it, so motor setters call this.
+    /// </summary>
+    protected void WakeBodies()
+    {
+        foreach (Constraint constraint in GetConstraints())
+        {
+            if (constraint.Body1.MotionType == MotionType.Dynamic) constraint.Body1.SetActivationState(true);
+            if (constraint.Body2.MotionType == MotionType.Dynamic) constraint.Body2.SetActivationState(true);
+        }
+    }
 
     /// <summary>
     /// Removes a constraint from the world that owns it. The constraint names its own bodies, so this

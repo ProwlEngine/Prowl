@@ -61,8 +61,10 @@ public class AngularMotorConstraint : PhysicsConstraint
         get => targetVelocity;
         set
         {
+            if (targetVelocity == value) return;
             targetVelocity = value;
-            if (IsLive(constraint)) constraint.TargetVelocity = value;
+            if (IsLive(constraint)) constraint.TargetVelocity = -value;
+            WakeBodies();
         }
     }
 
@@ -74,8 +76,10 @@ public class AngularMotorConstraint : PhysicsConstraint
         get => maximumForce;
         set
         {
+            if (maximumForce == value) return;
             maximumForce = value;
             if (IsLive(constraint)) constraint.MaximumForce = value;
+            WakeBodies();
         }
     }
 
@@ -86,7 +90,7 @@ public class AngularMotorConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return axis1;
+            if (!IsLive(constraint)) return axis1;
             JVector jaxis = constraint.LocalAxis1;
             return jaxis.ToProwl();
         }
@@ -99,7 +103,7 @@ public class AngularMotorConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return axis2;
+            if (!IsLive(constraint)) return axis2;
             JVector jaxis = constraint.LocalAxis2;
             return jaxis.ToProwl();
         }
@@ -117,7 +121,8 @@ public class AngularMotorConstraint : PhysicsConstraint
         constraint = world.CreateConstraint<AngularMotor>(body1, body2);
         constraint.Initialize(worldAxis1, worldAxis2);
 
-        constraint.TargetVelocity = targetVelocity;
+        // Jitter's motor drives the connected side relative to this body, so positive is negated to move this body along +axis.
+        constraint.TargetVelocity = -targetVelocity;
         constraint.MaximumForce = maximumForce;
     }
 

@@ -125,7 +125,7 @@ public class HingeAngleConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return 0.0f;
+            if (!IsLive(constraint)) return 0.0f;
             return constraint.Angle.Degree;
         }
     }
@@ -137,7 +137,7 @@ public class HingeAngleConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return Float3.Zero;
+            if (!IsLive(constraint)) return Float3.Zero;
             Jitter2.LinearMath.JVector impulse = constraint.Impulse;
             return impulse.ToProwl();
         }
@@ -147,7 +147,9 @@ public class HingeAngleConstraint : PhysicsConstraint
 
     protected override void CreateConstraint(World world, RigidBody body1, RigidBody body2)
     {
-        Jitter2.LinearMath.JVector worldAxis = LocalDirToWorld(hingeAxis, Body1.Transform);
+        // Jitter drives and measures the connected side relative to this body, so the axis is reversed to
+        // make a positive motor, angle or distance mean this body moving along +axis.
+        Jitter2.LinearMath.JVector worldAxis = -LocalDirToWorld(hingeAxis, Body1.Transform);
 
         constraint = world.CreateConstraint<HingeAngle>(body1, body2);
 

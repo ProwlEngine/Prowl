@@ -70,7 +70,7 @@ public class BallSocketConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return Float3.Zero;
+            if (!IsLive(constraint)) return Float3.Zero;
             Jitter2.LinearMath.JVector impulse = constraint.Impulse;
             return impulse.ToProwl();
         }

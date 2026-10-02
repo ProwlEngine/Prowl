@@ -113,7 +113,7 @@ public class TwistAngleConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return 0.0f;
+            if (!IsLive(constraint)) return 0.0f;
             return constraint.Angle.Degree;
         }
     }
@@ -121,7 +121,7 @@ public class TwistAngleConstraint : PhysicsConstraint
     /// <summary>
     /// Gets the accumulated impulse applied by this constraint.
     /// </summary>
-    public float Impulse => constraint?.Impulse ?? 0.0f;
+    public float Impulse => IsLive(constraint) ? constraint.Impulse : 0.0f;
 
     protected override Constraint GetConstraint() => constraint;
 
