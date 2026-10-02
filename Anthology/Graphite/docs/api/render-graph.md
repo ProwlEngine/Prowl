@@ -93,11 +93,12 @@ A view is what you render for: a camera, a shadow cascade, an editor viewport. I
 
 ## RenderPipeline<TView>
 
-Abstract base class. Subclass it, override `InitializePasses`, add passes. Source: [RenderPipeline.cs](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L10).
+Pass a pass list to the constructor, or subclass it, override `InitializePasses` and add passes. Source: [RenderPipeline.cs](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L10).
 
 | Member | Signature | Description |
 |--------|-----------|-------------|
-| `InitializePasses` | `protected abstract void InitializePasses()` | Runs once, lazily, on first use of `Graph`. Add passes here. |
+| Constructor | `RenderPipeline(IEnumerable<IPass<TView>> passes)` | Composes a fixed pass list with no subclass. Passes are re-added after `InvalidateGraph`. |
+| `InitializePasses` | `protected virtual void InitializePasses()` | Runs once, lazily, on first use of `Graph`, after composed passes are added. Add passes here. |
 | `AddPass` | `protected void AddPass(IPass<TView> pass)` | Adds a pass. Insertion order only breaks ties between independent passes. |
 | `DeclareTexture` | `protected void DeclareTexture(RenderResourceID id, GraphTextureDesc desc)` | Declares a transient texture with no owning pass. Takes priority over pass declarations of the same ID. |
 | `DeclareBuffer` | `protected void DeclareBuffer(RenderResourceID id, GraphBufferDesc desc)` | Same, for a buffer. |
