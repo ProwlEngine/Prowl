@@ -48,7 +48,7 @@ public sealed class MeshCollider : Collider
     }
 
     // Cached convex hull shape and its tessellation for gizmo drawing rebuilt when mesh or convex flag changes.
-    [SerializeIgnore] private ConvexHullShape? _cachedConvexShape;
+    [SerializeIgnore] private PointCloudShape? _cachedConvexShape;
     [SerializeIgnore] private List<JTriangle>? _cachedHullTris;
 
     public override RigidBodyShape[] CreateShapes() => BuildShapes(Float4x4.Identity);
@@ -76,7 +76,7 @@ public sealed class MeshCollider : Collider
         }
 
         if (convex)
-            return [new ConvexHullShape(baked.Triangles)];
+            return [BuildSampledConvexShape(baked)];
 
         // Triangles have no volume, so a dynamic body built from them cannot derive an inertia tensor
         // and falls back to a box approximation. Concave dynamic collision is not really supported.
@@ -104,6 +104,17 @@ public sealed class MeshCollider : Collider
         for (int i = 0; i < count; i++)
             shapes[i] = new TriangleShape(triMesh, i);
         return shapes;
+    }
+
+    /// <summary>
+    /// A convex shape around any mesh. ConvexHullShape needs points that already lie on a valid hull, so
+    /// a concave or arbitrary mesh breaks it; sampling the hull and using a point cloud accepts anything,
+    /// and bounds the point count whatever the source mesh's size.
+    /// </summary>
+    private static PointCloudShape BuildSampledConvexShape(BakedPhysicsMesh baked)
+    {
+        List<JVector> points = ShapeHelper.SampleHull(baked.TriangleMesh.Vertices, subdivisions: 3);
+        return new PointCloudShape(points);
     }
 
     /// <summary>
@@ -252,7 +263,7 @@ public sealed class MeshCollider : Collider
         {
             var baked = PhysicsWorld.BakeMesh(m);
             if (baked.Triangles.Count == 0) return;
-            _cachedConvexShape = new ConvexHullShape(baked.Triangles);
+            _cachedConvexShape = BuildSampledConvexShape(baked);
         }
 
         _cachedHullTris ??= ShapeHelper.Tessellate(_cachedConvexShape, 2);
