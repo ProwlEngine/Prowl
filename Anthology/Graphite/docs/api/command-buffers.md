@@ -27,7 +27,7 @@ From [PBRRenderer](../../Samples/PBRRenderer/Program.cs#L67):
 
 ```csharp
 CommandBuffer cmd = context.GetCommandBuffer(Name);
-BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+BindTarget(context, cmd);
 cmd.SetShader(_shader);
 cmd.SetVertexSource(_model.Mesh);
 cmd.SetProperties(_properties);

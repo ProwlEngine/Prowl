@@ -53,12 +53,12 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override string Name => "Triangle";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
     public override void Render(RenderContext<SceneView> context)
     {
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
@@ -147,8 +147,7 @@ Abstract helper for passes that render into one declared target. Source: [Raster
 | `SetTarget` | `protected TextureHandle SetTarget(RenderContextBuilder builder, RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null)` | Declares the single output as an `Attachment` and remembers it |
 | `SetBackbufferTarget` | `protected TextureHandle SetBackbufferTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null)` | Declares the default backbuffer as the single output |
 | `SetTargets` | `protected TextureHandle SetTargets(..., GraphTextureDesc mrtDesc, ...)` | Same, for a desc with several color formats (MRT) |
-| `BindTarget` | `protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd)` | Sets the framebuffer and applies load ops; clears color to `default(Color)` and depth to 1 |
-| `BindTarget` | `protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd, Color clearColor, float depthClear = 1f, byte stencilClear = 0)` | Same with explicit clear values |
+| `BindTarget` | `protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd)` | Sets the framebuffer and applies load ops using the clear values on the declaration |
 
 `BindTarget` clears only if the resource's ops say `Load == Clear`. With default ops that is true for transient targets and false for history targets. It throws if `Setup` never declared a target.
 
@@ -324,8 +323,8 @@ Several formats make a multiple-render-target G-buffer; they share one resource 
 |------|---------|
 | `LoadAction` | `Clear`, `Load`, `DontCare` |
 | `StoreAction` | `Store`, `DontCare` |
-| `AttachmentOps` | `Load`, `Store`; statics `Cleared`, `Loaded`, `Discard` |
-| `TargetLoadStoreOps` | `Color`, `Depth`; ctor `(AttachmentOps color, AttachmentOps depth)`; `static ForLifetime(bool persistent)` |
+| `AttachmentOps` | `Load`, `Store`, `ClearColor`, `ClearDepth`, `ClearStencil`; statics `Cleared`, `Loaded`, `Discard`, `Clear(Color)`, `Clear(float depth, byte stencil)` |
+| `TargetLoadStoreOps` | `Color`, `Depth`; ctor `(AttachmentOps color, AttachmentOps depth)`; `static ForLifetime(bool persistent)`; `static Clear(Color color, float depth = 1f, byte stencil = 0)` |
 
 Defaults: a `history = 0` output uses `ForLifetime(false)` (clear, store). A history output or an imported texture uses `ForLifetime(true)` (load, store). Pass `ops` to `DeclareOutputTexture` or `SetTarget` to override per declaring pass.
 
@@ -373,7 +372,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
     public void Advance(float dt) => _angle += dt * 0.5f;
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true));
+        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
     public override void Render(RenderContext<SceneView> context)
     {
@@ -383,7 +382,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
         _properties.SetMatrix("MatrixMVP", projection * view);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_mesh);
         cmd.SetProperties(_properties);
