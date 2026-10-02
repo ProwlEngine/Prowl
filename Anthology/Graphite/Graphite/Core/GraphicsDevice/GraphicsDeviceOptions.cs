@@ -6,9 +6,9 @@
 public struct GraphicsDeviceOptions
 {
     /// <summary>
-    /// Enable debug features if the host supports them.
+    /// Enable the Vulkan driver validation layers if installed. Default off.
     /// </summary>
-    public bool Debug;
+    public bool VulkanValidationLayers;
     /// <summary>
     /// Prefer 0-to-1 depth range.
     /// </summary>
@@ -39,9 +39,9 @@ public struct GraphicsDeviceOptions
     public uint TransientBufferHardCapBytes;
 
     /// <summary>
-    /// Run the usage-validation layer (extra correctness checks, throws on misuse). Null = enabled by default.
+    /// Run Graphite's own usage checks, which throw on misuse. Default true; process-wide, the last device created decides for all.
     /// </summary>
-    public bool? EnableValidation;
+    public bool GraphiteValidation = true;
 
     /// <summary>
     /// Profiler to report events to, or null for none. No default impl shipped - bring your own.
@@ -51,9 +51,13 @@ public struct GraphicsDeviceOptions
     /// <summary>
     /// Options for a device with no main Swapchain.
     /// </summary>
-    /// <param name="debug">Enable debug features if host supports them.</param>
-    public GraphicsDeviceOptions(bool debug)
+    /// <param name="vulkanValidationLayers">Enable the Vulkan driver validation layers if installed.</param>
+    public GraphicsDeviceOptions(bool vulkanValidationLayers)
     {
-        Debug = debug;
+        VulkanValidationLayers = vulkanValidationLayers;
+    }
+
+    public GraphicsDeviceOptions()
+    {
     }
 }

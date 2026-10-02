@@ -9,7 +9,7 @@ public abstract partial class GraphicsDevice
 
     private void InitializeFrameOptions_SetValidationEnabled(in GraphicsDeviceOptions options)
     {
-        ValidationEnabled = options.EnableValidation ?? true;
+        ValidationEnabled = options.GraphiteValidation;
     }
 
     private static void SubmitAndWait_CheckEnded(TransferCommandBuffer commandBuffer)

@@ -32,7 +32,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         VkSurfaceSwapchainSource? surfaceSource = scDesc != null ?
             Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(scDesc.Value.Source) : null;
 
-        CreateInstance(options.Debug, vkOptions, surfaceSource);
+        CreateInstance(options.VulkanValidationLayers, vkOptions, surfaceSource);
 
         SurfaceKHR surface = default;
         if (surfaceSource != null)
