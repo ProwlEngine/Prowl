@@ -24,12 +24,12 @@ internal sealed class CubePass : RasterPass<SceneView>
 {
     public override string Name => "Backbuffer";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
     public override void Render(RenderContext<SceneView> context)
     {
         CommandBuffer cmd = context.GetCommandBuffer("Cube");
-        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd);
         Cube.Draw(cmd);
         context.SubmitCommandBuffer(cmd);
     }

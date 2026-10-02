@@ -89,12 +89,12 @@ file sealed class ClearingRasterPass : RasterPass<ProfilerView>
     public override string Name => "ProfilerClear";
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R32_G32_B32_A32_Float));
+        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
     public override void Render(RenderContext<ProfilerView> context)
     {
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        BindTarget(context, cmd, new Color(0, 0, 0, 1));
+        BindTarget(context, cmd);
         context.SubmitCommandBuffer(cmd);
     }
 }

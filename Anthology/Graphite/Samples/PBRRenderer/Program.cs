@@ -53,7 +53,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
     public void Advance(float dt) => _angle += dt * 0.5f;
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true));
+        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
     public override void Render(RenderContext<SceneView> context)
     {
@@ -65,7 +65,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
         _properties.SetMatrix("MatrixMVP", projection * view);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_model.Mesh);
         cmd.SetProperties(_properties);

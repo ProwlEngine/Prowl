@@ -24,12 +24,12 @@ file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
 {
     public override string Name => "ClearSwapchain";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
 
     public override void Render(RenderContext<SwapchainView> context)
     {
         CommandBuffer cmd = context.GetCommandBuffer("ClearSwapchain");
-        BindTarget(context, cmd, Color.Blue);
+        BindTarget(context, cmd);
         context.SubmitCommandBuffer(cmd);
     }
 }
