@@ -24,6 +24,23 @@ public class InternerTests
     }
 
     [Fact]
+    public void Intern_DistinctInstancesWithEqualContent_ReturnSameValue()
+    {
+        Interner<string, IntId> interner = NewInterner();
+
+        string first = new string(new[] { 'a', 'b', 'c' });
+        string second = new string(new[] { 'a', 'b', 'c' });
+
+        IntId a = interner.Intern(first);
+        IntId b = interner.Intern(second);
+        IntId c = interner.Intern(first);
+
+        Assert.NotSame(first, second);
+        Assert.Equal(a, b);
+        Assert.Equal(a, c);
+    }
+
+    [Fact]
     public void Intern_SameKey_ReturnsSameValue()
     {
         Interner<string, IntId> interner = NewInterner();
