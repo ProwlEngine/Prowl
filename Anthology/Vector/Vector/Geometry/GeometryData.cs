@@ -356,7 +356,13 @@ public class GeometryData
     /// <summary>
     /// Add a new face that connects the array of vertices provided.
     /// </summary>
-    public Face? AddFace(params Vertex[] fVerts)
+    public Face? AddFace(params Vertex[] fVerts) => AddFace(fVerts, fillAttributes: true);
+
+    /// <summary>
+    /// Adds a face, optionally without giving it and its loops default attribute values. Operators that
+    /// assign every attribute themselves skip the defaults so nothing is allocated twice.
+    /// </summary>
+    internal Face? AddFace(Vertex[] fVerts, bool fillAttributes)
     {
         // A face needs at least 3 vertices; fewer would create self- or degenerate edges.
         if (fVerts.Length < 3) return null;
@@ -368,13 +374,13 @@ public class GeometryData
         }
 
         var f = new Face();
-        EnsureFaceAttributes(f);
+        if (fillAttributes) EnsureFaceAttributes(f);
         Faces.Add(f);
 
         for (int i = 0; i < fVerts.Length; i++)
         {
             var loop = new Loop(fVerts[i], fEdges[i], f);
-            EnsureLoopAttributes(loop);
+            if (fillAttributes) EnsureLoopAttributes(loop);
             Loops.Add(loop);
 
             // Insert loop into face's loop list
