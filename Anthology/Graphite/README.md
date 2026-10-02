@@ -218,6 +218,9 @@ public interface IVertexSource
 }
 ```
 
+`VertexSource` is a ready-made implementation, and `VertexSource.None` is the shared source for
+draws with no vertex data.
+
 ### New resource binding API
 
 To replace the resource binder, a new `PropertySet` API has been created. It acts as a merged
