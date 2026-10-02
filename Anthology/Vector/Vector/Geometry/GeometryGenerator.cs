@@ -172,8 +172,8 @@ public static partial class GeometryGenerator
         {
             for (int x = 0; x <= segments.X; x++)
             {
-                float u = x / segments.X - 0.5f;
-                float v = z / segments.Y - 0.5f;
+                float u = (float)x / segments.X - 0.5f;
+                float v = (float)z / segments.Y - 0.5f;
 
                 Float3 pos = center + tangent * (u * size.X) + bitangent * (v * size.Y);
                 vertices[z, x] = geometryData.AddVertex(pos);

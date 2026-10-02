@@ -55,6 +55,73 @@ public enum InsetMode
 }
 
 /// <summary>
+/// Settings for <see cref="GeometryOperators.Simplify"/>.
+/// </summary>
+public sealed class SimplifyOptions
+{
+    /// <summary>Fraction of triangles to keep, from 0 to 1. Ignored when <see cref="TargetTriangleCount"/> is set.</summary>
+    public float TargetRatio = 0.5f;
+
+    /// <summary>
+    /// Number of triangles to stop at. Negative means use <see cref="TargetRatio"/>. A collapse removes two
+    /// triangles, or one on a border, so the result can land one below.
+    /// </summary>
+    public int TargetTriangleCount = -1;
+
+    /// <summary>
+    /// Largest surface deviation allowed, in the mesh's own units, as estimated by the quadric of the
+    /// vertex being collapsed. Collapses that would go past it are never taken, so the result can stop
+    /// short of the target. Zero or less only allows collapses that keep the surface exactly in place.
+    /// </summary>
+    public float MaxError = float.PositiveInfinity;
+
+    /// <summary>Keeps open borders exactly where they are, for shells and alpha cards.</summary>
+    public bool LockBorders;
+
+    /// <summary>
+    /// Cost of changing each loop or vertex attribute, by name. Float attributes cost their weighted
+    /// squared difference, int attributes cost their weight whenever they differ. Attributes left out
+    /// cost nothing to change, but their seams are still kept.
+    /// </summary>
+    public Dictionary<string, float> AttributeWeights = new();
+
+    /// <summary>
+    /// Loop attributes whose discontinuities are seams that must survive. Null means every loop attribute.
+    /// Discontinuities in other attributes are not protected, but every corner still keeps a value some
+    /// original corner of its vertex had.
+    /// </summary>
+    public HashSet<string>? SeamAttributes;
+
+    /// <summary>Face attributes that split the surface into regions whose outlines are kept, like a material index. Null means every face attribute.</summary>
+    public HashSet<string>? RegionAttributes;
+
+    /// <summary>Optional vertex attribute, any vertex with a non zero value never moves.</summary>
+    public string? LockAttribute;
+}
+
+/// <summary>
+/// What <see cref="GeometryOperators.Simplify"/> achieved.
+/// </summary>
+public readonly struct SimplifyResult
+{
+    public readonly int TrianglesBefore;
+    public readonly int TrianglesAfter;
+
+    /// <summary>
+    /// Estimated surface deviation of the worst collapse taken, in the mesh's own units: the root mean square
+    /// distance of the moved vertex from the planes it carried. An estimate, not a hard bound.
+    /// </summary>
+    public readonly float Error;
+
+    public SimplifyResult(int trianglesBefore, int trianglesAfter, float error)
+    {
+        TrianglesBefore = trianglesBefore;
+        TrianglesAfter = trianglesAfter;
+        Error = error;
+    }
+}
+
+/// <summary>
 /// Static operators for manipulating GeometryData (BMesh-like) structures.
 /// All operations modify the mesh in-place. Inspired by Blender's BMesh operators.
 /// </summary>
@@ -674,6 +741,20 @@ public static class GeometryOperators
     public static void BevelVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> verticesToBevel, float offset = 0.3f)
     {
         BevelVertexOp.BevelVertices(mesh, verticesToBevel, offset);
+    }
+
+    /// <summary>
+    /// Reduce the triangle count by collapsing vertices onto their neighbours, cheapest first by quadric
+    /// error. No vertex is ever created or moved, so every vertex and loop attribute keeps an authored
+    /// value. Seams (loops at one vertex with different attributes), borders and region outlines are
+    /// only ever simplified along themselves. When anything collapses the mesh comes back as triangles,
+    /// faces with more corners included. When nothing does it is left untouched.
+    /// </summary>
+    /// <param name="mesh">The mesh to simplify in place.</param>
+    /// <param name="options">Target, error limit, attribute weights and what to preserve.</param>
+    public static SimplifyResult Simplify(GeometryData mesh, SimplifyOptions options)
+    {
+        return SimplifyOp.Simplify(mesh, options);
     }
 
 }
