@@ -1,8 +1,55 @@
+using Prowl.Graphite.RenderGraph;
+using Prowl.Vector;
+
 using Silk.NET.Windowing;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
+
+file readonly struct SwapchainView : IRenderView
+{
+    public SwapchainView(uint width, uint height)
+    {
+        PixelWidth = width;
+        PixelHeight = height;
+    }
+
+    public uint PixelWidth { get; }
+    public uint PixelHeight { get; }
+    public int ViewId => 0;
+}
+
+file sealed class ClearSwapchainPresentPass : IPresentPass<SwapchainView>
+{
+    public bool PresentThisFrame { get; set; } = true;
+
+    public string Name => "Present";
+
+    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+
+    public void Present(RenderContext<SwapchainView> context)
+    {
+        Framebuffer? target = context.SwapchainTarget;
+        if (target == null)
+            return;
+
+        CommandBuffer cmd = context.GetCommandBuffer("ClearSwapchain");
+        cmd.SetFramebuffer(target);
+        cmd.ClearColorTarget(0, Color.Blue);
+        context.SubmitCommandBuffer(cmd);
+
+        if (PresentThisFrame)
+            context.Present();
+    }
+}
+
+file sealed class ClearSwapchainPipeline : RenderPipeline<SwapchainView>
+{
+    public ClearSwapchainPresentPass PresentStep { get; } = new();
+
+    protected override void InitializePasses() => SetPresentPass(PresentStep);
+}
 
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These
 // run on the windowed device creators (a headless device has no swapchain).
@@ -35,6 +82,30 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
         ExecutionTask task = GD.BeginExecution();
         GD.CompleteExecution(task);
         GD.SwapBuffers();
+        GD.WaitForIdle();
+    }
+
+    [Fact]
+    public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
+    {
+        using ClearSwapchainPipeline pipeline = new();
+        SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height)];
+
+        for (int frame = 0; frame < 12; frame++)
+        {
+            pipeline.PresentStep.PresentThisFrame = frame % 4 != 3;
+            GD.DispatchGraph(pipeline, views);
+        }
+
+        GD.ResizeMainWindow(128, 96);
+        views[0] = new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height);
+
+        for (int frame = 0; frame < 12; frame++)
+        {
+            pipeline.PresentStep.PresentThisFrame = true;
+            GD.DispatchGraph(pipeline, views);
+        }
+
         GD.WaitForIdle();
     }
 

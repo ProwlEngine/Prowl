@@ -80,10 +80,11 @@ flowchart LR
     end
 ```
 
-- **[SubmitExecutionBatch](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Submission.cs#L39)** takes the list of queued command buffers and either the slot fence (final submit) or a pooled fence (flush). It builds a single `SubmitInfo`, with `ColorAttachmentOutput` as the wait stage mask but no wait semaphores, locks the queue, submits, and appends a `FenceSubmissionInfo` per buffer. Only the last buffer of a pooled-fence batch has `OwnsFence` set, so the fence is returned exactly once.
+- **[SubmitExecutionBatch](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Submission.cs#L39)** takes the list of queued command buffers and either the slot fence (final submit) or a pooled fence (flush). It builds a single `SubmitInfo`, locks the queue, adds any pending swapchain acquire semaphores as waits (see [Swapchain and present](#swapchain-and-present)), submits, and appends a `FenceSubmissionInfo` per buffer. Only the last buffer of a pooled-fence batch has `OwnsFence` set, so the fence is returned exactly once.
 - **[CheckSubmittedFences](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Submission.cs#L209)** polls in submission order and stops at the first unsignaled fence. It runs at the start of every submit and on `BeginExecutionCore`, and on `WaitForIdleCore`. There is no dedicated thread.
 - **[CompleteFenceSubmission](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Submission.cs#L230)** notifies the command buffer, resolves GPU timing and pipeline-statistics queries into the profiler, resets and returns owned fences to the pool ([GetFreeSubmissionFence](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Submission.cs#L299)), and returns staging textures, staging buffers and shared command pools.
 - **Transfers.** `SubmitTransferCore` goes through `SubmitCommandBuffer`, which tracks completion like other submissions. [SubmitAndWaitTransfer](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Submission.cs#L110) submits with a pooled fence and blocks on it immediately.
+- **Acquire waits.** Every `vkQueueSubmit` on the graphics queue (execution batches, transfers, immediate uploads) first takes the pending acquire semaphore of every registered swapchain and waits on it at `ColorAttachmentOutput | Transfer`. A semaphore wait in a `vkQueueSubmit` also orders every later submission on the queue, so the first submit after an acquire covers the whole frame.
 - After each `vkQueueSubmit` the code calls `FlushValidationErrors()` so debug-report messages are attributed to the submit that caused them.
 
 Execution slots themselves (`SlotState`, `BeginExecutionCore`, `IsExecutionCompleteCore`) are covered in [02-device-and-execution.md](02-device-and-execution.md#the-execution-ring).
@@ -112,7 +113,7 @@ Each layout has one stage and access scope. Shader layouts use every shader stag
 Where layouts change:
 
 - **Creation.** One immediate submit moves a new image from `Undefined` to its resting layout, clearing render targets and depth targets on the way through `TransferDstOptimal`.
-- **Graph barriers.** The graph's barrier command buffers, and `RenderContext.Transition` on a pass's own command buffer, call `RecordBarriers`. It first applies clears still queued on the bound framebuffer, ends any open render pass, then emits one `vkCmdPipelineBarrier` with an image barrier per texture and at most one global memory barrier for buffers.
+- **Graph barriers.** The graph's barrier command buffers, and `RenderContext.Transition` on a pass's own command buffer, call `RecordBarriers`. It first applies clears still queued on the bound framebuffer, ends any open render pass, then emits one `vkCmdPipelineBarrier` with an image barrier per texture and at most one global memory barrier for buffers. A barrier out of `PresentSrcKhr` uses `ColorAttachmentOutput | Transfer` as its source stage so it chains with the acquire semaphore wait.
 - **Copies, mip generation, resolves.** Each reads the current layout of its textures from the command buffer's graph state (resting for non-graph textures and for immediate uploads), transitions the touched subresources to transfer layouts, and transitions them back.
 - **Storage binds.** A non-graph texture bound read-write whose resting layout is not `General` moves to `General` for one compute dispatch and back.
 
@@ -170,7 +171,7 @@ Graphics programs cache pipelines lazily in a dictionary keyed by [VkPipelineCac
 
 ## Swapchain and present
 
-[VkSwapchain](../../Graphite/Platform/Vulkan/VkSwapchain.cs) is created with the device: it checks the surface is presentable from the graphics or present family, gets the present queue, creates a `VkSwapchainFramebuffer`, then creates the `VkSwapchainKHR` and does the first acquire, waiting on an image-available fence.
+[VkSwapchain](../../Graphite/Platform/Vulkan/VkSwapchain.cs) is created with the device: it checks the surface is presentable from the graphics or present family, gets the present queue, creates a `VkSwapchainFramebuffer`, then creates the `VkSwapchainKHR` and does the first acquire. It registers with the device so submits can find its pending acquire semaphore.
 
 | Choice | Rule |
 | --- | --- |
@@ -181,7 +182,9 @@ Graphics programs cache pipelines lazily in a dictionary keyed by [VkPipelineCac
 | Sharing | Concurrent if graphics and present families differ, else exclusive |
 | Usage | `ColorAttachment` and `TransferDst` |
 
-[AcquireNextImage](../../Graphite/Platform/Vulkan/VkSwapchain.cs#L100) first applies a pending vsync change (recreating the swapchain), then calls `vkAcquireNextImageKHR` with the fence, updates the framebuffer's image index, and on out-of-date or suboptimal results recreates the swapchain. [SwapBuffersCore](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.cs#L123) presents, acquires, and waits and resets the fence. It locks `_graphicsQueueLock` when the present queue is in the graphics family and the swapchain object otherwise, so two different queues never block each other. Recreating a swapchain first calls `WaitForIdle`.
+[AcquireNextImage](../../Graphite/Platform/Vulkan/VkSwapchain.cs) first applies a pending vsync change or recreation, then calls `vkAcquireNextImageKHR` with a semaphore and no fence, so the CPU never waits for the image. The semaphore becomes the swapchain's pending acquire and the next graphics-queue submit waits on it. Out-of-date results recreate the swapchain and retry; suboptimal results keep the image and recreate after it is presented. [SwapBuffersCore](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.cs) submits an empty batch that waits on any pending acquire and signals the current image's present semaphore, presents waiting on that semaphore, then acquires the next image. Present runs under `_graphicsQueueLock` when the present queue is in the graphics family and the swapchain object otherwise, so two different queues never block each other. Recreating a swapchain first consumes any pending acquire, then calls `WaitForIdle`.
+
+Semaphore reuse follows the image index. Each acquire semaphore is remembered against the image it acquired and returns to a free list when that image is acquired again: by then the present that read the image has completed, and so has every submit before it, including the one that waited on the old semaphore. Present semaphores are one per image and are reused the same way.
 
 ## Format mapping
 
@@ -212,7 +215,7 @@ Vulkan command pools are externally synchronised, so a pool per buffer means two
 - Device selection is fixed: the first physical device the loader enumerates.
 - Validation layers are enabled only when `GraphicsDeviceOptions.Debug` is true and a layer is installed; they are unrelated to Graphite's own `EnableValidation`.
 - Transient uniform memory is reused every `MaxFramesInFlight` executions; a range is invalid after its execution completes.
-- `SwapBuffers` blocks on an acquire fence. Presentation throttling therefore shows up as time spent inside it.
+- `SwapBuffers` does not wait on the GPU for the next image. `vkAcquireNextImageKHR` itself can still block when every image is queued for presentation, which is where vsync throttling shows up.
 - The driver pipeline cache is created empty and never saved, so pipeline creation cost is paid at every process start.
 - A `VkTexture` with `Staging` usage has no `VkImage` (only a staging buffer).
 - A texture created from a native handle (`ResourceFactory.CreateTexture(ulong, ...)`) is treated like a swapchain image: its resting layout is `PresentSrcKhr` and it is cleared on creation.

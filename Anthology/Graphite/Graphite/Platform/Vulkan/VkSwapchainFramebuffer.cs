@@ -43,6 +43,8 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     public uint ImageIndex => _currentImageIndex;
 
+    public int ImageCount => _scImages.Length;
+
     public override OutputDescription OutputDescription => _outputDescription;
 
     public override uint AttachmentCount { get; }

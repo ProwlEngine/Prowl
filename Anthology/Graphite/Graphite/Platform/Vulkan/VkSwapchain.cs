@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 
@@ -16,7 +17,12 @@ internal unsafe partial class VkSwapchain : Swapchain
     private readonly SurfaceKHR _surface;
     private SwapchainKHR _deviceSwapchain;
     private readonly VkSwapchainFramebuffer _framebuffer;
-    private VkFenceHandle _imageAvailableFence;
+    private readonly Stack<VkSemaphore> _freeAcquireSemaphores = new();
+    private VkSemaphore[] _imageAcquireSemaphores = [];
+    private VkSemaphore[] _presentSemaphores = [];
+    private ulong _pendingAcquire;
+    private bool _imageAcquired;
+    private bool _recreatePending;
     private readonly uint _presentQueueIndex;
     private readonly Queue _presentQueue;
     private bool _syncToVBlank;
@@ -42,7 +48,9 @@ internal unsafe partial class VkSwapchain : Swapchain
 
     public SwapchainKHR DeviceSwapchain => _deviceSwapchain;
     public uint ImageIndex => _currentImageIndex;
-    public VkFenceHandle ImageAvailableFence => _imageAvailableFence;
+    public bool ImageAcquired => _imageAcquired;
+    public VkSemaphore PresentSemaphore => _presentSemaphores[_currentImageIndex];
+    internal VkSemaphore TakePendingAcquire() => new(System.Threading.Interlocked.Exchange(ref _pendingAcquire, 0));
     public SurfaceKHR Surface => _surface;
     public Queue PresentQueue => _presentQueue;
     public uint PresentQueueIndex => _presentQueueIndex;
@@ -74,21 +82,11 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         _framebuffer = new VkSwapchainFramebuffer(gd, this, _surface, description.Width, description.Height, description.DepthFormat);
 
-        CreateSwapchain(description.Width, description.Height);
-
-        FenceCreateInfo fenceCI = new()
-        {
-            SType = StructureType.FenceCreateInfo,
-            Flags = 0
-        };
-        _gd.Vk.CreateFence(_gd.Device, &fenceCI, null, out _imageAvailableFence);
-
-        AcquireNextImage(_gd.Device, default, _imageAvailableFence);
-        VkFenceHandle iaf = _imageAvailableFence;
-        _gd.Vk.WaitForFences(_gd.Device, 1, &iaf, true, ulong.MaxValue);
-        _gd.Vk.ResetFences(_gd.Device, 1, &iaf);
-
         RefCount = new ResourceRefCount(DestroyNative);
+        _gd.RegisterSwapchain(this);
+
+        if (CreateSwapchain(description.Width, description.Height))
+            AcquireNextImage();
     }
 
     public override void Resize(uint width, uint height)
@@ -97,50 +95,111 @@ internal unsafe partial class VkSwapchain : Swapchain
         RecreateAndReacquire(width, height);
     }
 
-    public bool AcquireNextImage(Device device, VkSemaphore semaphore, VkFenceHandle fence)
+    public void AcquireNextImage()
     {
         if (_newSyncToVBlank != null)
         {
             _syncToVBlank = _newSyncToVBlank.Value;
             _newSyncToVBlank = null;
+            _recreatePending = true;
+        }
+
+        if (_recreatePending)
+        {
             RecreateAndReacquire(_framebuffer.Width, _framebuffer.Height);
-            return false;
+            return;
         }
 
-        uint imageIndex = 0;
-        Result result = _gd.KhrSwapchain.AcquireNextImage(
-            device,
-            _deviceSwapchain,
-            ulong.MaxValue,
-            semaphore,
-            fence,
-            &imageIndex);
-        _currentImageIndex = imageIndex;
-        _framebuffer.SetImageIndex(_currentImageIndex);
-        _gd.Profiler?.RecordSwap(SwapBin.Acquire, 0);
-        if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            CreateSwapchain(_framebuffer.Width, _framebuffer.Height);
-            return false;
-        }
-        else if (result != Result.Success)
-        {
-            throw new RenderException("Could not acquire next image from the Vulkan swapchain.");
-        }
+            VkSemaphore semaphore = RentAcquireSemaphore();
+            uint imageIndex = 0;
+            Result result = _gd.KhrSwapchain.AcquireNextImage(
+                _gd.Device,
+                _deviceSwapchain,
+                ulong.MaxValue,
+                semaphore,
+                default,
+                &imageIndex);
 
-        return true;
+            if (result == Result.ErrorOutOfDateKhr)
+            {
+                _freeAcquireSemaphores.Push(semaphore);
+                _imageAcquired = false;
+                if (!CreateSwapchain(_framebuffer.Width, _framebuffer.Height))
+                    return;
+                continue;
+            }
+
+            if (result != Result.Success && result != Result.SuboptimalKhr)
+            {
+                _freeAcquireSemaphores.Push(semaphore);
+                throw new RenderException("Could not acquire next image from the Vulkan swapchain.");
+            }
+
+            _currentImageIndex = imageIndex;
+            _framebuffer.SetImageIndex(_currentImageIndex);
+
+            VkSemaphore previous = _imageAcquireSemaphores[imageIndex];
+            if (previous.Handle != 0)
+                _freeAcquireSemaphores.Push(previous);
+            _imageAcquireSemaphores[imageIndex] = semaphore;
+            System.Threading.Interlocked.Exchange(ref _pendingAcquire, semaphore.Handle);
+
+            _imageAcquired = true;
+            _recreatePending = result == Result.SuboptimalKhr;
+            _gd.Profiler?.RecordSwap(SwapBin.Acquire, 0);
+            return;
+        }
+    }
+
+    internal void MarkPresented(Result presentResult)
+    {
+        _imageAcquired = false;
+        if (presentResult == Result.ErrorOutOfDateKhr || presentResult == Result.SuboptimalKhr)
+            _recreatePending = true;
+    }
+
+    private VkSemaphore RentAcquireSemaphore()
+    {
+        if (_freeAcquireSemaphores.Count > 0)
+            return _freeAcquireSemaphores.Pop();
+        return CreateSemaphore();
+    }
+
+    private VkSemaphore CreateSemaphore()
+    {
+        SemaphoreCreateInfo semaphoreCI = new(sType: StructureType.SemaphoreCreateInfo);
+        _gd.Vk.CreateSemaphore(_gd.Device, &semaphoreCI, null, out VkSemaphore semaphore).CheckResult();
+        return semaphore;
     }
 
     private void RecreateAndReacquire(uint width, uint height)
     {
+        _recreatePending = false;
+        _gd.ConsumePendingAcquires();
+        _imageAcquired = false;
         if (CreateSwapchain(width, height))
+            AcquireNextImage();
+    }
+
+    private void ResetSemaphores()
+    {
+        for (int i = 0; i < _imageAcquireSemaphores.Length; i++)
         {
-            if (AcquireNextImage(_gd.Device, default, _imageAvailableFence))
-            {
-                VkFenceHandle iaf2 = _imageAvailableFence;
-                _gd.Vk.WaitForFences(_gd.Device, 1, &iaf2, true, ulong.MaxValue);
-                _gd.Vk.ResetFences(_gd.Device, 1, &iaf2);
-            }
+            if (_imageAcquireSemaphores[i].Handle != 0)
+                _freeAcquireSemaphores.Push(_imageAcquireSemaphores[i]);
+        }
+
+        int imageCount = _framebuffer.ImageCount;
+        _imageAcquireSemaphores = new VkSemaphore[imageCount];
+
+        if (_presentSemaphores.Length < imageCount)
+        {
+            int old = _presentSemaphores.Length;
+            Array.Resize(ref _presentSemaphores, imageCount);
+            for (int i = old; i < imageCount; i++)
+                _presentSemaphores[i] = CreateSemaphore();
         }
     }
 
@@ -223,6 +282,7 @@ internal unsafe partial class VkSwapchain : Swapchain
         }
 
         _framebuffer.SetNewSwapchain(_deviceSwapchain, surfaceFormat, swapchainCI.ImageExtent);
+        ResetSemaphores();
         return true;
     }
 
@@ -321,7 +381,20 @@ internal unsafe partial class VkSwapchain : Swapchain
 
     private void DestroyNative()
     {
-        _gd.Vk.DestroyFence(_gd.Device, _imageAvailableFence, null);
+        _gd.UnregisterSwapchain(this);
+        _gd.ConsumePendingAcquires();
+        _gd.WaitForGraphicsQueueIdle();
+
+        foreach (VkSemaphore semaphore in _freeAcquireSemaphores)
+            _gd.Vk.DestroySemaphore(_gd.Device, semaphore, null);
+        foreach (VkSemaphore semaphore in _imageAcquireSemaphores)
+        {
+            if (semaphore.Handle != 0)
+                _gd.Vk.DestroySemaphore(_gd.Device, semaphore, null);
+        }
+        foreach (VkSemaphore semaphore in _presentSemaphores)
+            _gd.Vk.DestroySemaphore(_gd.Device, semaphore, null);
+
         _framebuffer.Dispose();
         _gd.KhrSwapchain.DestroySwapchain(_gd.Device, _deviceSwapchain, null);
         _gd.KhrSurface.DestroySurface(_gd.Instance, _surface, null);

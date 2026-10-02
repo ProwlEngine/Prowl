@@ -9,6 +9,7 @@ using Silk.NET.Vulkan.Extensions.KHR;
 
 using VkApi = Silk.NET.Vulkan.Vk;
 using VkFenceHandle = Silk.NET.Vulkan.Fence;
+using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Graphite.Vk;
 
@@ -123,24 +124,36 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     private protected override void SwapBuffersCore(Swapchain swapchain)
     {
         VkSwapchain vkSC = Util.AssertSubtype<Swapchain, VkSwapchain>(swapchain);
+        if (!vkSC.ImageAcquired)
+        {
+            vkSC.AcquireNextImage();
+            return;
+        }
+
+        VkSemaphore presentSemaphore = vkSC.PresentSemaphore;
+        SignalPresentSemaphore(presentSemaphore);
+
         SwapchainKHR deviceSwapchain = vkSC.DeviceSwapchain;
-        PresentInfoKHR presentInfo = new(sType: StructureType.PresentInfoKhr);
-        presentInfo.SwapchainCount = 1;
-        presentInfo.PSwapchains = &deviceSwapchain;
         uint imageIndex = vkSC.ImageIndex;
-        presentInfo.PImageIndices = &imageIndex;
+        PresentInfoKHR presentInfo = new(sType: StructureType.PresentInfoKhr)
+        {
+            WaitSemaphoreCount = 1,
+            PWaitSemaphores = &presentSemaphore,
+            SwapchainCount = 1,
+            PSwapchains = &deviceSwapchain,
+            PImageIndices = &imageIndex,
+        };
 
         object presentLock = vkSC.PresentQueueIndex == GraphicsQueueIndex ? _graphicsQueueLock : vkSC;
+        Result presentResult;
         lock (presentLock)
-        {
-            KhrSwapchain.QueuePresent(vkSC.PresentQueue, &presentInfo);
-            if (vkSC.AcquireNextImage(Device, default, vkSC.ImageAvailableFence))
-            {
-                VkFenceHandle fence = vkSC.ImageAvailableFence;
-                Vk.WaitForFences(Device, 1, &fence, true, ulong.MaxValue);
-                Vk.ResetFences(Device, 1, &fence);
-            }
-        }
+            presentResult = KhrSwapchain.QueuePresent(vkSC.PresentQueue, &presentInfo);
+
+        if (presentResult != Result.Success && presentResult != Result.SuboptimalKhr && presentResult != Result.ErrorOutOfDateKhr)
+            throw new RenderException($"Could not present the Vulkan swapchain: {presentResult}.");
+
+        vkSC.MarkPresented(presentResult);
+        vkSC.AcquireNextImage();
     }
 
     private protected override void WaitForIdleCore()
