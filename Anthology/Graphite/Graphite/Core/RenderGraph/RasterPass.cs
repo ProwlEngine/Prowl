@@ -34,6 +34,14 @@ public abstract class RasterPass<TView> : IPass<TView>
         return _target;
     }
 
+    /// <summary>Declares the main swapchain image as this pass's target. The frame presents after dispatch.</summary>
+    protected TextureHandle SetBackbufferTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null)
+    {
+        _target = builder.DeclareBackbuffer(ops);
+        _hasTarget = true;
+        return _target;
+    }
+
     /// <summary>
     /// Declares an MRT framebuffer: one resource, desc with several color formats, one framebuffer with
     /// several color attachments. BindTarget applies load ops to every attachment.

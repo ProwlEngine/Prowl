@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Prowl.Graphite.RenderGraph;
@@ -81,5 +82,22 @@ public sealed class RenderContextBuilder
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true));
         Outputs.Add(new GraphBufferResource(id, desc, history));
         return new BufferHandle(id);
+    }
+
+    /// <summary>
+    /// Declares a write to the device's main swapchain image. Any view whose graph declares it presents after dispatch.
+    /// Clears by default; pass Loaded ops for a pass that draws over an earlier backbuffer pass.
+    /// </summary>
+    public TextureHandle DeclareBackbuffer(
+        TargetLoadStoreOps? ops = null,
+        TextureUsageKind usage = TextureUsageKind.Attachment,
+        TextureUsageKind? initial = null)
+    {
+        if ((usage & ~(TextureUsageKind.Attachment | TextureUsageKind.TransferDst)) != 0)
+            throw new ArgumentException($"The backbuffer only supports Attachment and TransferDst, not {usage}.", nameof(usage));
+
+        Accesses.Add(ResourceAccess.Texture(GraphBackbufferResource.BackbufferId, usage, initial, null, isOutput: true));
+        Outputs.Add(new GraphBackbufferResource(ops));
+        return new TextureHandle(GraphBackbufferResource.BackbufferId);
     }
 }

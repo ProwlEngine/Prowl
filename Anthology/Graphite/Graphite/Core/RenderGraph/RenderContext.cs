@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Per-view context for passes and present pass. Fresh each view. Holds command buffers, transient textures, resolved targets.
+/// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.
 /// </summary>
 public sealed class RenderContext<TView>
     where TView : IRenderView
@@ -20,7 +20,6 @@ public sealed class RenderContext<TView>
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
     private readonly List<TextureBarrier> _barriers = new();
 
-    private bool _presentRequested;
     private PassInfo? _currentPass;
     private GraphResource[]? _currentPassOutputs;
     private ResourceAccess[]? _currentAccesses;
@@ -48,8 +47,7 @@ public sealed class RenderContext<TView>
     /// <summary>Execution this context records into.</summary>
     public ExecutionTask Task => _task;
 
-    /// <summary>True once present pass armed the swapchain present.</summary>
-    public bool RequestPresent => _presentRequested;
+    internal bool PresentRequested => _graph.WritesBackbuffer && _device.SwapchainFramebuffer != null;
 
     /// <summary>View being rendered.</summary>
     public TView View => _view;
@@ -120,7 +118,7 @@ public sealed class RenderContext<TView>
     public void Transition(TextureHandle handle, TextureUsageKind usage)
     {
         if (_currentAccesses == null)
-            throw new InvalidOperationException("Transition is only valid while a pass or the present pass is rendering.");
+            throw new InvalidOperationException("Transition is only valid while a pass is rendering.");
         if (_pendingCommandBuffers.Count != 1)
         {
             throw new InvalidOperationException(
@@ -140,7 +138,7 @@ public sealed class RenderContext<TView>
         if (!handle.IsValid)
             throw new ArgumentException("Cannot transition a default texture handle.", nameof(handle));
         if (_currentAccesses == null)
-            throw new InvalidOperationException("Transition is only valid while a pass or the present pass is rendering.");
+            throw new InvalidOperationException("Transition is only valid while a pass is rendering.");
         if (!_pendingCommandBuffers.Contains(cmd))
             throw new InvalidOperationException("Transition needs a command buffer rented by the running pass and not yet submitted.");
 
@@ -356,7 +354,7 @@ public sealed class RenderContext<TView>
     }
 
     /// <summary>
-    /// Warns and drops command buffers rented in this scope but never submitted. Ring disposes them on recycle. Called after each pass and present pass.
+    /// Warns and drops command buffers rented in this scope but never submitted. Ring disposes them on recycle. Called after each pass.
     /// </summary>
     /// <param name="scopeName">Pass name for the warning.</param>
     internal void ReclaimUnsubmittedCommandBuffers(string scopeName)
@@ -430,6 +428,15 @@ public sealed class RenderContext<TView>
 
         switch (resource)
         {
+            case GraphBackbufferResource:
+                if (framesAgo != 0)
+                    throw new ArgumentOutOfRangeException(nameof(framesAgo), "The backbuffer has no history.");
+                Framebuffer swapchain = _device.SwapchainFramebuffer
+                    ?? throw new InvalidOperationException("A pass declared the backbuffer, but the device has no main swapchain.");
+                RenderTexture backbuffer = new(swapchain);
+                _resolved[handle.Id] = backbuffer;
+                return backbuffer;
+
             case GraphImportedTextureResource imported:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), "An imported texture has no history.");
@@ -524,7 +531,7 @@ public sealed class RenderContext<TView>
 
     internal bool IsTextureResource(RenderResourceID id)
         => _graph.Resources.TryGetValue(id, out GraphResource? resource)
-            && resource is GraphTextureResource or GraphImportedTextureResource;
+            && resource is GraphTextureResource or GraphImportedTextureResource or GraphBackbufferResource;
 
     internal TargetLoadStoreOps GetTargetOps(RenderResourceID id)
     {
@@ -541,6 +548,8 @@ public sealed class RenderContext<TView>
                         return texture.Ops;
                     case GraphImportedTextureResource imported:
                         return imported.Ops;
+                    case GraphBackbufferResource backbuffer:
+                        return backbuffer.Ops;
                 }
             }
         }
@@ -552,17 +561,10 @@ public sealed class RenderContext<TView>
         {
             GraphTextureResource texture => texture.Ops,
             GraphImportedTextureResource imported => imported.Ops,
+            GraphBackbufferResource backbuffer => backbuffer.Ops,
             _ => throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' is not a render target.")
         };
     }
-
-    /// <summary>
-    /// Window swapchain target for this view. Null unless present pass requested it, or device has no swapchain.
-    /// </summary>
-    public Framebuffer? SwapchainTarget => _graph.PresentRequestsSwapchain ? _device.SwapchainFramebuffer : null;
-
-    /// <summary>Requests present on dispatch finish. Call from present pass after drawing to swapchain. Skip it, view stays offscreen.</summary>
-    public void Present() => _presentRequested = true;
 
     /// <summary>Resolves a texture or buffer handle to what the profiler should see for a pass read.</summary>
     internal void ResolveForProfiler(RenderResourceID resource, out RenderTexture? texture, out DeviceBuffer? buffer)

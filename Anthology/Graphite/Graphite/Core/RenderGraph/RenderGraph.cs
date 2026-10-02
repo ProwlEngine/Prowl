@@ -39,26 +39,16 @@ public sealed class RenderGraph<TView> : IDisposable
     /// <summary>All declared resources by ID (first declaration wins).</summary>
     public IReadOnlyDictionary<RenderResourceID, GraphResource> Resources { get; }
 
-    /// <summary>Present pass's declared inputs, for profiling/wiring.</summary>
-    public IReadOnlyList<RenderResourceID> PresentInputs { get; }
-
-    /// <summary>True if present pass wants the window's swapchain target.</summary>
-    public bool PresentRequestsSwapchain { get; }
-
-    internal ResourceAccess[] PresentAccesses { get; }
+    /// <summary>True if any pass writes the backbuffer, so views of this graph present.</summary>
+    public bool WritesBackbuffer { get; }
 
     private RenderGraph(
         PassNode[] ordered,
-        Dictionary<RenderResourceID, GraphResource> resources,
-        RenderResourceID[] presentInputs,
-        ResourceAccess[] presentAccesses,
-        bool presentRequestsSwapchain)
+        Dictionary<RenderResourceID, GraphResource> resources)
     {
         OrderedPasses = ordered;
         Resources = resources;
-        PresentInputs = presentInputs;
-        PresentAccesses = presentAccesses;
-        PresentRequestsSwapchain = presentRequestsSwapchain;
+        WritesBackbuffer = resources.ContainsKey(GraphBackbufferResource.BackbufferId);
     }
 
     /// <summary>Disposes physical resources owned by any history resource here.</summary>
@@ -69,11 +59,10 @@ public sealed class RenderGraph<TView> : IDisposable
     }
 
     /// <summary>
-    /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Present pass always runs last, so its inputs are recorded but not ordered. Throws if an input has no producer, or on a dependency cycle.
+    /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Throws if an input has no producer, or on a dependency cycle.
     /// </summary>
     public static RenderGraph<TView> Build(
         IReadOnlyList<IPass<TView>> passes,
-        IPresentPass<TView> presentPass,
         IReadOnlyList<GraphResource>? centralResources = null)
     {
         int count = passes.Count;
@@ -109,15 +98,8 @@ public sealed class RenderGraph<TView> : IDisposable
             nodes[i] = new PassNode(pass, inputs, outputs, declared, builder.Accesses.ToArray());
         }
 
-        var presentBuilder = new PresentContextBuilder();
-        presentPass.Setup(presentBuilder);
-
-        RenderResourceID[] presentInputs = presentBuilder.Inputs.ToArray();
-
-        ValidateInputsHaveProducers(nodes, presentPass.Name, presentInputs, resources);
-
-        ResourceAccess[] presentAccesses = presentBuilder.Accesses.ToArray();
-        ApplyStorageUsage(nodes, presentPass.Name, presentAccesses, resources);
+        ValidateInputsHaveProducers(nodes, resources);
+        ApplyStorageUsage(nodes, resources);
 
         int[] ordered = TopologicalSort(nodes);
 
@@ -125,14 +107,11 @@ public sealed class RenderGraph<TView> : IDisposable
         for (int i = 0; i < ordered.Length; i++)
             orderedNodes[i] = nodes[ordered[i]];
 
-        return new RenderGraph<TView>(
-            orderedNodes, resources, presentInputs, presentAccesses, presentBuilder.RequestsSwapchain);
+        return new RenderGraph<TView>(orderedNodes, resources);
     }
 
     private static void ApplyStorageUsage(
         PassNode[] nodes,
-        string presentPassName,
-        ResourceAccess[] presentAccesses,
         Dictionary<RenderResourceID, GraphResource> resources)
     {
         foreach (PassNode node in nodes)
@@ -140,14 +119,18 @@ public sealed class RenderGraph<TView> : IDisposable
             foreach (ResourceAccess access in node.Accesses)
                 ApplyStorageUsage(node.Pass.Name, access, resources);
         }
-
-        foreach (ResourceAccess access in presentAccesses)
-            ApplyStorageUsage(presentPassName, access, resources);
     }
 
     private static void ApplyStorageUsage(string passName, in ResourceAccess access, Dictionary<RenderResourceID, GraphResource> resources)
     {
         GraphResource resource = resources[access.Id];
+        if (resource is GraphBackbufferResource)
+        {
+            if (!access.IsOutput)
+                throw new InvalidOperationException($"Pass '{passName}' reads the backbuffer; it can only be written.");
+            return;
+        }
+
         if (access.IsTexture != (resource is GraphTextureResource or GraphImportedTextureResource))
             throw new InvalidOperationException(
                 $"Pass '{passName}' declares resource '{RenderResourceID.ToString(access.Id)}' as a " +
@@ -176,8 +159,6 @@ public sealed class RenderGraph<TView> : IDisposable
 
     private static void ValidateInputsHaveProducers(
         PassNode[] nodes,
-        string presentPassName,
-        RenderResourceID[] presentInputs,
         Dictionary<RenderResourceID, GraphResource> resources)
     {
         foreach (PassNode node in nodes)
@@ -189,14 +170,6 @@ public sealed class RenderGraph<TView> : IDisposable
                         $"Pass '{node.Pass.Name}' reads resource '{RenderResourceID.ToString(input)}' but no pass " +
                         "outputs it and it is not declared centrally on the pipeline.");
             }
-        }
-
-        foreach (RenderResourceID input in presentInputs)
-        {
-            if (!resources.ContainsKey(input))
-                throw new InvalidOperationException(
-                    $"Present pass '{presentPassName}' reads resource '{RenderResourceID.ToString(input)}' but no " +
-                    "pass outputs it and it is not declared centrally on the pipeline.");
         }
     }
 

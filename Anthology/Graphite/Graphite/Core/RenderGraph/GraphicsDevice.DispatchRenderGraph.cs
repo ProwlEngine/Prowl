@@ -36,7 +36,7 @@ public abstract partial class GraphicsDevice
             pipeline.ExecuteView(context);
             Profiler?.EndView(viewInfo);
 
-            present |= context.RequestPresent;
+            present |= context.PresentRequested;
         }
 
         CompleteExecution(task);

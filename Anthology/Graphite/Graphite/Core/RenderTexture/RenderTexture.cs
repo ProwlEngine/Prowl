@@ -17,6 +17,25 @@ public sealed class RenderTexture : IDisposable
     /// <summary>Framebuffer for these attachments.</summary>
     public Framebuffer Framebuffer { get; }
 
+    private readonly bool _owned = true;
+
+    internal RenderTexture(Framebuffer framebuffer)
+    {
+        _owned = false;
+        Framebuffer = framebuffer;
+
+        ColorTextures = new Texture[framebuffer.ColorTargets.Count];
+        PixelFormat[] formats = new PixelFormat[ColorTextures.Length];
+        for (int i = 0; i < ColorTextures.Length; i++)
+        {
+            ColorTextures[i] = framebuffer.ColorTargets[i].Target;
+            formats[i] = ColorTextures[i].Format;
+        }
+
+        DepthTexture = framebuffer.DepthTarget?.Target;
+        Desc = new RenderTextureDescription(framebuffer.Width, framebuffer.Height, formats, DepthTexture != null);
+    }
+
     internal RenderTexture(GraphicsDevice device, in RenderTextureDescription desc)
     {
         if (desc.ColorFormats.Length == 0 && !desc.Depth)
@@ -84,6 +103,9 @@ public sealed class RenderTexture : IDisposable
     /// <summary>Disposes framebuffer and textures.</summary>
     public void Dispose()
     {
+        if (!_owned)
+            return;
+
         Framebuffer.Dispose();
         foreach (Texture texture in ColorTextures)
             texture.Dispose();
