@@ -19,28 +19,21 @@ internal readonly struct SceneView : IRenderView
 }
 
 
-// One draw, no dependencies between passes: present clears and draws straight into the swapchain.
-internal sealed class CubeGridPresentPass : IPresentPass<SceneView>
+// One draw, no dependencies between passes: the pass clears and draws straight into the backbuffer.
+internal sealed class CubeGridPass : RasterPass<SceneView>
 {
     private float _time;
 
-    public string Name => "Present";
+    public override string Name => "Backbuffer";
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         CommandBuffer cmd = context.GetCommandBuffer("CubeGrid");
-        cmd.SetFramebuffer(target);
-        cmd.ClearDepthStencil(1, 0);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         CubeGrid.Draw(_time, cmd);
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
 
     public void Advance(float dt) => _time += dt;
@@ -49,11 +42,11 @@ internal sealed class CubeGridPresentPass : IPresentPass<SceneView>
 
 internal sealed class CubeGridPipeline : RenderPipeline<SceneView>
 {
-    private readonly CubeGridPresentPass _present = new();
+    private readonly CubeGridPass _pass = new();
 
-    public CubeGridPresentPass Present => _present;
+    public CubeGridPass Pass => _pass;
 
-    protected override void InitializePasses() => SetPresentPass(_present);
+    protected override void InitializePasses() => AddPass(_pass);
 }
 
 
@@ -98,7 +91,7 @@ public static class Program
     {
         tracker.Begin();
 
-        pipeline.Present.Advance((float)dt);
+        pipeline.Pass.Advance((float)dt);
         device.DispatchGraph(pipeline, views);
 
         tracker.End(dt);

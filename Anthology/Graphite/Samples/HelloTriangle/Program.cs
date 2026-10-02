@@ -20,48 +20,41 @@ internal readonly struct SceneView : IRenderView
 
 
 // The whole demo is one draw, so it needs no offscreen passes to order or textures to share between
-// passes: the present pass alone clears and draws straight into the swapchain target.
-internal sealed class TrianglePresentPass : IPresentPass<SceneView>
+// passes: one pass clears and draws straight into the backbuffer.
+internal sealed class TrianglePass : RasterPass<SceneView>
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
 
-    public TrianglePresentPass(Mesh triangle, GraphicsProgram shader)
+    public TrianglePass(Mesh triangle, GraphicsProgram shader)
     {
         _triangle = triangle;
         _shader = shader;
     }
 
-    public string Name => "Present";
+    public override string Name => "Backbuffer";
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        cmd.SetFramebuffer(target);
-        cmd.ClearDepthStencil(1, 0);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
 }
 
 
 internal sealed class TrianglePipeline : RenderPipeline<SceneView>
 {
-    private readonly IPresentPass<SceneView> _present;
+    private readonly TrianglePass _pass;
 
-    public TrianglePipeline(IPresentPass<SceneView> present) => _present = present;
+    public TrianglePipeline(TrianglePass pass) => _pass = pass;
 
-    protected override void InitializePasses() => SetPresentPass(_present);
+    protected override void InitializePasses() => AddPass(_pass);
 }
 
 
@@ -100,7 +93,7 @@ public static class Program
         shader = ShaderLoader.CreateShader(device);
         triangle = ModelLoader.CreateTriangle(device);
 
-        pipeline = new TrianglePipeline(new TrianglePresentPass(triangle, shader));
+        pipeline = new TrianglePipeline(new TrianglePass(triangle, shader));
         views = new[] { new SceneView(600, 600) };
     }
 

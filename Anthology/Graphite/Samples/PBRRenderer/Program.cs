@@ -169,7 +169,7 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
 }
 
 
-internal sealed class CompositePresentPass : IPresentPass<SceneView>
+internal sealed class CompositePass : RasterPass<SceneView>
 {
     private readonly GraphicsProgram _compositeShader;
     private readonly Sampler _sampler;
@@ -179,32 +179,28 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView>
     private TextureHandle _sceneHandle;
     private TextureHandle _bloomFullHandle;
 
-    public CompositePresentPass(GraphicsProgram compositeShader, Sampler sampler)
+    public CompositePass(GraphicsProgram compositeShader, Sampler sampler)
     {
         _compositeShader = compositeShader;
         _sampler = sampler;
     }
 
-    public string Name => "Composite";
+    public override string Name => "Composite";
 
-    public void Setup(PresentContextBuilder builder)
+    public override void Setup(RenderContextBuilder builder)
     {
         _sceneHandle = builder.DeclareInputTexture("Scene");
         _bloomFullHandle = builder.DeclareInputTexture("BloomFull");
-        builder.RequestSwapchain();
+        SetBackbufferTarget(builder);
     }
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        cmd.SetFramebuffer(target);
+        BindTarget(context, cmd);
 
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
         _properties.SetTexture("bloomTexture", bloomFull.ColorTextures[0], _sampler);
@@ -215,7 +211,6 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView>
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
 }
 
@@ -243,14 +238,14 @@ internal sealed class PBRPipeline : RenderPipeline<SceneView>
     private readonly ScenePass _scene;
     private readonly BloomDownsamplePass _bloomDown;
     private readonly BloomUpsamplePass _bloomUp;
-    private readonly CompositePresentPass _present;
+    private readonly CompositePass _composite;
 
-    public PBRPipeline(ScenePass scene, BloomDownsamplePass bloomDown, BloomUpsamplePass bloomUp, CompositePresentPass present)
+    public PBRPipeline(ScenePass scene, BloomDownsamplePass bloomDown, BloomUpsamplePass bloomUp, CompositePass composite)
     {
         _scene = scene;
         _bloomDown = bloomDown;
         _bloomUp = bloomUp;
-        _present = present;
+        _composite = composite;
     }
 
     public ScenePass Scene => _scene;
@@ -260,7 +255,7 @@ internal sealed class PBRPipeline : RenderPipeline<SceneView>
         AddPass(_scene);
         AddPass(_bloomDown);
         AddPass(_bloomUp);
-        SetPresentPass(_present);
+        AddPass(_composite);
     }
 }
 
@@ -335,9 +330,9 @@ public static class Program
         ScenePass scenePass = new(model, unlitShader, sceneProperties);
         BloomDownsamplePass bloomDown = new(bloomShader, bloomSampler);
         BloomUpsamplePass bloomUp = new(bloomShader, bloomSampler);
-        CompositePresentPass present = new(compositeShader, compositeSampler);
+        CompositePass composite = new(compositeShader, compositeSampler);
 
-        pipeline = new PBRPipeline(scenePass, bloomDown, bloomUp, present);
+        pipeline = new PBRPipeline(scenePass, bloomDown, bloomUp, composite);
         views = new[] { new SceneView(600, 600) };
     }
 
