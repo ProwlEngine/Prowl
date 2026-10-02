@@ -1005,6 +1005,61 @@ public class TerrainSceneTests : RuntimeTestBase
     }
 
     [Fact]
+    public void OverlapQueries_ReportTerrain()
+    {
+        Scene scene = CreateScene(enable: true);
+        var data = new TerrainData { Size = 64f, Height = 10f };
+        data.ResizeHeightmap(33);
+        TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
+        terrain.GameObject.AddComponent<TerrainCollider>();
+        Update(scene);
+
+        Assert.True(scene.Physics.CheckSphere(new Float3(32, 0, 32), 1f));
+        Assert.False(scene.Physics.CheckSphere(new Float3(32, 5, 32), 1f));
+
+        var hits = new List<ShapeCastHit>();
+        Assert.Equal(1, scene.Physics.OverlapBox(new Float3(32, 0, 32), new Float3(2, 2, 2), Quaternion.Identity, hits));
+        Assert.Same(terrain.GameObject.Transform, hits[0].Transform);
+
+        Assert.Equal(1, scene.Physics.OverlapSphere(new Float3(31.3f, 0.3f, 32.6f), 0.5f, hits));
+        Assert.True(hits[0].Normal.Y > 0.99f, $"normal {hits[0].Normal}");
+        Assert.Equal(0.2, hits[0].Penetration, 2);
+    }
+
+    private sealed class TerrainContactRecorder : MonoBehaviour
+    {
+        public readonly List<Collision> Begins = [];
+        public override void OnCollisionBegin(Collision collision) => Begins.Add(collision);
+    }
+
+    [Fact]
+    public void Collision_AgainstTerrain_NamesTheTerrainOnBothSides()
+    {
+        Scene scene = CreateScene(enable: true);
+        scene.Physics.UseMultithreading = false;
+        var data = new TerrainData { Size = 64f, Height = 10f };
+        data.ResizeHeightmap(33);
+        TerrainComponent terrain = AddTerrain(scene, data, Float3.Zero);
+        terrain.GameObject.AddComponent<TerrainCollider>();
+        var terrainRecorder = terrain.GameObject.AddComponent<TerrainContactRecorder>();
+        Update(scene);
+
+        GameObject box = CreateGameObject("Box");
+        box.Transform.Position = new Float3(32, 1, 32);
+        box.AddComponent<Rigidbody3D>();
+        box.AddComponent<BoxCollider>();
+        var boxRecorder = box.AddComponent<TerrainContactRecorder>();
+        scene.Add(box);
+
+        Tick(scene, 120);
+
+        Collision hit = Assert.Single(boxRecorder.Begins);
+        Assert.Same(terrain.GameObject, hit.GameObject);
+        Assert.True(hit.Normal.Y > 0.99f, $"normal {hit.Normal}");
+        Assert.Same(box, Assert.Single(terrainRecorder.Begins).GameObject);
+    }
+
+    [Fact]
     public void ColliderFollowsTheDataWhenItChanges()
     {
         Scene scene = CreateScene(enable: true);
