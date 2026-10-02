@@ -243,7 +243,7 @@ A pass may rent, record and submit more than one buffer. Submission order is rec
 
 ### Early out without renting
 
-Preconditions are checked before `GetCommandBuffer`, as the present pass does with `SwapchainTarget`, because renting without submitting is a warning.
+Preconditions are checked before `GetCommandBuffer`, as a pass should before using an optional resource, because renting without submitting is a warning.
 
 ## Pitfalls
 

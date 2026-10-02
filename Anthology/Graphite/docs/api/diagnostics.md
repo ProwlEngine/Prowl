@@ -137,7 +137,7 @@ All failures are `RenderException`. Validation is on unless `GraphiteValidation`
 | `RecordResourceSetBind` | `void RecordResourceSetBind(uint setCount)` | property sets bound at draw or dispatch |
 | `RecordBarrier` | `void RecordBarrier(BarrierBin kind, uint count)` | layout transitions and memory barriers |
 | `BeginView` / `EndView` | `void BeginView(in ViewInfo view)` | once per view in `DispatchGraph` |
-| `BeginPass` / `EndPass` | `void BeginPass(in PassInfo pass)` | around each graph pass (not the present pass) |
+| `BeginPass` / `EndPass` | `void BeginPass(in PassInfo pass)` | around each graph pass |
 | `RecordPassRead` | `void RecordPassRead(in PassInfo, RenderResourceID, RenderTexture?, DeviceBuffer?)` | per pass input before, per output after |
 | `RecordSubmit` | `void RecordSubmit(in CommandBufferInfo, bool isTransfer)` | command buffer submission |
 | `RecordPipelineSwitch` | `void RecordPipelineSwitch(in CommandBufferInfo, in PipelineBindInfo)` | `SetShader` / `SetComputeShader` |

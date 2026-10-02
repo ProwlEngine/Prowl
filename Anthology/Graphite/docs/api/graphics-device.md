@@ -129,7 +129,7 @@ The "null" resources are what a draw binds when a shader asks for a slot your `P
 | `MainSwapchain` | `Swapchain MainSwapchain { get; }` | Null for a headless device |
 | `SwapchainFramebuffer` | `Framebuffer? SwapchainFramebuffer { get; }` | Current main swapchain framebuffer |
 | `SyncToVerticalBlank` | `bool SyncToVerticalBlank { get; set; }` | Runtime vsync toggle. Throws (with validation on) if there is no swapchain |
-| `SwapBuffers` | `void SwapBuffers()` and `void SwapBuffers(Swapchain swapchain)` | Present, then acquire the next image. The GPU waits for rendering before presenting and for the image before the next frame renders; the CPU does not wait on either. `DispatchGraph` calls this for you when a pass called `RenderContext.Present()` |
+| `SwapBuffers` | `void SwapBuffers()` and `void SwapBuffers(Swapchain swapchain)` | Present, then acquire the next image. The GPU waits for rendering before presenting and for the image before the next frame renders; the CPU does not wait on either. `DispatchGraph` calls this for you when a pass wrote the backbuffer |
 | `ResizeMainWindow` | `void ResizeMainWindow(uint width, uint height)` | Resizes the main swapchain |
 
 ### CPU access to resources

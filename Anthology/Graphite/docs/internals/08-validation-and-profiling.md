@@ -70,7 +70,7 @@ One check lives in the Vulkan backend rather than the core: the transient hard c
 
 ### 3. Profiling: a null-guarded event stream
 
-The device exposes `Profiler` and the core and backend call it with `?.`. During `DispatchGraph`, [`DispatchGraph`](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L35) brackets each view and [`RenderPipeline.ExecuteView`](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L97) brackets each pass. The present pass is not wrapped in `BeginPass`/`EndPass`; only the ordered graph passes are.
+The device exposes `Profiler` and the core and backend call it with `?.`. During `DispatchGraph`, [`DispatchGraph`](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L35) brackets each view and [`RenderPipeline.ExecuteView`](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L97) brackets each pass.
 
 Event sources, grouped by where the call is made:
 

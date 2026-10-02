@@ -11,20 +11,20 @@ Reference for `RenderPipeline<TView>`, passes, builders, `RenderContext<TView>`,
 - [Usage kinds and barriers](#usage-kinds-and-barriers)
 - [RenderContext](#rendercontexttview)
 - [Resource descriptions](#resource-descriptions)
-- [Complete example](#complete-example-offscreen-pass-and-present-pass)
+- [Complete example](#complete-example-offscreen-pass-and-backbuffer-pass)
 - [Common patterns](#common-patterns)
 - [Pitfalls](#pitfalls)
 - [See also](#see-also)
 
 ## Overview
 
-You write passes. Each pass declares in `Setup` which named resources it reads and writes and how it uses them, and records GPU work in `Render`. A `RenderPipeline<TView>` collects the passes and one present pass. `GraphicsDevice.DispatchGraph(pipeline, views)` orders the passes from their declarations, moves every resource into the state its pass declared, runs the passes for every view, then runs the present pass. All types live in namespace `Prowl.Graphite.RenderGraph` except `GraphicsDevice`, `CommandBuffer` and friends in `Prowl.Graphite`.
+You write passes. Each pass declares in `Setup` which named resources it reads and writes and how it uses them, and records GPU work in `Render`. A `RenderPipeline<TView>` collects the passes. `GraphicsDevice.DispatchGraph(pipeline, views)` orders the passes from their declarations, moves every resource into the state its pass declared, runs the passes for every view, then presents if a pass wrote the backbuffer. All types live in namespace `Prowl.Graphite.RenderGraph` except `GraphicsDevice`, `CommandBuffer` and friends in `Prowl.Graphite`.
 
 Resource names are `RenderResourceID`, an interned string. A `string` converts implicitly, so `"Scene"` can be passed anywhere an ID is expected.
 
 ## Quick example
 
-The smallest pipeline is just a present pass drawing straight to the window ([HelloTriangle](../../Samples/HelloTriangle/Program.cs#L24)):
+The smallest pipeline is one pass drawing straight into the default backbuffer ([HelloTriangle](../../Samples/HelloTriangle/Program.cs#L24)):
 
 ```csharp
 internal readonly struct SceneView : IRenderView
@@ -40,46 +40,39 @@ internal readonly struct SceneView : IRenderView
     public int ViewId => 0;
 }
 
-internal sealed class TrianglePresentPass : IPresentPass<SceneView>
+internal sealed class TrianglePass : RasterPass<SceneView>
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
 
-    public TrianglePresentPass(Mesh triangle, GraphicsProgram shader)
+    public TrianglePass(Mesh triangle, GraphicsProgram shader)
     {
         _triangle = triangle;
         _shader = shader;
     }
 
-    public string Name => "Present";
+    public override string Name => "Triangle";
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        cmd.SetFramebuffer(target);
-        cmd.ClearDepthStencil(1, 0);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
 }
 
 internal sealed class TrianglePipeline : RenderPipeline<SceneView>
 {
-    private readonly IPresentPass<SceneView> _present;
+    private readonly TrianglePass _pass;
 
-    public TrianglePipeline(IPresentPass<SceneView> present) => _present = present;
+    public TrianglePipeline(TrianglePass pass) => _pass = pass;
 
-    protected override void InitializePasses() => SetPresentPass(_present);
+    protected override void InitializePasses() => AddPass(_pass);
 }
 ```
 
@@ -106,14 +99,12 @@ Abstract base class. Subclass it, override `InitializePasses`, add passes. Sourc
 |--------|-----------|-------------|
 | `InitializePasses` | `protected abstract void InitializePasses()` | Runs once, lazily, on first use of `Graph`. Add passes here. |
 | `AddPass` | `protected void AddPass(IPass<TView> pass)` | Adds a pass. Insertion order only breaks ties between independent passes. |
-| `SetPresentPass` | `protected void SetPresentPass(IPresentPass<TView> presentPass)` | Sets the required present pass. |
 | `DeclareTexture` | `protected void DeclareTexture(RenderResourceID id, GraphTextureDesc desc)` | Declares a transient texture with no owning pass. Takes priority over pass declarations of the same ID. |
 | `DeclareBuffer` | `protected void DeclareBuffer(RenderResourceID id, GraphBufferDesc desc)` | Same, for a buffer. |
 | `Graph` | `RenderGraph<TView> Graph { get; }` | The solved graph, built on first access. |
-| `PresentPass` | `IPresentPass<TView> PresentPass { get; }` | The present pass. Throws if none was set. |
 | `InvalidateGraph` | `protected void InvalidateGraph()` | Disposes the graph and reruns `InitializePasses` on next use. Throws during execution. |
-| `ExecuteView` | `void ExecuteView(RenderContext<TView> context)` | Runs passes then present for one view. Called by `DispatchGraph`; you rarely call it. |
-| `Dispose` | `virtual void Dispose()` | Disposes passes and the present pass that implement `IDisposable`, then the graph. |
+| `ExecuteView` | `void ExecuteView(RenderContext<TView> context)` | Runs the passes for one view. Called by `DispatchGraph`; you rarely call it. |
+| `Dispose` | `virtual void Dispose()` | Disposes passes that implement `IDisposable`, then the graph. |
 
 ### GraphicsDevice.DispatchGraph
 
@@ -121,7 +112,7 @@ Abstract base class. Subclass it, override `InitializePasses`, add passes. Sourc
 public ExecutionTask DispatchGraph<T>(RenderPipeline<T> pipeline, IReadOnlyList<T> views) where T : IRenderView
 ```
 
-Begins one execution, renders every view in order, completes the execution, and calls `SwapBuffers` if any view's present pass called `context.Present()`. Returns the `ExecutionTask` (see [graphics-device.md](graphics-device.md)). Non-blocking; GPU completion is signaled by the task's fence.
+Begins one execution, renders every view in order, completes the execution, and calls `SwapBuffers` if any pass wrote the backbuffer. Returns the `ExecutionTask` (see [graphics-device.md](graphics-device.md)). Non-blocking; GPU completion is signaled by the task's fence.
 
 ### RenderGraph<TView>
 
@@ -131,9 +122,8 @@ Read-only result of solving. Mostly useful for tooling and tests.
 |--------|-----------|-------------|
 | `OrderedPasses` | `IReadOnlyList<PassNode> OrderedPasses` | Passes in execution order |
 | `Resources` | `IReadOnlyDictionary<RenderResourceID, GraphResource> Resources` | Every declared resource, first declaration wins |
-| `PresentInputs` | `IReadOnlyList<RenderResourceID> PresentInputs` | IDs the present pass reads |
-| `PresentRequestsSwapchain` | `bool` | Whether the present pass called `RequestSwapchain` |
-| `Build` | `static RenderGraph<TView> Build(IReadOnlyList<IPass<TView>>, IPresentPass<TView>, IReadOnlyList<GraphResource>? central = null)` | Builds a graph by hand. Throws on a missing producer or a cycle. |
+| `WritesBackbuffer` | `bool WritesBackbuffer { get; }` | Whether any pass declared the backbuffer, so views present |
+| `Build` | `static RenderGraph<TView> Build(IReadOnlyList<IPass<TView>>, IReadOnlyList<GraphResource>? central = null)` | Builds a graph by hand. Throws on a missing producer or a cycle. |
 
 `PassNode` exposes `Pass`, `Inputs` and `Outputs`. `Build` also throws when a pass declares a texture ID as a buffer or the reverse, and when an imported texture is declared `Storage` without having `TextureUsage.Storage`.
 
@@ -147,16 +137,6 @@ Read-only result of solving. Mostly useful for tooling and tests.
 | `Setup` | `void Setup(RenderContextBuilder builder)` | Declare reads and writes. Runs once when the graph is built, with no view. |
 | `Render` | `void Render(RenderContext<TView> context)` | Record work. Runs every view, every dispatch. |
 
-### IPresentPass<TView>
-
-Runs once per view, always after every `IPass`. It decides whether and how the result reaches the window.
-
-| Member | Signature | Description |
-|--------|-----------|-------------|
-| `Name` | `string Name { get; }` | Command buffer label and diagnostics |
-| `Setup` | `void Setup(PresentContextBuilder builder)` | Declare inputs and whether the swapchain is needed. No outputs. |
-| `Present` | `void Present(RenderContext<TView> context)` | Draw to `context.SwapchainTarget` and call `context.Present()`, or do nothing to stay offscreen. |
-
 ### RasterPass<TView>
 
 Abstract helper for passes that render into one declared target. Source: [RasterPass.cs](../../Graphite/Core/RenderGraph/RasterPass.cs#L12). It implements `IPass` and adds target management; it does not rent or submit command buffers.
@@ -164,6 +144,7 @@ Abstract helper for passes that render into one declared target. Source: [Raster
 | Member | Signature | Description |
 |--------|-----------|-------------|
 | `SetTarget` | `protected TextureHandle SetTarget(RenderContextBuilder builder, RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null)` | Declares the single output as an `Attachment` and remembers it |
+| `SetBackbufferTarget` | `protected TextureHandle SetBackbufferTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null)` | Declares the default backbuffer as the single output |
 | `SetTargets` | `protected TextureHandle SetTargets(..., GraphTextureDesc mrtDesc, ...)` | Same, for a desc with several color formats (MRT) |
 | `BindTarget` | `protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd)` | Sets the framebuffer and applies load ops; clears color to `default(Color)` and depth to 1 |
 | `BindTarget` | `protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd, Color clearColor, float depthClear = 1f, byte stencilClear = 0)` | Same with explicit clear values |
@@ -181,24 +162,19 @@ Passed to `IPass.Setup`. Every call records a read or write. Source: [RenderCont
 | `DeclareInputTexture` | `TextureHandle DeclareInputTexture(RenderResourceID id, TextureUsageKind usage = Sampled, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture this pass reads. The producer owns the description. `usage` combines `Sampled`, `Storage` and `TransferSrc`. |
 | `DeclareOutputTexture` | `TextureHandle DeclareOutputTexture(RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null, TextureUsageKind usage = Attachment, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture this pass writes. `history > 0` keeps that many prior executions readable. `usage` must include `Attachment`, `Storage` or `TransferDst`. |
 | `DeclareImportedTexture` | `TextureHandle DeclareImportedTexture(RenderResourceID id, RenderTexture existing, TextureUsageKind usage = Attachment, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Registers an externally owned render texture as an output. The graph never disposes it. |
+| `DeclareBackbuffer` | `TextureHandle DeclareBackbuffer(TargetLoadStoreOps? ops = null, TextureUsageKind usage = Attachment, TextureUsageKind? initial = null)` | Declares a write to the device's main swapchain image. Clears by default; pass `Loaded` ops to draw over an earlier backbuffer pass. `usage` is `Attachment`, `TransferDst` or both. |
 | `DeclareInputBuffer` | `BufferHandle DeclareInputBuffer(RenderResourceID id, BufferUsageKind usage = AnyRead)` | Declares a buffer this pass reads. `usage` may combine read kinds only. |
 | `DeclareOutputBuffer` | `BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferUsageKind usage = Storage)` | Declares a buffer this pass writes. `usage` must include `Storage` or `TransferDst`. |
 
 A usage kind that does not fit the declaration (for example `Attachment` on an input) throws `ArgumentException` from the builder.
 
-### PresentContextBuilder
+### The backbuffer
 
-Passed to `IPresentPass.Setup`. Source: [PresentContextBuilder.cs](../../Graphite/Core/RenderGraph/PresentContextBuilder.cs).
-
-| Member | Signature | Description |
-|--------|-----------|-------------|
-| `DeclareInputTexture` | `TextureHandle DeclareInputTexture(RenderResourceID id, TextureUsageKind usage = Sampled, TextureUsageKind? initial = null, TextureUsageKind? depthUsage = null)` | Declares a texture read |
-| `DeclareInputBuffer` | `BufferHandle DeclareInputBuffer(RenderResourceID id, BufferUsageKind usage = AnyRead)` | Declares a buffer read |
-| `RequestSwapchain` | `void RequestSwapchain()` | Makes `context.SwapchainTarget` non-null |
+The backbuffer is a graph texture under a reserved ID, resolved with `GetRenderTexture` like any other. Its `RenderTexture.Framebuffer` is the swapchain framebuffer for the current image, and its color and depth textures are the swapchain's. It can only be written: declaring it as an input, or with `Sampled`, `Storage` or `TransferSrc`, throws. If any pass in a graph declares it, every view of that graph presents after the dispatch; if none does, the graph stays offscreen. Passes that read other graph textures and write the backbuffer run after the writers of those textures. Several passes may write it; independent ones run in insertion order, and every pass after the first should declare `Loaded` ops so it does not clear the earlier result. Resolving it on a device created without a main swapchain throws `InvalidOperationException`.
 
 ## Usage kinds and barriers
 
-Every declaration names how the pass uses the resource. Before a pass renders, the graph records the barriers that move each declared resource into its start state at the end of the command buffer submitted last, so they run after earlier passes and before anything this pass submits. Inside the pass, `context.Transition` switches a texture between the kinds it declared. After the present pass the graph returns every texture it touched to its resting layout. You never write a barrier.
+Every declaration names how the pass uses the resource. Before a pass renders, the graph records the barriers that move each declared resource into its start state at the end of the command buffer submitted last, so they run after earlier passes and before anything this pass submits. Inside the pass, `context.Transition` switches a texture between the kinds it declared. After the last pass of a view the graph returns every texture it touched, including the backbuffer, to its resting layout. You never write a barrier.
 
 When nothing has been submitted yet in the execution (the first pass), or right after a transfer flush, the barriers go at the start of the first command buffer the pass rents instead. In that pass, submit the first rented command buffer before the others; submitting another one first throws `InvalidOperationException`.
 
@@ -270,7 +246,7 @@ Outside a graph pass every texture is in a layout computed from its `TextureUsag
 
 ### Rules
 
-- Resolving a resource with `GetRenderTexture` or `GetRenderBuffer` that the running pass (or present pass) did not declare throws `InvalidOperationException`.
+- Resolving a resource with `GetRenderTexture` or `GetRenderBuffer` that the running pass did not declare throws `InvalidOperationException`.
 - A graph texture's current state decides how it can be bound. A framebuffer needs color in `Attachment` and depth in `Attachment` or `DepthReadOnly`; sampling needs `Sampled` (or `DepthReadOnly` for depth); a read-write binding needs `Storage`. A mismatch throws `RenderException`. Use `Transition` to change state inside a pass.
 - A framebuffer cannot mix graph attachments with non-graph textures.
 - With depth in `DepthReadOnly`, clearing depth throws, and the bound program must not write depth.
@@ -278,7 +254,7 @@ Outside a graph pass every texture is in a layout computed from its `TextureUsag
 
 ## RenderContext<TView>
 
-The per-view object handed to `Render` and `Present`. A new one is created for every view of every dispatch. Source: [RenderContext.cs](../../Graphite/Core/RenderGraph/RenderContext.cs#L9).
+The per-view object handed to `Render`. A new one is created for every view of every dispatch. Source: [RenderContext.cs](../../Graphite/Core/RenderGraph/RenderContext.cs#L9).
 
 | Member | Signature | Description |
 |--------|-----------|-------------|
@@ -294,9 +270,6 @@ The per-view object handed to `Render` and `Present`. A new one is created for e
 | `GetRenderBuffer` | `DeviceBuffer GetRenderBuffer(BufferHandle handle)` / `(handle, int framesAgo)` | Same for buffers |
 | `IsHistoryValid` | `bool IsHistoryValid(TextureHandle)` / `(BufferHandle)` | True once the view's ring holds an earlier execution |
 | `AllocateTransient` | `DeviceBufferRange AllocateTransient(uint sizeInBytes)` | Bump-allocated uniform range, valid until the execution's fence signals |
-| `SwapchainTarget` | `Framebuffer? SwapchainTarget { get; }` | The window framebuffer; null unless the present pass requested it |
-| `Present` | `void Present()` | Arms a swapchain present when the dispatch finishes |
-| `RequestPresent` | `bool RequestPresent { get; }` | True after `Present()` was called |
 | `Profiler` | `IProfiler? Profiler { get; }` | The device profiler, or null |
 | `WantsMetadata` | `bool WantsMetadata { get; }` | True if the profiler wants metadata |
 | `RecordPassMetadata` | `void RecordPassMetadata(object metadata)` | Attaches metadata to the running pass |
@@ -359,9 +332,9 @@ Defaults: a `history = 0` output uses `ForLifetime(false)` (clear, store). A his
 
 `TextureHandle` and `BufferHandle` are readonly structs with `Id` and `IsValid`. You obtain them only from builders. `RenderResourceID` has `Intern(string)`, `ToString(id)` (null if never interned), `IsValid`, and an implicit conversion from `string`.
 
-## Complete example: offscreen pass and present pass
+## Complete example: offscreen pass and backbuffer pass
 
-Adapted from [PBRRenderer](../../Samples/PBRRenderer/Program.cs#L32), with the bloom passes removed. `Mesh` is the sample helper in `Samples/Shared` and implements `IVertexSource`. `ScenePass` draws a mesh into a texture named "Scene". `BlitPresentPass` reads "Scene" and draws it to the window.
+Adapted from [PBRRenderer](../../Samples/PBRRenderer/Program.cs#L32), with the bloom passes removed. `Mesh` is the sample helper in `Samples/Shared` and implements `IVertexSource`. `ScenePass` draws a mesh into a texture named "Scene". `BlitPass` reads "Scene" and draws it to the backbuffer.
 
 ```csharp
 using Prowl.Graphite.RenderGraph;
@@ -436,56 +409,51 @@ internal sealed class FullscreenSource : IVertexSource
     }
 }
 
-internal sealed class BlitPresentPass : IPresentPass<SceneView>
+internal sealed class BlitPass : RasterPass<SceneView>
 {
     private readonly GraphicsProgram _blitShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
     private TextureHandle _sceneHandle;
 
-    public BlitPresentPass(GraphicsProgram blitShader, Sampler sampler)
+    public BlitPass(GraphicsProgram blitShader, Sampler sampler)
     {
         _blitShader = blitShader;
         _sampler = sampler;
     }
 
-    public string Name => "Blit";
+    public override string Name => "Blit";
 
-    public void Setup(PresentContextBuilder builder)
+    public override void Setup(RenderContextBuilder builder)
     {
         _sceneHandle = builder.DeclareInputTexture("Scene");
-        builder.RequestSwapchain();
+        SetBackbufferTarget(builder);
     }
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        cmd.SetFramebuffer(target);
+        BindTarget(context, cmd);
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
         cmd.SetShader(_blitShader);
         cmd.SetVertexSource(FullscreenSource.Instance);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
 }
 
 internal sealed class ScenePipeline : RenderPipeline<SceneView>
 {
     private readonly ScenePass _scene;
-    private readonly BlitPresentPass _present;
+    private readonly BlitPass _blit;
 
-    public ScenePipeline(ScenePass scene, BlitPresentPass present)
+    public ScenePipeline(ScenePass scene, BlitPass blit)
     {
         _scene = scene;
-        _present = present;
+        _blit = blit;
     }
 
     public ScenePass Scene => _scene;
@@ -493,7 +461,7 @@ internal sealed class ScenePipeline : RenderPipeline<SceneView>
     protected override void InitializePasses()
     {
         AddPass(_scene);
-        SetPresentPass(_present);
+        AddPass(_blit);
     }
 }
 ```
@@ -505,9 +473,9 @@ pipeline.Scene.Advance((float)dt);
 device.DispatchGraph(pipeline, views);
 ```
 
-What happens: at first dispatch, `Setup` runs on `ScenePass` (declares write "Scene" as an `Attachment`) and on `BlitPresentPass` (declares read "Scene" as `Sampled`, requests swapchain). The graph validates that "Scene" has a producer, orders `ScenePass` first, and runs the present pass last. Before `ScenePass` renders, the graph rents a view-sized transient texture for "Scene" and moves it to attachment layout; before the present pass it moves it to shader read-only; after the present pass it returns it to its resting layout. The present pass's `GetRenderTexture` returns that same texture. The scene texture returns to the pool when the execution's fence signals.
+What happens: at first dispatch, `Setup` runs on `ScenePass` (declares write "Scene" as an `Attachment`) and on `BlitPass` (declares read "Scene" as `Sampled` and a write to the backbuffer). The graph validates that "Scene" has a producer and orders `ScenePass` first. Before `ScenePass` renders, the graph rents a view-sized transient texture for "Scene" and moves it to attachment layout; before `BlitPass` it moves "Scene" to shader read-only and the swapchain image to attachment layout; after the view it returns both to their resting layouts. `BlitPass`'s `GetRenderTexture` returns the same "Scene" texture. Because `BlitPass` wrote the backbuffer, the dispatch presents. The scene texture returns to the pool when the execution's fence signals.
 
-With more passes, the sample adds `BloomDownsample` (reads "Scene", writes "BloomHalf" at 0.5 scale) and `BloomUpsample` (reads "BloomHalf", writes "BloomFull"); the present pass reads both "Scene" and "BloomFull". None of the `AddPass` calls need to be in dependency order.
+With more passes, the sample adds `BloomDownsample` (reads "Scene", writes "BloomHalf" at 0.5 scale) and `BloomUpsample` (reads "BloomHalf", writes "BloomFull"); the composite pass reads both "Scene" and "BloomFull" and writes the backbuffer. None of the `AddPass` calls need to be in dependency order.
 
 ## Common patterns
 
@@ -557,7 +525,6 @@ protected override void InitializePasses()
     DeclareTexture("GBuffer", GraphTextureDesc.ViewSized(true, 1f, PixelFormat.R8_G8_B8_A8_UNorm, PixelFormat.R16_G16_B16_A16_Float));
     AddPass(_geometry);
     AddPass(_lighting);
-    SetPresentPass(_present);
 }
 ```
 
@@ -574,9 +541,9 @@ public override void Setup(RenderContextBuilder builder)
 
 Imports default to load/store, have no history, and are never disposed by the graph. The texture must be in its resting layout when the dispatch starts; the graph leaves it there when each view ends.
 
-### Offscreen-only views
+### Offscreen-only pipelines
 
-If the present pass returns without calling `context.Present()`, nothing is presented for that view. Useful for render-to-texture views in the same dispatch as a windowed one.
+A pipeline whose passes never declare the backbuffer never presents. Use one for render-to-texture work, and dispatch it separately from the windowed pipeline.
 
 ### Multiple views
 
@@ -584,7 +551,7 @@ If the present pass returns without calling `context.Present()`, nothing is pres
 
 ## Pitfalls
 
-- Handles resolve only in `Render` and `Present`; `Setup` runs without a view.
+- Handles resolve only in `Render`; `Setup` runs without a view.
 - The first declaration of an ID decides size and format.
 - A pass that reads an ID nobody writes and nobody declared fails at graph build with a message naming both.
 - A cycle between passes throws at build time.
@@ -592,7 +559,7 @@ If the present pass returns without calling `context.Present()`, nothing is pres
 - The context begins and ends rented command buffers.
 - `ViewId` must be stable for history to persist; a changed or reused `ViewId` gets a fresh ring.
 - Mutating a pass list after `InitializePasses` has no effect; `InvalidateGraph` rebuilds the graph on next use.
-- `SwapchainTarget` is null unless the present pass called `RequestSwapchain()` in `Setup`.
+- The backbuffer is write-only and its default ops clear. A second pass writing it must declare `Loaded` ops or it erases the first.
 - A texture cannot be sampled while it is the bound attachment. Declare both kinds and `Transition` between draws, or split the work into two passes.
 - Ping-pong between two IDs across separate passes is a dependency cycle; use `Transition` inside one pass or give each iteration its own ID.
 - Every graph resource a pass touches must be declared by that pass, including the history resource it reads with `framesAgo > 0`.

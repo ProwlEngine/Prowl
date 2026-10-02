@@ -165,46 +165,40 @@ internal sealed class TriangleMesh : IVertexSource, IDisposable
 }
 
 
-internal sealed class TrianglePresentPass : IPresentPass<SceneView>
+internal sealed class TrianglePass : RasterPass<SceneView>
 {
     private readonly TriangleMesh _mesh;
     private readonly ShaderPass _shader;
 
-    public TrianglePresentPass(TriangleMesh mesh, ShaderPass shader)
+    public TrianglePass(TriangleMesh mesh, ShaderPass shader)
     {
         _mesh = mesh;
         _shader = shader;
     }
 
-    public string Name => "Present";
+    public override string Name => "Triangle";
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        cmd.SetFramebuffer(target);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_mesh);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
 }
 
 
 internal sealed class TrianglePipeline : RenderPipeline<SceneView>
 {
-    private readonly IPresentPass<SceneView> _present;
+    private readonly TrianglePass _pass;
 
-    public TrianglePipeline(IPresentPass<SceneView> present) => _present = present;
+    public TrianglePipeline(TrianglePass pass) => _pass = pass;
 
-    protected override void InitializePasses() => SetPresentPass(_present);
+    protected override void InitializePasses() => AddPass(_pass);
 }
 
 
@@ -242,7 +236,7 @@ internal sealed class TriangleApp : IDisposable
         compiler.EndSession();
 
         _mesh = new TriangleMesh(_device);
-        _pipeline = new TrianglePipeline(new TrianglePresentPass(_mesh, definition.Passes![0]));
+        _pipeline = new TrianglePipeline(new TrianglePass(_mesh, definition.Passes![0]));
         _views = [new SceneView(width, height)];
     }
 
@@ -292,7 +286,7 @@ public static class Program
 
 **Vertex data.** A command buffer asks an `IVertexSource` for one buffer per vertex layout slot of the bound shader. The reflected layouts here are `POSITION0` and `COLOR0`, each in its own slot, so `ResolveSlot` picks a buffer by the name of the slot's first element. Returning `false` from `TryGetIndexBuffer` makes the draw non-indexed. Buffers are created through the `ResourceFactory` and filled with `UpdateBuffer` ([Buffers and textures](buffers-and-textures.md), [Command buffers](command-buffers.md)).
 
-**Render graph.** All drawing goes through a render graph, even for a single pass. A view (`SceneView`) describes what is being rendered and how large it is. A `RenderPipeline` owns the passes; this one only sets a present pass, which asks for the swapchain in `Setup` and records its draw in `Present`. Command buffers come from `context.GetCommandBuffer`, already begun, and are handed back with `SubmitCommandBuffer`. Calling `context.Present()` asks the device to present the swapchain once the dispatch finishes ([Render graph](render-graph.md), [internals: render graph](../internals/03-render-graph.md)).
+**Render graph.** All drawing goes through a render graph, even for a single pass. A view (`SceneView`) describes what is being rendered and how large it is. A `RenderPipeline` owns the passes; this one adds a single pass that declares the default backbuffer as its target in `Setup` and records its draw in `Render`. `BindTarget` binds the backbuffer and applies its clear. Command buffers come from `context.GetCommandBuffer`, already begun, and are handed back with `SubmitCommandBuffer`. Because a pass wrote the backbuffer, the device presents it once the dispatch finishes ([Render graph](render-graph.md), [internals: render graph](../internals/03-render-graph.md)).
 
 **Frame and shutdown.** `DispatchGraph` is the whole frame: it begins an execution, runs the pipeline for each view, completes the execution and swaps buffers itself; the window does not swap on its own. It returns an `ExecutionTask` you can ignore or wait on. On resize, `ResizeMainWindow` rebuilds the swapchain framebuffer; the view is updated too so anything sized from it follows the window, and minimized windows (size 0) are skipped. Shutdown disposes created resources first and the device last. `Dispose` on the device waits for the GPU to go idle and frees the programs ShaderDef created for you.
 
@@ -300,14 +294,14 @@ public static class Program
 flowchart LR
     A["DispatchGraph(pipeline, views)"] --> B["BeginExecution"]
     B --> C["Setup and run passes per view"]
-    C --> D["Present pass records and submits"]
+    C --> D["Passes record and submit"]
     D --> E["CompleteExecution"]
-    E --> F["SwapBuffers if Present() was called"]
+    E --> F["SwapBuffers if a pass wrote the backbuffer"]
 ```
 
 ## Next steps
 
-- [Render graph](render-graph.md): add offscreen passes and graph textures ahead of the present pass.
+- [Render graph](render-graph.md): add offscreen passes and graph textures ahead of the backbuffer pass.
 - [Property sets](property-sets.md): feed uniforms, textures and samplers to your shaders.
 - [Shader programs](shader-programs.md): keywords, variants and program lifetime.
 - [Buffers and textures](buffers-and-textures.md): create, update and read back GPU resources.
