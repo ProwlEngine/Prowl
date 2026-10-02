@@ -80,7 +80,6 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
-    private readonly CanvasFullscreenSource _fullscreenSource = new();
     private static readonly Keyword UpsampleOff = new("Upsample", "false");
 
     public BloomDownsamplePass(ShaderPass bloomShader, Sampler sampler)
@@ -114,7 +113,7 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
         _properties.SetFloat("offset", 1f);
 
         cmd.SetShader(_bloomShader);
-        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
@@ -127,7 +126,6 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
-    private readonly CanvasFullscreenSource _fullscreenSource = new();
     private static readonly Keyword UpsampleOn = new("Upsample", "true");
 
     public BloomUpsamplePass(ShaderPass bloomShader, Sampler sampler)
@@ -161,7 +159,7 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
         _properties.SetFloat("offset", 1f);
 
         cmd.SetShader(_bloomShader);
-        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
@@ -174,7 +172,6 @@ internal sealed class CompositePass : RasterPass<SceneView>
     private readonly GraphicsProgram _compositeShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
-    private readonly CanvasFullscreenSource _fullscreenSource = new();
 
     private TextureHandle _sceneHandle;
     private TextureHandle _bloomFullHandle;
@@ -207,28 +204,10 @@ internal sealed class CompositePass : RasterPass<SceneView>
         _properties.SetFloat("bloomIntensity", 0.6f);
 
         cmd.SetShader(_compositeShader);
-        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
-    }
-}
-
-
-// A raw 3-vertex fullscreen-triangle source: no vertex/index buffers, just SV_VertexID in the shader.
-internal readonly struct CanvasFullscreenSource : IVertexSource
-{
-    public readonly PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-    public readonly void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-        => binding = default;
-
-    public readonly bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-    {
-        buffer = null!;
-        format = IndexFormat.UInt32;
-        indexCount = 0;
-        return false;
     }
 }
 

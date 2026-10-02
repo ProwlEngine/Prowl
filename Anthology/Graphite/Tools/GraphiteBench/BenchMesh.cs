@@ -7,44 +7,18 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Bench;
 
 
-internal sealed class BenchMesh : IVertexSource, IDisposable
+internal sealed class BenchMesh : IDisposable
 {
-    private readonly VertexAttributeID[] _names;
     private readonly DeviceBuffer[] _buffers;
-    private readonly DeviceBuffer _indexBuffer;
 
-    public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
+    public VertexSource Source { get; }
     public uint IndexCount { get; }
 
-    private BenchMesh(VertexAttributeID[] names, DeviceBuffer[] buffers, DeviceBuffer indexBuffer, uint indexCount)
+    private BenchMesh(VertexSource source, DeviceBuffer[] buffers, uint indexCount)
     {
-        _names = names;
+        Source = source;
         _buffers = buffers;
-        _indexBuffer = indexBuffer;
         IndexCount = indexCount;
-    }
-
-    public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-    {
-        VertexAttributeID wanted = layout.Elements[0].Name;
-        for (int i = 0; i < _names.Length; i++)
-        {
-            if (_names[i] == wanted)
-            {
-                binding = new VertexBinding(_buffers[i]);
-                return;
-            }
-        }
-
-        throw new InvalidOperationException($"Bench mesh has no stream for vertex attribute '{VertexAttributeID.ToString(wanted)}'.");
-    }
-
-    public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-    {
-        buffer = _indexBuffer;
-        format = IndexFormat.UInt16;
-        indexCount = IndexCount;
-        return true;
     }
 
     public static BenchMesh CreateCube(GraphicsDevice gd)
@@ -89,11 +63,12 @@ internal sealed class BenchMesh : IVertexSource, IDisposable
         DeviceBuffer uvBuffer = Upload(gd, uvs, BufferUsage.VertexBuffer);
         DeviceBuffer indexBuffer = Upload(gd, indices, BufferUsage.IndexBuffer);
 
-        return new BenchMesh(
-            [VertexAttributeID.Intern("POSITION0"), VertexAttributeID.Intern("UV0")],
-            [positionBuffer, uvBuffer],
-            indexBuffer,
-            (uint)indices.Length);
+        VertexSource source = new VertexSource()
+            .SetBuffer("POSITION0", positionBuffer)
+            .SetBuffer("UV0", uvBuffer)
+            .SetIndexBuffer(indexBuffer, IndexFormat.UInt16, (uint)indices.Length);
+
+        return new BenchMesh(source, [positionBuffer, uvBuffer, indexBuffer], (uint)indices.Length);
     }
 
     private static DeviceBuffer Upload<T>(GraphicsDevice gd, T[] data, BufferUsage usage) where T : unmanaged
@@ -108,7 +83,5 @@ internal sealed class BenchMesh : IVertexSource, IDisposable
     {
         foreach (DeviceBuffer buffer in _buffers)
             buffer.Dispose();
-
-        _indexBuffer.Dispose();
     }
 }

@@ -51,7 +51,7 @@ public sealed class BenchScene : IDisposable
         return props;
     }
 
-    public IVertexSource VertexSource => Mesh;
+    public IVertexSource VertexSource => Mesh.Source;
 
     public uint IndexCount => Mesh.IndexCount;
 

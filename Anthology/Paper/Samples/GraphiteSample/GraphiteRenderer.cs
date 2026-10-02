@@ -37,27 +37,6 @@ internal readonly struct CanvasView : IRenderView
 /// </summary>
 public class GraphiteRenderer : ICanvasRenderer, IDisposable
 {
-    private struct CanvasVertexSource : IVertexSource
-    {
-        public DeviceBuffer VertexBuffer;
-        public DeviceBuffer IndexBuffer;
-        public uint IndexCount;
-
-        public readonly PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-        public readonly void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-            => binding = new VertexBinding(VertexBuffer);
-
-        public readonly bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-        {
-            buffer = IndexBuffer;
-            format = IndexFormat.UInt32;
-            indexCount = IndexCount;
-            return true;
-        }
-    }
-
-
     // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
     // composites straight from level 0, so this also decides the resolution the backdrop is sampled
     // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
@@ -266,7 +245,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         private DeviceBuffer _activeEbo;
 
         private readonly PropertySet _properties = new();
-        private readonly CanvasVertexSource _fullscreenSource = new();
 
         private readonly Texture[] _blurTex = new Texture[MaxBlurLevels];
         private readonly Framebuffer[] _blurFB = new Framebuffer[MaxBlurLevels];
@@ -391,12 +369,9 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             else
                 texture.SetTexture(_properties, "backdropTexture");
 
-            CanvasVertexSource source = new()
-            {
-                VertexBuffer = _activeVbo,
-                IndexBuffer = _activeEbo,
-                IndexCount = (uint)drawCall.ElementCount
-            };
+            VertexSource source = new VertexSource()
+                .SetBuffer("POSITION0", _activeVbo)
+                .SetIndexBuffer(_activeEbo, IndexFormat.UInt32, (uint)drawCall.ElementCount);
 
             cmd.SetShader(_owner._canvasProgram);
             cmd.SetVertexSource(source);
@@ -460,7 +435,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             _properties.SetFloat("offset", offset);
 
             cmd.SetShader(_owner._blurPass);
-            cmd.SetVertexSource(_fullscreenSource);
+            cmd.SetVertexSource(VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
         }
@@ -515,7 +490,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
-        private readonly CanvasVertexSource _fullscreenSource = new();
         private TextureHandle _sceneHandle;
 
         public PresentPass(GraphiteRenderer owner)
@@ -545,7 +519,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             _properties.SetFloat("offset", 0f);
 
             cmd.SetShader(_owner._blurPass);
-            cmd.SetVertexSource(_fullscreenSource);
+            cmd.SetVertexSource(VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
 

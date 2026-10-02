@@ -177,7 +177,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, Size, Size, 0, -1, 1));
         props.SetInt("ColorNormalizationFactor", (int)normalizationFactor);
 
-        TestVertexSource source = new(PrimitiveTopology.PointList, [vb]);
+        VertexSource source = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", vb);
 
         Submit(cl =>
         {
@@ -271,7 +271,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.ClearDepthStencil(0f);
             cl.SetFullViewports();
             cl.SetShader(program);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(props);
             cl.Draw(3);
         });
@@ -413,7 +413,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.ClearColorTarget(0, clear);
             cl.SetFullViewports();
             cl.SetShader(program);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+            cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             cl.SetProperties(props);
             cl.Draw(4);
         });
@@ -454,7 +454,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.ClearColorTarget(0, Color.Black);
             cl.SetFullViewports();
             cl.SetShader(texProgram);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(texProps);
             cl.Draw(3);
             cl.CopyTexture(target1, s1);
@@ -463,7 +463,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.SetFramebuffer(fb2);
             cl.ClearColorTarget(0, Color.Blue);
             cl.SetShader(quadProgram);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, [quadVb]));
+            cl.SetVertexSource(new VertexSource().SetBuffer("POSITION", quadVb));
             cl.ClearProperties();
             cl.Draw(3);
 
@@ -471,7 +471,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.SetFramebuffer(fb1);
             cl.ClearColorTarget(0, Color.Black);
             cl.SetShader(texProgram);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(texProps);
             cl.Draw(3);
             cl.CopyTexture(target1, s3);
@@ -522,7 +522,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.ClearColorTarget(0, Color.Black);
             cl.SetFullViewports();
             cl.SetShader(program);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(props);
             cl.Draw(3);
         });

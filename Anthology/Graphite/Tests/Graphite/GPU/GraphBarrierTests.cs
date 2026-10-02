@@ -152,7 +152,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         cmd.ClearColorTarget(0, Color.Black);
         cmd.SetFullViewports();
         cmd.SetShader(program);
-        cmd.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(props);
         cmd.Draw(3);
     }
@@ -416,7 +416,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.ClearColorTarget(0, Color.Black);
                 cmd.SetFullViewports();
                 cmd.SetShader(graphics);
-                cmd.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+                cmd.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
                 cmd.SetProperties(props);
                 cmd.Draw(4);
                 context.SubmitCommandBuffer(cmd);
@@ -469,7 +469,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.SetFramebuffer(scene.Framebuffer);
                 cmd.SetFullViewports();
                 cmd.SetShader(program);
-                cmd.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+                cmd.SetVertexSource(VertexSource.None);
                 cmd.SetProperties(props);
                 cmd.Draw(3);
                 context.SubmitCommandBuffer(cmd);
