@@ -39,7 +39,7 @@ public struct GraphTextureDesc
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 
     /// <summary>Resource sized as a scale of the view.</summary>
-    public static GraphTextureDesc ViewSized(bool depth = true, float scale = 1f, params PixelFormat[] formats) => new()
+    public static GraphTextureDesc ViewSized(bool depth = false, float scale = 1f, params PixelFormat[] formats) => new()
     {
         SizeMode = TextureSizeMode.ViewRelative,
         Scale = scale,
@@ -48,7 +48,7 @@ public struct GraphTextureDesc
     };
 
     /// <summary>Resource with fixed pixel size, view-independent.</summary>
-    public static GraphTextureDesc Sized(int width, int height, bool depth = true, params PixelFormat[] formats) => new()
+    public static GraphTextureDesc Sized(int width, int height, bool depth = false, params PixelFormat[] formats) => new()
     {
         SizeMode = TextureSizeMode.Explicit,
         Scale = 1f,
