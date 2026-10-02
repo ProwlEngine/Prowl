@@ -117,12 +117,16 @@ public static class Program
         GraphicsDeviceOptions options = new()
         {
             Debug = false,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = false,
             PreferStandardClipSpaceYDirection = true
         };
 
-        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options);
+        SwapchainDescription swapchain = new()
+        {
+            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false
+        };
+
+        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options, swapchain);
     }
 
     public static void Load(GraphicsDevice newDevice)

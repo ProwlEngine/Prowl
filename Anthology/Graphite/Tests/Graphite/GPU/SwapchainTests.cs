@@ -126,7 +126,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     }
 }
 
-// Regression coverage for device creation honoring GraphicsDeviceOptions.SwapchainSrgbFormat.
+// Regression coverage for device creation honoring SwapchainDescription.ColorSrgb.
 // Each test stands up its own windowed device because the behavior under test is in the device
 // creation path. See the original bug: the Vulkan convenience path hardcoded colorSrgb = false.
 public class SwapchainRegressionTests
@@ -139,16 +139,18 @@ public class SwapchainRegressionTests
 
     private static void AssertMainSwapchainIsSrgb(GraphicsBackend backend)
     {
-        GraphicsDeviceOptions options = new(true, PixelFormat.R16_UNorm, false)
+        GraphicsDeviceOptions options = new(true);
+        SwapchainDescription swapchain = new()
         {
-            SwapchainSrgbFormat = true,
+            DepthFormat = PixelFormat.R16_UNorm,
+            ColorSrgb = true,
         };
 
         IWindow window = TestUtils.CreateWindow(backend);
         GraphicsDevice gd = null;
         try
         {
-            gd = TestUtils.CreateDevice(window, options, backend);
+            gd = TestUtils.CreateDevice(window, options, swapchain, backend);
             PixelFormat colorFormat = gd.MainSwapchain.Framebuffer.ColorTargets[0].Target.Format;
             Assert.Contains("SRgb", colorFormat.ToString());
         }

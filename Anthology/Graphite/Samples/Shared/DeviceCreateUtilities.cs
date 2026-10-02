@@ -20,7 +20,7 @@ public static class DeviceCreateUtilities
     static readonly ContextAPI API = ContextAPI.Vulkan;
 
 
-    public static IWindow CreateWindowAndDevice(Action<GraphicsDevice> load, Action<double> render, Action close, GraphicsDeviceOptions options)
+    public static IWindow CreateWindowAndDevice(Action<GraphicsDevice> load, Action<double> render, Action close, GraphicsDeviceOptions options, SwapchainDescription swapchain)
     {
         MoltenVKMacWorkaround();
 
@@ -36,8 +36,7 @@ public static class DeviceCreateUtilities
 
         window.Load += () =>
         {
-            GraphicsDevice device = CreateDevice(window, options, Backend.backend);
-            device.SyncToVerticalBlank = options.SyncToVerticalBlank;
+            GraphicsDevice device = CreateDevice(window, options, swapchain, Backend.backend);
 
             window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
 
@@ -76,7 +75,7 @@ public static class DeviceCreateUtilities
             Console.WriteLine($"SDL VulkanLoadLibrary failed for '{libraryPath}': {sdl.GetErrorS()}");
     }
 
-    public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, GraphicsBackend backend)
+    public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, SwapchainDescription swapchain, GraphicsBackend backend)
     {
         if (!window.IsInitialized)
             throw new Exception("Cannot create graphics device with an uninitialized window!");
@@ -88,15 +87,10 @@ public static class DeviceCreateUtilities
                     throw new Exception("Attempted to make a Vulkan graphics device without an available Vulkan API");
 
                 VulkanDeviceOptions vkOptions = default;
-                SwapchainDescription vkDescription = new()
-                {
-                    DepthFormat = options.SwapchainDepthFormat,
-                    ColorSrgb = options.SwapchainSrgbFormat,
-                    Width = (uint)window.FramebufferSize.X,
-                    Height = (uint)window.FramebufferSize.Y,
-                    SyncToVerticalBlank = options.SyncToVerticalBlank,
-                    Source = SwapchainSource.CreateVulkan(window.VkSurface!)
-                };
+                SwapchainDescription vkDescription = swapchain;
+                vkDescription.Width = (uint)window.FramebufferSize.X;
+                vkDescription.Height = (uint)window.FramebufferSize.Y;
+                vkDescription.Source = SwapchainSource.CreateVulkan(window.VkSurface!);
 
                 return GraphicsDevice.CreateVulkan(options, vkDescription, vkOptions);
         }

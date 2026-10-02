@@ -22,6 +22,7 @@ public class GraphiteWindow : IDisposable
     private IInputContext _input;
 
     private GraphicsDeviceOptions _deviceOptions;
+    private SwapchainDescription _swapchain;
     private GraphicsBackend _backend;
     private GraphicsDevice _device;
     private GraphiteRenderer _renderer;
@@ -54,9 +55,10 @@ public class GraphiteWindow : IDisposable
     }
 
 
-    public GraphiteWindow(WindowOptions windowOptions, GraphicsDeviceOptions deviceOptions, GraphicsBackend backend)
+    public GraphiteWindow(WindowOptions windowOptions, GraphicsDeviceOptions deviceOptions, SwapchainDescription swapchain, GraphicsBackend backend)
     {
         _deviceOptions = deviceOptions;
+        _swapchain = swapchain;
         _backend = backend;
 
         MoltenVKMacWorkaround(backend);
@@ -73,7 +75,7 @@ public class GraphiteWindow : IDisposable
 
     private void OnLoad()
     {
-        _device = DeviceCreateUtilities.CreateDevice(_window, _deviceOptions, _backend);
+        _device = DeviceCreateUtilities.CreateDevice(_window, _deviceOptions, _swapchain, _backend);
 
         _input = _window.CreateInput();
         _window.Render += OnRender;

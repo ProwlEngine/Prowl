@@ -26,6 +26,7 @@ public class SilkWindow : IDisposable
     private IInputContext _input;
 
     private GraphicsDeviceOptions _deviceOptions;
+    private SwapchainDescription _swapchain;
     private GraphicsBackend _backend;
     private GraphicsDevice _device;
     private GraphiteRenderer _renderer;
@@ -75,9 +76,10 @@ public class SilkWindow : IDisposable
     }
 
 
-    public SilkWindow(WindowOptions windowOptions, GraphicsDeviceOptions deviceOptions, GraphicsBackend backend)
+    public SilkWindow(WindowOptions windowOptions, GraphicsDeviceOptions deviceOptions, SwapchainDescription swapchain, GraphicsBackend backend)
     {
         _deviceOptions = deviceOptions;
+        _swapchain = swapchain;
         _backend = backend;
 
         MoltenVKMacWorkaround(backend);
@@ -94,7 +96,7 @@ public class SilkWindow : IDisposable
 
     private void OnLoad()
     {
-        _device = DeviceCreateUtilities.CreateDevice(_window, _deviceOptions, _backend);
+        _device = DeviceCreateUtilities.CreateDevice(_window, _deviceOptions, _swapchain, _backend);
 
         _input = _window.CreateInput();
         _window.Update += OnUpdate;
