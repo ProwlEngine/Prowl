@@ -12,7 +12,6 @@ How `Platform/Vulkan` brings up Vulkan, submits work, allocates memory, caches d
 - [Swapchain and present](#swapchain-and-present)
 - [Format mapping](#format-mapping)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -209,19 +208,6 @@ MoltenVK and older Android drivers are targets, so the backend stays on core Vul
 
 ### Why one command pool per command buffer?
 Vulkan command pools are externally synchronised, so a pool per buffer means two buffers never share a pool and can be recorded independently. Each wrapper is created with `ResetCommandBufferBit` so its native buffer can be reset and reused. The cost is one pool object per wrapper, which is why `VkGraphCommandBufferPool` recycles the wrappers themselves.
-
-## Gotchas
-
-- Device selection is fixed: the first physical device the loader enumerates.
-- Validation layers are enabled only when `GraphicsDeviceOptions.VulkanValidationLayers` is true and a layer is installed; they are unrelated to Graphite's own `GraphiteValidation`.
-- Transient uniform memory is reused every `MaxFramesInFlight` executions; a range is invalid after its execution completes.
-- `SwapBuffers` does not wait on the GPU for the next image. `vkAcquireNextImageKHR` itself can still block when every image is queued for presentation, which is where vsync throttling shows up.
-- The driver pipeline cache is created empty and never saved, so pipeline creation cost is paid at every process start.
-- A `VkTexture` with `Staging` usage has no `VkImage` (only a staging buffer).
-- A texture created from a native handle (`ResourceFactory.CreateTexture(ulong, ...)`) is treated like a swapchain image: its resting layout is `PresentSrcKhr` and it is cleared on creation.
-- Binding a framebuffer that mixes graph attachments with non-graph textures, or whose graph texture was declared with a non-`Attachment` kind, throws `RenderException`.
-- Surface lost (`ErrorSurfaceLostKhr`) throws `RenderException`; there is no automatic recovery.
-- The present queue and graphics queue use separate locks only when they differ; code that submits from several threads still serialises on the graphics queue lock.
 
 ## See also
 

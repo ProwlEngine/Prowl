@@ -6,7 +6,6 @@ How Graphite turns a compiled shader into something the GPU can draw with: the m
 - [Key types](#key-types)
 - [Control flow](#control-flow)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -131,14 +130,6 @@ Two command buffers recorded on different threads can hit the same missing key a
 ### Why global uniform block slots?
 
 `SetBindingMetadata` hands each element with loose uniform fields a process-unique slot from a static counter (or recycles one from a concurrent bag). That lets per-execution uniform caches be flat arrays indexed by slot instead of dictionaries keyed by block identity. Slots are returned in `OnDisposing`.
-
-## Gotchas
-
-- Creating a program does not deduplicate. `CreateGraphicsProgram` always constructs a new `VkGraphicsProgram`; nothing hashes `ShaderDescription`. `ShaderStageDescription.Equals` compares `ShaderBytes` by array reference, so two descriptions from separate compiles are never equal even with identical SPIR-V. Deduplication is the caller's job; ShaderDef does it with `_programCache`.
-- The first draw with a new `(OutputDescription, PrimitiveTopology)` pair builds a pipeline on the recording thread, which adds a one-time delay to that draw.
-- Blend attachments are padded: if the output has more color attachments than the program's `BlendState.AttachmentStates`, the last declared attachment state is reused for the extras, and with none declared they are blend-disabled.
-- Vertex layouts are part of the program. Changing mesh layout means a different program, not a different key.
-- Depth bias lives on `RasterizerStateDescription` (`DepthBiasEnabled`, `DepthBiasConstantFactor`, `DepthBiasSlopeFactor`, `DepthBiasClamp`). ShaderDef's `Offset <factor> <units>` maps factor to the slope factor and units to the constant factor.
 
 ## See also
 

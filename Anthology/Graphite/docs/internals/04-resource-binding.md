@@ -6,7 +6,6 @@ How a `PropertySet` full of named values becomes Vulkan descriptor sets at draw 
 - [Key types](#key-types)
 - [Control flow](#control-flow)
 - [Design decisions](#design-decisions)
-- [Gotchas and pitfalls](#gotchas-and-pitfalls)
 - [See also](#see-also)
 
 ## Overview
@@ -153,19 +152,6 @@ Avoids a heap allocation per entry. The largest supported uniform is `Double4x4`
 ### Why epochs and versions?
 
 Several counters serve different consumers. The command buffer epoch answers "did the active table change since the last draw" (whole-draw fast path). The changed-name list answers "which names were merged since the last draw" (per-set reuse). The per-entry `Version` answers "did this entry's contents change" (per-set reuse and uniform repack).
-
-## Gotchas and pitfalls
-
-- Changing the program resets the binder's per-set bound state, so all sets are re-emitted for the new program. The active property table is not cleared by `SetShader`; only `ClearProperties` or beginning the command buffer clears it.
-- `SetProperties` shares entry objects with the source set. After mutating a set between two draws in the same command buffer, call `SetProperties` with it again before the next draw: inside an active render pass with no `SetProperties` call in between, the whole-draw fast path skips every check. A changed block is repacked into a new transient range; one new range results per distinct value, not per draw.
-- A name bound under the wrong kind (a texture where the shader wants a buffer) is treated as missing, not as an error.
-- Only `ReadOnly: true` buffers ignore loose uniform writes. `SetBuffer(name, buffer, readOnly: false)` on a uniform block makes the loose uniforms get written into that buffer.
-- `ResourceLayoutDescription.MaxElementsPerSet` is 64; the binder's per-set scratch arrays are sized to that cap.
-- Two layouts with the same `Set` index in one program throw. Gaps in set indices are filled with an empty layout.
-- `PropertyID.ToString(id)` returns null for IDs never interned from a string.
-- `PropertySet` and `CommandBuffer` are not thread-safe.
-- Missing properties are reported only when `GraphicsDevice.OnMissingProperty` is set; it is null by default.
-- A graph texture can only be bound in the kind its pass declared: sampled needs `Sampled`, storage needs `Storage`.
 
 ## See also
 

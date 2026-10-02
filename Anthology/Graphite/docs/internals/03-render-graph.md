@@ -8,7 +8,6 @@ How Graphite turns a list of passes and their declared reads/writes into an orde
 - [Resource states and barriers](#resource-states-and-barriers)
 - [Resource lifetimes](#resource-lifetimes)
 - [Design decisions](#design-decisions)
-- [Gotchas and pitfalls](#gotchas-and-pitfalls)
 - [See also](#see-also)
 
 ## Overview
@@ -240,24 +239,6 @@ Graph textures are always one mip and one layer, so a whole-image state is exact
 ### Why append barriers to the open tail?
 
 A pass may rent several command buffers and submit them in any order, so the start of the pass's own first buffer is not a safe place for its barriers in general. The end of the last buffer already submitted is: it precedes, in queue order, everything the pass will submit. Appending there avoids a dedicated command buffer per pass (and its begin, end and profiler queries) without restricting the pass. Only when nothing has been submitted yet does the batch fall back to the pass's first rented buffer, and only then does submit order matter.
-
-## Gotchas and pitfalls
-
-- History rotates per execution. Calling `DispatchGraph` twice in a frame rotates twice.
-- A view that is not dispatched for 120 executions loses its history rings. The next dispatch starts with empty history, and `context.IsHistoryValid(handle)` returns false.
-- A history resource is declared as an output with `history`. Ordering after earlier writers comes only from declaring it as an input as well, because self edges are ignored.
-- Changing a view's `ViewId` reallocates its ring.
-- Default `TextureHandle`/`BufferHandle` have `IsValid == false`; resolving one throws `ArgumentException`.
-- Resolving a texture ID with `GetRenderBuffer` (or vice versa) throws with a message naming the right method.
-- Command buffers are submitted through `context.SubmitCommandBuffer`. A rented-but-unsubmitted buffer produces a warning and is discarded.
-- A texture is in one state at a time. To render into it and later sample it in the same pass, declare both kinds and call `Transition` between the draws.
-- Two passes that ping-pong between the same two IDs form a cycle and fail to build; loop inside one pass with `Transition` instead.
-- Resolving a resource the running pass did not declare throws. Declare everything a pass touches, including history reads (`DeclareInputTexture` on the history ID).
-- Pass barriers are recorded at the end of the previous pass's last submitted command buffer, so profiler timings for that buffer include them. A `"<pass> Barriers"` command buffer appears only when a pass with pending barriers rents no command buffer or never submits its first one.
-- In the first pass of an execution, and in the first pass after a transfer flush, the first rented command buffer carries the pass's barriers and must be submitted before the pass's other command buffers.
-- `InvalidateGraph` disposes history rings and reruns `InitializePasses` on next access; it throws if called while a view executes.
-- `IPresentPass.Setup` cannot declare outputs, so nothing can consume the present pass's work through the graph.
-- Present is skipped entirely (no `SwapBuffers`) unless some view's present pass called `context.Present()`. `SwapchainTarget` is null unless the present pass called `RequestSwapchain()`.
 
 ## See also
 

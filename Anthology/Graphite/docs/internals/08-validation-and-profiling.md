@@ -6,7 +6,6 @@ How Graphite's two optional diagnostic layers are wired into the core, what they
 - [Key types](#key-types)
 - [Control flow](#control-flow)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -136,19 +135,6 @@ GPU queries, buffer captures and deep copies are expensive. The profiler declare
 ### Why are the two layers independent?
 
 The profiler receives events whether or not validation is on, and validation never consults the profiler. You can profile a release-configured device with validation off, or validate with no profiler.
-
-## Gotchas
-
-- `ValidationEnabled` is `static`. Creating a second device with a different `GraphiteValidation` overwrites the setting for every device in the process.
-- With validation off, bad input is not rejected: a null where `RequireNotNull` would have thrown surfaces later as a `NullReferenceException`, and the transient buffer hard cap is no longer enforced (the soft-cap warning still fires).
-- Not every exception comes from the validation layer. `UpdateBuffer` range checks, `SwapBuffers` without a swapchain, and `RenderTexture` with no attachments throw regardless of the flag.
-- `SetProfiler` replaces the profiler immediately, with no locking. Call it between executions.
-- There is no shipped `IProfiler` implementation. A do-nothing implementation must still implement every member.
-- `BufferRoleBin` totals overlap by design: a buffer with `VertexBuffer | Staging` is counted in both bins. `AllocBin.DeviceBuffer` is the non-double-counted total.
-- Many `Allocate(AllocBin.X, 0)` calls are object counts only (`Pipeline`, `Sampler`, `TextureView`, `Framebuffer`, `ResourceLayout`, `ResourceSet`, `CommandBuffer`). Only buffers, textures and shader bytecode carry byte sizes.
-- Timing and pipeline-statistics results arrive late, keyed by `CommandBufferInfo.Id`. The command buffer object is not passed because it is pooled and reused.
-- `GetMemoryBudget` returns `IsSupported = false` and zeros on backends or drivers that do not expose a budget.
-- `RequestCapture` copies framebuffers mid-frame and is costly.
 
 ## See also
 

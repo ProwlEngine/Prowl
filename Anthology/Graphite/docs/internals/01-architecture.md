@@ -7,7 +7,6 @@ The 10,000-foot view of Graphite: how the solution is laid out, how the abstract
 - [Key types](#key-types)
 - [End-to-end flow](#end-to-end-flow)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -99,13 +98,6 @@ A decorator would wrap every resource and double the object count. Partial class
 
 ### Why the render graph sits on top of the device, not inside it
 `DispatchGraph` is an extension of `GraphicsDevice` in a separate file that only uses the public `BeginExecution`/`CompleteExecution` API. You can drive the device without the graph (create your own `ExecutionTask` and command buffers) and the graph is just one client.
-
-## Gotchas
-
-- `ValidationEnabled` is a static field. With two devices created with different `GraphiteValidation` values, the last constructed device wins for both.
-- Backend classes are `internal`; `VkBuffer` and `VkGraphicsDevice` are implementation, not API. `GraphicsDevice.GetVulkanInfo` exposes native handles.
-- `DispatchGraph` only presents if a pass called `RenderContext.Present()`. A pipeline whose present pass returns early (for example because `SwapchainTarget` is null) renders nothing on screen and does not swap.
-- Dispose order matters. The device does `WaitForIdle` and disposes its pools and default resources, but child resources created by the application must be disposed before the device.
 
 ## See also
 

@@ -10,7 +10,6 @@ How `GraphicsDevice` is created and torn down, how the execution ring keeps seve
 - [Writing to in-flight buffers](#writing-to-in-flight-buffers)
 - [Swapchain](#swapchain)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -154,17 +153,6 @@ A watcher thread would need its own synchronisation with the `_executionLock` an
 
 ### Why orphaning instead of a staging copy?
 Orphaning keeps the `DeviceBuffer` identity (so property sets and cached bindings that reference it stay valid) while avoiding both a stall and a GPU-side copy. The cost moves to the allocator, which is why repeated orphaning is warned about.
-
-## Gotchas
-
-- `BeginExecution` can block. It blocks when every slot is in flight, meaning the GPU is behind or `MaxFramesInFlight` is smaller than the latency requires.
-- `LastCompletedExecutionId` advances on reclaim and explicit checks, not on the fence signal itself. `IsExecutionComplete(task)` gives the exact answer.
-- `CompletionFence` belongs to a ring slot and is reset when the slot is reused, so it is valid only while the task is the newest occupant of its slot.
-- Transient uniform ranges are invalid after their execution completes; the arena rewinds and overwrites them.
-- `TransientWrites = true` disables all write-hazard tracking. Writing such a buffer while the GPU reads it is undefined behavior.
-- `WaitForIdle` resets all slots, including ones a caller is still recording into. Calling it between `BeginExecution` and `CompleteExecution` is invalid.
-- `SwapBuffers` and `ResizeMainWindow` throw if the device was created without a main swapchain.
-- Only the swapchain depth format is optional: a `null` `SwapchainDescription.DepthFormat` gives a framebuffer with no depth attachment.
 
 ## See also
 
