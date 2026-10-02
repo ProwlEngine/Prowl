@@ -52,6 +52,7 @@ Pass "Skybox"
             uniform vec3 _SkySunDepthSlope;
             uniform vec3 _SkyRayleighScale;
             uniform vec3 _SkyMieScale;
+            uniform vec2 _SkyMiePhase;
             uniform vec3 _SkyBounce;
             uniform vec3 _SkyBounceRedden;
             uniform float _SkyBounceSide;
@@ -67,14 +68,14 @@ Pass "Skybox"
 
             const vec3 RAYLEIGH = vec3(5.802e-6, 13.558e-6, 33.1e-6);
             const float MIE_EXTINCTION = 4.44e-6;
-            const float MIE_G = 0.8;
             const float RAYLEIGH_HEIGHT = 8000.0, RAYLEIGH_K = 8.0e-4;
             const float MIE_HEIGHT = 1200.0, MIE_K = 1.2e-4;
 
-            const float SUN_FAR_FADE = 11.998;       // how fast the far air sun shift fades with view height
-            const float BELT_REDDENING = 144350.0;   // extra air the sunlight crosses to reach the pink band
-            const float BELT_FADE = 0.06963;        // how softly the pink band fades out above the shadow edge
-            const float BOUNCE_SIDE_FADE = 2.542;    // how fast the bounce light's lean toward the sun fades looking up
+            const float SUN_FAR_FADE = 14.731;       // how fast the far air sun shift fades with view height
+            const float BELT_REDDENING = 167320.0;   // extra air the sunlight crosses to reach the pink band
+            const float BELT_FADE = 0.059246;        // how softly the pink band fades out above the shadow edge
+            const float SUN_FAR_ASYMMETRY = -0.35683;  // how much weaker the far air shift is toward the sun
+            const float BOUNCE_SIDE_FADE = 2.8823;    // how fast the bounce light's lean toward the sun fades looking up
 
             const float EXPOSURE = 40.0;
             const float SUN_DISK = 2000.0;
@@ -104,9 +105,9 @@ Pass "Skybox"
 
                 float cosAzimuth = dot(view.xz, _SkySunFlat);
 
-                lit *= max(1.0 + _SkySunDepthSlope * cosAzimuth / (1.0 + SUN_FAR_FADE * viewMu), 0.0);
+                lit *= max(1.0 + _SkySunDepthSlope * (cosAzimuth * (1.0 + SUN_FAR_ASYMMETRY * cosAzimuth) / (1.0 + SUN_FAR_FADE * viewMu)), 0.0);
 
-                float mieSpread = inversesqrt(1.0 + MIE_G * MIE_G - 2.0 * MIE_G * cosToSun);
+                float mieSpread = inversesqrt(_SkyMiePhase.x - _SkyMiePhase.y * cosToSun);
                 vec3 single = (_SkyRayleighScale * (viewRayleigh * (1.0 + cosToSun * cosToSun))
                              + _SkyMieScale * (viewMie * mieSpread * mieSpread * mieSpread)) * lit;
 

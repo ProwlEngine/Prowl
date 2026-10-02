@@ -20,35 +20,38 @@ public static class ProceduralSky
     const float OzoneColumn = 15000f, OzoneK = 0.0078f;
     const float DepressionScale = 28.2f;
 
-    const float TwilightFade = 0.63387f;
-    const float TwilightFadeCurve = 0.04601f;
-    const float TwilightAwayFade = -0.2021f;
-    const float TwilightAwayCurve = 0.36965f;
-    const float TwilightHighFade = -0.12966f;
-    const float TwilightHeightFade = -0.4545f;
-    const float TwilightHeightCurve = 0.51252f;
-    const float TwilightAirTint = 4548.9f;
-    const float TwilightOzoneTint = 146070.0f;
-    const float TwilightGlowFade = 2.6332f;
+    const float TwilightFade = 0.61172f;
+    const float TwilightFadeCurve = 0.040113f;
+    const float TwilightAwayFade = -0.18102f;
+    const float TwilightAwayCurve = 0.3826f;
+    const float TwilightHighFade = -0.13711f;
+    const float TwilightHeightFade = -0.44557f;
+    const float TwilightHeightCurve = 0.53126f;
+    const float TwilightAirTint = 4239.3f;
+    const float TwilightOzoneTint = 144770.0f;
+    const float TwilightGlowCurve = 0.035289f;
+    const float GlowSoftening = 0.045142f;
+    const float TwilightGlowFade = 1.7157f;
 
-    const float SunFarShift = 0.0054133f;
+    const float SunFarShift = 0.005083f;
 
-    const float ShadowLead = 0.010715f;
-    const float ShadowRise = 0.033052f;
-    const float ShadowRiseCurve = 0.026484f;
-    const float ShadowSoftening = 0.019543f;
-    const float ShadowSpread = 0.25126f;
-    const float ShadowRamp = 0.85012f;
+    const float ShadowLead = 0.0077169f;
+    const float ShadowRise = 0.033087f;
+    const float ShadowRiseCurve = 0.027632f;
+    const float ShadowSoftening = 0.01849f;
+    const float ShadowSpread = 0.28058f;
+    const float ShadowRamp = 0.79053f;
 
-    static readonly Float3 BouncePerSun = new(0.052731f, 0.058156f, 0.071765f);
-    static readonly Float3 BounceAtSunset = new(0.0021935f, 0.0011957f, 0.0034828f);
-    const float BounceFade = 1.019f;
-    const float BounceFadeCurve = 0.076588f;
-    const float BounceAirTint = 8951.8f;
-    const float BounceSide = 0.15057f;
-    const float BounceSunsetRedden = 0.043247f;
-    const float BounceSunsetReddenFade = 19.827f;
-    const float BounceTwilightRedden = 0.024638f;
+    static readonly Float3 BouncePerSun = new(0.052524f, 0.05829f, 0.071902f);
+    static readonly Float3 BounceAtSunset = new(0.0022233f, 0.0012501f, 0.0034871f);
+    const float BounceFade = 1.0157f;
+    const float BounceFadeCurve = 0.076503f;
+    const float BounceAirTint = 8758.3f;
+    const float BounceSide = 0.15012f;
+    const float BounceSunsetRedden = 0.045581f;
+    const float BounceSunsetReddenFade = 26.027f;
+    const float BounceReddenCurve = 0.0065451f;
+    const float BounceTwilightRedden = 0.0082749f;
 
     /// <summary>Sets every sun dependent uniform of the sky material, toSun is the unit direction toward the sun.</summary>
     public static void Apply(Material material, Float3 toSun)
@@ -65,9 +68,10 @@ public static class ProceduralSky
         // The ozone layer sits above nearly all the air, so it filters the sunlight the same for every point on the view.
         Float3 transmittance = Exp(-depth);
         Float3 ozone = Exp(-Ozone * (OzoneColumn / MathF.Sqrt(sunUp * sunUp + OzoneK)));
-        float mieScale = MieScatter * (1 - MieG * MieG) / (4 * MathF.PI) * MathF.Exp(-TwilightGlowFade * depression);
+        float glowG = MieG - GlowSoftening / (1 + 30 * sunUp);
+        float mieScale = MieScatter * (1 - glowG * glowG) / (4 * MathF.PI) * MathF.Exp(-(TwilightGlowFade + TwilightGlowCurve * depression) * depression);
 
-        Float3 bounceRedden = Rayleigh * (BounceSunsetRedden / (1 + BounceSunsetReddenFade * sunUp) + BounceTwilightRedden * depression);
+        Float3 bounceRedden = Rayleigh * (BounceSunsetRedden / (1 + BounceSunsetReddenFade * sunUp) + (BounceTwilightRedden + BounceReddenCurve * depression) * depression);
         Float3 bounceFade = new Float3(BounceFade + BounceFadeCurve * depression) + Rayleigh * BounceAirTint;
         Float3 bounce = Rayleigh * (BouncePerSun * sunUp + BounceAtSunset) * Exp(bounceRedden * RayleighHeight - bounceFade * depression);
 
@@ -83,6 +87,7 @@ public static class ProceduralSky
         material.SetVector("_SkySunDepthSlope", depthSlope);
         material.SetVector("_SkyRayleighScale", Rayleigh * ozone * (3 / (16 * MathF.PI)));
         material.SetVector("_SkyMieScale", ozone * mieScale);
+        material.SetVector("_SkyMiePhase", new Float2(1 + glowG * glowG, 2 * glowG));
         material.SetVector("_SkyBounce", bounce);
         material.SetVector("_SkyBounceRedden", bounceRedden);
         material.SetFloat("_SkyBounceSide", BounceSide * depression);
