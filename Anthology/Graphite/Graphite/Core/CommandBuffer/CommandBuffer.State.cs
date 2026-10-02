@@ -54,8 +54,6 @@ public abstract partial class CommandBuffer
         SetVertexSourceCore(source);
     }
 
-    private protected abstract void SetVertexSourceCore(IVertexSource source);
-
     /// <summary>
     /// Merges properties into bind table, last write wins, sticks until ClearProperties or Begin.
     /// <para>Same unchanged set twice in a row is a no-op.</para>
