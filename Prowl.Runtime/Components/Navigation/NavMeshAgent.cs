@@ -645,6 +645,20 @@ public class NavMeshAgent : MonoBehaviour
         return false;
     }
 
+    /// <summary>Pick a random point within <paramref name="radius"/> of the agent that it can walk to,
+    /// using the agent's filter.</summary>
+    public bool FindRandomPointAround(float radius, out NavMeshHit hit)
+    {
+        if (_world != null) return _world.FindRandomPointAround(NextPosition, radius, out hit, Filter);
+        hit = default;
+        return false;
+    }
+
+    /// <summary>Walk to a random reachable point within <paramref name="radius"/> of the agent.
+    /// Returns false when no point was found or the destination could not be set.</summary>
+    public bool SetRandomDestination(float radius)
+        => FindRandomPointAround(radius, out NavMeshHit hit) && SetDestination(hit.Position);
+
     /// <summary>
     /// How far along its current path the agent could get, without moving it: walks the path from
     /// where the agent stands and stops at <paramref name="maxDistance"/>, at the end of the path,
