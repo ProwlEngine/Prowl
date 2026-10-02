@@ -194,6 +194,10 @@ public class NavMeshAgent : MonoBehaviour
             or DtMoveRequestState.DT_CROWDAGENT_TARGET_WAITING_FOR_QUEUE
             or DtMoveRequestState.DT_CROWDAGENT_TARGET_WAITING_FOR_PATH;
 
+
+    /// <summary>Raised once when the agent reaches its destination.</summary>
+    public event Action? DestinationReached;
+
     /// <summary>True when the agent has a path it is following.</summary>
     public bool HasPath => _agent != null && _agent.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_VALID;
 
@@ -874,6 +878,7 @@ public class NavMeshAgent : MonoBehaviour
             // _arrived gates every re-path site.
             _arrived = true;
             _crowdEntry!.Crowd.ResetMoveTarget(_agent);
+            DestinationReached?.Invoke();
         }
     }
 
