@@ -1,8 +1,48 @@
+using Prowl.Graphite.RenderGraph;
+using Prowl.Vector;
+
 using Silk.NET.Windowing;
 
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
+
+file readonly struct SwapchainView : IRenderView
+{
+    public SwapchainView(uint width, uint height)
+    {
+        PixelWidth = width;
+        PixelHeight = height;
+    }
+
+    public uint PixelWidth { get; }
+    public uint PixelHeight { get; }
+    public int ViewId => 0;
+}
+
+file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
+{
+    public override string Name => "ClearSwapchain";
+
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
+
+    public override void Render(RenderContext<SwapchainView> context)
+    {
+        CommandBuffer cmd = context.GetCommandBuffer("ClearSwapchain");
+        BindTarget(context, cmd, Color.Blue);
+        context.SubmitCommandBuffer(cmd);
+    }
+}
+
+file sealed class OffscreenPass : IPass<SwapchainView>
+{
+    public string Name => "Offscreen";
+
+    public void Setup(RenderContextBuilder builder)
+        => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
+
+    public void Render(RenderContext<SwapchainView> context) { }
+}
 
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These
 // run on the windowed device creators (a headless device has no swapchain).
@@ -39,6 +79,29 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     }
 
     [Fact]
+    public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
+    {
+        using RenderPipeline<SwapchainView> presenting = new([new ClearSwapchainPass()]);
+        using RenderPipeline<SwapchainView> offscreen = new([new OffscreenPass()]);
+        SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height)];
+
+        for (int frame = 0; frame < 12; frame++)
+        {
+            GD.DispatchGraph(frame % 4 != 3 ? presenting : offscreen, views);
+        }
+
+        GD.ResizeMainWindow(128, 96);
+        views[0] = new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height);
+
+        for (int frame = 0; frame < 12; frame++)
+        {
+            GD.DispatchGraph(presenting, views);
+        }
+
+        GD.WaitForIdle();
+    }
+
+    [Fact]
     public void Resize_KeepsFramebufferValid()
     {
         // The presented surface clamps to the backing window, so the exact dimensions are
@@ -55,7 +118,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     }
 }
 
-// Regression coverage for device creation honoring GraphicsDeviceOptions.SwapchainSrgbFormat.
+// Regression coverage for device creation honoring SwapchainDescription.ColorSrgb.
 // Each test stands up its own windowed device because the behavior under test is in the device
 // creation path. See the original bug: the Vulkan convenience path hardcoded colorSrgb = false.
 public class SwapchainRegressionTests
@@ -68,16 +131,18 @@ public class SwapchainRegressionTests
 
     private static void AssertMainSwapchainIsSrgb(GraphicsBackend backend)
     {
-        GraphicsDeviceOptions options = new(true, PixelFormat.R16_UNorm, false)
+        GraphicsDeviceOptions options = new(true);
+        SwapchainDescription swapchain = new()
         {
-            SwapchainSrgbFormat = true,
+            DepthFormat = PixelFormat.R16_UNorm,
+            ColorSrgb = true,
         };
 
         IWindow window = TestUtils.CreateWindow(backend);
         GraphicsDevice gd = null;
         try
         {
-            gd = TestUtils.CreateDevice(window, options, backend);
+            gd = TestUtils.CreateDevice(window, options, swapchain, backend);
             PixelFormat colorFormat = gd.MainSwapchain.Framebuffer.ColorTargets[0].Target.Format;
             Assert.Contains("SRgb", colorFormat.ToString());
         }

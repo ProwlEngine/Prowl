@@ -245,3 +245,18 @@ public sealed class GraphImportedTextureResource : GraphResource
         Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: true);
     }
 }
+
+/// <summary>
+/// The device's main swapchain image for this execution. Writing it from any pass presents the frame after dispatch.
+/// </summary>
+public sealed class GraphBackbufferResource : GraphResource
+{
+    /// <summary>Reserved ID every backbuffer declaration uses.</summary>
+    public static readonly RenderResourceID BackbufferId = RenderResourceID.Intern("Graphite.Backbuffer");
+
+    /// <summary>Load/store ops applied when bound as a raster target. Clears by default.</summary>
+    public TargetLoadStoreOps Ops { get; }
+
+    internal GraphBackbufferResource(TargetLoadStoreOps? ops = null) : base(BackbufferId)
+        => Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: false);
+}

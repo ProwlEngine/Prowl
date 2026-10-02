@@ -33,6 +33,34 @@ internal unsafe sealed partial class VkDescriptorBinder
         public uint[] BoundDynOffsets = new uint[16];
         public int BoundDynOffsetCount;
         public bool Bound;
+
+        public PropertyEntry[] Entries = new PropertyEntry[16];
+        public uint[] EntryVersions = new uint[16];
+        public int EntryCount;
+        public int GraphStateVersion;
+
+        public void Track(PropertyEntry entry)
+        {
+            if (EntryCount == Entries.Length)
+            {
+                Array.Resize(ref Entries, EntryCount * 2);
+                Array.Resize(ref EntryVersions, EntryCount * 2);
+            }
+
+            Entries[EntryCount] = entry;
+            EntryVersions[EntryCount] = entry.Version;
+            EntryCount++;
+        }
+
+        public bool EntriesUnchanged()
+        {
+            for (int i = 0; i < EntryCount; i++)
+            {
+                if (Entries[i].Version != EntryVersions[i])
+                    return false;
+            }
+            return true;
+        }
     }
 
     private readonly VkCommandBuffer _cbOwner;
@@ -47,6 +75,7 @@ internal unsafe sealed partial class VkDescriptorBinder
 
     private SetBindState[] _setBindStates = Array.Empty<SetBindState>();
     private ShaderProgram _bindCacheProgram;
+    private SetBindState? _trackState;
 
     // Whole-draw fast path: the program + property epoch a graphics draw was last prepared for.
     private ShaderProgram _lastPreparedProgram;
@@ -82,7 +111,11 @@ internal unsafe sealed partial class VkDescriptorBinder
     {
         IVkDescriptorProgram descProgram = (IVkDescriptorProgram)program;
         uint setCount = descProgram.ResourceSetCount;
-        if (setCount == 0) return false;
+        if (setCount == 0)
+        {
+            _cbOwner.ConsumePropertyChanges();
+            return false;
+        }
 
         // No bind needed, everything is the same as last draw
         if (isGraphics
@@ -101,6 +134,7 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         EnsureBindCacheFor(program, (int)setCount);
         ulong executionId = _cbOwner.ExecutionId;
+        int graphStateVersion = CommandBufferBase.GraphStateVersion;
 
         int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
@@ -109,14 +143,23 @@ internal unsafe sealed partial class VkDescriptorBinder
             SetBindingMetadata meta = metadata[setIdx];
             SetBindState state = _setBindStates[setIdx];
 
-            ResolveSet(setIdx, elements, meta, reportProgram);
-            PrepareResolvedTextures(elements, isGraphics);
-            SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
-            GatherDynOffsets(meta, state);
+            if (!CanReuseSet(state, meta, graphStateVersion))
+            {
+                state.EntryCount = 0;
+                _trackState = state;
+                ResolveSet(setIdx, elements, meta, reportProgram);
+                _trackState = null;
+                PrepareResolvedTextures(elements, isGraphics);
+                SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
+                GatherDynOffsets(meta, state);
+                state.GraphStateVersion = graphStateVersion;
+            }
 
             if (firstChanged < 0 && SetDiffersFromBound(state))
                 firstChanged = setIdx;
         }
+
+        _cbOwner.ConsumePropertyChanges();
 
         _lastPreparedProgram = isGraphics ? program : null;
         _lastPreparedEpoch = _cbOwner.ActivePropertiesEpoch;
@@ -127,6 +170,14 @@ internal unsafe sealed partial class VkDescriptorBinder
         _preparedFirstSet = (uint)firstChanged;
         return true;
     }
+
+    private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, int graphStateVersion)
+        => state.IdentityLen >= 0
+            && !_cbOwner.AllPropertiesChanged
+            && !meta.HasStorageTexture
+            && state.GraphStateVersion == graphStateVersion
+            && !meta.ReadsAny(_cbOwner.ChangedPropertyKeys)
+            && state.EntriesUnchanged();
 
     private static bool SetDiffersFromBound(SetBindState state)
     {

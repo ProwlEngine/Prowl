@@ -42,15 +42,19 @@ public static class Program
 
         GraphicsDeviceOptions deviceOptions = new()
         {
-            Debug = false,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = false,
+            VulkanValidationLayers = false,
             PreferStandardClipSpaceYDirection = true,
             PreferDepthRangeZeroToOne = true,
         };
 
+        SwapchainDescription swapchain = new()
+        {
+            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false
+        };
+
         // Create and run the window
-        using var window = new SilkWindow(windowOptions, deviceOptions, backend);
+        using var window = new SilkWindow(windowOptions, deviceOptions, swapchain, backend);
 
         window.Run();
     }

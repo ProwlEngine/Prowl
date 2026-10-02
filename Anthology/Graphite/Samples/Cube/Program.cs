@@ -19,33 +19,20 @@ internal readonly struct SceneView : IRenderView
 }
 
 
-// One draw, no dependencies between passes: present clears and draws straight into the swapchain.
-internal sealed class CubePresentPass : IPresentPass<SceneView>
+// One draw, no dependencies between passes: the pass clears and draws straight into the backbuffer.
+internal sealed class CubePass : RasterPass<SceneView>
 {
-    public string Name => "Present";
+    public override string Name => "Backbuffer";
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         CommandBuffer cmd = context.GetCommandBuffer("Cube");
-        cmd.SetFramebuffer(target);
-        cmd.ClearDepthStencil(1, 0);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         Cube.Draw(cmd);
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
-}
-
-
-internal sealed class CubePipeline : RenderPipeline<SceneView>
-{
-    protected override void InitializePasses() => SetPresentPass(new CubePresentPass());
 }
 
 
@@ -53,7 +40,7 @@ public static class Program
 {
     static GraphicsDevice device;
     static RenderMSTracker tracker;
-    static CubePipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
     static SceneView[] views;
 
 
@@ -61,13 +48,17 @@ public static class Program
     {
         GraphicsDeviceOptions options = new()
         {
-            Debug = false,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = false,
+            VulkanValidationLayers = false,
             PreferStandardClipSpaceYDirection = true
         };
 
-        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options);
+        SwapchainDescription swapchain = new()
+        {
+            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false
+        };
+
+        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options, swapchain);
     }
 
     public static void Load(GraphicsDevice newDevice)
@@ -77,7 +68,7 @@ public static class Program
         tracker = new(newDevice);
         Cube.Create(device);
 
-        pipeline = new CubePipeline();
+        pipeline = new([new CubePass()]);
         views = new[] { new SceneView(600, 600) };
     }
 

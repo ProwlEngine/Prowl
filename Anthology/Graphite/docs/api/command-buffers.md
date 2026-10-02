@@ -17,7 +17,7 @@ Reference for `CommandBuffer` (draw, dispatch, state) and `TransferCommandBuffer
 
 ## Overview
 
-A `CommandBuffer` records GPU work: bind a shader, a framebuffer, vertex data and properties, then draw or dispatch. In the render graph you do not create or begin them. `RenderContext.GetCommandBuffer` hands you one that is already recording, and `RenderContext.SubmitCommandBuffer` ends it and queues it for the current execution. `TransferCommandBuffer` is a separate, smaller type for one-off uploads and readback outside the frame flow.
+A `CommandBuffer` records GPU work: bind a shader, a framebuffer, vertex data and properties, then draw or dispatch. In the render graph you do not create or begin them. `RenderContext.GetCommandBuffer` hands you one that is already recording, and `RenderContext.SubmitCommandBuffer` queues it for the current execution. `TransferCommandBuffer` is a separate, smaller type for one-off uploads and readback outside the frame flow.
 
 Both derive from `CommandBufferBase`, which carries the copy and update operations.
 
@@ -41,7 +41,7 @@ context.SubmitCommandBuffer(cmd);
 |------|-----|-------|
 | Rent and begin | `RenderContext.GetCommandBuffer(name)` | Begin resets all cached state: framebuffer, shaders, vertex source, merged properties |
 | Record | You | Not thread-safe. |
-| End and submit | `RenderContext.SubmitCommandBuffer(cmd)` | Ends it and adds it to the execution |
+| Submit | `RenderContext.SubmitCommandBuffer(cmd)` | Closes any open render pass and adds it to the execution. It stays open as the execution's tail so the next pass's barriers can be appended, and is ended when the next buffer or a transfer is submitted, or the execution completes |
 | Recycle | Device | When the execution's ring slot is reused |
 
 `Begin` and `End` on `CommandBuffer` are internal. A buffer that is rented and never submitted triggers a warning through `GraphicsDevice.OnWarning` after the pass and is dropped.
@@ -57,19 +57,18 @@ All in `CommandBuffer.State`. Source: [CommandBuffer.State.cs](../../Graphite/Co
 | `SetShader` | `void SetShader(GraphicsProgram program)` | Sets the graphics program. No-op if it is already current. Must match the framebuffer's outputs. |
 | `SetComputeShader` | `void SetComputeShader(ComputeProgram program)` | Sets the compute program |
 | `SetVertexSource` | `void SetVertexSource(IVertexSource source)` | Replaces the vertex and index source. Must not be null; an empty source means no vertex data. |
-| `SetProperties` | `void SetProperties(PropertySet properties)` | Merges the set into the bound properties. Unchanged same set twice in a row is a no-op. |
+| `SetProperties` | `void SetProperties(PropertySet properties)` | Merges the set into the bound properties. No-op when the set is unchanged since its last merge into this buffer and none of its names were overridden since. |
 | `ClearProperties` | `void ClearProperties()` | Empties the merged properties. No GPU work. |
-| `SetFramebuffer` | `void SetFramebuffer(Framebuffer fb)` | Sets the render target and resets viewports and scissors to full size |
+| `SetFramebuffer` | `void SetFramebuffer(Framebuffer fb)` | Sets the render target and resets viewport 0 and scissor 0 to full size |
 | `SetFramebuffer` | `void SetFramebuffer(RenderTexture renderTexture)` | Uses the render texture's framebuffer |
-| `SetRenderTarget` | `void SetRenderTarget(Framebuffer fb)` / `(RenderTexture rt)` | Aliases of `SetFramebuffer` |
 | `ClearColorTarget` | `void ClearColorTarget(uint index, Color clearColor)` | Clears one color attachment. Framebuffer must be set. |
 | `ClearDepthStencil` | `void ClearDepthStencil(float depth)` / `(float depth, byte stencil)` | Clears depth (stencil defaults to 0). Needs a depth attachment. |
-| `SetViewport` | `void SetViewport(uint index, Viewport viewport)` / `(uint index, ref Viewport viewport)` | Sets one viewport |
-| `SetFullViewports` | `void SetFullViewports()` | All viewports cover the framebuffer |
-| `SetFullViewport` | `void SetFullViewport(uint index)` | One viewport covers the framebuffer |
-| `SetScissorRect` | `void SetScissorRect(uint index, uint x, uint y, uint width, uint height)` | Sets one scissor rectangle |
-| `SetFullScissorRects` | `void SetFullScissorRects()` | All scissors cover the framebuffer |
-| `SetFullScissorRect` | `void SetFullScissorRect(uint index)` | One scissor covers the framebuffer |
+| `SetViewport` | `void SetViewport(Viewport viewport)` / `(ref Viewport viewport)` | Sets viewport 0 |
+| `SetViewport` | `void SetViewport(uint index, Viewport viewport)` / `(uint index, ref Viewport viewport)` | Sets one viewport. Index above 0 needs multi-viewport. |
+| `SetFullViewport` | `void SetFullViewport()` / `(uint index)` | Viewport covers the framebuffer |
+| `SetScissorRect` | `void SetScissorRect(uint x, uint y, uint width, uint height)` | Sets scissor rectangle 0 |
+| `SetScissorRect` | `void SetScissorRect(uint index, uint x, uint y, uint width, uint height)` | Sets one scissor rectangle. Index above 0 needs multi-viewport. |
+| `SetFullScissorRect` | `void SetFullScissorRect()` / `(uint index)` | Scissor covers the framebuffer |
 
 `Viewport` is `new Viewport(x, y, width, height, minDepth, maxDepth)`.
 
@@ -79,8 +78,8 @@ All in `CommandBuffer.State`. Source: [CommandBuffer.State.cs](../../Graphite/Co
 cmd.SetFramebuffer(target.Framebuffer);
 cmd.ClearColorTarget(0, new Color(0, 0, 0, 1));
 cmd.ClearDepthStencil(1f, 0);
-cmd.SetViewport(0, new Viewport(0, 0, 640, 360, 0f, 1f));
-cmd.SetScissorRect(0, 0, 0, 640, 360);
+cmd.SetViewport(new Viewport(0, 0, 640, 360, 0f, 1f));
+cmd.SetScissorRect(0, 0, 640, 360);
 ```
 
 ## Draw and dispatch
@@ -108,7 +107,7 @@ Argument structs:
 | `IndirectDrawIndexedArguments` | `IndexCount`, `InstanceCount`, `FirstIndex`, `VertexOffset`, `FirstInstance` |
 | `IndirectDispatchArguments` | `GroupCountX`, `GroupCountY`, `GroupCountZ` |
 
-A full-screen triangle with no vertex buffers is `cmd.Draw(3)` with an `IVertexSource` whose `ResolveSlot` returns `default`, as in [PBRRenderer](../../Samples/PBRRenderer/Program.cs#L224).
+A full-screen triangle with no vertex buffers is `cmd.Draw(3)` with `VertexSource.None`; see [IVertexSource](#ivertexsource).
 
 A compute pass:
 
@@ -120,7 +119,7 @@ cmd.Dispatch((count + 63) / 64, 1, 1);
 context.SubmitCommandBuffer(cmd);
 ```
 
-When validation is enabled (`GraphicsDevice.ValidationEnabled`), a draw throws `RenderException` unless a graphics program, a framebuffer and a vertex source are all bound, and indexed draws also need the source to return an index buffer. A draw with no vertex data still needs an empty `IVertexSource`; `null` is never allowed. Dispatch does not require a framebuffer; the backend ends any active render pass before dispatching.
+When validation is enabled (`GraphicsDevice.ValidationEnabled`), a draw throws `RenderException` unless a graphics program, a framebuffer and a vertex source are all bound, and indexed draws also need the source to return an index buffer. A draw with no vertex data still needs a source, use `VertexSource.None`; `null` is never allowed. Dispatch does not require a framebuffer; the backend ends any active render pass before dispatching.
 
 ## Transfers on a command buffer
 
@@ -167,27 +166,16 @@ Supplies vertex buffers, an optional index buffer and the topology. You implemen
 
 `VertexBinding` is `new VertexBinding(DeviceBuffer buffer, uint offset)`. The buffer must never be null and must have vertex buffer usage; stride lives in the program's layout, not the binding. `layout` is passed in full so implementations can dispatch on the semantic of what the slot holds rather than the slot index.
 
-Both methods are called on every draw and nothing is cached by the command buffer. A `readonly struct` implementation avoids allocation:
+`Topology` is read on every draw. `TryGetIndexBuffer` is called on every indexed draw. `ResolveSlot` is called when the bound source or program differs from the previous draw on the same command buffer; otherwise the resolved vertex buffers are reused. The comparison is by reference, so keep one long-lived instance per mesh.
+
+Implement `IVertexSource` on a class. `SetVertexSource` takes the interface, so a struct is boxed into a new object on every call, which allocates and also defeats the vertex buffer reuse above.
+
+Most code does not need to implement it. `VertexSource` is a ready-made class: `new VertexSource(topology).SetBuffer("POSITION0", buffer).SetIndexBuffer(indices, IndexFormat.UInt16, count)` matches buffers to layout slots by the first element name. `VertexSource.None` is the shared source for shaders that generate vertices from `SV_VertexID` and declare no vertex layout slots:
 
 ```csharp
-internal readonly struct CanvasFullscreenSource : IVertexSource
-{
-    public readonly PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-    public readonly void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-        => binding = default;
-
-    public readonly bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-    {
-        buffer = null!;
-        format = IndexFormat.UInt32;
-        indexCount = 0;
-        return false;
-    }
-}
+cmd.SetVertexSource(VertexSource.None);
+cmd.Draw(3);
 ```
-
-That struct is only valid for a shader that generates its vertices from `SV_VertexID` and so declares no vertex layout slots.
 
 ## TransferCommandBuffer
 
@@ -239,7 +227,7 @@ A pass may rent, record and submit more than one buffer. Submission order is rec
 
 ### Early out without renting
 
-Preconditions are checked before `GetCommandBuffer`, as the present pass does with `SwapchainTarget`, because renting without submitting is a warning.
+Preconditions are checked before `GetCommandBuffer`, as a pass should before using an optional resource, because renting without submitting is a warning.
 
 ## Pitfalls
 
@@ -249,6 +237,7 @@ Preconditions are checked before `GetCommandBuffer`, as the present pass does wi
 - `SetFramebuffer` resets viewports and scissors, so custom ones follow it.
 - `ClearColorTarget` and `ClearDepthStencil` require a framebuffer to be set first, and `ClearDepthStencil` requires a depth attachment.
 - `SetVertexSource` replaces the previous source completely.
+- An `IVertexSource` struct is boxed on every `SetVertexSource` call. Implement it on a class and reuse the instance.
 - `Begin` clears properties, so each rented buffer starts empty.
 - `GraphicsDevice.SubmitAndWait` blocks the CPU until the GPU finishes.
 - Indirect argument buffers must carry the `IndirectBuffer` usage flag.

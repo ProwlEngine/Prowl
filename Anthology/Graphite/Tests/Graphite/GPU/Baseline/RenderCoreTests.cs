@@ -51,14 +51,14 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
         props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1));
         props.SetInt("ColorNormalizationFactor", (int)norm);
 
-        TestVertexSource source = new(PrimitiveTopology.PointList, [vertexBuffer]);
+        VertexSource source = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", vertexBuffer);
 
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(framebuffer);
             cl.ClearColorTarget(0, new Color(0, 0, 0, 1));
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(source);
             cl.SetProperties(props);

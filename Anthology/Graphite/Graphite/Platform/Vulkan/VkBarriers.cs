@@ -118,6 +118,10 @@ internal static unsafe class VkBarriers
                 stages = PipelineStageFlags.TransferBit;
                 access = AccessFlags.TransferWriteBit;
                 break;
+            case ImageLayout.PresentSrcKhr:
+                stages = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.TransferBit;
+                access = AccessFlags.None;
+                break;
             default:
                 stages = PipelineStageFlags.None;
                 access = AccessFlags.None;

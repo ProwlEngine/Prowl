@@ -153,9 +153,9 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+            cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             cl.SetProperties(props);
             for (int i = 0; i < 5; i++)
                 cl.Draw(4);
@@ -181,8 +181,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         UIntPointVertex vertexA = new() { Position = new(10.5f, 10.5f), Color = new Int4 { X = (int)norm } };
         UIntPointVertex vertexB = new() { Position = new(40.5f, 40.5f), Color = new Int4 { Y = (int)norm } };
 
-        TestVertexSource sourceA = new(PrimitiveTopology.PointList, [CreatePointVertexBuffer(vertexA)]);
-        TestVertexSource sourceB = new(PrimitiveTopology.PointList, [CreatePointVertexBuffer(vertexB)]);
+        VertexSource sourceA = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexA));
+        VertexSource sourceB = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexB));
 
         (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
 
@@ -195,7 +195,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
             for (int i = 0; i < 6; i++)
@@ -236,9 +236,9 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(program);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+            cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             for (int i = 0; i < 5; i++)
             {
                 PropertySet iterProps = new();

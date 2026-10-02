@@ -10,7 +10,6 @@ How `GraphicsDevice` is created and torn down, how the execution ring keeps seve
 - [Writing to in-flight buffers](#writing-to-in-flight-buffers)
 - [Swapchain](#swapchain)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -38,7 +37,7 @@ Options that matter here (zero means "use default"):
 | `TransientBufferInitialSize` | 4 MB | Primary transient uniform buffer per slot |
 | `TransientBufferSoftCapBytes` | 64 MB | One-time warning when a slot's total grows past this |
 | `TransientBufferHardCapBytes` | 256 MB | Exception (with validation on) past this |
-| `EnableValidation` | on | See [08-validation-and-profiling.md](08-validation-and-profiling.md) |
+| `GraphiteValidation` | on | See [08-validation-and-profiling.md](08-validation-and-profiling.md) |
 | `Profiler` | null | Optional `IProfiler` |
 
 The defaults and clamping (soft cap raised to at least the initial size, hard cap to at least the soft cap) are in [InitializeFrameOptions](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L210).
@@ -142,7 +141,7 @@ CPU writes to a `DeviceBuffer` (`UpdateBuffer`, or `Map` with `Write`/`ReadWrite
 
 `SwapchainDescription` needs a `SwapchainSource`; `SwapchainSource.CreateVulkan(IVkSurface)` wraps a windowing-library surface. The device builds a `VkSwapchain` and exposes it as `MainSwapchain` and `SwapchainFramebuffer`. Extra swapchains come from `ResourceFactory.CreateSwapchain`.
 
-[SwapBuffersCore](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.cs#L123) presents the current image, immediately acquires the next one, and waits on an image-available fence so the next frame can start rendering into it. This is a CPU wait inside `SwapBuffers`, and `DispatchGraph` calls `SwapBuffers`, so frame-time measurements around `DispatchGraph` include presentation throttling. `ResizeMainWindow` calls `MainSwapchain.Resize`, which recreates the Vulkan swapchain and its framebuffers after a `WaitForIdle`. Changing `SyncToVerticalBlank` is deferred and applied at the next acquire by recreating the swapchain.
+[SwapBuffersCore](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.cs) presents the current image after the GPU signals a per-image present semaphore, then acquires the next image with an acquire semaphore. There is no CPU wait on a fence: the first graphics-queue submit of the next frame waits on the acquire semaphore on the GPU. `vkAcquireNextImageKHR` can still block the CPU when every image is queued for presentation, so frame-time measurements around `DispatchGraph` include that throttling. See [07-vulkan-backend.md](07-vulkan-backend.md#swapchain-and-present). `ResizeMainWindow` calls `MainSwapchain.Resize`, which recreates the Vulkan swapchain and its framebuffers after a `WaitForIdle`. Changing `SyncToVerticalBlank` is deferred and applied at the next acquire by recreating the swapchain.
 
 ## Design decisions
 
@@ -154,17 +153,6 @@ A watcher thread would need its own synchronisation with the `_executionLock` an
 
 ### Why orphaning instead of a staging copy?
 Orphaning keeps the `DeviceBuffer` identity (so property sets and cached bindings that reference it stay valid) while avoiding both a stall and a GPU-side copy. The cost moves to the allocator, which is why repeated orphaning is warned about.
-
-## Gotchas
-
-- `BeginExecution` can block. It blocks when every slot is in flight, meaning the GPU is behind or `MaxFramesInFlight` is smaller than the latency requires.
-- `LastCompletedExecutionId` advances on reclaim and explicit checks, not on the fence signal itself. `IsExecutionComplete(task)` gives the exact answer.
-- `CompletionFence` belongs to a ring slot and is reset when the slot is reused, so it is valid only while the task is the newest occupant of its slot.
-- Transient uniform ranges are invalid after their execution completes; the arena rewinds and overwrites them.
-- `TransientWrites = true` disables all write-hazard tracking. Writing such a buffer while the GPU reads it is undefined behavior.
-- `WaitForIdle` resets all slots, including ones a caller is still recording into. Calling it between `BeginExecution` and `CompleteExecution` is invalid.
-- `SwapBuffers` and `ResizeMainWindow` throw if the device was created without a main swapchain.
-- Only the swapchain depth format is optional: a `null` `SwapchainDepthFormat` gives a framebuffer with no depth attachment.
 
 ## See also
 

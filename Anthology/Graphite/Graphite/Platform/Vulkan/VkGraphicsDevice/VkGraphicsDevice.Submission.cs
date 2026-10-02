@@ -19,6 +19,88 @@ internal unsafe partial class VkGraphicsDevice
     /// <summary>Test hook: total vkQueueSubmit calls made against the graphics queue.</summary>
     internal int GraphicsQueueSubmitCount => System.Threading.Volatile.Read(ref _graphicsQueueSubmitCount);
 
+    private const PipelineStageFlags AcquireWaitStages = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.TransferBit;
+
+    private readonly List<VkSwapchain> _swapchains = [];
+    private VkSemaphore[] _acquireWaitSemaphores = new VkSemaphore[1];
+    private PipelineStageFlags[] _acquireWaitStages = new PipelineStageFlags[1];
+
+    internal void RegisterSwapchain(VkSwapchain swapchain)
+    {
+        lock (_graphicsQueueLock)
+            _swapchains.Add(swapchain);
+    }
+
+    internal void UnregisterSwapchain(VkSwapchain swapchain)
+    {
+        lock (_graphicsQueueLock)
+            _swapchains.Remove(swapchain);
+    }
+
+    private int GatherAcquireWaits_NoLock()
+    {
+        int count = 0;
+        foreach (VkSwapchain swapchain in _swapchains)
+        {
+            VkSemaphore pending = swapchain.TakePendingAcquire();
+            if (pending.Handle == 0)
+                continue;
+
+            if (count == _acquireWaitSemaphores.Length)
+            {
+                System.Array.Resize(ref _acquireWaitSemaphores, count * 2);
+                System.Array.Resize(ref _acquireWaitStages, count * 2);
+            }
+
+            _acquireWaitSemaphores[count] = pending;
+            _acquireWaitStages[count] = AcquireWaitStages;
+            count++;
+        }
+        return count;
+    }
+
+    private void SubmitSemaphoresOnly_NoLock(VkSemaphore* signal)
+    {
+        int waitCount = GatherAcquireWaits_NoLock();
+        if (waitCount == 0 && signal == null)
+            return;
+
+        fixed (VkSemaphore* waits = _acquireWaitSemaphores)
+        fixed (PipelineStageFlags* stages = _acquireWaitStages)
+        {
+            SubmitInfo si = new(sType: StructureType.SubmitInfo)
+            {
+                WaitSemaphoreCount = (uint)waitCount,
+                PWaitSemaphores = waits,
+                PWaitDstStageMask = stages,
+                SignalSemaphoreCount = signal != null ? 1u : 0u,
+                PSignalSemaphores = signal,
+            };
+
+            _graphicsQueueSubmitCount++;
+            Vk.QueueSubmit(GraphicsQueue, 1, &si, default).CheckResult();
+            FlushValidationErrors();
+        }
+    }
+
+    internal void ConsumePendingAcquires()
+    {
+        lock (_graphicsQueueLock)
+            SubmitSemaphoresOnly_NoLock(null);
+    }
+
+    internal void SignalPresentSemaphore(VkSemaphore semaphore)
+    {
+        lock (_graphicsQueueLock)
+            SubmitSemaphoresOnly_NoLock(&semaphore);
+    }
+
+    internal void WaitForGraphicsQueueIdle()
+    {
+        lock (_graphicsQueueLock)
+            Vk.QueueWaitIdle(GraphicsQueue);
+    }
+
     public override void ResetFence(Fence fence)
     {
         VkFenceHandle vkFence = Util.AssertSubtype<Fence, VkFence>(fence).DeviceFence;
@@ -58,21 +140,26 @@ internal unsafe partial class VkGraphicsDevice
                 handles[i] = handle;
             }
 
-            PipelineStageFlags waitDstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
-
             fixed (Silk.NET.Vulkan.CommandBuffer* pHandles = handles)
             {
                 SubmitInfo si = new(sType: StructureType.SubmitInfo)
                 {
                     CommandBufferCount = (uint)count,
                     PCommandBuffers = count > 0 ? pHandles : null,
-                    PWaitDstStageMask = &waitDstStageMask
                 };
 
                 lock (_graphicsQueueLock)
                 {
-                    _graphicsQueueSubmitCount++;
-                    Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+                    int waitCount = GatherAcquireWaits_NoLock();
+                    fixed (VkSemaphore* waits = _acquireWaitSemaphores)
+                    fixed (PipelineStageFlags* stages = _acquireWaitStages)
+                    {
+                        si.WaitSemaphoreCount = (uint)waitCount;
+                        si.PWaitSemaphores = waits;
+                        si.PWaitDstStageMask = stages;
+                        _graphicsQueueSubmitCount++;
+                        Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+                    }
                     FlushValidationErrors();
                 }
             }
@@ -99,7 +186,7 @@ internal unsafe partial class VkGraphicsDevice
     {
         VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
         SubmitCommandBuffer(
-            null, vkCb.CommandBuffer, 0, null, 0, null, null,
+            null, vkCb.CommandBuffer, null,
             timingPool: vkCb.TakePendingTimingPool(), statsPool: null, bufferName: vkCb.Name, isTransfer: true, pass: null,
             transferId: vkCb.Id);
     }
@@ -119,8 +206,16 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
-            _graphicsQueueSubmitCount++;
-            Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+            int waitCount = GatherAcquireWaits_NoLock();
+            fixed (VkSemaphore* waits = _acquireWaitSemaphores)
+            fixed (PipelineStageFlags* stages = _acquireWaitStages)
+            {
+                si.WaitSemaphoreCount = (uint)waitCount;
+                si.PWaitSemaphores = waits;
+                si.PWaitDstStageMask = stages;
+                _graphicsQueueSubmitCount++;
+                Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+            }
             FlushValidationErrors();
         }
 
@@ -144,10 +239,6 @@ internal unsafe partial class VkGraphicsDevice
     internal void SubmitCommandBuffer(
         VkCommandBuffer? vkCL,
         Silk.NET.Vulkan.CommandBuffer vkCB,
-        uint waitSemaphoreCount,
-        VkSemaphore* waitSemaphoresPtr,
-        uint signalSemaphoreCount,
-        VkSemaphore* signalSemaphoresPtr,
         Fence? fence,
         QueryPool? timingPool = null,
         QueryPool? statsPool = null,
@@ -166,14 +257,6 @@ internal unsafe partial class VkGraphicsDevice
             PCommandBuffers = &vkCB
         };
 
-        PipelineStageFlags waitDstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
-        si.PWaitDstStageMask = &waitDstStageMask;
-
-        si.PWaitSemaphores = waitSemaphoresPtr;
-        si.WaitSemaphoreCount = waitSemaphoreCount;
-        si.PSignalSemaphores = signalSemaphoresPtr;
-        si.SignalSemaphoreCount = signalSemaphoreCount;
-
         VkFenceHandle vkFence;
         VkFenceHandle submissionFence;
         if (useExtraFence)
@@ -189,8 +272,16 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
-            _graphicsQueueSubmitCount++;
-            Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
+            int waitCount = GatherAcquireWaits_NoLock();
+            fixed (VkSemaphore* waits = _acquireWaitSemaphores)
+            fixed (PipelineStageFlags* stages = _acquireWaitStages)
+            {
+                si.WaitSemaphoreCount = (uint)waitCount;
+                si.PWaitSemaphores = waits;
+                si.PWaitDstStageMask = stages;
+                _graphicsQueueSubmitCount++;
+                Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
+            }
             FlushValidationErrors();
 
             if (useExtraFence)

@@ -62,7 +62,7 @@ file sealed class CopyReadbackPass : IPass<RasterView>
 
     public string Name => "CopyReadback";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetInputTexture(_id);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
     public void Render(RenderContext<RasterView> context)
     {
@@ -70,27 +70,6 @@ file sealed class CopyReadbackPass : IPass<RasterView>
         CommandBuffer cmd = context.GetCommandBuffer(Name);
         cmd.CopyTexture(target.ColorTextures[0], _readback);
         context.SubmitCommandBuffer(cmd);
-    }
-}
-
-file sealed class NoOpRasterPresentPass : IPresentPass<RasterView>
-{
-    public string Name => "Present";
-    public void Setup(PresentContextBuilder builder) { }
-    public void Present(RenderContext<RasterView> context) { }
-}
-
-file sealed class RasterTestPipeline : RenderPipeline<RasterView>
-{
-    private readonly IPass<RasterView>[] _passes;
-
-    public RasterTestPipeline(params IPass<RasterView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<RasterView> pass in _passes)
-            AddPass(pass);
-        SetPresentPass(new NoOpRasterPresentPass());
     }
 }
 
@@ -108,7 +87,7 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         RenderResourceID id = RenderResourceID.Intern("raster_clear_target");
         ClearingRasterPass clearPass = new(id, clear);
         CopyReadbackPass copyPass = new(id, readback);
-        using RasterTestPipeline pipeline = new(clearPass, copyPass);
+        using RenderPipeline<RasterView> pipeline = new([clearPass, copyPass]);
 
         GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
         GD.WaitForIdle();

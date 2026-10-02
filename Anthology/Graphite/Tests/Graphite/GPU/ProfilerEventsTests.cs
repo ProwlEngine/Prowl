@@ -113,7 +113,7 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
 
     public string Name => "ProfilerCopy";
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetInputTexture(_id, TextureUsageKind.TransferSrc);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureUsageKind.TransferSrc);
 
     public void Render(RenderContext<ProfilerView> context)
     {
@@ -121,27 +121,6 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
         CommandBuffer cmd = context.GetCommandBuffer(Name);
         cmd.CopyTexture(target.ColorTextures[0], _readback);
         context.SubmitCommandBuffer(cmd);
-    }
-}
-
-file sealed class NoOpProfilerPresentPass : IPresentPass<ProfilerView>
-{
-    public string Name => "Present";
-    public void Setup(PresentContextBuilder builder) { }
-    public void Present(RenderContext<ProfilerView> context) { }
-}
-
-file sealed class ProfilerTestPipeline : RenderPipeline<ProfilerView>
-{
-    private readonly IPass<ProfilerView>[] _passes;
-
-    public ProfilerTestPipeline(params IPass<ProfilerView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<ProfilerView> pass in _passes)
-            AddPass(pass);
-        SetPresentPass(new NoOpProfilerPresentPass());
     }
 }
 
@@ -254,7 +233,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_target");
         ClearingRasterPass clearPass = new(id);
         ReadingCopyPass copyPass = new(id, readback);
-        using ProfilerTestPipeline pipeline = new(clearPass, copyPass);
+        using RenderPipeline<ProfilerView> pipeline = new([clearPass, copyPass]);
 
         device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
         device.WaitForIdle();
@@ -268,7 +247,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerCopy" && r.Resource.Equals(id));
 
         Assert.Equal(
-            new[] { "ProfilerClear Barriers", "ProfilerClear", "ProfilerCopy Barriers", "ProfilerCopy", "Present Barriers" },
+            new[] { "ProfilerClear", "ProfilerCopy" },
             profiler.Submits.ConvertAll(s => s.Info.Name));
         Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 

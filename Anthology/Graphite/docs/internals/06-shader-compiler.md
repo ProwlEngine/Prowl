@@ -8,7 +8,6 @@ How a `.shader` file becomes `ShaderDescription`s: tokenizer, parser, variant di
 - [Control flow](#control-flow)
 - [The variant and keyword model](#the-variant-and-keyword-model)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -225,20 +224,6 @@ The session (and its module cache) is reused across shaders to keep compiles fas
 ### Why an interface seam (`IShaderCompiler`)?
 
 Core must not depend on the native Slang library. Anything that only plays back baked variants never touches the Compiler assembly.
-
-## Gotchas
-
-- `ShaderDefinition.Create` with a compiler requires a `Variant fallback` argument. `new Variant()`, an empty variant with nothing compiled, means "throw if resolution fails".
-- `RegisterModule` precedes `BeginSession`. `GetAxes` and `Compile` require an open session; without one, `Prepare` throws `Compile called before BeginSession!`. `BeginSession` and `EndSession` both clear the per-pass cache, and `EndSession` closes the session, after which on-demand compilation is unavailable.
-- A `ShaderPass`'s keywords are mutable shared state. `SetKeyword` followed by `SetShader` is not thread-safe, and two users of the same pass with different keywords overwrite each other.
-- Enum axis types must be `public`. A non-public enum fails at link time in a generated module; `EnsureEnumAccessible` reports this with a clear message instead.
-- Only `bool` and enum axes are supported. Bool keyword values are the lowercase strings `"true"` and `"false"`.
-- `SetKeyword` throws for an unknown axis name; `TrySetKeyword` returns false; `ApplyKeywords` skips unknown names and returns how many applied.
-- Only the first blend attachment is written by `PassState.ToBlendState`. It replaces `AttachmentStates` with a single entry, so multi-target blend needs a hand-built program.
-- `Offset <factor> <units>` becomes depth bias in `PassState.ToRasterizerState`: factor is the slope factor, units the constant factor. `Cull Off` works by setting `CullMode = None`; `PassState.EnableCulling` is never set by the parser.
-- Shader `Properties` and `Fallback "name"` are parsed and stored on `ShaderDefinition`, but nothing in ShaderDef or Graphite consumes them. They are data for the consuming renderer or material system.
-- `SlangShaderCompiler.Compile` is called from `ShaderPass.Resolve` on the thread that binds the shader, so the first draw of an uncompiled variant stalls command recording. `CompileMode.All`, `CompileAll()` and baked snapshots remove the stall.
-- [SlangQuickCompile](../../Tools/SlangQuickCompile/Program.cs) reads `Tests/ShaderDef.Compiler/Shaders` and compares against `Tests/ShaderDef.Compiler/KnownGood`; `--write` updates the known-good outputs.
 
 ## See also
 

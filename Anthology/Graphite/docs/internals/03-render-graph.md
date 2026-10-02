@@ -8,12 +8,11 @@ How Graphite turns a list of passes and their declared reads/writes into an orde
 - [Resource states and barriers](#resource-states-and-barriers)
 - [Resource lifetimes](#resource-lifetimes)
 - [Design decisions](#design-decisions)
-- [Gotchas and pitfalls](#gotchas-and-pitfalls)
 - [See also](#see-also)
 
 ## Overview
 
-A `RenderPipeline<TView>` owns a list of `IPass<TView>` plus exactly one `IPresentPass<TView>`. The first time anything asks for `pipeline.Graph`, the pipeline runs `InitializePasses`, then `RenderGraph<TView>.Build` calls every pass's `Setup`, collects the resource IDs each pass reads and writes, links writers to readers, and topologically sorts the passes. The solved graph is cached. `GraphicsDevice.DispatchGraph` then runs the same solved graph once per view inside a single `ExecutionTask`.
+A `RenderPipeline<TView>` owns a list of `IPass<TView>`. The first time anything asks for `pipeline.Graph`, the pipeline runs `InitializePasses`, then `RenderGraph<TView>.Build` calls every pass's `Setup`, collects the resource IDs each pass reads and writes, links writers to readers, and topologically sorts the passes. The solved graph is cached. `GraphicsDevice.DispatchGraph` then runs the same solved graph once per view inside a single `ExecutionTask`.
 
 The graph orders passes, names resources, and owns the state of every graph resource inside an execution: each declaration carries a usage kind, and the graph records the barriers that move resources into those states before each pass runs. It does not alias memory or cull passes. Physical textures and buffers are obtained when a pass starts (for its declared resources) or when a pass calls `GetRenderTexture` or `GetRenderBuffer` during `Render`.
 
@@ -22,9 +21,9 @@ The graph orders passes, names resources, and owns the state of every graph reso
 | Type | Role | Source |
 |------|------|--------|
 | `RenderPipeline<TView>` | Owns passes, central resources, lazily builds and caches the graph, runs `ExecuteView` | [RenderPipeline.cs](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L10) |
-| `RenderGraph<TView>` | Solved result: `OrderedPasses`, merged `Resources`, present inputs | [RenderGraph.cs](../../Graphite/Core/RenderGraph/RenderGraph.cs#L7) |
+| `RenderGraph<TView>` | Solved result: `OrderedPasses`, merged `Resources`, `WritesBackbuffer` | [RenderGraph.cs](../../Graphite/Core/RenderGraph/RenderGraph.cs#L7) |
 | `RenderGraph<TView>.PassNode` | A pass plus its declared input and output IDs and its `ResourceAccess` list | [RenderGraph.cs](../../Graphite/Core/RenderGraph/RenderGraph.cs#L11) |
-| `RenderContextBuilder` / `PresentContextBuilder` | What a pass sees in `Setup`; records reads and writes with their usage kinds | [RenderContextBuilder.cs](../../Graphite/Core/RenderGraph/RenderContextBuilder.cs), [PresentContextBuilder.cs](../../Graphite/Core/RenderGraph/PresentContextBuilder.cs) |
+| `RenderContextBuilder` | What a pass sees in `Setup`; records reads and writes with their usage kinds | [RenderContextBuilder.cs](../../Graphite/Core/RenderGraph/RenderContextBuilder.cs) |
 | `TextureUsageKind` / `BufferUsageKind` | Public usage kinds a declaration carries | [UsageKinds.cs](../../Graphite/Core/RenderGraph/UsageKinds.cs#L6) |
 | `ResourceAccess` | Internal record of one declaration: ID, texture or buffer, input or output, declared kinds, start kind, optional depth kind | [UsageKinds.cs](../../Graphite/Core/RenderGraph/UsageKinds.cs#L60) |
 | `TextureState` / `BufferAccess` / `TextureBarrier` | Platform-agnostic barrier vocabulary the graph hands to the backend | [ResourceBarriers.cs](../../Graphite/Core/CommandBuffer/ResourceBarriers.cs) |
@@ -52,12 +51,12 @@ flowchart LR
     BE --> View
     subgraph View["Each view"]
         direction LR
-        P["Passes"] --> PP["Present pass"]
+        P["Passes"] --> RR["Restore resting states"]
     end
     View --> CE["CompleteExecution"] -->|"if presented"| SB["SwapBuffers"]
 ```
 
-[DispatchGraph](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L14) does four things: reads `pipeline.Graph`, calls `BeginExecution`, loops the views, and calls `CompleteExecution`. For each view it builds a fresh `RenderContext`, brackets the work in `Profiler?.BeginView/EndView`, and ORs `context.RequestPresent` into a flag. `SwapBuffers` is called once, after `CompleteExecution`, and only if at least one view armed present.
+[DispatchGraph](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L14) does four things: reads `pipeline.Graph`, calls `BeginExecution`, loops the views, and calls `CompleteExecution`. For each view it builds a fresh `RenderContext`, brackets the work in `Profiler?.BeginView/EndView`, and ORs `context.PresentRequested` into a flag. That is true when the graph writes the backbuffer and the device has a main swapchain. `SwapBuffers` is called once, after `CompleteExecution`, and only if at least one view requested it.
 
 All views in one dispatch share one `ExecutionTask`: one ring slot, one fence, one transient bump allocator. The execution lifecycle itself is covered in [02-device-and-execution.md](02-device-and-execution.md).
 
@@ -67,10 +66,9 @@ All views in one dispatch share one `ExecutionTask`: one ring slot, one fence, o
 
 1. Centrally declared resources (`DeclareTexture`, `DeclareBuffer`) are added to the `Resources` dictionary first, with `TryAdd`.
 2. For each pass in `AddPass` order: reset the shared `RenderContextBuilder`, call `Setup`, copy out the declared inputs (IDs only), outputs (full `GraphResource` objects) and accesses (ID plus usage kind). Each output is `TryAdd`ed to `Resources`, so the first declaration of an ID defines its description; later declarations only count as additional writers.
-3. The present pass `Setup` records its inputs, their usage kinds, and whether it needs the swapchain. It has no outputs.
-4. [`ValidateInputsHaveProducers`](../../Graphite/Core/RenderGraph/RenderGraph.cs#L177): every pass input and present input must exist in `Resources`, otherwise `InvalidOperationException` naming the pass and resource.
-5. [`ApplyStorageUsage`](../../Graphite/Core/RenderGraph/RenderGraph.cs#L132): a texture declaration against a buffer ID (or the reverse) throws. A texture declared `Storage` by any pass gets `TextureUsage.Storage` on its color textures; an imported texture declared `Storage` must already have it.
-6. [`TopologicalSort`](../../Graphite/Core/RenderGraph/RenderGraph.cs#L203) produces the final order.
+3. [`ValidateInputsHaveProducers`](../../Graphite/Core/RenderGraph/RenderGraph.cs#L177): every pass input must exist in `Resources`, otherwise `InvalidOperationException` naming the pass and resource.
+4. [`ApplyStorageUsage`](../../Graphite/Core/RenderGraph/RenderGraph.cs#L132): a texture declaration against a buffer ID (or the reverse) throws, and so does reading the backbuffer. A texture declared `Storage` by any pass gets `TextureUsage.Storage` on its color textures; an imported texture declared `Storage` must already have it.
+5. [`TopologicalSort`](../../Graphite/Core/RenderGraph/RenderGraph.cs#L203) produces the final order.
 
 ### 3. Ordering from declared reads and writes
 
@@ -80,7 +78,7 @@ The sort is Kahn's algorithm with a linear scan for the next ready node. The sca
 - A pass that both reads and writes an ID skips the self edge. This is what lets a pass read its own previous-frame output as history.
 - An input with no writer pass but a central declaration is valid and creates no edge.
 - A cycle throws during `Build`, before any rendering.
-- The present pass is not part of the sort. It always runs last, and its inputs are recorded only for validation and profiling.
+- The backbuffer has no readers, so a pass that writes it is ordered only by the other resources it reads. Backbuffer writers that read nothing in common keep insertion order.
 
 ### 4. ExecuteView
 
@@ -95,7 +93,7 @@ The sort is Kahn's algorithm with a linear scan for the next ready node. The sca
 7. Calls [`ReclaimUnsubmittedCommandBuffers`](../../Graphite/Core/RenderGraph/RenderContext.cs#L305): any command buffer rented but never submitted raises `OnWarning` and is dropped.
 8. If the profiler asks for capture, copies each texture output through a `TransferCommandBuffer`. The copy reads the output's current state from the context and transitions out of and back into it.
 
-After the loop it sets the present pass's accesses as current, records its barriers, calls `PresentPass.Present(context)`, reclaims again, and finally calls [`RestoreRestingStates`](../../Graphite/Core/RenderGraph/RenderContext.cs#L97). `_executingView` is set for the duration so `InvalidateGraph` can be rejected mid-dispatch.
+After the loop it calls [`RestoreRestingStates`](../../Graphite/Core/RenderGraph/RenderContext.cs#L97). `_executingView` is set for the duration so `InvalidateGraph` can be rejected mid-dispatch.
 
 ## Resource states and barriers
 
@@ -109,7 +107,7 @@ flowchart LR
         direction LR
         subgraph Pass["Each pass"]
             direction LR
-            A["Declared kinds"] --> B["Barrier batch"] --> C["Barrier CB"] --> R["Render"]
+            A["Declared kinds"] --> B["Barrier batch"] --> C["Open tail CB"] --> R["Render"]
         end
         Pass --> P["Present"] --> E["Restore to rest"]
     end
@@ -120,21 +118,29 @@ flowchart LR
 - **Textures.** Each declared resource is resolved (renting it if needed). Every color texture moves to the declaration's start kind (`initial`, or the only declared kind). The depth texture moves to `depthUsage` when given, else follows the color kind, except that `Storage` leaves it alone. A barrier is added when the state changes, or when the target state writes (`Storage`, `Attachment`, `TransferDst`) so back-to-back writers are ordered. When a pass declares the same ID as input and output, the output declaration wins.
 - **Buffers.** Buffers have no layout, so one global memory barrier covers them. Each graph buffer tracks its last write access, the reads since that write, and the reads the last barrier already made visible. A write adds the last write and the reads since it to the source scope; a read adds the last write only if the read kind is not visible yet. A buffer seen for the first time in a view assumes a prior shader or transfer write and prior reads of every kind.
 
-If anything is needed, the context rents a command buffer named `"<pass> Barriers"`, records the batch through the internal `CommandBuffer.RecordBarriers`, and submits it before the pass renders. Being submitted first makes the order of the pass's own command buffers irrelevant. The state dictionary is updated only after the batch is recorded.
+If anything is needed, the batch is recorded through the internal `CommandBuffer.RecordBarriers` into the execution's open tail, and the state dictionary is updated after it.
+
+The open tail is the command buffer most recently submitted through `SubmitCommandBuffer`. Submitting a buffer closes any open render pass on it (applying queued clears) but defers `End`: the buffer stays open as the execution's tail, so the next pass's barriers are appended to it and run after everything already queued and before anything the next pass submits. Submitting another buffer, a transfer flush (`SubmitTransferCommandBuffer`) and `CompleteExecution` end the tail and queue it. The tail carries over between views of one dispatch.
+
+When there is no tail (the first pass of an execution, or the first pass after a transfer flush), the batch is deferred and recorded at the start of the first command buffer the pass rents. That buffer must then be submitted before the pass's other buffers, otherwise [`SubmitCommandBuffer`](../../Graphite/Core/RenderGraph/RenderContext.cs#L288) throws `InvalidOperationException`; submitting a transfer before it throws as well. If the pass rents nothing, or never submits that buffer, the batch goes into a separate command buffer named `"<pass> Barriers"` after the pass.
 
 ### In-pass transitions
 
-[`Transition`](../../Graphite/Core/RenderGraph/RenderContext.cs#L114) lets a pass move a texture between the kinds it declared. It checks the kind against the pass's declaration, builds the same kind of barrier batch for the current texture of that ID (depth follows only when `depthUsage` was not given), records it into the pass's own command buffer, then commits the new states. The next pass's barriers start from wherever the texture was left.
+[`Transition`](../../Graphite/Core/RenderGraph/RenderContext.cs#L114) lets a pass move a texture between the kinds it declared. It checks the kind against the pass's declaration, builds the same kind of barrier batch for the current texture of that ID (depth follows only when `depthUsage` was not given), records it into the pass's own command buffer, then commits the new states. The next pass's barriers start from wherever the texture was left. The overload without a command buffer records into the pass's only open command buffer and throws when the pass holds none or several.
 
 Since the state now follows recording order, a pass that has transitioned must submit in rent order: [`SubmitCommandBuffer`](../../Graphite/Core/RenderGraph/RenderContext.cs#L288) throws if the buffer being submitted is not the oldest one the pass still holds. The flag resets when the next pass starts.
 
-`RestoreRestingStates` runs after the present pass and moves every non-resting texture back to `Resting` in one final `"<present> Barriers"` command buffer. Because of this, pooled transient textures, history rings and imported textures need no stored layout between executions.
+`RestoreRestingStates` runs after the last pass and moves every non-resting texture back to `Resting`, the backbuffer included, with one final batch appended to the open tail (or a `"View Barriers"` command buffer when there is none). Because of this, pooled transient textures, history rings and imported textures need no stored layout between executions.
 
 Every command buffer rented through the context (graphics and transfer) points at the same state dictionary, so backend commands that need a specific layout (copies, mip generation, resolves) start from the texture's current state and return to it. A texture that is not a graph resource is always `Resting` for them.
 
+### The backbuffer resource
+
+The main swapchain image is a [`GraphBackbufferResource`](../../Graphite/Core/RenderGraph/GraphResource.cs) under one reserved ID, registered by `RenderContextBuilder.DeclareBackbuffer`. `GetRenderTexture` resolves it by wrapping the device's swapchain framebuffer in a non-owning `RenderTexture` whose color and depth textures are the current image's, so the same barrier code that handles pooled textures moves it between `PresentSrcKhr` and attachment layout. The swapchain image is acquired eagerly before the first view, so the image is known when the context resolves it. `RenderGraph.WritesBackbuffer` is true when any pass declared it, and `DispatchGraph` presents when that holds and the device has a main swapchain. Capture skips it.
+
 ### Undeclared use
 
-[`CheckDeclared`](../../Graphite/Core/RenderGraph/RenderContext.cs#L228) runs in `GetRenderTexture` and `GetRenderBuffer` while a pass or the present pass is current. Resolving an ID the pass did not declare throws `InvalidOperationException`. Outside a pass (profiler reads, capture) no check applies.
+[`CheckDeclared`](../../Graphite/Core/RenderGraph/RenderContext.cs#L228) runs in `GetRenderTexture` and `GetRenderBuffer` while a pass is current. Resolving an ID the pass did not declare throws `InvalidOperationException`. Outside a pass (profiler reads, capture) no check applies.
 
 ## Resource lifetimes
 
@@ -142,9 +148,9 @@ Three lifetimes exist, decided by how a resource is declared.
 
 | Kind | Declared by | Backing storage | Freed when | Default ops |
 |------|-------------|-----------------|------------|-------------|
-| Transient | `GetOutputTexture(id, desc)` with `history = 0`, or `DeclareTexture` / `DeclareBuffer` | Rented from the device's transient pool on first `GetRender*` in a view | Returned to the pool once the execution's fence signals | Clear + Store |
-| History | `GetOutputTexture(id, desc, history: N)` | `N+1`-slot ring per view, owned by the graph | Ring disposed after 120 unused executions, on resize, or when the graph is disposed | Load + Store |
-| Imported | `ImportTexture(id, rt)` | Caller's `RenderTexture` | Never by the graph | Load + Store |
+| Transient | `DeclareOutputTexture(id, desc)` with `history = 0`, or `DeclareTexture` / `DeclareBuffer` | Rented from the device's transient pool on first `GetRender*` in a view | Returned to the pool once the execution's fence signals | Clear + Store |
+| History | `DeclareOutputTexture(id, desc, history: N)` | `N+1`-slot ring per view, owned by the graph | Ring disposed after 120 unused executions, on resize, or when the graph is disposed | Load + Store |
+| Imported | `DeclareImportedTexture(id, rt)` | Caller's `RenderTexture` | Never by the graph | Load + Store |
 
 "Shared" in the sense of this page means a resource declared once centrally on the pipeline and referenced by ID from several passes. It is still transient or history by lifetime; the central declaration only decides who owns the description.
 
@@ -193,7 +199,7 @@ History depth `N` allocates `N+1` copies per view ([HistoryRings.Resolve](../../
 
 ### Imported resources
 
-An imported resource resolves to the caller's `RenderTexture` directly. Requesting `framesAgo != 0` throws. The graph never disposes it. It must be in its resting layout when the execution starts, and the graph returns it there when the view ends. `ImportTexture` takes a usage kind like any output, `Attachment` by default.
+An imported resource resolves to the caller's `RenderTexture` directly. Requesting `framesAgo != 0` throws. The graph never disposes it. It must be in its resting layout when the execution starts, and the graph returns it there when the view ends. `DeclareImportedTexture` takes a usage kind like any output, `Attachment` by default.
 
 ## Design decisions
 
@@ -233,26 +239,9 @@ A declaration with several kinds has no natural start state, and a hidden priori
 
 Graph textures are always one mip and one layer, so a whole-image state is exact. Per-mip or per-layer work (mip generation, resolves) happens inside a single command, which transitions its own subresources and returns them to the texture's current state.
 
-### Why a separate barrier command buffer?
+### Why append barriers to the open tail?
 
-A pass may rent several command buffers and submit them in any order. Recording the pass's barriers into a buffer that is submitted before the pass renders guarantees they execute first. The extra buffers join the same queue submission batch.
-
-## Gotchas and pitfalls
-
-- History rotates per execution. Calling `DispatchGraph` twice in a frame rotates twice.
-- A view that is not dispatched for 120 executions loses its history rings. The next dispatch starts with empty history, and `context.IsHistoryValid(handle)` returns false.
-- A history resource is declared as an output with `history`. Ordering after earlier writers comes only from declaring it as an input as well, because self edges are ignored.
-- Changing a view's `ViewId` reallocates its ring.
-- Default `TextureHandle`/`BufferHandle` have `IsValid == false`; resolving one throws `ArgumentException`.
-- Resolving a texture ID with `GetRenderBuffer` (or vice versa) throws with a message naming the right method.
-- Command buffers are submitted through `context.SubmitCommandBuffer`. A rented-but-unsubmitted buffer produces a warning and is discarded.
-- A texture is in one state at a time. To render into it and later sample it in the same pass, declare both kinds and call `Transition` between the draws.
-- Two passes that ping-pong between the same two IDs form a cycle and fail to build; loop inside one pass with `Transition` instead.
-- Resolving a resource the running pass did not declare throws. Declare everything a pass touches, including history reads (`GetInputTexture` on the history ID).
-- The profiler sees the graph's `"<pass> Barriers"` command buffers as ordinary graphics submits.
-- `InvalidateGraph` disposes history rings and reruns `InitializePasses` on next access; it throws if called while a view executes.
-- `IPresentPass.Setup` cannot declare outputs, so nothing can consume the present pass's work through the graph.
-- Present is skipped entirely (no `SwapBuffers`) unless some view's present pass called `context.Present()`. `SwapchainTarget` is null unless the present pass called `RequestSwapchain()`.
+A pass may rent several command buffers and submit them in any order, so the start of the pass's own first buffer is not a safe place for its barriers in general. The end of the last buffer already submitted is: it precedes, in queue order, everything the pass will submit. Appending there avoids a dedicated command buffer per pass (and its begin, end and profiler queries) without restricting the pass. Only when nothing has been submitted yet does the batch fall back to the pass's first rented buffer, and only then does submit order matter.
 
 ## See also
 

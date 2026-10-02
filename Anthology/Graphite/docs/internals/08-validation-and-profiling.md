@@ -6,7 +6,6 @@ How Graphite's two optional diagnostic layers are wired into the core, what they
 - [Key types](#key-types)
 - [Control flow](#control-flow)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -41,7 +40,7 @@ Neither layer is a separate assembly or a `#if`. Both work through `partial` cla
 
 Every backend constructor calls [`InitializeFrameOptions`](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L210). After it sizes the execution ring and transient caps, it calls two partial methods:
 
-- `InitializeFrameOptions_SetValidationEnabled` sets `ValidationEnabled = options.EnableValidation ?? true`. Validation is on unless `EnableValidation` is `false`.
+- `InitializeFrameOptions_SetValidationEnabled` sets `ValidationEnabled = options.GraphiteValidation`. Validation is on unless `GraphiteValidation` is `false`.
 - `InitializeFrameOptions_InitializeProfiling` copies `options.Profiler` into the `Profiler` property.
 
 ### 2. Validation: check-then-act at the public boundary
@@ -71,7 +70,7 @@ One check lives in the Vulkan backend rather than the core: the transient hard c
 
 ### 3. Profiling: a null-guarded event stream
 
-The device exposes `Profiler` and the core and backend call it with `?.`. During `DispatchGraph`, [`DispatchGraph`](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L35) brackets each view and [`RenderPipeline.ExecuteView`](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L97) brackets each pass. The present pass is not wrapped in `BeginPass`/`EndPass`; only the ordered graph passes are.
+The device exposes `Profiler` and the core and backend call it with `?.`. During `DispatchGraph`, [`DispatchGraph`](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L35) brackets each view and [`RenderPipeline.ExecuteView`](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L97) brackets each pass.
 
 Event sources, grouped by where the call is made:
 
@@ -113,7 +112,7 @@ flowchart LR
 
 ### 5. The third layer: Vulkan's own validation
 
-`GraphicsDeviceOptions.Debug` is unrelated to `EnableValidation`. When `Debug` is true, the Vulkan instance enables `VK_EXT_debug_report` and whichever of the standard or Khronos validation layers are installed ([Init.cs](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Init.cs#L88)). The driver callback cannot throw across the unmanaged boundary, so it stores the last error string and returns; the next call to [`FlushValidationErrors`](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.DebugMarkers.cs#L77) (after a submit, after `WaitForIdle`) turns it into a `RenderException`. Warnings are printed to the console immediately.
+`GraphicsDeviceOptions.VulkanValidationLayers` is unrelated to `GraphiteValidation`. When `VulkanValidationLayers` is true, the Vulkan instance enables `VK_EXT_debug_report` and whichever of the standard or Khronos validation layers are installed ([Init.cs](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.Init.cs#L88)). The driver callback cannot throw across the unmanaged boundary, so it stores the last error string and returns; the next call to [`FlushValidationErrors`](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.DebugMarkers.cs#L77) (after a submit, after `WaitForIdle`) turns it into a `RenderException`. Warnings are printed to the console immediately.
 
 ## Design decisions
 
@@ -136,19 +135,6 @@ GPU queries, buffer captures and deep copies are expensive. The profiler declare
 ### Why are the two layers independent?
 
 The profiler receives events whether or not validation is on, and validation never consults the profiler. You can profile a release-configured device with validation off, or validate with no profiler.
-
-## Gotchas
-
-- `ValidationEnabled` is `static`. Creating a second device with a different `EnableValidation` overwrites the setting for every device in the process.
-- With validation off, bad input is not rejected: a null where `RequireNotNull` would have thrown surfaces later as a `NullReferenceException`, and the transient buffer hard cap is no longer enforced (the soft-cap warning still fires).
-- Not every exception comes from the validation layer. `UpdateBuffer` range checks, `SwapBuffers` without a swapchain, and `RenderTexture` with no attachments throw regardless of the flag.
-- `SetProfiler` replaces the profiler immediately, with no locking. Call it between executions.
-- There is no shipped `IProfiler` implementation. A do-nothing implementation must still implement every member.
-- `BufferRoleBin` totals overlap by design: a buffer with `VertexBuffer | Staging` is counted in both bins. `AllocBin.DeviceBuffer` is the non-double-counted total.
-- Many `Allocate(AllocBin.X, 0)` calls are object counts only (`Pipeline`, `Sampler`, `TextureView`, `Framebuffer`, `ResourceLayout`, `ResourceSet`, `CommandBuffer`). Only buffers, textures and shader bytecode carry byte sizes.
-- Timing and pipeline-statistics results arrive late, keyed by `CommandBufferInfo.Id`. The command buffer object is not passed because it is pooled and reused.
-- `GetMemoryBudget` returns `IsSupported = false` and zeros on backends or drivers that do not expose a budget.
-- `RequestCapture` copies framebuffers mid-frame and is costly.
 
 ## See also
 

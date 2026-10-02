@@ -53,7 +53,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
     public void Advance(float dt) => _angle += dt * 0.5f;
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized());
+        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true));
 
     public override void Render(RenderContext<SceneView> context)
     {
@@ -80,7 +80,6 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
-    private readonly CanvasFullscreenSource _fullscreenSource = new();
     private static readonly Keyword UpsampleOff = new("Upsample", "false");
 
     public BloomDownsamplePass(ShaderPass bloomShader, Sampler sampler)
@@ -96,7 +95,7 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture("Scene");
+        _sceneHandle = builder.DeclareInputTexture("Scene");
         _bloomHalfHandle = SetTarget(builder, "BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
     }
 
@@ -114,7 +113,7 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
         _properties.SetFloat("offset", 1f);
 
         cmd.SetShader(_bloomShader);
-        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
@@ -127,7 +126,6 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
-    private readonly CanvasFullscreenSource _fullscreenSource = new();
     private static readonly Keyword UpsampleOn = new("Upsample", "true");
 
     public BloomUpsamplePass(ShaderPass bloomShader, Sampler sampler)
@@ -143,7 +141,7 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
 
     public override void Setup(RenderContextBuilder builder)
     {
-        _bloomHalfHandle = builder.GetInputTexture("BloomHalf");
+        _bloomHalfHandle = builder.DeclareInputTexture("BloomHalf");
         _bloomFullHandle = SetTarget(builder, "BloomFull", GraphTextureDesc.ViewSized(false, 1f));
     }
 
@@ -161,7 +159,7 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
         _properties.SetFloat("offset", 1f);
 
         cmd.SetShader(_bloomShader);
-        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
@@ -169,98 +167,47 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
 }
 
 
-internal sealed class CompositePresentPass : IPresentPass<SceneView>
+internal sealed class CompositePass : RasterPass<SceneView>
 {
     private readonly GraphicsProgram _compositeShader;
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
-    private readonly CanvasFullscreenSource _fullscreenSource = new();
 
     private TextureHandle _sceneHandle;
     private TextureHandle _bloomFullHandle;
 
-    public CompositePresentPass(GraphicsProgram compositeShader, Sampler sampler)
+    public CompositePass(GraphicsProgram compositeShader, Sampler sampler)
     {
         _compositeShader = compositeShader;
         _sampler = sampler;
     }
 
-    public string Name => "Composite";
+    public override string Name => "Composite";
 
-    public void Setup(PresentContextBuilder builder)
+    public override void Setup(RenderContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture("Scene");
-        _bloomFullHandle = builder.GetInputTexture("BloomFull");
-        builder.RequestSwapchain();
+        _sceneHandle = builder.DeclareInputTexture("Scene");
+        _bloomFullHandle = builder.DeclareInputTexture("BloomFull");
+        SetBackbufferTarget(builder);
     }
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        cmd.SetFramebuffer(target);
+        BindTarget(context, cmd);
 
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
         _properties.SetTexture("bloomTexture", bloomFull.ColorTextures[0], _sampler);
         _properties.SetFloat("bloomIntensity", 0.6f);
 
         cmd.SetShader(_compositeShader);
-        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
         context.SubmitCommandBuffer(cmd);
-        context.Present();
-    }
-}
-
-
-// A raw 3-vertex fullscreen-triangle source: no vertex/index buffers, just SV_VertexID in the shader.
-internal readonly struct CanvasFullscreenSource : IVertexSource
-{
-    public readonly PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-    public readonly void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-        => binding = default;
-
-    public readonly bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-    {
-        buffer = null!;
-        format = IndexFormat.UInt32;
-        indexCount = 0;
-        return false;
-    }
-}
-
-
-internal sealed class PBRPipeline : RenderPipeline<SceneView>
-{
-    private readonly ScenePass _scene;
-    private readonly BloomDownsamplePass _bloomDown;
-    private readonly BloomUpsamplePass _bloomUp;
-    private readonly CompositePresentPass _present;
-
-    public PBRPipeline(ScenePass scene, BloomDownsamplePass bloomDown, BloomUpsamplePass bloomUp, CompositePresentPass present)
-    {
-        _scene = scene;
-        _bloomDown = bloomDown;
-        _bloomUp = bloomUp;
-        _present = present;
-    }
-
-    public ScenePass Scene => _scene;
-
-    protected override void InitializePasses()
-    {
-        AddPass(_scene);
-        AddPass(_bloomDown);
-        AddPass(_bloomUp);
-        SetPresentPass(_present);
     }
 }
 
@@ -280,7 +227,8 @@ public static class Program
     static Sampler compositeSampler;
     static Texture albedo;
 
-    static PBRPipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
+    static ScenePass scenePass;
     static SceneView[] views;
 
 
@@ -288,13 +236,17 @@ public static class Program
     {
         GraphicsDeviceOptions options = new()
         {
-            Debug = false,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = false,
+            VulkanValidationLayers = false,
             PreferStandardClipSpaceYDirection = true
         };
 
-        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options);
+        SwapchainDescription swapchain = new()
+        {
+            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false
+        };
+
+        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options, swapchain);
     }
 
 
@@ -328,12 +280,12 @@ public static class Program
         bloomSampler = device.ResourceFactory.CreateSampler(clampLinear);
         compositeSampler = device.ResourceFactory.CreateSampler(clampLinear);
 
-        ScenePass scenePass = new(model, unlitShader, sceneProperties);
+        scenePass = new(model, unlitShader, sceneProperties);
         BloomDownsamplePass bloomDown = new(bloomShader, bloomSampler);
         BloomUpsamplePass bloomUp = new(bloomShader, bloomSampler);
-        CompositePresentPass present = new(compositeShader, compositeSampler);
+        CompositePass composite = new(compositeShader, compositeSampler);
 
-        pipeline = new PBRPipeline(scenePass, bloomDown, bloomUp, present);
+        pipeline = new([scenePass, bloomDown, bloomUp, composite]);
         views = new[] { new SceneView(600, 600) };
     }
 
@@ -364,7 +316,7 @@ public static class Program
     {
         tracker.Begin();
 
-        pipeline.Scene.Advance((float)dt);
+        scenePass.Advance((float)dt);
         device.DispatchGraph(pipeline, views);
 
         tracker.End(dt);

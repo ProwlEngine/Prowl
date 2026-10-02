@@ -42,14 +42,18 @@ public static class Program
 
         GraphicsDeviceOptions deviceOptions = new()
         {
-            Debug = false,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = false,
+            VulkanValidationLayers = false,
             PreferStandardClipSpaceYDirection = true,
             PreferDepthRangeZeroToOne = true,
         };
 
-        using var window = new GraphiteWindow(windowOptions, deviceOptions, backend);
+        SwapchainDescription swapchain = new()
+        {
+            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false
+        };
+
+        using var window = new GraphiteWindow(windowOptions, deviceOptions, swapchain, backend);
 
         window.Run();
     }

@@ -37,27 +37,6 @@ internal readonly struct CanvasView : IRenderView
 /// </summary>
 public class GraphiteRenderer : ICanvasRenderer, IDisposable
 {
-    private struct CanvasVertexSource : IVertexSource
-    {
-        public DeviceBuffer VertexBuffer;
-        public DeviceBuffer IndexBuffer;
-        public uint IndexCount;
-
-        public readonly PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
-
-        public readonly void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-            => binding = new VertexBinding(VertexBuffer);
-
-        public readonly bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
-        {
-            buffer = IndexBuffer;
-            format = IndexFormat.UInt32;
-            indexCount = IndexCount;
-            return true;
-        }
-    }
-
-
     // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
     // composites straight from level 0, so this also decides the resolution the backdrop is sampled
     // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
@@ -86,8 +65,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     private int _fbHeight;
 
     private readonly ScenePass _scenePass;
-    private readonly PresentPass _presentPass;
-    private readonly CanvasPipeline _pipeline;
+    private readonly RenderPipeline<CanvasView> _pipeline;
     private CanvasView[] _views;
 
 
@@ -110,8 +88,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         _gl.SyncToVerticalBlank = false;
 
         _scenePass = new ScenePass(this);
-        _presentPass = new PresentPass(this, _scenePass);
-        _pipeline = new CanvasPipeline(_scenePass, _presentPass);
+        _pipeline = new([_scenePass, new PresentPass(this)]);
     }
 
 
@@ -268,7 +245,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         private DeviceBuffer _activeEbo;
 
         private readonly PropertySet _properties = new();
-        private readonly CanvasVertexSource _fullscreenSource = new();
 
         private readonly Texture[] _blurTex = new Texture[MaxBlurLevels];
         private readonly Framebuffer[] _blurFB = new Framebuffer[MaxBlurLevels];
@@ -289,7 +265,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         }
 
         public void Setup(RenderContextBuilder builder)
-            => _sceneHandle = builder.GetOutputTexture("Scene", GraphTextureDesc.ViewSized(false, 1f, TargetFormat));
+            => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.ViewSized(false, 1f, TargetFormat));
 
         public void Render(RenderContext<CanvasView> context)
         {
@@ -393,12 +369,9 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             else
                 texture.SetTexture(_properties, "backdropTexture");
 
-            CanvasVertexSource source = new()
-            {
-                VertexBuffer = _activeVbo,
-                IndexBuffer = _activeEbo,
-                IndexCount = (uint)drawCall.ElementCount
-            };
+            VertexSource source = new VertexSource()
+                .SetBuffer("POSITION0", _activeVbo)
+                .SetIndexBuffer(_activeEbo, IndexFormat.UInt32, (uint)drawCall.ElementCount);
 
             cmd.SetShader(_owner._canvasProgram);
             cmd.SetVertexSource(source);
@@ -462,7 +435,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             _properties.SetFloat("offset", offset);
 
             cmd.SetShader(_owner._blurPass);
-            cmd.SetVertexSource(_fullscreenSource);
+            cmd.SetVertexSource(VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
         }
@@ -513,36 +486,31 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     // Blits the graph's "Scene" texture to the swapchain, reusing the blur shader at zero offset as a
     // plain fullscreen copy. Depends on Scene through the declared texture handle: the graph runs
     // ScenePass first because this pass reads what that one writes.
-    private sealed class PresentPass : IPresentPass<CanvasView>
+    private sealed class PresentPass : RasterPass<CanvasView>
     {
         private readonly GraphiteRenderer _owner;
-        private readonly ScenePass _scenePass;
         private readonly PropertySet _properties = new();
-        private readonly CanvasVertexSource _fullscreenSource = new();
+        private TextureHandle _sceneHandle;
 
-        public PresentPass(GraphiteRenderer owner, ScenePass scenePass)
+        public PresentPass(GraphiteRenderer owner)
         {
             _owner = owner;
-            _scenePass = scenePass;
         }
 
-        public string Name => "Present";
+        public override string Name => "Present";
 
-        public void Setup(PresentContextBuilder builder)
+        public override void Setup(RenderContextBuilder builder)
         {
-            builder.RequestSwapchain();
+            _sceneHandle = builder.DeclareInputTexture("Scene");
+            SetBackbufferTarget(builder);
         }
 
-        public void Present(RenderContext<CanvasView> context)
+        public override void Render(RenderContext<CanvasView> context)
         {
-            Framebuffer? target = context.SwapchainTarget;
-            if (target == null)
-                return;
-
-            RenderTexture scene = context.GetRenderTexture(_scenePass.SceneHandle);
+            RenderTexture scene = context.GetRenderTexture(_sceneHandle);
 
             CommandBuffer cmd = context.GetCommandBuffer(Name);
-            cmd.SetFramebuffer(target);
+            BindTarget(context, cmd);
 
             _owner._blurPass.SetKeyword(UpsampleOff);
 
@@ -551,31 +519,11 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             _properties.SetFloat("offset", 0f);
 
             cmd.SetShader(_owner._blurPass);
-            cmd.SetVertexSource(_fullscreenSource);
+            cmd.SetVertexSource(VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
 
             context.SubmitCommandBuffer(cmd);
-            context.Present();
-        }
-    }
-
-
-    private sealed class CanvasPipeline : RenderPipeline<CanvasView>
-    {
-        private readonly ScenePass _scenePass;
-        private readonly PresentPass _presentPass;
-
-        public CanvasPipeline(ScenePass scenePass, PresentPass presentPass)
-        {
-            _scenePass = scenePass;
-            _presentPass = presentPass;
-        }
-
-        protected override void InitializePasses()
-        {
-            AddPass(_scenePass);
-            SetPresentPass(_presentPass);
         }
     }
 }

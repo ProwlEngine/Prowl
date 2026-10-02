@@ -34,54 +34,6 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     public bool ColorSrgb;
 
     /// <summary>
-    /// Makes a swapchain desc.
-    /// </summary>
-    /// <param name="source">Window handle target.</param>
-    /// <param name="width">Initial width.</param>
-    /// <param name="height">Initial height.</param>
-    /// <param name="depthFormat">Depth format, null = none.</param>
-    /// <param name="syncToVerticalBlank">Sync to vblank.</param>
-    public SwapchainDescription(
-        SwapchainSource source,
-        uint width,
-        uint height,
-        PixelFormat? depthFormat,
-        bool syncToVerticalBlank)
-    {
-        Source = source;
-        Width = width;
-        Height = height;
-        DepthFormat = depthFormat;
-        SyncToVerticalBlank = syncToVerticalBlank;
-        ColorSrgb = false;
-    }
-
-    /// <summary>
-    /// Makes a swapchain desc.
-    /// </summary>
-    /// <param name="source">Window handle target.</param>
-    /// <param name="width">Initial width.</param>
-    /// <param name="height">Initial height.</param>
-    /// <param name="depthFormat">Depth format, null = none.</param>
-    /// <param name="syncToVerticalBlank">Sync to vblank.</param>
-    /// <param name="colorSrgb">Color target uses sRGB.</param>
-    public SwapchainDescription(
-        SwapchainSource source,
-        uint width,
-        uint height,
-        PixelFormat? depthFormat,
-        bool syncToVerticalBlank,
-        bool colorSrgb)
-    {
-        Source = source;
-        Width = width;
-        Height = height;
-        DepthFormat = depthFormat;
-        SyncToVerticalBlank = syncToVerticalBlank;
-        ColorSrgb = colorSrgb;
-    }
-
-    /// <summary>
     /// Field-by-field equality.
     /// </summary>
     /// <param name="other">Instance to compare.</param>

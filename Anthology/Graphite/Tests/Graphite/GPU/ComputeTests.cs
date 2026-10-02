@@ -54,9 +54,9 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
-            cl.SetFullViewports();
+            cl.SetFullViewport();
             cl.SetShader(graphics);
-            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+            cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
             cl.SetProperties(graphicsProps);
             cl.Draw(4);
         });

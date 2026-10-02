@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 public abstract partial class CommandBuffer
 {
     /// <summary>
-    /// Sets active shader. Must match bound framebuffer/buffers. Invalidates bound resource sets, rebind after.
+    /// Sets active shader. Must match bound framebuffer/buffers. Merged properties stay bound; no need to reapply them.
     /// </summary>
     /// <param name="program">Shader to set.</param>
     public void SetShader(GraphicsProgram program)
@@ -29,7 +29,7 @@ public abstract partial class CommandBuffer
 
     private protected abstract void SetShaderCore(GraphicsProgram program);
 
-    /// <summary>Sets active compute shader. Invalidates bound compute resource sets.</summary>
+    /// <summary>Sets active compute shader. Merged properties stay bound; no need to reapply them.</summary>
     /// <param name="program">Compute shader to set.</param>
     public void SetComputeShader(ComputeProgram program)
     {
@@ -51,26 +51,31 @@ public abstract partial class CommandBuffer
     {
         SetVertexSource_CheckNonNull(source);
         _currentVertexSource = source;
-        SetVertexSourceCore(source);
     }
-
-    private protected abstract void SetVertexSourceCore(IVertexSource source);
 
     /// <summary>
     /// Merges properties into bind table, last write wins, sticks until ClearProperties or Begin.
-    /// <para>Same unchanged set twice in a row is a no-op.</para>
+    /// <para>No-op when the set is unchanged and its entries are still the active ones.</para>
     /// </summary>
     /// <param name="properties">Set to merge in.</param>
     public void SetProperties(PropertySet properties)
     {
         ValidationHelpers.RequireNotNull(properties, nameof(properties), nameof(SetProperties));
 
-        // Re-applying the very same set with no changes since is a no-op: the merge is idempotent
-        // when nothing else was applied in between, so skip it and leave the epoch untouched.
         if (ReferenceEquals(properties, _lastAppliedSource) && properties.Version == _lastAppliedSourceVersion)
             return;
 
-        _activeProperties.ApplyOther(properties);
+        if (_mergedSourceVersions.TryGetValue(properties, out uint mergedVersion)
+            && mergedVersion == properties.Version
+            && properties.EntriesActiveIn(_activeProperties))
+        {
+            _lastAppliedSource = properties;
+            _lastAppliedSourceVersion = properties.Version;
+            return;
+        }
+
+        _activeProperties.MergeFrom(properties, _changedPropertyKeys);
+        _mergedSourceVersions[properties] = properties.Version;
         _lastAppliedSource = properties;
         _lastAppliedSourceVersion = properties.Version;
         unchecked { _activePropertiesEpoch++; }
@@ -86,9 +91,12 @@ public abstract partial class CommandBuffer
     /// </summary>
     public void ClearProperties()
     {
-        _activeProperties.Clear();     // bump merged resource version
+        _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
+        _mergedSourceVersions.Clear();
+        _changedPropertyKeys.Clear();
+        _allPropertiesChanged = true;
         unchecked { _activePropertiesEpoch++; }
         ClearPropertiesCore();
     }
@@ -105,8 +113,8 @@ public abstract partial class CommandBuffer
             _framebuffer = fb;
             SetFramebufferCore(fb);
             _framebufferOutputs = fb != null ? fb.OutputDescription : default;
-            SetFullViewports();
-            SetFullScissorRects();
+            SetFullViewport();
+            SetFullScissorRect();
         }
     }
 
@@ -118,16 +126,6 @@ public abstract partial class CommandBuffer
     /// <param name="renderTexture">Render texture.</param>
     public void SetFramebuffer(RenderTexture renderTexture)
         => SetFramebuffer(renderTexture.Framebuffer);
-
-    /// <summary>Sets render texture's framebuffer as render target.</summary>
-    /// <param name="renderTexture">Render texture.</param>
-    public void SetRenderTarget(RenderTexture renderTexture)
-        => SetFramebuffer(renderTexture.Framebuffer);
-
-    /// <summary>Sets framebuffer as render target.</summary>
-    /// <param name="fb">Framebuffer to set.</param>
-    public void SetRenderTarget(Framebuffer fb)
-        => SetFramebuffer(fb);
 
     /// <summary>Clears one color target. Index must be within framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
@@ -158,56 +156,55 @@ public abstract partial class CommandBuffer
 
     private protected abstract void ClearDepthStencilCore(float depth, byte stencil);
 
-    /// <summary>Sets all viewports to cover whole framebuffer.</summary>
-    public void SetFullViewports()
-    {
-        CheckFramebuffer(nameof(SetFullViewports));
-        SetViewport(0, new Viewport(0, 0, _framebuffer!.Width, _framebuffer.Height, 0, 1));
-
-        for (uint index = 1; index < _framebuffer.ColorTargets.Count; index++)
-            SetViewport(index, new Viewport(0, 0, _framebuffer.Width, _framebuffer.Height, 0, 1));
-    }
+    /// <summary>Sets viewport 0 to cover whole framebuffer.</summary>
+    public void SetFullViewport() => SetFullViewport(0);
 
     /// <summary>Sets one viewport to cover whole framebuffer.</summary>
-    /// <param name="index">Color target index.</param>
+    /// <param name="index">Viewport index.</param>
     public void SetFullViewport(uint index)
     {
         CheckFramebuffer(nameof(SetFullViewport));
         SetViewport(index, new Viewport(0, 0, _framebuffer!.Width, _framebuffer.Height, 0, 1));
     }
 
-    /// <summary>Sets viewport at index. Index must be within framebuffer's color attachment count.</summary>
-    /// <param name="index">Color target index.</param>
+    /// <summary>Sets viewport 0.</summary>
+    /// <param name="viewport">New viewport.</param>
+    public void SetViewport(Viewport viewport) => SetViewport(0, ref viewport);
+
+    /// <summary>Sets viewport 0.</summary>
+    /// <param name="viewport">New viewport.</param>
+    public void SetViewport(ref Viewport viewport) => SetViewport(0, ref viewport);
+
+    /// <summary>Sets viewport at index. Indices above 0 need multi-viewport support.</summary>
+    /// <param name="index">Viewport index.</param>
     /// <param name="viewport">New viewport.</param>
     public void SetViewport(uint index, Viewport viewport) => SetViewport(index, ref viewport);
 
-    /// <summary>Sets viewport at index. Index must be within framebuffer's color attachment count.</summary>
-    /// <param name="index">Color target index.</param>
+    /// <summary>Sets viewport at index. Indices above 0 need multi-viewport support.</summary>
+    /// <param name="index">Viewport index.</param>
     /// <param name="viewport">New viewport.</param>
     public abstract void SetViewport(uint index, ref Viewport viewport);
 
-    /// <summary>Sets all scissor rects to cover whole framebuffer.</summary>
-    public void SetFullScissorRects()
-    {
-        CheckFramebuffer(nameof(SetFullScissorRects));
-        SetScissorRect(0, 0, 0, _framebuffer!.Width, _framebuffer.Height);
-
-        for (uint index = 1; index < _framebuffer.ColorTargets.Count; index++)
-        {
-            SetScissorRect(index, 0, 0, _framebuffer.Width, _framebuffer.Height);
-        }
-    }
+    /// <summary>Sets scissor rect 0 to cover whole framebuffer.</summary>
+    public void SetFullScissorRect() => SetFullScissorRect(0);
 
     /// <summary>Sets one scissor rect to cover whole framebuffer.</summary>
-    /// <param name="index">Color target index.</param>
+    /// <param name="index">Scissor index.</param>
     public void SetFullScissorRect(uint index)
     {
         CheckFramebuffer(nameof(SetFullScissorRect));
         SetScissorRect(index, 0, 0, _framebuffer!.Width, _framebuffer.Height);
     }
 
-    /// <summary>Sets scissor rect at index. Index must be within framebuffer's color attachment count.</summary>
-    /// <param name="index">Color target index.</param>
+    /// <summary>Sets scissor rect 0.</summary>
+    /// <param name="x">Rect X.</param>
+    /// <param name="y">Rect Y.</param>
+    /// <param name="width">Rect width.</param>
+    /// <param name="height">Rect height.</param>
+    public void SetScissorRect(uint x, uint y, uint width, uint height) => SetScissorRect(0, x, y, width, height);
+
+    /// <summary>Sets scissor rect at index. Indices above 0 need multi-viewport support.</summary>
+    /// <param name="index">Scissor index.</param>
     /// <param name="x">Rect X.</param>
     /// <param name="y">Rect Y.</param>
     /// <param name="width">Rect width.</param>

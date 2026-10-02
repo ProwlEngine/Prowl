@@ -21,9 +21,9 @@ internal readonly struct SceneView : IRenderView
 }
 
 
-// Three draws sharing one shader but switching PropertySets, no dependencies between passes: present
-// clears and draws straight into the swapchain.
-internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView>
+// Three draws sharing one shader but switching PropertySets, no dependencies between passes: the pass
+// clears and draws straight into the backbuffer.
+internal sealed class TexturedQuadPass : RasterPass<SceneView>
 {
     private readonly GraphicsProgram _shader;
     private readonly Mesh _leftQuad;
@@ -33,7 +33,7 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView>
     private readonly PropertySet _rightProperties;
     private readonly PropertySet _midProperties;
 
-    public TexturedQuadPresentPass(
+    public TexturedQuadPass(
         GraphicsProgram shader,
         Mesh leftQuad, Mesh rightQuad, Mesh midQuad,
         PropertySet leftProperties, PropertySet rightProperties, PropertySet midProperties)
@@ -47,20 +47,14 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView>
         _midProperties = midProperties;
     }
 
-    public string Name => "Present";
+    public override string Name => "Backbuffer";
 
-    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder);
 
-    public void Present(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
-        Framebuffer? target = context.SwapchainTarget;
-        if (target == null)
-            return;
-
         CommandBuffer cmd = context.GetCommandBuffer("TexturedQuad");
-        cmd.SetFramebuffer(target);
-        cmd.ClearDepthStencil(1, 0);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
 
         cmd.SetProperties(_leftProperties);
@@ -76,18 +70,7 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView>
         cmd.DrawIndexed();
 
         context.SubmitCommandBuffer(cmd);
-        context.Present();
     }
-}
-
-
-internal sealed class TexturedQuadPipeline : RenderPipeline<SceneView>
-{
-    private readonly IPresentPass<SceneView> _present;
-
-    public TexturedQuadPipeline(IPresentPass<SceneView> present) => _present = present;
-
-    protected override void InitializePasses() => SetPresentPass(_present);
 }
 
 
@@ -108,7 +91,7 @@ public static class Program
     static Sampler rightSampler;
     static Sampler midSampler;
     static RenderMSTracker tracker;
-    static TexturedQuadPipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
     static SceneView[] views;
 
 
@@ -116,13 +99,17 @@ public static class Program
     {
         GraphicsDeviceOptions options = new()
         {
-            Debug = false,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = false,
+            VulkanValidationLayers = false,
             PreferStandardClipSpaceYDirection = true
         };
 
-        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options);
+        SwapchainDescription swapchain = new()
+        {
+            DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false
+        };
+
+        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options, swapchain);
     }
 
     public static void Load(GraphicsDevice newDevice)
@@ -151,8 +138,8 @@ public static class Program
         midProperties = new();
         midProperties.SetTexture("MainTexture", midTexture, midSampler);
 
-        pipeline = new TexturedQuadPipeline(new TexturedQuadPresentPass(
-            shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties));
+        pipeline = new([new TexturedQuadPass(
+            shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties)]);
         views = new[] { new SceneView(600, 600) };
     }
 

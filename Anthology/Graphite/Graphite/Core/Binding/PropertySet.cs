@@ -172,6 +172,33 @@ public sealed partial class PropertySet
     }
 
 
+    internal void MergeFrom(PropertySet other, System.Collections.Generic.List<PropertyID> changedKeys)
+    {
+        bool dirtyResources = false;
+
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
+        {
+            _entries[kv.Key] = kv.Value;
+            changedKeys.Add(kv.Key);
+            if (kv.Value.Kind != PropertyEntryKind.Uniform)
+                dirtyResources = true;
+        }
+
+        if (dirtyResources) unchecked { _resourceVersion++; }
+        unchecked { _version++; }
+    }
+
+    internal bool EntriesActiveIn(PropertySet active)
+    {
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _entries)
+        {
+            if (!active._entries.TryGetValue(kv.Key, out PropertyEntry? current) || !ReferenceEquals(current, kv.Value))
+                return false;
+        }
+        return true;
+    }
+
+
     private void WriteUniform<T>(PropertyID key, T value, UniformScalarType type) where T : unmanaged
     {
         GetOrCreate(key).WriteUniform(value, type);

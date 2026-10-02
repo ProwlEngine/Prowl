@@ -6,7 +6,6 @@ How a `PropertySet` full of named values becomes Vulkan descriptor sets at draw 
 - [Key types](#key-types)
 - [Control flow](#control-flow)
 - [Design decisions](#design-decisions)
-- [Gotchas and pitfalls](#gotchas-and-pitfalls)
 - [See also](#see-also)
 
 ## Overview
@@ -48,13 +47,14 @@ Each setter finds or creates the entry for the ID and overwrites it in place ([P
 [`CommandBuffer.SetProperties`](../../Graphite/Core/CommandBuffer/CommandBuffer.State.cs#L64):
 
 1. If the same set object is passed again and its `Version` equals the version recorded last time, return immediately. The epoch is untouched.
-2. Otherwise `_activeProperties.ApplyOther(set)` copies every entry reference from the source into the active table, overwriting matches.
-3. Record the source and its version, bump `_activePropertiesEpoch`.
-4. Call `SetPropertiesCore`, which is empty in Vulkan.
+2. If this set was merged earlier in the same recording, its `Version` has not changed since, and every one of its entries is still the active entry for its name (no other set overrode it), return immediately. The epoch is untouched. This is what makes re-applying a frame set before every per-object set free.
+3. Otherwise `_activeProperties.MergeFrom(set)` copies every entry reference from the source into the active table, overwriting matches, and appends each name to the command buffer's list of changed names.
+4. Record the source and its version, bump `_activePropertiesEpoch`.
+5. Call `SetPropertiesCore`, which is empty in Vulkan.
 
 Sets stack. Applying a "global" set and then a "material" set leaves the union, with the material set winning on collisions. The table persists until `ClearProperties` or until the command buffer is begun again.
 
-Because the merge copies entry references rather than entry contents, writing a uniform into the source `PropertySet` after `SetProperties` is visible through the active table immediately (the entry object is shared), and the entry's `Version` change is what tells the backend to repack. The same-set shortcut in step 1 compares the set's `Version`, which uniform writes also bump, so the next `SetProperties` call re-merges.
+Because the merge copies entry references rather than entry contents, writing into the source `PropertySet` after `SetProperties` is visible through the active table immediately (the entry object is shared). Every write, uniform or resource, bumps both the entry's `Version` and the set's `Version`, so the shortcuts in steps 1 and 2 never skip a set that changed.
 
 ### 4. Draw time: Prepare
 
@@ -77,8 +77,12 @@ Steps inside `Prepare`:
 
 1. No sets in the program: return false.
 2. Fast path: graphics, render pass already active, same program object, same active-property epoch as the last prepare: return false.
-3. For each set index: resolve, check texture layouts, sync, gather offsets ([`ResolveSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L26), [`PrepareResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L7), [`SyncSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L206), [`GatherDynOffsets`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L266)).
-4. Remember the first set whose descriptor handle or dynamic offsets differ from what this command buffer last bound. `EmitBind` binds from that set index to the end in one `vkCmdBindDescriptorSets`.
+3. For each set index, decide whether the set's previous resolve still holds. It does when all of these are true: the set was resolved for this program in this recording; `ClearProperties` was not called since; none of the set's names (element names plus loose uniform field names, precomputed in `SetBindingMetadata.Names`) is in the changed-name list; every entry the last resolve read still has the `Version` it had then; no graph texture changed state since (a process-wide counter bumped whenever the render graph commits a barrier batch or a `Transition`); and the set has no read-write texture, which may need a layout move on every dispatch. A set that still holds keeps its descriptor set and dynamic offsets.
+4. Otherwise: resolve, check texture layouts, sync, gather offsets ([`ResolveSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Resolve.cs#L26), [`PrepareResolvedTextures`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.Write.cs#L7), [`SyncSet`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L206), [`GatherDynOffsets`](../../Graphite/Platform/Vulkan/VkDescriptorBinder/VkDescriptorBinder.cs#L266)). The resolve records every entry it reads and its `Version` for the check in step 3.
+5. Remember the first set whose descriptor handle or dynamic offsets differ from what this command buffer last bound. `EmitBind` binds from that set index to the end in one `vkCmdBindDescriptorSets`.
+6. Clear the changed-name list.
+
+With a frame set in descriptor set 0 and per-object sets in set 1, a loop of `SetProperties(frame)`, `SetProperties(item)`, draw re-resolves only set 1 per draw: step 2 of the merge skips the frame set, and only the item's names enter the changed list.
 
 ### 5. Resolving each element
 
@@ -147,20 +151,7 @@ Avoids a heap allocation per entry. The largest supported uniform is `Double4x4`
 
 ### Why epochs and versions?
 
-Two counters serve different consumers. The command buffer epoch answers "did the active table change since the last draw" (whole-draw fast path). The per-entry `Version` answers "did this uniform's bytes change" (repack decision).
-
-## Gotchas and pitfalls
-
-- Changing the program resets the binder's per-set bound state, so all sets are re-emitted for the new program. The active property table is not cleared by `SetShader`; only `ClearProperties` or beginning the command buffer clears it.
-- `SetProperties` shares entry objects with the source set. Mutating a uniform on the set between two draws in the same command buffer is supported: each draw compares entry versions, and a changed block is repacked into a new transient range. One new range results per distinct value, not per draw.
-- A name bound under the wrong kind (a texture where the shader wants a buffer) is treated as missing, not as an error.
-- Only `ReadOnly: true` buffers ignore loose uniform writes. `SetBuffer(name, buffer, readOnly: false)` on a uniform block makes the loose uniforms get written into that buffer.
-- `ResourceLayoutDescription.MaxElementsPerSet` is 64; the binder's per-set scratch arrays are sized to that cap.
-- Two layouts with the same `Set` index in one program throw. Gaps in set indices are filled with an empty layout.
-- `PropertyID.ToString(id)` returns null for IDs never interned from a string.
-- `PropertySet` and `CommandBuffer` are not thread-safe.
-- Missing properties are reported only when `GraphicsDevice.OnMissingProperty` is set; it is null by default.
-- A graph texture can only be bound in the kind its pass declared: sampled needs `Sampled`, storage needs `Storage`.
+Several counters serve different consumers. The command buffer epoch answers "did the active table change since the last draw" (whole-draw fast path). The changed-name list answers "which names were merged since the last draw" (per-set reuse). The per-entry `Version` answers "did this entry's contents change" (per-set reuse and uniform repack).
 
 ## See also
 

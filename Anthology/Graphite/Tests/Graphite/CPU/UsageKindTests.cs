@@ -14,7 +14,7 @@ public class UsageKindTests
     public void MultiKindOutput_WithoutInitial_Throws()
     {
         RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.GetOutputTexture(
+        Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
             "usage_multi", s_desc, usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled));
     }
 
@@ -22,7 +22,7 @@ public class UsageKindTests
     public void Initial_OutsideDeclaredKinds_Throws()
     {
         RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.GetOutputTexture(
+        Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
             "usage_initial", s_desc,
             usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled,
             initial: TextureUsageKind.Storage));
@@ -32,7 +32,7 @@ public class UsageKindTests
     public void MultiKindOutput_WithInitial_IsAccepted()
     {
         RenderContextBuilder builder = new();
-        TextureHandle handle = builder.GetOutputTexture(
+        TextureHandle handle = builder.DeclareOutputTexture(
             "usage_ok", s_desc,
             usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled,
             initial: TextureUsageKind.Sampled);
@@ -43,7 +43,7 @@ public class UsageKindTests
     public void Output_WithoutWriteKind_Throws()
     {
         RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.GetOutputTexture(
+        Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
             "usage_nowrite", s_desc, usage: TextureUsageKind.Sampled));
     }
 
@@ -51,7 +51,7 @@ public class UsageKindTests
     public void Input_WithWriteKind_Throws()
     {
         RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.GetInputTexture(
+        Assert.Throws<ArgumentException>(() => builder.DeclareInputTexture(
             "usage_inwrite", TextureUsageKind.Attachment));
     }
 
@@ -59,7 +59,7 @@ public class UsageKindTests
     public void DepthReadOnly_AsColorKind_Throws()
     {
         RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.GetInputTexture(
+        Assert.Throws<ArgumentException>(() => builder.DeclareInputTexture(
             "usage_depthcolor", TextureUsageKind.DepthReadOnly));
     }
 
@@ -67,7 +67,7 @@ public class UsageKindTests
     public void StorageDepthUsage_Throws()
     {
         RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.GetOutputTexture(
+        Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
             "usage_depthstorage", s_desc, depthUsage: TextureUsageKind.Storage));
     }
 
@@ -75,7 +75,7 @@ public class UsageKindTests
     public void DepthReadOnly_OnOutput_IsAccepted()
     {
         RenderContextBuilder builder = new();
-        TextureHandle handle = builder.GetOutputTexture(
+        TextureHandle handle = builder.DeclareOutputTexture(
             "usage_depthro", s_desc, depthUsage: TextureUsageKind.DepthReadOnly);
         Assert.True(handle.IsValid);
     }

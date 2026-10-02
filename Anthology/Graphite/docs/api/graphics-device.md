@@ -22,16 +22,15 @@ Only Vulkan is implemented. `GraphicsBackend` has one value: `Vulkan`.
 ## Quick example
 
 ```csharp
-GraphicsDeviceOptions options = new(debug: false, swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt, syncToVerticalBlank: true);
+GraphicsDeviceOptions options = new() { VulkanValidationLayers = false };
 
 SwapchainDescription swapchain = new()
 {
     Source = SwapchainSource.CreateVulkan(window.VkSurface!),
     Width = (uint)window.FramebufferSize.X,
     Height = (uint)window.FramebufferSize.Y,
-    DepthFormat = options.SwapchainDepthFormat,
-    SyncToVerticalBlank = options.SyncToVerticalBlank,
-    ColorSrgb = options.SwapchainSrgbFormat
+    DepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+    SyncToVerticalBlank = true
 };
 
 GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchain);
@@ -46,22 +45,18 @@ device.Dispose();
 
 ## GraphicsDeviceOptions
 
-[`GraphicsDeviceOptions`](../../Graphite/Core/GraphicsDevice/GraphicsDeviceOptions.cs#L6) is a struct of public fields. Two constructors exist: `GraphicsDeviceOptions(bool debug)` for a device with no swapchain, and `GraphicsDeviceOptions(bool debug, PixelFormat? swapchainDepthFormat, bool syncToVerticalBlank = false, bool preferDepthRangeZeroToOne = false, bool preferStandardClipSpaceYDirection = false, bool swapchainSrgbFormat = false)` which also sets `HasMainSwapchain = true`. The object initializer form used in the samples leaves `HasMainSwapchain` false; swapchain creation is driven by the `SwapchainDescription` passed to `CreateVulkan`.
+[`GraphicsDeviceOptions`](../../Graphite/Core/GraphicsDevice/GraphicsDeviceOptions.cs#L6) is a struct of public fields. It has one constructor, `GraphicsDeviceOptions(bool debug)`, and the object initializer form is the usual way to build it. Swapchain settings do not live here; they are set on the `SwapchainDescription` passed to `CreateVulkan`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Debug` | `bool` | false | Enable Vulkan debug report and validation layers if installed |
-| `HasMainSwapchain` | `bool` | false | Set by the swapchain constructor overload |
-| `SwapchainDepthFormat` | `PixelFormat?` | null | Depth format of the swapchain framebuffer. Null means no depth attachment |
-| `SyncToVerticalBlank` | `bool` | false | Vsync on the main swapchain |
+| `VulkanValidationLayers` | `bool` | false | Enable Vulkan debug report and validation layers if installed |
 | `PreferDepthRangeZeroToOne` | `bool` | false | Request 0..1 depth range |
 | `PreferStandardClipSpaceYDirection` | `bool` | false | Request bottom-to-top clip space Y. Not the Vulkan default and not always available; check `IsClipSpaceYInverted` afterwards |
-| `SwapchainSrgbFormat` | `bool` | false | Use an sRGB swapchain format. An explicit `SwapchainDescription.ColorSrgb` wins |
 | `MaxFramesInFlight` | `uint` | 0 (3) | Execution ring size |
 | `TransientBufferInitialSize` | `uint` | 0 (4 MB) | Initial size of each slot's transient bump buffer |
 | `TransientBufferSoftCapBytes` | `uint` | 0 (64 MB) | Warn once past this many transient bytes in one execution |
 | `TransientBufferHardCapBytes` | `uint` | 0 (256 MB) | Throw past this many transient bytes (validation on) |
-| `EnableValidation` | `bool?` | null (on) | Graphite's own checks |
+| `GraphiteValidation` | `bool` | true | Graphite's own checks |
 | `Profiler` | `IProfiler?` | null | See [Diagnostics](diagnostics.md) |
 
 The caps are clamped so that soft >= initial and hard >= soft ([InitializeFrameOptions](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L210)).
@@ -134,7 +129,7 @@ The "null" resources are what a draw binds when a shader asks for a slot your `P
 | `MainSwapchain` | `Swapchain MainSwapchain { get; }` | Null for a headless device |
 | `SwapchainFramebuffer` | `Framebuffer? SwapchainFramebuffer { get; }` | Current main swapchain framebuffer |
 | `SyncToVerticalBlank` | `bool SyncToVerticalBlank { get; set; }` | Runtime vsync toggle. Throws (with validation on) if there is no swapchain |
-| `SwapBuffers` | `void SwapBuffers()` and `void SwapBuffers(Swapchain swapchain)` | Present. `DispatchGraph` calls this for you when a pass called `RenderContext.Present()` |
+| `SwapBuffers` | `void SwapBuffers()` and `void SwapBuffers(Swapchain swapchain)` | Present, then acquire the next image. The GPU waits for rendering before presenting and for the image before the next frame renders; the CPU does not wait on either. `DispatchGraph` calls this for you when a pass wrote the backbuffer |
 | `ResizeMainWindow` | `void ResizeMainWindow(uint width, uint height)` | Resizes the main swapchain |
 
 ### CPU access to resources

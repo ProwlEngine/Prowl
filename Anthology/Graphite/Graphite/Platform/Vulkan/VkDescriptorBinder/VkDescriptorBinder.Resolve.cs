@@ -80,9 +80,13 @@ internal unsafe sealed partial class VkDescriptorBinder
     }
 
     private PropertyEntry? FindProperty(PropertyID name, PropertyEntryKind kind)
-        => _cbOwner.ActiveProperties.Entries.TryGetValue(name, out PropertyEntry? entry) && entry.Kind == kind
-            ? entry
-            : null;
+    {
+        if (!_cbOwner.ActiveProperties.Entries.TryGetValue(name, out PropertyEntry? entry))
+            return null;
+
+        _trackState?.Track(entry);
+        return entry.Kind == kind ? entry : null;
+    }
 
     private DeviceBufferRange ResolveStructuredRange(in ResourceLayoutElementDescription elem, out bool missing)
     {

@@ -146,24 +146,30 @@ cmd.SetProperties(materialProperties);
 
 ### Change detection
 
-The command buffer skips re-applying the same set object if nothing in it changed since the last `SetProperties` of that set. Each uniform entry carries its own version so the backend repacks a uniform block only when a value changed. This makes it cheap to keep one long-lived set per material and rewrite uniforms every frame.
+`SetProperties` is a no-op for a set that has not changed since the command buffer last merged it and whose entries are all still the active ones, even when other sets were applied in between. At draw time the backend re-resolves only the descriptor sets that read a name merged since the previous draw. Each entry carries its own version so the backend repacks a uniform block only when a value changed. This makes it cheap to keep one long-lived set per material and rewrite uniforms every frame.
 
 ## Common patterns
 
 ### One set per material, one per frame
 
+Apply the frame set once per command buffer, then only the per-object sets inside the loop:
+
 ```csharp
 frame.SetMatrix("ViewProjection", viewProjection);
 frame.SetFloat3("CameraPosition", cameraPosition);
 
+cmd.SetProperties(frame);
 foreach (Item item in items)
 {
-    cmd.SetProperties(frame);
     cmd.SetProperties(item.Material);
     cmd.SetVertexSource(item.Mesh);
     cmd.DrawIndexed();
 }
 ```
+
+Keep the names in the frame set and the per-object sets disjoint. A per-object set that overrides a frame name stays in effect for later draws until something writes that name again, and re-applying the frame set after such an override costs a full merge. Re-applying an unchanged frame set whose names nobody overrode is free, so calling `cmd.SetProperties(frame)` inside the loop is correct, only redundant.
+
+Lay out shaders so that per-frame and per-object values live in different descriptor sets (for example a `ParameterBlock` per frequency). The backend re-resolves a descriptor set only when one of its names was merged since the previous draw, so a draw that changes only per-object names leaves the frame descriptor set bound as is.
 
 ### Switching textures between draws
 
@@ -211,7 +217,7 @@ Or pass the `RenderTexture` itself to get its first color attachment.
 - `PropertySet` is not thread-safe.
 - Names are case-sensitive strings; a typo binds a default silently unless `OnMissingProperty` is set.
 - Setting a texture under a name that held a uniform converts the entry. The old value is gone.
-- The merge shares entry objects between your set and the command buffer's table. Rewriting a uniform after `SetProperties` and before the next draw in the same command buffer affects that next draw.
+- The merge shares entry objects between your set and the command buffer's table. After rewriting a value in a set that is already applied, call `SetProperties` with it again before the next draw; otherwise a draw inside the same render pass can reuse the previous bindings.
 - Uniform payload per entry is 128 bytes, the size of a `Double4x4`. Large arrays belong in buffers.
 - `SetTexture` with a `RenderTexture` binds only color attachment 0. Other attachments of an MRT target bind from `ColorTextures[i]`.
 - `ClearProperties` only clears the command buffer's merged table, not your `PropertySet`. Beginning a command buffer also clears it, so rented buffers always start empty.

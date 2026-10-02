@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Collections.Generic;
 using Xunit;
 
 namespace Prowl.Graphite.RenderGraph.Tests;
@@ -13,54 +14,23 @@ file sealed class CountingPass : IPass<TestView>
     public void Setup(RenderContextBuilder builder)
     {
         SetupCount++;
-        builder.GetOutputTexture("pipeline_counting_out", Desc.Color());
+        builder.DeclareOutputTexture("pipeline_counting_out", Desc.Color());
     }
 
     public void Render(RenderContext<TestView> context) { }
 }
 
-file sealed class NoOpPresentPass : IPresentPass<TestView>
-{
-    public string Name => "Present";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<TestView> context) { }
-}
-
-file sealed class CountingPresentPass : IPresentPass<TestView>
-{
-    public int SetupCount { get; private set; }
-
-    public string Name => "CountingPresent";
-
-    public void Setup(PresentContextBuilder builder) => SetupCount++;
-
-    public void Present(RenderContext<TestView> context) { }
-}
-
 file sealed class CountingPipeline : RenderPipeline<TestView>
 {
     private readonly CountingPass _pass;
-    private readonly IPresentPass<TestView> _present;
 
-    public CountingPipeline(CountingPass pass, IPresentPass<TestView>? present = null)
-    {
-        _pass = pass;
-        _present = present ?? new NoOpPresentPass();
-    }
+    public CountingPipeline(CountingPass pass) => _pass = pass;
 
-    protected override void InitializePasses()
-    {
-        AddPass(_pass);
-        SetPresentPass(_present);
-    }
+    protected override void InitializePasses() => AddPass(_pass);
 }
 
 file sealed class ReconfigurablePipeline : RenderPipeline<TestView>
 {
-    private readonly IPresentPass<TestView> _present = new NoOpPresentPass();
-
     public IPass<TestView> ActivePass { get; set; }
 
     public ReconfigurablePipeline(IPass<TestView> initialPass)
@@ -69,14 +39,44 @@ file sealed class ReconfigurablePipeline : RenderPipeline<TestView>
     protected override void InitializePasses()
     {
         AddPass(ActivePass);
-        SetPresentPass(_present);
     }
+
+    public void PublicInvalidateGraph() => InvalidateGraph();
+}
+
+file sealed class ComposedInvalidatable : RenderPipeline<TestView>
+{
+    public ComposedInvalidatable(IEnumerable<IPass<TestView>> passes) : base(passes) { }
 
     public void PublicInvalidateGraph() => InvalidateGraph();
 }
 
 public class RenderPipelineTests
 {
+    [Fact]
+    public void Composed_BuildsGraphFromPassList()
+    {
+        CountingPass pass = new();
+        RenderPipeline<TestView> pipeline = new([pass]);
+
+        _ = pipeline.Graph;
+
+        Assert.Equal(1, pass.SetupCount);
+    }
+
+    [Fact]
+    public void Composed_InvalidateGraph_ReaddsPasses()
+    {
+        CountingPass pass = new();
+        ComposedInvalidatable pipeline = new([pass]);
+
+        _ = pipeline.Graph;
+        pipeline.PublicInvalidateGraph();
+        _ = pipeline.Graph;
+
+        Assert.Equal(2, pass.SetupCount);
+    }
+
     [Fact]
     public void Graph_AccessedMultipleTimes_BuildsOnlyOnce()
     {
@@ -99,19 +99,6 @@ public class RenderPipelineTests
         RenderGraph<TestView> second = pipeline.Graph;
 
         Assert.Same(first, second);
-    }
-
-    [Fact]
-    public void Graph_AccessedMultipleTimes_RunsPresentPassSetupOnlyOnce()
-    {
-        CountingPresentPass present = new();
-        CountingPipeline pipeline = new(new CountingPass(), present);
-
-        _ = pipeline.Graph;
-        _ = pipeline.Graph;
-        _ = pipeline.Graph;
-
-        Assert.Equal(1, present.SetupCount);
     }
 
     [Fact]

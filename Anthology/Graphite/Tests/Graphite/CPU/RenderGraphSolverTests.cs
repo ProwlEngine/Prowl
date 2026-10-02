@@ -13,10 +13,7 @@ namespace Prowl.Graphite.RenderGraph.Tests;
 public class RenderGraphSolverTests
 {
     private static RenderGraph<TestView> Build(params IPass<TestView>[] passes)
-        => RenderGraph<TestView>.Build(passes, new NoOpTestPresentPass());
-
-    private static RenderGraph<TestView> Build(IPresentPass<TestView> presentPass, params IPass<TestView>[] passes)
-        => RenderGraph<TestView>.Build(passes, presentPass);
+        => RenderGraph<TestView>.Build(passes);
 
     private static List<string> OrderNames(RenderGraph<TestView> graph)
         => graph.OrderedPasses.Select(n => n.Pass.Name).ToList();
@@ -103,7 +100,7 @@ public class RenderGraphSolverTests
         };
 
         RenderGraph<TestView> graph = RenderGraph<TestView>.Build(
-            new IPass<TestView>[] { reader }, new NoOpTestPresentPass(), central);
+            new IPass<TestView>[] { reader }, central);
 
         Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("central_shared")));
         Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Reader");
@@ -231,47 +228,38 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void Build_PresentPassRequestsSwapchain_SetsPresentRequestsSwapchainTrue()
+    public void Build_PassDeclaresBackbuffer_WritesBackbufferIsTrue()
     {
-        var present = new TestPresentPass(requestSwapchain: true);
+        RenderGraph<TestView> graph = Build(new TestBackbufferPass());
 
-        RenderGraph<TestView> graph = Build(present);
-
-        Assert.True(graph.PresentRequestsSwapchain);
+        Assert.True(graph.WritesBackbuffer);
     }
 
     [Fact]
-    public void Build_PresentPassDoesNotRequestSwapchain_PresentRequestsSwapchainIsFalse()
+    public void Build_NoPassDeclaresBackbuffer_WritesBackbufferIsFalse()
     {
-        var present = new TestPresentPass(requestSwapchain: false);
+        RenderGraph<TestView> graph = Build(new TestPass("Offscreen", outputs: new[] { ("bb_offscreen", Desc.Color()) }));
 
-        RenderGraph<TestView> graph = Build(present);
-
-        Assert.False(graph.PresentRequestsSwapchain);
+        Assert.False(graph.WritesBackbuffer);
     }
 
     [Fact]
-    public void Build_PresentPassDeclaresInputForResourceWrittenByAPass_ResourceKeepsWritersDesc()
+    public void Build_BackbufferPassReadsTexture_RunsAfterWriter()
     {
-        var writerDesc = GraphTextureDesc.ViewSized(true, 0.5f);
+        var writer = new TestPass("Writer", outputs: new[] { ("bb_shared", Desc.Color()) });
+        var backbuffer = new TestBackbufferPass(inputs: new[] { "bb_shared" });
 
-        var writer = new TestPass("Writer", outputs: new[] { ("present_in_shared", writerDesc) });
-        var present = new TestPresentPass(inputs: new[] { "present_in_shared" });
+        RenderGraph<TestView> graph = Build(backbuffer, writer);
 
-        RenderGraph<TestView> graph = Build(present, writer);
-
-        Assert.Contains(RenderResourceID.Intern("present_in_shared"), graph.PresentInputs);
-        var merged = (GraphTextureResource)graph.Resources[RenderResourceID.Intern("present_in_shared")];
-        Assert.Equal(writerDesc.Scale, merged.Description.Scale);
-        Assert.True(merged.Description.EnableDepth);
+        Assert.Equal(new[] { "Writer", "TestBackbuffer" }, OrderNames(graph));
     }
 
     [Fact]
-    public void Build_PresentPassDeclaresInputForResourceNoPassWrites_Throws()
+    public void Build_BackbufferPassReadsResourceNoPassWrites_Throws()
     {
-        var present = new TestPresentPass(inputs: new[] { "present_only_resource" });
+        var backbuffer = new TestBackbufferPass(inputs: new[] { "bb_only_resource" });
 
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Build(present));
-        Assert.Contains("present_only_resource", ex.Message);
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Build(backbuffer));
+        Assert.Contains("bb_only_resource", ex.Message);
     }
 }

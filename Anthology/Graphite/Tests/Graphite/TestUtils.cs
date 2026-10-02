@@ -19,22 +19,13 @@ public readonly struct TestRenderView : IRenderView
     public int ViewId => 0;
 }
 
-internal sealed class NoOpTestPresentPass : IPresentPass<TestRenderView>
-{
-    public string Name => "TestNoOpPresent";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<TestRenderView> context) { }
-}
-
 public static class TestGraphExtensions
 {
     public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView>> record)
     {
         ExecutionTask task = gd.BeginExecution();
         RenderGraph<TestRenderView> graph = RenderGraph<TestRenderView>.Build(
-            Array.Empty<IPass<TestRenderView>>(), new NoOpTestPresentPass());
+            Array.Empty<IPass<TestRenderView>>());
         var context = new RenderContext<TestRenderView>(gd, task, graph, default);
 
         try
@@ -58,7 +49,8 @@ public static class TestUtils
 {
     // Each device gets its own profiler instance - state must not leak across devices/tests.
     private static GraphicsDeviceOptions HeadlessOptions() => new(true) { Profiler = new TestCountingProfiler() };
-    private static GraphicsDeviceOptions SwapchainOptions() => new(true, PixelFormat.R16_UNorm, false) { Profiler = new TestCountingProfiler() };
+    private static GraphicsDeviceOptions SwapchainOptions() => new(true) { Profiler = new TestCountingProfiler() };
+    private static SwapchainDescription SwapchainConfig() => new() { DepthFormat = PixelFormat.R16_UNorm };
 
     public static GraphicsDevice CreateVulkanDevice()
         => GraphicsDevice.CreateVulkan(HeadlessOptions());
@@ -66,7 +58,7 @@ public static class TestUtils
     public static void CreateVulkanDeviceWithSwapchain(out IWindow window, out GraphicsDevice gd)
     {
         window = CreateWindow(GraphicsBackend.Vulkan);
-        gd = CreateDevice(window, SwapchainOptions(), GraphicsBackend.Vulkan);
+        gd = CreateDevice(window, SwapchainOptions(), SwapchainConfig(), GraphicsBackend.Vulkan);
     }
 
     // Creates a hidden, initialized window for the given backend. Initialize() performs the
@@ -95,7 +87,7 @@ public static class TestUtils
     };
 
     // Duplicated from Samples/Shared/DeviceCreateUtilities.CreateDevice.
-    public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, GraphicsBackend backend)
+    public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, SwapchainDescription swapchain, GraphicsBackend backend)
     {
         if (!window.IsInitialized)
             throw new InvalidOperationException("Cannot create graphics device with an uninitialized window!");
@@ -107,15 +99,10 @@ public static class TestUtils
                     throw new InvalidOperationException("Attempted to make a Vulkan graphics device without an available Vulkan API");
 
                 VulkanDeviceOptions vkOptions = default;
-                SwapchainDescription vkDescription = new()
-                {
-                    DepthFormat = options.SwapchainDepthFormat,
-                    ColorSrgb = options.SwapchainSrgbFormat,
-                    Width = (uint)window.Size.X,
-                    Height = (uint)window.Size.Y,
-                    SyncToVerticalBlank = options.SyncToVerticalBlank,
-                    Source = SwapchainSource.CreateVulkan(window.VkSurface!)
-                };
+                SwapchainDescription vkDescription = swapchain;
+                vkDescription.Width = (uint)window.Size.X;
+                vkDescription.Height = (uint)window.Size.Y;
+                vkDescription.Source = SwapchainSource.CreateVulkan(window.VkSurface!);
 
                 return GraphicsDevice.CreateVulkan(options, vkDescription, vkOptions);
         }

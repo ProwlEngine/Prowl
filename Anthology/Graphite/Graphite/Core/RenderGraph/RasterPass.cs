@@ -29,7 +29,15 @@ public abstract class RasterPass<TView> : IPass<TView>
     /// </summary>
     protected TextureHandle SetTarget(RenderContextBuilder builder, RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null)
     {
-        _target = builder.GetOutputTexture(id, desc, history, ops);
+        _target = builder.DeclareOutputTexture(id, desc, history, ops);
+        _hasTarget = true;
+        return _target;
+    }
+
+    /// <summary>Declares the main swapchain image as this pass's target. The frame presents after dispatch.</summary>
+    protected TextureHandle SetBackbufferTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null)
+    {
+        _target = builder.DeclareBackbuffer(ops);
         _hasTarget = true;
         return _target;
     }

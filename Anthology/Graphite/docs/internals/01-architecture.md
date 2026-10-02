@@ -7,7 +7,6 @@ The 10,000-foot view of Graphite: how the solution is laid out, how the abstract
 - [Key types](#key-types)
 - [End-to-end flow](#end-to-end-flow)
 - [Design decisions](#design-decisions)
-- [Gotchas](#gotchas)
 - [See also](#see-also)
 
 ## Overview
@@ -56,7 +55,7 @@ Both layers are plain partial-class files in the same assembly. There is no cond
 
 | Layer | Mechanism | Off switch |
 | --- | --- | --- |
-| Validation | `*_Check*` helper methods that begin with `if (!GraphicsDevice.ValidationEnabled) return;` | `GraphicsDeviceOptions.EnableValidation = false` (validation is on unless it is `false`) |
+| Validation | `*_Check*` helper methods that begin with `if (!GraphicsDevice.ValidationEnabled) return;` | `GraphicsDeviceOptions.GraphiteValidation = false` (validation is on unless it is `false`) |
 | Profiling | `Profiler` property, each hook starts with `if (Profiler is not { } profiler) return;` or uses `Profiler?.Record...` | `GraphicsDeviceOptions.Profiler = null` (default) |
 
 [ValidationEnabled](../../Graphite/ValidationLayers/Core/GraphicsDevice/GraphicsDevice.Validation.cs#L8) is a static field written once in `InitializeFrameOptions`. [SetProfiler](../../Graphite/Profiling/Core/GraphicsDevice/GraphicsDevice.Profiling.cs) swaps the profiler at any time. The two layers do not depend on each other. See [08-validation-and-profiling.md](08-validation-and-profiling.md).
@@ -86,8 +85,8 @@ One frame, from shader source to a presented image:
 1. **Shader compile.** [ShaderParser.Parse](../../ShaderDef/Compiler/ShaderParser.cs#L103) turns source into a `ShaderDefinition`, and [ShaderDefinition.Create](../../ShaderDef/Core/ShaderDefinition.cs#L56) binds it to a device with a `SlangShaderCompiler`. Each `ShaderPass` resolves a variant into a `ShaderDescription` with reflected stages, vertex inputs and resource layouts. See [06-shader-compiler.md](06-shader-compiler.md).
 2. **Device creation.** [GraphicsDevice.CreateVulkan](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Factory.cs#L33) takes `GraphicsDeviceOptions` and a swapchain description built from a window surface. The Vulkan constructor is [VkGraphicsDevice](../../Graphite/Platform/Vulkan/VkGraphicsDevice/VkGraphicsDevice.cs#L29); see [07-vulkan-backend.md](07-vulkan-backend.md) and [02-device-and-execution.md](02-device-and-execution.md).
 3. **Resources.** `device.ResourceFactory.CreateGraphicsProgram(description)` validates and builds a `VkGraphicsProgram`. The pipeline object (`RenderPipeline<TView>`) lazily builds its `RenderGraph<TView>` on first use of [Graph](../../Graphite/Core/RenderGraph/RenderPipeline.cs), calling `InitializePasses` once. See [05-programs-and-pipelines.md](05-programs-and-pipelines.md) and [03-render-graph.md](03-render-graph.md).
-4. **Frame.** [DispatchGraph](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L14) wraps one `BeginExecution`/`CompleteExecution` pair around all views. For each view it builds a `RenderContext` and calls [ExecuteView](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L97), which walks the topologically sorted passes and finally the present pass. Passes rent command buffers with [GetCommandBuffer](../../Graphite/Core/RenderGraph/RenderContext.cs#L78), record into them, and hand them back with [SubmitCommandBuffer](../../Graphite/Core/RenderGraph/RenderContext.cs#L97), which queues them on the `ExecutionTask` (nothing reaches the GPU yet). At draw time the Vulkan command buffer resolves a pipeline for the current framebuffer and topology and binds descriptor sets; see [04-resource-binding.md](04-resource-binding.md).
-5. **Submit and present.** [CompleteExecution](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L108) makes the backend submit every queued buffer in one `vkQueueSubmit`, signaling the slot's fence. If any view called `context.Present()`, `DispatchGraph` then calls [SwapBuffers](../../Graphite/Core/GraphicsDevice/GraphicsDevice.cs#L113), which presents and acquires the next image.
+4. **Frame.** [DispatchGraph](../../Graphite/Core/RenderGraph/GraphicsDevice.DispatchRenderGraph.cs#L14) wraps one `BeginExecution`/`CompleteExecution` pair around all views. For each view it builds a `RenderContext` and calls [ExecuteView](../../Graphite/Core/RenderGraph/RenderPipeline.cs#L97), which walks the topologically sorted passes. Passes rent command buffers with [GetCommandBuffer](../../Graphite/Core/RenderGraph/RenderContext.cs#L78), record into them, and hand them back with [SubmitCommandBuffer](../../Graphite/Core/RenderGraph/RenderContext.cs#L97), which queues them on the `ExecutionTask` (nothing reaches the GPU yet). At draw time the Vulkan command buffer resolves a pipeline for the current framebuffer and topology and binds descriptor sets; see [04-resource-binding.md](04-resource-binding.md).
+5. **Submit and present.** [CompleteExecution](../../Graphite/Core/GraphicsDevice/GraphicsDevice.Execution.cs#L108) makes the backend submit every queued buffer in one `vkQueueSubmit`, signaling the slot's fence. If any view's graph writes the backbuffer, `DispatchGraph` then calls [SwapBuffers](../../Graphite/Core/GraphicsDevice/GraphicsDevice.cs#L113), which presents and acquires the next image.
 
 ## Design decisions
 
@@ -99,13 +98,6 @@ A decorator would wrap every resource and double the object count. Partial class
 
 ### Why the render graph sits on top of the device, not inside it
 `DispatchGraph` is an extension of `GraphicsDevice` in a separate file that only uses the public `BeginExecution`/`CompleteExecution` API. You can drive the device without the graph (create your own `ExecutionTask` and command buffers) and the graph is just one client.
-
-## Gotchas
-
-- `ValidationEnabled` is a static field. With two devices created with different `EnableValidation` values, the last constructed device wins for both.
-- Backend classes are `internal`; `VkBuffer` and `VkGraphicsDevice` are implementation, not API. `GraphicsDevice.GetVulkanInfo` exposes native handles.
-- `DispatchGraph` only presents if a pass called `RenderContext.Present()`. A pipeline whose present pass returns early (for example because `SwapchainTarget` is null) renders nothing on screen and does not swap.
-- Dispose order matters. The device does `WaitForIdle` and disposes its pools and default resources, but child resources created by the application must be disposed before the device.
 
 ## See also
 

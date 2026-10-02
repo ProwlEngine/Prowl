@@ -55,7 +55,7 @@ Public types, their members, and example usage.
 | [Command Buffers](api/command-buffers.md) | CommandBuffer, TransferCommandBuffer |
 | [Property Sets](api/property-sets.md) | PropertySet, PropertyID |
 | [Shader Programs](api/shader-programs.md) | ShaderProgram, GraphicsProgram, ComputeProgram, pipeline state descriptions |
-| [Render Graph](api/render-graph.md) | RenderPipeline, IPass, IPresentPass, builders, RenderContext |
+| [Render Graph](api/render-graph.md) | RenderPipeline, IPass, the backbuffer, builders, RenderContext |
 | [ShaderDef](api/shaderdef.md) | Shader file format, compiler API, SlangQuickCompile |
 | [Diagnostics](api/diagnostics.md) | Validation layers and profiling |
 

@@ -4,32 +4,50 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Base class for graph-driven render pipelines. Subclass adds passes and a present pass in InitializePasses;
+/// Graph-driven render pipeline. Pass a pass list to the constructor, or subclass and add passes in InitializePasses;
 /// gets solved into an ordered graph and run per view via ExecuteView.
 /// </summary>
-public abstract class RenderPipeline<TView> : IDisposable
+public class RenderPipeline<TView> : IDisposable
     where TView : IRenderView
 {
     private readonly List<IPass<TView>> _passes = new();
     private readonly List<GraphResource> _centralResources = new();
-    private IPresentPass<TView>? _presentPass;
+    private readonly IPass<TView>[] _composedPasses;
     private RenderGraph<TView>? _graph;
     private bool _initialized;
     private bool _executingView;
 
+    /// <summary>Creates a pipeline to subclass; add passes in InitializePasses.</summary>
+    protected RenderPipeline()
+    {
+        _composedPasses = Array.Empty<IPass<TView>>();
+    }
+
+    /// <summary>Creates a pipeline from a fixed pass list. Read/write declarations decide order.</summary>
+    /// <param name="passes">Passes to run. Re-added after InvalidateGraph.</param>
+    public RenderPipeline(IEnumerable<IPass<TView>> passes)
+    {
+        if (passes == null)
+            throw new ArgumentNullException(nameof(passes));
+
+        List<IPass<TView>> list = new();
+        foreach (IPass<TView> pass in passes)
+            list.Add(pass ?? throw new ArgumentException("Pass list contains null.", nameof(passes)));
+
+        _composedPasses = list.ToArray();
+    }
+
     /// <summary>
-    /// Runs once lazily before first execution. Override to add passes and set the present pass.
+    /// Runs once lazily before first execution. Override to add passes.
     /// Read/write declarations decide order.
     /// </summary>
-    protected abstract void InitializePasses();
+    protected virtual void InitializePasses()
+    {
+    }
 
     /// <summary>Adds a pass. Call from InitializePasses.</summary>
     protected void AddPass(IPass<TView> pass)
         => _passes.Add(pass ?? throw new ArgumentNullException(nameof(pass)));
-
-    /// <summary>Sets the required present pass. Call from InitializePasses.</summary>
-    protected void SetPresentPass(IPresentPass<TView> presentPass)
-        => _presentPass = presentPass ?? throw new ArgumentNullException(nameof(presentPass));
 
     /// <summary>
     /// Declares a texture resource centrally so passes can reference it by ID with no owner. Call from InitializePasses.
@@ -47,24 +65,13 @@ public abstract class RenderPipeline<TView> : IDisposable
     protected void DeclareBuffer(RenderResourceID id, GraphBufferDesc desc)
         => _centralResources.Add(new GraphBufferResource(id, desc));
 
-    /// <summary>The present pass, resolved after init. Throws if none was set.</summary>
-    public IPresentPass<TView> PresentPass
-    {
-        get
-        {
-            EnsureInitialized();
-            return _presentPass ?? throw new InvalidOperationException(
-                "A render pipeline must set a present pass in InitializePasses (via SetPresentPass).");
-        }
-    }
-
     /// <summary>The solved graph, built on first use from the added passes.</summary>
     public RenderGraph<TView> Graph
     {
         get
         {
             EnsureInitialized();
-            return _graph ??= RenderGraph<TView>.Build(_passes, PresentPass, _centralResources);
+            return _graph ??= RenderGraph<TView>.Build(_passes, _centralResources);
         }
     }
 
@@ -73,6 +80,7 @@ public abstract class RenderPipeline<TView> : IDisposable
         if (_initialized)
             return;
 
+        _passes.AddRange(_composedPasses);
         InitializePasses();
         _initialized = true;
     }
@@ -91,7 +99,7 @@ public abstract class RenderPipeline<TView> : IDisposable
     }
 
     /// <summary>
-    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture, then present.
+    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Presents after dispatch if a pass wrote the backbuffer.
     /// Once per view per dispatch.
     /// </summary>
     public void ExecuteView(RenderContext<TView> context)
@@ -141,12 +149,7 @@ public abstract class RenderPipeline<TView> : IDisposable
                     CapturePassOutputs(context, profiler, passInfo, node);
             }
 
-            context.SetCurrentPass(null, null, graph.PresentAccesses, PresentPass.Name);
-            context.TransitionForAccesses(PresentPass.Name, graph.PresentAccesses);
-            PresentPass.Present(context);
-            context.SetCurrentPass(null);
-            context.ReclaimUnsubmittedCommandBuffers(PresentPass.Name);
-            context.RestoreRestingStates(PresentPass.Name);
+            context.RestoreRestingStates("View");
         }
         finally
         {
@@ -161,7 +164,7 @@ public abstract class RenderPipeline<TView> : IDisposable
         {
             foreach (RenderResourceID output in node.Outputs)
             {
-                if (context.IsTextureResource(output))
+                if (context.IsTextureResource(output) && output != GraphBackbufferResource.BackbufferId)
                     framebuffers.Add(context.GetRenderTexture(new TextureHandle(output)).Framebuffer);
             }
         }
@@ -183,13 +186,11 @@ public abstract class RenderPipeline<TView> : IDisposable
         context.SubmitTransferCommandBuffer(transfer);
     }
 
-    /// <summary>Disposes passes and the present pass that are disposable.</summary>
+    /// <summary>Disposes passes that are disposable.</summary>
     public virtual void Dispose()
     {
         foreach (IPass<TView> pass in _passes)
             (pass as IDisposable)?.Dispose();
-
-        (_presentPass as IDisposable)?.Dispose();
 
         _graph?.Dispose();
 

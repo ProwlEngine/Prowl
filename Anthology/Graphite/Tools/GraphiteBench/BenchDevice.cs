@@ -12,7 +12,7 @@ public static class BenchDevice
     {
         GraphicsDeviceOptions options = new(validation)
         {
-            EnableValidation = validation,
+            GraphiteValidation = validation,
             Profiler = profiler
         };
 

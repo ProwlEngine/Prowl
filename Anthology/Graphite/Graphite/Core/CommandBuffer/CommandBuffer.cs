@@ -32,6 +32,20 @@ public abstract partial class CommandBuffer : CommandBufferBase
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
+    private readonly System.Collections.Generic.Dictionary<PropertySet, uint> _mergedSourceVersions = new();
+    private readonly System.Collections.Generic.List<PropertyID> _changedPropertyKeys = new();
+    private bool _allPropertiesChanged = true;
+
+    internal System.Collections.Generic.List<PropertyID> ChangedPropertyKeys => _changedPropertyKeys;
+
+    internal bool AllPropertiesChanged => _allPropertiesChanged;
+
+    internal void ConsumePropertyChanges()
+    {
+        _changedPropertyKeys.Clear();
+        _allPropertiesChanged = false;
+    }
+
     internal CommandBuffer(GraphicsDeviceFeatures features, uint uniformAlignment, uint structuredAlignment)
     {
         _features = features;
@@ -49,6 +63,9 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
+        _mergedSourceVersions.Clear();
+        _changedPropertyKeys.Clear();
+        _allPropertiesChanged = true;
         unchecked { _activePropertiesEpoch++; }
     }
 
@@ -59,4 +76,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
     internal abstract void End();
 
     internal abstract void RecordBarriers(System.ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst);
+
+    internal abstract void SealRenderPass();
 }

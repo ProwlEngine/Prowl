@@ -16,6 +16,12 @@ public abstract class CommandBufferBase : GraphicsResource
 
     internal System.Collections.Generic.Dictionary<Texture, TextureState>? GraphStates { get; set; }
 
+    private static int s_graphStateVersion;
+
+    internal static int GraphStateVersion => System.Threading.Volatile.Read(ref s_graphStateVersion);
+
+    internal static void BumpGraphStateVersion() => System.Threading.Interlocked.Increment(ref s_graphStateVersion);
+
     internal TextureState StateOf(Texture texture)
         => GraphStates != null && GraphStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
 

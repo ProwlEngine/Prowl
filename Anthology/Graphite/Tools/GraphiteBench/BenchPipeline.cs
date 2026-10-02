@@ -45,7 +45,7 @@ public sealed class BenchPass : IPass<BenchView>
         cmd.SetFramebuffer(_scene.Framebuffer);
         if (_index == 0)
             cmd.ClearColorTarget(0, Color.Black);
-        cmd.SetFullViewports();
+        cmd.SetFullViewport();
 
         _record(cmd, _index);
 
@@ -57,38 +57,5 @@ public sealed class BenchPass : IPass<BenchView>
 
         _stats.RecordTicks += recorded - start;
         _stats.SubmitTicks += submitted - recorded;
-    }
-}
-
-public sealed class BenchPresentPass : IPresentPass<BenchView>
-{
-    public string Name => "BenchPresent";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<BenchView> context) { }
-}
-
-public sealed class BenchPipeline : RenderPipeline<BenchView>
-{
-    private readonly BenchScene _scene;
-    private readonly int _passCount;
-    private readonly Action<CommandBuffer, int> _record;
-    private readonly BenchStats _stats;
-
-    public BenchPipeline(BenchScene scene, int passCount, Action<CommandBuffer, int> record, BenchStats stats)
-    {
-        _scene = scene;
-        _passCount = passCount;
-        _record = record;
-        _stats = stats;
-    }
-
-    protected override void InitializePasses()
-    {
-        for (int i = 0; i < _passCount; i++)
-            AddPass(new BenchPass(_scene, i, _record, _stats));
-
-        SetPresentPass(new BenchPresentPass());
     }
 }

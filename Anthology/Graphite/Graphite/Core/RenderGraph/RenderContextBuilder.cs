@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Prowl.Graphite.RenderGraph;
@@ -20,7 +21,7 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>Declares a texture this pass reads. Writer owns the description.</summary>
-    public TextureHandle GetInputTexture(
+    public TextureHandle DeclareInputTexture(
         RenderResourceID id,
         TextureUsageKind usage = TextureUsageKind.Sampled,
         TextureUsageKind? initial = null,
@@ -35,7 +36,7 @@ public sealed class RenderContextBuilder
     /// Declares a texture this pass writes, creating it if new. Non-zero history makes it a ring buffer
     /// of history+1 copies, rotated each execution so reads can pull prior frames by age.
     /// </summary>
-    public TextureHandle GetOutputTexture(
+    public TextureHandle DeclareOutputTexture(
         RenderResourceID id,
         GraphTextureDesc desc,
         int history = 0,
@@ -52,7 +53,7 @@ public sealed class RenderContextBuilder
     /// <summary>
     /// Imports an external render target under an ID so passes can read/order around it. Caller keeps ownership.
     /// </summary>
-    public TextureHandle ImportTexture(
+    public TextureHandle DeclareImportedTexture(
         RenderResourceID id,
         RenderTexture existing,
         TextureUsageKind usage = TextureUsageKind.Attachment,
@@ -65,7 +66,7 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>Declares a buffer this pass reads. Writer owns the description.</summary>
-    public BufferHandle GetInputBuffer(RenderResourceID id, BufferUsageKind usage = BufferUsageKind.AnyRead)
+    public BufferHandle DeclareInputBuffer(RenderResourceID id, BufferUsageKind usage = BufferUsageKind.AnyRead)
     {
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: false));
         Inputs.Add(id);
@@ -76,10 +77,27 @@ public sealed class RenderContextBuilder
     /// Declares a buffer this pass writes, creating it if new. Non-zero history makes it a ring buffer of
     /// history+1 copies, rotated each execution so reads can pull prior frames by age.
     /// </summary>
-    public BufferHandle GetOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferUsageKind usage = BufferUsageKind.Storage)
+    public BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferUsageKind usage = BufferUsageKind.Storage)
     {
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true));
         Outputs.Add(new GraphBufferResource(id, desc, history));
         return new BufferHandle(id);
+    }
+
+    /// <summary>
+    /// Declares a write to the device's main swapchain image. Any view whose graph declares it presents after dispatch.
+    /// Clears by default; pass Loaded ops for a pass that draws over an earlier backbuffer pass.
+    /// </summary>
+    public TextureHandle DeclareBackbuffer(
+        TargetLoadStoreOps? ops = null,
+        TextureUsageKind usage = TextureUsageKind.Attachment,
+        TextureUsageKind? initial = null)
+    {
+        if ((usage & ~(TextureUsageKind.Attachment | TextureUsageKind.TransferDst)) != 0)
+            throw new ArgumentException($"The backbuffer only supports Attachment and TransferDst, not {usage}.", nameof(usage));
+
+        Accesses.Add(ResourceAccess.Texture(GraphBackbufferResource.BackbufferId, usage, initial, null, isOutput: true));
+        Outputs.Add(new GraphBackbufferResource(ops));
+        return new TextureHandle(GraphBackbufferResource.BackbufferId);
     }
 }

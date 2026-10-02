@@ -40,7 +40,7 @@ file sealed class ViewHistoryPass : IPass<HistoryView>
     public Dictionary<int, List<RenderTexture>> Previous { get; } = new();
     public Dictionary<int, List<bool>> Valid { get; } = new();
 
-    public void Setup(RenderContextBuilder builder) => _handle = builder.GetOutputTexture(_id, _desc, history: 1);
+    public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
 
     public void Render(RenderContext<HistoryView> context)
     {
@@ -71,7 +71,7 @@ file sealed class ViewBufferHistoryPass : IPass<HistoryView>
     public Dictionary<int, List<DeviceBuffer>> Previous { get; } = new();
 
     public void Setup(RenderContextBuilder builder)
-        => _handle = builder.GetOutputBuffer(_id, GraphBufferDesc.Structured(16, 16), history: 1);
+        => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(16, 16), history: 1);
 
     public void Render(RenderContext<HistoryView> context)
     {
@@ -83,28 +83,6 @@ file sealed class ViewBufferHistoryPass : IPass<HistoryView>
         }
         Current[view].Add(context.GetRenderBuffer(_handle, 0));
         Previous[view].Add(context.GetRenderBuffer(_handle, 1));
-    }
-}
-
-file sealed class NoOpPresentPass : IPresentPass<HistoryView>
-{
-    public string Name => "Present";
-
-    public void Setup(PresentContextBuilder builder) { }
-
-    public void Present(RenderContext<HistoryView> context) { }
-}
-
-file sealed class HistoryTestPipeline : RenderPipeline<HistoryView>
-{
-    private readonly IPass<HistoryView> _pass;
-
-    public HistoryTestPipeline(IPass<HistoryView> pass) => _pass = pass;
-
-    protected override void InitializePasses()
-    {
-        AddPass(_pass);
-        SetPresentPass(new NoOpPresentPass());
     }
 }
 
@@ -123,7 +101,7 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void TwoViewsInOneDispatch_EachReadsItsOwnPreviousFrame()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_alternating"), ColorDesc());
-        using HistoryTestPipeline pipeline = new(pass);
+        using RenderPipeline<HistoryView> pipeline = new([pass]);
         HistoryView a = new(1, 64, 64);
         HistoryView b = new(2, 64, 64);
 
@@ -151,7 +129,7 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void TwoViewsInOneDispatch_BufferHistoryIsPerView()
     {
         ViewBufferHistoryPass pass = new(RenderResourceID.Intern("viewhistory_buffer"));
-        using HistoryTestPipeline pipeline = new(pass);
+        using RenderPipeline<HistoryView> pipeline = new([pass]);
         HistoryView a = new(1, 64, 64);
         HistoryView b = new(2, 64, 64);
 
@@ -168,7 +146,7 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void IsHistoryValid_FalseOnFirstExecution_TrueAfter_FalseAgainAfterResize()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_valid"), ColorDesc());
-        using HistoryTestPipeline pipeline = new(pass);
+        using RenderPipeline<HistoryView> pipeline = new([pass]);
 
         Dispatch(pipeline, new HistoryView(1, 64, 64));
         Dispatch(pipeline, new HistoryView(1, 64, 64));
@@ -182,7 +160,7 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void IsHistoryValid_IsTrackedPerView()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_valid_per_view"), ColorDesc());
-        using HistoryTestPipeline pipeline = new(pass);
+        using RenderPipeline<HistoryView> pipeline = new([pass]);
 
         Dispatch(pipeline, new HistoryView(1, 64, 64));
         Dispatch(pipeline, new HistoryView(1, 64, 64), new HistoryView(2, 64, 64));
@@ -195,7 +173,7 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ViewNotRenderedFor120Executions_HasItsRingDisposed()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_disposal"), ColorDesc());
-        using HistoryTestPipeline pipeline = new(pass);
+        using RenderPipeline<HistoryView> pipeline = new([pass]);
         HistoryView a = new(1, 64, 64);
         HistoryView b = new(2, 64, 64);
 
@@ -227,7 +205,7 @@ public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ViewRenderedWithin120Executions_KeepsItsRing()
     {
         ViewHistoryPass pass = new(RenderResourceID.Intern("viewhistory_retained"), ColorDesc());
-        using HistoryTestPipeline pipeline = new(pass);
+        using RenderPipeline<HistoryView> pipeline = new([pass]);
         HistoryView a = new(1, 64, 64);
         HistoryView b = new(2, 64, 64);
 
