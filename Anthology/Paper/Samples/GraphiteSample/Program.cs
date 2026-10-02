@@ -42,7 +42,7 @@ public static class Program
 
         GraphicsDeviceOptions deviceOptions = new()
         {
-            Debug = false,
+            VulkanValidationLayers = false,
             PreferStandardClipSpaceYDirection = true,
             PreferDepthRangeZeroToOne = true,
         };

@@ -61,7 +61,7 @@ public static class Program
     {
         GraphicsDeviceOptions options = new()
         {
-            Debug = false,
+            VulkanValidationLayers = false,
             PreferStandardClipSpaceYDirection = true
         };
 
