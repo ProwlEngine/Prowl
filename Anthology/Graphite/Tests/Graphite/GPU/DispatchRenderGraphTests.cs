@@ -86,19 +86,6 @@ file sealed class BackbufferPass : IPass<DispatchView>
     }
 }
 
-file sealed class TestPipeline : RenderPipeline<DispatchView>
-{
-    private readonly IPass<DispatchView>[] _passes;
-
-    public TestPipeline(params IPass<DispatchView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<DispatchView> pass in _passes)
-            AddPass(pass);
-    }
-}
-
 public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
@@ -106,7 +93,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         RecordingPass passA = new();
         RecordingPass passB = new();
-        using TestPipeline pipeline = new(passA, passB);
+        using RenderPipeline<DispatchView> pipeline = new([passA, passB]);
         DispatchView[] views = { new(64, 64), new(80, 48), new(32, 32) };
 
         GD.DispatchGraph(pipeline, views);
@@ -119,7 +106,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void Dispatch_ReturnsTaskThatCompletes()
     {
-        using TestPipeline pipeline = new(new RecordingPass());
+        using RenderPipeline<DispatchView> pipeline = new([new RecordingPass()]);
 
         ExecutionTask task = GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
         GD.WaitForExecution(task);
@@ -131,7 +118,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     public void Dispatch_EachViewSeesItsOwnContext()
     {
         RecordingPass pass = new();
-        using TestPipeline pipeline = new(pass);
+        using RenderPipeline<DispatchView> pipeline = new([pass]);
         DispatchView[] views = { new(64, 64), new(128, 96), new(32, 200) };
 
         GD.DispatchGraph(pipeline, views);
@@ -143,7 +130,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void Dispatch_BackbufferDeclaredWithoutMainSwapchain_Throws()
     {
-        using TestPipeline pipeline = new(new BackbufferPass());
+        using RenderPipeline<DispatchView> pipeline = new([new BackbufferPass()]);
 
         Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) }));
         GD.WaitForIdle();
@@ -153,7 +140,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     public void Dispatch_TransientThroughContext_ReclaimsAcrossManyDispatches()
     {
         RecordingPass pass = new(rentTransient: true);
-        using TestPipeline pipeline = new(pass);
+        using RenderPipeline<DispatchView> pipeline = new([pass]);
         DispatchView[] views = { new(64, 64) };
 
         uint iterations = GD.MaxExecutingTasks * 2 + 1;
@@ -174,7 +161,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         GD.OnWarning = message => warnings.Add(message);
         try
         {
-            using TestPipeline pipeline = new(new LeakingCommandBufferPass());
+            using RenderPipeline<DispatchView> pipeline = new([new LeakingCommandBufferPass()]);
             GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
             GD.WaitForIdle();
         }
@@ -190,7 +177,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void Dispatch_ManyTimes_NeverExceedsMaxExecutingGraphs()
     {
-        using TestPipeline pipeline = new(new RecordingPass());
+        using RenderPipeline<DispatchView> pipeline = new([new RecordingPass()]);
         DispatchView[] views = { new(64, 64) };
 
         uint max = GD.MaxExecutingTasks;
@@ -210,7 +197,7 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
     public void Dispatch_BackbufferPass_ResolvesSwapchainAndPresents()
     {
         BackbufferPass pass = new();
-        using TestPipeline pipeline = new(new RecordingPass(), pass);
+        using RenderPipeline<DispatchView> pipeline = new([new RecordingPass(), pass]);
         DispatchView[] views = { new(64, 64) };
 
         GD.DispatchGraph(pipeline, views);
@@ -224,7 +211,7 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
     public void Dispatch_NoPassDeclaresBackbuffer_RunsWithoutPresenting()
     {
         RecordingPass pass = new();
-        using TestPipeline pipeline = new(pass);
+        using RenderPipeline<DispatchView> pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
         GD.WaitForIdle();

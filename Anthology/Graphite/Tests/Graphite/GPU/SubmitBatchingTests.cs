@@ -62,19 +62,6 @@ file sealed class MidExecutionTransferPass : IPass<SubmitBatchingView>
     }
 }
 
-file sealed class SubmitBatchingPipeline : RenderPipeline<SubmitBatchingView>
-{
-    private readonly IPass<SubmitBatchingView>[] _passes;
-
-    public SubmitBatchingPipeline(params IPass<SubmitBatchingView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<SubmitBatchingView> pass in _passes)
-            AddPass(pass);
-    }
-}
-
 public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private DeviceBuffer CreateValueBuffer(uint value)
@@ -94,10 +81,10 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(3);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
 
-        using SubmitBatchingPipeline pipeline = new(
+        using RenderPipeline<SubmitBatchingView> pipeline = new([
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
-            new BufferWritePass("PassC", sourceC, destination));
+            new BufferWritePass("PassC", sourceC, destination)]);
 
         int before = vk.GraphicsQueueSubmitCount;
 
@@ -115,10 +102,10 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer sourceC = CreateValueBuffer(33);
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
 
-        using SubmitBatchingPipeline pipeline = new(
+        using RenderPipeline<SubmitBatchingView> pipeline = new([
             new BufferWritePass("PassA", sourceA, destination),
             new BufferWritePass("PassB", sourceB, destination),
-            new BufferWritePass("PassC", sourceC, destination));
+            new BufferWritePass("PassC", sourceC, destination)]);
 
         GD.DispatchGraph(pipeline, new SubmitBatchingView[] { new() });
         GD.WaitForIdle();
@@ -138,9 +125,9 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
         DeviceBuffer staging = RF.CreateBuffer(new BufferDescription(sizeof(uint), BufferUsage.Staging));
 
-        using SubmitBatchingPipeline pipeline = new(
+        using RenderPipeline<SubmitBatchingView> pipeline = new([
             new BufferWritePass("PassA", source, destination),
-            new MidExecutionTransferPass(destination, staging));
+            new MidExecutionTransferPass(destination, staging)]);
 
         GD.DispatchGraph(pipeline, new SubmitBatchingView[] { new() });
         GD.WaitForIdle();

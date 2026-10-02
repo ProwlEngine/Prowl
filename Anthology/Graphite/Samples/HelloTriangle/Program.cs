@@ -48,23 +48,13 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 }
 
 
-internal sealed class TrianglePipeline : RenderPipeline<SceneView>
-{
-    private readonly TrianglePass _pass;
-
-    public TrianglePipeline(TrianglePass pass) => _pass = pass;
-
-    protected override void InitializePasses() => AddPass(_pass);
-}
-
-
 public static class Program
 {
     static GraphicsDevice device;
     static Mesh triangle;
     static GraphicsProgram shader;
     static RenderMSTracker tracker;
-    static TrianglePipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
     static SceneView[] views;
 
 
@@ -93,7 +83,7 @@ public static class Program
         shader = ShaderLoader.CreateShader(device);
         triangle = ModelLoader.CreateTriangle(device);
 
-        pipeline = new TrianglePipeline(new TrianglePass(triangle, shader));
+        pipeline = new([new TrianglePass(triangle, shader)]);
         views = new[] { new SceneView(600, 600) };
     }
 

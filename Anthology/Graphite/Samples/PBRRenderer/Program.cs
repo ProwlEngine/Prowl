@@ -233,33 +233,6 @@ internal readonly struct CanvasFullscreenSource : IVertexSource
 }
 
 
-internal sealed class PBRPipeline : RenderPipeline<SceneView>
-{
-    private readonly ScenePass _scene;
-    private readonly BloomDownsamplePass _bloomDown;
-    private readonly BloomUpsamplePass _bloomUp;
-    private readonly CompositePass _composite;
-
-    public PBRPipeline(ScenePass scene, BloomDownsamplePass bloomDown, BloomUpsamplePass bloomUp, CompositePass composite)
-    {
-        _scene = scene;
-        _bloomDown = bloomDown;
-        _bloomUp = bloomUp;
-        _composite = composite;
-    }
-
-    public ScenePass Scene => _scene;
-
-    protected override void InitializePasses()
-    {
-        AddPass(_scene);
-        AddPass(_bloomDown);
-        AddPass(_bloomUp);
-        AddPass(_composite);
-    }
-}
-
-
 public static class Program
 {
     static GraphicsDevice device;
@@ -275,7 +248,8 @@ public static class Program
     static Sampler compositeSampler;
     static Texture albedo;
 
-    static PBRPipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
+    static ScenePass scenePass;
     static SceneView[] views;
 
 
@@ -327,12 +301,12 @@ public static class Program
         bloomSampler = device.ResourceFactory.CreateSampler(clampLinear);
         compositeSampler = device.ResourceFactory.CreateSampler(clampLinear);
 
-        ScenePass scenePass = new(model, unlitShader, sceneProperties);
+        scenePass = new(model, unlitShader, sceneProperties);
         BloomDownsamplePass bloomDown = new(bloomShader, bloomSampler);
         BloomUpsamplePass bloomUp = new(bloomShader, bloomSampler);
         CompositePass composite = new(compositeShader, compositeSampler);
 
-        pipeline = new PBRPipeline(scenePass, bloomDown, bloomUp, composite);
+        pipeline = new([scenePass, bloomDown, bloomUp, composite]);
         views = new[] { new SceneView(600, 600) };
     }
 
@@ -363,7 +337,7 @@ public static class Program
     {
         tracker.Begin();
 
-        pipeline.Scene.Advance((float)dt);
+        scenePass.Advance((float)dt);
         device.DispatchGraph(pipeline, views);
 
         tracker.End(dt);

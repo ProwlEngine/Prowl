@@ -44,16 +44,6 @@ file sealed class OffscreenPass : IPass<SwapchainView>
     public void Render(RenderContext<SwapchainView> context) { }
 }
 
-file sealed class ClearSwapchainPipeline : RenderPipeline<SwapchainView>
-{
-    protected override void InitializePasses() => AddPass(new ClearSwapchainPass());
-}
-
-file sealed class OffscreenPipeline : RenderPipeline<SwapchainView>
-{
-    protected override void InitializePasses() => AddPass(new OffscreenPass());
-}
-
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These
 // run on the windowed device creators (a headless device has no swapchain).
 public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -91,8 +81,8 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void DispatchGraph_PresentsMoreFramesThanSwapchainImages()
     {
-        using ClearSwapchainPipeline presenting = new();
-        using OffscreenPipeline offscreen = new();
+        using RenderPipeline<SwapchainView> presenting = new([new ClearSwapchainPass()]);
+        using RenderPipeline<SwapchainView> offscreen = new([new OffscreenPass()]);
         SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height)];
 
         for (int frame = 0; frame < 12; frame++)

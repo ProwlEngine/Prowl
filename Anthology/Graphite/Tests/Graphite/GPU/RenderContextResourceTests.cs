@@ -239,19 +239,6 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 }
 
-file sealed class ResourceTestPipeline : RenderPipeline<ResourceView>
-{
-    private readonly IPass<ResourceView>[] _passes;
-
-    public ResourceTestPipeline(params IPass<ResourceView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<ResourceView> pass in _passes)
-            AddPass(pass);
-    }
-}
-
 public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private static GraphTextureDesc ColorDesc(float scale = 1f)
@@ -261,7 +248,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void GetRenderTexture_SameHandleWithinContext_ReturnsCachedInstance()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_cache"), ColorDesc(), resolvesPerRender: 3);
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -277,7 +264,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderResourceID id = RenderResourceID.Intern("resourcetest_shared");
         ResolvingPass writer = new("Writer", id, ColorDesc(), isOutput: true);
         ResolvingPass reader = new("Reader", id, ColorDesc(), isOutput: false);
-        using ResourceTestPipeline pipeline = new(writer, reader);
+        using RenderPipeline<ResourceView> pipeline = new([writer, reader]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -290,7 +277,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     {
         ResolvingPass a = new("A", RenderResourceID.Intern("resourcetest_distinct_a"), ColorDesc());
         ResolvingPass b = new("B", RenderResourceID.Intern("resourcetest_distinct_b"), ColorDesc());
-        using ResourceTestPipeline pipeline = new(a, b);
+        using RenderPipeline<ResourceView> pipeline = new([a, b]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -301,7 +288,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     [Fact]
     public void GetRenderTexture_UndeclaredHandle_Throws()
     {
-        using ResourceTestPipeline pipeline = new(new UndeclaredResolvePass());
+        using RenderPipeline<ResourceView> pipeline = new([new UndeclaredResolvePass()]);
 
         Assert.Throws<InvalidOperationException>(
             () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) }));
@@ -310,7 +297,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     [Fact]
     public void GetRenderTexture_DefaultHandle_Throws()
     {
-        using ResourceTestPipeline pipeline = new(new DefaultHandleResolvePass());
+        using RenderPipeline<ResourceView> pipeline = new([new DefaultHandleResolvePass()]);
 
         Assert.Throws<ArgumentException>(
             () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) }));
@@ -320,7 +307,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void GetRenderTexture_TwoViewsInOneDispatch_ResolveToIndependentCorrectlySizedTextures()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_perview"), ColorDesc());
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
         ResourceView[] views = { new(64, 48), new(128, 96) };
 
         GD.DispatchGraph(pipeline, views);
@@ -338,7 +325,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void GetRenderTexture_ViewSizedResource_ScalesToViewPixelSize()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_scale"), ColorDesc(0.5f));
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 100) });
         GD.WaitForIdle();
@@ -353,7 +340,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ResolvingPass pass = new("Pass",
             RenderResourceID.Intern("resourcetest_explicit"),
             GraphTextureDesc.Sized(37, 41, false, PixelFormat.R8_G8_B8_A8_UNorm));
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 300) });
         GD.WaitForIdle();
@@ -366,7 +353,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void Dispatch_ConsecutiveDispatchesWithDifferentViewSizes_EachResolvesOwnSizedTexture()
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_crossdispatch"), ColorDesc());
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
 
         ExecutionTask task1 = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         ExecutionTask task2 = GD.DispatchGraph(pipeline, new ResourceView[] { new(128, 128) });
@@ -385,7 +372,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderResourceID b = RenderResourceID.Intern("resourcetest_capture_b");
         TwoOutputPass twoOutputs = new("TwoOutputs", a, b, ColorDesc());
         ZeroOutputPass zeroOutputs = new("ZeroOutputs");
-        using ResourceTestPipeline pipeline = new(zeroOutputs, twoOutputs);
+        using RenderPipeline<ResourceView> pipeline = new([zeroOutputs, twoOutputs]);
         RecordingProfiler profiler = new() { RequestCapture = true };
 
         using GraphicsDevice profiledDevice = GD.BackendType switch
@@ -405,7 +392,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     public void GetRenderTexture_HistoryResource_ThisFramesPreviousEqualsLastFramesCurrent()
     {
         HistoryResolvingPass pass = new(RenderResourceID.Intern("resourcetest_history"), ColorDesc());
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
 
         for (int frame = 0; frame < 3; frame++)
         {
@@ -426,7 +413,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderTexture external = RF.CreateRenderTexture(new RenderTextureDescription(
             64, 64, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, false, TextureSampleCount.Count1));
         ImportingPass pass = new(RenderResourceID.Intern("resourcetest_imported"), external);
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -440,7 +427,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         RenderResourceID id = RenderResourceID.Intern("resourcetest_present_reads_graph");
         ResolvingPass writer = new("Writer", id, ColorDesc());
         ReadingPass reader = new(id);
-        using ResourceTestPipeline pipeline = new(reader, writer);
+        using RenderPipeline<ResourceView> pipeline = new([reader, writer]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -456,7 +443,7 @@ public abstract class RenderContextResourcePresentTests<T> : GraphicsDeviceTestB
     public void Backbuffer_PassDeclaredItInSetup_ResolvesToSwapchainFramebuffer()
     {
         BackbufferResolvingPass pass = new();
-        using ResourceTestPipeline pipeline = new(pass);
+        using RenderPipeline<ResourceView> pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
         GD.WaitForIdle();

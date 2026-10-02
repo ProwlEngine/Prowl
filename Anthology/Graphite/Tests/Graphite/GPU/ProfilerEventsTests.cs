@@ -124,19 +124,6 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
     }
 }
 
-file sealed class ProfilerTestPipeline : RenderPipeline<ProfilerView>
-{
-    private readonly IPass<ProfilerView>[] _passes;
-
-    public ProfilerTestPipeline(params IPass<ProfilerView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<ProfilerView> pass in _passes)
-            AddPass(pass);
-    }
-}
-
 public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private GraphicsDevice CreateProfiledDevice(IProfiler profiler) => GD.BackendType switch
@@ -246,7 +233,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_target");
         ClearingRasterPass clearPass = new(id);
         ReadingCopyPass copyPass = new(id, readback);
-        using ProfilerTestPipeline pipeline = new(clearPass, copyPass);
+        using RenderPipeline<ProfilerView> pipeline = new([clearPass, copyPass]);
 
         device.DispatchGraph(pipeline, new ProfilerView[] { new(size, size) });
         device.WaitForIdle();

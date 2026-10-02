@@ -73,19 +73,6 @@ file sealed class CopyReadbackPass : IPass<RasterView>
     }
 }
 
-file sealed class RasterTestPipeline : RenderPipeline<RasterView>
-{
-    private readonly IPass<RasterView>[] _passes;
-
-    public RasterTestPipeline(params IPass<RasterView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<RasterView> pass in _passes)
-            AddPass(pass);
-    }
-}
-
 public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
@@ -100,7 +87,7 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         RenderResourceID id = RenderResourceID.Intern("raster_clear_target");
         ClearingRasterPass clearPass = new(id, clear);
         CopyReadbackPass copyPass = new(id, readback);
-        using RasterTestPipeline pipeline = new(clearPass, copyPass);
+        using RenderPipeline<RasterView> pipeline = new([clearPass, copyPass]);
 
         GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
         GD.WaitForIdle();

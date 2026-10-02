@@ -136,20 +136,6 @@ file sealed class BufferHistoryPass : IPass<BufferView>
     }
 }
 
-file sealed class BufferTestPipeline : RenderPipeline<BufferView>
-{
-    private readonly IPass<BufferView>[] _passes;
-
-    public BufferTestPipeline(params IPass<BufferView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<BufferView> pass in _passes)
-            AddPass(pass);
-
-    }
-}
-
 public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
@@ -159,7 +145,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         GraphBufferDesc desc = GraphBufferDesc.Structured(16, sizeof(float));
         BufferWriterPass writer = new(id, desc);
         BufferReaderPass reader = new(id);
-        using BufferTestPipeline pipeline = new(writer, reader);
+        using RenderPipeline<BufferView> pipeline = new([writer, reader]);
 
         GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -210,7 +196,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         GraphBufferDesc desc = GraphBufferDesc.Structured(count, sizeof(float));
         ComputeWriteReadbackPass pass = new(
             RenderResourceID.Intern("bufres_compute_out"), desc, compute, source, readback, side);
-        using BufferTestPipeline pipeline = new(pass);
+        using RenderPipeline<BufferView> pipeline = new([pass]);
 
         GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
         GD.WaitForIdle();
@@ -230,7 +216,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = RF.CreateBuffer(new BufferDescription(size, BufferUsage.StructuredBufferReadWrite, 4));
         DeviceBuffer readback = RF.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
         BufferHistoryPass pass = new(RenderResourceID.Intern("bufres_history"), size, source, readback);
-        using BufferTestPipeline pipeline = new(pass);
+        using RenderPipeline<BufferView> pipeline = new([pass]);
 
         float[]? previousValues = null;
         for (int frame = 0; frame < 3; frame++)

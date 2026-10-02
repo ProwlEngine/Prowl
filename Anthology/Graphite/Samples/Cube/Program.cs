@@ -36,17 +36,11 @@ internal sealed class CubePass : RasterPass<SceneView>
 }
 
 
-internal sealed class CubePipeline : RenderPipeline<SceneView>
-{
-    protected override void InitializePasses() => AddPass(new CubePass());
-}
-
-
 public static class Program
 {
     static GraphicsDevice device;
     static RenderMSTracker tracker;
-    static CubePipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
     static SceneView[] views;
 
 
@@ -74,7 +68,7 @@ public static class Program
         tracker = new(newDevice);
         Cube.Create(device);
 
-        pipeline = new CubePipeline();
+        pipeline = new([new CubePass()]);
         views = new[] { new SceneView(600, 600) };
     }
 

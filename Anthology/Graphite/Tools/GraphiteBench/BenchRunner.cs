@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 using Prowl.Graphite;
+using Prowl.Graphite.RenderGraph;
 
 namespace Prowl.Graphite.Bench;
 
@@ -57,7 +59,8 @@ public static class BenchRunner
         Action<CommandBuffer, int> record)
     {
         BenchStats stats = new();
-        using BenchPipeline pipeline = new(scene, passes, record, stats);
+        using RenderPipeline<BenchView> pipeline = new(
+            Enumerable.Range(0, passes).Select(i => (IPass<BenchView>)new BenchPass(scene, i, record, stats)));
         BenchView[] views = [new BenchView()];
 
         for (int i = 0; i < warmupFrames; i++)

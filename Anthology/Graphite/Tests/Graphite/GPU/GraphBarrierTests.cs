@@ -40,19 +40,6 @@ file sealed class LambdaPass : IPass<BarrierView>
     public void Render(RenderContext<BarrierView> context) => _render(context);
 }
 
-file sealed class BarrierPipeline : RenderPipeline<BarrierView>
-{
-    private readonly IPass<BarrierView>[] _passes;
-
-    public BarrierPipeline(params IPass<BarrierView>[] passes) => _passes = passes;
-
-    protected override void InitializePasses()
-    {
-        foreach (IPass<BarrierView> pass in _passes)
-            AddPass(pass);
-    }
-}
-
 file static class BarrierPasses
 {
     public static LambdaPass Upload(RenderResourceID id, GraphTextureDesc desc, Texture source)
@@ -221,7 +208,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(upload, load, BarrierPasses.Readback(id, staging));
+        using RenderPipeline<BarrierView> pipeline = new([upload, load, BarrierPasses.Readback(id, staging)]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
         GD.WaitForIdle();
 
@@ -299,7 +286,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(write, sample, BarrierPasses.Readback(outputId, staging));
+        using RenderPipeline<BarrierView> pipeline = new([write, sample, BarrierPasses.Readback(outputId, staging)]);
         BarrierView[] views = { new(size, size) };
 
         GD.DispatchGraph(pipeline, views);
@@ -360,7 +347,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(generate, sample, BarrierPasses.Readback(outputId, staging));
+        using RenderPipeline<BarrierView> pipeline = new([generate, sample, BarrierPasses.Readback(outputId, staging)]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
         GD.WaitForIdle();
 
@@ -435,7 +422,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(generate, draw, BarrierPasses.Readback(outputId, staging));
+        using RenderPipeline<BarrierView> pipeline = new([generate, draw, BarrierPasses.Readback(outputId, staging)]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
         GD.WaitForIdle();
 
@@ -488,7 +475,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(depth, fog, BarrierPasses.Readback(id, staging));
+        using RenderPipeline<BarrierView> pipeline = new([depth, fog, BarrierPasses.Readback(id, staging)]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
         GD.WaitForIdle();
 
@@ -527,7 +514,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 }
             });
 
-        using BarrierPipeline pipeline = new(pass);
+        using RenderPipeline<BarrierView> pipeline = new([pass]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
         GD.WaitForIdle();
 
@@ -597,7 +584,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(seed, pingPong, readback);
+        using RenderPipeline<BarrierView> pipeline = new([seed, pingPong, readback]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
         GD.WaitForIdle();
 
@@ -633,7 +620,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(second);
             });
 
-        using BarrierPipeline pipeline = new(pass);
+        using RenderPipeline<BarrierView> pipeline = new([pass]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
         GD.WaitForIdle();
 
@@ -665,7 +652,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(pass);
+        using RenderPipeline<BarrierView> pipeline = new([pass]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
         GD.WaitForIdle();
 
@@ -706,7 +693,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 }
             });
 
-        using BarrierPipeline pipeline = new(write, thief);
+        using RenderPipeline<BarrierView> pipeline = new([write, thief]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
         GD.WaitForIdle();
 
@@ -739,7 +726,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(second);
             });
 
-        using BarrierPipeline pipeline = new(pass);
+        using RenderPipeline<BarrierView> pipeline = new([pass]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
         GD.WaitForIdle();
 
@@ -768,7 +755,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(first);
             });
 
-        using BarrierPipeline pipeline = new(BarrierPasses.Upload(id, desc, source), load, BarrierPasses.Readback(id, staging));
+        using RenderPipeline<BarrierView> pipeline = new([BarrierPasses.Upload(id, desc, source), load, BarrierPasses.Readback(id, staging)]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
         GD.WaitForIdle();
 
@@ -788,7 +775,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             builder => builder.DeclareOutputTexture(id, desc),
             context => { });
 
-        using BarrierPipeline pipeline = new(idle, BarrierPasses.Upload(id, desc, source), BarrierPasses.Readback(id, staging));
+        using RenderPipeline<BarrierView> pipeline = new([idle, BarrierPasses.Upload(id, desc, source), BarrierPasses.Readback(id, staging)]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
         GD.WaitForIdle();
 
@@ -819,7 +806,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(cmd);
             });
 
-        using BarrierPipeline pipeline = new(pass);
+        using RenderPipeline<BarrierView> pipeline = new([pass]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
         GD.WaitForIdle();
 
@@ -854,7 +841,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 context.SubmitCommandBuffer(second);
             });
 
-        using BarrierPipeline pipeline = new(pass);
+        using RenderPipeline<BarrierView> pipeline = new([pass]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
         GD.WaitForIdle();
 

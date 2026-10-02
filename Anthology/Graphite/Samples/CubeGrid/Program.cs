@@ -40,21 +40,12 @@ internal sealed class CubeGridPass : RasterPass<SceneView>
 }
 
 
-internal sealed class CubeGridPipeline : RenderPipeline<SceneView>
-{
-    private readonly CubeGridPass _pass = new();
-
-    public CubeGridPass Pass => _pass;
-
-    protected override void InitializePasses() => AddPass(_pass);
-}
-
-
 public static class Program
 {
     static GraphicsDevice device;
     static RenderMSTracker tracker;
-    static CubeGridPipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
+    static CubeGridPass gridPass;
     static SceneView[] views;
 
 
@@ -82,7 +73,8 @@ public static class Program
         device = newDevice;
         CubeGrid.Create(device);
 
-        pipeline = new CubeGridPipeline();
+        gridPass = new CubeGridPass();
+        pipeline = new([gridPass]);
         views = new[] { new SceneView(600, 600) };
     }
 
@@ -91,7 +83,7 @@ public static class Program
     {
         tracker.Begin();
 
-        pipeline.Pass.Advance((float)dt);
+        gridPass.Advance((float)dt);
         device.DispatchGraph(pipeline, views);
 
         tracker.End(dt);

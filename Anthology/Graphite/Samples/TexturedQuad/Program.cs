@@ -74,16 +74,6 @@ internal sealed class TexturedQuadPass : RasterPass<SceneView>
 }
 
 
-internal sealed class TexturedQuadPipeline : RenderPipeline<SceneView>
-{
-    private readonly TexturedQuadPass _pass;
-
-    public TexturedQuadPipeline(TexturedQuadPass pass) => _pass = pass;
-
-    protected override void InitializePasses() => AddPass(_pass);
-}
-
-
 public static class Program
 {
     static GraphicsDevice device;
@@ -101,7 +91,7 @@ public static class Program
     static Sampler rightSampler;
     static Sampler midSampler;
     static RenderMSTracker tracker;
-    static TexturedQuadPipeline pipeline;
+    static RenderPipeline<SceneView> pipeline;
     static SceneView[] views;
 
 
@@ -148,8 +138,8 @@ public static class Program
         midProperties = new();
         midProperties.SetTexture("MainTexture", midTexture, midSampler);
 
-        pipeline = new TexturedQuadPipeline(new TexturedQuadPass(
-            shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties));
+        pipeline = new([new TexturedQuadPass(
+            shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties)]);
         views = new[] { new SceneView(600, 600) };
     }
 
