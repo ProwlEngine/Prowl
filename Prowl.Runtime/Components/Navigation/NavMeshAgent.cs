@@ -194,6 +194,9 @@ public class NavMeshAgent : MonoBehaviour
             or DtMoveRequestState.DT_CROWDAGENT_TARGET_WAITING_FOR_QUEUE
             or DtMoveRequestState.DT_CROWDAGENT_TARGET_WAITING_FOR_PATH;
 
+    /// <summary>True once the agent has reached its destination, until a new destination or path is
+    /// set, the path is reset, or the agent is warped.</summary>
+    public bool HasArrived => _arrived;
 
     /// <summary>Raised once when the agent reaches its destination.</summary>
     public event Action? DestinationReached;
