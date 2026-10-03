@@ -22,8 +22,10 @@
     <Project Path="Samples/Runtime/HelloProwl/HelloProwl.csproj" />
     <Project Path="Samples/Runtime/ControllerShowcase/ControllerShowcase.csproj" />
     <Project Path="Samples/Runtime/ParticleShowcase/ParticleShowcase.csproj" />
+    <Project Path="Samples/Runtime/PhysicsShowcase/PhysicsShowcase.csproj" />
     <Project Path="Samples/Runtime/RenderingShowcase/RenderingShowcase.csproj" />
     <Project Path="Samples/Runtime/ScriptingShowcase/ScriptingShowcase.csproj" />
+    <Project Path="Samples/Runtime/VehicleShowcase/VehicleShowcase.csproj" />
   </Folder>
   <Project Path="Prowl.Analyzers/Prowl.Analyzers.csproj" />
   <Project Path="Prowl.Editor.Test/Prowl.Editor.Test.csproj" />
