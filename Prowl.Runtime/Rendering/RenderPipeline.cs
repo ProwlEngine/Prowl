@@ -226,6 +226,7 @@ public abstract class RenderPipeline : EngineObject
         var renderables = new List<IRenderable>();
         var lights = new List<IRenderableLight>();
         scene.CollectRenderables(camera, renderables, lights);
+        s_lastCollectCount = renderables.Count;
         return (renderables, lights);
     }
 
@@ -249,6 +250,7 @@ public abstract class RenderPipeline : EngineObject
     {
         EnsureWorldBounds(renderables);
 
+        ReadOnlySpan<Plane> planes = worldFrustum?.Planes;
         bool[] culledRenderableIndices = new bool[renderables.Count];
         int culled = 0;
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
@@ -261,7 +263,7 @@ public abstract class RenderPipeline : EngineObject
             }
 
             bool frustumCull = worldFrustum != null
-                && (!_boundsRenderable[renderIndex] || !worldFrustum.Value.Intersects(_worldBounds[renderIndex]));
+                && (!_boundsRenderable[renderIndex] || !BoxInsidePlanes(planes, in _worldBounds[renderIndex]));
 
             if (frustumCull || cullingMask.HasLayer(renderables[renderIndex].GetLayer()) == false)
             {
@@ -273,6 +275,26 @@ public abstract class RenderPipeline : EngineObject
         int collected = renderables.Count;
         RenderStats.AddRenderables(collected, culled, collected - culled);
 
+        return culledRenderableIndices;
+    }
+
+
+    /// <summary>
+    /// Culls every renderable whose bounds miss the sphere, as a cheap first pass for views that all sit inside
+    /// it, such as the faces of a point light. Not counted in the render stats, the views that use it are.
+    /// </summary>
+    public bool[] CullOutsideSphere(IReadOnlyList<IRenderable> renderables, Float3 center, float radius)
+    {
+        EnsureWorldBounds(renderables);
+
+        bool[] culledRenderableIndices = new bool[renderables.Count];
+        float radiusSq = radius * radius;
+        for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
+        {
+            AABB bounds = _worldBounds[renderIndex];
+            Float3 closest = Maths.Clamp(center, bounds.Min, bounds.Max);
+            culledRenderableIndices[renderIndex] = !_boundsRenderable[renderIndex] || Float3.LengthSquared(closest - center) > radiusSq;
+        }
         return culledRenderableIndices;
     }
 
