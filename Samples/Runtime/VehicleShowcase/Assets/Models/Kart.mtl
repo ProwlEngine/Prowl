@@ -1,0 +1,5 @@
+newmtl Trim
+Kd 0.015 0.015 0.018
+
+newmtl Body
+Kd 0.55 0.02 0.02

@@ -1,0 +1,8 @@
+newmtl Body
+Kd 0.55 0.02 0.02
+
+newmtl Trim
+Kd 0.015 0.015 0.018
+
+newmtl Taillights
+Kd 0.3 0 0

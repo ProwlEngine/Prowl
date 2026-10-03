@@ -1,0 +1,5 @@
+newmtl Chrome
+Kd 0.6 0.6 0.62
+
+newmtl Trim
+Kd 0.015 0.015 0.018
