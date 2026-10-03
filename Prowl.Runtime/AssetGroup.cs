@@ -22,7 +22,7 @@ public sealed class AssetGroup : IDisposable
     internal AssetGroup(List<Asset> assets)
     {
         Assets = assets;
-        _weights = assets.Select(a => Math.Max(1, AssetDatabase.Backend?.GetEstimatedSize(a.AssetID) ?? 1)).ToArray();
+        _weights = assets.Select(a => Math.Max(1, AssetDatabase.SourceOf(a.AssetID)?.GetEstimatedSize(a.AssetID) ?? 1)).ToArray();
         _totalWeight = Math.Max(1, _weights.Sum());
 
         var loads = new List<Task>();

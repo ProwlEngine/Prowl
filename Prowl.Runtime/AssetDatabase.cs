@@ -36,7 +36,65 @@ public static class AssetDatabase
     [ModuleInitializer]
     internal static void InstallReferenceRule() => Serializer.ReferenceRule = new AssetReferenceRule();
 
+    /// <summary>The project's or the player's own content. Mounted sources are asked before it, so they can add to it or override it.</summary>
     public static AssetBackend? Backend { get; set; }
+
+    private static AssetBackend[] s_mounts = [];
+    private static readonly object s_mountLock = new();
+
+    /// <summary>Extra sources of assets, newest first: content packs, mods, files on disk or on a web server.</summary>
+    public static IReadOnlyList<AssetBackend> Mounts => s_mounts;
+
+    /// <summary>
+    /// Adds a source of assets for the rest of the session or until <see cref="Unmount"/>. A GUID or load path that
+    /// several sources know comes from the one mounted last, so a patch or a content pack can replace what came before.
+    /// </summary>
+    public static void Mount(AssetBackend source)
+    {
+        lock (s_mountLock)
+        {
+            if (Array.IndexOf(s_mounts, source) >= 0) return;
+            s_mounts = [source, .. s_mounts];
+        }
+        RefreshAfterMountChange();
+    }
+
+    /// <summary>
+    /// Removes a mounted source. Its assets that no other source provides become missing, keeping their GUIDs so
+    /// whatever refers to them finds them again if the source comes back.
+    /// </summary>
+    public static void Unmount(AssetBackend source)
+    {
+        lock (s_mountLock)
+        {
+            if (Array.IndexOf(s_mounts, source) < 0) return;
+            s_mounts = s_mounts.Where(mount => mount != source).ToArray();
+        }
+        RefreshAfterMountChange();
+    }
+
+    // Whatever now resolves to a different source, or to none, reads its content again on next use.
+    private static void RefreshAfterMountChange()
+    {
+        s_indexedResources = null;
+        foreach (Asset asset in s_assets.Values)
+        {
+            if (BuiltInAssets.IsBuiltIn(asset.AssetID)) continue;
+            if (GetAssetType(asset.AssetID) == null) MarkMissing(asset.AssetID);
+            else if (asset.State is AssetState.Missing or AssetState.Failed) Refill(asset, ReloadReason.Reimport);
+            else if (asset.IsLoaded) Refill(asset, ReloadReason.Reimport);
+        }
+    }
+
+    /// <summary>The source an asset's content comes from: the newest mount that knows the GUID, then <see cref="Backend"/>.</summary>
+    public static AssetBackend? SourceOf(Guid assetId)
+    {
+        foreach (AssetBackend mount in s_mounts)
+            if (mount.GetAssetType(assetId) != null) return mount;
+        return Backend;
+    }
+
+    private static bool HasAnySource => Backend != null || s_mounts.Length > 0;
 
     public static event Action<Asset>? Loaded;
     public static event Action<Asset, ReloadReason>? Reloaded;
@@ -163,10 +221,10 @@ public static class AssetDatabase
     public static IEnumerable<Asset> All => s_assets.Values;
 
     public static Type? GetAssetType(Guid assetId)
-        => BuiltInAssets.Entries.TryGetValue(assetId, out var builtIn) ? builtIn.AssetType : Backend?.GetAssetType(assetId);
+        => BuiltInAssets.Entries.TryGetValue(assetId, out var builtIn) ? builtIn.AssetType : SourceOf(assetId)?.GetAssetType(assetId);
 
     private static string? GetAssetPath(Guid assetId)
-        => BuiltInAssets.Entries.TryGetValue(assetId, out var builtIn) ? builtIn.Path : Backend?.GetAssetPath(assetId);
+        => BuiltInAssets.Entries.TryGetValue(assetId, out var builtIn) ? builtIn.Path : SourceOf(assetId)?.GetAssetPath(assetId);
 
     public static bool IsBuiltIn(Asset asset) => BuiltInAssets.IsBuiltIn(asset.AssetID);
 
@@ -175,14 +233,14 @@ public static class AssetDatabase
     #region Loading and refilling
 
     internal static bool NeedsMainThread(Guid assetId)
-        => !BuiltInAssets.IsBuiltIn(assetId) && Backend != null && Backend.NeedsMainThread(assetId);
+        => !BuiltInAssets.IsBuiltIn(assetId) && SourceOf(assetId) is { } source && source.NeedsMainThread(assetId);
 
     internal static bool ReadContent(Guid assetId, Asset staging, bool mayImport = true)
     {
         if (BuiltInAssets.Entries.ContainsKey(assetId))
             return BuiltInAssets.ReadContent(assetId, staging);
 
-        AssetBackend? backend = Backend;
+        AssetBackend? backend = SourceOf(assetId);
         if (backend == null) return false;
         if (mayImport && backend.NeedsMainThread(assetId)) backend.PrepareOnMainThread(assetId);
 
@@ -342,7 +400,7 @@ public static class AssetDatabase
             if (!seen.Add(asset.AssetID)) continue;
             result.Add(asset);
 
-            foreach (Guid dependency in Backend?.GetHardDependencies(asset.AssetID) ?? [])
+            foreach (Guid dependency in SourceOf(asset.AssetID)?.GetHardDependencies(asset.AssetID) ?? [])
                 if (Get(dependency) is { } found) pending.Push(found);
         }
         return result;
@@ -421,9 +479,45 @@ public static class AssetDatabase
         return null;
     }
 
-    private static IReadOnlyList<ResourceEntry> Resources => Backend?.Resources ?? [];
+    private static IReadOnlyList<ResourceEntry>[] s_mergedFrom = [];
+    private static IReadOnlyList<ResourceEntry> s_merged = [];
 
-    private static IEnumerable<ResourceEntry> Candidates<T>(string loadPath)
+    // Every source's resources in one list, newest mount first, rebuilt only when a source's own list changes.
+    private static IReadOnlyList<ResourceEntry> Resources
+    {
+        get
+        {
+            AssetBackend[] mounts = s_mounts;
+            if (mounts.Length == 0) return Backend?.Resources ?? [];
+
+            var lists = new IReadOnlyList<ResourceEntry>[mounts.Length + 1];
+            for (int i = 0; i < mounts.Length; i++) lists[i] = mounts[i].Resources;
+            lists[mounts.Length] = Backend?.Resources ?? [];
+
+            IReadOnlyList<ResourceEntry>[] previous = s_mergedFrom;
+            bool same = previous.Length == lists.Length;
+            for (int i = 0; same && i < lists.Length; i++) same = ReferenceEquals(previous[i], lists[i]);
+            if (same) return s_merged;
+
+            var merged = new List<ResourceEntry>();
+            foreach (IReadOnlyList<ResourceEntry> list in lists) merged.AddRange(list);
+            s_merged = merged;
+            s_mergedFrom = lists;
+            return merged;
+        }
+    }
+
+    /// <summary>The GUID at a load path for an asset of <paramref name="type"/>, or empty. Nothing is loaded.</summary>
+    public static Guid FindResourceGuid(string loadPath, Type type)
+    {
+        foreach (ResourceEntry entry in Candidates(loadPath, type))
+            return entry.Guid;
+        return Guid.Empty;
+    }
+
+    private static IEnumerable<ResourceEntry> Candidates<T>(string loadPath) => Candidates(loadPath, typeof(T));
+
+    private static IEnumerable<ResourceEntry> Candidates(string loadPath, Type type)
     {
         IReadOnlyList<ResourceEntry> resources = Resources;
         if (!ReferenceEquals(resources, s_indexedResources))
@@ -441,14 +535,16 @@ public static class AssetDatabase
 
         string? key = ToLoadPath(loadPath);
         if (key == null || !s_resourcesByPath.TryGetValue(key, out var entries)) return [];
-        return entries.Where(IsOfType<T>);
+        return entries.Where(entry => IsOfType(entry, type));
     }
 
     // An entry whose type can't be resolved is still a candidate, and is checked once loaded.
-    private static bool IsOfType<T>(ResourceEntry entry)
+    private static bool IsOfType<T>(ResourceEntry entry) => IsOfType(entry, typeof(T));
+
+    private static bool IsOfType(ResourceEntry entry, Type wanted)
     {
         Type? type = RuntimeUtils.ResolveType(entry.TypeName);
-        return type == null || typeof(T).IsAssignableFrom(type);
+        return type == null || wanted.IsAssignableFrom(type);
     }
 
     private static bool IsAtOrBelow(string loadPath, string folder)
@@ -686,7 +782,7 @@ public static class AssetDatabase
 
     private static int Evict(bool ignoreGrace)
     {
-        if (!EvictionEnabled || Backend == null) return 0;
+        if (!EvictionEnabled || !HasAnySource) return 0;
 
         long now = Stopwatch.GetTimestamp();
         bool overBudget = MemoryBudget > 0 && ResidentBytes > MemoryBudget;
@@ -751,6 +847,8 @@ public static class AssetDatabase
     {
         AssetLoader.Stop();
         s_assets.Clear();
+        lock (s_mountLock) s_mounts = [];
+        s_indexedResources = null;
         lock (s_holdLock)
         {
             s_holds.Clear();
@@ -1072,14 +1170,20 @@ internal sealed class AssetReferenceRule : IReferenceRule
                    && s_runtimeLinks.TryGetValue(instanceId, out WeakReference<Asset>? link) && link.TryGetTarget(out Asset? linked)
                    && declaredType.IsInstanceOfType(linked) ? linked : null;
 
-        if (!Guid.TryParse(reference, out Guid id) || id == Guid.Empty) return null;
+        Type type = typeof(Asset).IsAssignableFrom(declaredType) ? declaredType : typeof(Asset);
+        if (declaredType.IsGenericType && declaredType.GetGenericTypeDefinition() == typeof(AssetRef<>))
+            type = declaredType.GetGenericArguments()[0];
+
+        // Text written by hand can name an asset by its load path, "Textures/Paint", rather than its GUID.
+        if (!Guid.TryParse(reference, out Guid id))
+            id = AssetDatabase.FindResourceGuid(reference, type);
+        if (id == Guid.Empty) return null;
         if (context is DependencySerializationContext tracker) tracker.Dependencies.Add(id);
 
         // A field that became an AssetRef reads the stub as a lazy reference.
         if (declaredType.IsGenericType && declaredType.GetGenericTypeDefinition() == typeof(AssetRef<>))
             return Activator.CreateInstance(declaredType, id);
 
-        Type type = typeof(Asset).IsAssignableFrom(declaredType) ? declaredType : typeof(Asset);
         return AssetDatabase.GetOrMissing(id, type);
     }
 }
