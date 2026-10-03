@@ -56,41 +56,45 @@ public partial class PropertyState : ISerializationCallbackReceiver
 
     public bool IsEmpty => _colors.Count == 0 && _vectors4.Count == 0 && _vectors3.Count == 0 && _vectors2.Count == 0 && _floats.Count == 0 && _ints.Count == 0 && _matrices.Count == 0 && _textures.Count == 0 && _textures3D.Count == 0;
 
-    private ulong HashDictionary<T>(Dictionary<string, T> dict, ulong hash)
+    // Each entry is mixed on its own and the results summed, so the order a dictionary holds them in does not matter.
+    private static ulong HashDictionary<T>(Dictionary<string, T> dict, ulong hash, ulong kind)
     {
-        foreach (var kvp in dict.OrderBy(x => x.Key))
-        {
-            hash ^= (ulong)kvp.Key.GetHashCode();
-            hash *= 1099511628211UL;
-            hash ^= (ulong)kvp.Value.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-        return hash;
+        ulong sum = 0;
+        foreach (KeyValuePair<string, T> kvp in dict)
+            sum += Mix(((ulong)(uint)kvp.Key.GetHashCode() << 32 | (uint)EqualityComparer<T>.Default.GetHashCode(kvp.Value!)) ^ kind);
+        return (hash ^ Mix(sum + kind)) * 1099511628211UL;
+    }
+
+    internal static ulong Mix(ulong x)
+    {
+        x ^= x >> 30;
+        x *= 0xbf58476d1ce4e5b9UL;
+        x ^= x >> 27;
+        x *= 0x94d049bb133111ebUL;
+        return x ^ (x >> 31);
     }
 
     /// <summary>
-    /// Computes a FNV-1a 64-bit hash representing the current state of all properties.
-    /// Used for material batching to group objects with identical material properties together,
-    /// minimizing GPU state changes. Properties are ordered by key to ensure consistent hashing.
+    /// Computes a 64-bit hash of every property's name and value. Used for material batching to group
+    /// objects with identical material properties together, minimizing GPU state changes.
     /// </summary>
-    /// <returns>A 64-bit FNV-1a hash of all property key-value pairs</returns>
     public ulong ComputeHash()
     {
         ulong hash = 14695981039346656037UL; // FNV-1a offset basis
 
         // Hash all property dictionaries (order is important for consistency)
-        hash = HashDictionary(_floats, hash);
-        hash = HashDictionary(_ints, hash);
-        hash = HashDictionary(_vectors2, hash);
-        hash = HashDictionary(_vectors3, hash);
-        hash = HashDictionary(_vectors4, hash);
-        hash = HashDictionary(_colors, hash);
-        hash = HashDictionary(_matrices, hash);
-        hash = HashDictionary(_matrixArr, hash);
-        hash = HashDictionary(_textures, hash);
-        hash = HashDictionary(_textures3D, hash);
-        hash = HashDictionary(_texturesCube, hash);
-        hash = HashDictionary(_buffers, hash);
+        hash = HashDictionary(_floats, hash, 1);
+        hash = HashDictionary(_ints, hash, 2);
+        hash = HashDictionary(_vectors2, hash, 3);
+        hash = HashDictionary(_vectors3, hash, 4);
+        hash = HashDictionary(_vectors4, hash, 5);
+        hash = HashDictionary(_colors, hash, 6);
+        hash = HashDictionary(_matrices, hash, 7);
+        hash = HashDictionary(_matrixArr, hash, 8);
+        hash = HashDictionary(_textures, hash, 9);
+        hash = HashDictionary(_textures3D, hash, 10);
+        hash = HashDictionary(_texturesCube, hash, 11);
+        hash = HashDictionary(_buffers, hash, 12);
 
         return hash;
     }
