@@ -28,6 +28,9 @@ public sealed class Shader : Asset, ISerializationCallbackReceiver
     private ShaderPass[] _passes = [];
     public IEnumerable<ShaderPass> Passes { get { EnsureLoaded(); return _passes; } }
 
+    // Walked every draw, so iterating it never allocates an enumerator.
+    internal ReadOnlySpan<ShaderPass> LoadedPasses { get { EnsureLoaded(); return _passes; } }
+
     /// <summary>Loads the default textures and creates their handles, so the render thread only binds what exists.</summary>
     internal void PrepareDefaultTextures()
     {

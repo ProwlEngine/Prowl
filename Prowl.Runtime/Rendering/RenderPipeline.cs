@@ -527,7 +527,7 @@ public abstract class RenderPipeline : EngineObject
 
                 // Find ALL shader passes matching the requested tag and add to batches
                 int instancedPassIndex = -1;
-                foreach (ShaderPass pass in material.Shader.Passes)
+                foreach (ShaderPass pass in material.Shader.LoadedPasses)
                 {
                     instancedPassIndex++;
 
@@ -564,7 +564,7 @@ public abstract class RenderPipeline : EngineObject
             // Find ALL shader passes matching the requested tag (e.g., "Opaque", "Transparent", "ShadowCaster")
             // Multi-pass rendering: materials can have multiple passes with the same tag (e.g., terrain with many texture layers)
             int passIndex = -1;
-            foreach (ShaderPass pass in material.Shader.Passes)
+            foreach (ShaderPass pass in material.Shader.LoadedPasses)
             {
                 passIndex++;
 
