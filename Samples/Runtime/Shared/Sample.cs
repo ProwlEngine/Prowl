@@ -372,7 +372,21 @@ public sealed class ChaseCamera : MonoBehaviour
     public float Yaw;
     public float Pitch = 18f;
 
+    /// <summary>Which way is up for the target. The orbit turns smoothly to follow it, for a target walking on walls or round a planet.</summary>
+    public Float3 Up = Float3.UnitY;
+
     private float _sinceLook = 10f;
+    private Quaternion _frame = Quaternion.Identity;
+
+    /// <summary>The way the camera looks across the ground, in world space, which is what forward means to the player.</summary>
+    public Float3 Heading
+    {
+        get
+        {
+            float yaw = Yaw * MathF.PI / 180f;
+            return _frame * new Float3(MathF.Sin(yaw), 0f, MathF.Cos(yaw));
+        }
+    }
 
     public override void LateUpdate()
     {
@@ -390,9 +404,13 @@ public sealed class ChaseCamera : MonoBehaviour
 
         Distance = Maths.Clamp(Distance - Input.MouseWheelDelta * 0.8f, 3f, 25f);
 
+        // Carry the orbit's frame round to the target's up a little each frame, so a change of gravity swings the view rather than snapping it.
+        Quaternion toUp = Quaternion.FromToRotation(_frame * Float3.UnitY, Up);
+        _frame = Quaternion.Normalize(Quaternion.Slerp(Quaternion.Identity, toUp, MathF.Min(1f, dt * 6f)) * _frame);
+
         if (FollowHeading && _sinceLook > 1.5f)
         {
-            Float3 forward = Target.Forward;
+            Float3 forward = Quaternion.Inverse(_frame) * Target.Forward;
             if (forward.X * forward.X + forward.Z * forward.Z > 1e-4f)
             {
                 float heading = MathF.Atan2(forward.X, forward.Z) * 180f / MathF.PI;
@@ -402,12 +420,13 @@ public sealed class ChaseCamera : MonoBehaviour
         }
 
         float yaw = Yaw * MathF.PI / 180f, pitch = Pitch * MathF.PI / 180f;
-        Float3 back = new(-MathF.Sin(yaw) * MathF.Cos(pitch), MathF.Sin(pitch), -MathF.Cos(yaw) * MathF.Cos(pitch));
-        Float3 focus = Target.Position + new Float3(0f, 1.3f, 0f);
+        Float3 back = _frame * new Float3(-MathF.Sin(yaw) * MathF.Cos(pitch), MathF.Sin(pitch), -MathF.Cos(yaw) * MathF.Cos(pitch));
+        Float3 frameUp = _frame * Float3.UnitY;
+        Float3 focus = Target.Position + frameUp * 1.3f;
         Float3 goal = focus + back * Distance;
 
         Transform.Position += (goal - Transform.Position) * MathF.Min(1f, dt * 10f);
-        Transform.LookAt(focus);
+        Transform.LookAt(focus, frameUp);
     }
 }
 
