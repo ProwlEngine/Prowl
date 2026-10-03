@@ -98,7 +98,7 @@ internal sealed class TestBackbufferPass : IPass<TestView>
         foreach (string name in _inputs)
             builder.DeclareInputTexture(name);
 
-        builder.DeclareBackbuffer();
+        builder.DeclareViewTarget();
     }
 
     public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }

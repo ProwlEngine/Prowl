@@ -13,6 +13,8 @@ namespace GraphiteSample;
 
 internal readonly struct CanvasView : IRenderView
 {
+    public bool TargetSwapchain => true;
+
     public CanvasView(uint width, uint height)
     {
         PixelWidth = width;
@@ -502,7 +504,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         public override void Setup(RenderContextBuilder builder)
         {
             _sceneHandle = builder.DeclareInputTexture("Scene");
-            SetBackbufferTarget(builder);
+            SetViewTarget(builder);
         }
 
         public override void Render(RenderContext<CanvasView> context)

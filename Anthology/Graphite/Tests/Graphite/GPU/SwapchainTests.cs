@@ -9,6 +9,8 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct SwapchainView : IRenderView
 {
+    public bool TargetSwapchain => true;
+
     public SwapchainView(uint width, uint height)
     {
         PixelWidth = width;
@@ -24,7 +26,7 @@ file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
 {
     public override string Name => "ClearSwapchain";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
+    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
 
     public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
     {

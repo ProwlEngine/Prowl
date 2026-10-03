@@ -17,6 +17,8 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct ResourceView : IRenderView
 {
+    public bool TargetSwapchain => true;
+
     public ResourceView(uint width, uint height)
     {
         PixelWidth = width;
@@ -169,7 +171,7 @@ file sealed class BackbufferResolvingPass : IPass<ResourceView>
 
     public string Name => "BackbufferResolving";
 
-    public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareBackbuffer();
+    public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareViewTarget();
 
     public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
         => SawFramebuffer = context.GetRenderTexture(_backbuffer).Framebuffer != null;
