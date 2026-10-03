@@ -244,7 +244,8 @@ public abstract class RenderPipeline : EngineObject
     /// HashSet and turns the per-object membership test in every pass into an O(1) array read
     /// instead of a hash lookup.
     /// </summary>
-    public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask)
+    /// <param name="alreadyCulled">Renderables an earlier, wider test culled, which stay culled without testing again.</param>
+    public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask, bool[]? alreadyCulled = null)
     {
         EnsureWorldBounds(renderables);
 
@@ -252,6 +253,13 @@ public abstract class RenderPipeline : EngineObject
         int culled = 0;
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
+            if (alreadyCulled != null && alreadyCulled[renderIndex])
+            {
+                culledRenderableIndices[renderIndex] = true;
+                culled++;
+                continue;
+            }
+
             bool frustumCull = worldFrustum != null
                 && (!_boundsRenderable[renderIndex] || !worldFrustum.Value.Intersects(_worldBounds[renderIndex]));
 
