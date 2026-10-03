@@ -27,7 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jitter2" Version="2.8.13" />
+    <PackageReference Include="Jitter2" Version="2.9.0" />
 
     <!-- <ProjectReference Include="..\..\Anthology\Aperture\Aperture\Aperture.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Clay\Clay\Clay.csproj" /> -->
