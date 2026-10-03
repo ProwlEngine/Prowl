@@ -60,9 +60,6 @@ public class CharacterController : MonoBehaviour
     /// <summary>The tallest ledge the controller walks straight up onto.</summary>
     public float StepSize = 0.3f;
 
-    /// <summary>How far the controller's middle may go past the edge of a drop before it stops standing on the edge and falls.</summary>
-    public float LedgeOverhang = 0.1f;
-
     /// <summary>Whether standing on something that moves or turns carries the controller with it.</summary>
     public bool RideMovingPlatforms = true;
 
@@ -339,7 +336,7 @@ public class CharacterController : MonoBehaviour
             // to the caller's gravity, rather than stopping dead as a wall would.
             // Only a run into the slope carries up it. Pressed against it, or just slid back off it, it holds
             // like a wall, or held input would hop up and slide back over and over.
-            if (hit.Normal.Y > WallNormalY && RanInto(hit.Normal, length) && !StandableNormal(hit, position, out _))
+            if (hit.Normal.Y > WallNormalY && RanInto(hit.Normal, length) && !StandableNormal(hit, out _))
             {
                 Float3 up = Float3.ProjectOntoPlane(AlongGround(horizontal, ground), hit.Normal);
                 if (up.Y > Epsilon)
@@ -419,7 +416,7 @@ public class CharacterController : MonoBehaviour
 
         Float3 over = raised + forward * ahead;
         if (!Sweep(over, Down, rise + SkinWidth, out ShapeCastHit below)) return false;
-        if (!StandableNormal(below, over, out landing, forward)) return false;
+        if (!StandableNormal(below, out landing, forward)) return false;
 
         Float3 landed = over + Down * Maths.Max(0f, below.Distance - SkinWidth);
         if (landed.Y < position.Y - SkinWidth || landed.Y > position.Y + StepSize + SkinWidth * 2f) return false;
@@ -460,7 +457,7 @@ public class CharacterController : MonoBehaviour
         foreach (ShapeCastHit hit in _groundHits)
         {
             if (hit.Distance > nearest + SkinWidth) break;
-            if (!StandableNormal(hit, position, out normal)) continue;
+            if (!StandableNormal(hit, out normal)) continue;
 
             ground = hit;
             drop = Maths.Max(0f, nearest - SkinWidth);
@@ -496,7 +493,7 @@ public class CharacterController : MonoBehaviour
             position += direction * travelled;
             motion *= 1f - travelled / length;
 
-            if (direction.Y < 0f && StandableNormal(hit, position, out Float3 ground))
+            if (direction.Y < 0f && StandableNormal(hit, out Float3 ground))
             {
                 _groundNormal = ground;
                 return WalkAlongGround(position, new Float3(motion.X, 0f, motion.Z), ground);
@@ -608,10 +605,9 @@ public class CharacterController : MonoBehaviour
     /// <summary>
     /// Whether a hit is something the controller can stand on, and the normal of the face it stands on.
     /// A rounded shape meets the edge of a face at an angle, so the face itself is found with a short ray
-    /// just inside the contact. Standing on such an edge only holds until the controller's middle is
-    /// <see cref="LedgeOverhang"/> past it, unless there is ground just beyond, as on a crest or a stair.
+    /// just inside the contact, and the controller stands on that face for as long as it touches its edge.
     /// </summary>
-    private bool StandableNormal(in ShapeCastHit hit, Float3 position, out Float3 normal, Float3 inwardHint = default)
+    private bool StandableNormal(in ShapeCastHit hit, out Float3 normal, Float3 inwardHint = default)
     {
         normal = hit.Normal;
         float minY = MinWalkableNormalY;
@@ -624,18 +620,8 @@ public class CharacterController : MonoBehaviour
         if (!WalkableFaceBelow(hit.HitPoint + inward * LedgeProbeInset, LedgeProbeHeight, out Float3 face))
             return normal.Y >= minY;
 
-        if (Float3.Dot(face, normal) > 0.98f)
-        {
-            normal = face;
-            return true;
-        }
-
         normal = face;
-        Float3 outward = -inward;
-        float overhang = Float3.Dot(new Float3(position.X - hit.HitPoint.X, 0f, position.Z - hit.HitPoint.Z), outward);
-        if (overhang <= LedgeOverhang) return true;
-
-        return WalkableFaceBelow(hit.HitPoint + outward * LedgeProbeInset, Maths.Max(StepSize, SnapDownDistance), out _);
+        return true;
     }
 
     // A walkable face straight down from just above a point, within reach below it.
