@@ -68,8 +68,6 @@ Pass "Skybox"
 
             const vec3 RAYLEIGH = vec3(5.802e-6, 13.558e-6, 33.1e-6);
             const float MIE_EXTINCTION = 4.44e-6;
-            const float RAYLEIGH_HEIGHT = 8000.0, RAYLEIGH_K = 8.0e-4;
-            const float MIE_HEIGHT = 1200.0, MIE_K = 1.2e-4;
 
             const float SUN_FAR_FADE = 12.266;       // how fast the far air sun shift fades with view height
             const float BELT_REDDENING = 142550.0;   // extra air the sunlight crosses to reach the pink band
@@ -85,9 +83,9 @@ Pass "Skybox"
                 return 0.5 + 0.5 * x * inversesqrt(1.0 + x * x);
             }
 
-            float airMass(float mu, float k)
+            float airGradient(float mu, vec4 g)
             {
-                return 1.0 / (0.641433 * mu + sqrt(0.128567 * mu * mu + k));
+                return g.x * (mu + g.y) / (mu * (mu + g.z) + g.w);
             }
 
             vec3 atmosphere(vec3 view)
@@ -95,8 +93,8 @@ Pass "Skybox"
                 float viewMu = max(view.y, 0.0);
                 float cosToSun = dot(view, _SkySunDir);
 
-                float viewRayleigh = RAYLEIGH_HEIGHT * airMass(viewMu, RAYLEIGH_K);
-                float viewMie = MIE_HEIGHT * airMass(viewMu, MIE_K);
+                float viewRayleigh = airGradient(viewMu, vec4(7978.28, 0.07868, 0.0735028, 0.00224883));
+                float viewMie = airGradient(viewMu, vec4(1198.75, 0.027243, 0.0258633, 0.000305857));
                 vec3 viewDepth = RAYLEIGH * viewRayleigh + MIE_EXTINCTION * viewMie;
                 vec3 viewTransmittance = exp(-viewDepth);
 
