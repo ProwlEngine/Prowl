@@ -33,7 +33,7 @@ public static class ImageLoader
 
         Texture texture = device.ResourceFactory.CreateTexture(desc);
 
-        device.UpdateTexture(texture, color, 0, 0, 0, image.Width, image.Height, 1, 0, 0);
+        device.UpdateTexture(texture, color);
 
         SamplerDescription samplerDesc = SamplerDescription.Linear;
 
