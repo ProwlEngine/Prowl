@@ -217,13 +217,16 @@ public abstract class RenderPipeline : EngineObject
         return _motion.Previous.TryGetValue(key, out Float4x4 prevModel) ? prevModel : currentModel;
     }
 
+    private static int s_lastCollectCount;
+
     /// <summary>
     /// Collects renderables and lights from the scene for the given camera.
     /// Components receive camera info for LOD/culling decisions.
     /// </summary>
     public static (List<IRenderable> renderables, List<IRenderableLight> lights) CollectRenderables(Scene scene, Camera camera)
     {
-        var renderables = new List<IRenderable>();
+        // Sized from the last collect, so a big scene does not regrow its list from empty every frame.
+        var renderables = new List<IRenderable>(s_lastCollectCount);
         var lights = new List<IRenderableLight>();
         scene.CollectRenderables(camera, renderables, lights);
         s_lastCollectCount = renderables.Count;
@@ -278,6 +281,23 @@ public abstract class RenderPipeline : EngineObject
         return culledRenderableIndices;
     }
 
+    /// <summary>
+    /// The same test as <see cref="Frustum.Intersects(AABB)"/>, reading the planes in place: a box is out once its
+    /// corner furthest along a plane's normal is still behind that plane.
+    /// </summary>
+    private static bool BoxInsidePlanes(ReadOnlySpan<Plane> planes, in AABB box)
+    {
+        for (int i = 0; i < planes.Length; i++)
+        {
+            Float3 n = planes[i].Normal;
+            float x = n.X >= 0f ? box.Max.X : box.Min.X;
+            float y = n.Y >= 0f ? box.Max.Y : box.Min.Y;
+            float z = n.Z >= 0f ? box.Max.Z : box.Min.Z;
+            if (n.X * x + n.Y * y + n.Z * z - planes[i].D < -Intersection.INTERSECTION_EPSILON)
+                return false;
+        }
+        return true;
+    }
 
     /// <summary>
     /// Culls every renderable whose bounds miss the sphere, as a cheap first pass for views that all sit inside
@@ -331,6 +351,7 @@ public abstract class RenderPipeline : EngineObject
     private readonly List<RenderBatch> _batches = new();
     private readonly Dictionary<(ulong, int, Mesh), int> _batchLookup = new();
     private readonly List<List<int>> _indexListPool = new();
+    private readonly List<int> _lastBatches = new();
     private int _indexListRented;
 
     // Per-frame world-space AABB cache shared by the main cull and every shadow cascade cull, so each
@@ -528,6 +549,12 @@ public abstract class RenderPipeline : EngineObject
         batchLookup.Clear();
         _indexListRented = 0;
 
+        // Neighbours with the same material and mesh land in the same batches, so the lookup is skipped for them.
+        Material? lastMaterial = null;
+        Mesh? lastMesh = null;
+        List<int> lastBatches = _lastBatches;
+        lastBatches.Clear();
+
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
             // Skip culled objects
@@ -588,6 +615,16 @@ public abstract class RenderPipeline : EngineObject
                 continue;
             }
 
+            if (!preserveOrder && ReferenceEquals(material, lastMaterial) && ReferenceEquals(mesh, lastMesh))
+            {
+                foreach (int batch in lastBatches)
+                    batches[batch].RenderableIndices.Add(renderIndex);
+                continue;
+            }
+            lastMaterial = material;
+            lastMesh = mesh;
+            lastBatches.Clear();
+
             // Get material hash for batching - materials with identical uniforms will batch together
             ulong materialHash = material.GetStateHash();
 
@@ -609,6 +646,7 @@ public abstract class RenderPipeline : EngineObject
                 {
                     // Batch already exists - add this object to it
                     batches[batchIndex].RenderableIndices.Add(renderIndex);
+                    lastBatches.Add(batchIndex);
                 }
                 else
                 {
@@ -629,6 +667,7 @@ public abstract class RenderPipeline : EngineObject
                         Order = batches.Count
                     };
                     batchLookup[batchKey] = batches.Count;
+                    lastBatches.Add(batches.Count);
                     batches.Add(newBatch);
                 }
 
@@ -739,9 +778,8 @@ public abstract class RenderPipeline : EngineObject
 
                 renderable.GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
 
-                int instanceId = properties.GetInt("_ObjectID");
                 Float4x4 prevModel = model;
-                if (updatePreviousMatrices && instanceId != 0)
+                if (updatePreviousMatrices && properties.GetInt("_ObjectID") is int instanceId and not 0)
                     prevModel = TrackModelMatrix(instanceId, renderable.GetSubMeshIndex(), in model);
 
                 cmd.SetInstanceProperties(properties);
