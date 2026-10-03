@@ -3,19 +3,19 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>A field in a uniform block, written by PropertySet via Offset and Type.</summary>
-public readonly struct UniformBlockField : IEquatable<UniformBlockField>
+public struct UniformBlockField : IEquatable<UniformBlockField>
 {
     /// <summary>Interned field name, implicitly converts from string.</summary>
-    public readonly PropertyID Name;
+    public PropertyID Name;
 
     /// <summary>Byte offset in the buffer.</summary>
-    public readonly uint Offset;
+    public uint Offset;
 
     /// <summary>Byte size matching Type.</summary>
-    public readonly uint Size;
+    public uint Size;
 
     /// <summary>Scalar type used for writes.</summary>
-    public readonly UniformScalarType Type;
+    public UniformScalarType Type;
 
     /// <summary>Creates a field with an interned name.</summary>
     public UniformBlockField(PropertyID name, uint offset, uint size, UniformScalarType type)
