@@ -46,7 +46,11 @@ public unsafe class GraphicsTexture : IDisposable
     /// <summary>Binds the texture to the currently-active texture unit. Always
     /// emits the GL call no per-instance cache, because a single "last bound"
     /// flag can't represent per-unit state and would silently skip valid binds.</summary>
-    public void Bind(bool force = true) => Graphics.GL.BindTexture(Target, Handle);
+    public void Bind(bool force = true)
+    {
+        Graphics.GL.BindTexture(Target, Handle);
+        Graphics.Executor.OnTextureBound(Target, Handle);
+    }
 
     public void GenerateMipmap()
     {

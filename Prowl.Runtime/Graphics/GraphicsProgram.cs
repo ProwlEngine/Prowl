@@ -46,9 +46,10 @@ public class GraphicsProgram : IDisposable
     internal readonly Dictionary<string, uint> blockIndices = [];
 
     // Every sampler the program declares, with the empty unit it falls back to when a draw binds
-    // nothing to it, and the draw that last bound it.
+    // nothing to it, the draw that last bound it and the unit it currently reads.
     internal (int Location, int EmptyUnit)[] samplers = [];
     internal int[] samplerBoundDraw = [];
+    internal int[] samplerUnits = [];
     internal readonly Dictionary<int, int> samplerIndexByLocation = [];
 
     // Units kept free of textures, one per sampler type, since two sampler types on one unit is an error.
@@ -209,6 +210,8 @@ public class GraphicsProgram : IDisposable
 
         samplers = [.. found];
         samplerBoundDraw = new int[samplers.Length];
+        samplerUnits = new int[samplers.Length];
+        Array.Fill(samplerUnits, -1);
     }
 
     public static GraphicsProgram? currentProgram = null;

@@ -236,14 +236,17 @@ public partial class PropertyState
     {
         _boundTextures.Clear();
         foreach (KeyValuePair<string, Texture2D> item in _textures)
-        {
-            if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
-            else if (item.Value is { IsMissing: false }) _boundTextures[item.Key] = Texture2D.LoadDefault(DefaultTexture.White).Handle;
-        }
+            if (Bindable2D(item.Value) is { } handle) _boundTextures[item.Key] = handle;
         foreach (KeyValuePair<string, Texture3D> item in _textures3D)
             if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
         foreach (KeyValuePair<string, Cubemap> item in _texturesCube)
             if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
+    }
+
+    private static GraphicsTexture? Bindable2D(Texture2D? texture)
+    {
+        if (Bindable(texture) is { } handle) return handle;
+        return texture is { IsMissing: false } ? Texture2D.LoadDefault(DefaultTexture.White).Handle : null;
     }
 
     private static GraphicsTexture? Bindable(Texture? texture)
@@ -252,6 +255,61 @@ public partial class PropertyState
         if (texture.IsLoaded) return texture.Handle;
         if (texture.State == AssetState.Unloaded) AssetLoader.Request(texture);
         return null;
+    }
+
+    // The snapshot last taken of this state, handed out again while it still matches.
+    [SerializeIgnore] internal PropertyState? _lastSnapshot;
+
+    // Holds on this snapshot, one from its source and one per command buffer that encoded it.
+    [SerializeIgnore] internal int _snapshotHolds;
+
+    /// <summary>Whether this snapshot is exactly what a fresh snapshot of <paramref name="source"/> would be.</summary>
+    internal bool SnapshotMatches(PropertyState source)
+    {
+        if (!SameValues(_floats, source._floats) || !SameValues(_ints, source._ints)
+            || !SameValues(_vectors2, source._vectors2) || !SameValues(_vectors3, source._vectors3)
+            || !SameValues(_vectors4, source._vectors4) || !SameValues(_colors, source._colors)
+            || !SameValues(_matrices, source._matrices) || !SameValues(_bufferBindings, source._bufferBindings)
+            || !SameRefs(_matrixArr, source._matrixArr) || !SameRefs(_buffers, source._buffers)
+            || !SameRefs(_textures, source._textures) || !SameRefs(_textures3D, source._textures3D)
+            || !SameRefs(_texturesCube, source._texturesCube))
+            return false;
+
+        // Textures resolve again in case one finished loading or was replaced since.
+        int bound = 0;
+        foreach (KeyValuePair<string, Texture2D> item in _textures)
+            if (!SameHandle(item.Key, Bindable2D(item.Value), ref bound)) return false;
+        foreach (KeyValuePair<string, Texture3D> item in _textures3D)
+            if (!SameHandle(item.Key, Bindable(item.Value), ref bound)) return false;
+        foreach (KeyValuePair<string, Cubemap> item in _texturesCube)
+            if (!SameHandle(item.Key, Bindable(item.Value), ref bound)) return false;
+        return bound == _boundTextures.Count;
+    }
+
+    private bool SameHandle(string name, GraphicsTexture? handle, ref int bound)
+    {
+        if (handle == null) return !_boundTextures.ContainsKey(name);
+        bound++;
+        return _boundTextures.TryGetValue(name, out GraphicsTexture? current) && ReferenceEquals(current, handle);
+    }
+
+    private static bool SameValues<T>(Dictionary<string, T> a, Dictionary<string, T> b)
+    {
+        if (a.Count != b.Count) return false;
+        if (a.Count == 0) return true;
+        EqualityComparer<T> comparer = EqualityComparer<T>.Default;
+        foreach (KeyValuePair<string, T> item in b)
+            if (!a.TryGetValue(item.Key, out T? value) || !comparer.Equals(value, item.Value)) return false;
+        return true;
+    }
+
+    private static bool SameRefs<T>(Dictionary<string, T> a, Dictionary<string, T> b) where T : class
+    {
+        if (a.Count != b.Count) return false;
+        if (a.Count == 0) return true;
+        foreach (KeyValuePair<string, T> item in b)
+            if (!a.TryGetValue(item.Key, out T? value) || !ReferenceEquals(value, item.Value)) return false;
+        return true;
     }
 }
 

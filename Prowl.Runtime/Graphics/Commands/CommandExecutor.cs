@@ -59,19 +59,55 @@ internal sealed class CommandExecutor
     // full Material) since the snapshotted properties already capture the overrides.
     private Resources.Shader? _boundShader;
 
-    // Globals walk runs per draw GraphicsProgram.uniformCache dedupes the actual
-    // uniform uploads, so the cost is just dictionary enumeration.
-
-    // No cross-draw texture-unit cache. Slot assignment in PrepareDraw is dynamic
-    // (depends on how many globals + material props are bound this draw), so a
-    // cached "unit X = texture Y" mapping would desync within a single frame.
-
     // Per-uniform SetTexture opcodes can be encoded BEFORE the draw, but their
     // texture-slot allocation must wait until AFTER PrepareDraw has bound globals
     // and the material/instance property blocks otherwise they race for slot 0
     // and the global walk silently overwrites the per-uniform binding. Buffer them
     // here and flush at the tail of PrepareDraw.
     private readonly List<(string name, GraphicsTexture tex)> _pendingDirectTextures = new(8);
+
+    // What a draw applies before its instance properties: the globals, the material and the shader
+    // defaults. The next draw with the same program, material snapshot and shader reuses it as long as
+    // only opcodes that cannot disturb it ran in between and nothing wrote over a uniform it set.
+    private bool _prefixValid;
+    private GraphicsProgram? _prefixProgram;
+    private PropertyState? _prefixProperties;
+    private Resources.Shader? _prefixShader;
+    private int _prefixSlots;
+    private int _prefixDraw;
+    private readonly HashSet<string> _prefixNames = [];
+
+    // The texture each unit last had bound, so binding the same one again skips GL.
+    private const int MirroredUnits = 64;
+    private readonly uint[] _unitHandles = new uint[MirroredUnits];
+    private readonly TextureTarget[] _unitTargets = new TextureTarget[MirroredUnits];
+    private int _activeUnit;
+
+    private static readonly bool[] s_keepsPrefix = BuildKeepsPrefix();
+
+    private static bool[] BuildKeepsPrefix()
+    {
+        var keeps = new bool[Enum.GetValues<CommandOpcode>().Length + 1];
+        foreach (CommandOpcode op in (ReadOnlySpan<CommandOpcode>)[
+            CommandOpcode.SetRenderTarget, CommandOpcode.SetRenderTargets, CommandOpcode.SetViewport,
+            CommandOpcode.SetScissor, CommandOpcode.DisableScissor, CommandOpcode.ClearRenderTarget,
+            CommandOpcode.SetRasterState, CommandOpcode.SetShader, CommandOpcode.SetProperties,
+            CommandOpcode.SetMaterialProperties, CommandOpcode.ClearProperties,
+            CommandOpcode.SetInstanceProperties, CommandOpcode.ClearInstanceProperties,
+            CommandOpcode.SetUniformFloat, CommandOpcode.SetUniformInt, CommandOpcode.SetUniformVec2,
+            CommandOpcode.SetUniformVec3, CommandOpcode.SetUniformVec4, CommandOpcode.SetUniformMatrix,
+            CommandOpcode.SetUniformMatrixArray, CommandOpcode.SetUniformTexture, CommandOpcode.SetUniformBuffer,
+            CommandOpcode.UpdateBuffer, CommandOpcode.DrawIndexed, CommandOpcode.DrawIndexedInstanced,
+            CommandOpcode.DrawArrays, CommandOpcode.BeginSample, CommandOpcode.EndSample])
+            keeps[(int)op] = true;
+        return keeps;
+    }
+
+    private void InvalidatePrefix()
+    {
+        _prefixValid = false;
+        PropertyApply.StopWatching();
+    }
 
     // ─────────────────────── Entry point ───────────────────────
 
@@ -88,10 +124,14 @@ internal sealed class CommandExecutor
         _boundShader = null;
         _boundInstanceProperties = null;
         _pendingDirectTextures.Clear();
+        InvalidatePrefix();
 
         while (pos < stream.Length)
         {
             CommandOpcode op = ReadOpcode(stream, ref pos);
+            if (_prefixValid && ((int)op >= s_keepsPrefix.Length || !s_keepsPrefix[(int)op]))
+                InvalidatePrefix();
+
             switch (op)
             {
                 case CommandOpcode.SetRenderTarget:
@@ -477,6 +517,9 @@ internal sealed class CommandExecutor
                     var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     if (tex.Handle != 0)
                     {
+                        // GL unbinds a deleted texture from every unit, and may hand its name out again.
+                        for (int unit = 0; unit < MirroredUnits; unit++)
+                            if (_unitHandles[unit] == tex.Handle) _unitHandles[unit] = 0;
                         Graphics.GL.DeleteTexture(tex.Handle);
                         tex.Handle = 0;
                     }
@@ -902,29 +945,48 @@ internal sealed class CommandExecutor
 
         if (_boundProgram == null) return;
 
-        _texSlotCounter = 0;
+        bool reusePrefix = _prefixValid && !PropertyApply.WatchedTouched
+            && ReferenceEquals(_prefixProgram, _boundProgram)
+            && ReferenceEquals(_prefixProperties, _boundProperties)
+            && ReferenceEquals(_prefixShader, _boundShader);
+
+        if (!reusePrefix)
+        {
+            _texSlotCounter = 0;
+            _prefixDraw = ++DrawNumber;
+            PropertyApply.BeginRecording(_prefixNames);
+
+            // GlobalUniforms UBO must be bound for every program, shaders that read camera
+            // matrices, time, screen size, etc. expect block 0 to hold this buffer.
+            // Done here (rather than per encoding site) so the high-level cmd.DrawMesh /
+            // cmd.Blit paths get it automatically; the low-level cmd.DrawIndexed path
+            // in DrawRenderables also benefits without needing an explicit cmd.SetBuffer.
+            // PropertyApply.BindUniformBuffer skips when the program doesn't declare the
+            // block, so shaders that don't use it pay nothing.
+            var globalBuf = Rendering.GlobalUniforms.GetBuffer();
+            if (globalBuf != null)
+                PropertyApply.BindUniformBuffer(_boundProgram, "GlobalUniforms", globalBuf, 0);
+
+            // Global property block (PropertyState statics).
+            PropertyApply.ApplyGlobals(_boundProgram, this);
+
+            if (_boundProperties != null)
+                PropertyApply.ApplyMaterial(_boundProperties, _boundProgram, this);
+
+            // Shader defaults fill in anything the material didn't override.
+            if (_boundShader != null && _boundShader.IsValid())
+                PropertyApply.FillShaderDefaults(_boundShader, _boundProperties, _boundProgram, this);
+
+            _prefixSlots = _texSlotCounter;
+            _prefixProgram = _boundProgram;
+            _prefixProperties = _boundProperties;
+            _prefixShader = _boundShader;
+            _prefixValid = true;
+        }
+
+        PropertyApply.Watch(_prefixNames);
+        _texSlotCounter = _prefixSlots;
         DrawNumber++;
-
-        // GlobalUniforms UBO must be bound on every draw shaders that read camera
-        // matrices, time, screen size, etc. expect block 0 to hold this buffer.
-        // Done here (rather than per encoding site) so the high-level cmd.DrawMesh /
-        // cmd.Blit paths get it automatically; the low-level cmd.DrawIndexed path
-        // in DrawRenderables also benefits without needing an explicit cmd.SetBuffer.
-        // PropertyApply.BindUniformBuffer skips when the program doesn't declare the
-        // block, so shaders that don't use it pay nothing.
-        var globalBuf = Rendering.GlobalUniforms.GetBuffer();
-        if (globalBuf != null)
-            PropertyApply.BindUniformBuffer(_boundProgram, "GlobalUniforms", globalBuf, 0);
-
-        // Global property block (PropertyState statics).
-        PropertyApply.ApplyGlobals(_boundProgram, this);
-
-        if (_boundProperties != null)
-            PropertyApply.ApplyMaterial(_boundProperties, _boundProgram, this);
-
-        // Shader defaults fill in anything the material didn't override.
-        if (_boundShader != null && _boundShader.IsValid())
-            PropertyApply.FillShaderDefaults(_boundShader, _boundProperties, _boundProgram, this);
 
         if (_boundInstanceProperties != null)
             PropertyApply.ApplyInstance(_boundInstanceProperties, _boundProgram, this);
@@ -944,8 +1006,8 @@ internal sealed class CommandExecutor
         var samplers = _boundProgram.samplers;
         var boundDraw = _boundProgram.samplerBoundDraw;
         for (int i = 0; i < samplers.Length; i++)
-            if (boundDraw[i] != DrawNumber)
-                Graphics.GL.Uniform1(samplers[i].Location, samplers[i].EmptyUnit);
+            if (boundDraw[i] != DrawNumber && boundDraw[i] != _prefixDraw)
+                PropertyApply.SetSamplerUnit(_boundProgram, i, samplers[i].EmptyUnit);
     }
 
     /// <summary>Counts draws, so a program can tell which of its samplers this draw has bound.</summary>
@@ -961,8 +1023,21 @@ internal sealed class CommandExecutor
 
     internal void BindTextureToUnit(int unit, GraphicsTexture tex)
     {
-        Graphics.GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + unit));
+        if (unit < MirroredUnits && _unitHandles[unit] == tex.Handle && _unitTargets[unit] == tex.Target) return;
+        if (unit != _activeUnit)
+        {
+            Graphics.GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + unit));
+            _activeUnit = unit;
+        }
         tex.Bind();
+    }
+
+    /// <summary>Records a texture bound to the active unit, by this executor or anything else on the render thread.</summary>
+    internal void OnTextureBound(TextureTarget target, uint handle)
+    {
+        if (_activeUnit >= MirroredUnits) return;
+        _unitHandles[_activeUnit] = handle;
+        _unitTargets[_activeUnit] = target;
     }
 
     // Debug markers. Compiled out in release builds the per-call overhead
