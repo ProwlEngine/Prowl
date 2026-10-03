@@ -372,7 +372,7 @@ internal sealed class AnimatorRagdoll
         }
 
         ref FixedAngle.FixedAngleData data = ref muscle.Data;
-        float mass = SpringMass(part.CarriedInertia, parent.Body.Native!.Data.InverseInertiaWorld);
+        float mass = SpringMass(part.CarriedInertia, parent.Body.Native!.Data.InverseInertiaWorld.ToMatrix());
         part.MuscleLead = Tune(ref data.Softness, ref data.BiasFactor, mass, strength * MuscleFrequency, dt, substep, AngleErrorPerRadian);
     }
 

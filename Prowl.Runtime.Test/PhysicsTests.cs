@@ -1532,6 +1532,154 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Equal(1.0, Maths.Abs(rotation.W), 3);
     }
 
+    [Fact]
+    public void Constraints_ConfiguredBeforeCreation_RestrictImpulsesAndNativeStepping()
+    {
+        var scene = CreatePhysicsScene();
+        var go = CreateGameObject("PlanarBody");
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        rb.Constraints = RigidbodyConstraints.FreezePositionZ |
+            RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY;
+        go.AddComponent<BoxCollider>();
+        scene.Add(go);
+
+        rb.ApplyImpulse(new Float3(1, 2, 3));
+        rb.ApplyAngularImpulse(new Float3(4, 5, 6));
+
+        Assert.Equal(new Float3(1, 2, 0), rb.LinearVelocity);
+        Assert.Equal(0f, rb.AngularVelocity.X);
+        Assert.Equal(0f, rb.AngularVelocity.Y);
+        Assert.True(rb.AngularVelocity.Z > 0f);
+
+        // Step Jitter directly so no Prowl pose correction can conceal a missing native lock.
+        scene.Physics.World.Step(0.02f, false);
+
+        Assert.Equal(0f, rb.Position.Z);
+        Assert.True(rb.Position.X > 0f);
+        Assert.True(rb.Position.Y > 0f);
+        Assert.Equal(0f, rb.Rotation.X);
+        Assert.Equal(0f, rb.Rotation.Y);
+        Assert.True(Maths.Abs(rb.Rotation.Z) > 0f);
+    }
+
+    [Theory]
+    [InlineData(ForceMode.Force)]
+    [InlineData(ForceMode.Acceleration)]
+    [InlineData(ForceMode.Impulse)]
+    [InlineData(ForceMode.VelocityChange)]
+    public void FrozenAxis_RejectsEveryForceMode_DuringNativeStepping(ForceMode mode)
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        StepPhysics(scene, 1);
+        rb.Mass = 4f;
+        rb.Constraints = RigidbodyConstraints.FreezePositionY;
+
+        rb.AddForce(new Float3(3, 6, 9), mode);
+        scene.Physics.World.Step(0.02f, false);
+        scene.Physics.World.Step(0.02f, false);
+
+        Assert.Equal(0f, rb.LinearVelocity.Y);
+        Assert.Equal(0f, rb.Position.Y);
+        Assert.True(rb.LinearVelocity.X > 0f);
+        Assert.True(rb.LinearVelocity.Z > 0f);
+    }
+
+    [Fact]
+    public void FrozenAxis_RestrictsOffCenterImpulsesImmediately()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        rb.Mass = 2f;
+        rb.Constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationZ;
+
+        rb.ApplyImpulse(new Float3(2, 4, 6), new Float3(1, 0, 0));
+
+        Assert.Equal(new Float3(1, 0, 3), rb.LinearVelocity);
+        Assert.Equal(0f, rb.AngularVelocity.Z);
+        Assert.True(rb.AngularVelocity.Y < 0f);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Constraints_RuntimeAndInspectorChanges_ClearVelocityAndRestoreMassResponse(bool inspector)
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        rb.Mass = 2f;
+        rb.LinearVelocity = new Float3(1, 2, 3);
+        rb.AngularVelocity = new Float3(4, 5, 6);
+        var frozen = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationX;
+
+        if (inspector)
+        {
+            typeof(Rigidbody3D).GetField("constraints", System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Instance)!.SetValue(rb, frozen);
+            rb.OnValidate();
+        }
+        else
+            rb.Constraints = frozen;
+
+        Assert.Equal(new Float3(1, 0, 3), rb.LinearVelocity);
+        Assert.Equal(new Float3(0, 5, 6), rb.AngularVelocity);
+
+        rb.Mass = 4f;
+        rb.ApplyImpulse(new Float3(0, 8, 0));
+        Assert.Equal(0f, rb.LinearVelocity.Y);
+
+        rb.Constraints = RigidbodyConstraints.None;
+        rb.ApplyImpulse(new Float3(0, 8, 0));
+        Assert.Equal(2f, rb.LinearVelocity.Y);
+        rb.ApplyAngularImpulse(new Float3(1, 0, 0));
+        Assert.True(rb.AngularVelocity.X > 0f);
+    }
+
+    [Fact]
+    public void PartialRotationFreeze_PreservesAccelerationTorqueOnFreeAxis()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        StepPhysics(scene, 1);
+        rb.Mass = 4f;
+        rb.Constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY;
+
+        rb.AddTorque(new Float3(4, 5, 6), ForceMode.Acceleration);
+        scene.Physics.World.Step(0.02f, false);
+        scene.Physics.World.Step(0.02f, false);
+
+        Assert.Equal(0f, rb.AngularVelocity.X);
+        Assert.Equal(0f, rb.AngularVelocity.Y);
+        Assert.Equal(0.12f, rb.AngularVelocity.Z, 4);
+    }
+
+    [Fact]
+    public void FrozenKinematicBody_AllowsTeleportAndUnlocking()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
+        rb.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
+        rb.Constraints = RigidbodyConstraints.FreezeAll;
+        rb.LinearVelocity = new Float3(1, 2, 3);
+        rb.AngularVelocity = new Float3(4, 5, 6);
+        rb.MovePosition(new Float3(10, 20, 30));
+        var rotation = Quaternion.AxisAngle(Float3.UnitY, 0.5f);
+        rb.MoveRotation(rotation);
+        scene.Physics.World.Step(0.02f, false);
+
+        Assert.Equal(Float3.Zero, rb.LinearVelocity);
+        Assert.Equal(Float3.Zero, rb.AngularVelocity);
+        Assert.Equal(new Float3(10, 20, 30), rb.Position);
+        Assert.Equal(rotation.Y, rb.Rotation.Y, 4);
+        Assert.Equal(rotation.W, rb.Rotation.W, 4);
+
+        rb.Constraints = RigidbodyConstraints.None;
+        rb.LinearVelocity = new Float3(1, 0, 0);
+        scene.Physics.World.Step(0.02f, false);
+        Assert.True(rb.Position.X > 10f);
+    }
+
     // ---------------------------------------------------------------------
     // Query API: filters, all-hits, linecast
     // ---------------------------------------------------------------------
