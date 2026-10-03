@@ -12,12 +12,12 @@ internal static class CommandBufferPool
 {
     public const int MaxPoolSize = 64;
 
-    private static readonly ConcurrentBag<CommandBuffer> s_free = new();
+    private static readonly ConcurrentQueue<CommandBuffer> s_free = new();
     private static int s_count;
 
     public static CommandBuffer Rent(string? name)
     {
-        if (s_free.TryTake(out var cmd))
+        if (s_free.TryDequeue(out var cmd))
         {
             System.Threading.Interlocked.Decrement(ref s_count);
             cmd.OnRent(name);
@@ -43,6 +43,6 @@ internal static class CommandBufferPool
             return;
         }
 
-        s_free.Add(cmd);
+        s_free.Enqueue(cmd);
     }
 }
