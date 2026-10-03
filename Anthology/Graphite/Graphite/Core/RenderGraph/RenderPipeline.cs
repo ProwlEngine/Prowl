@@ -130,7 +130,9 @@ public class RenderPipeline<TView> : IDisposable
 
                 context.SetCurrentPass(passInfo, node.DeclaredOutputs, node.Accesses, node.Pass.Name);
                 context.TransitionForAccesses(node.Pass.Name, node.Accesses);
-                node.Pass.Render(context);
+                CommandBuffer passCommands = context.BeginPassCommandBuffer(node.Pass.Name);
+                node.Pass.Render(context, passCommands);
+                context.EndPassCommandBuffer(passCommands);
                 context.SetCurrentPass(null);
 
                 profiler?.EndPass(passInfo);

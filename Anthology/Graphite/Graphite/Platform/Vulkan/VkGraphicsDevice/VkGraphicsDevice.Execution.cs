@@ -15,6 +15,7 @@ internal unsafe partial class VkGraphicsDevice
         public VkFence FenceWrapper;
         public VkUniformArena UniformArena;
         public List<VkCommandBuffer> RentedCommandBuffers;
+        public List<VkTransferCommandBuffer> RentedTransferCommandBuffers;
         public List<VkCommandBuffer> QueuedCommandBuffers;
         public ulong CurrentExecutionId;
     }
@@ -40,6 +41,7 @@ internal unsafe partial class VkGraphicsDevice
                 FenceWrapper = slotWrapper,
                 UniformArena = new VkUniformArena(this, primary),
                 RentedCommandBuffers = [],
+                RentedTransferCommandBuffers = [],
                 QueuedCommandBuffers = [],
                 CurrentExecutionId = 0,
             };
@@ -79,12 +81,19 @@ internal unsafe partial class VkGraphicsDevice
             slot.RentedCommandBuffers.Clear();
         }
 
+        if (slot.RentedTransferCommandBuffers.Count > 0)
+        {
+            foreach (VkTransferCommandBuffer rented in slot.RentedTransferCommandBuffers)
+                _graphTransferCommandBufferPool.Return(rented);
+            slot.RentedTransferCommandBuffers.Clear();
+        }
+
         _descriptorSetCaches.SweepAll(executionId, _maxExecutingTasks);
 
         slot.CurrentExecutionId = executionId;
 
         return new VkExecutionTask(this, executionId, ringSlot, slot.FenceWrapper,
-            slot.UniformArena, slot.RentedCommandBuffers, slot.QueuedCommandBuffers);
+            slot.UniformArena, slot.RentedCommandBuffers, slot.RentedTransferCommandBuffers, slot.QueuedCommandBuffers);
     }
 
     private protected override void CompleteExecutionCore(ExecutionTask task)

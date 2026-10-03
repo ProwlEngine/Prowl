@@ -32,6 +32,6 @@ public interface IPass<TView>
     /// <summary>Declare in/out textures.</summary>
     void Setup(RenderContextBuilder builder);
 
-    /// <summary>Record rendering. Get textures via context.GetRenderTexture.</summary>
-    void Render(RenderContext<TView> context);
+    /// <summary>Record rendering into cmd, already begun. The graph submits it after Render returns. Get textures via context.GetRenderTexture.</summary>
+    void Render(RenderContext<TView> context, CommandBuffer cmd);
 }

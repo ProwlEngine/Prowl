@@ -300,7 +300,7 @@ public sealed class RenderContext<TView>
     }
 
     /// <summary>
-    /// Rents a command buffer, already begun. Submit via SubmitCommandBuffer. Don't begin/end it yourself.
+    /// Rents an extra command buffer, already begun, for passes that need more than the one Render receives. Submit via SubmitCommandBuffer. Do not begin or end it yourself.
     /// </summary>
     /// <param name="name">Optional debug name.</param>
     public CommandBuffer GetCommandBuffer(string name = "")
@@ -325,6 +325,14 @@ public sealed class RenderContext<TView>
         }
 
         return cb;
+    }
+
+    internal CommandBuffer BeginPassCommandBuffer(string passName) => GetCommandBuffer(passName);
+
+    internal void EndPassCommandBuffer(CommandBuffer cmd)
+    {
+        if (_pendingCommandBuffers.Contains(cmd))
+            SubmitCommandBuffer(cmd);
     }
 
     /// <summary>Queues a command buffer rented here for this execution's submit. Do not record into it afterwards.</summary>
@@ -371,16 +379,17 @@ public sealed class RenderContext<TView>
         FlushDeferredBarriers(scopeName);
     }
 
-    /// <summary>Rents a transfer command buffer, copies only.</summary>
+    /// <summary>
+    /// Rents a transfer command buffer, copies only, already begun. Submit via SubmitTransferCommandBuffer. Pooled and reclaimed when the execution retires, don't dispose it.
+    /// </summary>
     /// <param name="name">Optional debug name.</param>
     public TransferCommandBuffer GetTransferCommandBuffer(string name = "")
     {
-        TransferCommandBuffer cb = _device.ResourceFactory.CreateTransferCommandBuffer();
+        TransferCommandBuffer cb = _device.RentGraphTransferCommandBuffer();
+        _task.TrackRentedTransferCommandBuffer(cb);
+        cb.Name = name;
+        cb.Begin();
         cb.GraphStates = _textureStates;
-
-        if (!string.IsNullOrEmpty(name))
-            cb.Name = name;
-
         return cb;
     }
 
