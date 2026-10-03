@@ -339,7 +339,7 @@ public abstract class Collider : MonoBehaviour
 
         var transformedShapes = new RigidBodyShape[shapes.Length];
         for (int i = 0; i < shapes.Length; i++)
-            transformedShapes[i] = new TransformedShape(shapes[i], jTranslation, jLinear);
+            transformedShapes[i] = new PlacedShape(shapes[i], jTranslation, jLinear);
 
         return transformedShapes;
     }
@@ -412,4 +412,27 @@ public abstract class Collider : MonoBehaviour
     protected virtual void OnAutoRebuild() { }
 
     public override void OnValidate() => Rebuild();
+}
+
+internal sealed class PlacedShape : TransformedShape
+{
+    private readonly JMatrix _inverse;
+
+    public PlacedShape(RigidBodyShape shape, in JVector translation, in JMatrix transform) : base(shape, translation, transform)
+    {
+        JMatrix.Inverse(transform, out _inverse);
+    }
+
+    public override bool LocalRayCast(in JVector origin, in JVector direction, out JVector normal, out float lambda)
+    {
+        // Points along the ray keep their lambda through the affine map, and normals go back through the inverse transpose.
+        JVector innerOrigin = JVector.Transform(origin - Translation, _inverse);
+        JVector innerDirection = JVector.Transform(direction, _inverse);
+
+        bool hit = OriginalShape.LocalRayCast(innerOrigin, innerDirection, out JVector innerNormal, out lambda);
+        // A ray starting inside the shape hits at once with no normal, which must stay zero rather than become NaN.
+        bool hasNormal = hit && innerNormal.LengthSquared() > 0f;
+        normal = hasNormal ? JVector.Normalize(JVector.TransposedTransform(innerNormal, _inverse)) : JVector.Zero;
+        return hit;
+    }
 }

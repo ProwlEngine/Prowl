@@ -486,6 +486,29 @@ public class PhysicsWorld
         return owner.IsValid() && owner.GameObject.IsValid() ? owner.GameObject.Transform : null;
     }
 
+    internal MonoBehaviour GetProxyOwner(IDynamicTreeProxy proxy)
+        => proxy is RigidBodyShape shape ? GetShapeOwner(shape) : GetTerrainOwner(proxy);
+
+    /// <summary>
+    /// Whether something cast from <paramref name="body"/> may touch the proxy: the same layer matrix, ignored pairs
+    /// and constraint rules as a collision between them, narrowed further by <paramref name="mask"/>.
+    /// </summary>
+    internal bool CastAccepts(RigidBody body, IDynamicTreeProxy proxy, in LayerMask mask)
+    {
+        int layer = body.Tag is Rigidbody3D.RigidBodyUserData own ? own.Layer : 0;
+        if (proxy is RigidBodyShape shape)
+        {
+            if (shape.RigidBody == body) return false;
+            if (shape.RigidBody.Tag is Rigidbody3D.RigidBodyUserData other && !mask.HasLayer(other.Layer)) return false;
+            return _layerFilter.BodiesCollide(body, shape.RigidBody);
+        }
+
+        MonoBehaviour terrain = GetTerrainOwner(proxy);
+        if (!terrain.IsValid() || !terrain.GameObject.IsValid()) return true;
+        int terrainLayer = terrain.GameObject.LayerIndex;
+        return mask.HasLayer(terrainLayer) && CollisionMatrix.GetLayerCollision(layer, terrainLayer);
+    }
+
     /// <summary>The component that registered the given terrain proxy, or null if it is not terrain.</summary>
     private MonoBehaviour GetTerrainOwner(IDynamicTreeProxy proxy)
     {

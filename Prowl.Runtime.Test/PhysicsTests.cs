@@ -323,6 +323,46 @@ public class PhysicsTests : RuntimeTestBase
         Assert.True(hit.Distance > 0);
     }
 
+    [Theory]
+    [InlineData(50f)]
+    [InlineData(3000f)]
+    public void Raycast_OnAPlacedBox_IsExactWhateverItsSize(float size)
+    {
+        var scene = CreatePhysicsScene();
+        var box = CreateGameObject("PlacedBox");
+        box.Transform.Position = new Float3(0, -1, 0);
+        box.Transform.Rotation = Quaternion.FromEuler(new Float3(10f, 0f, 5f));
+        box.Transform.LocalScale = new Float3(1f, 2f, 1f);
+        box.AddComponent<BoxCollider>().Size = new Float3(size, 1, size);
+        scene.Add(box);
+        StepPhysics(scene, 2);
+
+        Float3 up = box.Transform.Rotation * Float3.UnitY;
+        Float3 top = box.Transform.Position + up;
+        var random = new System.Random(3);
+        for (int i = 0; i < 200; i++)
+        {
+            var origin = new Float3(random.NextSingle() * 20f - 10f, 3f, random.NextSingle() * 20f - 10f);
+            var down = new Float3(0f, -1f, 0f);
+            Assert.True(scene.Physics.Raycast(origin, down, 10f, out RaycastHit hit));
+
+            float expected = Float3.Dot(top - origin, up) / Float3.Dot(down, up);
+            Assert.InRange(hit.Distance, expected - 1e-3f, expected + 1e-3f);
+            Assert.True(Float3.Dot(hit.Normal, up) > 0.9999f, $"normal {hit.Normal} should be the top face's {up}");
+        }
+    }
+
+    [Fact]
+    public void Raycast_StartingInsideAPlacedBox_HasNoNaNNormal()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(3, 0, 0), new Float3(2, 2, 2));
+        StepPhysics(scene, 2);
+
+        Assert.True(scene.Physics.Raycast(new Float3(3, 0, 0), new Float3(0, -1, 0), 10f, out RaycastHit hit));
+        Assert.False(float.IsNaN(hit.Normal.X) || float.IsNaN(hit.Normal.Y) || float.IsNaN(hit.Normal.Z), $"normal {hit.Normal}");
+    }
+
     [Fact]
     public void Collider_OnRigidbody_MovesWithBody()
     {
