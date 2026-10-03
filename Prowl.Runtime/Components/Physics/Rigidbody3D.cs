@@ -57,14 +57,9 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeField] private RigidbodyInterpolation interpolation = RigidbodyInterpolation.Interpolate;
     [SerializeField] private RigidbodyConstraints constraints = RigidbodyConstraints.None;
 
-    // The pose the frozen axes are held at, captured the first time a constraint is applied.
-    private JVector _lockedPosition;
-    private JQuaternion _lockedOrientation;
-    private bool _hasLockedPose;
-
     /// <summary>
-    /// World-space axes this body may not move or turn along. Freezing an axis re-pins it after every
-    /// step, so a body can still be placed on that axis with <see cref="MovePosition"/>.
+    /// World-space axes this body may not move or turn along during simulation. The body can still
+    /// be placed on a frozen axis with <see cref="MovePosition"/> or <see cref="MoveRotation"/>.
     /// </summary>
     public RigidbodyConstraints Constraints
     {
@@ -73,7 +68,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             AssertOwner();
             constraints = value;
-            CaptureLockedPose(); // re-pin to wherever the body is now
+            if (IsSimulated) _body.AllowedMotion = MotionAxes.All & ~(MotionAxes)value;
         }
     }
 
@@ -341,8 +336,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     [MemberNotNullWhen(true, nameof(_body), nameof(Native))]
     internal bool IsSimulated => _body?.IsValid == true;
 
-    /// <summary>The body's inertia about its origin, in world space.</summary>
-    internal JMatrix WorldInertia => IsSimulated && JMatrix.Inverse(_body.Data.InverseInertiaWorld, out JMatrix inertia) ? inertia : default;
+    /// <summary>The body's effective inertia in world space, with zero response on locked axes.</summary>
+    internal JMatrix WorldInertia => IsSimulated
+        ? MathHelper.PseudoInverseSymmetric(_body.Data.InverseInertiaWorld.ToMatrix())
+        : default;
 
     /// <summary>
     /// Ensures the underlying Jitter body exists. Body creation normally happens in OnEnable, but
@@ -442,54 +439,11 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
-    /// Re-applies the frozen axes. Jitter has no native axis locks, so the frozen components of the
-    /// velocity are zeroed and the pose is put back where it was, right after the step that moved it.
-    /// </summary>
-    private void ApplyConstraints()
-    {
-        if (constraints == RigidbodyConstraints.None || !IsSimulated) return;
-        if (!_hasLockedPose) { CaptureLockedPose(); return; }
-
-        JVector velocity = _body.Velocity;
-        JVector position = _body.Position;
-
-        if ((constraints & RigidbodyConstraints.FreezePositionX) != 0) { velocity.X = 0.0f; position.X = _lockedPosition.X; }
-        if ((constraints & RigidbodyConstraints.FreezePositionY) != 0) { velocity.Y = 0.0f; position.Y = _lockedPosition.Y; }
-        if ((constraints & RigidbodyConstraints.FreezePositionZ) != 0) { velocity.Z = 0.0f; position.Z = _lockedPosition.Z; }
-
-        JVector angularVelocity = _body.AngularVelocity;
-        if ((constraints & RigidbodyConstraints.FreezeRotationX) != 0) angularVelocity.X = 0.0f;
-        if ((constraints & RigidbodyConstraints.FreezeRotationY) != 0) angularVelocity.Y = 0.0f;
-        if ((constraints & RigidbodyConstraints.FreezeRotationZ) != 0) angularVelocity.Z = 0.0f;
-
-        _body.Velocity = velocity;
-        _body.Position = position;
-        _body.AngularVelocity = angularVelocity;
-
-        // Zeroing angular velocity stops a body turning but leaves whatever rotation the solver already
-        // applied this step. That only fully cancels when every axis is locked, so a full rotation
-        // freeze restores the orientation outright and a partial one accepts a little drift.
-        if ((constraints & RigidbodyConstraints.FreezeRotation) == RigidbodyConstraints.FreezeRotation)
-            _body.Orientation = _lockedOrientation;
-    }
-
-    private void CaptureLockedPose()
-    {
-        if (!IsSimulated) return;
-
-        _lockedPosition = _body.Position;
-        _lockedOrientation = _body.Orientation;
-        _hasLockedPose = true;
-    }
-
-    /// <summary>
     /// Records the pose the step just produced, so the next frames can render between it and the one
     /// before. Driven by the physics world for every registered body right after the step.
     /// </summary>
     internal void CapturePose()
     {
-        ApplyConstraints();
-
         if (!IsSimulated) return;
 
         _previousPosition = _currentPosition;
@@ -515,7 +469,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         _currentPosition = _previousPosition = _body.Position.ToProwl();
         _currentRotation = _previousRotation = _body.Orientation.ToProwl();
         _hasPose = true;
-        CaptureLockedPose();
     }
 
 
@@ -569,6 +522,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         ClampSettings();
         rb.MotionType = motionType;
+        rb.AllowedMotion = MotionAxes.All & ~(MotionAxes)constraints;
         rb.EnableSpeculativeContacts = isSpeculative;
         rb.Damping = (linearDamping, angularDamping);
         rb.Friction = friction;
@@ -624,9 +578,9 @@ public sealed class Rigidbody3D : MonoBehaviour
         }
     }
 
-    private static JMatrix ApproximateBoxInertia(ReadOnlyList<RigidBodyShape> shapes, float mass)
+    private static JSymmetricMatrix ApproximateBoxInertia(ReadOnlyList<RigidBodyShape> shapes, float mass)
     {
-        if (shapes.Count == 0) return JMatrix.Identity;
+        if (shapes.Count == 0) return JSymmetricMatrix.Identity;
 
         JVector min = new(float.MaxValue, float.MaxValue, float.MaxValue);
         JVector max = new(float.MinValue, float.MinValue, float.MinValue);
@@ -643,7 +597,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         float sy = Maths.Max(max.Y - min.Y, 1e-3f);
         float sz = Maths.Max(max.Z - min.Z, 1e-3f);
 
-        JMatrix inertia = JMatrix.Identity;
+        JSymmetricMatrix inertia = JSymmetricMatrix.Identity;
         inertia.M11 = (1.0f / 12.0f) * mass * (sy * sy + sz * sz);
         inertia.M22 = (1.0f / 12.0f) * mass * (sx * sx + sz * sz);
         inertia.M33 = (1.0f / 12.0f) * mass * (sx * sx + sy * sy);
@@ -715,8 +669,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jForce = force.ToJitter();
-        float inverseMass = body.Data.InverseMass;
-
         switch (mode)
         {
             case ForceMode.Force:
@@ -725,11 +677,11 @@ public sealed class Rigidbody3D : MonoBehaviour
 
             case ForceMode.Acceleration:
                 // a = F/m, so cancelling the mass means asking for a force of m*a.
-                if (inverseMass > 0.0f) body.AddForce(jForce * (1.0f / inverseMass));
+                if (body.MotionType == MotionType.Dynamic) body.AddForce(jForce * body.Mass);
                 break;
 
             case ForceMode.Impulse:
-                body.Velocity += jForce * inverseMass;
+                body.ApplyImpulse(jForce);
                 body.SetActivationState(true);
                 break;
 
@@ -761,9 +713,8 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         if (mode == ForceMode.Acceleration)
         {
-            float inverseMass = body.Data.InverseMass;
-            if (inverseMass <= 0.0f) return;
-            jForce *= 1.0f / inverseMass;
+            if (body.MotionType != MotionType.Dynamic) return;
+            jForce *= body.Mass;
         }
 
         body.AddForce(jForce, jPosition);
@@ -888,7 +839,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         {
             // Reciprocals of the inverse diagonal are not the moments unless the tensor is diagonal,
             // so invert the matrix properly.
-            if (_body == null || !JMatrix.Inverse(_body.InverseInertia, out JMatrix inertia))
+            if (_body == null || !JSymmetricMatrix.Inverse(_body.InverseInertia, out JSymmetricMatrix inertia))
                 return Float3.One;
 
             return new Float3(inertia.M11, inertia.M22, inertia.M33);
@@ -906,9 +857,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         var jImpulse = impulse.ToJitter();
         var jPosition = worldPosition.ToJitter();
 
-        JVector r = jPosition - body.Position;
-        body.Velocity += jImpulse * body.Data.InverseMass;
-        body.AngularVelocity += JVector.Transform(JVector.Cross(r, jImpulse), body.Data.InverseInertiaWorld);
+        body.ApplyImpulse(jImpulse, jPosition);
 
         SetActive(true);
     }
@@ -922,7 +871,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         if (!TryGetMovingBody(out RigidBody body)) return;
 
         var jImpulse = impulse.ToJitter();
-        body.Velocity += jImpulse * body.Data.InverseMass;
+        body.ApplyImpulse(jImpulse);
 
         SetActive(true);
     }
