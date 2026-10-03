@@ -32,6 +32,7 @@ public abstract partial class ExecutionTask
         CloseTail();
         commandBuffer.SealRenderPass();
         _openTail = commandBuffer;
+        Device.Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
     }
 
     internal void CloseTail()

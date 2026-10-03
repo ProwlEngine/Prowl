@@ -62,8 +62,6 @@ internal sealed class VkExecutionTask : ExecutionTask
     {
         SubmitCommands_CheckEnded(commandList);
         _queuedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandList));
-
-        _gd.Profiler?.RecordSubmit(commandList.ProfilerInfo, isTransfer: false);
     }
 
 
