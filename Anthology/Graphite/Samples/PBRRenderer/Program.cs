@@ -13,6 +13,8 @@ namespace Prowl.Graphite.Samples.PBRRenderer;
 
 internal readonly struct SceneView : IRenderView
 {
+    public bool TargetSwapchain => true;
+
     public SceneView(uint width, uint height)
     {
         PixelWidth = width;
@@ -182,7 +184,7 @@ internal sealed class CompositePass : RasterPass<SceneView>
     {
         _sceneHandle = builder.DeclareInputTexture("Scene");
         _bloomFullHandle = builder.DeclareInputTexture("BloomFull");
-        SetBackbufferTarget(builder);
+        SetViewTarget(builder);
     }
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)

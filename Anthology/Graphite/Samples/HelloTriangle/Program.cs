@@ -7,6 +7,8 @@ namespace Prowl.Graphite.Samples.HelloTriangle;
 
 internal readonly struct SceneView : IRenderView
 {
+    public bool TargetSwapchain => true;
+
     public SceneView(uint width, uint height)
     {
         PixelWidth = width;
@@ -34,7 +36,7 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override string Name => "Backbuffer";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
+    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
