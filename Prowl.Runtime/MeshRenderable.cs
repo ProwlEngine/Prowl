@@ -18,6 +18,10 @@ public class MeshRenderable : IRenderable
     private Float4x4? _worldToObject;
 
     public MeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, PropertyState? propertyBlock = null, int subMeshIndex = -1)
+        => Set(mesh, material, matrix, layerIndex, propertyBlock, subMeshIndex);
+
+    /// <summary>Points this renderable at a new draw, so a renderer can keep one across collects.</summary>
+    public void Set(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, PropertyState? propertyBlock = null, int subMeshIndex = -1)
     {
         _mesh = mesh;
         _material = material;
@@ -25,6 +29,7 @@ public class MeshRenderable : IRenderable
         _layerIndex = layerIndex;
         _properties = propertyBlock ?? new();
         _subMeshIndex = subMeshIndex;
+        _worldToObject = null;
     }
 
     public Material GetMaterial() => _material;
@@ -44,8 +49,7 @@ public class MeshRenderable : IRenderable
         instanceData = null;
     }
 
-    // The transform is fixed for this renderable's lifetime (one frame), so invert once and
-    // reuse across every render pass instead of re-inverting per pass.
+    // The transform is fixed until the next Set, so invert once and reuse across every render pass.
     public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => _worldToObject ??= _transform.Invert();
 
     /// <summary>
