@@ -31,9 +31,10 @@ public class MeshRenderer : MonoBehaviour
     }
 
 
-    // Per-instance property blocks, reused across frames so a static scene collects without allocating.
+    // Per-instance property blocks and renderables, reused across frames so a static scene collects without allocating.
     // The command buffer snapshots these at encode time, so mutating them next frame is safe.
     [System.NonSerialized] private PropertyState[] _propCache;
+    [System.NonSerialized] private MeshRenderable[] _renderableCache;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
@@ -45,6 +46,7 @@ public class MeshRenderer : MonoBehaviour
         if (_propCache == null || _propCache.Length != subCount)
         {
             _propCache = new PropertyState[subCount];
+            _renderableCache = new MeshRenderable[subCount];
             for (int i = 0; i < subCount; i++)
                 _propCache[i] = new PropertyState();
         }
@@ -68,9 +70,9 @@ public class MeshRenderer : MonoBehaviour
                 props.SetInt("morphActiveCount", 0);
             LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
 
-            renderables.Add(new MeshRenderable(
-                mesh, mat, world,
-                GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
+            MeshRenderable renderable = _renderableCache[s] ??= new MeshRenderable(mesh, mat, world, 0);
+            renderable.Set(mesh, mat, world, GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1);
+            renderables.Add(renderable);
         }
     }
 
