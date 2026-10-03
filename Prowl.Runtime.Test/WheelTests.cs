@@ -155,6 +155,30 @@ public class WheelTests : RuntimeTestBase
     }
 
     [Fact]
+    public void Slip_IsSmallWhileRolling_AndLargeWhileSlidingSideways()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, -0.5f, 0), new Float3(200, 1, 200));
+        var (rb, wheels) = BuildCar(scene, new Float3(0, 0.6f, 0), Quaternion.Identity);
+        Tick(scene, 200);
+
+        rb.LinearVelocity = new Float3(0f, 0f, 15f);
+        foreach (var w in wheels) w.MotorTorque = 40f;
+        Tick(scene, 120);
+        foreach (var w in wheels)
+        {
+            Assert.InRange(MathF.Abs(w.ForwardSlip), 0f, 0.5f);
+            Assert.InRange(MathF.Abs(w.SidewaysSlip), 0f, 0.5f);
+        }
+
+        foreach (var w in wheels) w.MotorTorque = 0f;
+        rb.LinearVelocity = new Float3(12f, 0f, 0f);
+        Tick(scene, 2);
+        foreach (var w in wheels)
+            Assert.True(MathF.Abs(w.SidewaysSlip) > 5f, $"a car shoved sideways slides, slip {w.SidewaysSlip}");
+    }
+
+    [Fact]
     public void Car_HardDrive_StaysPhysical()
     {
         // Heavier car, big wheels, dropped from a height, then driven with high torque: speed must stay

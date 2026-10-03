@@ -135,13 +135,13 @@ public sealed class ParticleShowcaseGame : StationGame
 
     private void CreateMaterials()
     {
-        Texture2D dot = SoftDot();
+        Texture2D dot = Load<Texture2D>("Textures/Soft Dot");
         _dotAlpha = ParticleMaterial(dot);
         _dotAdditive = ParticleMaterial(dot);
-        _flame = ParticleMaterial(FlameSheet());
-        _smoke = ParticleMaterial(SmokeSheet());
-        _flipbook = ParticleMaterial(SpinnerSheet());
-        _ring = ParticleMaterial(Ring());
+        _flame = ParticleMaterial(Load<Texture2D>("Textures/Flame Sheet"));
+        _smoke = ParticleMaterial(Load<Texture2D>("Textures/Smoke Sheet"));
+        _flipbook = ParticleMaterial(Load<Texture2D>("Textures/Spinner Sheet"));
+        _ring = ParticleMaterial(Load<Texture2D>("Textures/Ring"));
         _solid = ParticleMaterial(Texture2D.LoadDefault(DefaultTexture.White));
     }
 
@@ -682,68 +682,6 @@ public sealed class ParticleShowcaseGame : StationGame
         }
         return ps;
     }
-
-    // ----------------------------------------------------------------
-    //  Procedural textures
-    // ----------------------------------------------------------------
-
-    private static Texture2D Ring() => Texture(128, (u, v) =>
-    {
-        float r = Distance(u, v, 0.5f, 0.5f) * 2f;
-        float a = Saturate(1f - MathF.Abs(r - 0.85f) / 0.08f) + Saturate(1f - MathF.Abs(r - 0.6f) / 0.05f) * 0.5f;
-        return new Color(1f, 1f, 1f, Saturate(a));
-    });
-
-    // A flickering tongue of flame whose height and wobble change over the 16 frames.
-    private static Texture2D FlameSheet() => Sheet(64, 4, 4, (frame, u, v) =>
-    {
-        float t = frame / 16f * MathF.PI * 2f;
-        float dx = u - 0.5f;
-        float dy = v - 0.3f;
-        float height = 0.55f + 0.12f * MathF.Sin(t);
-        float sway = 0.06f * MathF.Sin(t * 2f + v * 8f);
-        dx -= sway * Saturate(dy * 2f);
-        float stretched = dy > 0f ? dy / height : dy / 0.2f;
-        float width = 0.22f * (1f - Saturate(dy / height) * 0.7f);
-        float r = MathF.Sqrt(dx * dx / (width * width) + stretched * stretched);
-        float wobble = 0.12f * MathF.Sin(MathF.Atan2(dy, dx) * 5f + t * 3f);
-        float a = MathF.Pow(Saturate(1f - r + wobble), 1.4f);
-        return new Color(1f, 1f, 1f, a);
-    });
-
-    // Puffs of overlapping blobs that turn and swell across the frames.
-    private static Texture2D SmokeSheet() => Sheet(64, 4, 4, (frame, u, v) =>
-    {
-        float t = frame / 16f * MathF.PI * 2f;
-        float a = 0f;
-        for (int i = 0; i < 5; i++)
-        {
-            float angle = t * 0.5f + i * 1.3f;
-            float cx = 0.5f + MathF.Cos(angle) * 0.16f;
-            float cy = 0.5f + MathF.Sin(angle * 1.3f) * 0.14f;
-            float radius = 0.2f + 0.05f * MathF.Sin(t + i);
-            float d = Distance(u, v, cx, cy) / radius;
-            a = MathF.Max(a, MathF.Pow(Saturate(1f - d), 1.2f));
-        }
-        float shade = 0.75f + 0.25f * v;
-        return new Color(shade, shade, shade, a * 0.9f);
-    });
-
-    // A ring with a spoke that turns a little every frame, so stepping and blending are easy to tell apart.
-    private static Texture2D SpinnerSheet() => Sheet(64, 4, 4, (frame, u, v) =>
-    {
-        float angle = frame / 16f * MathF.PI;
-        float dx = u - 0.5f, dy = v - 0.5f;
-        float r = MathF.Sqrt(dx * dx + dy * dy) * 2f;
-        float ring = Saturate(1f - MathF.Abs(r - 0.8f) / 0.08f);
-        float along = dx * MathF.Cos(angle) + dy * MathF.Sin(angle);
-        float across = -dx * MathF.Sin(angle) + dy * MathF.Cos(angle);
-        float spoke = r < 0.75f ? Saturate(1f - MathF.Abs(across) / 0.05f) : 0f;
-        float tip = along > 0f ? 1f : 0.35f;
-        float hue = frame / 16f;
-        Color color = new(0.5f + 0.5f * MathF.Cos(hue * 6.283f), 0.5f + 0.5f * MathF.Cos((hue - 0.33f) * 6.283f), 0.5f + 0.5f * MathF.Cos((hue - 0.66f) * 6.283f), 1f);
-        return new Color(color.R, color.G, color.B, Saturate(MathF.Max(ring, spoke * tip)));
-    });
 
     // ----------------------------------------------------------------
     //  Input

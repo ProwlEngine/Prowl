@@ -142,17 +142,17 @@ public sealed class ControllerShowcaseGame : StationGame
 
     protected override void Build()
     {
-        _stairsMat = GridMaterial(new Color(0.12f, 0.1f, 0.05f, 1f), new Color(0.35f, 0.25f, 0.08f, 1f));
-        _towerMat = GridMaterial(new Color(0.06f, 0.1f, 0.16f, 1f), new Color(0.12f, 0.25f, 0.4f, 1f));
-        _ceilingMat = GridMaterial(new Color(0.12f, 0.06f, 0.12f, 1f), new Color(0.3f, 0.12f, 0.3f, 1f));
-        _trapMat = GridMaterial(new Color(0.14f, 0.05f, 0.04f, 1f), new Color(0.4f, 0.12f, 0.08f, 1f));
-        _curveMat = GridMaterial(new Color(0.04f, 0.12f, 0.1f, 1f), new Color(0.08f, 0.32f, 0.26f, 1f));
-        _roughMat = GridMaterial(new Color(0.07f, 0.1f, 0.04f, 1f), new Color(0.16f, 0.24f, 0.08f, 1f));
-        _movingMat = GridMaterial(new Color(0.14f, 0.11f, 0.02f, 1f), new Color(0.4f, 0.3f, 0.04f, 1f));
-        _edgeMat = GridMaterial(new Color(0.1f, 0.1f, 0.12f, 1f), new Color(0.28f, 0.28f, 0.34f, 1f));
-        _plainMat = GridMaterial(new Color(0.16f, 0.17f, 0.19f, 1f), new Color(0.3f, 0.32f, 0.36f, 1f));
+        _stairsMat = GridMaterial(new Color(0.455f, 0.325f, 0.104f, 1f));
+        _towerMat = GridMaterial(new Color(0.156f, 0.325f, 0.52f, 1f));
+        _ceilingMat = GridMaterial(new Color(0.39f, 0.156f, 0.39f, 1f));
+        _trapMat = GridMaterial(new Color(0.52f, 0.156f, 0.104f, 1f));
+        _curveMat = GridMaterial(new Color(0.104f, 0.416f, 0.338f, 1f));
+        _roughMat = GridMaterial(new Color(0.208f, 0.312f, 0.104f, 1f));
+        _movingMat = GridMaterial(new Color(0.52f, 0.39f, 0.052f, 1f));
+        _edgeMat = GridMaterial(new Color(0.364f, 0.364f, 0.442f, 1f));
+        _plainMat = GridMaterial(new Color(0.39f, 0.416f, 0.468f, 1f));
         _dark = Lit(new Color(0.03f, 0.032f, 0.04f, 1f), 0f, 0.7f);
-        _travelMat = GridMaterial(new Color(0.08f, 0.05f, 0.14f, 1f), new Color(0.22f, 0.12f, 0.4f, 1f));
+        _travelMat = GridMaterial(new Color(0.286f, 0.156f, 0.52f, 1f));
 
         AddStation("Controller playground", "One open world full of everything a character controller has to cope with: stairs and slopes, low ceilings and tight gaps, traps that press from several sides, curves, rough ground, moving platforms, jump pads, teleporters, and gravity that pulls sideways, upward or toward a little planet. Walk up to anything and the line below says what it is testing.", Float3.Zero, new Float3(0f, 5f, -12f), 1f);
 
@@ -173,7 +173,7 @@ public sealed class ControllerShowcaseGame : StationGame
         BuildSpawnPad();
 
         const float Size = 240f;
-        Add(Block("Ground", new Float3(Size, 1f, Size), GridMaterial(new Color(0.16f, 0.17f, 0.19f, 1f), new Color(0.3f, 0.32f, 0.36f, 1f), Size / 4f, Size / 4f), new Float3(0f, -0.5f, 0f)));
+        Add(Block("Ground", new Float3(Size, 1f, Size), Floor(Size, Size), new Float3(0f, -0.5f, 0f)));
 
         BuildPlayer(_spawn);
         _chase.Target = _character.Transform;
@@ -468,13 +468,7 @@ public sealed class ControllerShowcaseGame : StationGame
         Add(Model("Spawn Pad", pad, Lit(new Color(0.05f, 0.05f, 0.06f, 1f)).Emissive(Orange, 0.08f), new Float3(0f, 0.03f, 0f)));
     }
 
-    private static Material GridMaterial(Color background, Color line, float tileX = 1f, float tileY = 1f)
-    {
-        Material material = Lit(Color.White, 0f, 0.85f);
-        material.SetTexture("_MainTex", Grid(background, line));
-        if (tileX != 1f || tileY != 1f) material.SetVector("_Tiling", new Float2(tileX, tileY));
-        return material;
-    }
+    private static Material GridMaterial(Color tint) => Lit(tint, 0f, 0.85f).With("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid)).Tiled(2f, 2f);
 
     private float Range(float min, float max) => min + _rng.NextSingle() * (max - min);
 
@@ -1095,7 +1089,6 @@ public sealed class ControllerShowcaseGame : StationGame
         Part(Mesh.CreateCube(new Float3(0.45f, 0.55f, 0.22f)), Lit(new Color(0.05f, 0.05f, 0.06f, 1f), 0f, 0.6f), new Float3(0f, 0.95f, -0.3f));
 
         _character = player.AddComponent<CharacterController>();
-        _character.Shape = CharacterController.ColliderShape.Capsule;
         _character.Radius = 0.38f;
         _character.Height = 1.8f;
         _character.StepSize = 0.3f;
@@ -1117,7 +1110,6 @@ public sealed class ControllerShowcaseGame : StationGame
         Slider(paper, font, "Steepest walkable slope", _character.MaxSlopeAngle, 10f, 80f, v => _character.MaxSlopeAngle = v, "0");
         Slider(paper, font, "Step height", _character.StepSize, 0f, 0.6f, v => _character.StepSize = v);
         Slider(paper, font, "Snap down distance", _character.SnapDownDistance, 0f, 1f, v => _character.SnapDownDistance = v);
-        Cycle(paper, font, "Shape", _character.Shape, v => _character.Shape = v);
         Button(paper, font, "Back to the spawn", () => { _input.Stand(); _character.Teleport(_spawn); });
     }
 }

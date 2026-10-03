@@ -14,4 +14,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Shared\**\*.cs" LinkBase="Shared" />
   </ItemGroup>
 
+  <!-- Each sample's Assets folder ships beside the exe as files the runtime imports when loaded. -->
+  <ItemGroup>
+    <None Include="$(MSBuildProjectDirectory)\Assets\**\*" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -83,6 +83,7 @@ public sealed class WheelCollider : MonoBehaviour
     private float _springK, _damperC, _damperCap;
     private float _sprungMass; // this wheel's share of the body mass (cached in PreStep)
     private float _fLong, _fLat; // last tyre forces, for gizmos
+    private float _forwardSlip, _sidewaysSlip;
 
     // Public configuration
     public float Radius { get => radius; set => radius = Maths.Max(0.01f, value); }
@@ -115,6 +116,12 @@ public sealed class WheelCollider : MonoBehaviour
     public float WheelRotation => wheelRotation;
     public Float3 ContactPoint => contactPoint;
     public Float3 ContactNormal => contactNormal;
+
+    /// <summary>How fast the tyre's surface slides over the ground along its heading, in m/s, from wheel spin or a locked wheel. Zero in the air.</summary>
+    public float ForwardSlip => _forwardSlip;
+
+    /// <summary>How fast the tyre slides across its heading over the ground, in m/s. Zero in the air.</summary>
+    public float SidewaysSlip => _sidewaysSlip;
 
     // The inspector writes the backing fields directly (bypassing the property setters), so clamp
     // them here to keep inspector-entered values valid. The properties still validate scripting use.
@@ -332,6 +339,7 @@ public sealed class WheelCollider : MonoBehaviour
             frictionTorque = -fLong * radius;
 
             _fLong = fLong; _fLat = fLat;
+            _forwardSlip = longSlip; _sidewaysSlip = vLat;
 
             JVector frictionForce = _planeFwd * fLong + _planeLeft * fLat;
             car.ApplyImpulse(frictionForce * dt, forcePoint);
@@ -339,7 +347,7 @@ public sealed class WheelCollider : MonoBehaviour
 
             PushGround(-frictionForce * dt, _contactJ, dt);
         }
-        else _fLong = _fLat = 0.0f;
+        else _fLong = _fLat = _forwardSlip = _sidewaysSlip = 0.0f;
 
         // Spin integration. The wheel spin is a free flywheel: the tyre friction reaction, drive torque,
         // and brake/rolling-resistance are the only torques; grip-limited friction transfers spin momentum

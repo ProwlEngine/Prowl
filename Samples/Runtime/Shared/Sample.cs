@@ -59,6 +59,10 @@ public abstract class StationGame : Game
     {
         ReadCaptureArguments();
 
+        // The Assets folder beside the exe holds the sample's textures, materials and models as plain files,
+        // imported the first time something asks for them by path.
+        AssetDatabase.Mount(new SourceAssetBackend(new FolderAssetSource(Path.Combine(AppContext.BaseDirectory, "Assets"))));
+
         SampleScene = new Scene();
 
         CameraObject = new GameObject("Main Camera") { Tag = "Main Camera" };
@@ -775,6 +779,14 @@ public sealed class SampleHud : MonoBehaviour
 /// <summary>Small helpers every sample uses: materials, meshes, curves, procedural textures and Paper widgets.</summary>
 public static class Sample
 {
+    /// <summary>An asset from the Assets folder by its path without the extension, such as "Textures/Asphalt".</summary>
+    public static T Load<T>(string path) where T : Asset
+    {
+        T? asset = AssetDatabase.FindResource<T>(path);
+        if (asset.IsNotValid()) throw new FileNotFoundException($"The sample has no {typeof(T).Name} at 'Assets/{path}'.");
+        return asset!;
+    }
+
     // ----------------------------------------------------------------
     //  Objects and materials
     // ----------------------------------------------------------------
@@ -806,6 +818,23 @@ public static class Sample
     {
         var material = new Material(Shader.LoadDefault(DefaultShader.Unlit));
         material.SetColor("_MainColor", color);
+        return material;
+    }
+
+    /// <summary>The runtime grid texture on a floor of this size, tiled so each square is a metre across.</summary>
+    public static Material Floor(float width, float depth)
+        => Lit(new Color(0.42f, 0.44f, 0.48f, 1f), 0f, 0.9f).With("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid)).Tiled(width * 0.5f, depth * 0.5f);
+
+    /// <summary>Sets a texture and returns the material, to build one in a single expression.</summary>
+    public static Material With(this Material material, string property, Texture2D texture)
+    {
+        material.SetTexture(property, texture);
+        return material;
+    }
+
+    public static Material Tiled(this Material material, float x, float y)
+    {
+        material.SetVector("_Tiling", new Float2(x, y));
         return material;
     }
 
@@ -855,60 +884,8 @@ public static class Sample
         => new(colors.Select(k => new GradientColorKey(k.time, k.color)), alphas.Select(k => new GradientAlphaKey(k.time, k.alpha)));
 
     // ----------------------------------------------------------------
-    //  Procedural textures
+    //  Noise
     // ----------------------------------------------------------------
-
-    public static Texture2D Texture(int size, Func<float, float, Color> pixel, bool repeat = false)
-        => Sheet(size, 1, 1, (_, u, v) => pixel(u, v), repeat);
-
-    /// <summary>
-    /// Builds a sprite sheet with frame 0 in the top left. Texture rows are stored bottom first, which
-    /// is what the particle shader expects when it picks a frame.
-    /// </summary>
-    public static Texture2D Sheet(int frameSize, int columns, int rows, Func<int, float, float, Color> pixel, bool repeat = false)
-    {
-        int width = frameSize * columns, height = frameSize * rows;
-        var pixels = new Color32[width * height];
-        for (int frame = 0; frame < columns * rows; frame++)
-        {
-            int column = frame % columns;
-            int rowFromBottom = rows - 1 - frame / columns;
-            for (int y = 0; y < frameSize; y++)
-                for (int x = 0; x < frameSize; x++)
-                {
-                    Color c = pixel(frame, (x + 0.5f) / frameSize, (y + 0.5f) / frameSize);
-                    int px = column * frameSize + x;
-                    int py = rowFromBottom * frameSize + y;
-                    pixels[py * width + px] = new Color32(ToByte(c.R), ToByte(c.G), ToByte(c.B), ToByte(c.A));
-                }
-        }
-
-        var texture = new Texture2D((uint)width, (uint)height);
-        texture.SetData(new Memory<Color32>(pixels));
-        texture.GenerateMipmaps();
-        texture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
-        TextureWrap wrap = repeat ? TextureWrap.Repeat : TextureWrap.ClampToEdge;
-        texture.SetWrapModes(wrap, wrap);
-        return texture;
-    }
-
-    public static Texture2D SoftDot() => Texture(64, (u, v) =>
-    {
-        float r = Distance(u, v, 0.5f, 0.5f) * 2f;
-        return new Color(1f, 1f, 1f, MathF.Pow(Saturate(1f - r), 1.6f));
-    });
-
-    public static Texture2D Checker(int cells, Color a, Color b) => Texture(256, (u, v) =>
-        ((int)(u * cells) + (int)(v * cells)) % 2 == 0 ? a : b, true);
-
-    /// <summary>Thin grid lines over a base color, handy for showing scale on floors.</summary>
-    public static Texture2D Grid(Color background, Color line, int cells = 4) => Texture(256, (u, v) =>
-    {
-        float fu = u * cells % 1f, fv = v * cells % 1f;
-        float edge = MathF.Min(MathF.Min(fu, 1f - fu), MathF.Min(fv, 1f - fv));
-        float t = Saturate(1f - edge / 0.02f);
-        return Lerp(background, line, t);
-    }, true);
 
     /// <summary>Tileable value noise in 0 to 1.</summary>
     public static float Noise(float x, float y, int period)
@@ -935,19 +912,6 @@ public static class Sample
             cells *= 2;
         }
         return sum / total;
-    }
-
-    /// <summary>A tangent space normal map from a height function, tileable when the height is.</summary>
-    public static Texture2D NormalMap(int size, Func<float, float, float> height, float strength)
-    {
-        float step = 1f / size;
-        return Texture(size, (u, v) =>
-        {
-            float dx = (height(u + step, v) - height(u - step, v)) * strength;
-            float dy = (height(u, v + step) - height(u, v - step)) * strength;
-            Float3 n = Float3.Normalize(new Float3(-dx, -dy, 1f));
-            return new Color(n.X * 0.5f + 0.5f, n.Y * 0.5f + 0.5f, n.Z * 0.5f + 0.5f, 1f);
-        }, true);
     }
 
     private static float Hash(int x, int y, int period)
@@ -982,7 +946,6 @@ public static class Sample
 
     public static float Saturate(float x) => Math.Clamp(x, 0f, 1f);
     public static float Distance(float x0, float y0, float x1, float y1) => MathF.Sqrt((x0 - x1) * (x0 - x1) + (y0 - y1) * (y0 - y1));
-    private static byte ToByte(float x) => (byte)(Saturate(x) * 255f + 0.5f);
 
     // ----------------------------------------------------------------
     //  Paper widgets for the controls panel

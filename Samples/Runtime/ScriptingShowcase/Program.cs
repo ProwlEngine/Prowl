@@ -64,10 +64,7 @@ public sealed class ScriptingShowcaseGame : StationGame
         Add(sun);
 
         float length = StationSpacing * StationCount + 20f;
-        Material floor = Lit(Color.White, 0f, 0.9f);
-        floor.SetTexture("_MainTex", Grid(new Color(0.16f, 0.17f, 0.19f, 1f), new Color(0.3f, 0.32f, 0.36f, 1f)));
-        floor.SetVector("_Tiling", new Float2(length / 4f, 40f / 4f));
-        Add(Block("Floor", new Float3(length, 1f, 40f), floor, new Float3(StationSpacing * (StationCount - 1) * 0.5f, -0.5f, 0f)));
+        Add(Block("Floor", new Float3(length, 1f, 40f), Floor(length, 40f), new Float3(StationSpacing * (StationCount - 1) * 0.5f, -0.5f, 0f)));
 
         BuildLifecycle(StationCenter(0));
         BuildHierarchy(StationCenter(1));
@@ -278,8 +275,7 @@ public sealed class ScriptingShowcaseGame : StationGame
         _courier.Stops = pads;
         _courier.Colors = colors;
 
-        _canvas = Lit(new Color(0.4f, 0.4f, 0.4f, 1f), 0f, 0.9f);
-        _canvas.SetTexture("_MainTex", Checker(8, new Color(0.3f, 0.3f, 0.3f, 1f), new Color(0.6f, 0.6f, 0.6f, 1f)));
+        _canvas = Lit(new Color(0.4f, 0.4f, 0.4f, 1f), 0f, 0.9f).With("_MainTex", Load<Texture2D>("Textures/Checker"));
         Add(Model("Canvas", Mesh.CreateCube(new Float3(3f, 3f, 0.1f)), _canvas, c + new Float3(0f, 2.5f, 6f)));
     }
 

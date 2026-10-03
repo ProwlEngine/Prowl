@@ -14,7 +14,7 @@
 //   7  Instancing       thousands of renderers sharing a mesh and material
 //   8  Render textures  a second camera drawing into a texture shown on a monitor
 //
-// Every texture is generated in code, so nothing needs to be loaded from disk.
+// Textures and materials load from the sample's Assets folder.
 //
 // Controls:
 //   1 to 8      Jump to a station
@@ -85,10 +85,7 @@ public sealed class RenderingShowcaseGame : StationGame
         SampleScene.Fog.Mode = Scene.FogParams.FogMode.Off;
 
         float length = StationSpacing * StationCount + 30f;
-        Material floor = Lit(Color.White, 0f, 0.9f);
-        floor.SetTexture("_MainTex", Grid(new Color(0.16f, 0.17f, 0.19f, 1f), new Color(0.3f, 0.32f, 0.36f, 1f)));
-        floor.SetVector("_Tiling", new Float2(length / 4f, 60f / 4f));
-        Add(Block("Floor", new Float3(length, 1f, 60f), floor, new Float3(StationSpacing * (StationCount - 1) * 0.5f, -0.5f, 0f)));
+        Add(Block("Floor", new Float3(length, 1f, 60f), Floor(length, 60f), new Float3(StationSpacing * (StationCount - 1) * 0.5f, -0.5f, 0f)));
 
         BuildMaterials(StationCenter(0));
         BuildSurfaceMaps(StationCenter(1));
@@ -219,8 +216,6 @@ public sealed class RenderingShowcaseGame : StationGame
 
     private Material _bricks = null!;
     private Material _panel = null!;
-    private Texture2D _brickNormals = null!;
-    private Texture2D _panelNormals = null!;
     private bool _normalMaps = true;
     private float _parallax = 0.04f;
 
@@ -228,65 +223,20 @@ public sealed class RenderingShowcaseGame : StationGame
     {
         AddStation("Surface maps", "Three panels built from generated textures. Bricks use albedo, a normal map and a parallax height map. The panel is worn paint over metal, with metallic and roughness painted into its surface texture. The last one glows from an emission map.", c, new Float3(0f, 2.5f, -8f), 1.8f);
 
-        // Bricks: the height function drives the albedo, the normal map and the parallax map.
-        static float BrickHeight(float u, float v)
-        {
-            float rows = 8f, columns = 4f;
-            float row = MathF.Floor(v * rows);
-            float x = u * columns + (row % 2f) * 0.5f;
-            float fu = x - MathF.Floor(x), fv = v * rows - row;
-            float edge = MathF.Min(MathF.Min(fu, 1f - fu) * 2.5f, MathF.Min(fv, 1f - fv) * 1.2f);
-            float mortar = Saturate(edge / 0.08f);
-            return mortar * (0.85f + Fractal(u, v, 16, 3) * 0.15f);
-        }
-
-        Texture2D brickAlbedo = Texture(256, (u, v) =>
-        {
-            float h = BrickHeight(u, v);
-            float tone = Fractal(u, v, 8, 4);
-            Color brick = new(0.55f + tone * 0.2f, 0.22f + tone * 0.08f, 0.15f, 1f);
-            return Lerp(new Color(0.45f, 0.43f, 0.4f, 1f), brick, Saturate(h * 1.5f));
-        }, true);
-        _brickNormals = NormalMap(256, BrickHeight, 6f);
-        Texture2D brickHeight = Texture(256, (u, v) => { float h = BrickHeight(u, v); return new Color(h, h, h, 1f); }, true);
-
-        _bricks = Lit(Color.White, 0f, 0.9f);
-        _bricks.SetTexture("_MainTex", brickAlbedo);
-        _bricks.SetTexture("_NormalTex", _brickNormals);
-        _bricks.SetTexture("_ParallaxMap", brickHeight);
+        _bricks = Lit(Color.White, 0f, 0.9f)
+            .With("_MainTex", Load<Texture2D>("Textures/Bricks"))
+            .With("_NormalTex", Load<Texture2D>("Textures/Bricks Normal"))
+            .With("_ParallaxMap", Load<Texture2D>("Textures/Bricks Height"));
         _bricks.SetFloat("_Parallax", _parallax);
         Add(Model("Bricks", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), _bricks, c + new Float3(-3f, 1.6f, 0f)));
 
-        // Worn panel: paint where the noise is high, bare metal where it has worn through.
-        static float Wear(float u, float v) => Fractal(u, v, 4, 5);
-        Texture2D panelAlbedo = Texture(256, (u, v) =>
-            Wear(u, v) > 0.45f ? new Color(0.1f, 0.35f, 0.6f, 1f) : new Color(0.75f, 0.75f, 0.78f, 1f), true);
-        Texture2D panelSurface = Texture(256, (u, v) =>
-        {
-            bool painted = Wear(u, v) > 0.45f;
-            float scratch = Fractal(u * 4f, v * 0.25f, 8, 3);
-            return new Color(0f, painted ? 0.6f : 0.2f + scratch * 0.3f, painted ? 0f : 1f, 1f);
-        }, true);
-        _panelNormals = NormalMap(256, (u, v) => Saturate((Wear(u, v) - 0.4f) * 10f), 2f);
-
-        _panel = Lit(Color.White, 1f, 1f);
-        _panel.SetTexture("_MainTex", panelAlbedo);
-        _panel.SetTexture("_SurfaceTex", panelSurface);
-        _panel.SetTexture("_NormalTex", _panelNormals);
+        _panel = Lit(Color.White, 1f, 1f)
+            .With("_MainTex", Load<Texture2D>("Textures/Worn Panel"))
+            .With("_SurfaceTex", Load<Texture2D>("Textures/Worn Panel Surface"))
+            .With("_NormalTex", Load<Texture2D>("Textures/Worn Panel Normal"));
         Add(Model("Worn Panel", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), _panel, c + new Float3(0f, 1.6f, 0f)));
 
-        // Circuit: thin glowing traces from an emission map over a dark board.
-        Texture2D circuit = Texture(256, (u, v) =>
-        {
-            float gx = u * 8f % 1f, gy = v * 8f % 1f;
-            bool trace = (MathF.Abs(gx - 0.5f) < 0.04f && Fractal(MathF.Floor(u * 8f) / 8f, v, 4, 1) > 0.5f)
-                      || (MathF.Abs(gy - 0.5f) < 0.04f && Fractal(u, MathF.Floor(v * 8f) / 8f, 4, 1) > 0.5f);
-            bool pad = Distance(gx, gy, 0.5f, 0.5f) < 0.1f;
-            return trace || pad ? new Color(0.2f, 1f, 0.7f, 1f) : Color.Black;
-        }, true);
-        Material board = Lit(new Color(0.02f, 0.05f, 0.03f, 1f), 0f, 0.4f).Emissive(Color.White, 4f);
-        board.SetTexture("_EmissionTex", circuit);
-        Add(Model("Circuit", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), board, c + new Float3(3f, 1.6f, 0f)));
+        Add(Model("Circuit", Mesh.CreateCube(new Float3(2.5f, 2.5f, 0.2f)), Lit(new Color(0.02f, 0.05f, 0.03f, 1f), 0f, 0.4f).Emissive(Color.White, 4f).With("_EmissionTex", Load<Texture2D>("Textures/Circuit Emission")), c + new Float3(3f, 1.6f, 0f)));
     }
 
     private void SurfaceControls(Paper paper, FontFile font)
@@ -296,8 +246,8 @@ public sealed class RenderingShowcaseGame : StationGame
         {
             _normalMaps = v;
             Texture2D flat = Texture2D.LoadDefault(DefaultTexture.Normal);
-            _bricks.SetTexture("_NormalTex", v ? _brickNormals : flat);
-            _panel.SetTexture("_NormalTex", v ? _panelNormals : flat);
+            _bricks.SetTexture("_NormalTex", v ? Load<Texture2D>("Textures/Bricks Normal") : flat);
+            _panel.SetTexture("_NormalTex", v ? Load<Texture2D>("Textures/Worn Panel Normal") : flat);
         });
         Slider(paper, font, "Parallax height", _parallax, 0f, 0.1f, v => { _parallax = v; _bricks.SetFloat("_Parallax", v); }, "0.000");
     }
@@ -310,26 +260,10 @@ public sealed class RenderingShowcaseGame : StationGame
     {
         AddStation("Transparency", "Leaf cards use the cutout shader, which drops pixels below an alpha threshold and still casts shaped shadows. The colored panes blend with the transparent shader, the flag is a double sided plane, and the sphere bends what is behind it with the refraction shader.", c, new Float3(0f, 2.5f, -9f), 1.5f);
 
-        Material checker = Lit(Color.White, 0f, 0.8f);
-        checker.SetTexture("_MainTex", Checker(8, new Color(0.1f, 0.1f, 0.1f, 1f), new Color(0.8f, 0.8f, 0.8f, 1f)));
-        Add(Model("Checker Wall", Mesh.CreateCube(new Float3(12f, 4f, 0.2f)), checker, c + new Float3(0f, 2f, 3f)));
+        Add(Model("Checker Wall", Mesh.CreateCube(new Float3(12f, 4f, 0.2f)), Lit(Color.White, 0f, 0.8f).With("_MainTex", Load<Texture2D>("Textures/Checker")), c + new Float3(0f, 2f, 3f)));
 
         // Cutout leaves on crossed cards.
-        Texture2D leaves = Texture(256, (u, v) =>
-        {
-            float a = 0f;
-            for (int i = 0; i < 9; i++)
-            {
-                float cx = 0.2f + (i % 3) * 0.3f + (Fractal(i * 0.1f, 0.3f, 4, 1) - 0.5f) * 0.1f;
-                float cy = 0.2f + (i / 3) * 0.3f + (Fractal(0.7f, i * 0.1f, 4, 1) - 0.5f) * 0.1f;
-                float dx = (u - cx) / 0.08f, dy = (v - cy) / 0.14f;
-                a = MathF.Max(a, 1f - (dx * dx + dy * dy));
-            }
-            float tone = Fractal(u, v, 8, 3);
-            return new Color(0.15f + tone * 0.15f, 0.45f + tone * 0.25f, 0.1f, a > 0f ? 1f : 0f);
-        });
-        Material leafMaterial = Lit(Color.White, 0f, 0.7f, DefaultShader.StandardCutoutDoubleSided);
-        leafMaterial.SetTexture("_MainTex", leaves);
+        Material leafMaterial = Lit(Color.White, 0f, 0.7f, DefaultShader.StandardCutoutDoubleSided).With("_MainTex", Load<Texture2D>("Textures/Leaves"));
         leafMaterial.SetFloat("_AlphaCutoff", 0.5f);
         for (int i = 0; i < 2; i++)
             Add(Model("Leaf Card", Plane(3f, 3f), leafMaterial, c + new Float3(-4f, 1.5f, 0f), new Float3(90f, 45f + i * 90f, 0f)));
@@ -341,10 +275,8 @@ public sealed class RenderingShowcaseGame : StationGame
                 c + new Float3(-1.2f + i * 0.5f, 1f, -0.5f + i * 0.6f), new Float3(0f, 20f, 0f)));
 
         // A double sided flag, readable from both sides.
-        Material flag = Lit(Color.White, 0f, 0.8f, DefaultShader.StandardDoubleSided);
-        flag.SetTexture("_MainTex", Texture(128, (u, v) => v > 0.5f ? new Color(0.8f, 0.1f, 0.05f, 1f) : new Color(0.9f, 0.9f, 0.85f, 1f)));
         Add(Model("Flag Pole", Mesh.CreateCylinder(0.04f, 3f, 8), _dark, c + new Float3(1.8f, 1.5f, 0f)));
-        Add(Model("Flag", Plane(1.6f, 1f), flag, c + new Float3(2.6f, 2.4f, 0f), new Float3(-90f, 0f, 0f)));
+        Add(Model("Flag", Plane(1.6f, 1f), Lit(Color.White, 0f, 0.8f, DefaultShader.StandardDoubleSided).With("_MainTex", Load<Texture2D>("Textures/Flag")), c + new Float3(2.6f, 2.4f, 0f), new Float3(-90f, 0f, 0f)));
 
         // Refraction bends the scene behind the sphere.
         var refraction = new Material(Shader.LoadDefault(DefaultShader.Refraction));
