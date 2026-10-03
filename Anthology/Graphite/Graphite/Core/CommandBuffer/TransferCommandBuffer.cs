@@ -71,6 +71,41 @@ public abstract partial class TransferCommandBuffer : CommandBufferBase
         UpdateTextureCore(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
     }
 
+    /// <summary>
+    /// Updates a texture region from a pointer.
+    /// </summary>
+    public void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, in TextureRegion region)
+    {
+        UpdateTexture(
+            texture,
+            source,
+            sizeInBytes,
+            region.X, region.Y, region.Z,
+            region.Width, region.Height, region.Depth,
+            region.MipLevel, region.ArrayLayer);
+    }
+
+    /// <summary>
+    /// Updates a texture region from a span.
+    /// </summary>
+    public void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source, in TextureRegion region) where T : unmanaged
+    {
+        UpdateTexture(
+            texture,
+            source,
+            region.X, region.Y, region.Z,
+            region.Width, region.Height, region.Depth,
+            region.MipLevel, region.ArrayLayer);
+    }
+
+    /// <summary>
+    /// Replaces all of mip 0, layer 0 with the span.
+    /// </summary>
+    public void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source) where T : unmanaged
+    {
+        UpdateTexture(texture, source, TextureRegion.Whole(texture));
+    }
+
     private protected abstract void UpdateTextureCore(
         Texture texture,
         IntPtr source,
