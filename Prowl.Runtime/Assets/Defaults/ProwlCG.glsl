@@ -383,18 +383,18 @@ vec3 prowlSky(vec3 view, vec3 sun, float sunGlow)
     float mu = max(view.y, 0.0), nu = dot(view, sun);
 
     // Air along the sun's path and the view's, and the light left after each
-    float sunAir = 1.021 / (up + 0.020977);
-    float viewAir = 1.021 / (mu + 0.020977);
-    vec3 sunT = exp(-vec3(0.084541, 0.1669, 0.3645) * sunAir);
-    vec3 viewT = exp(-vec3(0.050494, 0.10431, 0.27962) * viewAir);
+    float sunAir = 1.0279 / (up + 0.027943);
+    float viewAir = 1.0279 / (mu + 0.027943);
+    vec3 sunT = exp(-vec3(0.088977, 0.16327, 0.31751) * sunAir);
+    vec3 viewT = exp(-vec3(0.046745, 0.097582, 0.24505) * viewAir);
 
     // Single scattering from the average sunlight along the view, filtered by ozone
-    vec3 h = vec3(0.030616, 0.055593, 0.12392) * (viewAir - sunAir);
+    vec3 h = vec3(0.026626, 0.055859, 0.13174) * (viewAir - sunAir);
     vec3 lit = 0.5 * (sunT + viewT) * inversesqrt(1.0 + 0.8839 * h * h);
-    vec3 ozone = exp(-vec3(-0.0034039, 0.0099811, 0.0044447) * sunAir);
-    float spread = inversesqrt(1.5956 - 1.5435 * nu);
-    float glow = 0.00011462 * sunGlow * spread * spread * spread;
-    vec3 single = ozone * lit * viewAir * (vec3(0.0015611, 0.0035877, 0.01096) * (1.0 + nu * nu) + glow);
+    vec3 ozone = exp(-vec3(-0.0026066, 0.01647, 0.0064102) * sunAir);
+    float spread = inversesqrt(1.6156 - 1.5692 * nu);
+    float glow = 0.00010368 * sunGlow * spread * spread * spread;
+    vec3 single = ozone * lit * viewAir * (vec3(0.001631, 0.0038803, 0.010984) * (1.0 + nu * nu) + glow);
 
     float shade = 0.0;
     if (dep > 0.0)
@@ -408,14 +408,14 @@ vec3 prowlSky(vec3 view, vec3 sun, float sunGlow)
         shade = strength * (1.0 - sunlit);
 
         // Twilight fade and colour shift
-        vec3 depth = dep * (vec3(-0.11392 + 0.62889 * dep) + vec3(0.2927, 0.25719, -0.0047186));
+        vec3 depth = dep * (vec3(0.72954 + 0.20683 * dep) + vec3(0.15423, 0.11361, -0.012866));
         single *= exp(-depth) * (1.0 - shade) * (1.0 + band * vec3(0.0, -0.4, -0.2));
     }
 
     // Light that bounced more than once, levelling off along long views, lighter and purple inside the shadow
-    vec3 bounce = vec3(0.029856, 0.034466, 0.034878) * (up + 0.032848) * exp(-(vec3(3.0947) + vec3(0.016992, 0.48159, -0.060275)) * dep);
+    vec3 bounce = vec3(0.031648, 0.033978, 0.03542) * (up + 0.022059) * exp(-(vec3(1.8692) + vec3(-0.0023863, 0.020262, 0.05909)) * dep);
     bounce *= 1.0 + shade * vec3(4.0, 1.0, 2.0);
-    return (single + bounce * (1.0 - viewT)) * 1.7516;
+    return (single + bounce * (1.0 - viewT)) * 1.7557;
 }
 
 // ----------------------------------------------------------------------------
