@@ -447,7 +447,7 @@ public sealed class MeshBuilder
         _vertices.AddRange([a, b, c, d]);
         _uvs.AddRange([ua, ub, uc, ud]);
 
-        bool flip = Float3.Dot(Float3.Cross(b - a, c - a), facing) < 0f;
+        bool flip = Float3.Dot(Float3.Cross(c - a, d - b), facing) < 0f;
         if (flip) _indices.AddRange([i, i + 2, i + 1, i, i + 3, i + 2]);
         else _indices.AddRange([i, i + 1, i + 2, i, i + 2, i + 3]);
     }

@@ -11,9 +11,9 @@ using static Prowl.Samples.Sample;
 namespace VehicleShowcase;
 
 /// <summary>
-/// The world the vehicles drive around. North of the car park is the asphalt circuit, with a drift pad, a bowling
-/// lane and a seesaw inside it; south is the dirt rally track. West are the rough ground, the hill climb and the ice
-/// rink; east are the jumps and the moving platforms.
+/// The world the vehicles drive around. North of the car park is the asphalt circuit with the hill climb inside it,
+/// and south is the dirt rally track with the moving platforms inside it. West are the rough ground and the ice rink,
+/// east are the jumps.
 /// </summary>
 public sealed partial class VehicleShowcaseGame
 {
@@ -26,16 +26,13 @@ public sealed partial class VehicleShowcaseGame
         BuildCarPark(Float3.Zero);
         BuildCircuit(new Float3(0f, 0f, 50f));
         BuildDirtTrack(new Float3(0f, 0f, -150f));
-        BuildDriftPad(new Float3(-60f, 0f, 150f));
-        BuildBowling(new Float3(60f, 0f, 130f));
-        BuildSeesaw(new Float3(0f, 0f, 205f));
-        BuildRoughGround(new Float3(-320f, 0f, 0f));
-        BuildHillClimb(new Float3(-320f, 0f, 140f));
-        BuildIceRink(new Float3(-260f, 0f, -170f));
-        BuildJumps(new Float3(320f, 0f, -40f));
-        BuildTurntable(new Float3(235f, 0f, -100f));
-        BuildFerry(new Float3(275f, 0f, -170f));
-        BuildLift(new Float3(215f, 0f, -200f));
+        BuildRoughGround(new Float3(-168.3f, 0f, -49.1f));
+        BuildHillClimb(new Float3(3.5f, 0f, 87.7f));
+        BuildIceRink(new Float3(-89.9f, 0f, -49.9f));
+        BuildJumps(new Float3(130.6f, 0f, -10f));
+        BuildTurntable(new Float3(12f, 0f, -131.1f));
+        BuildFerry(new Float3(11.6f, 0f, -179f), 75f);
+        BuildLift(new Float3(-19.1f, 0f, -142f), 75f);
     }
 
     // ----------------------------------------------------------------
@@ -60,13 +57,14 @@ public sealed partial class VehicleShowcaseGame
     }
 
     /// <summary>
-    /// A solid ramp running along Z from <paramref name="z0"/> to <paramref name="z1"/>, its top rising from
-    /// <paramref name="h0"/> to <paramref name="h1"/> above <paramref name="baseY"/>, with a mesh collider to drive on.
+    /// A solid ramp placed at <paramref name="origin"/> turned <paramref name="yaw"/> degrees, running along its Z
+    /// from <paramref name="z0"/> to <paramref name="z1"/> at <paramref name="x"/>, its top rising from
+    /// <paramref name="h0"/> to <paramref name="h1"/>, with a mesh collider to drive on.
     /// </summary>
-    private GameObject Wedge(string name, float x, float z0, float z1, float h0, float h1, float width, Material material, float baseY = 0f)
+    private GameObject Wedge(string name, Float3 origin, float yaw, float x, float z0, float z1, float h0, float h1, float width, Material material)
     {
         float half = width * 0.5f;
-        Float3 P(float side, float z, float h) => new(x + side * half, baseY + h, z);
+        Float3 P(float side, float z, float h) => new(x + side * half, h, z);
         float length = MathF.Abs(z1 - z0);
         var builder = new MeshBuilder();
         Float3 slope = Float3.Normalize(new Float3(0f, z1 - z0, -(h1 - h0)));
@@ -80,7 +78,7 @@ public sealed partial class VehicleShowcaseGame
         builder.Quad(P(-1, z1, 0f), P(1, z1, 0f), P(1, z1, h1), P(-1, z1, h1), default, default, default, default, new Float3(0f, 0f, -end0));
 
         Mesh mesh = builder.Build();
-        GameObject go = Model(name, mesh, material, Float3.Zero);
+        GameObject go = Model(name, mesh, material, origin, new Float3(0f, yaw, 0f));
         go.AddComponent<MeshCollider>().Mesh = mesh;
         return Add(go);
     }
@@ -98,7 +96,7 @@ public sealed partial class VehicleShowcaseGame
     {
         for (int i = 0; i < 6; i++)
             Static("Bump", new Float3(6f, 0.2f, 0.4f), c + new Float3(-12f, 0.1f, 4f + i * 1.6f), material: _stone);
-        Static("Kicker", new Float3(5f, 0.4f, 6f), c + new Float3(14f, 0.7f, 8f), new Float3(-12f, 0f, 0f), _stone);
+        Static("Kicker", new Float3(24f, 0.4f, 8.7f), c + new Float3(26.2f, 0.67f, 8.3f), new Float3(-12f, 0f, 0f), _stone);
         for (int i = 0; i < 12; i++)
             Crate(c + new Float3(Range(-16f, -6f), 0.3f, Range(16f, 28f)), new Float3(0.6f), RandomColor());
         for (int i = 0; i < 5; i++)
@@ -234,58 +232,7 @@ public sealed partial class VehicleShowcaseGame
     }
 
     // ----------------------------------------------------------------
-    //  Inside the circuit
-    // ----------------------------------------------------------------
-
-    // A wide pad with a ring painted on it, for drifting circles round the pole in the middle.
-    private void BuildDriftPad(Float3 c)
-    {
-        Material asphalt = Textured("Textures/Asphalt", Color.White, 0.85f, 6f);
-        Add(Model("Drift Pad", Mesh.CreateCube(new Float3(56f, 0.06f, 56f)), asphalt, c + new Float3(0f, 0.03f, 0f)));
-        Add(Model("Drift Ring", Mesh.CreateCylinder(16f, 0.02f, 64), Lit(new Color(0.75f, 0.75f, 0.7f, 1f), 0f, 0.6f), c + new Float3(0f, 0.065f, 0f)));
-        Add(Model("Drift Ring Inside", Mesh.CreateCylinder(15.6f, 0.02f, 64), asphalt, c + new Float3(0f, 0.07f, 0f)));
-        Static("Drift Pole", new Float3(0.5f, 3f, 0.5f), c + new Float3(0f, 1.5f, 0f), material: Lit(Orange).Emissive(Orange, 1.5f));
-    }
-
-    // A lane with ten pins at the end of it.
-    private void BuildBowling(Float3 c)
-    {
-        Add(Model("Bowling Lane", Mesh.CreateCube(new Float3(8f, 0.06f, 60f)), Textured("Textures/Asphalt", new Color(0.6f, 0.45f, 0.3f, 1f), 0.5f, 4f), c + new Float3(0f, 0.03f, 0f)));
-        Material pin = Lit(new Color(0.85f, 0.85f, 0.82f, 1f), 0f, 0.3f);
-        Material stripe = Lit(new Color(0.6f, 0.02f, 0.02f, 1f), 0f, 0.4f);
-        for (int row = 0; row < 4; row++)
-            for (int i = 0; i <= row; i++)
-            {
-                Float3 at = c + new Float3((i - row * 0.5f) * 1.1f, 0.75f, 24f + row * 1.0f);
-                GameObject go = Model("Pin", Mesh.CreateCylinder(0.25f, 1.5f, 12), pin, at);
-                Part(go, Model("Stripe", Mesh.CreateCylinder(0.26f, 0.15f, 12), stripe, Float3.Zero), new Float3(0f, 0.45f, 0f));
-                var rb = go.AddComponent<Rigidbody3D>();
-                var collider = go.AddComponent<CylinderCollider>();
-                collider.Radius = 0.25f;
-                collider.Height = 1.5f;
-                Add(go);
-                rb.Mass = 6f;
-            }
-    }
-
-    // A long plank on a hinge: drive up one end and it tips you down the other.
-    private void BuildSeesaw(Float3 c)
-    {
-        Static("Seesaw Pivot", new Float3(4f, 0.8f, 0.8f), c + new Float3(0f, 0.5f, 0f), new Float3(45f, 0f, 0f), _stone);
-        GameObject plank = Model("Seesaw", Mesh.CreateCube(new Float3(5f, 0.3f, 18f)), Grid(new Color(0.5f, 0.35f, 0.15f, 1f)), c + new Float3(0f, 1.25f, 0f));
-        var rb = plank.AddComponent<Rigidbody3D>();
-        plank.AddComponent<BoxCollider>().Size = new Float3(5f, 0.3f, 18f);
-        Add(plank);
-        rb.Mass = 500f;
-        var hinge = plank.AddComponent<HingeJoint>();
-        hinge.Anchor = Float3.Zero;
-        hinge.Axis = Float3.UnitX;
-        hinge.MinAngle = -8f;
-        hinge.MaxAngle = 8f;
-    }
-
-    // ----------------------------------------------------------------
-    //  West
+    //  Off road
     // ----------------------------------------------------------------
 
     private void BuildRoughGround(Float3 c)
@@ -323,12 +270,12 @@ public sealed partial class VehicleShowcaseGame
         float[] angles = [10f, 20f, 30f, 45f];
         for (int i = 0; i < angles.Length; i++)
         {
-            float x = c.X + (i - 1.5f) * 13f;
+            float x = (i - 1.5f) * 13f;
             float climb = Height / MathF.Tan(angles[i] * MathF.PI / 180f);
             Material material = Grid(Palette[(i + 1) % Palette.Length] * 0.8f);
-            Wedge($"Climb {angles[i]}", x, c.Z, c.Z + climb, 0f, Height, 10f, material);
-            Wedge("Hill Top", x, c.Z + climb, c.Z + climb + 14f, Height, Height, 10f, material);
-            Wedge("Hill Descent", x, c.Z + climb + 14f, c.Z + climb + 14f + Height / MathF.Tan(12f * MathF.PI / 180f), Height, 0f, 10f, material);
+            Wedge($"Climb {angles[i]}", c, 0f, x, 0f, climb, 0f, Height, 10f, material);
+            Wedge("Hill Top", c, 0f, x, climb, climb + 14f, Height, Height, 10f, material);
+            Wedge("Hill Descent", c, 0f, x, climb + 14f, climb + 14f + Height / MathF.Tan(12f * MathF.PI / 180f), Height, 0f, 10f, material);
         }
     }
 
@@ -363,31 +310,29 @@ public sealed partial class VehicleShowcaseGame
     }
 
     // ----------------------------------------------------------------
-    //  East
+    //  Jumps and platforms
     // ----------------------------------------------------------------
 
-    // A long straight of jumps getting bigger, each with a long run up, a gap to clear and a sloped landing, then a
-    // tabletop. Hold Shift on the run up to clear the big ones.
+    // Four jumps side by side, each in its own lane with a long run up: three ramps of rising steepness with a gap to
+    // clear and a sloped landing, and a tabletop. Hold Shift on the run up to clear the big ones.
     private void BuildJumps(Float3 c)
     {
         Material ramp = Grid(new Color(0.45f, 0.45f, 0.5f, 1f));
         Material landing = Grid(new Color(0.3f, 0.32f, 0.36f, 1f));
-        float z = c.Z;
-        foreach ((float angle, float gap) in new[] { (10f, 14f), (14f, 22f), (18f, 32f) })
+        foreach ((float x, float angle, float gap) in new[] { (0f, 10f, 14f), (15.4f, 14f, 22f), (31.1f, 18f, 32f) })
         {
             float rise = 12f * MathF.Sin(angle * MathF.PI / 180f);
             float run = 12f * MathF.Cos(angle * MathF.PI / 180f);
-            Wedge("Ramp", c.X, z, z + run, 0f, rise, 10f, ramp);
-            z += run + gap;
-            Wedge("Landing", c.X, z, z + rise / MathF.Tan(angle * 0.6f * MathF.PI / 180f), rise * 0.8f, 0f, 12f, landing);
-            z += rise / MathF.Tan(angle * 0.6f * MathF.PI / 180f) + 70f;
+            float land = run + gap;
+            Wedge("Ramp", c, 0f, x, 0f, run, 0f, rise, 10f, ramp);
+            Wedge("Landing", c, 0f, x, land, land + rise / MathF.Tan(angle * 0.6f * MathF.PI / 180f), rise * 0.8f, 0f, 12f, landing);
         }
 
         // Tabletop: up, a long flat top to land on, and down.
-        const float Table = 3f;
-        Wedge("Table Ramp", c.X, z, z + 14f, 0f, Table, 10f, ramp);
-        Wedge("Table", c.X, z + 14f, z + 44f, Table, Table, 10f, landing);
-        Wedge("Table Descent", c.X, z + 44f, z + 64f, Table, 0f, 10f, ramp);
+        const float Table = 3f, TableLane = 50.9f;
+        Wedge("Table Ramp", c, 0f, TableLane, 0f, 14f, 0f, Table, 10f, ramp);
+        Wedge("Table", c, 0f, TableLane, 14f, 44f, Table, Table, 10f, landing);
+        Wedge("Table Descent", c, 0f, TableLane, 44f, 64f, Table, 0f, 10f, ramp);
     }
 
     // A round platform turning slowly. Drive on and park to be carried round.
@@ -404,40 +349,42 @@ public sealed partial class VehicleShowcaseGame
         Add(table);
     }
 
-    // Two raised docks with a ferry shuttling between them across the gap. Wait on a dock for the ferry, drive on
-    // and it carries you over.
-    private void BuildFerry(Float3 c)
+    // Two raised docks with a ferry shuttling between them across the gap, the whole crossing turned to face
+    // yaw. Wait on a dock for the ferry, drive on and it carries you over.
+    private void BuildFerry(Float3 c, float yaw)
     {
         const float Deck = 2f, Gap = 46f, DockLength = 14f;
+        Quaternion turn = Quaternion.FromEuler(new Float3(0f, yaw, 0f));
         Material dock = Grid(new Color(0.4f, 0.3f, 0.2f, 1f));
         foreach (float side in new[] { -1f, 1f })
         {
-            float inner = c.Z + side * Gap * 0.5f;
+            float inner = side * Gap * 0.5f;
             float outer = inner + side * DockLength;
-            Wedge("Dock", c.X, inner, outer, Deck, Deck, 12f, dock);
-            Wedge("Dock Ramp", c.X, outer, outer + side * 14f, Deck, 0f, 12f, dock);
+            Wedge("Dock", c, yaw, 0f, inner, outer, Deck, Deck, 12f, dock);
+            Wedge("Dock Ramp", c, yaw, 0f, outer, outer + side * 14f, Deck, 0f, 12f, dock);
         }
 
-        GameObject ferry = Model("Ferry", Mesh.CreateCube(new Float3(10f, 0.4f, 12f)), Grid(new Color(0.55f, 0.1f, 0.05f, 1f)), new Float3(c.X, Deck - 0.2f, c.Z + Gap * 0.5f - 6.2f));
+        // The ferry starts against one dock and travels along the crossing, so its path turns with it.
+        GameObject ferry = Model("Ferry", Mesh.CreateCube(new Float3(10f, 0.4f, 12f)), Grid(new Color(0.55f, 0.1f, 0.05f, 1f)), c + turn * new Float3(0f, Deck - 0.2f, Gap * 0.5f - 6.2f), new Float3(0f, yaw, 0f));
         var body = ferry.AddComponent<Rigidbody3D>();
         body.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
         ferry.AddComponent<BoxCollider>().Size = new Float3(10f, 0.4f, 12f);
         var mover = ferry.AddComponent<MovingPlatform>();
-        mover.Travel = new Float3(0f, 0f, -(Gap - 12.4f));
+        mover.Travel = turn * new Float3(0f, 0f, -(Gap - 12.4f));
         mover.Speed = 4f;
         mover.Wait = 5f;
         Add(ferry);
     }
 
-    // A lift that carries a vehicle up to a high deck, with a long ramp back down.
-    private void BuildLift(Float3 c)
+    // A lift that carries a vehicle up to a high deck, with a long ramp back down, turned to face yaw.
+    private void BuildLift(Float3 c, float yaw)
     {
         const float High = 8f;
         Material deck = Grid(new Color(0.35f, 0.35f, 0.4f, 1f));
-        Wedge("High Deck", c.X, c.Z - 4f, c.Z - 16f, High, High, 12f, deck);
-        Wedge("High Deck Ramp", c.X, c.Z - 16f, c.Z - 76f, High, 0f, 10f, deck);
+        Wedge("High Deck", c, yaw, 0f, -4f, -16f, High, High, 12f, deck);
+        Wedge("High Deck Ramp", c, yaw, 0f, -16f, -76f, High, 0f, 10f, deck);
 
-        GameObject lift = Model("Lift", Mesh.CreateCube(new Float3(9f, 0.4f, 8f)), Grid(new Color(0.7f, 0.55f, 0.05f, 1f)), new Float3(c.X, 0.2f, c.Z));
+        GameObject lift = Model("Lift", Mesh.CreateCube(new Float3(9f, 0.4f, 8f)), Grid(new Color(0.7f, 0.55f, 0.05f, 1f)), c + new Float3(0f, 0.2f, 0f), new Float3(0f, yaw, 0f));
         var body = lift.AddComponent<Rigidbody3D>();
         body.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
         lift.AddComponent<BoxCollider>().Size = new Float3(9f, 0.4f, 8f);

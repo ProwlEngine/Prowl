@@ -7,7 +7,7 @@
 // Six vehicles built on WheelColliders, all parked in one world: a sports car, a rally buggy, a monster truck,
 // a go-kart, a six wheeled army truck and a motorcycle. The bar along the bottom picks which one you drive.
 // Around the car park are an asphalt circuit and a dirt rally track with lap timers, rough ground, a hill climb,
-// an ice rink, a row of jumps, a turntable, a ferry, a lift, a drift pad, bowling pins and a seesaw.
+// an ice rink, four jumps side by side, a turntable, a ferry and a lift.
 //
 // The vehicle controllers live in their own files and depend on nothing else here, so they can be copied into
 // a project as they are:
@@ -135,7 +135,7 @@ public sealed partial class VehicleShowcaseGame : StationGame
         BuildVehicles();
 
         var marks = new GameObject("Skidmarks");
-        marks.AddComponent<MeshRenderer>().Material = Lit(new Color(1f, 1f, 1f, 0.85f), 0f, 0.9f, DefaultShader.StandardTransparent).With("_MainTex", Load<Texture2D>("Textures/Skidmark"));
+        marks.AddComponent<MeshRenderer>().Material = Lit(new Color(0.02f, 0.02f, 0.02f, 0.6f), 0f, 0.9f, DefaultShader.StandardTransparent);
         _skidmarks = marks.AddComponent<Skidmarks>();
         foreach (Vehicle vehicle in _vehicles) _skidmarks.Track(vehicle.Body, vehicle.Wheels);
         Add(marks);
@@ -146,6 +146,10 @@ public sealed partial class VehicleShowcaseGame : StationGame
         tyreSpray.ChipTexture = Load<Texture2D>("Textures/Soft Dot");
         foreach (Vehicle vehicle in _vehicles) tyreSpray.Track(vehicle.Wheels);
         Add(spray);
+
+        var speedometer = new GameObject("Speedometer");
+        speedometer.AddComponent<SpeedometerHud>().Game = this;
+        Add(speedometer);
     }
 
     /// <summary>Parks a vehicle in the world and gives it a slot in the bar along the bottom.</summary>
@@ -339,9 +343,6 @@ public sealed partial class VehicleShowcaseGame : StationGame
 
     public override void DrawControls(Paper paper, FontFile font)
     {
-        using (paper.Box("speedometer").Height(190).Enter())
-            paper.Draw((canvas, rect) => DrawSpeedometer(canvas, rect, font));
-
         if (_current.Car.IsValid()) CarControls(paper, font, _current, _current.Car!);
         else BikeControls(paper, font, _current, _current.Bike!);
 
@@ -402,6 +403,20 @@ public sealed partial class VehicleShowcaseGame : StationGame
         Slider(paper, font, "Damping", first.SuspensionDampingRatio, 0.1f, 1.5f, v => { foreach (WheelCollider w in vehicle.Wheels) w.SuspensionDampingRatio = v; });
         Slider(paper, font, "Suspension travel", first.SuspensionDistance, 0.03f, 1f, v => { foreach (WheelCollider w in vehicle.Wheels) w.SuspensionDistance = v; });
         Slider(paper, font, "Mass", vehicle.Body.Mass, vehicle.BaseMass * 0.4f, vehicle.BaseMass * 2.5f, v => { vehicle.Body.Mass = v; foreach (WheelCollider w in vehicle.Wheels) w.Recalculate(); }, "0");
+    }
+
+    /// <summary>Floats the speedometer in the bottom left corner, above the vehicle bar, while the HUD shows.</summary>
+    internal void DrawSpeedometer(Paper paper)
+    {
+        FontFile? font = FontAsset.LoadDefault().FontFile;
+        if (font == null || !Hud.Visible) return;
+
+        using (paper.Box("speedometer")
+            .PositionType(PositionType.SelfDirected)
+            .AnchorLeft(20).AnchorBottom(84).Width(220).Height(190)
+            .IsNotInteractable()
+            .Enter())
+            paper.Draw((canvas, rect) => DrawSpeedometer(canvas, rect, font));
     }
 
     private void DrawSpeedometer(Prowl.Quill.Canvas canvas, Rect rect, FontFile font)
@@ -507,4 +522,12 @@ public sealed class LapTimer : MonoBehaviour
     }
 
     public static string Format(float seconds) => seconds <= 0f ? "--" : $"{(int)(seconds / 60f)}:{seconds % 60f:00.00}";
+}
+
+/// <summary>Draws the showcase's speedometer over the scene.</summary>
+public sealed class SpeedometerHud : MonoBehaviour
+{
+    public VehicleShowcaseGame Game = null!;
+
+    public override void OnGui(Paper paper) => Game.DrawSpeedometer(paper);
 }
