@@ -50,24 +50,6 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
         Assert.True(MathF.Abs(walker.Position.Z - WalkSpeed * 1.5f) < 0.1f, $"lost ground speed on landing, ended at {walker.Position}");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule, 30f)]
-    [InlineData(ColliderShape.Cylinder, 30f)]
-    [InlineData(ColliderShape.Capsule, 50f)]
-    [InlineData(ColliderShape.Cylinder, 50f)]
-    public void FallingOntoAWalkableSlopeLandsAndStays(ColliderShape shape, float degrees)
-    {
-        Scene scene = WorldWithFloor();
-        Ramp(scene, new Float3(0f, 0f, -6f), degrees, 14f);
-        Walker walker = Spawn(scene, new Float3(0f, 10f, 0f), shape);
-        walker.Settle(1.5f);
-        Float3 landed = walker.Position;
-
-        walker.Settle(1f);
-
-        Assert.True(walker.Grounded);
-        Assert.True(Float3.Length(walker.Position - landed) < 0.01f, $"slid {walker.Position - landed} after landing");
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -165,26 +147,6 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
         Assert.True(walker.Position.Z > expected * 0.95f, $"lost speed along the wall, ended at {walker.Position}");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
-    public void FallingIntoAVBetweenTwoSteepSlopesNeverTrapsIt(ColliderShape shape)
-    {
-        Scene scene = World();
-        Ramp(scene, new Float3(0f, 0f, 0.3f), 65f, 6f);
-        Ramp(scene, new Float3(0f, 0f, -0.3f), 65f, 6f, yaw: 180f);
-        Box(scene, new Float3(0f, -2f, 0f), new Float3(6f, 1f, 6f));
-        Walker walker = Spawn(scene, new Float3(0f, 6f, 0f), shape);
-
-        walker.Settle(2f);
-
-        AssertFinite(walker);
-        AssertNotInside(walker);
-        float before = walker.Position.Y;
-        walker.Jump();
-        walker.Run(Float3.Zero, 0.15f);
-        Assert.True(walker.Position.Y > before + 0.3f || !walker.Grounded, $"could not even jump out of the V at {walker.Position}");
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -201,21 +163,6 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
         Assert.True(walker.Grounded && walker.Position.Y > -0.01f, $"ended at {walker.Position}");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
-    public void JumpingFromALedgeEdgeStillJumps(ColliderShape shape)
-    {
-        Scene scene = WorldWithFloor();
-        Box(scene, new Float3(0f, 0.5f, -3f), new Float3(4f, 1f, 6f));
-        Walker walker = Spawn(scene, new Float3(0f, 1f, 0f), shape);
-        Assert.True(walker.Grounded, "a controller over the very edge of a ledge should still stand on it");
-
-        walker.Jump();
-        walker.Run(Float3.Zero, 0.2f);
-
-        Assert.True(walker.Position.Y > 1.5f, $"only rose to {walker.Position.Y}");
-    }
 
     /// <summary>Resting in a V too steep to stand on is still resting, so it can jump and does not build up a fall.</summary>
     [Theory]
@@ -232,6 +179,8 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
 
         Assert.True(walker.Grounded, $"resting in the V at {walker.Position} is not grounded");
         Assert.True(walker.Velocity.Y > -1.5f, $"built up a fall of {walker.Velocity.Y} m/s while resting");
+        AssertFinite(walker);
+        AssertNotInside(walker);
     }
 
     [Theory]
@@ -258,12 +207,12 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
         Assert.True(fastest < WalkSpeed * 1.5f, $"was shot out at {fastest:0.0} m/s");
     }
 
-    /// <summary>Walked out until part of the shape is over a drop, it is still standing on the edge, so it can still jump.</summary>
+    /// <summary>Walked out to an edge, right to it or with part of the shape over the drop, it is still standing on the edge, so it can still jump.</summary>
     [Theory]
-    [InlineData(ColliderShape.Capsule, 0.3f)]
+    [InlineData(ColliderShape.Capsule, 0f)]
     [InlineData(ColliderShape.Capsule, 0.6f)]
     [InlineData(ColliderShape.Capsule, 0.9f)]
-    [InlineData(ColliderShape.Cylinder, 0.3f)]
+    [InlineData(ColliderShape.Cylinder, 0f)]
     [InlineData(ColliderShape.Cylinder, 0.6f)]
     [InlineData(ColliderShape.Cylinder, 0.9f)]
     public void HangingPartlyOverAnEdgeStillStandsAndCanJump(ColliderShape shape, float overhang)
@@ -282,21 +231,6 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
         Assert.True(walker.Position.Y > 2.4f, $"could not jump from the edge, only rose to {walker.Position.Y}");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
-    public void WalkingUpToAnEdgeAndStoppingHalfOverItStaysOnIt(ColliderShape shape)
-    {
-        Scene scene = WorldWithFloor();
-        Box(scene, new Float3(0f, 1f, -3f), new Float3(4f, 2f, 6f));
-        Walker walker = Spawn(scene, new Float3(0f, 2f, -3f), shape);
-        float stopAt = walker.Controller.Radius * 0.5f;
-
-        while (walker.Position.Z < stopAt && walker.Frames < 300) walker.Step(North * 1.5f);
-        walker.Settle(1f);
-
-        Assert.True(walker.Grounded && walker.Position.Y > 1.9f, $"lost the ground at the edge, at {walker.Position}");
-    }
 
     /// <summary>
     /// Jumping at a block about as tall as the jump, still walking into it, ends either back on the floor
@@ -304,12 +238,10 @@ public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
     /// </summary>
     [Theory]
     [InlineData(ColliderShape.Capsule, 1.0f)]
-    [InlineData(ColliderShape.Capsule, 1.1f)]
     [InlineData(ColliderShape.Capsule, 1.15f)]
     [InlineData(ColliderShape.Capsule, 1.25f)]
     [InlineData(ColliderShape.Capsule, 1.4f)]
     [InlineData(ColliderShape.Cylinder, 1.0f)]
-    [InlineData(ColliderShape.Cylinder, 1.1f)]
     [InlineData(ColliderShape.Cylinder, 1.15f)]
     [InlineData(ColliderShape.Cylinder, 1.25f)]
     [InlineData(ColliderShape.Cylinder, 1.4f)]

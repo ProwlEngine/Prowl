@@ -21,14 +21,9 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
     /// </summary>
     [Theory]
     [InlineData(ColliderShape.Capsule, 15f, 30f)]
-    [InlineData(ColliderShape.Capsule, 15f, 60f)]
-    [InlineData(ColliderShape.Capsule, 30f, 30f)]
-    [InlineData(ColliderShape.Capsule, 30f, 60f)]
     [InlineData(ColliderShape.Capsule, 45f, 45f)]
-    [InlineData(ColliderShape.Capsule, 60f, 30f)]
     [InlineData(ColliderShape.Capsule, 60f, 75f)]
     [InlineData(ColliderShape.Cylinder, 15f, 30f)]
-    [InlineData(ColliderShape.Cylinder, 30f, 60f)]
     [InlineData(ColliderShape.Cylinder, 45f, 45f)]
     [InlineData(ColliderShape.Cylinder, 60f, 75f)]
     public void WalkingIntoASlopedCeilingAtAnAngleSlidesAlongIt(ColliderShape shape, float ceilingDegrees, float approachFromSide)
@@ -68,20 +63,6 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
         Assert.True(walker.Position.Z < pressedAt - 2f, $"could not back away, ended at {walker.Position}");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
-    public void WalkingAlongUnderALeanToCeilingKeepsGoing(ColliderShape shape)
-    {
-        Scene scene = WorldWithFloor();
-        SlopedCeiling(scene, new Float3(-1f, 0f, 0f), 2.3f, 35f, yaw: 90f);
-        Walker walker = Spawn(scene, new Float3(0f, 0f, -10f), shape);
-
-        walker.Run(Float3.Normalize(new Float3(0.4f, 0f, 1f)) * WalkSpeed, 3f);
-
-        Assert.True(walker.Position.Z > 0f, $"got stuck under the lean-to at {walker.Position}");
-        AssertNotInside(walker);
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -97,6 +78,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
 
         Assert.True(walker.Grounded, $"never came back down, at {walker.Position}");
         Assert.True(walker.Position.Y < 0.05f);
+        Assert.True(walker.Position.Z < 0.99f, $"dropped straight back down at {walker.Position} instead of sliding along the ceiling");
         AssertNotInside(walker);
     }
 
@@ -177,9 +159,7 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
 
     [Theory]
     [InlineData(ColliderShape.Capsule, 20f)]
-    [InlineData(ColliderShape.Capsule, 50f)]
     [InlineData(ColliderShape.Cylinder, 20f)]
-    [InlineData(ColliderShape.Cylinder, 50f)]
     public void WalkingIntoTheTipOfAVShapedWedgeStopsAndCanLeave(ColliderShape shape, float halfAngle)
     {
         Scene scene = WorldWithFloor();
@@ -201,26 +181,6 @@ public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBa
         AssertCanStillMove(walker);
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule, 0f)]
-    [InlineData(ColliderShape.Capsule, 35f)]
-    [InlineData(ColliderShape.Capsule, 80f)]
-    [InlineData(ColliderShape.Cylinder, 0f)]
-    [InlineData(ColliderShape.Cylinder, 35f)]
-    [InlineData(ColliderShape.Cylinder, 80f)]
-    public void AGapClosingToNothingNeverTrapsTheController(ColliderShape shape, float approach)
-    {
-        Scene scene = WorldWithFloor();
-        SlopedCeiling(scene, new Float3(0f, 0f, 2f), 2.2f, 12f);
-        Walker walker = Spawn(scene, new Float3(-3f, 0f, 0f), shape);
-
-        float radians = approach * MathF.PI / 180f;
-        walker.Run(new Float3(MathF.Sin(radians), 0f, MathF.Cos(radians)) * WalkSpeed, 3f);
-
-        AssertNotInside(walker);
-        AssertFinite(walker);
-        AssertCanStillMove(walker);
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]

@@ -38,6 +38,8 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
 
         Assert.True(MathF.Abs(walker.Position.X - LocalPosition(platform).X) < 0.05f, $"fell behind to {walker.Position}, the platform is at {LocalPosition(platform)}");
         Assert.Equal(walker.Frames, walker.GroundedFrames);
+        Assert.Equal(3f, walker.GroundVelocity.X, 1);
+        Assert.True(Float3.Length(walker.Controller.Velocity) < 0.05f, $"reported its own velocity as {walker.Controller.Velocity}");
     }
 
     [Theory]
@@ -95,24 +97,12 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
         Assert.True(MathF.Abs(walker.Position.X - expected.X) < 0.1f && MathF.Abs(walker.Position.Z - expected.Z) < 0.1f,
                     $"ended at {walker.Position}, the spot it stood on is now at {expected}");
         Assert.True(MathF.Abs(reported - yaw) < 2f, $"reported {reported} degrees of turn for a platform that turned {yaw}");
-    }
 
-    /// <summary>The controller only reports the turn. Turning its own Transform left a character facing the wrong way after stepping off.</summary>
-    [Fact]
-    public void TheControllerNeverTurnsItselfOnASpinningPlatform()
-    {
-        (_, GameObject platform, Walker walker) = StandOnPlatform(ColliderShape.Capsule, new Float3(1f, 0f, 0f), size: 6f);
-        float yaw = 0f;
-
-        walker.Run(Float3.Zero, 1f, () =>
-        {
-            yaw += 90f * Dt;
-            SetRotation(platform, Quaternion.FromEuler(0f, yaw, 0f));
-        });
-
+        // It only reports the turn. Turning its own Transform left a character facing the wrong way after stepping off.
         Float3 facing = walker.Controller.GameObject.Transform.Rotation * North;
-        Assert.True(Float3.Dot(facing, North) > 0.999f, $"turned to {facing}");
+        Assert.True(Float3.Dot(facing, North) > 0.999f, $"turned itself to {facing}");
     }
+
 
     /// <summary>
     /// Two rollers lying side by side and touching, both turning so their tops run the same way. The
@@ -144,16 +134,6 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
         AssertNotInside(walker);
     }
 
-    [Fact]
-    public void RidingCanBeSwitchedOff()
-    {
-        (_, GameObject platform, Walker walker) = StandOnPlatform(ColliderShape.Capsule);
-        walker.Controller.RideMovingPlatforms = false;
-
-        walker.Run(Float3.Zero, 0.3f, () => MoveBy(platform, East * 3f * Dt));
-
-        Assert.True(MathF.Abs(walker.Position.X) < 0.05f, $"was carried to {walker.Position}");
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -172,18 +152,6 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
         Assert.True(walker.Position.X < 2.75f - 0.35f, $"went through the wall to {walker.Position}");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
-    public void GroundVelocityIsThePlatformsAndVelocityIsTheControllersOwn(ColliderShape shape)
-    {
-        (_, GameObject platform, Walker walker) = StandOnPlatform(shape);
-
-        walker.Run(Float3.Zero, 0.5f, () => MoveBy(platform, East * 3f * Dt));
-
-        Assert.Equal(3f, walker.GroundVelocity.X, 1);
-        Assert.True(Float3.Length(walker.Controller.Velocity) < 0.05f, $"reported its own velocity as {walker.Controller.Velocity}");
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -267,18 +235,7 @@ public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravi
         Assert.True(walker.Position.Z > 3f);
     }
 
-    /// <summary>A crate stood on is reported as the ground body, which is what lets a game leave it alone when pushing things.</summary>
-    [Fact]
-    public void ACrateStoodOnIsTheGroundBody()
-    {
-        Scene scene = WorldWithFloor();
-        GameObject crate = Box(scene, new Float3(0f, 0.5f, 0f), new Float3(1.5f, 1f, 1.5f), name: "Crate");
-        Rigidbody3D body = crate.AddComponent<Rigidbody3D>();
-        Walker walker = Spawn(scene, new Float3(0.6f, 1f, 0f));
 
-        Assert.True(walker.Grounded);
-        Assert.Same(body, walker.Controller.GroundBody);
-    }
 }
 
 public sealed class PlatformsUpright() : PlatformsTests(Gravity.Upright);

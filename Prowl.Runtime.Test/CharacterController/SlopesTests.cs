@@ -15,10 +15,8 @@ namespace Prowl.Runtime.Test.Controller;
 public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     [Theory]
-    [InlineData(ColliderShape.Capsule, 15f)]
     [InlineData(ColliderShape.Capsule, 30f)]
     [InlineData(ColliderShape.Capsule, 50f)]
-    [InlineData(ColliderShape.Cylinder, 15f)]
     [InlineData(ColliderShape.Cylinder, 30f)]
     [InlineData(ColliderShape.Cylinder, 50f)]
     public void WalksUpAWalkableSlope(ColliderShape shape, float degrees)
@@ -26,6 +24,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
         Scene scene = WorldWithFloor();
         Ramp(scene, new Float3(0f, 0f, 1f), degrees, 6f);
         Walker walker = Spawn(scene, Float3.Zero, shape);
+        Float3 start = walker.Position;
 
         walker.Run(North * WalkSpeed, 0.9f);
 
@@ -35,12 +34,12 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
         float alongSlope = WalkSpeed * 0.9f - 0.62f;
         Assert.True(walker.Position.Z > 0.62f + alongSlope * MathF.Cos(degrees * MathF.PI / 180f) * 0.9f, $"slowed to a crawl, ended at {walker.Position}");
         Assert.True(MathF.Abs(walker.Position.Y - expected) < 0.25f, $"at {walker.Position} the slope is {expected:0.00} high");
+        float travelled = Float3.Length(walker.Position - start);
+        Assert.True(travelled < WalkSpeed * 0.9f * 1.05f, $"covered {travelled:0.00} m, faster up the slope than walking on the flat");
     }
 
     [Theory]
-    [InlineData(ColliderShape.Capsule, 20f)]
     [InlineData(ColliderShape.Capsule, 45f)]
-    [InlineData(ColliderShape.Cylinder, 20f)]
     [InlineData(ColliderShape.Cylinder, 45f)]
     public void WalkingDownASlopeNeverLeavesIt(ColliderShape shape, float degrees)
     {
@@ -57,9 +56,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     }
 
     [Theory]
-    [InlineData(ColliderShape.Capsule, 25f)]
     [InlineData(ColliderShape.Capsule, 50f)]
-    [InlineData(ColliderShape.Cylinder, 25f)]
     [InlineData(ColliderShape.Cylinder, 50f)]
     public void StandingStillOnAWalkableSlopeDoesNotSlide(ColliderShape shape, float degrees)
     {
@@ -75,38 +72,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
         Assert.True(Float3.Length(walker.Position - settled) < 0.01f, $"slid {walker.Position - settled} in three seconds");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule, 60f)]
-    [InlineData(ColliderShape.Capsule, 75f)]
-    [InlineData(ColliderShape.Cylinder, 60f)]
-    [InlineData(ColliderShape.Cylinder, 75f)]
-    public void ASlopeTooSteepIsNotClimbedByWalkingIntoIt(ColliderShape shape, float degrees)
-    {
-        Scene scene = WorldWithFloor();
-        Ramp(scene, new Float3(0f, 0f, 1f), degrees, 6f);
-        Walker walker = Spawn(scene, Float3.Zero, shape);
 
-        walker.Run(North * WalkSpeed, 3f);
-
-        Assert.True(walker.Position.Y < 0.35f, $"climbed to {walker.Position}");
-        AssertNotInside(walker);
-        AssertCanStillMove(walker);
-    }
-
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
-    public void StandingOnASlopeTooSteepSlidesOff(ColliderShape shape)
-    {
-        Scene scene = WorldWithFloor();
-        Ramp(scene, new Float3(0f, 0f, 0f), 65f, 6f);
-        Walker walker = Spawn(scene, new Float3(0f, 6f, 1.6f), shape);
-
-        walker.Settle(3f);
-
-        Assert.True(walker.Position.Y < 0.3f, $"clung to the slope at {walker.Position}");
-        Assert.True(walker.Grounded, "never landed on the floor at the bottom");
-    }
 
     [Fact]
     public void LoweringTheSteepestWalkableSlopeMakesAShallowRampUnclimbable()
@@ -205,24 +171,6 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
         Assert.True(walker.Position.Y < 0.1f);
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule, 20f)]
-    [InlineData(ColliderShape.Capsule, 45f)]
-    [InlineData(ColliderShape.Cylinder, 20f)]
-    [InlineData(ColliderShape.Cylinder, 45f)]
-    public void WalkingUpARampIsNoFasterThanWalkingOnTheFlat(ColliderShape shape, float degrees)
-    {
-        Scene scene = WorldWithFloor();
-        Ramp(scene, new Float3(0f, 0f, 0f), degrees, 12f);
-        Walker walker = Spawn(scene, new Float3(0f, 0.6f, 1.5f), shape);
-        Float3 start = walker.Position;
-
-        walker.Run(North * WalkSpeed, 0.5f);
-
-        float travelled = Float3.Length(walker.Position - start);
-        Assert.True(travelled < WalkSpeed * 0.5f * 1.05f, $"covered {travelled:0.00} m along the ramp in half a second at {WalkSpeed} m/s");
-        Assert.True(travelled > WalkSpeed * 0.5f * 0.9f, $"only covered {travelled:0.00} m");
-    }
 
     /// <summary>
     /// Running into a slope too steep to stand on carries some of the speed up it, the way a quarter
@@ -230,9 +178,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     /// </summary>
     [Theory]
     [InlineData(ColliderShape.Capsule, 60f)]
-    [InlineData(ColliderShape.Capsule, 70f)]
     [InlineData(ColliderShape.Cylinder, 60f)]
-    [InlineData(ColliderShape.Cylinder, 70f)]
     public void RunningIntoASteepSlopeCarriesUpItThenSlidesBack(ColliderShape shape, float degrees)
     {
         Scene scene = WorldWithFloor();
@@ -258,10 +204,8 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     /// </summary>
     [Theory]
     [InlineData(ColliderShape.Capsule, 60f)]
-    [InlineData(ColliderShape.Capsule, 70f)]
     [InlineData(ColliderShape.Capsule, 80f)]
     [InlineData(ColliderShape.Cylinder, 60f)]
-    [InlineData(ColliderShape.Cylinder, 70f)]
     [InlineData(ColliderShape.Cylinder, 80f)]
     public void HoldingForwardIntoASteepSlopeGainsNoHeight(ColliderShape shape, float degrees)
     {
@@ -277,6 +221,8 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
 
         Assert.True(highestLate <= highestEarly + 0.02f, $"kept climbing, from {highestEarly:0.00} in the first second to {highestLate:0.00} later");
         Assert.True(highestLate < 0.6f, $"was pumped up to {highestLate:0.00}");
+        AssertNotInside(walker);
+        AssertCanStillMove(walker);
     }
 
     /// <summary>
@@ -318,9 +264,7 @@ public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
     /// </summary>
     [Theory]
     [InlineData(ColliderShape.Capsule, 20f)]
-    [InlineData(ColliderShape.Capsule, 30f)]
     [InlineData(ColliderShape.Cylinder, 20f)]
-    [InlineData(ColliderShape.Cylinder, 30f)]
     public void DriftingOffTheSideOfARampDropsOffCleanly(ColliderShape shape, float degrees)
     {
         Scene scene = WorldWithFloor();

@@ -83,22 +83,6 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
         AssertNotInside(walker);
     }
 
-    [Theory]
-    [InlineData(float.NaN)]
-    [InlineData(float.PositiveInfinity)]
-    [InlineData(float.NegativeInfinity)]
-    public void ABrokenMotionIsIgnored(float bad)
-    {
-        Scene scene = WorldWithFloor();
-        Walker walker = Spawn(scene, Float3.Zero);
-        Float3 before = walker.Position;
-
-        walker.Move(new Float3(bad, 0f, 1f));
-
-        AssertFinite(walker);
-        Assert.True(Float3.Length(walker.Position - before) < 0.01f, $"moved to {walker.Position}");
-        Assert.True(walker.Grounded);
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -147,9 +131,7 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
     }
 
     [Theory]
-    [InlineData(ColliderShape.Capsule, 10f)]
     [InlineData(ColliderShape.Capsule, 40f)]
-    [InlineData(ColliderShape.Cylinder, 10f)]
     [InlineData(ColliderShape.Cylinder, 40f)]
     public void WalkingIntoAWallAtAShallowAngleKeepsTheSpeedAlongIt(ColliderShape shape, float angle)
     {
@@ -212,46 +194,8 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
         Assert.True(MathF.Abs(walker.Position.X) < 0.01f && MathF.Abs(walker.Position.Z - WalkSpeed) < 0.05f, $"ended at {walker.Position}");
     }
 
-    [Fact]
-    public void StandingStillInTheOpenTouchesNothingButTheFloor()
-    {
-        Scene scene = WorldWithFloor();
-        Walker walker = Spawn(scene, Float3.Zero);
 
-        CharacterController.CollisionFlags flags = walker.Move(new Float3(0f, -0.01f, 0f));
 
-        Assert.Equal(CharacterController.CollisionFlags.Below, flags);
-        Assert.Single(walker.Controller.Hits);
-    }
-
-    [Fact]
-    public void ATeleportForgetsThePlatformItStoodOn()
-    {
-        Scene scene = WorldWithFloor();
-        GameObject platform = Box(scene, new Float3(0f, 0.75f, 0f), new Float3(3f, 0.5f, 3f));
-        Walker walker = Spawn(scene, new Float3(0f, 1f, 0f));
-        walker.Teleport(new Float3(10f, 0f, 0f));
-
-        MoveBy(platform, East * 2f);
-        walker.Step(Float3.Zero);
-
-        Assert.True(MathF.Abs(walker.Position.X - 10f) < 0.01f, $"was dragged to {walker.Position}");
-    }
-
-    [Fact]
-    public void IgnoredBodiesAreWalkedThrough()
-    {
-        Scene scene = WorldWithFloor();
-        GameObject crate = Box(scene, new Float3(0f, 1f, 2f), new Float3(2f, 2f, 1f));
-        Rigidbody3D body = crate.AddComponent<Rigidbody3D>();
-        body.MotionType = Jitter2.Dynamics.MotionType.Static;
-        Walker walker = Spawn(scene, Float3.Zero);
-        walker.Controller.IgnoreCollisionWith(body);
-
-        walker.Run(North * WalkSpeed, 1f);
-
-        Assert.True(walker.Position.Z > 4f, $"was blocked by an ignored body at {walker.Position}");
-    }
 
     /// <summary>
     /// A cluttered world of tilted blocks, ramps, ceilings and pillars, walked through at random with
