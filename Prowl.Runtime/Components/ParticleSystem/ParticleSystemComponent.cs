@@ -832,6 +832,7 @@ public class ParticleSystemComponent : MonoBehaviour
         Scene? scene = Scene;
         _physics = scene.IsValid() ? scene.Physics : null;
         if (Wind.Enabled) Wind.BeginStep(this);
+        if (Collision.Enabled) Collision.BeginStep();
 
         _frameDt = dt;
         float done = 0f;
@@ -1440,6 +1441,7 @@ public class ParticleSystemComponent : MonoBehaviour
         if (!EnabledInHierarchy) return;
 
         ApplyMaxParticles();
+        if (Collision.Enabled) Collision.BeginStep();
         // Once a frame, the child may have moved since it last simulated.
         if (!_spacesValid || _emitSpacesFrame != Time.FrameCount)
         {

@@ -120,6 +120,23 @@ public class CollisionModule : ParticleSystemModule
     private long _queryFrame = -1;
     private int _queriesLeft;
 
+    // Where the collision planes sit in the world, read once per step rather than for every particle.
+    [NonSerialized] private List<(Float3 Point, Float3 Normal, Transform Transform)>? _planes;
+
+    /// <summary>Reads where the collision planes are. Called before particles step.</summary>
+    internal void BeginStep()
+    {
+        _planes ??= new();
+        _planes.Clear();
+        if (!IsPlanes) return;
+        foreach (GameObject plane in Planes)
+        {
+            if (plane.IsNotValid()) continue;
+            Transform t = plane.Transform;
+            _planes.Add((t.Position, Float3.NormalizeSafe(t.Up, Float3.UnitY), t));
+        }
+    }
+
     /// <summary>
     /// Sweeps the particle from <paramref name="previous"/> to where it moved this step and bounces it off
     /// the first surface in the way. Returns true when the hit should be reported, false for no hit or for
@@ -275,12 +292,10 @@ public class CollisionModule : ParticleSystemModule
         touching = false;
         float best = float.MaxValue;
         bool hit = false;
-        foreach (GameObject plane in Planes)
+        if (_planes == null) return false;
+        foreach ((Float3 point, Float3 normal, Transform t) in _planes)
         {
-            if (plane.IsNotValid()) continue;
-            Transform t = plane.Transform;
-            Float3 normal = Float3.NormalizeSafe(t.Up, Float3.UnitY);
-            if (!SweepPlane(from, to, radius, t.Position, normal, out Float3 contact, out Float3 resolved, out bool planeTouching)) continue;
+            if (!SweepPlane(from, to, radius, point, normal, out Float3 contact, out Float3 resolved, out bool planeTouching)) continue;
 
             float d = Float3.LengthSquared(resolved - from);
             if (d >= best) continue;
