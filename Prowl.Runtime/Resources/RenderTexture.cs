@@ -169,26 +169,23 @@ public sealed class RenderTexture : Asset, ISerializable
 
     #region Pool
 
-    private struct RenderTextureKey(int width, int height, bool hasDepth, TextureImageFormat[] format)
+    private struct RenderTextureKey(int width, int height, bool hasDepth, TextureImageFormat[] format) : IEquatable<RenderTextureKey>
     {
         public int Width = width;
         public int Height = height;
         public bool HasDepth = hasDepth;
         public TextureImageFormat[] Format = format;
 
-        public override bool Equals(object? obj)
+        public override bool Equals(object? obj) => obj is RenderTextureKey key && Equals(key);
+
+        public bool Equals(RenderTextureKey key)
         {
-            if (obj is RenderTextureKey key)
-            {
-                if (Width == key.Width && Height == key.Height && HasDepth == key.HasDepth && Format.Length == key.Format.Length)
-                {
-                    for (int i = 0; i < Format.Length; i++)
-                        if (Format[i] != key.Format[i])
-                            return false;
-                    return true;
-                }
-            }
-            return false;
+            if (Width != key.Width || Height != key.Height || HasDepth != key.HasDepth || Format.Length != key.Format.Length)
+                return false;
+            for (int i = 0; i < Format.Length; i++)
+                if (Format[i] != key.Format[i])
+                    return false;
+            return true;
         }
         public override int GetHashCode()
         {
