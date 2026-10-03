@@ -1,0 +1,19 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Players/" />
+  <Folder Name="/Players/Desktop/">
+    <Project Path="Players/Desktop/Prowl.Player.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/Samples/" />
+  <Folder Name="/Samples/Runtime/">
+  </Folder>
+  <Project Path="Prowl.Analyzers/Prowl.Analyzers.csproj" />
+  <Project Path="Prowl.Editor.Test/Prowl.Editor.Test.csproj" />
+  <Project Path="Prowl.Editor/Prowl.Editor.csproj" />
+  <Project Path="Prowl.Runtime.Test/Prowl.Runtime.Test.csproj" />
+  <Project Path="Prowl.Runtime/Prowl.Runtime.csproj" />
+</Solution>
