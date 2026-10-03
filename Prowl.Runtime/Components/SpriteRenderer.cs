@@ -38,6 +38,7 @@ public class SpriteRenderer : MonoBehaviour
 
     [System.NonSerialized] private Mesh? _mesh;
     [System.NonSerialized] private PropertyState? _props;
+    [System.NonSerialized] private MeshRenderable? _renderable;
 
     // Snapshot of the inputs the baked mesh was built from, so we only rebuild when something changes.
     [System.NonSerialized] private Sprite? _bakedSprite;
@@ -85,7 +86,9 @@ public class SpriteRenderer : MonoBehaviour
         if (SortingOrder != 0)
             world *= Float4x4.CreateTranslation(new Float3(0, 0, SortingOrder * SortBias));
 
-        renderables.Add(new MeshRenderable(_mesh, mat, world, GameObject.LayerIndex, _props));
+        _renderable ??= new MeshRenderable(_mesh, mat, world, GameObject.LayerIndex, _props);
+        _renderable.Set(_mesh, mat, world, GameObject.LayerIndex, _props);
+        renderables.Add(_renderable);
     }
 
     private void EnsureMesh(Sprite sprite)
