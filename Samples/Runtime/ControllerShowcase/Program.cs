@@ -61,7 +61,7 @@ public sealed class ControllerShowcaseGame : StationGame
     private CharacterInput _input = null!;
 
     private Material _stairsMat = null!, _towerMat = null!, _ceilingMat = null!, _trapMat = null!, _curveMat = null!;
-    private Material _roughMat = null!, _movingMat = null!, _edgeMat = null!, _plainMat = null!, _dark = null!;
+    private Material _roughMat = null!, _movingMat = null!, _edgeMat = null!, _plainMat = null!, _dark = null!, _travelMat = null!;
 
     // ----------------------------------------------------------------
     //  Layout
@@ -87,7 +87,7 @@ public sealed class ControllerShowcaseGame : StationGame
         public float HalfZ => (MaxZ - MinZ) * 0.5f;
     }
 
-    private sealed record Group(string Name, float Bearing, Footprint Area, Action Build);
+    private sealed record Group(string Name, float Bearing, Footprint Area, Action Build, Placement? Fixed = null);
 
     /// <summary>A footprint turned and set down in the world, for overlap tests while packing.</summary>
     private readonly record struct Placed(Float3 Center, Float3 AxisX, Float3 AxisZ, float HalfX, float HalfZ)
@@ -152,8 +152,9 @@ public sealed class ControllerShowcaseGame : StationGame
         _edgeMat = GridMaterial(new Color(0.1f, 0.1f, 0.12f, 1f), new Color(0.28f, 0.28f, 0.34f, 1f));
         _plainMat = GridMaterial(new Color(0.16f, 0.17f, 0.19f, 1f), new Color(0.3f, 0.32f, 0.36f, 1f));
         _dark = Lit(new Color(0.03f, 0.032f, 0.04f, 1f), 0f, 0.7f);
+        _travelMat = GridMaterial(new Color(0.08f, 0.05f, 0.14f, 1f), new Color(0.22f, 0.12f, 0.4f, 1f));
 
-        AddStation("Controller playground", "One open world full of everything a character controller has to cope with: stairs and slopes, low ceilings and tight gaps, traps that press from several sides, curves, rough ground, moving platforms and things to push. Walk up to anything and the line below says what it is testing.", Float3.Zero, new Float3(0f, 5f, -12f), 1f);
+        AddStation("Controller playground", "One open world full of everything a character controller has to cope with: stairs and slopes, low ceilings and tight gaps, traps that press from several sides, curves, rough ground, moving platforms, jump pads, teleporters, and gravity that pulls sideways, upward or toward a little planet. Walk up to anything and the line below says what it is testing.", Float3.Zero, new Float3(0f, 5f, -12f), 1f);
 
         var sun = new GameObject("Sun");
         DirectionalLight light = sun.AddComponent<DirectionalLight>();
@@ -261,6 +262,14 @@ public sealed class ControllerShowcaseGame : StationGame
             Sub("Hop blocks", "blocks of rising height to jump up", 6f, new(-2f, 0f, -12f), 0f, HopBlocks);
             Sub("Beams", "beams 1, 0.5 and 0.25 m wide to balance along", 8f, new(-14f, 0f, 2f), 0f, Beams);
         }),
+        new("Gravity and travel", 0f, new(-33f, 25f, -8f, 18f), () =>
+        {
+            Sub("Jump pads", "pads that throw you up onto towers 2, 4 and 7 m tall", 8f, new(-12f, 0f, -2f), 0f, JumpPads);
+            Sub("Teleporters", "step onto a ring to come out at its partner, here the ground and the top of a 9 m column", 3f, new(2f, 0f, -4f), 0f, Teleporters);
+            Sub("Planet", "a small world with its own gravity pulling toward its middle; the orange pad throws you up into its pull and the ring on top brings you back", 9f, new(14f, 0f, 6f), 0f, Planet);
+            Sub("Flip room", "a room whose gravity pulls toward the ceiling, so walking in drops you onto it", 6f, new(-2f, 0f, 11f), 0f, FlipRoom);
+            Sub("Wall walk", "a corridor whose gravity pulls toward its wall, so you walk along the wall", 7f, new(-28f, 0f, 8f), 0f, WallWalk);
+        }, new Placement(0f, 48f, 0f, 0f)),
     ];
 
     /// <summary>
@@ -275,6 +284,14 @@ public sealed class ControllerShowcaseGame : StationGame
 
         foreach (Group group in groups)
         {
+            // A group with a fixed spot skips the search, which draws no random numbers, so the groups built after it come out the same.
+            if (group.Fixed is Placement fixedAt)
+            {
+                placed.Add(Placed.Of(group.Area, fixedAt.Origin, fixedAt.Turn, Gap * 0.5f));
+                result[group.Name] = fixedAt;
+                continue;
+            }
+
             float bearing = group.Bearing * MathF.PI / 180f;
             Float3 direction = new(MathF.Sin(bearing), 0f, MathF.Cos(bearing));
 
@@ -358,6 +375,7 @@ public sealed class ControllerShowcaseGame : StationGame
     private void BuildWorld()
     {
         Dictionary<string, Placement> groups = Lay(_groupList);
+        var built = new List<List<GameObject>>();
         foreach (PartDef def in _defs)
         {
             Placement group = groups[def.Group];
@@ -372,6 +390,7 @@ public sealed class ControllerShowcaseGame : StationGame
             for (int i = 0; i < objects.Count; i++)
                 Register($"{def.Key}#{i}", objects[i]);
             _landmarks.Add(new Landmark(def.Name, def.About, _origin, def.Radius));
+            built.Add(objects);
         }
 
         _origin = Float3.Zero;
@@ -380,6 +399,15 @@ public sealed class ControllerShowcaseGame : StationGame
         foreach ((string key, Pose pose) in LoadLayout())
             if (_byKey.TryGetValue(key, out GameObject? go))
                 SetPose(go, pose);
+
+        // Layout.txt can move a part well away from where its code put it, so each landmark goes to the middle of what its part built.
+        for (int i = 0; i < _landmarks.Count; i++)
+        {
+            if (built[i].Count == 0) continue;
+            Float3 middle = Float3.Zero;
+            foreach (GameObject go in built[i]) middle += go.Transform.Position;
+            _landmarks[i] = _landmarks[i] with { Position = middle / built[i].Count };
+        }
     }
 
     // ----------------------------------------------------------------
@@ -899,6 +927,149 @@ public sealed class ControllerShowcaseGame : StationGame
     }
 
     // ----------------------------------------------------------------
+    //  Gravity and travel
+    // ----------------------------------------------------------------
+
+    private const float PadGravity = 24f;
+
+    private Material Glow(Color color) => Lit(new Color(0.02f, 0.02f, 0.03f, 1f), 0f, 0.4f).Emissive(color, 2f);
+
+    private JumpPad Pad(Float3 local, Float3 launchLocal, Color color)
+    {
+        GameObject go = Model("Jump Pad", Mesh.CreateCylinder(1.2f, 0.08f, 32), Glow(color), Float3.Zero);
+        JumpPad pad = go.AddComponent<JumpPad>();
+        pad.Launch = _turn * launchLocal;
+        Place(go, local + new Float3(0f, 0.04f, 0f));
+        return pad;
+    }
+
+    private Teleporter Gate(Float3 local, Float3? euler = null)
+    {
+        GameObject go = Model("Teleporter", Mesh.CreateCylinder(1f, 0.06f, 32), Glow(new Color(0.55f, 0.2f, 1f, 1f)), Float3.Zero);
+        Teleporter gate = go.AddComponent<Teleporter>();
+        Place(go, local, euler);
+        return gate;
+    }
+
+    private GameObject Zone(Float3 local, Action<GravityZone> setUp)
+    {
+        var go = new GameObject("Gravity Zone");
+        setUp(go.AddComponent<GravityZone>());
+        return Place(go, local);
+    }
+
+    /// <summary>The speed that throws something from the ground onto a top <paramref name="height"/> up and <paramref name="ahead"/> along, clearing it by a metre.</summary>
+    private static Float3 Throw(float height, float ahead)
+    {
+        float up = MathF.Sqrt(2f * PadGravity * (height + 1f));
+        float flight = up / PadGravity + MathF.Sqrt(2f * 1f / PadGravity);
+        return new Float3(0f, up, ahead / flight);
+    }
+
+    private void JumpPads()
+    {
+        float[] heights = [2f, 4f, 7f];
+        for (int i = 0; i < heights.Length; i++)
+        {
+            float x = (i - 1) * 5f;
+            Box(new Float3(3f, heights[i], 3f), new Float3(x, heights[i] * 0.5f, 4f), _travelMat, name: "Pad Tower");
+            Pad(new Float3(x, 0f, -1f), Throw(heights[i], 5f), new Color(0.2f, 1f, 0.5f, 1f));
+        }
+    }
+
+    private void Teleporters()
+    {
+        Box(new Float3(2.6f, 9f, 2.6f), new Float3(0f, 4.5f, 6f), _travelMat, name: "Gate Column");
+        Teleporter low = Gate(new Float3(0f, 0.03f, 0f));
+        Teleporter high = Gate(new Float3(0f, 9.03f, 6f));
+        low.Exit = high;
+        high.Exit = low;
+    }
+
+    private void Planet()
+    {
+        const float Radius = 6f;
+        Float3 center = new(0f, 20f, 0f);
+
+        GameObject planet = Model("Planet", Mesh.CreateSphere(Radius, 32, 48), _travelMat, Float3.Zero);
+        planet.AddComponent<SphereCollider>().Radius = Radius;
+        Place(planet, center);
+
+        Zone(center, zone =>
+        {
+            zone.TowardCenter = true;
+            zone.Radius = Radius + 8f;
+            zone.Strength = PadGravity;
+            zone.Priority = 1;
+        });
+
+        // Blocks and steps standing out of the surface, each upright to the planet.
+        var random = new Random(7);
+        for (int i = 0; i < 14; i++)
+        {
+            Float3 direction = Float3.Normalize(new Float3(random.NextSingle() * 2f - 1f, random.NextSingle() * 2f - 1f, random.NextSingle() * 2f - 1f));
+            if (direction.Y > 0.85f) continue;
+            float height = 0.3f + random.NextSingle() * 1.2f;
+            Quaternion stand = Quaternion.FromToRotation(Float3.UnitY, direction);
+            GameObject block = Block("Planet Block", new Float3(1.4f, height, 1.4f), i % 2 == 0 ? _plainMat : _edgeMat, Float3.Zero);
+            block.Transform.Position = W(center + direction * (Radius + height * 0.5f - 0.1f));
+            block.Transform.Rotation = _turn * stand;
+            Add(block);
+        }
+
+        Pad(Float3.Zero, new Float3(0f, 23f, 0f), new Color(1f, 0.6f, 0.1f, 1f));
+
+        Teleporter top = Gate(center + new Float3(0f, Radius + 0.02f, 0f));
+        Teleporter ground = Gate(new Float3(3.5f, 0.03f, -3.5f));
+        top.Exit = ground;
+        ground.Exit = top;
+    }
+
+    private void FlipRoom()
+    {
+        const float Size = 8f, High = 5f, Wall = 0.4f, Door = 2.4f;
+        float outer = Size + Wall * 2f;
+        Box(new Float3(outer, Wall, outer), new Float3(0f, High + Wall * 0.5f, 0f), _travelMat, name: "Flip Ceiling");
+        Box(new Float3(outer, High, Wall), new Float3(0f, High * 0.5f, Size * 0.5f + Wall * 0.5f), _travelMat, name: "Flip Wall");
+        foreach (float side in new[] { -1f, 1f })
+        {
+            Box(new Float3(Wall, High, outer), new Float3(side * (Size * 0.5f + Wall * 0.5f), High * 0.5f, 0f), _travelMat, name: "Flip Wall");
+            float segment = (outer - Door) * 0.5f;
+            Box(new Float3(segment, High, Wall), new Float3(side * (Door * 0.5f + segment * 0.5f), High * 0.5f, -(Size * 0.5f + Wall * 0.5f)), _travelMat, name: "Flip Wall");
+        }
+
+        // Things to stand on once the ceiling is the floor.
+        Box(new Float3(2f, 0.6f, 2f), new Float3(-2f, High - 0.3f, 1.5f), _edgeMat, name: "Ceiling Block");
+        Box(new Float3(2f, 1.2f, 2f), new Float3(2f, High - 0.6f, 2f), _plainMat, name: "Ceiling Block");
+
+        Zone(new Float3(0f, High * 0.5f, 0f), zone =>
+        {
+            zone.Size = new Float3(Size - 0.4f, High, Size - 0.4f);
+            zone.Direction = new Float3(0f, 1f, 0f);
+            zone.Strength = PadGravity;
+            zone.Priority = 1;
+        });
+    }
+
+    private void WallWalk()
+    {
+        const float Length = 16f, High = 8f;
+        Box(new Float3(0.6f, High, Length), new Float3(-3.3f, High * 0.5f, 0f), _travelMat, name: "Walking Wall");
+        for (int i = 0; i < 4; i++)
+            Box(new Float3(0.8f, 1.6f, 1.6f), new Float3(-2.6f, 2f + i * 1.4f, -4.5f + i * 3f), _edgeMat, name: "Wall Ledge");
+
+        Zone(new Float3(-0.5f, High * 0.5f, 0f), zone =>
+        {
+            zone.Size = new Float3(5f, High, Length - 2f);
+            zone.Direction = new Float3(-1f, 0f, 0f);
+            zone.Strength = PadGravity;
+            zone.Priority = 1;
+        });
+
+        Place(Model("Zone Edge", Mesh.CreateCube(new Float3(0.1f, 0.02f, Length - 2f)), Glow(new Color(0.3f, 0.6f, 1f, 1f)), Float3.Zero), new Float3(2f, 0.01f, 0f));
+    }
+
+    // ----------------------------------------------------------------
     //  Player
     // ----------------------------------------------------------------
 
@@ -1007,6 +1178,8 @@ public sealed class CharacterInput : MonoBehaviour
     public float Speed = 6f;
     public float JumpHeight = 1.4f;
     public float AirControl = 0.35f;
+
+    /// <summary>The pull of gravity outside every <see cref="GravityZone"/>.</summary>
     public float Gravity = 24f;
     public Transform Model = null!;
     public ChaseCamera View = null!;
@@ -1021,8 +1194,11 @@ public sealed class CharacterInput : MonoBehaviour
     private Float3 _velocity;
     private float _sinceGrounded;
     private float _sinceJumpPressed = 1f;
+    private float _sinceLaunched = 1f;
     private float _facing;
     private bool _wantsCrouch;
+    private Quaternion _body = Quaternion.Identity;
+    private Teleporter? _arrivedOn;
 
     public bool Crouched { get; private set; }
 
@@ -1033,6 +1209,9 @@ public sealed class CharacterInput : MonoBehaviour
     {
         _wantsCrouch = false;
         _velocity = Float3.Zero;
+        _arrivedOn = null;
+        if (_controller.IsNotValid()) return;
+        _controller.Up = Float3.UnitY;
         if (Crouched && _controller.TrySetHeight(StandingHeight)) SetCrouched(false);
     }
 
@@ -1051,6 +1230,13 @@ public sealed class CharacterInput : MonoBehaviour
         if (_wantsCrouch && !Crouched && _controller.TrySetHeight(CrouchHeight)) SetCrouched(true);
         else if (!_wantsCrouch && Crouched && _controller.TrySetHeight(StandingHeight)) SetCrouched(false);
 
+        // Gravity comes from whatever zone the middle of the body is in, and up is straight away from it.
+        Float3 pull = GravityZone.At(_controller.Center, new Float3(0f, -Gravity, 0f));
+        float gravity = Float3.Length(pull);
+        if (gravity > 1e-3f) _controller.Up = -pull / gravity;
+        Float3 up = _controller.Up;
+        View.Up = up;
+
         Float2 input = Float2.Zero;
         if (Input.GetKey(KeyCode.W)) input.Y += 1f;
         if (Input.GetKey(KeyCode.S)) input.Y -= 1f;
@@ -1058,56 +1244,188 @@ public sealed class CharacterInput : MonoBehaviour
         if (Input.GetKey(KeyCode.A)) input.X -= 1f;
         if (Float2.LengthSquared(input) > 1f) input = Float2.Normalize(input);
 
-        float yaw = View.Yaw * MathF.PI / 180f;
-        Float3 forward = new(MathF.Sin(yaw), 0f, MathF.Cos(yaw));
-        Float3 right = new(forward.Z, 0f, -forward.X);
+        Float3 forward = Across(View.Heading, up);
+        if (Float3.LengthSquared(forward) < 1e-4f) forward = Across(_body * Float3.UnitZ, up);
+        forward = Float3.Normalize(forward);
+        Float3 right = Float3.Cross(up, forward);
         Float3 wish = (forward * input.Y + right * input.X) * Speed * (Crouched ? 0.45f : 1f);
 
-        bool grounded = _controller.IsGrounded;
+        bool grounded = _controller.IsGrounded && _sinceLaunched > 0.2f;
         _sinceGrounded = grounded ? 0f : _sinceGrounded + dt;
         _sinceJumpPressed = Input.GetKeyDown(KeyCode.Space) ? 0f : _sinceJumpPressed + dt;
+        _sinceLaunched += dt;
+
+        float rising = Float3.Dot(_velocity, up);
+        Float3 across = _velocity - up * rising;
 
         float control = grounded ? 1f : AirControl;
-        Float3 horizontal = new(_velocity.X, 0f, _velocity.Z);
-        Float3 change = wish - horizontal;
+        Float3 change = wish - across;
         float maxChange = Acceleration * control * dt;
         if (Float3.Length(change) > maxChange) change = Float3.Normalize(change) * maxChange;
-        _velocity += change;
+        across += change;
 
-        if (grounded && _velocity.Y <= 0f) _velocity.Y = -2f;
-        else _velocity.Y -= Gravity * dt;
+        if (grounded && rising <= 0f) rising = -2f;
+        else rising -= gravity * dt;
 
-        if (!Crouched && _sinceJumpPressed < JumpBuffer && _sinceGrounded < CoyoteTime && _velocity.Y <= 0f)
+        if (!Crouched && _sinceJumpPressed < JumpBuffer && _sinceGrounded < CoyoteTime && rising <= 0f)
         {
             Float3 carried = _controller.GroundVelocity;
-            _velocity += new Float3(carried.X, 0f, carried.Z);
-            _velocity.Y = MathF.Sqrt(2f * Gravity * JumpHeight) + MathF.Max(carried.Y, 0f);
+            across += Across(carried, up);
+            rising = MathF.Sqrt(2f * gravity * JumpHeight) + MathF.Max(Float3.Dot(carried, up), 0f);
             _sinceJumpPressed = 1f;
             _sinceGrounded = 1f;
         }
 
-        // Letting go of jump early cuts the climb short, for small hops.
-        if (!Input.GetKey(KeyCode.Space) && _velocity.Y > 0f) _velocity.Y -= Gravity * dt;
+        // Letting go of jump early cuts the climb short, for small hops. A pad launch always flies its full arc.
+        if (!Input.GetKey(KeyCode.Space) && rising > 0f && _sinceLaunched > 1f) rising -= gravity * dt;
+
+        _velocity = across + up * rising;
+        UsePadsAndGates();
 
         CharacterController.CollisionFlags flags = _controller.Move(_velocity * dt);
         Float3 achieved = _controller.Velocity;
-        if ((flags & CharacterController.CollisionFlags.Above) != 0 && _velocity.Y > 0f) _velocity.Y = 0f;
-        if ((flags & CharacterController.CollisionFlags.Sides) != 0)
-        {
-            _velocity.X = achieved.X;
-            _velocity.Z = achieved.Z;
-        }
+        rising = Float3.Dot(_velocity, up);
+        across = _velocity - up * rising;
+        if ((flags & CharacterController.CollisionFlags.Above) != 0 && rising > 0f) rising = 0f;
+        if ((flags & CharacterController.CollisionFlags.Sides) != 0) across = Across(achieved, up);
 
         // In the air, a fall something held up stops building speed, and a run up a steep slope keeps the upward speed it gained.
-        if (!_controller.IsGrounded) _velocity.Y = MathF.Max(_velocity.Y, achieved.Y);
+        if (!_controller.IsGrounded) rising = MathF.Max(rising, Float3.Dot(achieved, up));
+        _velocity = across + up * rising;
+
+        TurnBody(up, wish, input, dt);
+    }
+
+    private static Float3 Across(Float3 v, Float3 up) => v - up * Float3.Dot(v, up);
+
+    /// <summary>Turns the body to stand along up, smoothly, and to face the way it walks.</summary>
+    private void TurnBody(Float3 up, Float3 wish, Float2 input, float dt)
+    {
+        Quaternion toUp = Quaternion.FromToRotation(_body * Float3.UnitY, up);
+        _body = Quaternion.Normalize(Quaternion.Slerp(Quaternion.Identity, toUp, MathF.Min(1f, dt * 12f)) * _body);
 
         _facing += _controller.GroundYawDelta;
         if (Float2.LengthSquared(input) > 0.01f)
         {
-            float target = MathF.Atan2(wish.X, wish.Z) * 180f / MathF.PI;
+            Float3 local = Quaternion.Inverse(_body) * wish;
+            float target = MathF.Atan2(local.X, local.Z) * 180f / MathF.PI;
             float delta = ((target - _facing) % 360f + 540f) % 360f - 180f;
             _facing += delta * MathF.Min(1f, dt * 12f);
         }
-        Model.LocalRotation = Quaternion.FromEuler(new Float3(0f, _facing, 0f));
+        Model.Rotation = _body * Quaternion.FromEuler(new Float3(0f, _facing, 0f));
+    }
+
+    /// <summary>Launches off any jump pad it stands on, and steps through any teleporter it walks onto.</summary>
+    private void UsePadsAndGates()
+    {
+        Float3 feet = Transform.Position;
+
+        if (_sinceLaunched > 0.3f)
+        {
+            foreach (JumpPad pad in JumpPad.All)
+            {
+                if (!pad.Holds(feet)) continue;
+                _velocity = pad.Launch;
+                _sinceLaunched = 0f;
+                _sinceGrounded = 1f;
+                break;
+            }
+        }
+
+        if (_arrivedOn != null && !_arrivedOn.Holds(feet)) _arrivedOn = null;
+        foreach (Teleporter gate in Teleporter.All)
+        {
+            if (gate == _arrivedOn || gate.Exit == null || !gate.Holds(feet)) continue;
+            _controller.Teleport(gate.Exit.Transform.Position + gate.Exit.Transform.Up * 0.05f);
+            _arrivedOn = gate.Exit;
+            break;
+        }
+    }
+}
+
+/// <summary>
+/// A region with its own gravity: a fixed pull across a box, or a pull toward the middle of a sphere
+/// for a planet. Where zones overlap the higher <see cref="Priority"/> wins.
+/// </summary>
+public sealed class GravityZone : MonoBehaviour
+{
+    public static readonly List<GravityZone> All = new();
+
+    /// <summary>True pulls toward the zone's middle across a sphere of <see cref="Radius"/>, false pulls along <see cref="Direction"/> across a box of <see cref="Size"/>.</summary>
+    public bool TowardCenter;
+    public float Radius = 10f;
+    public Float3 Size = new(10f, 10f, 10f);
+
+    /// <summary>The way the box pulls, in the zone's own space.</summary>
+    public Float3 Direction = new(0f, -1f, 0f);
+    public float Strength = 24f;
+    public int Priority;
+
+    public override void OnEnable() => All.Add(this);
+
+    public override void OnDisable() => All.Remove(this);
+
+    public bool Contains(Float3 point)
+    {
+        if (TowardCenter) return Float3.Length(point - Transform.Position) <= Radius;
+
+        Float3 local = Quaternion.Inverse(Transform.Rotation) * (point - Transform.Position);
+        return MathF.Abs(local.X) <= Size.X * 0.5f && MathF.Abs(local.Y) <= Size.Y * 0.5f && MathF.Abs(local.Z) <= Size.Z * 0.5f;
+    }
+
+    public Float3 Pull(Float3 point)
+    {
+        if (!TowardCenter) return Transform.Rotation * Float3.Normalize(Direction) * Strength;
+
+        Float3 toCenter = Transform.Position - point;
+        float distance = Float3.Length(toCenter);
+        return distance > 1e-3f ? toCenter / distance * Strength : Float3.Zero;
+    }
+
+    /// <summary>The gravity at a point: the highest priority zone holding it, or <paramref name="outside"/>.</summary>
+    public static Float3 At(Float3 point, Float3 outside)
+    {
+        GravityZone? best = null;
+        foreach (GravityZone zone in All)
+            if (zone.Contains(point) && (best == null || zone.Priority > best.Priority)) best = zone;
+        return best == null ? outside : best.Pull(point);
+    }
+}
+
+/// <summary>A pad that throws whatever stands on it at <see cref="Launch"/>.</summary>
+public sealed class JumpPad : MonoBehaviour
+{
+    public static readonly List<JumpPad> All = new();
+
+    public Float3 Launch;
+    public float Radius = 1.2f;
+
+    public override void OnEnable() => All.Add(this);
+
+    public override void OnDisable() => All.Remove(this);
+
+    public bool Holds(Float3 feet)
+    {
+        Float3 local = Quaternion.Inverse(Transform.Rotation) * (feet - Transform.Position);
+        return local.X * local.X + local.Z * local.Z <= Radius * Radius && local.Y > -0.2f && local.Y < 0.5f;
+    }
+}
+
+/// <summary>One end of a teleporter: stepping onto it puts the walker on <see cref="Exit"/>.</summary>
+public sealed class Teleporter : MonoBehaviour
+{
+    public static readonly List<Teleporter> All = new();
+
+    public Teleporter? Exit;
+    public float Radius = 1f;
+
+    public override void OnEnable() => All.Add(this);
+
+    public override void OnDisable() => All.Remove(this);
+
+    public bool Holds(Float3 feet)
+    {
+        Float3 local = Quaternion.Inverse(Transform.Rotation) * (feet - Transform.Position);
+        return local.X * local.X + local.Z * local.Z <= Radius * Radius && local.Y > -0.3f && local.Y < 0.6f;
     }
 }
