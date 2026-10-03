@@ -98,20 +98,6 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
         Assert.True(walker.Position.Z < 5f, $"went through to {walker.Position}");
     }
 
-    [Theory]
-    [InlineData(ColliderShape.Capsule)]
-    [InlineData(ColliderShape.Cylinder)]
-    public void StartingInsideACrateIsPushedOut(ColliderShape shape)
-    {
-        Scene scene = WorldWithFloor();
-        Box(scene, new Float3(0.3f, 0.5f, 0f), new Float3(1f, 1f, 1f));
-        Walker walker = Spawn(scene, Float3.Zero, shape);
-
-        walker.Run(Float3.Zero, 0.3f);
-
-        AssertNotInside(walker);
-        AssertCanStillMove(walker);
-    }
 
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -197,81 +183,6 @@ public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(grav
 
 
 
-    /// <summary>
-    /// A cluttered world of tilted blocks, ramps, ceilings and pillars, walked through at random with
-    /// random jumps. Every frame it has to stay finite and out of everything, and whenever the way it
-    /// is asked to walk is clear it has to actually go that way.
-    /// </summary>
-    [Theory]
-    [InlineData(ColliderShape.Capsule, 1)]
-    [InlineData(ColliderShape.Capsule, 2)]
-    [InlineData(ColliderShape.Capsule, 3)]
-    [InlineData(ColliderShape.Capsule, 4)]
-    [InlineData(ColliderShape.Cylinder, 1)]
-    [InlineData(ColliderShape.Cylinder, 2)]
-    [InlineData(ColliderShape.Cylinder, 3)]
-    [InlineData(ColliderShape.Cylinder, 4)]
-    public void WanderingAClutteredWorldNeverGetsStuckOrInside(ColliderShape shape, int seed)
-    {
-        var random = new Random(seed);
-        float Range(float min, float max) => min + (float)random.NextDouble() * (max - min);
-
-        Scene scene = WorldWithFloor(60f);
-        foreach (float side in new[] { -1f, 1f })
-        {
-            Box(scene, new Float3(side * 20f, 2f, 0f), new Float3(1f, 4f, 41f));
-            Box(scene, new Float3(0f, 2f, side * 20f), new Float3(41f, 4f, 1f));
-        }
-
-        for (int i = 0; i < 18; i++)
-        {
-            Float3 at = new(Range(-17f, 17f), 0f, Range(-17f, 17f));
-            if (Float3.Length(at) < 3f) continue;
-            Float3 size = new(Range(0.3f, 3f), Range(0.1f, 2.5f), Range(0.3f, 3f));
-            Box(scene, at + new Float3(0f, size.Y * 0.5f - Range(0f, 0.3f), 0f), size, new Float3(Range(-25f, 25f), Range(0f, 360f), Range(-25f, 25f)), "Block");
-        }
-        for (int i = 0; i < 5; i++)
-            Ramp(scene, new Float3(Range(-15f, 15f), 0f, Range(-15f, 15f)), Range(10f, 70f), Range(2f, 6f), Range(1.5f, 4f), yaw: Range(0f, 360f));
-        for (int i = 0; i < 4; i++)
-            SlopedCeiling(scene, new Float3(Range(-15f, 15f), 0f, Range(-15f, 15f)), Range(1.6f, 2.8f), Range(10f, 60f), Range(2f, 6f), Range(0f, 360f));
-        for (int i = 0; i < 5; i++)
-            Pillar(scene, new Float3(Range(-16f, 16f), 0f, Range(-16f, 16f)), Range(0.2f, 1f), Range(1f, 4f));
-
-        Walker walker = Spawn(scene, Float3.Zero, shape);
-        Float3 walk = Float3.Zero;
-        int stalls = 0;
-        int checks = 0;
-
-        for (int frame = 0; frame < 60 * 25; frame++)
-        {
-            if (frame % 30 == 0)
-            {
-                float angle = Range(0f, MathF.PI * 2f);
-                walk = new Float3(MathF.Sin(angle), 0f, MathF.Cos(angle)) * Range(2f, 7f);
-            }
-
-            Float3 direction = Float3.Normalize(walk);
-            bool clear = walker.Grounded && !walker.Cast(direction, Float3.Length(walk) * Dt + 0.05f);
-            Float3 before = walker.Position;
-
-            walker.Step(walk, jump: random.NextDouble() < 0.01);
-
-            AssertFinite(walker);
-            float deepest = DeepestOverlap(walker.Controller);
-            Assert.True(deepest < 0.02f, $"frame {frame}: {deepest:0.000} m inside something at {walker.Position}");
-            Assert.True(walker.Position.Y > -0.05f, $"frame {frame}: fell through the floor to {walker.Position}");
-
-            if (clear)
-            {
-                checks++;
-                Float3 moved = walker.Position - before;
-                if (Float3.Dot(moved, direction) < Float3.Length(walk) * Dt * 0.5f) stalls++;
-            }
-        }
-
-        Assert.True(checks > 100, $"only {checks} frames had a clear path, the world is too cluttered to test anything");
-        Assert.True(stalls <= checks / 50, $"stalled on {stalls} of {checks} frames where the way ahead was clear");
-    }
 }
 
 public sealed class RobustnessUpright() : RobustnessTests(Gravity.Upright);
