@@ -21,57 +21,48 @@ public sealed class PaperView : IRenderView
 {
     public uint PixelWidth { get; set; }
     public uint PixelHeight { get; set; }
+    public Framebuffer? TargetFramebuffer { get; set; }
+    public bool TargetSwapchain { get; set; }
     public string Name => "UI";
     public int ViewId => 0;
 }
 
 /// <summary>
-/// <see cref="PaperPipeline"/>'s present pass: reads the scene texture <see cref="GUI.PaperRenderer{TView}"/>
-/// declared (as a graph input, not a stored field) and composites it into
-/// <see cref="PaperPipeline.PresentTarget"/>, or the swapchain when that is null.
+/// <see cref="PaperPipeline"/>'s final pass: reads the scene texture <see cref="GUI.PaperRenderer{TView}"/>
+/// declared and composites it into the view's target.
 /// </summary>
-internal sealed class PaperPresentPass : IPresentPass<PaperView>
+internal sealed class PaperPresentPass : IPass<PaperView>
 {
     private readonly PaperRenderer<PaperView> _paper;
-    private readonly Func<Framebuffer?> _target;
 
     private TextureHandle _sceneHandle;
+    private TextureHandle _targetHandle;
 
-    public PaperPresentPass(PaperRenderer<PaperView> paper, Func<Framebuffer?> target)
+    public PaperPresentPass(PaperRenderer<PaperView> paper)
     {
         _paper = paper;
-        _target = target;
     }
 
     public string Name => "Paper Present";
 
-    public void Setup(PresentContextBuilder builder)
+    public void Setup(RenderContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture(_paper.SceneResourceId);
-        builder.RequestSwapchain();
+        _sceneHandle = builder.DeclareInputTexture(_paper.SceneResourceId);
+        _targetHandle = builder.DeclareViewTarget();
     }
 
-    public void Present(RenderContext<PaperView> context)
+    public void Render(RenderContext<PaperView> context, CommandBuffer cmd)
     {
         RenderTexture sceneRT = context.GetRenderTexture(_sceneHandle);
+        Framebuffer target = context.GetRenderTexture(_targetHandle).Framebuffer;
 
-        Framebuffer? target = _target();
-        if (target != null)
+        if (context.View.TargetSwapchain)
         {
-            CommandBuffer copyCmd = context.GetCommandBuffer(Name);
-            _paper.CompositeInto(copyCmd, sceneRT.ColorTextures[0], target);
-            context.SubmitCommandBuffer(copyCmd);
-            return;
+            cmd.SetFramebuffer(target);
+            cmd.ClearColorTarget(0, new Color(0f, 0f, 0f, 1f));
         }
 
-        Framebuffer? swap = context.SwapchainTarget;
-        if (swap == null)
-            return;
-
-        CommandBuffer cmd = context.GetCommandBuffer(Name);
-        _paper.CompositeInto(cmd, sceneRT.ColorTextures[0], swap);
-        context.SubmitCommandBuffer(cmd);
-        context.Present();
+        _paper.CompositeInto(cmd, sceneRT.ColorTextures[0], target);
     }
 }
 
@@ -108,7 +99,7 @@ public sealed class PaperPipeline : RenderPipeline<PaperView>, ICanvasRenderer
     protected override void InitializePasses()
     {
         AddPass(_paper);
-        SetPresentPass(new PaperPresentPass(_paper, () => PresentTarget));
+        AddPass(new PaperPresentPass(_paper));
     }
 
     /// <summary>Dispatches the graph, running the draw calls <see cref="PaperRenderer{TView}.RenderCalls"/> stashed.</summary>
@@ -118,6 +109,8 @@ public sealed class PaperPipeline : RenderPipeline<PaperView>, ICanvasRenderer
         {
             PixelWidth = (uint)_paper.PixelWidth,
             PixelHeight = (uint)_paper.PixelHeight,
+            TargetFramebuffer = PresentTarget,
+            TargetSwapchain = PresentTarget == null,
         };
 
         Graphics.Device.DispatchGraph(this, [view]);

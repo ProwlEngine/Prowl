@@ -21,19 +21,16 @@ public sealed class ClearPass : IPass<CameraView>
 
     public void Setup(RenderContextBuilder builder)
     {
-        _outputHandle = builder.GetOutputTexture(Output, GraphTextureDesc.ViewSized(depth: true));
+        _outputHandle = builder.DeclareOutputTexture(Output, GraphTextureDesc.ViewSized(depth: true));
     }
 
-    public void Render(RenderContext<CameraView> context)
+    public void Render(RenderContext<CameraView> context, CommandBuffer cmd)
     {
         RenderTexture output = context.GetRenderTexture(_outputHandle);
-        CommandBuffer cmd = context.GetCommandBuffer(Name);
 
         cmd.SetFramebuffer(output.Framebuffer);
         cmd.SetProperties(context.View.FrameProperties);
         cmd.ClearColorTarget(0, context.View.Camera.ClearColor);
         cmd.ClearDepthStencil(1f, 0);
-
-        context.SubmitCommandBuffer(cmd);
     }
 }

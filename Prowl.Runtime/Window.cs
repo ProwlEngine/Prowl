@@ -187,10 +187,7 @@ public static class Window
 
         s_deviceOptions = new GraphicsDeviceOptions
         {
-            Debug = true,
-            EnableValidation = true,
-            SwapchainDepthFormat = Graphite.PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = Application.VSync,
+            VulkanValidationLayers = true,
             PreferStandardClipSpaceYDirection = true,
             PreferDepthRangeZeroToOne = true,
         };
@@ -312,8 +309,8 @@ public static class Window
 
     public static void OnLoad()
     {
-        Graphics.Device = DeviceCreateUtilities.CreateDevice(InternalWindow, s_deviceOptions, Backend);
-        Graphics.Device.SyncToVerticalBlank = s_deviceOptions.SyncToVerticalBlank;
+        Graphics.Device = DeviceCreateUtilities.CreateDevice(InternalWindow, s_deviceOptions, Backend, Graphite.PixelFormat.D24_UNorm_S8_UInt, false, Application.VSync);
+        Graphics.Device.SyncToVerticalBlank = Application.VSync;
         Graphics.Device.OnMissingProperty += (shader, compute, name, expectedKind, set, bindingIndex) =>
             Debug.LogWarning($"Missing shader property '{name}' ({expectedKind}) at set {set}, binding {bindingIndex} for {(shader?.Name ?? compute?.Name ?? "<unknown>")}");
 

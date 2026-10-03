@@ -36,8 +36,8 @@
     <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Motion" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite" Version="$(ProwlGraphiteVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlGraphiteVersion)" />
+    <PackageReference Include="Prowl.Graphite" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />

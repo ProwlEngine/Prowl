@@ -36,10 +36,14 @@ public sealed class CameraView : IRenderView
     public RenderingData Data;
 
     /// <summary>
-    /// Where the pipeline's default presenter (<see cref="DefaultPresentPass"/>) blits its final content.
+    /// Where the pipeline's default present pass (<see cref="DefaultPresentPass"/>) blits its final content.
     /// Null presents to the swapchain instead.
     /// </summary>
     public RenderTexture? Target;
+
+    public Framebuffer? TargetFramebuffer => Target.IsValid() ? Target!.frameBuffer : null;
+
+    public bool TargetSwapchain => Target == null;
 
     /// <summary>
     /// The shader-side <c>Frame</c> parameter block (see ShaderVariables.slang) for this camera: view/projection

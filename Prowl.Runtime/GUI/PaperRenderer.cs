@@ -330,14 +330,15 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
 
     public void Setup(RenderContextBuilder builder)
     {
-        _sceneHandle = builder.GetOutputTexture(_sceneId, GraphTextureDesc.ViewSized(depth: false));
+        const TextureUsageKind both = TextureUsageKind.Attachment | TextureUsageKind.Sampled;
+        _sceneHandle = builder.DeclareOutputTexture(_sceneId, GraphTextureDesc.ViewSized(depth: false), usage: both, initial: TextureUsageKind.Attachment);
 
-        _captureHandle = builder.GetOutputTexture(_captureId, GraphTextureDesc.ViewSized(depth: false, scale: 0.5f));
+        _captureHandle = builder.DeclareOutputTexture(_captureId, GraphTextureDesc.ViewSized(depth: false, scale: 0.5f), usage: both, initial: TextureUsageKind.Attachment);
         for (int i = 0; i < _blurHandles.Length; i++)
-            _blurHandles[i] = builder.GetOutputTexture(_blurIds[i], GraphTextureDesc.ViewSized(depth: false, scale: 1f / (1 << (i + BlurBaseShift))));
+            _blurHandles[i] = builder.DeclareOutputTexture(_blurIds[i], GraphTextureDesc.ViewSized(depth: false, scale: 1f / (1 << (i + BlurBaseShift))), usage: both, initial: TextureUsageKind.Attachment);
 
-        _vboHandle = builder.GetOutputBuffer(_vboId, GraphBufferDesc.Of(_vertexBufferBytes, BufferUsage.VertexBuffer));
-        _eboHandle = builder.GetOutputBuffer(_eboId, GraphBufferDesc.Of(_indexBufferBytes, BufferUsage.IndexBuffer));
+        _vboHandle = builder.DeclareOutputBuffer(_vboId, GraphBufferDesc.Of(_vertexBufferBytes, BufferUsage.VertexBuffer), usage: BufferUsageKind.TransferDst | BufferUsageKind.Vertex);
+        _eboHandle = builder.DeclareOutputBuffer(_eboId, GraphBufferDesc.Of(_indexBufferBytes, BufferUsage.IndexBuffer), usage: BufferUsageKind.TransferDst | BufferUsageKind.Index);
     }
 
     /// <summary>
@@ -346,17 +347,16 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     /// <see cref="Setup"/>, resolved here, never manually created). Does not present or touch any
     /// framebuffer beyond its own scene texture - use <see cref="CompositeInto"/> for that.
     /// </summary>
-    public void Render(RenderContext<TView> context)
+    public void Render(RenderContext<TView> context, CommandBuffer cmd)
     {
         Canvas canvas = _pendingCanvas;
         IReadOnlyList<DrawCall> drawCalls = _pendingDrawCalls;
 
+        _context = context;
+        _textureStates.Clear();
         RenderTexture sceneRT = context.GetRenderTexture(_sceneHandle);
-        RenderTexture ResolveBlur(int level) => context.GetRenderTexture(level < 0 ? _captureHandle : _blurHandles[level]);
         DeviceBuffer vbo = context.GetRenderBuffer(_vboHandle);
         DeviceBuffer ebo = context.GetRenderBuffer(_eboHandle);
-
-        CommandBuffer cmd = context.GetCommandBuffer("Paper");
 
         bool hasGeometry = drawCalls.Count > 0 && canvas.VertexCount > 0 && canvas.IndexCount > 0;
 
@@ -397,12 +397,10 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
             for (int i = 0; i < includedDrawCalls; i++)
             {
                 DrawCall drawCall = drawCalls[i];
-                ProcessDrawCall(cmd, canvas, drawCall, indexOffset, sceneRT, ResolveBlur, vbo, ebo);
+                ProcessDrawCall(cmd, canvas, drawCall, indexOffset, sceneRT, vbo, ebo);
                 indexOffset += drawCall.ElementCount;
             }
         }
-
-        context.SubmitCommandBuffer(cmd);
     }
 
     /// <summary>
@@ -471,7 +469,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
 
     private void ProcessDrawCall(
         CommandBuffer cmd, Canvas canvas, DrawCall drawCall, int indexOffset,
-        RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur, DeviceBuffer vbo, DeviceBuffer ebo)
+        RenderTexture sceneRT, DeviceBuffer vbo, DeviceBuffer ebo)
     {
         float fbScale = (float)canvas.FramebufferScale;
         Brush brush = drawCall.Brush;
@@ -481,7 +479,10 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         // Backdrop blur: blur the scene drawn so far into blur level 0, then composite the shape over it.
         if (blur > 0f)
         {
-            blurMix = RenderBackdropBlur(cmd, blur, sceneRT, resolveBlur);
+            blurMix = RenderBackdropBlur(cmd, blur, sceneRT);
+            UseScene(cmd, TextureUsageKind.Attachment);
+            UseLevel(cmd, 0, TextureUsageKind.Sampled);
+            UseLevel(cmd, CaptureLevel, TextureUsageKind.Sampled);
             cmd.SetFramebuffer(sceneRT.Framebuffer);
         }
 
@@ -529,8 +530,8 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         // backdropTexture always needs a bound sampler; use the blurred scene when blurring, else any texture.
         if (blur > 0f)
         {
-            _properties.SetTexture("backdropTexture", resolveBlur(0).ColorTextures[0], _sampler);
-            _properties.SetTexture("backdropSharpTexture", resolveBlur(-1).ColorTextures[0], _sampler);
+            _properties.SetTexture("backdropTexture", ResolveLevel(0).ColorTextures[0], _sampler);
+            _properties.SetTexture("backdropSharpTexture", ResolveLevel(CaptureLevel).ColorTextures[0], _sampler);
         }
         else
         {
@@ -584,26 +585,56 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         offset = BlurOffsetMin + (col - 1 + t) * BlurOffsetStep;
     }
 
-    private float RenderBackdropBlur(CommandBuffer cmd, float radius, RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur)
+    private const int CaptureLevel = -1;
+
+    private RenderContext<TView> _context;
+    private readonly Dictionary<RenderResourceID, TextureUsageKind> _textureStates = new();
+
+    private TextureHandle HandleOfLevel(int level) => level == CaptureLevel ? _captureHandle : _blurHandles[level];
+
+    private RenderTexture ResolveLevel(int level) => _context.GetRenderTexture(HandleOfLevel(level));
+
+    private void Use(CommandBuffer cmd, TextureHandle handle, TextureUsageKind kind)
+    {
+        TextureUsageKind current = _textureStates.TryGetValue(handle.Id, out TextureUsageKind known) ? known : TextureUsageKind.Attachment;
+        if (current == kind)
+            return;
+
+        _context.Transition(cmd, handle, kind);
+        _textureStates[handle.Id] = kind;
+    }
+
+    private void UseLevel(CommandBuffer cmd, int level, TextureUsageKind kind) => Use(cmd, HandleOfLevel(level), kind);
+
+    private void UseScene(CommandBuffer cmd, TextureUsageKind kind) => Use(cmd, _sceneHandle, kind);
+
+    private float RenderBackdropBlur(CommandBuffer cmd, float radius, RenderTexture sceneRT)
     {
         ComputeBlurParams(radius, out int iterations, out float offset, out float blurMix);
 
-        BlurPass(cmd, sceneRT.ColorTextures[0], TexelSize(sceneRT), resolveBlur, -1, false, 0f);
-        BlurPass(cmd, resolveBlur(-1).ColorTextures[0], TexelSize(resolveBlur(-1)), resolveBlur, 0, false, 1f);
+        BlurPass(cmd, sceneRT.ColorTextures[0], TexelSize(sceneRT), -2, CaptureLevel, false, 0f);
+        BlurPass(cmd, ResolveLevel(CaptureLevel).ColorTextures[0], TexelSize(ResolveLevel(CaptureLevel)), CaptureLevel, 0, false, 1f);
         for (int i = 0; i < iterations; i++)
-            BlurPass(cmd, resolveBlur(i).ColorTextures[0], TexelSize(resolveBlur(i)), resolveBlur, i + 1, false, offset);
+            BlurPass(cmd, ResolveLevel(i).ColorTextures[0], TexelSize(ResolveLevel(i)), i, i + 1, false, offset);
 
         for (int i = iterations; i > 0; i--)
-            BlurPass(cmd, resolveBlur(i).ColorTextures[0], TexelSize(resolveBlur(i)), resolveBlur, i - 1, true, offset);
+            BlurPass(cmd, ResolveLevel(i).ColorTextures[0], TexelSize(ResolveLevel(i)), i, i - 1, true, offset);
 
         return blurMix;
     }
 
     private static Int2 TexelSize(RenderTexture rt) => new((int)rt.Desc.Width, (int)rt.Desc.Height);
 
-    private void BlurPass(CommandBuffer cmd, Texture source, Int2 sourceSize, Func<int, RenderTexture> resolveBlur, int dstLevel, bool upsample, float offset)
+    private void BlurPass(CommandBuffer cmd, Texture source, Int2 sourceSize, int srcLevel, int dstLevel, bool upsample, float offset)
     {
-        RenderTexture dst = resolveBlur(dstLevel);
+        if (srcLevel == -2)
+            UseScene(cmd, TextureUsageKind.Sampled);
+        else
+            UseLevel(cmd, srcLevel, TextureUsageKind.Sampled);
+
+        UseLevel(cmd, dstLevel, TextureUsageKind.Attachment);
+
+        RenderTexture dst = ResolveLevel(dstLevel);
         Int2 dstSize = TexelSize(dst);
         Int2 basis = upsample ? dstSize : sourceSize;
 

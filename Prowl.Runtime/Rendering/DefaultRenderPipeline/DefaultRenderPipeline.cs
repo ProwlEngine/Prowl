@@ -68,9 +68,6 @@ public class DefaultRenderPipeline : RenderPipeline<CameraView>
         return s_blitMaterial!;
     }
 
-    /// <summary>Overrides the present pass. Must be assigned before the pipeline's first dispatch.</summary>
-    public IPresentPass<CameraView>? Presenter { get; set; }
-
     /// <summary>Paper UI pass composited over swapchain presents. Must be assigned before the first dispatch.</summary>
     public PaperRenderer<CameraView>? UIRenderer { get; set; }
 
@@ -81,6 +78,6 @@ public class DefaultRenderPipeline : RenderPipeline<CameraView>
         if (UIRenderer != null)
             AddPass(UIRenderer);
 
-        SetPresentPass(Presenter ?? new DefaultPresentPass(UIRenderer));
+        AddPass(new DefaultPresentPass(UIRenderer));
     }
 }

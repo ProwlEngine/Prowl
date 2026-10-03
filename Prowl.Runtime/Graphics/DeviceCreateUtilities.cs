@@ -11,7 +11,7 @@ namespace Prowl.Runtime;
 
 public static class DeviceCreateUtilities
 {
-    public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, GraphicsBackend backend)
+    public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, GraphicsBackend backend, PixelFormat depthFormat, bool colorSrgb, bool syncToVerticalBlank)
     {
         if (!window.IsInitialized)
             throw new Exception("Cannot create graphics device with an uninitialized window!");
@@ -30,11 +30,11 @@ public static class DeviceCreateUtilities
                 VulkanDeviceOptions vkOptions = default;
                 SwapchainDescription vkDescription = new()
                 {
-                    DepthFormat = options.SwapchainDepthFormat,
-                    ColorSrgb = options.SwapchainSrgbFormat,
+                    DepthFormat = depthFormat,
+                    ColorSrgb = colorSrgb,
                     Width = (uint)window.FramebufferSize.X,
                     Height = (uint)window.FramebufferSize.Y,
-                    SyncToVerticalBlank = options.SyncToVerticalBlank,
+                    SyncToVerticalBlank = syncToVerticalBlank,
                     Source = SwapchainSource.CreateVulkan(window.VkSurface!)
                 };
 
@@ -45,7 +45,7 @@ public static class DeviceCreateUtilities
                 throw new Exception($"Unsupported graphics backend: {backend}");
         }
 
-        device.SyncToVerticalBlank = options.SyncToVerticalBlank;
+        device.SyncToVerticalBlank = syncToVerticalBlank;
         if (device.MainSwapchain != null)
             device.MainSwapchain.Name = "Main Swapchain";
         window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
