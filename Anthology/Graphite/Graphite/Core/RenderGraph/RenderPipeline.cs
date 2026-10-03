@@ -99,7 +99,7 @@ public class RenderPipeline<TView> : IDisposable
     }
 
     /// <summary>
-    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Presents after dispatch if a pass wrote the backbuffer.
+    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture. Passes that write the view target are skipped when the view has none. The dispatch presents if a pass wrote the view target of a view that set TargetSwapchain.
     /// Once per view per dispatch.
     /// </summary>
     public void ExecuteView(RenderContext<TView> context)
@@ -114,8 +114,12 @@ public class RenderPipeline<TView> : IDisposable
         try
         {
             int index = 0;
+            bool hasViewTarget = context.HasViewTarget;
             foreach (RenderGraph<TView>.PassNode node in graph.OrderedPasses)
             {
+                if (node.WritesViewTarget && !hasViewTarget)
+                    continue;
+
                 var passInfo = new PassInfo(node.Pass.Name, index++, node.Inputs, node.Outputs);
 
                 profiler?.BeginPass(passInfo);
@@ -166,7 +170,7 @@ public class RenderPipeline<TView> : IDisposable
         {
             foreach (RenderResourceID output in node.Outputs)
             {
-                if (context.IsTextureResource(output) && output != GraphBackbufferResource.BackbufferId)
+                if (context.IsTextureResource(output) && output != GraphViewTargetResource.ViewTargetId)
                     framebuffers.Add(context.GetRenderTexture(new TextureHandle(output)).Framebuffer);
             }
         }

@@ -18,6 +18,18 @@ public interface IRenderView
     /// Display name for profiler/debug tooling. Defaults to the type name; override to tell instances apart (e.g. per camera).
     /// </summary>
     string Name => GetType().Name;
+
+    /// <summary>
+    /// Framebuffer that passes declaring the view target draw into, or null. Write-only to passes: they can neither
+    /// sample nor transition it. Should match <see cref="PixelWidth"/> and <see cref="PixelHeight"/>. Setting this and
+    /// <see cref="TargetSwapchain"/> together throws at dispatch.
+    /// </summary>
+    Framebuffer? TargetFramebuffer => null;
+
+    /// <summary>
+    /// True to draw into the device's main swapchain image and present after the dispatch. Needs a main swapchain.
+    /// </summary>
+    bool TargetSwapchain => false;
 }
 
 /// <summary>

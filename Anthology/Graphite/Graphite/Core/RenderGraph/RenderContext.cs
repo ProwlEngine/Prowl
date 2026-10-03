@@ -47,7 +47,18 @@ public sealed class RenderContext<TView>
     /// <summary>Execution this context records into.</summary>
     public ExecutionTask Task => _task;
 
-    internal bool PresentRequested => _graph.WritesBackbuffer && _device.SwapchainFramebuffer != null;
+    internal bool PresentRequested => _graph.WritesViewTarget && _view.TargetSwapchain && _device.SwapchainFramebuffer != null;
+
+    internal bool HasViewTarget
+    {
+        get
+        {
+            if (_view.TargetSwapchain && _view.TargetFramebuffer != null)
+                throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
+
+            return _view.TargetSwapchain ? _device.SwapchainFramebuffer != null : _view.TargetFramebuffer != null;
+        }
+    }
 
     /// <summary>View being rendered.</summary>
     public TView View => _view;
@@ -437,14 +448,16 @@ public sealed class RenderContext<TView>
 
         switch (resource)
         {
-            case GraphBackbufferResource:
+            case GraphViewTargetResource:
                 if (framesAgo != 0)
-                    throw new ArgumentOutOfRangeException(nameof(framesAgo), "The backbuffer has no history.");
-                Framebuffer swapchain = _device.SwapchainFramebuffer
-                    ?? throw new InvalidOperationException("A pass declared the backbuffer, but the device has no main swapchain.");
-                RenderTexture backbuffer = new(swapchain);
-                _resolved[handle.Id] = backbuffer;
-                return backbuffer;
+                    throw new ArgumentOutOfRangeException(nameof(framesAgo), "The view target has no history.");
+                if (_view.TargetSwapchain && _view.TargetFramebuffer != null)
+                    throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
+                Framebuffer viewTarget = (_view.TargetSwapchain ? _device.SwapchainFramebuffer : _view.TargetFramebuffer)
+                    ?? throw new InvalidOperationException($"A pass resolved the view target, but view '{_view.Name}' has none.");
+                RenderTexture target = new(viewTarget);
+                _resolved[handle.Id] = target;
+                return target;
 
             case GraphImportedTextureResource imported:
                 if (framesAgo != 0)
@@ -540,7 +553,7 @@ public sealed class RenderContext<TView>
 
     internal bool IsTextureResource(RenderResourceID id)
         => _graph.Resources.TryGetValue(id, out GraphResource? resource)
-            && resource is GraphTextureResource or GraphImportedTextureResource or GraphBackbufferResource;
+            && resource is GraphTextureResource or GraphImportedTextureResource or GraphViewTargetResource;
 
     internal TargetLoadStoreOps GetTargetOps(RenderResourceID id)
     {
@@ -557,8 +570,8 @@ public sealed class RenderContext<TView>
                         return texture.Ops;
                     case GraphImportedTextureResource imported:
                         return imported.Ops;
-                    case GraphBackbufferResource backbuffer:
-                        return backbuffer.Ops;
+                    case GraphViewTargetResource viewTarget:
+                        return viewTarget.Ops;
                 }
             }
         }
@@ -570,7 +583,7 @@ public sealed class RenderContext<TView>
         {
             GraphTextureResource texture => texture.Ops,
             GraphImportedTextureResource imported => imported.Ops,
-            GraphBackbufferResource backbuffer => backbuffer.Ops,
+            GraphViewTargetResource viewTarget => viewTarget.Ops,
             _ => throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' is not a render target.")
         };
     }
