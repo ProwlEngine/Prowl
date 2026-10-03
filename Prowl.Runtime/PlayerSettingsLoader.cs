@@ -54,10 +54,10 @@ public static class PlayerSettingsLoader
 
         try
         {
-            // Default ON if the key is absent.
-            bool async = !settings.TryGet("AsyncAssetLoading", out var a) || a!.BoolValue;
-            AssetLoadingConfig.AsyncEnabled = async;
-            Debug.Log($"[PlayerSettings] Async asset loading: {async}.");
+            if (settings.TryGet("GracePeriodSeconds", out var grace))
+                AssetDatabase.GracePeriod = TimeSpan.FromSeconds(grace!.FloatValue);
+            if (settings.TryGet("MemoryBudgetMB", out var budget))
+                AssetDatabase.MemoryBudget = (long)budget!.IntValue * 1024 * 1024;
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply asset config: {ex.Message}"); }
     }
@@ -72,9 +72,9 @@ public static class PlayerSettingsLoader
             float gx = settings.TryGet("GravityX", out var gxp) ? gxp!.FloatValue : 0;
             float gy = settings.TryGet("GravityY", out var gyp) ? gyp!.FloatValue : -9.81f;
             float gz = settings.TryGet("GravityZ", out var gzp) ? gzp!.FloatValue : 0;
-            int solverIter = settings.TryGet("SolverIterations", out var si) ? si!.IntValue : 8;
+            int solverIter = settings.TryGet("SolverIterations", out var si) ? si!.IntValue : 12;
             int relaxIter = settings.TryGet("RelaxIterations", out var ri) ? ri!.IntValue : 4;
-            int subSteps = settings.TryGet("SubSteps", out var ss) ? ss!.IntValue : 2;
+            int subSteps = settings.TryGet("SubSteps", out var ss) ? ss!.IntValue : 3;
             bool sleep = !settings.TryGet("AllowSleep", out var sl) || sl!.BoolValue;
             bool mt = !settings.TryGet("UseMultithreading", out var mtp) || mtp!.BoolValue;
             bool sync = !settings.TryGet("AutoSyncTransforms", out var st) || st!.BoolValue;

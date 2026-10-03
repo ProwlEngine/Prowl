@@ -80,7 +80,7 @@ public class NavMeshSurfaceEditor : CustomEditor
             else if (!bake.Start(surface)) Runtime.Debug.LogWarning("[Navigation] Another navmesh is already baking.");
         }).Show();
 
-        var data = surface.NavMeshData.Res;
+        var data = surface.NavMeshData;
         if (data.IsValid() && data!.HasTiles)
         {
             Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear", () => NavMeshBakeService.Clear(surface)).Show();
@@ -96,7 +96,7 @@ public class NavMeshSurfaceEditor : CustomEditor
     // registration keys off the data.
     private static int RegistrationKey(NavMeshSurface surface)
     {
-        Runtime.NavMeshData? data = surface.NavMeshData.Res;
+        Runtime.NavMeshData? data = surface.NavMeshData;
         return data.IsValid() ? data!.Settings.AgentTypeId : surface.AgentTypeId;
     }
 
@@ -127,7 +127,7 @@ public class NavMeshSurfaceEditor : CustomEditor
 
         // Baked, enabled, and still unregistered with no rival to blame: something else holds the
         // type, so the bake is invisible until it is redone under a type that is free.
-        Runtime.NavMeshData? data = surface.NavMeshData.Res;
+        Runtime.NavMeshData? data = surface.NavMeshData;
         if (surface.EnabledInHierarchy && surface.Instance == null && data.IsValid() && data!.HasTiles)
             return $"This bake targets {agentType}, which already has a navmesh; this surface is ignored.";
         return null;

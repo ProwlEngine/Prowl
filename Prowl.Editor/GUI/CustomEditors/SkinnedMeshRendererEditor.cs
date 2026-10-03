@@ -28,7 +28,7 @@ public class SkinnedMeshRendererEditor : CustomEditor
         // Default inspector (mesh, materials, bone paths, etc.).
         DrawDefaultInspector(paper, id, renderer);
 
-        var mesh = renderer.SharedMesh.Res;
+        var mesh = renderer.SharedMesh;
         int count = mesh.IsValid() ? mesh.BlendShapeCount : 0;
         if (mesh == null || count == 0)
             return;

@@ -36,18 +36,17 @@ public sealed class DesktopPlayer : Game, IDisposable
         BuiltInAssets.Initialize();
 
         var backend = new PlayerAssetBackend(_manifest.Packaging, "Content");
-        AssetDatabase.Current = backend;
-        GameResources.Initialize(backend.ResourceEntries);
+        AssetDatabase.Backend = backend;
         _assets = backend;
 
         string settingsDir = Path.Combine(Application.DataPath, "Content", "Settings");
 
-        // Before the scene loads, because a component's OnEnable may resolve an AssetRef.
+        // Before anything loads, since they set how long unused assets stay loaded.
         PlayerSettingsLoader.ApplyAssetConfig(settingsDir);
         PlayerSettingsLoader.ApplyNavigation(settingsDir);
 
-        var scene = backend.LoadScene(_manifest.DefaultSceneGuid);
-        if (scene != null)
+        // Blocks until the scene and everything it uses is loaded, so the first frame shows all of it.
+        if (AssetDatabase.Get<SceneAsset>(_manifest.DefaultSceneGuid) is { IsMissing: false } scene)
             Scene.Load(scene);
         else
             Debug.LogError($"[Player] Failed to load the default scene {_manifest.DefaultSceneGuid}.");
@@ -68,25 +67,20 @@ public sealed class DesktopPlayer : Game, IDisposable
         }
     }
 
-    public override void OnUpdate(Scene? scene)
-    {
-        _assets?.TickIdleSweep();
-        scene?.Update();
-    }
+    public override void OnUpdate(Scene? scene) => scene?.Update();
 
     public override void OnRender(Scene? scene) => scene?.Render();
 
     public override void OnGui(Scene? scene, Paper paper) => scene?.OnGui(paper);
 
     /// <summary>
-    /// Closes the pak archives the backend holds open, once the game loop returns. The database it
-    /// installed goes with it, so a late asset lookup during shutdown finds nothing rather than reading
-    /// through a disposed archive.
+    /// Closes the pak archives the backend holds open, once the game loop returns. The backend goes with
+    /// it, so a late asset lookup during shutdown finds nothing rather than reading through a disposed archive.
     /// </summary>
     public void Dispose()
     {
-        if (ReferenceEquals(AssetDatabase.Current, _assets))
-            AssetDatabase.Current = null;
+        if (ReferenceEquals(AssetDatabase.Backend, _assets))
+            AssetDatabase.Backend = null;
 
         _assets?.Dispose();
         _assets = null;

@@ -8,9 +8,8 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Registry of built-in assets (embedded in the runtime assembly).
-/// Provides deterministic GUIDs so they can be referenced like any other asset.
-/// Works at both runtime and editor level.
+/// Assets embedded in the runtime assembly, with deterministic GUIDs so they are referenced like any other asset.
+/// The asset database asks here before its backend, and never unloads them.
 /// </summary>
 public static class BuiltInAssets
 {
@@ -20,14 +19,21 @@ public static class BuiltInAssets
         public string Name;
         public string Path; // e.g. "$Default:Standard"
         public Type AssetType;
-        public Func<EngineObject> Loader;
+        public Func<Asset> Loader;
     }
 
     private static readonly Dictionary<Guid, BuiltInEntry> _entries = new();
-    private static readonly Dictionary<Guid, EngineObject> _cache = new();
-    private static bool _initialized;
+    private static readonly object _initLock = new();
+    private static volatile bool _initialized;
 
-    public static IReadOnlyDictionary<Guid, BuiltInEntry> Entries => _entries;
+    public static IReadOnlyDictionary<Guid, BuiltInEntry> Entries
+    {
+        get
+        {
+            Initialize();
+            return _entries;
+        }
+    }
 
     /// <summary>
     /// Generate a deterministic GUID from a built-in asset path.
@@ -48,8 +54,16 @@ public static class BuiltInAssets
     public static void Initialize()
     {
         if (_initialized) return;
-        _initialized = true;
+        lock (_initLock)
+        {
+            if (_initialized) return;
+            RegisterAll();
+            _initialized = true;
+        }
+    }
 
+    private static void RegisterAll()
+    {
         // Default shaders: precompiled blobs (Tools/DefaultShaderCompiler), raw parse from an embedded
         // resource, same as every other default type. Most DefaultShader entries have no source .shader
         // file yet, so ParseDefault returning null is expected and just skipped.
@@ -73,7 +87,6 @@ public static class BuiltInAssets
                 DefaultModel.Sphere => "Sphere.obj",
                 DefaultModel.Cylinder => "Cylinder.obj",
                 DefaultModel.Plane => "Plane.obj",
-                DefaultModel.SkyDome => "SkyDome.obj",
                 _ => null
             };
             if (fileName == null) continue;
@@ -87,13 +100,9 @@ public static class BuiltInAssets
                 () =>
                 {
                     using var stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-                    // Built-in primitives always get lightmap UV2 so they're lightmappable out of the
-                    // box. The SkyDome is the skybox mesh (never lightmapped), so it's skipped.
-                    var importResult = new AssetImporting.ModelImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true, GenerateLightmapUVs = model != DefaultModel.SkyDome });
-                    var mesh = importResult.Meshes.Count > 0 ? importResult.Meshes[0] : new Mesh { Name = model.ToString() };
-                    mesh.AssetID = GuidForMesh(model);
-                    mesh.AssetPath = $"$Default:Mesh/{model}";
-                    return mesh;
+                    // Built-in primitives always get lightmap UV2 so they're lightmappable out of the box.
+                    var importResult = new AssetImporting.ModelImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true, GenerateLightmapUVs = true });
+                    return importResult.Meshes.Count > 0 ? importResult.Meshes[0] : new Mesh { Name = model.ToString() };
                 });
         }
 
@@ -130,7 +139,7 @@ public static class BuiltInAssets
         }
     }
 
-    private static void Register(string path, string name, Type type, Func<EngineObject> loader)
+    private static void Register(string path, string name, Type type, Func<Asset> loader)
     {
         var guid = DeterministicGuid(path);
         _entries[guid] = new BuiltInEntry
@@ -143,49 +152,40 @@ public static class BuiltInAssets
         };
     }
 
-    /// <summary>
-    /// Try to resolve a built-in asset by GUID. Returns null if not a built-in asset.
-    /// Caches loaded assets.
-    /// </summary>
-    public static EngineObject? Get(Guid guid)
+    /// <summary>Builds a built-in asset into the staging copy the database fills its stable object from.</summary>
+    internal static bool ReadContent(Guid guid, Asset staging)
     {
-        if (!_entries.TryGetValue(guid, out var entry))
-            return null;
+        if (!_entries.TryGetValue(guid, out var entry)) return false;
 
-        // _entries is populated once in Initialize() and read-only afterward, but _cache is
-        // filled lazily and is now hit from multiple threads (render thread texture fallback,
-        // AssetLoader background thread, main thread). Guard it so a built-in is created once.
-        lock (_cache)
+        try
         {
-            if (_cache.TryGetValue(guid, out var cached) && cached != null && !cached.IsDisposed)
-                return cached;
-
-            try
+            Asset built = entry.Loader();
+            if (built.GetType() != staging.GetType())
             {
-                var obj = entry.Loader();
-                if (obj != null)
-                {
-                    obj.AssetID = guid;
-                    obj.AssetPath = entry.Path;
-                    obj.Name = entry.Name;
-                    _cache[guid] = obj;
-                }
-                return obj;
+                Debug.LogError($"Built-in asset '{entry.Path}' built a {built.GetType().Name}, not the {staging.GetType().Name} it is registered as.");
+                return false;
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to load built-in asset '{entry.Path}': {ex.Message}");
-                return null;
-            }
+            AssetContent.Move(built, staging);
+            GC.SuppressFinalize(built);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to load built-in asset '{entry.Path}': {ex.Message}");
+            return false;
         }
     }
+
+    /// <summary>The built-in asset with this GUID, loaded.</summary>
+    public static T Load<T>(Guid guid) where T : Asset
+        => AssetDatabase.Load<T>(guid) ?? throw new InvalidOperationException($"No built-in {typeof(T).Name} has the GUID {guid}.");
 
     /// <summary>
     /// Find all built-in assets assignable to the given type.
     /// </summary>
     public static IEnumerable<(Guid guid, string name, string path, Type type)> FindAllOfType(Type type)
     {
-        foreach (var (guid, entry) in _entries)
+        foreach (var (guid, entry) in Entries)
         {
             if (type.IsAssignableFrom(entry.AssetType))
                 yield return (guid, entry.Name, entry.Path, entry.AssetType);
@@ -193,7 +193,7 @@ public static class BuiltInAssets
     }
 
     /// <summary>Check if a GUID corresponds to a built-in asset.</summary>
-    public static bool IsBuiltIn(Guid guid) => _entries.ContainsKey(guid);
+    public static bool IsBuiltIn(Guid guid) => Entries.ContainsKey(guid);
 
     /// <summary>
     /// Get the deterministic GUID for a specific default shader.

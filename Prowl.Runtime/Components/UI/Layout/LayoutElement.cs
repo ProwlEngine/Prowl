@@ -57,7 +57,7 @@ public class LayoutElement : UIBehaviour, ILayoutElement
 /// <summary>
 /// Resolves the sizes the layout system arranges against: <see cref="ILayoutElement"/> components take
 /// priority (a nested <see cref="LayoutGroup"/> reports its content size this way), otherwise the
-/// element's intrinsic size (its <see cref="RectTransform.SizeDelta"/>).
+/// element's intrinsic size (its <see cref="RectTransform.SizeDelta"/> on axes with fixed anchors).
 /// </summary>
 /// <remarks>
 /// Results are memoized for the duration of one canvas layout pass. A nested group answers a size query
@@ -131,6 +131,12 @@ public static class LayoutUtility
         return sizes;
     }
 
+    // On a stretched axis SizeDelta is padding against the anchors, not a size, so that axis has none of its own.
     private static Float2 Intrinsic(GameObject go)
-        => go.RectTransform is { } rt ? rt.SizeDelta : new Float2(100f, 100f);
+    {
+        if (go.RectTransform is not { } rt) return new Float2(100f, 100f);
+        float w = rt.AnchorMin.X == rt.AnchorMax.X ? rt.SizeDelta.X : 0f;
+        float h = rt.AnchorMin.Y == rt.AnchorMax.Y ? rt.SizeDelta.Y : 0f;
+        return new Float2(Maths.Max(0f, w), Maths.Max(0f, h));
+    }
 }

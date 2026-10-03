@@ -16,22 +16,22 @@ namespace Prowl.Runtime.Resources;
 /// created and inspected without a graphics context.
 /// </summary>
 [CreateAssetMenu("Render Texture", Extension = ".rendertexture", Order = 1200)]
-public sealed class RenderTexture : EngineObject, ISerializable
+public sealed class RenderTexture : Asset, ISerializable
 {
     private Framebuffer _frameBuffer;
-    public Framebuffer frameBuffer { get { EnsureNotDisposed(); return _frameBuffer; } private set => _frameBuffer = value; }
-    public Texture2D MainTexture { get { EnsureNotDisposed(); return InternalTextures[0]; } }
+    public Framebuffer frameBuffer { get { EnsureLoaded(); return _frameBuffer; } private set => _frameBuffer = value; }
+    public Texture2D MainTexture { get { EnsureLoaded(); return InternalTextures[0]; } }
     private Texture2D[] _internalTextures;
-    public Texture2D[] InternalTextures { get { EnsureNotDisposed(); return _internalTextures; } private set => _internalTextures = value; }
+    public Texture2D[] InternalTextures { get { EnsureLoaded(); return _internalTextures; } private set => _internalTextures = value; }
     private Texture2D _internalDepth;
-    public Texture2D InternalDepth { get { EnsureNotDisposed(); return _internalDepth; } private set => _internalDepth = value; }
+    public Texture2D InternalDepth { get { EnsureLoaded(); return _internalDepth; } private set => _internalDepth = value; }
 
     private const PixelFormat DepthFormat = PixelFormat.D24_UNorm_S8_UInt;
 
     private int _width;
     private int _height;
-    public int Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
-    public int Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
+    public int Width { get { EnsureLoaded(); return _width; } private set => _width = value; }
+    public int Height { get { EnsureLoaded(); return _height; } private set => _height = value; }
     private int numTextures;
     private bool hasDepthAttachment;
     private bool ownsDepth;
@@ -123,9 +123,21 @@ public sealed class RenderTexture : EngineObject, ISerializable
         _frameBuffer = null;
     }
 
-    protected override void OnDispose() => ReleaseResources();
+    protected internal override long EstimateBytes()
+    {
+        if (_internalTextures == null) return 0;
+        long bytesPerPixel = hasDepthAttachment ? Texture.GetBytesPerPixel(DepthFormat) : 0;
+        foreach (PixelFormat format in textureFormats)
+            bytesPerPixel += Texture.GetBytesPerPixel(format);
+        return (long)_width * _height * bytesPerPixel;
+    }
 
-    ~RenderTexture() => Dispose();
+    protected override void OnUnload() => ReleaseResources();
+
+    ~RenderTexture()
+    {
+        if (!Registered) Dispose();
+    }
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {

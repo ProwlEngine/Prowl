@@ -151,7 +151,7 @@ public class PointOnLineConstraint : PhysicsConstraint
     /// <summary>
     /// Gets the current distance along the line axis.
     /// </summary>
-    public float Distance => constraint?.Distance ?? 0.0f;
+    public float Distance => IsLive(constraint) ? constraint.Distance : 0.0f;
 
     /// <summary>
     /// Gets the accumulated impulse applied by this constraint.
@@ -160,9 +160,9 @@ public class PointOnLineConstraint : PhysicsConstraint
     {
         get
         {
-            if (constraint == null) return Float3.Zero;
+            if (!IsLive(constraint)) return Float3.Zero;
             JVector impulse = constraint.Impulse;
-            return new Float3(impulse.X, impulse.Y, impulse.Z);
+            return impulse.ToProwl();
         }
     }
 
@@ -174,7 +174,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         JVector worldAnchor1 = LocalToWorld(anchor1, Body1.Transform);
         JVector worldAnchor2 = connectedBody.IsValid()
             ? LocalToWorld(anchor2, connectedBody.Transform)
-            : new JVector(anchor2.X, anchor2.Y, anchor2.Z);
+            : anchor2.ToJitter();
 
         constraint = world.CreateConstraint<PointOnLine>(body1, body2);
 

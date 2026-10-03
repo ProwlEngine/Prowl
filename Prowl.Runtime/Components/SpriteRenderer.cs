@@ -23,7 +23,7 @@ public class SpriteRenderer : MonoBehaviour
     /// <summary>Sorting-order spacing along Z (world units) so higher orders sort in front for the transparent queue.</summary>
     private const float SortBias = 0.0001f;
 
-    public AssetRef<Sprite> Sprite;
+    public Sprite? Sprite;
 
     /// <summary>Tint multiplied into the sprite. Baked into vertex color.</summary>
     public Color Color = Color.White;
@@ -32,7 +32,7 @@ public class SpriteRenderer : MonoBehaviour
     public bool FlipY;
 
     /// <summary>Optional material override. Defaults to the built-in unlit alpha-blended sprite material.</summary>
-    public AssetRef<Material> Material;
+    public Material? Material;
 
     /// <summary>Higher values render in front of lower ones (applied as a small Z bias for the transparent queue).</summary>
     public int SortingOrder;
@@ -42,6 +42,7 @@ public class SpriteRenderer : MonoBehaviour
 
     // Snapshot of the inputs the baked mesh was built from, so we only rebuild when something changes.
     [System.NonSerialized] private Sprite? _bakedSprite;
+    [System.NonSerialized] private int _bakedContent;
     [System.NonSerialized] private bool _bakedFlipX, _bakedFlipY;
     [System.NonSerialized] private Color _bakedColor;
 
@@ -53,17 +54,17 @@ public class SpriteRenderer : MonoBehaviour
 
     public override void OnRenderCollect(SceneCuller culler)
     {
-        Sprite? sprite = Sprite.Res;
+        Sprite? sprite = Sprite;
         if (sprite == null) return;
 
-        Texture2D? tex = sprite.Texture.Res;
+        Texture2D? tex = sprite.Texture;
         if (tex == null || tex.Width == 0 || tex.Height == 0) return;
         if (sprite.Rect.Width <= 0 || sprite.Rect.Height <= 0) return;
 
         EnsureMesh(sprite);
         if (_mesh == null) return;
 
-        Material assignedMat = Material.Res;
+        Material assignedMat = Material;
         Material mat = assignedMat.IsValid() ? assignedMat : DefaultSpriteMaterial;
 
         _props ??= new PropertySet();
@@ -75,7 +76,7 @@ public class SpriteRenderer : MonoBehaviour
         {
             foreach (var key in sprite.SecondaryTextures.Keys)
             {
-                Texture2D? secondary = CollectionsMarshal.GetValueRefOrNullRef(sprite.SecondaryTextures, key).Res;
+                Texture2D? secondary = sprite.SecondaryTextures[key];
                 if (secondary != null)
                     _props.SetTexture(key, secondary);
             }
@@ -140,20 +141,21 @@ public class SpriteRenderer : MonoBehaviour
 
     private bool NeedsRebuild(Sprite sprite) =>
         _mesh == null ||
-        !ReferenceEquals(_bakedSprite, sprite) ||
+        !ReferenceEquals(_bakedSprite, sprite) || _bakedContent != sprite.ContentVersion ||
         _bakedFlipX != FlipX || _bakedFlipY != FlipY ||
         !_bakedColor.Equals(Color);
 
     private void Snapshot(Sprite sprite)
     {
         _bakedSprite = sprite;
+        _bakedContent = sprite.ContentVersion;
         _bakedFlipX = FlipX; _bakedFlipY = FlipY;
         _bakedColor = Color;
     }
 
     public override void DrawGizmosSelected()
     {
-        Sprite? sprite = Sprite.Res;
+        Sprite? sprite = Sprite;
         if (sprite == null) return;
 
         float ppu = sprite.PixelsPerUnit > 0 ? sprite.PixelsPerUnit : 100f;

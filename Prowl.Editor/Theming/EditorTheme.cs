@@ -408,4 +408,8 @@ public static class EditorTheme
 
     /// <summary> Returns a copy of the color with the specified alpha channel value. </summary>
     public static Color WithAlpha(Color c, int a) => Color.FromArgb(a, c.R, c.G, c.B);
+
+    /// <summary>A theme colour as a canvas colour, its alpha scaled.</summary>
+    public static Prowl.Vector.Color32 ToColor32(Color c, float alpha = 1f)
+        => new(c.R, c.G, c.B, (byte)Math.Clamp((int)(c.A * alpha), 0, 255));
 }

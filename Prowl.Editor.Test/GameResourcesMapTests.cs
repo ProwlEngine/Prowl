@@ -40,12 +40,27 @@ public class GameResourcesMapTests : EditorTestHarness
         var (texture, sprite, spriteName) = ImportSpriteTexture("Art/Resources/Icons/Heart.png");
         Assets.RefreshResourcesMap();
 
-        Assert.Equal(texture, GameResources.GetGuid("Icons/Heart"));
-        Assert.Equal(sprite, GameResources.GetGuid($"Icons/Heart#{spriteName}"));
+        Assert.Equal(texture, AssetDatabase.FindResourceGuid<Asset>("Icons/Heart"));
+        Assert.Equal(sprite, AssetDatabase.FindResourceGuid<Asset>($"Icons/Heart#{spriteName}"));
 
         // Exactly what "Copy Path" puts on the clipboard for the asset and its sub asset.
-        Assert.Equal(texture, GameResources.GetGuid("Art/Resources/Icons/Heart.png"));
-        Assert.Equal(sprite, GameResources.GetGuid($"Art/Resources/Icons/Heart.png#{spriteName}"));
+        Assert.Equal(texture, AssetDatabase.FindResourceGuid<Asset>("Art/Resources/Icons/Heart.png"));
+        Assert.Equal(sprite, AssetDatabase.FindResourceGuid<Asset>($"Art/Resources/Icons/Heart.png#{spriteName}"));
+    }
+
+    [Fact]
+    public void EditorMap_FollowsAnAssetMovedOutOfResources()
+    {
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
+
+        var (texture, _, _) = ImportSpriteTexture("Art/Resources/Icons/Heart.png");
+        Assert.Equal(texture, AssetDatabase.FindResourceGuid<Asset>("Icons/Heart"));
+
+        Directory.CreateDirectory(AssetAbsolutePath("Art/Icons"));
+        Assert.True(Assets.MoveAsset("Art/Resources/Icons/Heart.png", "Art/Icons/Heart.png"));
+
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Asset>("Icons/Heart"));
     }
 
     [Fact]
@@ -57,10 +72,10 @@ public class GameResourcesMapTests : EditorTestHarness
         var (_, _, spriteName) = ImportSpriteTexture("Art/Icons/Heart.png");
         Assets.RefreshResourcesMap();
 
-        Assert.Equal(Guid.Empty, GameResources.GetGuid("Art/Icons/Heart.png"));
-        Assert.Equal(Guid.Empty, GameResources.GetGuid($"Art/Icons/Heart.png#{spriteName}"));
-        Assert.Equal(Guid.Empty, GameResources.GetGuid("Art/Icons/Heart"));
-        Assert.Equal(Guid.Empty, GameResources.GetGuid("Icons/Heart"));
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Asset>("Art/Icons/Heart.png"));
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Asset>($"Art/Icons/Heart.png#{spriteName}"));
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Asset>("Art/Icons/Heart"));
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Asset>("Icons/Heart"));
     }
 
     [Fact]
@@ -89,9 +104,9 @@ public class GameResourcesMapTests : EditorTestHarness
         var (texture, sprite, spriteName) = ImportSpriteTexture("Resources/Icons/Heart.png");
         Assets.RefreshResourcesMap();
 
-        Assert.Equal(texture, GameResources.GetGuid<Texture2D>("Icons/Heart"));
-        Assert.Equal(sprite, GameResources.GetGuid<Sprite>($"Icons/Heart#{spriteName}"));
-        Assert.Equal(Guid.Empty, GameResources.GetGuid<Sprite>("Icons/Heart"));
+        Assert.Equal(texture, AssetDatabase.FindResourceGuid<Texture2D>("Icons/Heart"));
+        Assert.Equal(sprite, AssetDatabase.FindResourceGuid<Sprite>($"Icons/Heart#{spriteName}"));
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Sprite>("Icons/Heart"));
 
         var collected = AssetCollector.Collect(Assets, [], dependenciesOnly: true);
         Assert.Contains(collected.ResourcesMap, r => r.Guid == sprite && RuntimeUtils.ResolveType(r.TypeName) == typeof(Sprite));
@@ -107,8 +122,8 @@ public class GameResourcesMapTests : EditorTestHarness
         var (first, _, _) = ImportSpriteTexture("A/Resources/Icons/Heart.png");
         Assets.RefreshResourcesMap();
 
-        Assert.Equal(first, GameResources.GetGuid<Texture2D>("Icons/Heart"));
-        Assert.Equal(first, GameResources.GetGuid<Texture2D>("B/Resources/Icons/Heart.png"));
+        Assert.Equal(first, AssetDatabase.FindResourceGuid<Texture2D>("Icons/Heart"));
+        Assert.Equal(first, AssetDatabase.FindResourceGuid<Texture2D>("B/Resources/Icons/Heart.png"));
 
         var collected = AssetCollector.Collect(Assets, [], dependenciesOnly: true);
         var hearts = collected.ResourcesMap.Where(r => r.LoadPath == "Icons/Heart").Select(r => r.Guid).ToList();

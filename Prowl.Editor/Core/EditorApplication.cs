@@ -40,8 +40,10 @@ public class EditorApplication : Game
     private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
-    private const double IntroOpenDuration = 3.0;  // bars open revealing editor
-    private const double IntroDuration = 5.0;      // total
+    private const double IntroBrandStart = 0.5;    // logo starts spinning in while the bars close
+    private const double IntroOpenStart = 4.5;     // bars open once the logo animation has played
+    private const double IntroOpenDuration = 2.5;  // bars open revealing editor
+    private const double IntroDuration = IntroOpenStart + IntroOpenDuration;
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
     private bool _wasFocused = true;
@@ -100,26 +102,34 @@ public class EditorApplication : Game
         _dockSpace = new DockSpace(CreateDefaultLayout());
         _panelMaximizer = new PanelMaximizer(_dockSpace);
 
+        // Open windows and the selection keep what they show loaded, through their fields like a scene's objects.
+        AssetDatabase.WalkingRoots += WalkEditorRoots;
+
         // If launched with --project arg, open the project and load assemblies
         // BEFORE registries scan so user types are visible to all registries
         bool projectAlreadyInitialized = false;
+        bool outdatedStartupProject = false;
         if (Program.StartupProjectPath != null)
         {
             try
             {
                 var project = Project.Open(Program.StartupProjectPath);
-                project.SetActive();
+                outdatedStartupProject = project.NeedsMigration || project.IsFromNewerEngine;
+                if (!outdatedStartupProject)
+                {
+                    project.SetActive();
 
-                // Load user script assemblies before registry scanning
-                ScriptAssemblyManager.LoadAssemblies(project);
+                    // Load user script assemblies before registry scanning
+                    ScriptAssemblyManager.LoadAssemblies(project);
 
-                // RequestStartupCompile skips the debounce time entirely and starts the compile process right away.
-                // This is crucial since without assemblies correctly compiled the scene would load in with broken
-                // references, which require correct script data to be in
-                ScriptAssemblyManager.RequestRecompile(true);
+                    // RequestStartupCompile skips the debounce time entirely and starts the compile process right away.
+                    // This is crucial since without assemblies correctly compiled the scene would load in with broken
+                    // references, which require correct script data to be in
+                    ScriptAssemblyManager.RequestRecompile(true);
 
-                projectAlreadyInitialized = true;
-                Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
+                    projectAlreadyInitialized = true;
+                    Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
+                }
             }
             catch (Exception ex)
             {
@@ -172,8 +182,10 @@ public class EditorApplication : Game
         }
         else
         {
-            // Start with the project launcher
+            // Start with the project launcher, which asks before migrating a project from another version
             ProjectLauncher.Initialize();
+            if (outdatedStartupProject)
+                ProjectLauncher.TryOpenProject(Program.StartupProjectPath!);
         }
 
         // Initialize status bar log tracking
@@ -188,7 +200,11 @@ public class EditorApplication : Game
         PropertyGridConfig.OnFieldChanged = target =>
         {
             var eo = target as Runtime.EngineObject;
-            if (eo.IsValid()) eo.OnValidate();
+            if (eo.IsValid())
+            {
+                try { eo.OnValidate(); }
+                catch (Exception ex) { Runtime.Debug.LogError($"OnValidate threw on {eo.GetType().Name}: {ex}"); }
+            }
 
             // Record the edit against the prefab it belongs to as it happens, rather than relying on
             // something drawing this object again later.
@@ -500,11 +516,6 @@ public class EditorApplication : Game
             EditorSceneManager.EnsureSceneLoaded();
         }
 
-        // Give idle assets a chance to be evicted. Not gated behind canProcessAssets/window focus -
-        // memory eviction shouldn't depend on file-reimport gating, and this is cheap to call every
-        // frame since the sweep itself is internally rate-limited (see MaybeSweepIdle's own gate).
-        EditorAssetBackend.Instance?.TickIdleSweep();
-
         // Layout auto-save is handled by SaveManager's auto-save timer.
 
         // Show project launcher or intro close phase
@@ -740,11 +751,10 @@ public class EditorApplication : Game
             // as "past the open phase" and zero the tip out on the launcher.
             if (_introTime < IntroDuration)
             {
-                const double openStart = IntroCloseDuration + 0.5;
                 const double fadeOutDuration = 0.8;
-                if (_introTime >= openStart)
+                if (_introTime >= IntroOpenStart)
                 {
-                    float t = (float)((_introTime - openStart) / fadeOutDuration);
+                    float t = (float)((_introTime - IntroOpenStart) / fadeOutDuration);
                     tipAlpha = 1f - Math.Clamp(t, 0f, 1f);
                 }
             }
@@ -1076,87 +1086,65 @@ public class EditorApplication : Game
             .IsNotInteractable()
             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
-                float cx = w / 2f;
-                float cy = h / 2f;
                 var font = EditorTheme.FontLogo ?? EditorTheme.DefaultBoldFont;
                 var black = Prowl.Vector.Color32.FromArgb(255, 8, 8, 10);
                 float barH = (float)h / BarCount;
                 double time = _introTime;
+                float brandFade = 1f;
 
-                // -- CLOSE PHASE (0 -> IntroCloseDuration): Bars slide IN, text fades in --
+                // -- CLOSE PHASE: Bars slide IN --
                 if (time < IntroCloseDuration)
                 {
-                    float t = (float)(time / IntroCloseDuration); // 0->1
-
-                    // Bars slide in from off-screen
+                    float t = (float)(time / IntroCloseDuration);
                     for (int i = 0; i < BarCount; i++)
                     {
-                        float delay = i * 0.04f;
-                        float slideDuration = 0.5f;
-                        float barPhase = Math.Clamp((t - delay) / slideDuration, 0f, 1f);
+                        float barPhase = Math.Clamp((t - i * 0.04f) / 0.5f, 0f, 1f);
                         float eased = EaseInOutQuart(barPhase);
-
-                        // Slide from off-screen to on-screen (reverse of open)
                         float slideX = (i % 2 == 0) ? -(1f - eased) * w : (1f - eased) * w;
-
-                        float barY = i * barH;
-                        canvas.RectFilled(slideX, barY, w, barH + 1, black);
-                    }
-
-                    // Logo + wordmark fade in during second half
-                    if (t > 0.5f)
-                    {
-                        float textPhase = (t - 0.5f) / 0.5f;
-                        float eased = EaseOutQuart(textPhase);
-                        DrawIntroBrand(canvas, cx, cy, (byte)(eased * 255), font);
+                        canvas.RectFilled(slideX, i * barH, w, barH + 1, black);
                     }
                 }
-                // -- HOLD PHASE: brief pause with text visible --
-                else if (time < IntroCloseDuration + 0.5)
+                // -- HOLD PHASE: the logo animation plays out --
+                else if (time < IntroOpenStart)
                 {
                     canvas.RectFilled(0, 0, w, h, black);
-
-                    DrawIntroBrand(canvas, cx, cy, 255, font);
                 }
-                // -- OPEN PHASE: Bars slide OUT, text fades out --
+                // -- OPEN PHASE: Bars slide OUT, brand fades out --
                 else
                 {
-                    float openStart = (float)(IntroCloseDuration + 0.5);
-                    float openDuration = (float)(IntroDuration - openStart);
-                    float t = Math.Clamp((float)(time - openStart) / openDuration, 0f, 1f);
-
-                    // Bars slide off screen
+                    float t = Math.Clamp((float)((time - IntroOpenStart) / IntroOpenDuration), 0f, 1f);
                     for (int i = 0; i < BarCount; i++)
                     {
-                        float delay = i * 0.05f;
-                        float slideDuration = 0.5f;
-                        float barPhase = Math.Clamp((t - delay) / slideDuration, 0f, 1f);
+                        float barPhase = Math.Clamp((t - i * 0.05f) / 0.5f, 0f, 1f);
                         float eased = EaseInOutQuart(barPhase);
-
                         float slideX = (i % 2 == 0) ? -eased * w : eased * w;
-
-                        float barY = i * barH;
-                        canvas.RectFilled(slideX, barY, w, barH + 1, black);
+                        canvas.RectFilled(slideX, i * barH, w, barH + 1, black);
                     }
-
-                    // Logo + wordmark fade out quickly
-                    if (t < 0.3f)
-                    {
-                        float textFade = 1f - (t / 0.3f);
-                        byte alpha = (byte)(EaseOutQuart(textFade) * 255);
-                        DrawIntroBrand(canvas, cx, cy, alpha, font);
-                    }
+                    brandFade = EaseOutQuart(1f - Math.Clamp(t / 0.3f, 0f, 1f));
                 }
+
+                if (time >= IntroBrandStart && brandFade > 0f)
+                    DrawIntroBrand(canvas, w / 2f, h / 2f, (float)(time - IntroBrandStart), brandFade, font);
             }));
     }
 
-    // The intro brand lockup: the Prowl logo to the LEFT of the PROWL wordmark, the pair centered on
-    // (cx, cy) as one unit, both at the given fade alpha.
-    private static void DrawIntroBrand(Prowl.Quill.Canvas canvas, float cx, float cy, byte alpha, Scribe.FontFile? font)
+    // Brand animation timeline, in seconds from IntroBrandStart.
+    private const float SpinInEnd = 1.1f;      // edge on to facing, slowing but never stopping
+    private const float SpinOutEnd = 2.5f;     // one more full turn while shrinking, settling facing
+    private const float MoveStart = 2.15f;     // logo slides aside into the lockup
+    private const float MoveEnd = 3.05f;
+    private const float TextStart = 2.45f;     // wordmark fades in and unblurs
+    private const float TextEnd = 3.55f;
+    private const float SpinStartScale = 1.8f; // logo size while spinning, relative to its lockup size
+    private const float TextStartBlur = 18f;
+
+    // The intro brand lockup: the Prowl logo to the LEFT of the PROWL wordmark, the pair centered on (cx, cy).
+    // The logo spins in about its vertical axis at the screen center, shrinks, then slides aside while the
+    // wordmark fades in under a clearing blur that sits between the text and the logo.
+    private static void DrawIntroBrand(Prowl.Quill.Canvas canvas, float cx, float cy, float time, float fade, Scribe.FontFile? font)
     {
         const string word = "PROWL";
         const float letterSpacing = 10f, gap = 8f;
-        var tint = System.Drawing.Color.FromArgb(alpha, 230, 230, 230);
 
         // Size the logo to the wordmark's height and measure the text (with its spacing) so the
         // [logo | gap | text] lockup can be centered horizontally as a whole.
@@ -1171,18 +1159,71 @@ public class EditorApplication : Game
         float logoW = logoH * (282f / 264f);   // logo viewBox aspect
         float totalW = logoW + (textW > 0f ? gap + textW : 0f);
         float left = cx - totalW / 2f;
+        float textX = left + logoW + gap;
 
-        EditorIcons.ProwlLogo.Draw(canvas,
-            new Rect(left, cy - logoH / 2f, left + logoW, cy + logoH / 2f), tint, 1f);
-
-        if (font != null)
+        if (font != null && time > TextStart)
         {
-            var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
-            canvas.DrawText(word, left + logoW + gap, cy, textColor, EditorTheme.FontSizeLogo, font,
+            float t = EaseOutCubic(Math.Clamp((time - TextStart) / (TextEnd - TextStart), 0f, 1f));
+            float drift = (1f - t) * 16f;
+            var textColor = Prowl.Vector.Color32.FromArgb((byte)(t * fade * 255), 230, 230, 230);
+            canvas.DrawText(word, textX + drift, cy, textColor, EditorTheme.FontSizeLogo, font,
                 letterSpacing, new Float2(0f, 0.5f), quality: Scribe.FontQuality.Ultra);
+
+            float blur = TextStartBlur * MathF.Pow(1f - t, 1.5f);
+            if (blur > 0.5f)
+            {
+                float pad = blur * 2f + 4f;
+                canvas.SetBackdropBlur(blur);
+                canvas.RectFilled(textX - pad, cy - lockupH / 2f - pad, textW + drift + pad * 2f, lockupH + pad * 2f,
+                    Prowl.Vector.Color32.FromArgb(0, 0, 0, 0));
+                canvas.ClearBackdropBlur();
+            }
         }
+
+        float angle = SpinAngle(time);
+        float facing = MathF.Cos(angle * MathF.PI / 180f);
+        float width = MathF.Abs(facing);
+        if (width < 0.01f) return;
+
+        float shrink = SmoothStep(Math.Clamp((time - SpinInEnd) / (SpinOutEnd - SpinInEnd), 0f, 1f));
+        float scale = SpinStartScale + (1f - SpinStartScale) * shrink;
+        float move = EaseInOutCubic(Math.Clamp((time - MoveStart) / (MoveEnd - MoveStart), 0f, 1f));
+        float logoX = cx + (left + logoW / 2f - cx) * move;
+
+        // The back face reads darker, and both faces dim as they turn edge on.
+        float shade = (facing >= 0f ? 230f : 120f) * (0.55f + 0.45f * width);
+        float appear = Math.Clamp(time / 0.2f, 0f, 1f);
+        var tint = System.Drawing.Color.FromArgb((byte)(appear * fade * 255), (byte)shade, (byte)shade, (byte)shade);
+
+        canvas.SaveState();
+        canvas.TransformBy(Prowl.Vector.Spatial.Transform2D.CreateTranslation(logoX, cy));
+        canvas.TransformBy(Prowl.Vector.Spatial.Transform2D.CreateScale(scale * width, scale));
+        EditorIcons.ProwlLogo.Draw(canvas, new Rect(-logoW / 2f, -logoH / 2f, logoW / 2f, logoH / 2f), tint, 1f);
+        canvas.RestoreState();
     }
 
+    // Degrees about the vertical axis, 90 is edge on and multiples of 360 face the viewer. Two hermite
+    // segments: fast in from edge on and slow through facing, then a faster full turn that settles facing.
+    private static float SpinAngle(float time)
+    {
+        if (time < SpinInEnd)
+            return Hermite(90f, 600f, 360f, 45f, SpinInEnd, time / SpinInEnd);
+        if (time < SpinOutEnd)
+            return Hermite(360f, 45f, 720f, 0f, SpinOutEnd - SpinInEnd, (time - SpinInEnd) / (SpinOutEnd - SpinInEnd));
+        return 720f;
+    }
+
+    // Cubic hermite from p0 to p1 over duration seconds, with start and end speeds m0 and m1 per second.
+    private static float Hermite(float p0, float m0, float p1, float m1, float duration, float s)
+    {
+        float s2 = s * s, s3 = s2 * s;
+        return (2f * s3 - 3f * s2 + 1f) * p0 + (s3 - 2f * s2 + s) * duration * m0
+            + (-2f * s3 + 3f * s2) * p1 + (s3 - s2) * duration * m1;
+    }
+
+    private static float SmoothStep(float x) => x * x * (3f - 2f * x);
+    private static float EaseOutCubic(float x) => 1f - MathF.Pow(1f - x, 3f);
+    private static float EaseInOutCubic(float x) => x < 0.5f ? 4f * x * x * x : 1f - MathF.Pow(-2f * x + 2f, 3f) / 2f;
     private static float EaseOutQuart(float x) => 1f - MathF.Pow(1f - x, 4f);
     private static float EaseInOutQuart(float x) => x < 0.5f ? 8f * x * x * x * x : 1f - MathF.Pow(-2f * x + 2f, 4f) / 2f;
 
@@ -1266,6 +1307,15 @@ public class EditorApplication : Game
         if (node.IsLeaf)
             return node.Tabs?.FirstOrDefault(t => t.GetType() == panelType);
         return FindInNode(node.ChildA, panelType) ?? FindInNode(node.ChildB, panelType);
+    }
+
+    private void WalkEditorRoots(AssetWalker walker)
+    {
+        foreach (DockPanel panel in EnumerateAllPanels())
+            walker.Visit(panel);
+
+        foreach (object selected in Selection.Selected)
+            walker.Visit(selected is ContentItem { Guid: var guid } && guid != Guid.Empty ? AssetDatabase.Get(guid) : selected);
     }
 
     /// <summary>Enumerate every open panel across the docked tree and all floating windows.</summary>
@@ -1463,6 +1513,7 @@ public class EditorApplication : Game
         // re-scan the new assemblies (picking up newly-compiled types and dropping removed ones). Runs on
         // both the migrate and initial-load paths.
         Prowl.Runtime.MeshFeatures.MeshFeatureRegistry.ClearCache();
+        AnimationNodeRegistry.Reset();
         EditorRegistries.Reinitialize();
         Inspector.GameObjectInspector.ClearAddComponentCache();
         MenuRegistry.Clear();
@@ -1686,9 +1737,6 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
-        // Before the play copy is built, so it resolves its own instances rather than adopting the ones
-        // the editor scene had.
-        DropLoadedAssets();
 
         // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
         // the frame, so a failure here leaves the editor scene loaded and the editor usable.
@@ -1715,6 +1763,10 @@ public class EditorApplication : Game
         Input.PushHandler(new GameViewInputHandler(Input.Current));
 
         Runtime.Resources.Scene.DestroyPreserved();
+
+        // The swap ends the edit scene's async session once its teardown has run, and the play scene starts
+        // in a fresh one.
+        Runtime.Resources.Scene.EndSessionOnSwap = true;
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
@@ -1751,14 +1803,27 @@ public class EditorApplication : Game
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
         {
-            DropLoadedAssets();
+            RevertAssetsAfterPlay();
 
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
             if (restoredScene != null)
+            {
+                // Ends the play session at the swap, once the play scene's teardown has run, so nothing still
+                // awaiting can resume against the edit scene.
+                Runtime.Resources.Scene.EndSessionOnSwap = true;
                 Runtime.Resources.Scene.Load(restoredScene);
+            }
             Undo.Clear();
             _savedEditorScene = null;
+        }
+
+        // Without a restore to swap to, the session still ends at a swap user code queued this frame, and
+        // only with nothing queued does it end here.
+        if (!Runtime.Resources.Scene.EndSessionOnSwap)
+        {
+            if (Runtime.Resources.Scene.IsLoadPending) Runtime.Resources.Scene.EndSessionOnSwap = true;
+            else Runtime.Tasks.MainThreadContext.Restart();
         }
 
         // Don't inherit cursor state the game left behind
@@ -1785,16 +1850,14 @@ public class EditorApplication : Game
         Runtime.Debug.Log("Exited play mode.");
     }
 
-    /// <summary>
-    /// Drops every loaded asset instance, so the scene about to be built resolves fresh ones and
-    /// nothing a play session did to an asset outlives it.
-    /// </summary>
-    private static void DropLoadedAssets()
+    // Nothing a play session does to a project asset outlives it, so every loaded one is unloaded and read again. Built-in
+    // assets stay, since the editor draws with them.
+    private void RevertAssetsAfterPlay()
     {
-        int dropped = EditorAssetBackend.Instance?.UnloadAll() ?? 0;
-
-        if (dropped > 0)
-            Runtime.Debug.Log($"[Assets] Dropped {dropped} loaded asset instances, so both sides of the play session read from disk.");
+        foreach (Asset asset in AssetDatabase.All.ToList())
+            if (asset.IsLoaded && !AssetDatabase.IsBuiltIn(asset))
+                AssetDatabase.Reload(asset);
+        AssetDatabase.Walk();
     }
 
     private void TogglePause()
@@ -1910,8 +1973,31 @@ public class EditorApplication : Game
     /// <summary>
     /// Editor does NOT auto-update the scene. SceneView handles it.
     /// </summary>
+    /// <summary>
+    /// Runs work on the main thread and waits for it, for a background task that has to touch the open scene or the
+    /// asset database. Runs it at once on the main thread, or where no editor frame loop runs, such as a command line
+    /// build or a test.
+    /// </summary>
+    public static void RunOnMainThread(Action work)
+    {
+        if (Program.BuildMode || Instance == null) work();
+        else if (s_closing) throw new OperationCanceledException("The editor is closing, so the main thread no longer takes work.");
+        else GameTask.Run(work);
+    }
+
+    private static volatile bool s_closing;
+
+    public override void Closing()
+    {
+        s_closing = true;
+        base.Closing();
+    }
+
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
+        Tasks.EditorTask.Poll();
+        PreviewWidget.ReleaseUndrawn();
+
         // Always update lifecycle gating is per-component via ShouldExecuteGameplay.
         // Components only run Start/Update/LateUpdate if IsPlaying or [ExecuteAlways].
         if (Application.ShouldRunGameplay)
@@ -1936,16 +2022,29 @@ public class EditorApplication : Game
 
             if (Selection.Count > 0)
             {
-                // Draw selection gizmo
-                var selectedGOs = Selection.GetSelected<GameObject>();
-                foreach (var comp in selectedGOs.SelectMany(e => e.GetComponents()))
-                    comp.DrawGizmosSelected();
+                // Selected gizmos draw for the selection and everything below it, each GameObject once
+                // even when a parent and its child are both selected.
+                s_selectedGizmoObjects.Clear();
+                foreach (GameObject go in Selection.GetSelected<GameObject>())
+                    CollectSelectedGizmoObjects(go);
+                foreach (GameObject go in s_selectedGizmoObjects)
+                    foreach (MonoBehaviour comp in go.GetComponents())
+                        comp.DrawGizmosSelected();
             }
         }
         finally
         {
             GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
+    }
+
+    private static readonly HashSet<GameObject> s_selectedGizmoObjects = new();
+
+    private static void CollectSelectedGizmoObjects(GameObject go)
+    {
+        if (go.IsNotValid() || !s_selectedGizmoObjects.Add(go)) return;
+        foreach (GameObject child in go.Children)
+            CollectSelectedGizmoObjects(child);
     }
 
     /// <summary>

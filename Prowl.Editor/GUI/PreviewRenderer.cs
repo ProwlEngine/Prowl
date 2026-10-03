@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 
 using Prowl.Graphite;
 using Prowl.PaperUI;
@@ -8,6 +9,11 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
+using Canvas = Prowl.Quill.Canvas;
+using MotionAvatar = Prowl.Motion.Avatar;
+using MotionSkeleton = Prowl.Motion.Skeleton;
+using MotionClip = Prowl.Motion.AnimationClipBase;
+using MotionPose = Prowl.Motion.Pose;
 
 namespace Prowl.Editor.GUI;
 
@@ -28,6 +34,12 @@ public class PreviewRenderer : IDisposable
 
     // Each preview owns an isolated pipeline so per-surface pass state is never shared with the scene view.
     private readonly DefaultRenderPipeline _pipeline = new();
+
+    // The rig of an animated subject, resolved once when it is set up.
+    private AnimatorBinding? _binding;
+    private MotionPose? _pose;
+    private MotionAvatar? _avatar;
+    private readonly List<AnimationClip> _clips = new();
 
     /// <summary>Whether to draw a grid plane in the preview.</summary>
     public bool ShowGrid { get; set; }
@@ -101,6 +113,61 @@ public class PreviewRenderer : IDisposable
         FitToSubject(AABB.FromCenterAndSize(Float3.Zero, Float3.One));
     }
 
+    /// <summary>The clips the subject's animator can play, empty when it has none.</summary>
+    public IReadOnlyList<AnimationClip> Clips => _clips;
+
+    /// <summary>The rig the subject is bound to, or null when it has none.</summary>
+    public MotionSkeleton? Skeleton => _pose?.Skeleton;
+
+    /// <summary>
+    /// Where a bone lands in the preview image, as a fraction across and down it. False when the rig
+    /// does not have that bone, or when it sits behind the camera.
+    /// </summary>
+    public bool TryProjectBone(int boneIndex, out Float2 normalized)
+    {
+        normalized = default;
+        Transform? bone = _binding?.BoneTransform(boneIndex);
+        if (bone == null) return false;
+
+        // Valid because Render() ran first: the camera's matrices are written when it is set up to
+        // draw, not when it moves.
+        Float4x4 viewProjection = _camera.ProjectionMatrix * _camera.ViewMatrix;
+        Float4 clip = viewProjection * new Float4(bone.Position, 1f);
+        if (clip.W <= 1e-5f) return false;
+
+        float x = clip.X / clip.W, y = clip.Y / clip.W;
+        normalized = new Float2(x * 0.5f + 0.5f, 0.5f - y * 0.5f);
+        return true;
+    }
+
+    /// <summary>True when the subject carries a rig this preview can pose.</summary>
+    public bool CanAnimate => _binding != null && _pose != null;
+
+    /// <summary>
+    /// Poses the subject at a point through a clip, from 0 at its first frame to 1 at its last. Sampling
+    /// rather than playing is what makes the preview scrub: any time is one call, in any order, and it
+    /// works outside play mode where nothing is ticking.
+    /// </summary>
+    public void PoseAt(AnimationClip? clip, float normalizedTime)
+    {
+        if (_binding == null || _pose == null) return;
+
+        MotionClip? runtime = clip.IsValid() ? clip!.GetClip(_avatar) : null;
+        if (runtime == null)
+        {
+            _pose.SetToReferencePose(false);
+        }
+        else
+        {
+            runtime.GetPose(Math.Clamp(normalizedTime, 0f, 1f), _pose);
+        }
+
+        for (int b = 0; b < _pose.BoneCount; b++)
+            _binding.ApplyBone(b, _pose.GetTransform(b));
+        for (int c = 0; c < _pose.FloatChannelCount; c++)
+            _binding.ApplyChannel(c, _pose.GetFloat(c));
+    }
+
     /// <summary>Set up the preview to show a Prefab's serialized GameObject hierarchy.</summary>
     public void SetupForPrefab(PrefabAsset prefab)
     {
@@ -119,7 +186,37 @@ public class PreviewRenderer : IDisposable
         NormalizeSubjectToUnitCube(_subjectGo);
 
         _scene.Add(_subjectGo);
+        BindRig(_subjectGo);
         FitToSubject(AABB.FromCenterAndSize(Float3.Zero, Float3.One));
+    }
+
+    // A subject with an animator can be posed, so the preview reads its rig and binds to the copy it
+    // just instantiated. The animator itself is left alone: outside play mode nothing ticks it, and
+    // sampling by hand is what gives the preview a scrubber.
+    private void BindRig(GameObject root)
+    {
+        Animator? animator = FindAnimator(root);
+        if (animator.IsNotValid()) return;
+
+        Avatar? avatar = animator!.Avatar;
+        if (avatar.IsNotValid() || avatar!.Skeleton == null) return;
+
+        _avatar = avatar.Runtime;
+        _pose = new MotionPose(avatar.Skeleton);
+        _binding = new AnimatorBinding(animator.Transform, avatar.Skeleton);
+
+        foreach (AnimationClip clip in animator.Clips)
+            if (clip.IsValid()) _clips.Add(clip);
+    }
+
+    private static Animator? FindAnimator(GameObject go)
+    {
+        Animator? own = go.GetComponent<Animator>();
+        if (own.IsValid()) return own;
+
+        foreach (GameObject child in go.Children)
+            if (FindAnimator(child) is { } found) return found;
+        return null;
     }
 
     /// <summary>Set up the preview to show a Material on a sphere.</summary>
@@ -173,7 +270,13 @@ public class PreviewRenderer : IDisposable
     }
 
     /// <summary> Draw the preview into a Paper element area. Resizes and renders the preview, then displays it with orbit controls via drag and scroll. </summary>
-    public void DrawPreview(Paper paper, string id, float width, float height)
+    /// <summary>
+    /// Draws the preview, with anything the caller wants on top of it. The overlay is painted by this
+    /// same element rather than by one laid over it, so orbiting and clicking a gizmo do not fight: a
+    /// drag turns the camera and a click reaches <paramref name="onClick"/>.
+    /// </summary>
+    public void DrawPreview(Paper paper, string id, float width, float height,
+        Action<Canvas, Rect>? overlay = null, Action<Float2>? onClick = null)
     {
         Resize((int)width, (int)height);
         Render();
@@ -181,10 +284,13 @@ public class PreviewRenderer : IDisposable
         if (_rt == null || _rt.MainTexture == null) return;
         float round = Prowl.OrigamiUI.Origami.Current.Metrics.ContainerRounding;
 
-        paper.Box(id)
+        ElementBuilder box = paper.Box(id)
             .Size(width, height)
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 38, 42))
             .Rounded(round)
+            // An overlay draws in screen space, so without this a gizmo for something off to the side
+            // paints over whatever is next to the preview.
+            .Clip()
             .StopEventPropagation()
             .OnDragging((e) =>
             {
@@ -199,8 +305,11 @@ public class PreviewRenderer : IDisposable
                 _orbitDistance *= 1f - e.Delta * 0.1f;
                 _orbitDistance = MathF.Max(0.5f, MathF.Min(50f, _orbitDistance));
                 UpdateCameraPosition();
-            })
-            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+            });
+
+        if (onClick != null) box.OnClick(0, (_, e) => onClick(new Float2((float)e.PointerPosition.X, (float)e.PointerPosition.Y)));
+
+        box.OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float rx = (float)r.Min.X;
                 float ry = (float)r.Min.Y;
@@ -213,6 +322,8 @@ public class PreviewRenderer : IDisposable
                     Prowl.Vector.Spatial.Transform2D.CreateScale(rw, rh));
                 canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, new Color32(255, 255, 255, 255));
                 canvas.ClearBrushTexture();
+
+                overlay?.Invoke(canvas, r);
             }));
     }
 
@@ -238,10 +349,10 @@ public class PreviewRenderer : IDisposable
         // Fast path for single-MeshRenderer subjects (SetupForMesh case): use the mesh's own
         // bounds directly, since there is no child hierarchy to walk and world == local at this
         // point thanks to the identity reset above.
-        if (meshRenderer != null && meshRenderer.Mesh.Res != null && subject.Children.Count == 0)
-            bounds = meshRenderer.Mesh.Res.bounds;
-        else if (skinnedRenderer != null && skinnedRenderer.SharedMesh.Res != null && subject.Children.Count == 0)
-            bounds = skinnedRenderer.SharedMesh.Res.bounds;
+        if (meshRenderer != null && meshRenderer.Mesh != null && subject.Children.Count == 0)
+            bounds = meshRenderer.Mesh.bounds;
+        else if (skinnedRenderer != null && skinnedRenderer.SharedMesh != null && subject.Children.Count == 0)
+            bounds = skinnedRenderer.SharedMesh.bounds;
         else
             bounds = ComputeHierarchyBounds(subject);
 
@@ -255,6 +366,11 @@ public class PreviewRenderer : IDisposable
 
     private void ClearSubject()
     {
+        _binding = null;
+        _pose = null;
+        _avatar = null;
+        _clips.Clear();
+
         if (_subjectGo != null)
         {
             _scene.Remove(_subjectGo);
@@ -321,7 +437,7 @@ public class PreviewRenderer : IDisposable
         var mr = go.GetComponent<MeshRenderer>();
         if (mr != null)
         {
-            var mesh = mr.Mesh.Res;
+            var mesh = mr.Mesh;
             if (mesh != null)
             {
                 var worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
@@ -335,7 +451,7 @@ public class PreviewRenderer : IDisposable
         var smr = go.GetComponent<SkinnedMeshRenderer>();
         if (smr != null)
         {
-            var mesh = smr.SharedMesh.Res;
+            var mesh = smr.SharedMesh;
             if (mesh != null)
             {
                 var worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);

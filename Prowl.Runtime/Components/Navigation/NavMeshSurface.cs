@@ -65,10 +65,7 @@ public class NavMeshSurface : MonoBehaviour
     [SerializeField] private NavMeshArea defaultArea = NavMeshAreas.Walkable;
 
     [Tooltip("The baked navmesh. Assigned by baking, or point it at an existing .navmesh asset.")]
-    // A field, not a property, like MeshRenderer.Mesh: AssetRef<T> caches its resolved instance as
-    // a side effect of .Res, and a property hands out a copy — so every read would resolve from the
-    // database again and the async-load dedup the cache drives would never engage.
-    public AssetRef<NavMeshData> NavMeshData;
+    public NavMeshData? NavMeshData;
 
     private NavMeshInstance? _instance;
     private Runtime.NavMeshData? _runtimeData;
@@ -109,13 +106,20 @@ public class NavMeshSurface : MonoBehaviour
     {
         World?.RegisterSurface(this);
         Register();
+        AssetDatabase.Reloaded += OnAssetReloaded;
     }
 
     public override void OnDisable()
     {
+        AssetDatabase.Reloaded -= OnAssetReloaded;
         World?.UnregisterSurface(this);
         Unregister(handOver: true);
         _overlay?.Release();
+    }
+
+    private void OnAssetReloaded(Asset asset, ReloadReason reason)
+    {
+        if (ReferenceEquals(asset, NavMeshData)) RefreshRegistration();
     }
 
     private void Register()
@@ -124,12 +128,10 @@ public class NavMeshSurface : MonoBehaviour
         NavMeshWorld? world = World;
         if (world == null) return;
 
-        // The navmesh has to be present now: registration happens once on enable and nothing
-        // retries it — a transient null from async streaming would leave the scene permanently
-        // without one. Block-load it, as the mesh and terrain colliders do for the same reason.
-        NavMeshData.EnsureLoaded();
+        // Registration happens once on enable and nothing retries it, so the navmesh loads now.
+        if (NavMeshData is { } stored) stored.Load();
 
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        Runtime.NavMeshData? data = NavMeshData;
         if (data.IsNotValid() || !data!.HasTiles) return;
 
         // Copy only what the asset database owns. A .navmesh asset is shared with every other
@@ -138,7 +140,7 @@ public class NavMeshSurface : MonoBehaviour
         // ApplyNavMeshData has no other owner — copying it would just cost a list per
         // registration and throw away every rebuild since the original bake on re-registering.
         // (Two surfaces of DIFFERENT types handed the same runtime data still share it.)
-        _runtimeData = NavMeshData.AssetID == Guid.Empty ? data : data.Clone();
+        _runtimeData = data.IsFromDatabase ? data.Clone() : data;
         _instance = world.AddNavMeshData(_runtimeData);
         if (_instance == null)
         {
@@ -680,7 +682,7 @@ public class NavMeshSurface : MonoBehaviour
         if (CollectObjects == NavMeshCollectObjects.Volume)
             Debug.DrawWireCube(Transform.TransformPoint(Center), Size * 0.5f, Color.Cyan);
 
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        Runtime.NavMeshData? data = NavMeshData;
         if (data.IsNotValid() || !data!.HasTiles)
             return;
 

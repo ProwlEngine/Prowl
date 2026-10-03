@@ -30,7 +30,10 @@ public static class PropertyGridUtils
         if (instance is MonoBehaviour mb && mb.GameObject != null)
             return $"{mb.GameObject.Name} ({instance.GetType().Name})";
 
-        bool isAsset = instance.AssetID != Guid.Empty;
+        if (instance is Asset { IsMissing: true } missing)
+            return $"Missing ({missing.GetType().Name} {missing.AssetID.ToString()[..8]})";
+
+        bool isAsset = instance is Asset { IsFromDatabase: true };
         string suffix = isAsset || instance is GameObject ? instance.GetType().Name : "Instance";
         return $"{instance.Name} ({suffix})";
     }

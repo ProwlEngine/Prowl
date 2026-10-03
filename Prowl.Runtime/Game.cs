@@ -66,7 +66,7 @@ public abstract class Game
         Application.IsPlaying = true;
 
         // Installed on this thread, which is the one the loop runs on, so an await in game code resumes
-        // where the scene actually lives. The editor starts and ends a session per play instead.
+        // where the scene actually lives. The editor restarts the session when play starts and stops.
         Tasks.MainThreadContext.Install();
         InitializeWindow(title, width, height);
 
@@ -106,6 +106,7 @@ public abstract class Game
             _paper.DevTools.Enabled = true;
 
             BuiltInAssets.Initialize();
+            AssetLoader.SetMainThread();
 
             Initialize();
         }
@@ -193,6 +194,9 @@ public abstract class Game
                 // Then the scene swap, so a load requested this frame tears the outgoing scene down
                 // here rather than under whatever was still running.
                 Scene.ProcessPendingLoad();
+
+                // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
+                AssetDatabase.EndFrame();
             }
             catch (Exception e)
             {
@@ -227,10 +231,20 @@ public abstract class Game
         {
             Closing();
 
+            // Before anything shuts down, so work blocked on the main thread runs while it still can and
+            // worker loops watching the session token stop. Workers asking for the main thread from here
+            // on are refused rather than run alongside the shutdown.
+            Tasks.MainThreadContext.Stop();
+
             // Dispose the current scene so everything in it runs its teardown callbacks.
             Scene.Shutdown();
 
+            // Asset payloads go while the audio and graphics they belong to are still up.
+            AssetDatabase.Shutdown();
+
             AudioContext.Deinitialize();
+
+            Tasks.MainThreadContext.Uninstall();
 
             Debug.Log("Is terminating...");
         };
@@ -261,6 +275,7 @@ public abstract class Game
         Tasks.MainThreadContext.Install();
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
         BuiltInAssets.Initialize();
+        AssetLoader.SetMainThread();
         Initialize();
 
         Debug.LogSuccess("Headless initialization complete");
@@ -294,6 +309,9 @@ public abstract class Game
                 // here rather than under whatever was still running.
                 Scene.ProcessPendingLoad();
 
+                // Frees what nothing reaches any more, after rendering, so no draw in flight still uses it.
+                AssetDatabase.EndFrame();
+
                 frame++;
                 if (options.MaxFrames > 0 && frame >= options.MaxFrames) break;
                 if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
@@ -306,7 +324,10 @@ public abstract class Game
         {
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
+            Tasks.MainThreadContext.Stop();
             Scene.Shutdown();
+            AssetDatabase.Shutdown();
+            Tasks.MainThreadContext.Uninstall();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
             Application.IsHeadless = false;
         }
@@ -324,8 +345,11 @@ public abstract class Game
         Scene? currentScene = Scene.Current;
 
         // Before the scene runs, so a continuation resumed this frame sees the same world the rest of
-        // the frame will. Anything left over from a finished play session is dropped here.
+        // the frame will.
         Tasks.MainThreadContext.Current?.Pump();
+
+        // Assets that finished loading in the background join at the start of the frame, all at once.
+        AssetDatabase.Pump();
 
         // Pausing play mode has to stop the sound as well as the simulation, or the music carries on
         // over a frozen game. Only in the editor: pausing there is a debugging tool that freezes
@@ -391,7 +415,7 @@ public abstract class Game
     /// <summary>Called during render. Override to control scene rendering.</summary>
     public virtual void OnRender(Scene? scene)
     {
-        if (scene.IsValid()) scene.Render();
+        if (scene.IsValid()) scene.Render(null, DrawGizmos);
     }
 
     /// <summary>Called during GUI phase. Override to control scene GUI rendering.</summary>

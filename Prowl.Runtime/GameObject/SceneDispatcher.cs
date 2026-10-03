@@ -33,6 +33,9 @@ internal enum SceneCallbacks
     TriggerEnter = 1 << 9,
     TriggerStay = 1 << 10,
     TriggerExit = 1 << 11,
+    CollisionStay = 1 << 12,
+
+    AnyCollision = CollisionBegin | CollisionStay | CollisionEnd,
 
     /// <summary>Everything the per-frame loops dispatch. A component with none of these is never registered.</summary>
     AnyFrame = Start | Update | LateUpdate | FixedUpdate | RenderCollect | DrawGizmos | OnGui,
@@ -83,6 +86,7 @@ internal sealed class SceneDispatcher
         if (Overrides(type, nameof(MonoBehaviour.OnGui))) callbacks |= SceneCallbacks.OnGui;
 
         if (Overrides(type, nameof(MonoBehaviour.OnCollisionBegin))) callbacks |= SceneCallbacks.CollisionBegin;
+        if (Overrides(type, nameof(MonoBehaviour.OnCollisionStay))) callbacks |= SceneCallbacks.CollisionStay;
         if (Overrides(type, nameof(MonoBehaviour.OnCollisionEnd))) callbacks |= SceneCallbacks.CollisionEnd;
         if (Overrides(type, nameof(MonoBehaviour.OnTriggerEnter))) callbacks |= SceneCallbacks.TriggerEnter;
         if (Overrides(type, nameof(MonoBehaviour.OnTriggerStay))) callbacks |= SceneCallbacks.TriggerStay;
@@ -112,6 +116,9 @@ internal sealed class SceneDispatcher
 
     // ---- registration --------------------------------------------------------------------------------
 
+    /// <summary>Enabled components that listen for a collision event. Physics tracks no contacts while there are none.</summary>
+    public int CollisionListeners { get; private set; }
+
     private MonoBehaviour[] _registered = new MonoBehaviour[64];
     private int _count;
     private int _sequence;
@@ -130,9 +137,14 @@ internal sealed class SceneDispatcher
     /// </summary>
     public void Register(MonoBehaviour c)
     {
-        if (c._dispatchSlot != 0) return;
-
         SceneCallbacks callbacks = CallbacksOf(c);
+        if ((callbacks & SceneCallbacks.AnyCollision) != 0 && !c._countedCollisionListener)
+        {
+            c._countedCollisionListener = true;
+            CollisionListeners++;
+        }
+
+        if (c._dispatchSlot != 0) return;
 
         // A component with no per-frame callback is never in the arrays at all, so it costs nothing to have
         // and never lengthens a channel rebuild. Its physics callbacks still dispatch, from the mask alone.
@@ -152,6 +164,12 @@ internal sealed class SceneDispatcher
     /// <summary>Stops dispatching a component's per-frame callbacks. Constant time.</summary>
     public void Unregister(MonoBehaviour c)
     {
+        if (c._countedCollisionListener)
+        {
+            c._countedCollisionListener = false;
+            CollisionListeners--;
+        }
+
         int slot = c._dispatchSlot;
         if (slot == 0) return;
 
@@ -186,6 +204,7 @@ internal sealed class SceneDispatcher
 
         _count = 0;
         _sequence = 0;
+        CollisionListeners = 0;
 
         _start.Clear(); _update.Clear(); _lateUpdate.Clear(); _fixedUpdate.Clear();
         _renderCollect.Clear(); _drawGizmos.Clear(); _onGui.Clear();
@@ -401,6 +420,33 @@ internal sealed class SceneDispatcher
 
         try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionBegin(collision); }
         finally { Release(many!, count); }
+    }
+
+    public static void CollisionStay(GameObject go, in Collision collision)
+    {
+        if (go is null) return;
+
+        int count = Collect(go, SceneCallbacks.CollisionStay, out MonoBehaviour single, out MonoBehaviour[]? many);
+        if (count == 0) return;
+        if (count == 1) { single.InternalOnCollisionStay(collision); return; }
+
+        try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionStay(collision); }
+        finally { Release(many!, count); }
+    }
+
+    /// <summary>Whether any live component on the GameObject listens for the callback.</summary>
+    public static bool HasRecipient(GameObject go, SceneCallbacks which)
+    {
+        if (go is null) return false;
+
+        List<MonoBehaviour> components = go._components;
+        for (int i = 0; i < components.Count; i++)
+        {
+            MonoBehaviour c = components[i];
+            if ((CallbacksOf(c) & which) != 0 && !c.IsDisposed && c.EnabledInHierarchy) return true;
+        }
+
+        return false;
     }
 
     public static void CollisionEnd(GameObject go, in Collision collision)

@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Migration;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
@@ -85,6 +86,8 @@ public static class ProjectLauncher
     private static int _tipIndex;
     private static float _tipTimer;
 
+    private static readonly Dictionary<string, string> _versions = new();
+
     /// <summary> Sets the default new-project path and resets the launcher to its initial state. </summary>
     public static void Initialize()
     {
@@ -94,6 +97,14 @@ public static class ProjectLauncher
         _animTime = 0;
         _tipIndex = Random.Shared.Next(_tipKeys.Length);
         _tipTimer = 0;
+        _versions.Clear();
+    }
+
+    private static string VersionOf(string path)
+    {
+        if (!_versions.TryGetValue(path, out string? version))
+            _versions[path] = version = Project.ReadVersion(path);
+        return version;
     }
 
     private static void AdvanceTip()
@@ -141,16 +152,6 @@ public static class ProjectLauncher
             if (_tab == 0) RecentBody(paper, font);
             else NewProjectBody(paper, font);
         }
-    }
-
-    private static string EngineVersion()
-    {
-        var v = System.Reflection.Assembly.GetExecutingAssembly()
-            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.1";
-        int plus = v.IndexOf('+');
-        if (plus >= 0) v = v[..plus];
-        return v;
     }
 
     // ---- Header (brand + tab pills) ---------------------------------
@@ -332,11 +333,16 @@ public static class ProjectLauncher
                     P.Box("pl_cname" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                         .Text(entry.Name, EditorTheme.FontSemiBold ?? font).FontSize(15 * TS).TextColor(exists ? EditorTheme.Ink500 : EditorTheme.Ink300).Alignment(TextAlignment.MiddleLeft);
 
-                    // Version chip (or a "missing" chip when the folder is gone).
+                    // The version the project was saved with, amber when opening it migrates it (or a "missing" chip when the folder is gone).
                     if (exists)
+                    {
+                        string version = VersionOf(entry.Path);
+                        bool current = EngineVersion.TryParse(version, out EngineVersion parsed) && parsed == Project.CurrentVersion;
                         P.Box("pl_cver" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(M.SmallRounding).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
-                            .BackgroundColor(Raised)
-                            .Text($"v{EngineVersion()}", mono).FontSize(10 * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleCenter);
+                            .BackgroundColor(current ? Raised : Color.FromArgb(90, EditorTheme.Amber400))
+                            .Text(version.Length > 0 ? version : Loc.Get("launcher.version_unknown"), mono).FontSize(10 * TS)
+                            .TextColor(current ? EditorTheme.Ink300 : EditorTheme.Amber400).Alignment(TextAlignment.MiddleCenter);
+                    }
                     else
                         P.Box("pl_cmiss" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(M.SmallRounding).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
                             .BackgroundColor(Color.FromArgb(128, EditorTheme.Red300))
@@ -622,19 +628,57 @@ public static class ProjectLauncher
         }
     }
 
-    private static void TryOpenProject(string path)
+    /// <summary> Opens a project, first asking to migrate it when it was saved with another version. </summary>
+    public static void TryOpenProject(string path)
     {
+        Project project;
         try
         {
-            var project = Project.Open(path);
-            project.SetActive();
-            Close();
+            project = Project.Open(path);
         }
         catch (Exception ex)
         {
             Runtime.Debug.LogError(Loc.Get("launcher.open_failed", new { message = ex.Message }));
             Toasts.Warning(Loc.Get("launcher.open_failed_title"), ex.Message);
+            return;
         }
+
+        string version = project.Version.IsUnknown ? Loc.Get("launcher.version_unknown") : project.Version.ToString();
+        if (project.IsFromNewerEngine)
+        {
+            Toasts.Warning(Loc.Get("launcher.newer_title"), Loc.Get("launcher.newer_body", new { name = project.Name, version, current = Project.CurrentVersion.ToString() }));
+            return;
+        }
+
+        if (!project.NeedsMigration)
+        {
+            Activate(project);
+            return;
+        }
+
+        Origami.Confirm(Loc.Get("launcher.migrate_title"),
+            Loc.Get("launcher.migrate_body", new { name = project.Name, version, current = Project.CurrentVersion.ToString() }),
+            () =>
+            {
+                try
+                {
+                    ProjectMigration.Migrate(project);
+                }
+                catch (Exception ex)
+                {
+                    Runtime.Debug.LogError($"Failed to migrate '{project.Name}': {ex}");
+                    Toasts.Warning(Loc.Get("launcher.migrate_failed_title"), ex.Message);
+                    return;
+                }
+                _versions.Remove(path);
+                Activate(project);
+            });
+    }
+
+    private static void Activate(Project project)
+    {
+        project.SetActive();
+        Close();
     }
 
     private static void TryCreateProject()

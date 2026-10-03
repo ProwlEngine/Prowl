@@ -194,6 +194,13 @@ public class NavMeshAgent : MonoBehaviour
             or DtMoveRequestState.DT_CROWDAGENT_TARGET_WAITING_FOR_QUEUE
             or DtMoveRequestState.DT_CROWDAGENT_TARGET_WAITING_FOR_PATH;
 
+    /// <summary>True once the agent has reached its destination, until a new destination or path is
+    /// set, the path is reset, or the agent is warped.</summary>
+    public bool HasArrived => _arrived;
+
+    /// <summary>Raised once when the agent reaches its destination.</summary>
+    public event Action? DestinationReached;
+
     /// <summary>True when the agent has a path it is following.</summary>
     public bool HasPath => _agent != null && _agent.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_VALID;
 
@@ -645,6 +652,20 @@ public class NavMeshAgent : MonoBehaviour
         return false;
     }
 
+    /// <summary>Pick a random point within <paramref name="radius"/> of the agent that it can walk to,
+    /// using the agent's filter.</summary>
+    public bool FindRandomPointAround(float radius, out NavMeshHit hit)
+    {
+        if (_world != null) return _world.FindRandomPointAround(NextPosition, radius, out hit, Filter);
+        hit = default;
+        return false;
+    }
+
+    /// <summary>Walk to a random reachable point within <paramref name="radius"/> of the agent.
+    /// Returns false when no point was found or the destination could not be set.</summary>
+    public bool SetRandomDestination(float radius)
+        => FindRandomPointAround(radius, out NavMeshHit hit) && SetDestination(hit.Position);
+
     /// <summary>
     /// How far along its current path the agent could get, without moving it: walks the path from
     /// where the agent stands and stops at <paramref name="maxDistance"/>, at the end of the path,
@@ -860,6 +881,7 @@ public class NavMeshAgent : MonoBehaviour
             // _arrived gates every re-path site.
             _arrived = true;
             _crowdEntry!.Crowd.ResetMoveTarget(_agent);
+            DestinationReached?.Invoke();
         }
     }
 

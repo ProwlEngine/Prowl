@@ -71,13 +71,13 @@ public sealed class TriggerVolume : MonoBehaviour
     {
         _selfBody = GetComponentInParent<Rigidbody3D>();
 
-        // Sample after the step, not in FixedUpdate: FixedUpdate runs before the step, so it would
-        // report overlaps against poses the solver is about to change.
+        // Sample once the step has returned: FixedUpdate runs before the step, so it would report
+        // overlaps against poses the solver is about to change, and handlers may then move bodies.
         PhysicsWorld physics = ResolvePhysics();
-        if (physics != null) physics.PostStep += OnPostStep;
+        if (physics != null) physics.StepFinished += OnStepFinished;
     }
 
-    private void OnPostStep(float deltaTime)
+    private void OnStepFinished(float deltaTime)
     {
         PhysicsWorld physics = ResolvePhysics();
         if (physics == null) return;
@@ -114,7 +114,7 @@ public sealed class TriggerVolume : MonoBehaviour
     public override void OnDisable()
     {
         PhysicsWorld physics = ResolvePhysics();
-        if (physics != null) physics.PostStep -= OnPostStep;
+        if (physics != null) physics.StepFinished -= OnStepFinished;
 
         // Everything that was inside counts as having left when the volume turns off.
         foreach (Rigidbody3D rb in _current) RaiseExit(rb);

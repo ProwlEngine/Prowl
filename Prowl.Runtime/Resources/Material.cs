@@ -18,7 +18,7 @@ using ShaderPropertyType = Prowl.Runtime.Rendering.Shaders.ShaderPropertyType;
 namespace Prowl.Runtime.Resources;
 
 [CreateAssetMenu("Material", Extension = ".mat", Order = 1)]
-public sealed class Material : EngineObject, ISerializationCallbackReceiver
+public sealed class Material : Asset, ISerializationCallbackReceiver
 {
     private static Shader s_defaultShader;
 
@@ -44,17 +44,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// is only deserialized once, but the returned instance is always yours to own.
     /// </summary>
     public static Material LoadDefault(DefaultMaterial material)
-    {
-        // Pull the shared template from the cache, then clone. Clone is a cheap deep-copy
-        // of the property dictionaries + a shared shader reference materials are
-        // configuration objects, not heavy resources.
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(material)) is Material template)
-            return new Material(template);
-
-        // Fallback if BuiltInAssets isn't initialized ParseDefault already returns a
-        // fresh instance, no clone needed.
-        return ParseDefault(material);
-    }
+        => new(BuiltInAssets.Load<Material>(BuiltInAssets.GuidFor(material)));
 
     /// <summary>
     /// Raw deserialize of a default embedded material invoked by <see cref="BuiltInAssets"/>
@@ -76,26 +66,21 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         using var reader = new StreamReader(stream);
         string text = reader.ReadToEnd();
         var echo = EchoObject.ReadFromString(text);
-        var mat = Serializer.Deserialize<Material>(echo);
-
-        return mat;
+        return Serializer.Deserialize<Material>(echo);
     }
 
     [SerializeField]
-    private AssetRef<Shader> _shader;
+    private Shader? _shader;
 
+    /// <summary>The material's shader. One that was never set, or is missing or failed to load, is the built-in Standard shader.</summary>
     public Shader? Shader
     {
-        get { EnsureNotDisposed(); return _shader.Res; }
-        set { EnsureNotDisposed(); SetShader(value); }
-    }
-
-    /// <summary>The shader as an <see cref="AssetRef{Shader}"/>, for asset-reference editing.
-    /// A material must always have a shader, so assigning an empty ref is ignored.</summary>
-    public AssetRef<Shader> ShaderRef
-    {
-        get { EnsureNotDisposed(); return _shader; }
-        set { EnsureNotDisposed(); if (value.Res != null) SetShader(value.Res); }
+        get
+        {
+            EnsureLoaded();
+            return _shader is { State: not (AssetState.Missing or AssetState.Failed) } shader ? shader : Shader.LoadDefault(DefaultShader.Standard);
+        }
+        set { EnsureLoaded(); SetShader(value); }
     }
 
     /// <summary>
@@ -125,12 +110,6 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         _properties = new();
         _localKeywords = new();
-
-        // Default to Standard shader so new materials are immediately usable
-        var standard = Shader.LoadDefault(DefaultShader.Standard);
-
-        if (standard != null)
-            Shader = standard;
     }
 
 
@@ -154,6 +133,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public Material(Material source) : base(source.IsValid() ? source.Name : "New Material")
     {
         ArgumentNullException.ThrowIfNull(source);
+        source.EnsureLoaded();
 
         _shader = source._shader;
 
@@ -165,12 +145,15 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
 
     /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
-    public Material Clone() { EnsureNotDisposed(); return new Material(this); }
+    public Material Clone() { EnsureLoaded(); return new Material(this); }
 
     /// <summary>Records a local keyword as currently set on this material.</summary>
     public void SetKeyword(Keyword keyword)
     {
+        EnsureLoaded();
+        if (_localKeywords.TryGetValue(keyword.NameId, out Keyword current) && current.Equals(keyword)) return;
         _localKeywords[keyword.NameId] = keyword;
+        MarkDirty();
     }
 
     /// <summary>
@@ -188,24 +171,21 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     // Every public Set marks the property as user-overridden so subsequent shader
     // default-refreshes won't stomp the user's value.
-    public void SetColor(string name, Color value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromColor(value)); }
-    public void SetVector(string name, Float2 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
-    public void SetVector(string name, Float3 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
-    public void SetVector(string name, Float4 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
-    public void SetFloat(string name, float value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromFloat(value)); }
-    public void SetInt(string name, int value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromInt(value)); }
-    public void SetMatrix(string name, Float4x4 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromMatrix(value)); }
-    public void SetTexture(string name, Texture2D value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture(new AssetRef<Texture2D>(value))); }
-    public void SetTexture(string name, AssetRef<Texture2D> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture(value)); }
-    public void SetTexture3D(string name, Texture3D value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture3D(new AssetRef<Texture3D>(value))); }
-    public void SetTexture3D(string name, AssetRef<Texture3D> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture3D(value)); }
-    public void SetTextureCube(string name, Cubemap value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTextureCube(new AssetRef<Cubemap>(value))); }
-    public void SetTextureCube(string name, AssetRef<Cubemap> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTextureCube(value)); }
+    public void SetColor(string name, Color value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromColor(value)); }
+    public void SetVector(string name, Float2 value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
+    public void SetVector(string name, Float3 value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
+    public void SetVector(string name, Float4 value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
+    public void SetFloat(string name, float value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromFloat(value)); }
+    public void SetInt(string name, int value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromInt(value)); }
+    public void SetMatrix(string name, Float4x4 value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromMatrix(value)); }
+    public void SetTexture(string name, Texture2D value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture(value)); }
+    public void SetTexture3D(string name, Texture3D value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture3D(value)); }
+    public void SetTextureCube(string name, Cubemap value) { EnsureLoaded(); PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTextureCube(value)); }
 
     /// <summary>
     /// Builds a fresh runtime <see cref="PropertySet"/> from this material's stored
     /// property values. Numeric values map to their typed uniform setters; textures
-    /// are resolved from their <see cref="AssetRef{T}"/> and bound with their sampler,
+    /// are bound with their sampler,
     /// skipping any that aren't currently loaded.
     /// </summary>
     public PropertySet BuildPropertySet()
@@ -246,7 +226,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
                 case MaterialPropertyType.Texture2D:
                     {
-                        Texture2D? tex = prop.Tex2D.Res;
+                        Texture2D? tex = prop.Tex2D;
                         if (tex.IsValid() && tex.Handle != null)
                             set.SetTexture(name, tex.Handle, tex.Sampler);
                         break;
@@ -254,7 +234,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
                 case MaterialPropertyType.Texture3D:
                     {
-                        Texture3D? tex = prop.Tex3D.Res;
+                        Texture3D? tex = prop.Tex3D;
                         if (tex.IsValid() && tex.Handle != null)
                             set.SetTexture(name, tex.Handle, tex.Sampler);
                         break;
@@ -262,7 +242,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
                 case MaterialPropertyType.TextureCube:
                     {
-                        Cubemap? tex = prop.TexCube.Res;
+                        Cubemap? tex = prop.TexCube;
                         if (tex.IsValid() && tex.Handle != null)
                             set.SetTexture(name, tex.Handle, tex.Sampler);
                         break;
@@ -270,7 +250,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             }
         }
 
-        Shader? shader = _shader.Res;
+        Shader? shader = Shader;
         if (shader != null)
         {
             foreach (ShaderProperty prop in shader.Properties)
@@ -347,11 +327,11 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         switch (property.PropertyType)
         {
             case ShaderPropertyType.Texture2D:
-                Store(property.Name, MaterialProperty.FromTexture(new AssetRef<Texture2D>(property.Texture2DValue)));
+                Store(property.Name, MaterialProperty.FromTexture(property.Texture2DValue));
                 break;
 
             case ShaderPropertyType.Texture3D:
-                Store(property.Name, MaterialProperty.FromTexture3D(new AssetRef<Texture3D>(property.Texture3DValue)));
+                Store(property.Name, MaterialProperty.FromTexture3D(property.Texture3DValue));
                 break;
 
             case ShaderPropertyType.Float:
@@ -389,10 +369,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         ArgumentNullException.ThrowIfNull(shader);
 
-        if (shader == _shader.Res)
+        if (shader == _shader)
             return;
 
-        _shader = new AssetRef<Shader>(shader);
+        _shader = shader;
 
         // Intentionally do NOT pre-fill _properties with shader defaults defaults
         // are read live from the shader at access time (see DrawShaderProperty
@@ -402,20 +382,34 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Gets a hash representing the current material state (uniform values only, not keywords or shader).
-    /// The hash is used by the renderer to batch objects with identical material properties together,
-    /// minimizing GPU uniform binding overhead. The hash is cached and only recalculated when dirty.
+    /// Gets a hash of everything that decides how this material draws: its shader, keywords and
+    /// uniform values. The renderer batches materials with equal hashes, so two materials only share a
+    /// hash when either one could draw the other's objects. Properties and keywords are cached until dirty.
     /// </summary>
-    /// <returns>A 64-bit hash of all material uniform values</returns>
     public ulong GetStateHash()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         if (_isDirty)
         {
-            _stateHash = ComputeHash();
+            _stateHash = HashKeywords(ComputeHash());
             _isDirty = false;
         }
-        return _stateHash;
+
+        ulong hash = _stateHash ^ (ulong)Shader.InstanceID;
+        return hash * 1099511628211UL;
+    }
+
+    private ulong HashKeywords(ulong hash)
+    {
+        foreach (KeyValuePair<int, Keyword> kv in _localKeywords.OrderBy(x => x.Key))
+        {
+            if (kv.Value.Value == "false") continue;
+            hash ^= (ulong)kv.Key;
+            hash *= 1099511628211UL;
+            hash ^= (ulong)kv.Value.GetHashCode();
+            hash *= 1099511628211UL;
+        }
+        return hash;
     }
 
     /// <summary>
@@ -450,6 +444,8 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public void OnAfterDeserialize()
     {
+        MarkDirty();
+
         // Migration: materials saved before the override-tracking model don't have
         // _overrides populated, but their _properties dictionary holds values the
         // user actually set. Treat every existing entry as an override so saved
@@ -476,8 +472,8 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void SyncShaderDefaults()
     {
-        EnsureNotDisposed();
-        var shader = _shader.Res;
+        EnsureLoaded();
+        var shader = Shader;
         if (shader == null) return;
 
         foreach (ShaderProperty prop in shader.Properties)
@@ -488,5 +484,6 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
             UpdatePropertyState(prop);
         }
+        MarkDirty();
     }
 }

@@ -78,9 +78,9 @@ public sealed class BakedPhysicsMesh
             Float3 v1 = vertices[i1];
             Float3 v2 = vertices[i2];
             triangles.Add(new JTriangle(
-                new JVector(v0.X, v0.Y, v0.Z),
-                new JVector(v1.X, v1.Y, v1.Z),
-                new JVector(v2.X, v2.Y, v2.Z)));
+                v0.ToJitter(),
+                v1.ToJitter(),
+                v2.ToJitter()));
         }
 
         return triangles;

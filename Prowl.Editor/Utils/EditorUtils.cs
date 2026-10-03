@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -48,11 +47,7 @@ public static class EditorUtils
         foreach (var assembly in RuntimeUtils.AssemblySource())
         {
             if (IsFrameworkAssembly(assembly)) continue;
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray()!; }
-            catch { continue; }
-            foreach (var type in types)
+            foreach (var type in RuntimeUtils.GetLoadableTypes(assembly))
                 yield return type;
         }
     }

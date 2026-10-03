@@ -1,6 +1,9 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+using System.Linq;
+
 namespace Prowl.Runtime;
 
 /// <summary>
@@ -22,6 +25,9 @@ public struct QueryFilter
     /// <summary>Skip this one collider.</summary>
     public Collider IgnoreCollider;
 
+    /// <summary>Skip everything attached to any of these rigidbodies.</summary>
+    public IReadOnlySet<Rigidbody3D>? IgnoreBodies;
+
     /// <summary>Hits anything on any layer.</summary>
     public static readonly QueryFilter Default = new(LayerMask.Everything);
 
@@ -33,12 +39,23 @@ public struct QueryFilter
     /// <summary>This filter, additionally skipping everything attached to <paramref name="rigidbody"/>.</summary>
     public readonly QueryFilter Ignoring(Rigidbody3D rigidbody)
     {
+        if (IgnoreRigidbody.IsValid() && !ReferenceEquals(IgnoreRigidbody, rigidbody))
+            return Ignoring(new HashSet<Rigidbody3D> { rigidbody });
+
         QueryFilter filter = this;
         filter.IgnoreRigidbody = rigidbody;
         return filter;
     }
 
-    /// <summary>This filter, additionally skipping <paramref name="collider"/>.</summary>
+    /// <summary>This filter, additionally skipping everything attached to any of <paramref name="bodies"/>.</summary>
+    public readonly QueryFilter Ignoring(IReadOnlySet<Rigidbody3D> bodies)
+    {
+        QueryFilter filter = this;
+        filter.IgnoreBodies = IgnoreBodies is { Count: > 0 } already ? new HashSet<Rigidbody3D>(already.Concat(bodies)) : bodies;
+        return filter;
+    }
+
+    /// <summary>This filter, skipping <paramref name="collider"/> in place of any collider it skipped before.</summary>
     public readonly QueryFilter Ignoring(Collider collider)
     {
         QueryFilter filter = this;
@@ -47,7 +64,7 @@ public struct QueryFilter
     }
 
     /// <summary>Whether anything is excluded beyond the layer mask. Lets queries skip the owner lookup.</summary>
-    internal readonly bool HasExclusions => IgnoreRigidbody.IsValid() || IgnoreCollider.IsValid();
+    internal readonly bool HasExclusions => IgnoreRigidbody.IsValid() || IgnoreCollider.IsValid() || IgnoreBodies is { Count: > 0 };
 
     public static implicit operator QueryFilter(LayerMask layerMask) => new(layerMask);
 }

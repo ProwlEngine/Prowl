@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Resources;
 /// Stores the raw TTF/OTF bytes so the font can be reconstructed at runtime.
 /// The actual glyph atlas is managed per-Canvas by Scribe's FontSystem at runtime.
 /// </summary>
-public sealed class FontAsset : EngineObject
+public sealed class FontAsset : Asset
 {
     /// <summary>Raw font file bytes (TTF or OTF). Serialized with the asset.</summary>
     [SerializeField]
@@ -25,7 +25,7 @@ public sealed class FontAsset : EngineObject
     {
         get
         {
-            EnsureNotDisposed();
+            EnsureLoaded();
             if (_fontFile == null && _fontData.Length > 0)
                 _fontFile = new FontFile(_fontData);
             return _fontFile!;
@@ -56,12 +56,7 @@ public sealed class FontAsset : EngineObject
     /// Get the shared instance of a default embedded font. Returns the same asset across the whole
     /// app. Used as the fallback font for UI text that has no font assigned.
     /// </summary>
-    public static FontAsset LoadDefault(DefaultFont font = DefaultFont.Default)
-    {
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(font)) is FontAsset cached)
-            return cached;
-        return ParseDefault(font);
-    }
+    public static FontAsset LoadDefault(DefaultFont font = DefaultFont.Default) => BuiltInAssets.Load<FontAsset>(BuiltInAssets.GuidFor(font));
 
     /// <summary>
     /// Raw load of a default embedded font, invoked by <see cref="BuiltInAssets"/> on first cache
@@ -79,6 +74,5 @@ public sealed class FontAsset : EngineObject
         using var ms = new System.IO.MemoryStream();
         stream.CopyTo(ms);
         return new FontAsset(font.ToString(), ms.ToArray());
-        // AssetID/AssetPath/Name are finalized by BuiltInAssets.Get after this returns.
     }
 }

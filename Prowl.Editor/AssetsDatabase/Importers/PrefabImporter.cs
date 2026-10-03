@@ -10,14 +10,12 @@ namespace Prowl.Editor.Importers;
 
 /// <summary>
 /// Imports .prefab files serialized GameObject hierarchies wrapped in PrefabAsset.
-/// Dependencies are discovered by walking the raw EchoObject tree for AssetID tags
-/// (from AssetRef serialization) and PrefabAssetId references, without deserializing the full GO hierarchy.
+/// Dependencies are read straight from the stored tree, without deserializing the hierarchy.
 /// </summary>
 [ImporterFor(".prefab")]
 public class PrefabImporter : AssetImporter
 {
-    // 2: PrefabAsset stores its tree in a backing field, so cached payloads from v1 no longer bind.
-    public override int Version => 2;
+    public override int Version => 3;
 
     /// <summary> Reads a .prefab file, parses its EchoObject tree, flattens any nested prefab links, collects asset dependencies, and sets a PrefabAsset as the main asset. Returns true on success, false on failure with a logged error. </summary>
     public override bool Import(ImportContext ctx)
@@ -38,16 +36,12 @@ public class PrefabImporter : AssetImporter
             // link in a prefab file is nested by definition: the asset's own root carries none.
             ImportHelper.FlattenNestedPrefabLinks(goEcho, insideInstance: true);
 
-            var dependencies = new HashSet<Guid>();
-            ImportHelper.CollectAssetDependencies(goEcho, dependencies);
-
             var prefab = new PrefabAsset();
             prefab.GameObjectData = goEcho;
             prefab.Name = ctx.FileName;
 
             ctx.SetMainAsset(prefab);
-            foreach (var dep in dependencies)
-                ctx.AddDependency(dep);
+            ImportHelper.CollectAssetDependencies(goEcho, ctx);
         }
         catch (Exception ex)
         {

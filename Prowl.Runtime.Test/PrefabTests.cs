@@ -19,7 +19,9 @@ public class PrefabTests : RuntimeTestBase
     private static PrefabAsset MakePrefab(GameObject source, Guid assetId)
     {
         EchoObject data = Serializer.Serialize(typeof(object), source);
-        return new PrefabAsset { GameObjectData = data, AssetID = assetId };
+        var prefab = new PrefabAsset { GameObjectData = data };
+        prefab.SetIdentity(assetId, "");
+        return prefab;
     }
 
     private static T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.Serialize(value));

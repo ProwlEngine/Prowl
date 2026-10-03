@@ -202,7 +202,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         if (_dragging)
         {
             // Track velocity from the drag so a release can coast.
-            float dt = Maths.Max(Time.DeltaTime, 1e-4f);
+            float dt = Maths.Max(Time.UnscaledDeltaTime, 1e-4f);
             Float2 cur = _content.AnchoredPosition;
             _velocity = (cur - _prevContentPos) / dt;
             _prevContentPos = cur;
@@ -220,7 +220,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
             {
                 float t = _movementType == ScrollMovementType.Clamped || _elasticity <= 0f
                     ? 1f
-                    : Maths.Clamp(Time.DeltaTime / _elasticity, 0f, 1f);
+                    : Maths.Clamp(Time.UnscaledDeltaTime / _elasticity, 0f, 1f);
                 _velocity = Float2.Zero;
                 SetContentPosition(pos + offset * t);
                 return;
@@ -229,10 +229,10 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
 
         if (!_inertia || Maths.Abs(_velocity.X) + Maths.Abs(_velocity.Y) < 1f) { _velocity = Float2.Zero; return; }
 
-        float decay = MathF.Pow(_decelerationRate, Time.DeltaTime);
+        float decay = MathF.Pow(_decelerationRate, Time.UnscaledDeltaTime);
         _velocity *= decay;
 
-        Float2 target = _content.AnchoredPosition + _velocity * Time.DeltaTime;
+        Float2 target = _content.AnchoredPosition + _velocity * Time.UnscaledDeltaTime;
         // Clamped stops dead at the wall; Elastic coasts past it and the spring above brings it back.
         Float2 result = _movementType == ScrollMovementType.Clamped ? ClampContent(target) : FilterAxes(target);
         if (result.X != target.X) _velocity.X = 0f;

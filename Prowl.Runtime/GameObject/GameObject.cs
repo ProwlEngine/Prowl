@@ -10,8 +10,8 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -26,12 +26,10 @@ public partial class GameObject : EngineObject, ISerializable
 
     // The hot reload walk migrates this list in place; a removed-type component becomes null and is cleaned up
     // in OnHotReload.
-    [ManuallyCloned]
     internal List<MonoBehaviour> _components = [];
     // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
-    [ReloadIgnore, ManuallyCloned] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
+    [ReloadIgnore] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
-    [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
     // The identifier stored in the data this object was last loaded from. A scene load restores it.
@@ -44,13 +42,12 @@ public partial class GameObject : EngineObject, ISerializable
 
     // We don't serialize parent, since if we want to serialize X object who is a child to Y object, we don't want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
-    [ManuallyCloned]
     private GameObject? _parent;
 
     [SerializeField]
     private Transform _transform = new();
 
-    [SerializeIgnore, ManuallyCloned]
+    [SerializeIgnore]
     private WeakReference<Scene> _scene;
 
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
@@ -112,7 +109,6 @@ public partial class GameObject : EngineObject, ISerializable
     public GameObject? Parent => _parent;
 
     /// <summary> A List of all children of this GameObject </summary>
-    [ManuallyCloned]
     public List<GameObject> Children = [];
 
     public int ChildCount => Children.Count;
@@ -275,6 +271,8 @@ public partial class GameObject : EngineObject, ISerializable
     /// <returns>True if the parent was successfully set, false otherwise.</returns>
     public bool SetParent(GameObject NewParent, bool worldPositionStays = true)
     {
+        MainThreadContext.AssertOwner(this);
+        MainThreadContext.AssertOwner(NewParent);
         if (NewParent == _parent)
             return true;
 
@@ -520,6 +518,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="index">The new index of this GameObject.</param>
     public void SetSiblingIndex(int index)
     {
+        MainThreadContext.AssertOwner(this);
         if (Parent.IsNotValid()) return;
 
         // Remove this object from current position
@@ -561,6 +560,7 @@ public partial class GameObject : EngineObject, ISerializable
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type,
         HashSet<Type>? pending)
     {
+        MainThreadContext.AssertOwner(this, nameof(AddComponent));
         if (!CanConstruct(type)) return null;
 
         pending ??= [];
@@ -657,6 +657,8 @@ public partial class GameObject : EngineObject, ISerializable
     public void AddComponent(MonoBehaviour comp)
     {
         ArgumentNullException.ThrowIfNull(comp, nameof(comp));
+        MainThreadContext.AssertOwner(this);
+        MainThreadContext.AssertOwner(comp.GameObject);
 
         if (ReferenceEquals(comp.GameObject, this)) return;
 
@@ -782,6 +784,7 @@ public partial class GameObject : EngineObject, ISerializable
     internal void RemoveComponentInternal(MonoBehaviour component)
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
+        MainThreadContext.AssertOwner(this, nameof(RemoveComponent));
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))
@@ -1107,6 +1110,8 @@ public partial class GameObject : EngineObject, ISerializable
         return false;
     }
 
+    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
+
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
@@ -1147,6 +1152,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="state">The new enabled state.</param>
     private void SetEnabled(bool state)
     {
+        MainThreadContext.AssertOwner(this, nameof(Enabled));
         _enabled = state;
         HierarchyStateChanged();
     }
@@ -1329,8 +1335,13 @@ public partial class GameObject : EngineObject, ISerializable
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx) ?? new Transform();
         _transform.GameObject = this;
 
+        // Read into an object that already has components and children, the ones the data was paired with are
+        // filled in place and anything else it has is kept. A new object has none, so this is an ordinary load.
+        int firstNewComponent = _components.Count;
+        var existing = new HashSet<object>(_components, ReferenceEqualityComparer.Instance);
+        existing.UnionWith(Children);
+
         EchoObject comps = value["Components"];
-        _components = [];
         // comps is null when this echo is a bare $id reference stub (an unresolved forward reference);
         // guard so such an object degrades to an empty GameObject instead of NREing out of the whole scene.
         foreach (EchoObject compTag in comps?.List ?? [])
@@ -1342,7 +1353,7 @@ public partial class GameObject : EngineObject, ISerializable
 
                 if (oType == typeof(MissingMonobehaviour))
                 {
-                    HandleMissingComponent(compTag, ctx);
+                    HandleMissingComponent(compTag, ctx, existing);
                     continue;
                 }
 
@@ -1367,8 +1378,7 @@ public partial class GameObject : EngineObject, ISerializable
 
                 if (typedComponent.IsValid())
                 {
-                    _components.Add(typedComponent!);
-                    _componentCache.Add(typedComponent!.GetType(), typedComponent);
+                    if (existing.Add(typedComponent!)) AddLoadedComponent(typedComponent!);
                     continue;
                 }
 
@@ -1377,21 +1387,26 @@ public partial class GameObject : EngineObject, ISerializable
                 Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
                 EchoObject trapped = compTag;
                 ctx.Defer(() => BackPatchTrappedDefinitions(DefinitionOf(trapped, ctx), ctx));
-                var missing = new MissingMonobehaviour();
+                // A copy onto an existing object fills the missing component it was paired with.
+                MissingMonobehaviour missing = compTag.TryGet("$id", out EchoObject? missingId)
+                    && ctx.idToObject.TryGetValue(missingId!.IntValue, out object? paired) && paired is MissingMonobehaviour pairedMissing
+                    ? pairedMissing
+                    : new MissingMonobehaviour();
                 Serializer.DeserializeInto(compTag, missing, ctx);
-                _components.Add(missing);
-                _componentCache.Add(typeof(MissingMonobehaviour), missing);
+                if (existing.Add(missing)) AddLoadedComponent(missing);
                 continue;
             }
 
             MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
-            if (component.IsNotValid()) continue;
-            _components.Add(component);
-            _componentCache.Add(component.GetType(), component);
+            if (component.IsValid() && existing.Add(component!)) AddLoadedComponent(component!);
         }
-        // Attach all components
-        foreach (MonoBehaviour comp in _components)
-            comp.AttachToGameObject(this);
+
+        bool inScene = Scene.IsValid();
+        for (int i = firstNewComponent; i < _components.Count; i++)
+        {
+            _components[i].AttachToGameObject(this);
+            if (inScene) NotifyComponentAddedToScene(_components[i]);
+        }
 
         // Children are deserialized AFTER components so the visit order matches serialization
         // (Serialize writes Components then Children). Echo's reference encoding is single-pass and
@@ -1399,7 +1414,6 @@ public partial class GameObject : EngineObject, ISerializable
         // component referencing another component, including across the parent/child boundary, or a
         // cyclic reference) into broken forward refs.
         EchoObject children = value["Children"];
-        Children = [];
         foreach (EchoObject childTag in children?.List ?? [])
         {
             GameObject? child;
@@ -1412,10 +1426,32 @@ public partial class GameObject : EngineObject, ISerializable
                 Debug.LogError($"A child of '{Name}' threw while being loaded and was skipped. {e.GetType().Name}: {e.Message}");
                 continue;
             }
-            if (child.IsNotValid()) continue;
-            child._parent = this;
+            if (child.IsNotValid() || !existing.Add(child!)) continue;
+            child!._parent = this;
             Children.Add(child);
         }
+    }
+
+    private void AddLoadedComponent(MonoBehaviour component)
+    {
+        _components.Add(component);
+        _componentCache.Add(component.GetType(), component);
+    }
+
+    /// <summary>
+    /// Attaches a bare component of the given type, for a copy to fill. Unlike <see cref="AddComponent(Type)"/> this
+    /// does not pull in required components, since the object being copied already has whatever it needs. Null when
+    /// the type's constructor throws, so one bad component is skipped rather than abandoning the whole copy.
+    /// </summary>
+    internal MonoBehaviour? AttachBareComponent(Type type)
+    {
+        if (!TryConstruct(type, out MonoBehaviour? component) || component is null)
+            return null;
+
+        component.AttachToGameObject(this);
+        AddLoadedComponent(component);
+        NotifyComponentAddedToScene(component);
+        return component;
     }
 
     // A bare reference means the definition was written inside a field that could not load it.
@@ -1491,7 +1527,7 @@ public partial class GameObject : EngineObject, ISerializable
     /// <param name="ctx">The serialization context.</param>
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
         Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
-    private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx)
+    private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx, HashSet<object> existing)
     {
         MissingMonobehaviour? missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
         if (missing.IsNotValid()) return;
@@ -1503,8 +1539,7 @@ public partial class GameObject : EngineObject, ISerializable
         else
             component = missing;
 
-        _components.Add(component!);
-        _componentCache.Add(component!.GetType(), component);
+        if (existing.Add(component!)) AddLoadedComponent(component!);
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",

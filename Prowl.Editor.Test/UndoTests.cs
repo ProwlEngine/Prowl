@@ -283,6 +283,28 @@ public class UndoTests : EditorTestHarness
     }
 
     [Fact]
+    public void RegisterDestroyObject_Undo_BringsBackARuntimeMaterialNothingElseHeld()
+    {
+        var (scene, go, _) = MakeScene();
+        GiveRuntimeMaterial(go);
+        Guid goId = go.Identifier;
+
+        Undo.RegisterDestroyObject(go, "Delete");
+        DestroyGO(scene, go);
+        Undo.IncrementGroup();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Undo.PerformUndo();
+
+        Assert.Equal("Runtime", Undo.FindGO(goId)!.GetComponent<MeshRenderer>()!.Material!.Name);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void GiveRuntimeMaterial(GameObject go) => go.AddComponent<MeshRenderer>().Material = new Material { Name = "Runtime" };
+
+    [Fact]
     public void RegisterDestroyObject_Undo_RestoresChildren()
     {
         var scene = new Scene();

@@ -66,7 +66,7 @@ public class TextureImporter : AssetImporter
         if (spriteSettings.Mode != SpriteMode.None)
         {
             foreach (var kv in spriteSettings.SecondaryTextures)
-                if (!kv.Value.IsExplicitNull) ctx.AddDependency(kv.Value.AssetID);
+                if (kv.Value is not null) ctx.AddDependency(kv.Value.AssetID);
 
             foreach (var (slice, sprite) in SpriteBuilder.Build(texture, spriteSettings))
                 ctx.AddSubAsset(slice.Name, sprite, SpriteBuilder.IdentityOf(spriteSettings, slice));
@@ -179,7 +179,7 @@ public class SpriteImportSettings
     public byte TightMeshAlphaThreshold = 1;
 
     /// <summary>Named secondary maps (e.g. "_NormalMap") applied to every sprite in this texture.</summary>
-    public Dictionary<string, AssetRef<Texture2D>> SecondaryTextures = new();
+    public Dictionary<string, Texture2D> SecondaryTextures = new();
 
     // Slicing-tool state (editor convenience; the importer only reads Slices).
     /// <summary> The auto-slicing tool last used in the Sprite Editor. The importer only reads Slices, not this value. </summary>
@@ -711,11 +711,37 @@ public static class SpriteBuilder
         List<SpriteSliceData> slices = ResolveSlices(s, texW, texH, tex.Name);
         byte[]? alpha = s.GenerateTightMesh ? SpriteSlicer.ReadAlpha(tex) : null;
 
+        int clampedCount = 0;
         foreach (SpriteSliceData slice in slices)
-            result.Add((slice, BuildOne(tex, s, slice, texW, texH, alpha)));
+        {
+            SpriteRect rect = ClampToTexture(slice.Rect, texW, texH);
+            if (!SameRect(rect, slice.Rect)) clampedCount++;
+            result.Add((slice, BuildOne(tex, s, slice, rect, texW, texH, alpha)));
+        }
+
+        // Replacing the source image with a smaller one leaves the stored rects describing the old
+        // dimensions, which would otherwise produce UVs past 1 and sample whatever Repeat wrap lands on.
+        // Only the built sprite is clamped - the authored slicing is left alone so restoring the original
+        // image (or re-slicing) brings it straight back.
+        if (clampedCount > 0)
+            Prowl.Runtime.Debug.LogWarning(
+                $"[Sprite] '{tex.Name}': {clampedCount} slice(s) fall outside the {texW}x{texH} texture and were clamped for this import. The stored slicing is unchanged.");
 
         return result;
     }
+
+    /// <summary>Trims a rect to the texture, coping with a negative origin and an oversized extent.</summary>
+    private static SpriteRect ClampToTexture(SpriteRect r, int texW, int texH)
+    {
+        int x0 = Math.Clamp(r.X, 0, texW);
+        int y0 = Math.Clamp(r.Y, 0, texH);
+        int x1 = Math.Clamp(r.MaxX, 0, texW);
+        int y1 = Math.Clamp(r.MaxY, 0, texH);
+        return new SpriteRect(x0, y0, Math.Max(0, x1 - x0), Math.Max(0, y1 - y0));
+    }
+
+    private static bool SameRect(SpriteRect a, SpriteRect b)
+        => a.X == b.X && a.Y == b.Y && a.Width == b.Width && a.Height == b.Height;
 
     private static List<SpriteSliceData> ResolveSlices(SpriteImportSettings s, int texW, int texH, string baseName)
     {
@@ -730,23 +756,25 @@ public static class SpriteBuilder
         return s.Slices;
     }
 
-    private static Sprite BuildOne(Texture2D tex, SpriteImportSettings s, SpriteSliceData slice, int texW, int texH, byte[]? alpha)
+    /// <summary><paramref name="rect"/> is the slice's rect after clamping to the texture, which is what
+    /// the sprite is actually built from.</summary>
+    private static Sprite BuildOne(Texture2D tex, SpriteImportSettings s, SpriteSliceData slice, SpriteRect rect, int texW, int texH, byte[]? alpha)
     {
         var sprite = new Sprite
         {
             Name = slice.Name,
-            Texture = tex, // implicit AssetRef<Texture2D>; carries the texture's AssetID
-            Rect = slice.Rect,
-            Pivot = ResolvePivot(slice),
+            Texture = tex,
+            Rect = rect,
+            Pivot = ResolvePivot(slice, rect),
             PixelsPerUnit = s.PixelsPerUnit,
             Border = slice.Border,
-            SecondaryTextures = new Dictionary<string, AssetRef<Texture2D>>(s.SecondaryTextures),
+            SecondaryTextures = new Dictionary<string, Texture2D>(s.SecondaryTextures),
         };
 
-        if (s.GenerateTightMesh && alpha != null)
+        if (s.GenerateTightMesh && alpha != null && rect.Width > 0 && rect.Height > 0)
         {
-            byte[] rectAlpha = ExtractRectAlpha(alpha, texW, texH, slice.Rect);
-            var traced = SpriteMeshTracer.Generate(rectAlpha, slice.Rect.Width, slice.Rect.Height,
+            byte[] rectAlpha = ExtractRectAlpha(alpha, texW, texH, rect);
+            var traced = SpriteMeshTracer.Generate(rectAlpha, rect.Width, rect.Height,
                 s.TightMeshAlphaThreshold, s.TightMeshDetail);
             sprite.BuildTightGeometry(traced, texW, texH);
         }
@@ -758,15 +786,15 @@ public static class SpriteBuilder
         return sprite;
     }
 
-    private static Float2 ResolvePivot(SpriteSliceData slice)
+    private static Float2 ResolvePivot(SpriteSliceData slice, SpriteRect rect)
     {
         if (slice.Alignment != SpriteAlignment.Custom)
             return Sprite.PivotFromAlignment(slice.Alignment);
 
         if (slice.PivotUnit == PivotUnitMode.Pixels)
         {
-            float w = Math.Max(1, slice.Rect.Width);
-            float h = Math.Max(1, slice.Rect.Height);
+            float w = Math.Max(1, rect.Width);
+            float h = Math.Max(1, rect.Height);
             return new Float2(slice.CustomPivot.X / w, slice.CustomPivot.Y / h);
         }
         return slice.CustomPivot;

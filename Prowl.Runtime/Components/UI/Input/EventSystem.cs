@@ -116,7 +116,7 @@ public sealed class EventSystem : MonoBehaviour
         // Reclaim the role if the active system went away, so a surviving instance keeps input alive.
         if (s_current is null || s_current.IsDisposed) s_current = this;
         if (!ReferenceEquals(s_current, this)) return;
-        Tick(Time.TimeSinceStartup);
+        Tick(Time.UnscaledTotalTime);
     }
 
     private void ClearState()
@@ -185,7 +185,7 @@ public sealed class EventSystem : MonoBehaviour
     /// <see cref="PointerEventData.Used"/>. Used for pointer events that may want to be observed by
     /// ancestors regardless of whether a leaf handled them.
     /// </summary>
-    private static GameObject? Bubble<TInterface>(GameObject? root, PointerEventData e, Action<TInterface, PointerEventData> action)
+    internal static GameObject? Bubble<TInterface>(GameObject? root, PointerEventData e, Action<TInterface, PointerEventData> action)
         where TInterface : class
     {
         if (root == null || action == null) return null;
@@ -230,6 +230,16 @@ public sealed class EventSystem : MonoBehaviour
         for (GameObject? c = of; c != null; c = c.Parent)
             if (ReferenceEquals(c, node)) return true;
         return false;
+    }
+
+    /// <summary>The first GameObject up from <paramref name="from"/> with an enabled component implementing
+    /// <typeparamref name="TInterface"/>, or null.</summary>
+    internal static GameObject? FindHandler<TInterface>(GameObject? from) where TInterface : class
+    {
+        for (GameObject? node = from; node != null; node = node.Parent)
+            foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
+                if (comp is TInterface && comp.EnabledInHierarchy) return node;
+        return null;
     }
 
     /// <summary>Walks up from <paramref name="from"/> and returns the GameObject that owns the first
@@ -327,9 +337,9 @@ public sealed class EventSystem : MonoBehaviour
         }
 
         // 3) Per-button presses, releases, clicks, drags.
-        UpdateButton(_left, MouseButton.Left, 0, hovered, hoveredCanvas, pos, delta, designPos, winSize, currentTime);
-        UpdateButton(_right, MouseButton.Right, 1, hovered, hoveredCanvas, pos, delta, designPos, winSize, currentTime);
-        UpdateButton(_middle, MouseButton.Middle, 2, hovered, hoveredCanvas, pos, delta, designPos, winSize, currentTime);
+        UpdateButton(_left, MouseButton.Left, Input.GetMouseButtonDown(0), Input.GetMouseButtonUp(0), Input.GetMouseButton(0), hovered, hoveredCanvas, pos, delta, designPos, winSize, currentTime);
+        UpdateButton(_right, MouseButton.Right, Input.GetMouseButtonDown(1), Input.GetMouseButtonUp(1), Input.GetMouseButton(1), hovered, hoveredCanvas, pos, delta, designPos, winSize, currentTime);
+        UpdateButton(_middle, MouseButton.Middle, Input.GetMouseButtonDown(2), Input.GetMouseButtonUp(2), Input.GetMouseButton(2), hovered, hoveredCanvas, pos, delta, designPos, winSize, currentTime);
 
         // 4) Scroll dispatch - only when the pointer is over something hittable.
         float scroll = Input.MouseWheelDelta;
@@ -365,10 +375,12 @@ public sealed class EventSystem : MonoBehaviour
         ExecuteHierarchy<IMoveHandler>(_selected, h => h.OnMove(dir));
     }
 
-    private void UpdateButton(
+    internal void UpdateButton(
         PointerEventData e,
         MouseButton button,
-        int buttonIndex,
+        bool down,
+        bool up,
+        bool held,
         GameObject? hovered,
         GameCanvas? hoveredCanvas,
         Float2 pos,
@@ -390,22 +402,19 @@ public sealed class EventSystem : MonoBehaviour
                 e.DesignPosition = dp;
         }
 
-        bool down = Input.GetMouseButtonDown(buttonIndex);
-        bool up = Input.GetMouseButtonUp(buttonIndex);
-        bool held = Input.GetMouseButton(buttonIndex);
-
         // ---- Press ----
         if (down)
         {
             e.PressedOn = hovered;
+            e.ClickTarget = FindHandler<IPointerClickHandler>(hovered);
             e.PressPosition = pos;
             e.PressTime = currentTime;
             e.IsDragging = false;
             e.Dragging = null;
 
-            if (hovered != null &&
+            if (e.ClickTarget != null &&
                 currentTime - e.LastClickTime <= _multiClickWindow &&
-                ReferenceEquals(hovered, e.LastClickTarget))
+                ReferenceEquals(e.ClickTarget, e.LastClickTarget))
                 e.ClickCount++;
             else
                 e.ClickCount = 1;
@@ -425,9 +434,11 @@ public sealed class EventSystem : MonoBehaviour
         {
             if (!e.IsDragging)
             {
+                // Only something that handles drags turns a moving press into a drag. Without one the
+                // press stays a press, so a button still clicks when the pointer shifts a few pixels.
                 Float2 fromPress = pos - e.PressPosition;
                 float distSqr = fromPress.X * fromPress.X + fromPress.Y * fromPress.Y;
-                if (distSqr >= _dragThreshold * _dragThreshold)
+                if (distSqr >= _dragThreshold * _dragThreshold && FindHandler<IDragHandler>(e.PressedOn) != null)
                 {
                     e.IsDragging = true;
                     e.Dragging = e.PressedOn;
@@ -456,15 +467,17 @@ public sealed class EventSystem : MonoBehaviour
                 if (hovered != null && !ReferenceEquals(hovered, e.Dragging))
                     Bubble<IDropHandler>(hovered, e, static (h, ev) => h.OnDrop(ev));
             }
-            else if (e.PressedOn != null && ReferenceEquals(e.PressedOn, hovered))
+            else if (e.ClickTarget != null && ReferenceEquals(e.ClickTarget, FindHandler<IPointerClickHandler>(hovered)))
             {
-                // Click: down + up on the same target without a drag.
+                // Click: released over the same clickable the press started on (a label inside a button
+                // counts as the button), without a drag.
                 e.LastClickTime = currentTime;
-                e.LastClickTarget = hovered;
-                Bubble<IPointerClickHandler>(hovered, e, static (h, ev) => h.OnPointerClick(ev));
+                e.LastClickTarget = e.ClickTarget;
+                Bubble<IPointerClickHandler>(e.ClickTarget, e, static (h, ev) => h.OnPointerClick(ev));
             }
 
             e.PressedOn = null;
+            e.ClickTarget = null;
             e.Dragging = null;
             e.IsDragging = false;
         }

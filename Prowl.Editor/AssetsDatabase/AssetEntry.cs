@@ -21,6 +21,8 @@ public class SubAssetEntry
     [SerializeField] public string TypeName = "";  // Assembly-qualified type name
     /// <summary> GUIDs of other sub-assets or assets this sub-asset depends on. </summary>
     [SerializeField] public Guid[] Dependencies = Array.Empty<Guid>();
+    /// <summary> GUIDs this sub-asset names through an AssetRef, which ship but do not load with it. </summary>
+    [SerializeField] public Guid[] SoftDependencies = Array.Empty<Guid>();
 
     /// <summary> The resolved System.Type of the sub-asset, serialized as TypeName. </summary>
     public Type? Type
@@ -51,6 +53,10 @@ public class AssetEntry
     [SerializeField] public string? MainAssetTypeName;  // Assembly-qualified type name of main asset
     /// <summary> GUIDs of other assets this asset depends on. </summary>
     [SerializeField] public Guid[] Dependencies = Array.Empty<Guid>();
+    /// <summary> GUIDs this asset names through an AssetRef, which ship but do not load with it. </summary>
+    [SerializeField] public Guid[] SoftDependencies = Array.Empty<Guid>();
+    /// <summary> Prefabs this asset has instances of. They only matter to the editor, a player never reads them. </summary>
+    [SerializeField] public Guid[] EditorDependencies = Array.Empty<Guid>();
     /// <summary> User-defined labels or tags associated with this asset. </summary>
     [SerializeField] public string[] Labels = Array.Empty<string>();
     /// <summary> Sub-assets contained within this asset. </summary>

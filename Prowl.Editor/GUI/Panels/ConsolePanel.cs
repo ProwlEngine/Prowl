@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
@@ -30,11 +31,17 @@ public class ConsolePanel : DockPanel
     public override string Icon => EditorIcons.Terminal;
 
     private const int MaxMessages = 500;
+
+    // Past this many undrained logs the oldest go, so nothing grows while no console or status bar is drawn.
+    private const int MaxPending = 5000;
     private static float RowHeight => EditorTheme.RowHeight + 2f;
 
     private static readonly List<LogEntry> _messages = new();
-    private static readonly object _messagesLock = new();
     private static bool _subscribed;
+
+    // Every log waits here until a reader drains it into _messages, so logging from any thread never touches the list.
+    private static readonly ConcurrentQueue<(string Message, DebugStackTrace? StackTrace, LogSeverity Severity, DateTime Time)> s_pending = new();
+    private static readonly object s_messagesLock = new();
 
     // Settings
     private bool _showTime = true;
@@ -55,6 +62,7 @@ public class ConsolePanel : DockPanel
     private bool _lastCollapseState;
     private readonly List<int> _filteredIndices = new();
     private int _selectedFilteredIndex = -1;
+    private TextLayout? _ellipsis;
 
     internal struct LogEntry
     {
@@ -72,6 +80,12 @@ public class ConsolePanel : DockPanel
         public TextLayout? CountLayout;
         public TextLayout? SourceLayout;
         public TextLayout? StackLayout;
+
+        // Truncated copies for when the full line does not fit, with the width they were cut for.
+        public TextLayout? MessageCut;
+        public float MessageCutWidth;
+        public TextLayout? StackCut;
+        public float StackCutWidth;
     }
 
     public ConsolePanel() => EnsureSubscribed();
@@ -97,67 +111,98 @@ public class ConsolePanel : DockPanel
     /// <summary>Total Info / Warning / Error counts (including collapsed repeats).</summary>
     public static (int info, int warn, int err) LogCounts()
     {
-        int info = 0, warn = 0, err = 0;
-        foreach (var m in _messages)
+        lock (s_messagesLock)
         {
-            if (m.Severity == LogSeverity.Warning) warn += m.Count;
-            else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) err += m.Count;
-            else info += m.Count;
+            DrainPending();
+            int info = 0, warn = 0, err = 0;
+            foreach (var m in _messages)
+            {
+                if (m.Severity == LogSeverity.Warning) warn += m.Count;
+                else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) err += m.Count;
+                else info += m.Count;
+            }
+            return (info, warn, err);
         }
-        return (info, warn, err);
     }
 
     /// <summary>The most recent log entry (message, source class, collapse count), or null if none.</summary>
     public static (LogSeverity severity, string message, string? source, int count)? LastLog()
     {
-        if (_messages.Count == 0) return null;
-        var m = _messages[^1];
-        return (m.Severity, m.Message, SourceOf(m), m.Count);
+        lock (s_messagesLock)
+        {
+            DrainPending();
+            if (_messages.Count == 0) return null;
+            var m = _messages[^1];
+            return (m.Severity, m.Message, SourceOf(m), m.Count);
+        }
     }
 
     private static void OnLogMessage(string message, DebugStackTrace? stackTrace, LogSeverity severity)
     {
-        // Debug.OnLog can fire from the render thread (e.g. Graphite's OnMissingProperty
-        // callback), while the UI thread reads/enumerates _messages every frame to draw the
-        // console, so all access to _messages must go through _messagesLock.
-        lock (_messagesLock)
+        s_pending.Enqueue((message, stackTrace, severity, DateTime.Now));
+        while (s_pending.Count > MaxPending && s_pending.TryDequeue(out _)) { }
+    }
+
+    internal static int PendingLogCount => s_pending.Count;
+
+    /// <summary>How many times a message was logged, repeats included, among the entries still held.</summary>
+    internal static int CountOf(string message)
+    {
+        lock (s_messagesLock)
         {
-            string firstLine = message.Contains('\n') ? message.Split('\n')[0] : message;
-
-            // Collapse duplicates
-            if (_messages.Count > 0)
-            {
-                var last = _messages[^1];
-                if (last.FullMessage == message && last.Severity == severity)
-                {
-                    last.Count += 1;
-                    last.TimeString = DateTime.Now.ToString("HH:mm:ss");
-                    last.StackTrace = stackTrace ?? last.StackTrace;
-                    last.TimeLayout = null;
-                    last.CountLayout = null;
-                    _messages[^1] = last;
-                    return;
-                }
-            }
-
-            _messages.Add(new LogEntry
-            {
-                Message = firstLine,
-                FullMessage = message,
-                Severity = severity,
-                TimeString = DateTime.Now.ToString("HH:mm:ss"),
-                Count = 1,
-                StackTrace = stackTrace,
-            });
-
-            while (_messages.Count > MaxMessages)
-                _messages.RemoveAt(0);
+            DrainPending();
+            int count = 0;
+            foreach (var m in _messages)
+                if (m.FullMessage == message) count += m.Count;
+            return count;
         }
+    }
+
+    // Callers hold s_messagesLock.
+    private static void DrainPending()
+    {
+        while (s_pending.TryDequeue(out var log))
+            Append(log.Message, log.StackTrace, log.Severity, log.Time);
+    }
+
+    private static void Append(string message, DebugStackTrace? stackTrace, LogSeverity severity, DateTime time)
+    {
+        string firstLine = message.Contains('\n') ? message.Split('\n')[0] : message;
+
+        if (_messages.Count > 0)
+        {
+            var last = _messages[^1];
+            if (last.FullMessage == message && last.Severity == severity)
+            {
+                last.Count += 1;
+                last.TimeString = time.ToString("HH:mm:ss");
+                last.StackTrace = stackTrace ?? last.StackTrace;
+                last.TimeLayout = null;
+                last.CountLayout = null;
+                _messages[^1] = last;
+                return;
+            }
+        }
+
+        _messages.Add(new LogEntry
+        {
+            Message = firstLine,
+            FullMessage = message,
+            Severity = severity,
+            TimeString = time.ToString("HH:mm:ss"),
+            Count = 1,
+            StackTrace = stackTrace,
+        });
+
+        while (_messages.Count > MaxMessages)
+            _messages.RemoveAt(0);
     }
 
     // ================================================================
     public override void OnGUI(Paper paper, float width, float height)
     {
+        lock (s_messagesLock) DrainPending();
+
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
@@ -174,14 +219,11 @@ public class ConsolePanel : DockPanel
     private void DrawToolbar(Paper paper, FontFile font, float width)
     {
         int infoCount = 0, warnCount = 0, errCount = 0;
-        lock (_messagesLock)
+        foreach (var m in _messages)
         {
-            foreach (var m in _messages)
-            {
-                if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
-                else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) errCount += m.Count;
-                else infoCount += m.Count;
-            }
+            if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
+            else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) errCount += m.Count;
+            else infoCount += m.Count;
         }
 
         using (paper.Column("con_tb_col").Height(34).Enter())
@@ -202,7 +244,7 @@ public class ConsolePanel : DockPanel
                 using (paper.Row("con_search_wrap").Width(130).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Width(130).Height(24).Show();
 
-                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, false, () => { lock (_messagesLock) { _messages.Clear(); } _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
+                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, false, () => { lock (s_messagesLock) _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
                 ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
@@ -258,15 +300,12 @@ public class ConsolePanel : DockPanel
     private void DrawMessages(Paper paper, FontFile font, float width, float height)
     {
         int filterHash = HashCode.Combine(_showInfo, _showWarnings, _showErrors, _searchText);
-        lock (_messagesLock)
+        if (_lastMessageCount != _messages.Count || _lastFilterHash != filterHash || _lastCollapseState != _collapse)
         {
-            if (_lastMessageCount != _messages.Count || _lastFilterHash != filterHash || _lastCollapseState != _collapse)
-            {
-                _lastMessageCount = _messages.Count;
-                _lastFilterHash = filterHash;
-                _lastCollapseState = _collapse;
-                RebuildFilteredList();
-            }
+            _lastMessageCount = _messages.Count;
+            _lastFilterHash = filterHash;
+            _lastCollapseState = _collapse;
+            RebuildFilteredList();
         }
 
         int count = _filteredIndices.Count;
@@ -286,12 +325,7 @@ public class ConsolePanel : DockPanel
                     int row = (int)((float)e.RelativePosition.Y / rowH);
                     if (row < 0 || row >= _filteredIndices.Count) return;
                     _selectedFilteredIndex = row;
-                    lock (_messagesLock)
-                    {
-                        int msgIdx = _filteredIndices[row];
-                        if (msgIdx < _messages.Count)
-                            Selection.Select(new ConsoleLogSelection(_messages[msgIdx]));
-                    }
+                    Selection.Select(new ConsoleLogSelection(_messages[_filteredIndices[row]]));
                 })
                 .OnPostLayout((handle, contentRect) =>
                 {
@@ -324,8 +358,22 @@ public class ConsolePanel : DockPanel
         TextLayout Make(string text, FontFile f, float size) =>
             canvas.CreateLayout(text, new TextLayoutSettings { Font = f, PixelSize = size, LineHeight = 1f, Quality = FontQuality.Normal });
 
-        lock (_messagesLock)
+        // The full layout when it fits, otherwise a copy cut before the first character that would
+        // overflow, ending in an ellipsis. The cut is found from the glyph positions the layout already
+        // holds and is only rebuilt when the width changes.
+        TextLayout Fit(TextLayout full, ref TextLayout? cut, ref float cutWidth, float maxWidth, FontFile f)
         {
+            if (LW(full) <= maxWidth) return full;
+            if (cut != null && cutWidth == maxWidth) return cut;
+
+            float room = canvas.LogicalToPixel(maxWidth - LW(_ellipsis!));
+            int index = Math.Max(0, full.GetCursorIndex(new Float2(room, 0)));
+            while (index > 0 && full.GetCursorPosition(index).X > room) index--;
+            cut = Make(full.Text[..index] + "...", f, EditorTheme.FontSizeSmall);
+            cutWidth = maxWidth;
+            return cut;
+        }
+
         for (int vi = first; vi <= last; vi++)
         {
             // first/last were captured at layout time; a mid-frame Clear can shrink the list before
@@ -387,22 +435,22 @@ public class ConsolePanel : DockPanel
                 rightCursor -= badgeW + gap;
             }
 
-            float msgLimit = Math.Max(cursorX, rightCursor);
-            canvas.SaveState();
-            canvas.IntersectScissor(cursorX, rowY, msgLimit - cursorX, rowH);
-            msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
-            DrawMid(msg.MessageLayout, cursorX, line1, EditorTheme.Ink400);
-            if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
+            float msgWidth = rightCursor - cursorX;
+            if (msgWidth > 0f)
             {
-                msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
-                DrawMid(msg.StackLayout, cursorX, line2, EditorTheme.InkDim);
+                _ellipsis ??= Make("...", mono, EditorTheme.FontSizeSmall);
+                msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
+                DrawMid(Fit(msg.MessageLayout, ref msg.MessageCut, ref msg.MessageCutWidth, msgWidth, mono), cursorX, line1, EditorTheme.Ink400);
+                if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
+                {
+                    msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
+                    DrawMid(Fit(msg.StackLayout, ref msg.StackCut, ref msg.StackCutWidth, msgWidth, mono), cursorX, line2, EditorTheme.InkDim);
+                }
             }
-            canvas.RestoreState();
 
             canvas.RectFilled(left, rowY + rowH - 1f, w, 1f, EditorTheme.BorderSoft);
 
             _messages[msgIdx] = msg;
-        }
         }
     }
 

@@ -11,8 +11,8 @@ namespace Prowl.Runtime.UI;
 /// </summary>
 public struct SpriteState
 {
-    public AssetRef<Sprite> HighlightedSprite;
-    public AssetRef<Sprite> PressedSprite;
-    public AssetRef<Sprite> SelectedSprite;
-    public AssetRef<Sprite> DisabledSprite;
+    public Sprite? HighlightedSprite;
+    public Sprite? PressedSprite;
+    public Sprite? SelectedSprite;
+    public Sprite? DisabledSprite;
 }

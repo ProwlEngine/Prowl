@@ -89,9 +89,11 @@ public class UniversalJoint : PhysicsJoint
         get => motorTargetVelocity;
         set
         {
+            if (motorTargetVelocity == value) return;
             motorTargetVelocity = value;
             if (IsLive(universalJoint?.Motor))
-                universalJoint.Motor.TargetVelocity = value;
+                universalJoint.Motor.TargetVelocity = -value;
+            WakeBodies();
         }
     }
 
@@ -103,9 +105,11 @@ public class UniversalJoint : PhysicsJoint
         get => motorMaxForce;
         set
         {
+            if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(universalJoint?.Motor))
                 universalJoint.Motor.MaximumForce = value;
+            WakeBodies();
         }
     }
 
@@ -127,16 +131,17 @@ public class UniversalJoint : PhysicsJoint
         JVector worldAxis1 = LocalDirToWorld(axis1, Body1.Transform);
         JVector worldAxis2 = connectedBody.IsValid()
             ? LocalDirToWorld(axis2, connectedBody.Transform)
-            : new JVector(axis2.X, axis2.Y, axis2.Z);
+            : axis2.ToJitter();
 
         universalJoint = new Jitter2.Dynamics.Constraints.UniversalJoint(
             world, body1, body2, worldAnchor, worldAxis1, worldAxis2, hasMotor);
 
         joint = universalJoint;
 
-        if (hasMotor && universalJoint.Motor != null)
+        if (hasMotor && IsLive(universalJoint.Motor))
         {
-            universalJoint.Motor.TargetVelocity = motorTargetVelocity;
+            // Jitter's motor drives the connected side relative to this body, so positive is negated to turn this body along +axis.
+            universalJoint.Motor.TargetVelocity = -motorTargetVelocity;
             universalJoint.Motor.MaximumForce = motorMaxForce;
         }
     }

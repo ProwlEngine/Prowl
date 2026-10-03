@@ -2217,19 +2217,17 @@ public class AudioTests : RuntimeTestBase
 
     // Reading Clip resolves the reference, which loads the asset. Assigning and reading through ClipRef
     // is the way past that, so nothing on this path may end up holding a loaded instance.
+    // A clip nothing knows is missing, and assigning it loads nothing: the source keeps the object, and its GUID.
     [Fact]
-    public void ClipRef_RoundTripsWithoutResolving()
+    public void AMissingClip_IsKeptWithoutLoading()
     {
         var source = CreateSource();
-        var reference = new AssetRef<AudioClip>(Guid.NewGuid());
+        AudioClip missing = AssetDatabase.Get<AudioClip>(Guid.NewGuid())!;
 
-        source.ClipRef = reference;
+        source.Clip = missing;
 
-        Assert.Equal(reference.AssetID, source.ClipRef.AssetID);
-
-        // ResWeak is whatever the reference already has in hand. Anything here means the assignment or
-        // the read went to the database for a guid that belongs to no asset.
-        Assert.Null(source.ClipRef.ResWeak);
+        Assert.Same(missing, source.Clip);
+        Assert.True(missing.IsMissing);
     }
 
     // Seeking a source with nothing loaded has no length to seek within, so it must answer zero

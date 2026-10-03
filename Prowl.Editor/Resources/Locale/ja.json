@@ -368,6 +368,8 @@
   "env.start_distance": "開始距離",
   "env.end_distance": "終了距離",
   "env.density": "密度",
+  "env.fog_use_sky": "空を使用",
+  "env.fog_sun_glow": "太陽の輝き",
   "env.ambient_lighting": "アンビエントライティング",
   "env.strength": "強度",
   "env.sky_color": "空の色",

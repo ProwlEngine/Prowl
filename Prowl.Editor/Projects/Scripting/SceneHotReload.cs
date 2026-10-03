@@ -60,6 +60,12 @@ public static class SceneHotReload
 
         var report = engine.Apply(request.Build());
 
+        // Asset objects of a user type were replaced too. The walk repoints the registry with everything else,
+        // and this makes sure of it, so a GUID never answers with an object nothing else still uses.
+        foreach (var (old, replacement) in report.Replaced)
+            if (old is Asset { Registered: true } stale && replacement is Asset fresh)
+                AssetDatabase.Replace(stale, fresh);
+
         Summarize(report);
 
         scene.OnHotReload(); // re-derive per-frame membership and rebuild GameObject lookups from the new types

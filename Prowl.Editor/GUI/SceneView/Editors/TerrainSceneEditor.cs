@@ -165,7 +165,7 @@ public class TerrainSceneEditor : SceneTool
         }
 
         // Update brush preview
-        var terrainData = _terrain.Data.Res;
+        var terrainData = _terrain.Data;
         if (terrainData == null)
         {
             _terrain.BrushVisible = false;
@@ -319,19 +319,26 @@ public class TerrainSceneEditor : SceneTool
         else if (_preStrokeSplats != null && data.Splats != null)
         {
             int res = data.SplatmapResolution;
-            FindChangedRect(_preStrokeSplats, data.Splats, res, res * 4,
+            int stride = data.LayerCount;
+            FindChangedRect(_preStrokeSplats, data.Splats, res, res * stride,
                 out int minX, out int minZ, out int maxX, out int maxZ);
 
             if (minX <= maxX)
             {
-                int stride = 4;
                 var preRect = CopyRectStride(_preStrokeSplats, res, stride, minX, minZ, maxX, maxZ);
                 var postRect = CopyRectStride(data.Splats, res, stride, minX, minZ, maxX, maxZ);
                 int cx = minX, cz = minZ, cxe = maxX, cze = maxZ, cres = res;
                 var capturedData = data;
-                Undo.RegisterAction("Terrain Paint",
-                    () => { PasteRectStride(capturedData.Splats!, cres, stride, cx, cz, cxe, cze, preRect); capturedData.SetSplatmapDirty(); },
-                    () => { PasteRectStride(capturedData.Splats!, cres, stride, cx, cz, cxe, cze, postRect); capturedData.SetSplatmapDirty(); });
+
+                // Skipped once a layer or resolution change has altered the pixel layout
+                void Paste(float[] rect)
+                {
+                    if (capturedData.LayerCount != stride || capturedData.SplatmapResolution != cres) return;
+                    PasteRectStride(capturedData.Splats, cres, stride, cx, cz, cxe, cze, rect);
+                    capturedData.SetSplatmapDirty();
+                }
+
+                Undo.RegisterAction("Terrain Paint", () => Paste(preRect), () => Paste(postRect));
             }
             _preStrokeSplats = null;
         }

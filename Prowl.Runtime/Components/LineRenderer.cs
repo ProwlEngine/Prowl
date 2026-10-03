@@ -15,7 +15,7 @@ namespace Prowl.Runtime;
 [ComponentIcon("\uf4d7")] // Route
 public class LineRenderer : MonoBehaviour, IRenderable
 {
-    public AssetRef<Material> Material;
+    public Material? Material;
     public float StartWidth = 0.1f;
     public float EndWidth = 0.1f;
     public List<Float3> Points = [];
@@ -53,7 +53,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
     public override void Update()
     {
-        if (Material.Res != null && Points != null && Points.Count >= 2)
+        if (Material != null && Points != null && Points.Count >= 2)
         {
             // Check if we need to regenerate
             bool needsUpdate = _isDirty ||
@@ -88,7 +88,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
     public override void OnRenderCollect(SceneCuller culler)
     {
-        if (Material.Res != null && Points != null && Points.Count >= 2)
+        if (Material != null && Points != null && Points.Count >= 2)
             culler.Add(this);
     }
 
@@ -175,7 +175,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
     #region IRenderable Implementation
 
-    public Material GetMaterial() => Material.Res;
+    public Material GetMaterial() => Material;
     public int GetLayer() => GameObject.LayerIndex;
     Float3 IRenderable.GetPosition() => Transform.Position;
 

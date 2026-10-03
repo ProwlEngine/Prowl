@@ -60,8 +60,10 @@ public class LinearMotorConstraint : PhysicsConstraint
         get => targetVelocity;
         set
         {
+            if (targetVelocity == value) return;
             targetVelocity = value;
-            if (IsLive(constraint)) constraint.TargetVelocity = value;
+            if (IsLive(constraint)) constraint.TargetVelocity = -value;
+            WakeBodies();
         }
     }
 
@@ -73,15 +75,17 @@ public class LinearMotorConstraint : PhysicsConstraint
         get => maximumForce;
         set
         {
+            if (maximumForce == value) return;
             maximumForce = value;
             if (IsLive(constraint)) constraint.MaximumForce = value;
+            WakeBodies();
         }
     }
 
     /// <summary>
     /// Gets the accumulated impulse applied by this constraint.
     /// </summary>
-    public float Impulse => constraint?.Impulse ?? 0.0f;
+    public float Impulse => IsLive(constraint) ? constraint.Impulse : 0.0f;
 
     protected override Constraint GetConstraint() => constraint;
 
@@ -90,12 +94,13 @@ public class LinearMotorConstraint : PhysicsConstraint
         JVector worldAxis1 = LocalDirToWorld(axis1, Body1.Transform);
         JVector worldAxis2 = connectedBody.IsValid()
             ? LocalDirToWorld(axis2, connectedBody.Transform)
-            : new JVector(axis2.X, axis2.Y, axis2.Z);
+            : axis2.ToJitter();
 
         constraint = world.CreateConstraint<LinearMotor>(body1, body2);
         constraint.Initialize(worldAxis1, worldAxis2);
 
-        constraint.TargetVelocity = targetVelocity;
+        // Jitter's motor drives the connected side relative to this body, so positive is negated to move this body along +axis.
+        constraint.TargetVelocity = -targetVelocity;
         constraint.MaximumForce = maximumForce;
     }
 

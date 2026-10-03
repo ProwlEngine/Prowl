@@ -4,12 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 using Prowl.Ember;
@@ -23,7 +24,6 @@ namespace Prowl.Runtime;
 public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
-    [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
     // The identifier stored in the data this component was last loaded from. A scene load restores it.
@@ -61,6 +61,28 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [SerializeIgnore]
     private bool? _executeAlwaysCached;
 
+    [SerializeIgnore]
+    private CancellationTokenSource? _destroyCancellation;
+
+    /// <summary>
+    /// Cancelled when this component is destroyed. Pass it to async work that should stop with the component.
+    /// </summary>
+    public CancellationToken DestroyCancellationToken
+    {
+        get
+        {
+            CancellationTokenSource? cancellation = Volatile.Read(ref _destroyCancellation);
+            if (cancellation == null && !IsDisposed)
+            {
+                var created = new CancellationTokenSource();
+                cancellation = Interlocked.CompareExchange(ref _destroyCancellation, created, null) ?? created;
+            }
+
+            // Checked after creating too, in case disposal ran in between and never saw the new source.
+            return cancellation == null || IsDisposed ? new CancellationToken(true) : cancellation.Token;
+        }
+    }
+
     // Dispatch state, owned by SceneDispatcher. All four are derived from this component's type or its place
     // in the scene, so all four are opted out of hot reload and re-derived from the new type afterwards. Each
     // one treats its default value as "not known yet", so arriving zeroed is always the safe outcome.
@@ -72,6 +94,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>One past the index in the dispatcher's registration array. Zero means not registered.</summary>
     [SerializeIgnore, ReloadIgnore]
     internal int _dispatchSlot;
+
+    /// <summary>Whether the dispatcher counts this component among the scene's collision listeners.</summary>
+    [SerializeIgnore, ReloadIgnore]
+    internal bool _countedCollisionListener;
 
     /// <summary>Cached [ExecutionOrder], the primary sort key for every per-frame channel.</summary>
     [SerializeIgnore, ReloadIgnore]
@@ -146,6 +172,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         {
             if (value != _enabled)
             {
+                MainThreadContext.AssertOwner(_go, nameof(Enabled));
                 _enabled = value;
                 HierarchyStateChanged();
             }
@@ -393,10 +420,16 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <param name="paper"></param>
     public virtual void OnGui(Paper paper) { }
 
-    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> begins touching another.</summary>
+    /// <summary>
+    /// Called after the physics step in which a collider on this GameObject, or one owned by its
+    /// <see cref="Rigidbody3D"/>, begins touching another collider. Both sides receive it.
+    /// </summary>
     public virtual void OnCollisionBegin(Collision collision) { }
 
-    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> stops touching another.</summary>
+    /// <summary>Called after every physics step the contact persists, following <see cref="OnCollisionBegin"/>.</summary>
+    public virtual void OnCollisionStay(Collision collision) { }
+
+    /// <summary>Called after the physics step in which the contact ended, or when either side left the world.</summary>
     public virtual void OnCollisionEnd(Collision collision) { }
 
     /// <summary>Called once when <paramref name="other"/> first enters a <see cref="TriggerVolume"/> on this GameObject.</summary>
@@ -482,6 +515,13 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionBegin() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
+    internal void InternalOnCollisionStay(in Collision collision)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnCollisionStay(collision); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionStay() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
     internal void InternalOnCollisionEnd(in Collision collision)
     {
         if (!ShouldExecuteGameplay) return;
@@ -535,6 +575,21 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Called right after this component is deserialized, before any lifecycle callback.
     /// Override to react to freshly loaded values.</summary>
     public virtual void OnAfterDeserialize() { }
+
+    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(_go, nameof(Dispose));
+
+    /// <summary>Throws when this component's live object is touched from a thread other than the main one.</summary>
+    private protected void AssertOwner([System.Runtime.CompilerServices.CallerMemberName] string member = "")
+        => MainThreadContext.AssertOwner(_go, member);
+
+    private protected override void OnDisposed()
+    {
+        CancellationTokenSource? cancellation = Interlocked.Exchange(ref _destroyCancellation, null);
+        if (cancellation == null) return;
+
+        try { cancellation.Cancel(); }
+        catch (AggregateException e) { Debug.LogError($"[{Name}/{GetType().Name}] A DestroyCancellationToken callback threw: {e.InnerException?.Message}\n{e.InnerException?.StackTrace}"); }
+    }
 
     /// <summary>
     /// Called when the MonoBehaviour will be destroyed.

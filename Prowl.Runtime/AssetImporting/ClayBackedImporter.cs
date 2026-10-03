@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -135,9 +135,9 @@ internal static class ClayBackedImporter
 
         // 1. Textures - resolve once, share by Clay texture index. Resolution (not necessarily
         // decoding - see IModelTextureResolver) happens through the resolver, so the editor can
-        // supply one that only ever produces AssetRefs and never touches pixel data itself.
+        // supply one that only ever produces references to database textures and never touches pixel data itself.
         var resolver = settings.TextureResolver ?? DefaultModelTextureResolver.Instance;
-        var textureCache = new AssetRef<Texture2D>[clayModel.Textures.Count];
+        var textureCache = new Texture2D?[clayModel.Textures.Count];
         // Skipped wholesale when materials are off, so an import that wants no materials also does
         // not decode or register the textures only those materials would have referenced.
         if (settings.ImportMaterials)
@@ -146,10 +146,21 @@ internal static class ClayBackedImporter
 
         // 2. Materials. Left empty when the import does not want them, which makes every renderer
         // fall back to the default material rather than to a material built from the file.
-        var materials = new List<PMaterial>(clayModel.Materials.Count);
+        // One ref per material the file defines. An extracted material is referenced where it lives, so
+        // edits to it survive a reimport; everything else is built here and handed back as a sub asset.
+        var materialRefs = new List<PMaterial?>(clayModel.Materials.Count);
+        var materials = new List<PMaterial>();
         if (settings.ImportMaterials)
             for (int i = 0; i < clayModel.Materials.Count; i++)
-                materials.Add(BuildMaterial(clayModel.Materials[i], textureCache));
+            {
+                PMaterial? extracted = settings.MaterialResolver is { } materialResolver ? materialResolver.Resolve(MaterialName(clayModel, i)) : null;
+                if (extracted is not null) { materialRefs.Add(extracted); continue; }
+
+                PMaterial built = BuildMaterial(clayModel.Materials[i], textureCache);
+                built.Name = MaterialName(clayModel, i);
+                materials.Add(built);
+                materialRefs.Add(built);
+            }
 
         // 3. Meshes (with per-submesh material index propagated).
         var meshes = new List<PMesh>(clayModel.Meshes.Count);
@@ -196,7 +207,7 @@ internal static class ClayBackedImporter
             if (n.MeshIndex < 0) continue;
             var go = nodeGOs[i];
             var mesh = meshes[n.MeshIndex];
-            var matRefs = BuildMatRefs(meshSubmeshMaterials[n.MeshIndex], materials);
+            var matRefs = BuildMatRefs(meshSubmeshMaterials[n.MeshIndex], materialRefs);
 
             if (n.SkinIndex >= 0)
             {
@@ -224,7 +235,7 @@ internal static class ClayBackedImporter
                 }
 
                 var smr = go.AddComponent<SkinnedMeshRenderer>();
-                smr.SharedMesh = new AssetRef<PMesh>(mesh);
+                smr.SharedMesh = mesh;
                 smr.Materials = matRefs;
                 Transform? rootBoneTransform = clayskin.RootNodeIndex >= 0
                     ? nodeGOs[clayskin.RootNodeIndex].Transform
@@ -236,13 +247,13 @@ internal static class ClayBackedImporter
                 // Morph-only mesh (no skin): a SkinnedMeshRenderer still owns the blend-shape
                 // weights. No bones to wire skinning stays disabled in-shader.
                 var smr = go.AddComponent<SkinnedMeshRenderer>();
-                smr.SharedMesh = new AssetRef<PMesh>(mesh);
+                smr.SharedMesh = mesh;
                 smr.Materials = matRefs;
             }
             else
             {
                 var mr = go.AddComponent<MeshRenderer>();
-                mr.Mesh = new AssetRef<PMesh>(mesh);
+                mr.Mesh = mesh;
                 mr.Materials = matRefs;
             }
         }
@@ -253,17 +264,23 @@ internal static class ClayBackedImporter
                 if (clayModel.Nodes[i].CameraIndex is int ci and >= 0)
                     BuildCamera(clayModel.Cameras[ci], ForwardChild(nodeGOs[i], "Camera"));
 
-        // 6. Animations.
-        var animations = new List<PAnim>(clayModel.AnimationClips.Count);
-        if (settings.ImportAnimations)
-            foreach (var clip in clayModel.AnimationClips)
-                animations.Add(BuildAnimationClip(clip, clayModel, nodeGOs, rootGO, settings.AnimationWrapMode));
+        // 6. The rig, then the clips that play on it.
+        bool wantsRig = settings.RigType != ModelRigType.None
+            && (clayModel.Skins.Count > 0 || (settings.ImportAnimations && clayModel.AnimationClips.Count > 0));
 
-        if (animations.Count > 0)
+        Avatar? avatar = null;
+        var animations = new List<PAnim>();
+        if (wantsRig)
         {
-            var anim = rootGO.AddComponent<AnimationComponent>();
-            anim.DefaultClip = new AssetRef<PAnim>(animations[0]);
-            anim.Clips = animations.Select(c => new AssetRef<PAnim>(c)).ToList();
+            ModelRigBuilder.Rig rig = ModelRigBuilder.BuildRig(clayModel, nodeGOs, rootGO);
+            avatar = BuildAvatar(rig, settings, modelName);
+            if (settings.ImportAnimations)
+                foreach (ClayAnim clip in clayModel.AnimationClips)
+                    animations.Add(BuildClip(clip, clayModel, rig, avatar, settings));
+
+            var animator = rootGO.AddComponent<Animator>();
+            animator.Avatar = avatar;
+            animator.Clips = [.. animations];
         }
 
         return new ModelImportResult
@@ -272,21 +289,27 @@ internal static class ClayBackedImporter
             Meshes = meshes,
             Materials = materials,
             Animations = animations,
+            Avatar = avatar,
         };
     }
 
     /// <summary>No node has claimed this mesh for a skin yet.</summary>
     private const int UnclaimedMesh = -1;
 
-    private static List<AssetRef<PMaterial>> BuildMatRefs(int[] submeshMatIndices, List<PMaterial> materials)
+    /// <summary>The name a material is addressed by, which is what an extracted asset is keyed on.</summary>
+    public static string MaterialName(Clay.Model model, int index)
     {
-        var matRefs = new List<AssetRef<PMaterial>>(submeshMatIndices.Length);
+        string name = model.Materials[index].Name;
+        return string.IsNullOrEmpty(name) ? $"Material_{index}" : name;
+    }
+
+    private static List<PMaterial> BuildMatRefs(int[] submeshMatIndices, List<PMaterial?> materialRefs)
+    {
+        var matRefs = new List<PMaterial>(submeshMatIndices.Length);
         for (int s = 0; s < submeshMatIndices.Length; s++)
         {
             int idx = submeshMatIndices[s];
-            matRefs.Add(idx >= 0 && idx < materials.Count
-                ? new AssetRef<PMaterial>(materials[idx])
-                : default);
+            matRefs.Add(idx >= 0 && idx < materialRefs.Count ? materialRefs[idx]! : null!);
         }
         return matRefs;
     }
@@ -478,9 +501,10 @@ internal static class ClayBackedImporter
         };
     }
 
-    private static PMaterial BuildMaterial(ClayMaterial src, AssetRef<Texture2D>[] textureCache)
+    private static PMaterial BuildMaterial(ClayMaterial src, Texture2D?[] textureCache)
     {
-        var mat = new PMaterial(Shader.LoadDefault(SelectShader(src)))
+        // Models also import on the loader thread, which never loads other assets, so built-ins are referenced.
+        var mat = new PMaterial(Shader.GetDefault(SelectShader(src)))
         {
             Name = string.IsNullOrEmpty(src.Name) ? "Material" : src.Name,
         };
@@ -582,21 +606,20 @@ internal static class ClayBackedImporter
         yield return src.EmissiveTexture;
     }
 
-    private static AssetRef<Texture2D> ResolveTexture(MaterialTextureSlot? slot, AssetRef<Texture2D>[] cache)
+    private static Texture2D? ResolveTexture(MaterialTextureSlot? slot, Texture2D?[] cache)
     {
-        if (slot is null) return default;
+        if (slot is null) return null;
         int idx = slot.TextureIndex;
-        if ((uint)idx >= (uint)cache.Length) return default;
+        if ((uint)idx >= (uint)cache.Length) return null;
         return cache[idx];
     }
 
     // "No texture in this slot" is never resolved through IModelTextureResolver - it isn't a texture
     // reference to look up, it's the absence of one. Falls back to the shared, GUID-tagged default
     // texture singletons (same as always).
-    private static AssetRef<Texture2D> OrDefault(AssetRef<Texture2D> tex, DefaultTexture fallback) =>
-        tex.IsExplicitNull ? new AssetRef<Texture2D>(Texture2D.LoadDefault(fallback)) : tex;
+    private static Texture2D OrDefault(Texture2D? tex, DefaultTexture fallback) => tex is not null ? tex : Texture2D.GetDefault(fallback);
 
-    private static AssetRef<Texture2D> ResolveModelTexture(ClayTexture src, IModelTextureResolver resolver)
+    private static Texture2D? ResolveModelTexture(ClayTexture src, IModelTextureResolver resolver)
     {
         try
         {
@@ -616,93 +639,74 @@ internal static class ClayBackedImporter
     // Animation bake
     // ----------------------------------------------------------------------------------------
 
-    private static PAnim BuildAnimationClip(ClayAnim src, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO, AnimationWrapMode wrap)
+    private static Avatar BuildAvatar(ModelRigBuilder.Rig rig, ModelImporterSettings settings, string modelName)
     {
-        var clip = new PAnim
+        string name = $"{modelName} Avatar";
+        if (settings.RigType != ModelRigType.Humanoid)
+            return Avatar.CreateGeneric(rig.Skeleton, 0, name);
+
+        Avatar avatar = Avatar.CreateAutomatic(rig.Skeleton, out Motion.HumanoidMapResult report, name);
+        avatar = ApplyBoneMap(avatar, rig.Skeleton, settings.HumanoidBoneMap, name);
+
+        if (!avatar.IsHuman)
+            Debug.LogWarning($"[Model] '{modelName}' was imported as humanoid but could not be mapped. Missing: {string.Join(", ", report.UnmappedBones)}. It plays as a generic rig until the mapping is fixed.");
+        else if (!report.IsRestPoseTPose)
+            Debug.LogWarning($"[Model] '{modelName}' does not rest in a T-pose. It retargets, but reach and hand orientation will be offset.");
+        return avatar;
+    }
+
+    /// <summary>
+    /// Lays the hand made mapping over the one the auto mapper found. Fixing the two bones it got wrong
+    /// is two entries rather than a whole rig, and a bone the mapper should not have claimed is cleared
+    /// by mapping it to nothing.
+    /// </summary>
+    private static Avatar ApplyBoneMap(Avatar avatar, Motion.Skeleton skeleton, Dictionary<string, string>? map, string name)
+    {
+        if (map is not { Count: > 0 }) return avatar;
+
+        Motion.HumanDescription description = avatar.Description?.Clone() ?? new Motion.HumanDescription();
+        foreach (KeyValuePair<string, string> entry in map)
         {
-            Name = src.Name,
-            // A clip authored on a shared timeline can start after zero; carrying that keeps the
-            // player from sitting on the first pose for the gap.
-            StartTime = src.StartTime,
-            Duration = src.Duration,
-            DurationInTicks = src.Duration,
-            TicksPerSecond = 1f,
-            Wrap = wrap,
-        };
+            if (!Enum.TryParse(entry.Key, ignoreCase: true, out Motion.HumanBodyBone humanBone)) continue;
 
-        // Bin bindings by target node -> AnimBone. Blend-shape weight channels are handled
-        // separately (they target a renderer + named shape, not a bone transform).
-        var boneByNode = new Dictionary<int, PAnim.AnimBone>();
-        foreach (var b in src.Bindings)
-        {
-            if (b.NodeIndex < 0 || b.NodeIndex >= nodeGOs.Length) continue;
-
-            if (b.Property == AnimatedProperty.BlendShapeWeight)
-            {
-                ApplyBlendShapeBinding(b, clayModel, nodeGOs, rootGO, clip);
-                continue;
-            }
-
-            var targetGO = nodeGOs[b.NodeIndex];
-            string bonePath = Transform.GetRelativePath(targetGO.Transform, rootGO.Transform);
-            if (!boneByNode.TryGetValue(b.NodeIndex, out var bone))
-            {
-                bone = new PAnim.AnimBone { BoneName = bonePath };
-                boneByNode[b.NodeIndex] = bone;
-            }
-            ApplyBinding(b, bone);
+            int bone = string.IsNullOrEmpty(entry.Value)
+                ? Motion.Skeleton.InvalidIndex
+                : skeleton.GetBoneIndex(new Motion.StringID(entry.Value));
+            description.SetSkeletonBoneIndex(humanBone, bone);
         }
 
-        // P/R/S backfill is now done at Clay's SceneBaker so every consumer gets complete
-        // 9-channel-per-bone clips. Any (NodeIndex, Property) tuple still null here would be
-        // a Clay-side regression.
+        return Avatar.CreateHumanoid(skeleton, description, name);
+    }
 
-        foreach (var bone in boneByNode.Values)
-            clip.AddBone(bone);
+    private static PAnim BuildClip(ClayAnim source, Clay.Model clayModel, ModelRigBuilder.Rig rig, Avatar avatar, ModelImporterSettings settings)
+    {
+        string sourceName = string.IsNullOrEmpty(source.Name) ? "Animation" : source.Name;
+        ModelClipSettings overrides = default;
+        settings.ClipOverrides?.TryGetValue(sourceName, out overrides);
 
-        clip.EnsureQuaternionContinuity();
+        string name = string.IsNullOrWhiteSpace(overrides.Name) ? sourceName : overrides.Name!;
+
+        // A humanoid moves by its hips; any other rig by the highest bone the clip moves.
+        int body = avatar.Runtime is { IsHuman: true } && avatar.Description is { } description
+            ? description.GetSkeletonBoneIndex(Motion.HumanBodyBone.Hips)
+            : ModelRigBuilder.AnimatedRootBone(source, rig.Skeleton);
+        var root = new ModelRigBuilder.RootExtraction(body,
+            overrides.RootTravel ?? true, overrides.RootTurn ?? true, overrides.RootHeight ?? false);
+
+        Motion.CompressedAnimationClip sampled = ModelRigBuilder.BuildClip(
+            source, clayModel, rig, settings.AnimationSampleRate, overrides.TrimStart, overrides.TrimEnd, root);
+
+        (float start, float end) = ModelRigBuilder.Trim(source, settings.AnimationSampleRate, overrides.TrimStart, overrides.TrimEnd);
+        List<ClipEvent>? events = overrides.Events is { Count: > 0 } onTake ? ModelRigBuilder.PlaceEvents(onTake, start, end) : null;
+
+        // A humanoid rig bakes into muscle space, which is what lets the clip play on another rig at all.
+        PAnim clip = settings.RigType == ModelRigType.Humanoid && avatar.Runtime is { IsHuman: true } human
+            ? PAnim.FromHumanoid(Motion.HumanoidClip.Bake(human, sampled), avatar, name, events)
+            : PAnim.FromSkeletal(sampled, avatar, name, events);
+
+        clip.Loop = overrides.Loop ?? settings.LoopAnimations;
+        clip.SourceName = sourceName;
+        clip.TakeStart = start;
         return clip;
     }
-
-    /// <summary>
-    /// Hands Clay's curve to the bone channel unchanged. Both sides are
-    /// <see cref="Prowl.Vector.AnimationCurve"/>, so per-key interpolation and cubic tangents cross
-    /// intact rather than being resampled into scalar points.
-    /// </summary>
-    private static void ApplyBinding(ClayBinding binding, PAnim.AnimBone bone)
-    {
-        switch (binding.Property)
-        {
-            case AnimatedProperty.Position: bone.Position = binding.Curve; break;
-            case AnimatedProperty.Rotation: bone.Rotation = binding.Curve; break;
-            case AnimatedProperty.Scale: bone.Scale = binding.Curve; break;
-            // Visibility: not handled by Prowl yet. BlendShapeWeight is handled separately
-            // (see ApplyBlendShapeBinding) since it targets a renderer + named shape, not a bone.
-        }
-    }
-
-    /// <summary>
-    /// Converts a Clay BlendShapeWeight binding into a Prowl <see cref="PAnim.BlendShapeAnim"/>.
-    /// Resolves the renderer path and the blend-shape name. Clay normalizes weight curves to the
-    /// 0-100 scale (matching <c>SetBlendShapeWeight</c> and the frame weights), so no scaling here.
-    /// </summary>
-    private static void ApplyBlendShapeBinding(ClayBinding binding, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO, PAnim clip)
-    {
-        var node = clayModel.Nodes[binding.NodeIndex];
-        if (node.MeshIndex < 0 || node.MeshIndex >= clayModel.Meshes.Count) return;
-
-        var clayMesh = clayModel.Meshes[node.MeshIndex];
-        if (binding.SubIndex < 0 || binding.SubIndex >= clayMesh.BlendShapes.Length) return;
-
-        string shapeName = clayMesh.BlendShapes[binding.SubIndex].Name ?? $"BlendShape{binding.SubIndex}";
-        string path = Transform.GetRelativePath(nodeGOs[binding.NodeIndex].Transform, rootGO.Transform);
-
-        clip.AddBlendShape(new PAnim.BlendShapeAnim
-        {
-            Path = path,
-            ShapeName = shapeName,
-            Weight = binding.Curve,
-        });
-    }
-
 }

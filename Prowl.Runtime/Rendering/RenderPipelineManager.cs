@@ -21,7 +21,7 @@ public static class RenderPipelineManager
     {
         get
         {
-            RenderPipelineAsset? asset = Asset.Res;
+            RenderPipelineAsset? asset = Asset.Load();
             if (asset.IsValid() && asset.Pipeline != null)
                 return asset.Pipeline;
 

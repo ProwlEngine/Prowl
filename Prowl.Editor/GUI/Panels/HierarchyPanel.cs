@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
@@ -57,6 +58,11 @@ public class HierarchyPanel : DockPanel
     // Filled by the tree each frame with each node's resolved expanded state, so drag-drop can turn a
     // "below" drop on an expanded node into a "first child" drop (where its first child visually sits).
     private readonly Dictionary<string, bool> _expandState = new();
+
+    // Rebuilt every frame from the scene. Nodes are kept per GameObject so their id string is only made once.
+    private readonly List<TreeNode> _treeNodes = new();
+    private readonly List<object> _flatObjects = new();
+    private readonly ConditionalWeakTable<GameObject, TreeNode> _nodeCache = new();
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -289,8 +295,10 @@ public class HierarchyPanel : DockPanel
                     usedHeight += 28; // prefab breadcrumb row + margins
                 float scrollHeight = height - usedHeight;
                 var roots = GetDisplayRoots(scene);
-                var treeNodes = new List<TreeNode>();
-                var flatObjects = new List<object>();
+                var treeNodes = _treeNodes;
+                var flatObjects = _flatObjects;
+                treeNodes.Clear();
+                flatObjects.Clear();
                 foreach (var root in roots)
                     BuildNodeList(root, 0, treeNodes, flatObjects);
 
@@ -360,19 +368,20 @@ public class HierarchyPanel : DockPanel
                     {
                         if (font == null) return;
                         var go = (GameObject)node.UserData!;
-                        string goId = go.Identifier.ToString();
+                        string goId = node.Id;
 
+                        // Rows are their own elements, so these ids only need to be unique within the row.
                         // Icon (vector, chosen from the GameObject's first component + coloured)
                         var (goIcon, goColor) = GetGoStyle(go);
                         if (!go.EnabledInHierarchy) goColor = Color.FromArgb(120, goColor);
-                        paper.Box($"hier_ico_{goId}")
+                        paper.Box("hier_ico")
                             .Width(18).Height(EditorTheme.RowHeight).IsNotInteractable()
                             .Icon(paper, goIcon, goColor, size: 14f);
 
                         // Name or rename field
                         if (RenameOverlay.IsRenaming(goId))
                         {
-                            using (paper.Box($"hier_renamebox_{goId}")
+                            using (paper.Box("hier_renamebox")
                                        .Width(UnitValue.StretchOne)
                                        .Height(EditorTheme.RowHeight)
                                        .Enter())
@@ -382,16 +391,16 @@ public class HierarchyPanel : DockPanel
                         }
                         else
                         {
-                            paper.Box($"hier_name_{goId}")
+                            paper.Box("hier_name")
                                 .Height(EditorTheme.RowHeight).PaddingLeft(4)
                                 .Text(go.Name, font)
-                                .TextColor(node.LabelColor ?? EditorTheme.Ink500)
+                                .TextColor(GetPrefabTextColor(go))
                                 .FontSize(EditorTheme.FontSizeSmall)
                                 .Alignment(TextAlignment.MiddleLeft);
                         }
 
                         // Visibility eye
-                        paper.Box($"hier_vis_{goId}")
+                        paper.Box("hier_vis")
                             .Width(18).Height(EditorTheme.RowHeight)
                             .Text(node.TrailingIcon ?? "", font)
                             .TextColor(node.TrailingIconColor ?? EditorTheme.Ink400)
@@ -404,7 +413,7 @@ public class HierarchyPanel : DockPanel
                             });
 
                         // Per-GameObject right-click menu
-                        BuildGameObjectContextMenu(paper, $"hier_go_ctx_{goId}");
+                        BuildGameObjectContextMenu(paper, "hier_go_ctx");
                     })
                     .IsPinged(n => _pingedGameObjects.Contains((GameObject)n.UserData!) && Selection.PingedGuid != Guid.Empty)
                     .PingAlpha(() => Selection.GetPingAlpha())
@@ -515,7 +524,8 @@ public class HierarchyPanel : DockPanel
             && !go.GetChildrenDeep().Any(c => EditorUtils.MatchesSearch(c.Name, _searchText)))
             return;
 
-        string goId = go.Identifier.ToString();
+        var node = _nodeCache.GetValue(go, static g => new TreeNode { Id = g.Identifier.ToString(), UserData = g });
+        string goId = node.Id;
         bool hasVisibleChildren = go.Children.Count > 0
             && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
 
@@ -528,24 +538,15 @@ public class HierarchyPanel : DockPanel
             else dropInd = TreeDropPosition.Into;
         }
 
-        var node = new TreeNode
-        {
-            Id = goId,
-            Label = go.Name,
-            Icon = GetGameObjectIcon(go),
-            IconColor = go.EnabledInHierarchy ? null : EditorTheme.Ink300,
-            LabelColor = GetPrefabTextColor(go),
-            HasChildren = hasVisibleChildren,
-            Depth = depth,
-            UserData = go,
-            TrailingIcon = go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash,
-            TrailingIconColor = go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300,
-            DropIndicator = dropInd,
-        };
+        node.Label = go.Name;
+        node.HasChildren = hasVisibleChildren;
+        node.Depth = depth;
+        node.TrailingIcon = go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash;
+        node.TrailingIconColor = go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300;
+        node.DropIndicator = dropInd;
 
         // Force expand parents of pinged nodes
-        if (_forceExpandedIds.Contains(goId))
-            node.OverrideExpanded = true;
+        node.OverrideExpanded = _forceExpandedIds.Contains(goId) ? true : null;
 
         nodes.Add(node);
         flatObjects.Add(go);
@@ -1216,18 +1217,10 @@ public class HierarchyPanel : DockPanel
         return go.EnabledInHierarchy ? EditorTheme.Purple400 : EditorTheme.Purple300;
     }
 
-    private static string GetGameObjectIcon(GameObject go)
-    {
-        if (go.GetComponent<Camera>() != null) return EditorIcons.Camera;
-        if (go.GetComponent<MeshRenderer>() != null) return EditorIcons.Cube;
-        if (go.GetComponent<SkinnedMeshRenderer>() != null) return EditorIcons.Cubes;
-        return EditorIcons.Circle;
-    }
-
     // Vector icon + accent colour chosen from the GameObject's defining (first) component.
     private static (IOrigamiIcon icon, Color color) GetGoStyle(GameObject go)
     {
-        var first = go.GetComponents<MonoBehaviour>().FirstOrDefault();
+        var first = go.GetComponents().FirstOrDefault();
         if (first is Camera)               return (EditorIcons.Camera_I, EditorTheme.Blue400);    // blue
         if (first is SkinnedMeshRenderer)  return (EditorIcons.Cubes_I, EditorTheme.Purple400);    // purple
         if (first is MeshRenderer)         return (EditorIcons.Cube_I, EditorTheme.Purple400);    // purple
@@ -1262,31 +1255,21 @@ public class HierarchyPanel : DockPanel
 
             foreach (var comp in go.GetComponents<MonoBehaviour>())
             {
-                if (comp.AssetID == guid)
-                {
-                    results.Add(go);
-                    break;
-                }
-
-                // Search fields for AssetRef<T> that reference this GUID
+                // A field holding the asset, or naming it through an AssetRef.
                 bool found = false;
-                var type = comp.GetType();
-                foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
+                foreach (var field in comp.GetType().GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
                 {
-                    var fieldType = field.FieldType;
-                    if (!fieldType.IsGenericType) continue;
-                    if (fieldType.GetGenericTypeDefinition() != typeof(AssetRef<>)) continue;
-
-                    var assetRef = field.GetValue(comp);
-                    if (assetRef == null) continue;
-
-                    var assetIdProp = fieldType.GetProperty("AssetID");
-                    if (assetIdProp?.GetValue(assetRef) is Guid refGuid && refGuid == guid)
+                    Guid referenced = field.GetValue(comp) switch
                     {
-                        results.Add(go);
-                        found = true;
-                        break;
-                    }
+                        Asset asset => asset.AssetID,
+                        IAssetRef assetRef => assetRef.AssetID,
+                        _ => Guid.Empty,
+                    };
+                    if (referenced != guid) continue;
+
+                    results.Add(go);
+                    found = true;
+                    break;
                 }
                 if (found) break;
             }

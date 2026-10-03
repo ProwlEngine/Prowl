@@ -55,19 +55,13 @@ internal static class MaterialPropertyReadExtensions
         => p.TryGetValue(name, out MaterialProperty v) && v.Type == MaterialPropertyType.Texture2D;
 
     public static Texture2D GetTexture(this Dictionary<string, MaterialProperty> p, string name)
-        => p.TryGetValue(name, out MaterialProperty v) ? v.Tex2D.Res : null;
-
-    public static AssetRef<Texture2D> GetTextureRef(this Dictionary<string, MaterialProperty> p, string name)
-        => p.TryGetValue(name, out MaterialProperty v) ? v.Tex2D : default;
+        => p.TryGetValue(name, out MaterialProperty v) ? v.Tex2D : null;
 
     public static bool HasTexture3D(this Dictionary<string, MaterialProperty> p, string name)
         => p.TryGetValue(name, out MaterialProperty v) && v.Type == MaterialPropertyType.Texture3D;
 
     public static Texture3D GetTexture3D(this Dictionary<string, MaterialProperty> p, string name)
-        => p.TryGetValue(name, out MaterialProperty v) ? v.Tex3D.Res : null;
-
-    public static AssetRef<Texture3D> GetTexture3DRef(this Dictionary<string, MaterialProperty> p, string name)
-        => p.TryGetValue(name, out MaterialProperty v) ? v.Tex3D : default;
+        => p.TryGetValue(name, out MaterialProperty v) ? v.Tex3D : null;
 
     public static bool RemoveProperty(this Dictionary<string, MaterialProperty> p, string name)
         => p.Remove(name);

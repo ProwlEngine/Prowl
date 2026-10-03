@@ -48,7 +48,7 @@ internal sealed class NavMeshSurfaceOverlay
 
     public void Draw(NavMeshSurface surface, NavMeshWorld? world)
     {
-        NavMeshData? data = surface.NavMeshData.Res;
+        NavMeshData? data = surface.NavMeshData;
         if (data.IsNotValid() || !data!.HasTiles)
             return;
 

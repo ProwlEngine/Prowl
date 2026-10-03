@@ -68,7 +68,7 @@ public class AudioAssetTests : EditorTestHarness
         MetaFile.Write(metaPath, meta);
         Assets.Reimport(guid);
 
-        return (AudioClip)Assets.Get(guid)!;
+        return (AudioClip)AssetDatabase.Load<Asset>(guid)!;
     }
 
     private Guid CreateMixer(AudioMixer mixer, string relativePath = "Game.audiomixer")
@@ -79,15 +79,8 @@ public class AudioAssetTests : EditorTestHarness
         return Assets.ImportFile(relativePath);
     }
 
-    /// <summary>Serializes an asset the way its file is written: AssetID cleared so the whole object
-    /// is emitted rather than an $assetId reference back to itself.</summary>
-    private static string SerializeAsset(EngineObject asset)
-    {
-        Guid saved = asset.AssetID;
-        asset.AssetID = Guid.Empty;
-        try { return Serializer.Serialize(typeof(object), asset).WriteToString(); }
-        finally { asset.AssetID = saved; }
-    }
+    /// <summary>Serializes an asset the way its file is written, as the root of the write.</summary>
+    private static string SerializeAsset(Asset asset) => Serializer.Serialize(typeof(object), asset).WriteToString();
 
     #endregion
 
@@ -102,7 +95,7 @@ public class AudioAssetTests : EditorTestHarness
         byte[] source = StereoWav();
         Guid guid = ImportBytes("Beep.wav", source);
 
-        var clip = Assets.Get(guid) as AudioClip;
+        var clip = AssetDatabase.Load<Asset>(guid) as AudioClip;
 
         Assert.NotNull(clip);
         Assert.NotEqual(IntPtr.Zero, clip!.Handle);
@@ -118,7 +111,7 @@ public class AudioAssetTests : EditorTestHarness
         byte[] source = StereoWav();
         Guid guid = ImportBytes("Music.wav", source);
 
-        var clip = Assets.Get(guid) as AudioClip;
+        var clip = AssetDatabase.Load<Asset>(guid) as AudioClip;
         Assert.NotNull(clip);
 
         EchoObject echo = EchoObject.ReadFromString(SerializeAsset(clip!));
@@ -134,7 +127,7 @@ public class AudioAssetTests : EditorTestHarness
         byte[] source = StereoWav();
         Guid guid = ImportBytes("AsIs.wav", source);
 
-        var clip = Assets.Get(guid) as AudioClip;
+        var clip = AssetDatabase.Load<Asset>(guid) as AudioClip;
 
         Assert.NotNull(clip);
         Assert.Equal((ulong)source.Length, clip!.DataSize);
@@ -239,66 +232,81 @@ public class AudioAssetTests : EditorTestHarness
 
     #region Mixer assets
 
-    // Assets are shared instances, so a script setting a mixer group's volume at run time writes to
-    // the project's copy of it. Dropping the loaded instances is what stops that outliving the play
-    // session, and it is what both sides of a play mode transition do.
+    // Assets are shared, so a script setting a mixer group's volume at run time writes to the project's
+    // mixer. Reverting refills the same objects, so every source routed to the group keeps it.
     [Fact]
-    public void UnloadAll_ThrowsAwayRuntimeChangesToAnAsset()
+    public void Revert_ThrowsAwayRuntimeChangesToAMixer_InTheSameObjects()
     {
         var mixer = new AudioMixer();
         mixer.AddGroup("Music");
 
         Guid guid = CreateMixer(mixer);
 
-        var loaded = Assets.Get(guid) as AudioMixer;
-        Assert.NotNull(loaded);
-
-        AudioMixerGroup music = loaded!.FindGroup("Music")!;
+        var loaded = AssetDatabase.Load<AudioMixer>(guid)!;
+        AudioMixerGroup music = loaded.FindGroup("Music")!;
         Assert.Equal(0f, music.VolumeDB);
 
         // What a gameplay script does to a mixer it was handed.
         music.VolumeDB = -24f;
-        Assert.Equal(-24f, loaded.FindGroup("Music")!.VolumeDB);
 
-        Assert.True(Assets.UnloadAll() > 0);
+        Assets.RevertToSaved(loaded);
 
-        var reloaded = Assets.Get(guid) as AudioMixer;
-
-        Assert.NotNull(reloaded);
-        Assert.NotSame(loaded, reloaded);
-        Assert.Equal(0f, reloaded!.FindGroup("Music")!.VolumeDB);
+        Assert.Same(loaded, AssetDatabase.Get(guid));
+        Assert.Same(music, loaded.FindGroup("Music"));
+        Assert.Equal(0f, music.VolumeDB);
     }
 
-    // A pinned asset is pinned because something needs that exact instance to survive, which is the
-    // one thing the drop has to respect.
     [Fact]
-    public void UnloadAll_LeavesPinnedAssetsAlone()
+    public void AHeldMixer_SurvivesUnloadingWhatIsUnused()
     {
-        Guid pinned = CreateMixer(new AudioMixer(), "Pinned.audiomixer");
+        Guid held = CreateMixer(new AudioMixer(), "Held.audiomixer");
         Guid ordinary = CreateMixer(new AudioMixer(), "Ordinary.audiomixer");
 
-        var pinnedAsset = Assets.Get(pinned) as AudioMixer;
-        var ordinaryAsset = Assets.Get(ordinary) as AudioMixer;
+        var heldAsset = AssetDatabase.Load<AudioMixer>(held)!;
+        var ordinaryAsset = AssetDatabase.Load<AudioMixer>(ordinary)!;
+        object owner = new();
+        AssetDatabase.Hold(heldAsset, owner);
 
-        Assert.NotNull(pinnedAsset);
-        Assert.NotNull(ordinaryAsset);
+        AssetDatabase.UnloadUnused();
 
-        AssetDatabase.LockPermanent(pinned);
+        Assert.True(heldAsset.IsLoaded);
+        Assert.False(ordinaryAsset.IsLoaded);
+        Assert.Same(ordinaryAsset, AssetDatabase.Load<AudioMixer>(ordinary));
+        AssetDatabase.ReleaseAll(owner);
+    }
 
-        try
-        {
-            Assets.UnloadAll();
+    // The mixer's list and a group loaded by GUID are the same object, so a volume set through one is heard through the other.
+    [Fact]
+    public void AGroupLoadedByGuid_IsTheOneInItsMixer()
+    {
+        var mixer = new AudioMixer();
+        mixer.AddGroup("Music");
+        Guid guid = CreateMixer(mixer);
+        AssetDatabase.ClearForTests();
 
-            Assert.False(pinnedAsset!.IsDisposed);
-            Assert.Same(pinnedAsset, Assets.Get(pinned));
+        Guid musicId = Assets.GetSubAssets(guid).First(s => s.Name == "Music").Guid;
+        var group = AssetDatabase.Load<AudioMixerGroup>(musicId)!;
+        var loaded = AssetDatabase.Load<AudioMixer>(guid)!;
 
-            Assert.True(ordinaryAsset!.IsDisposed);
-            Assert.NotSame(ordinaryAsset, Assets.Get(ordinary));
-        }
-        finally
-        {
-            AssetDatabase.Unlock(pinned);
-        }
+        Assert.Same(group, loaded.FindGroup("Music"));
+        Assert.Same(loaded, group.Mixer);
+    }
+
+    [Fact]
+    public void SavingAGroup_WritesItsMixer()
+    {
+        var mixer = new AudioMixer();
+        mixer.AddGroup("Music");
+        Guid guid = CreateMixer(mixer);
+        Guid musicId = Assets.GetSubAssets(guid).First(s => s.Name == "Music").Guid;
+
+        var group = AssetDatabase.Load<AudioMixerGroup>(musicId)!;
+        group.VolumeDB = -6f;
+
+        Assert.True(Assets.SaveAsset(group));
+
+        AssetDatabase.ClearForTests();
+        Assert.Equal(-6f, AssetDatabase.Load<AudioMixerGroup>(musicId)!.VolumeDB);
     }
 
     [Fact]
@@ -310,7 +318,7 @@ public class AudioAssetTests : EditorTestHarness
 
         Guid guid = CreateMixer(mixer);
 
-        var imported = Assets.Get(guid) as AudioMixer;
+        var imported = AssetDatabase.Load<Asset>(guid) as AudioMixer;
 
         Assert.NotNull(imported);
         Assert.Equal(3, imported!.Groups.Count);
@@ -328,14 +336,14 @@ public class AudioAssetTests : EditorTestHarness
         mixer.AddGroup("Music");
 
         Guid guid = CreateMixer(mixer);
-        var imported = (AudioMixer)Assets.Get(guid)!;
+        var imported = (AudioMixer)AssetDatabase.Load<Asset>(guid)!;
         Guid musicId = imported.FindGroup("Music").AssetID;
 
         imported.AddGroup("Ambience");
         File.WriteAllText(AssetAbsolutePath("Game.audiomixer"), SerializeAsset(imported));
         Assets.Reimport(guid);
 
-        var reimported = (AudioMixer)Assets.Get(guid)!;
+        var reimported = (AudioMixer)AssetDatabase.Load<Asset>(guid)!;
 
         Assert.Equal(musicId, reimported.FindGroup("Music").AssetID);
     }
@@ -348,14 +356,14 @@ public class AudioAssetTests : EditorTestHarness
         mixer.AddGroup("Music");
 
         Guid guid = CreateMixer(mixer);
-        var imported = (AudioMixer)Assets.Get(guid)!;
+        var imported = (AudioMixer)AssetDatabase.Load<Asset>(guid)!;
         Guid musicId = imported.FindGroup("Music").AssetID;
 
         imported.FindGroup("Music").GroupName = "Soundtrack";
         File.WriteAllText(AssetAbsolutePath("Game.audiomixer"), SerializeAsset(imported));
         Assets.Reimport(guid);
 
-        var reimported = (AudioMixer)Assets.Get(guid)!;
+        var reimported = (AudioMixer)AssetDatabase.Load<Asset>(guid)!;
 
         Assert.Equal(musicId, reimported.FindGroup("Soundtrack").AssetID);
     }
@@ -370,13 +378,13 @@ public class AudioAssetTests : EditorTestHarness
         mixer.AddGroup("Stingers", music);
 
         Guid guid = CreateMixer(mixer);
-        var imported = (AudioMixer)Assets.Get(guid)!;
+        var imported = (AudioMixer)AssetDatabase.Load<Asset>(guid)!;
         Guid stingersId = imported.FindGroup("Stingers").AssetID;
 
         ReopenDatabase();
 
         // Resolved by GUID alone, the way an AudioSource's OutputGroup resolves it.
-        var stingers = Assets.Get(stingersId) as AudioMixerGroup;
+        var stingers = AssetDatabase.Load<Asset>(stingersId) as AudioMixerGroup;
 
         Assert.NotNull(stingers);
         Assert.NotNull(stingers!.Mixer);
@@ -392,7 +400,8 @@ public class AudioAssetTests : EditorTestHarness
     [Fact]
     public void Scene_TracksAudioSourceClipDependency()
     {
-        var clip = new AudioClip([1, 2, 3, 4]) { AssetID = Guid.NewGuid() };
+        var clip = new AudioClip([1, 2, 3, 4]);
+        clip.SetIdentity(Guid.NewGuid(), "Clip.wav");
 
         var go = new GameObject("Holder");
         go.AddComponent<AudioSource>().Clip = clip;
@@ -415,7 +424,7 @@ public class AudioAssetTests : EditorTestHarness
         mixer.AddGroup("Music");
 
         Guid mixerGuid = CreateMixer(mixer);
-        var imported = (AudioMixer)Assets.Get(mixerGuid)!;
+        var imported = (AudioMixer)AssetDatabase.Load<Asset>(mixerGuid)!;
         AudioMixerGroup music = imported.FindGroup("Music");
 
         var scene = new Runtime.Resources.Scene();

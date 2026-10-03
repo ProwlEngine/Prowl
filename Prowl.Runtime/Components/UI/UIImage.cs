@@ -71,21 +71,23 @@ public class UIImage : Graphic
     /// the UVs, and its 9-slice border feeds <see cref="ImageType.Sliced"/>. With no sprite the image draws
     /// nothing but still hit-tests as a <see cref="RaycastTarget"/>. New images default to the built-in UI panel.
     /// </summary>
-    [SerializeField] private AssetRef<Sprite> _sprite = new(BuiltInAssets.GuidFor(DefaultSprite.UIPanel));
-    public AssetRef<Sprite> Sprite
+    [SerializeField] private Sprite? _sprite = AssetDatabase.Get<Sprite>(BuiltInAssets.GuidFor(DefaultSprite.UIPanel));
+    public Sprite? Sprite
     {
         get => _sprite;
         set => SetField(ref _sprite, value, UIDirtyFlags.Material | UIDirtyFlags.Vertices);
     }
 
     /// <summary>The resolved sprite, or null when none is assigned.</summary>
-    private Sprite? Spr => _sprite.Res;
+    private Sprite? Spr => _sprite;
 
     /// <summary>The source texture bound for drawing: the sprite's texture, or null when no sprite is set.</summary>
-    private Texture2D? SourceTexture { get { var s = Spr; return s.IsValid() ? s.Texture.Res : null; } }
+    private Texture2D? SourceTexture { get { var s = Spr; return s is { IsLoaded: true } ? s.Texture : null; } }
 
     /// <summary>A sprite is assigned but it (or its texture) is still loading, so this image drew nothing.</summary>
-    public override bool IsContentPending => !_sprite.IsExplicitNull && SourceTexture is null;
+    public override bool IsContentPending => _sprite is not null && SourceTexture is null;
+
+    public override int ContentVersion => _sprite is Sprite s ? s.ContentVersion : 0;
 
     /// <summary>9-slice border in source pixels, taken from the sprite (zero when no sprite is set).</summary>
     private Float4 EffectiveBorder => Spr is Sprite s ? s.Border : Float4.Zero;
@@ -96,7 +98,7 @@ public class UIImage : Graphic
     // Sets the builder's UV remap to the sprite's atlas sub-rect (identity when the sprite covers the whole texture).
     private void ApplySpriteUVRect(UIMeshBuilder b)
     {
-        if (Spr is Sprite s && s.Texture.Res is Texture2D st && st.Width > 0 && st.Height > 0)
+        if (Spr is Sprite s && s.Texture is Texture2D st && st.Width > 0 && st.Height > 0)
         {
             float u0 = s.Rect.X / (float)st.Width, u1 = s.Rect.MaxX / (float)st.Width;
             float v0 = s.Rect.Y / (float)st.Height, v1 = s.Rect.MaxY / (float)st.Height;

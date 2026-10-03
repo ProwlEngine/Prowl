@@ -45,7 +45,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
-        Runtime.NavMeshData data = surface.NavMeshData.Res!;
+        Runtime.NavMeshData data = surface.NavMeshData;
         Assert.NotEmpty(data.CacheLayers);
 
         Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)));
@@ -92,7 +92,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.True(scene.Navigation.CalculatePath(new Float3(-15, 0, -15), new Float3(15, 0, 15), path, NavMeshAreaMask.Everything));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
         // The editor overlay reads this: empty layers drew nothing, which is how it looked unbaked.
-        Assert.NotEmpty(surface.NavMeshData.Res!.CalculateTriangulation().Vertices);
+        Assert.NotEmpty(surface.NavMeshData.CalculateTriangulation().Vertices);
     }
 
     /// <summary>An explicit oversized tile size is clamped rather than silently producing an
@@ -108,7 +108,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.True(surface.BuildNavMesh());
         Tick(scene, 2);
 
-        Assert.Equal(NavMeshBuildSettings.MaxTileSize, surface.NavMeshData.Res!.Settings.EffectiveTileSize);
+        Assert.Equal(NavMeshBuildSettings.MaxTileSize, surface.NavMeshData.Settings.EffectiveTileSize);
         Assert.True(Walkable(scene, new Float3(0, 0.2f, 0)));
     }
 
@@ -532,7 +532,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     {
         (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
-        Assert.Same(surface.NavMeshData.Res, surface.RuntimeData);
+        Assert.Same(surface.NavMeshData, surface.RuntimeData);
 
         Runtime.NavMeshData data = surface.RuntimeData!;
         var blobsBefore = new Dictionary<(int, int), byte[]>();
@@ -568,8 +568,8 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.True(surface.BuildNavMesh());
 
         // Stand in for an imported asset: what marks one is carrying a database id.
-        Runtime.NavMeshData asset = surface.NavMeshData.Res!;
-        asset.AssetID = Guid.NewGuid();
+        Runtime.NavMeshData asset = surface.NavMeshData;
+        asset.SetIdentity(Guid.NewGuid(), "Floor.navmesh");
         surface.RefreshRegistration();
 
         Runtime.NavMeshData runtime = surface.RuntimeData!;
@@ -977,7 +977,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
     public void Obstacle_CarvesAndFollowsOutsidePlayMode()
     {
         (Scene _, NavMeshSurface baker) = CreateFloorScene(bake: true);
-        NavMeshData asset = baker.NavMeshData.Res!;
+        NavMeshData asset = baker.NavMeshData;
 
         using (EditMode())
         {

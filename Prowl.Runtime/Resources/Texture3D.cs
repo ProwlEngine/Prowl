@@ -31,13 +31,13 @@ public sealed class Texture3D : Texture, ISerializable
     private uint _width, _height, _depth;
 
     /// <summary>The width of this <see cref="Texture3D"/>.</summary>
-    public uint Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
+    public uint Width { get { EnsureLoaded(); return _width; } private set => _width = value; }
 
     /// <summary>The height of this <see cref="Texture3D"/>.</summary>
-    public uint Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
+    public uint Height { get { EnsureLoaded(); return _height; } private set => _height = value; }
 
     /// <summary>The depth of this <see cref="Texture3D"/>.</summary>
-    public uint Depth { get { EnsureNotDisposed(); return _depth; } private set => _depth = value; }
+    public uint Depth { get { EnsureLoaded(); return _depth; } private set => _depth = value; }
 
     private bool _generateMipmaps;
 
@@ -60,7 +60,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public unsafe void SetDataPtr(void* ptr, int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
 
         uint bytes = boxWidth * boxHeight * boxDepth * ImageFormat.GetSizeInBytes();
@@ -73,7 +73,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public unsafe void SetData<T>(Memory<T> data, int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
         ValidateByteCapacity(data.Length * sizeof(T), (long)boxWidth * boxHeight * boxDepth * ImageFormat.GetSizeInBytes(), nameof(data));
 
@@ -86,7 +86,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         SetData(data, 0, 0, 0, Width, Height, Depth);
     }
 
@@ -146,7 +146,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public unsafe void RecreateImage(uint width, uint height, uint depth)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateTextureSize(width, height, depth);
 
         Width = width;
@@ -200,6 +200,9 @@ public sealed class Texture3D : Texture, ISerializable
         if (boxWidth > Width - boxX || boxHeight > Height - boxY || boxDepth > Depth - boxZ)
             throw new ArgumentOutOfRangeException("Specified box is outside of the texture's storage");
     }
+
+    protected internal override long EstimateBytes()
+        => (long)(_width * _height * _depth * (ulong)GetBytesPerPixel(ImageFormatUnchecked) * (IsMipmappedUnchecked ? 8.0 / 7.0 : 1.0));
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {

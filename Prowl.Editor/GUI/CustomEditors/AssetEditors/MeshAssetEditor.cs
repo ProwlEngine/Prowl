@@ -27,25 +27,9 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Mesh))]
 public class MeshAssetEditor : AssetImporterEditor
 {
-    private sealed class State : IDisposable
-    {
-        public PreviewRenderer? Preview;
-        public EngineObject? LastPreviewSubject;
-
-        public void Dispose()
-        {
-            Preview?.Dispose();
-            Preview = null;
-        }
-    }
-
-    private readonly State _ownState = new();
-
-    private static readonly Dictionary<Guid, State> _subAssetStates = new();
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        Draw(paper, id, entry, subEntry: null, asset as Mesh, _ownState);
+        Draw(paper, id, entry, subEntry: null, asset as Mesh);
     }
 
     /// <summary>
@@ -54,12 +38,10 @@ public class MeshAssetEditor : AssetImporterEditor
     /// </summary>
     public static void DrawForSubAsset(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry subEntry, Mesh mesh)
     {
-        if (!_subAssetStates.TryGetValue(subEntry.Guid, out var state))
-            _subAssetStates[subEntry.Guid] = state = new State();
-        Draw(paper, id, parentEntry, subEntry, mesh, state);
+        Draw(paper, id, parentEntry, subEntry, mesh);
     }
 
-    private static void Draw(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh? mesh, State state)
+    private static void Draw(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh? mesh)
     {
         id = $"{id}_{parentEntry.Guid:N}";
         if (subEntry != null) id = $"{id}_{subEntry.Guid:N}";
@@ -78,22 +60,15 @@ public class MeshAssetEditor : AssetImporterEditor
             return;
         }
 
-        DrawPreview(paper, id, parentEntry, subEntry, mesh, state, m);
+        DrawPreview(paper, id, parentEntry, subEntry, mesh, m);
         DrawStatChips(paper, id, mesh, font, m);
         DrawDetails(paper, id, mesh, font, m);
         DrawFeaturePanel(paper, id, parentEntry, subEntry, mesh, font, m);
     }
 
-    private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state, OrigamiMetrics m)
+    private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, OrigamiMetrics m)
     {
-        state.Preview ??= new PreviewRenderer(256, 256);
-        state.Preview.ShowGrid = true;
-
-        if (state.LastPreviewSubject != mesh)
-        {
-            state.LastPreviewSubject = mesh;
-            state.Preview.SetupForMesh(mesh);
-        }
+        PreviewRenderer preview = PreviewWidget.For(subEntry?.Guid ?? parentEntry.Guid, showGrid: true).Get(mesh, p => p.SetupForMesh(mesh));
 
         // Preview hero card wraps the 3D orbit preview in themed chrome.
         using (paper.Box($"{id}_previewCard").Height(200)
@@ -103,7 +78,7 @@ public class MeshAssetEditor : AssetImporterEditor
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .JustifyContent(LayoutJustification.Center).AlignItems(LayoutAlignment.Center).Enter())
         {
-            state.Preview.DrawPreview(paper, $"{id}_preview_rt", 184, 184);
+            preview.DrawPreview(paper, $"{id}_preview_rt", 184, 184);
         }
     }
 
@@ -166,15 +141,5 @@ public class MeshAssetEditor : AssetImporterEditor
         string meshName = subEntry?.Name ?? mesh.Name ?? "Mesh";
         var sdfGuid = AssetEntry.DeriveSubAssetGuid(parentEntry.Guid, $"{meshName}_sdf");
         return Runtime.AssetDatabase.Get(sdfGuid) as MeshSDF;
-    }
-
-    /// <summary>
-    /// Called by parent-asset editors after they trigger a reimport, so cached previews
-    /// drop their stale references and re-bind to the freshly generated sub-assets.
-    /// </summary>
-    internal static void InvalidateCachedPreviews()
-    {
-        foreach (var s in _subAssetStates.Values)
-            s.LastPreviewSubject = null;
     }
 }

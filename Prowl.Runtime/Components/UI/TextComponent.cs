@@ -26,10 +26,10 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("UI/Text")]
 [ComponentIcon("T")] // Text
-public class TextComponent : Graphic
+public class TextComponent : Graphic, ILayoutElement
 {
-    [SerializeField] private AssetRef<FontAsset> _font;
-    public AssetRef<FontAsset> Font
+    [SerializeField] private FontAsset? _font;
+    public FontAsset? Font
     {
         get => _font;
         set => SetField(ref _font, value, UIDirtyFlags.Vertices | UIDirtyFlags.Material);
@@ -40,14 +40,14 @@ public class TextComponent : Graphic
     {
         get
         {
-            var f = _font.Res;
-            return f.IsValid() ? f : FontAsset.LoadDefault();
+            var f = _font;
+            return f is { IsLoaded: true } ? f : FontAsset.LoadDefault();
         }
     }
 
     /// <summary>A font is assigned but hasn't loaded, so this text is currently laid out with the
     /// built-in fallback and has to be rebuilt once the real one arrives.</summary>
-    public override bool IsContentPending => !_font.IsExplicitNull && _font.Res.IsNotValid();
+    public override bool IsContentPending => _font is { IsLoaded: false };
 
     [SerializeField] private string _text = string.Empty;
     public string Text
@@ -87,7 +87,7 @@ public class TextComponent : Graphic
     /// region. Reporting the atlas version here makes the canvas re-bake this text in both play and
     /// edit mode.
     /// </summary>
-    public override int ContentVersion => UIFontSystem.Default.System.AtlasVersion;
+    public override int ContentVersion => unchecked(UIFontSystem.Default.System.AtlasVersion * 31 + (_font is FontAsset f ? f.ContentVersion : 0));
 
     // ============================================================
     // Mesh generation
@@ -122,26 +122,63 @@ public class TextComponent : Graphic
         // Scribe generates the geometry and drives DrawQuads; the capture
         // maps it into element-local space and appends it to the mesh. Vertical alignment isn't done
         // by Scribe (its alignment is horizontal-only), so we offset the whole box by the layout height.
-        TextLayoutSettings settings = new TextLayoutSettings
-        {
-            Font          = fontFile,
-            PixelSize     = pixelSize,
-            Quality       = _quality,
-            Alignment     = ToScribeAlignment(_alignment),
-            MaxWidth      = w,
-            WrapMode      = TextWrapMode.Wrap,
-            LineHeight    = 1.0f,
-            TabSize       = 4,
-            LetterSpacing = 0f,
-            WordSpacing   = 0f,
-        };
-        TextLayout layout = fs.System.CreateLayout(_text, settings);
+        TextLayout layout = fs.System.CreateLayout(_text, LayoutSettings(fontFile, ToScribeAlignment(_alignment), w, TextWrapMode.Wrap));
 
         float verticalOffset = ComputeVerticalOffset(_alignment, h, layout.Size.Y);
         fs.BeginCapture(builder, originX, originY - verticalOffset);
         try { fs.System.DrawLayout(layout, Float2.Zero, color); }
         finally { fs.EndCapture(); }
     }
+
+    private TextLayoutSettings LayoutSettings(FontFile font, ScribeAlign alignment, float maxWidth, TextWrapMode wrap) => new()
+    {
+        Font          = font,
+        PixelSize     = Maths.Max(1, _size),
+        Quality       = _quality,
+        Alignment     = alignment,
+        MaxWidth      = maxWidth,
+        WrapMode      = wrap,
+        LineHeight    = 1.0f,
+        TabSize       = 4,
+        LetterSpacing = 0f,
+        WordSpacing   = 0f,
+    };
+
+    // ============================================================
+    // Layout size (ILayoutElement), so a fitter or layout group can size to the text
+    // ============================================================
+
+    public float MinWidth => 0f;
+    public float MinHeight => 0f;
+    public float FlexibleWidth => -1f;
+    public float FlexibleHeight => -1f;
+
+    /// <summary>Width of the text laid out without wrapping (its widest line).</summary>
+    public float PreferredWidth => MeasureWidth(_text);
+
+    /// <summary>Height of the text wrapped at the element's width from the last layout pass, or unwrapped
+    /// before it has one. A width change made this pass is picked up by the rebuild it triggers.</summary>
+    public float PreferredHeight
+    {
+        get
+        {
+            FontAsset? font = ResolvedFont;
+            if (font.IsNotValid() || font.FontFile is null || string.IsNullOrEmpty(_text)) return 0f;
+
+            float width = GameObject.RectTransform is { } rt && rt.ComputedRect.Size.X > 0f ? rt.ComputedRect.Size.X : float.MaxValue;
+            int sig = HashCode.Combine(font.FontFile, _size, (int)_quality, _text, width);
+            if (sig != _heightSig)
+            {
+                TextLayout layout = UIFontSystem.Default.System.CreateLayout(_text, LayoutSettings(font.FontFile, ScribeAlign.Left, width, TextWrapMode.Wrap));
+                _preferredHeight = (float)layout.Size.Y;
+                _heightSig = sig;
+            }
+            return _preferredHeight;
+        }
+    }
+
+    [SerializeIgnore] private int _heightSig;
+    [SerializeIgnore] private float _preferredHeight;
 
     // ============================================================
     // Single-line measurement (caret / selection support for input fields)
@@ -163,20 +200,7 @@ public class TextComponent : Graphic
 
         if (_measureLayout is null || sig != _measureSig || !string.Equals(_measureText, text, StringComparison.Ordinal))
         {
-            TextLayoutSettings settings = new TextLayoutSettings
-            {
-                Font          = font.FontFile,
-                PixelSize     = Maths.Max(1, _size),
-                Quality       = _quality,
-                Alignment     = ScribeAlign.Left,
-                MaxWidth      = float.MaxValue,
-                WrapMode      = TextWrapMode.NoWrap,
-                LineHeight    = 1.0f,
-                TabSize       = 4,
-                LetterSpacing = 0f,
-                WordSpacing   = 0f,
-            };
-            _measureLayout = UIFontSystem.Default.System.CreateLayout(text, settings);
+            _measureLayout = UIFontSystem.Default.System.CreateLayout(text, LayoutSettings(font.FontFile, ScribeAlign.Left, float.MaxValue, TextWrapMode.NoWrap));
             _measureText = text;
             _measureSig = sig;
         }

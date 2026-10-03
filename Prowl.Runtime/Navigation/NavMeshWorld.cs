@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 
+using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour;
 using Prowl.Recast.Detour.Crowd;
@@ -84,6 +85,7 @@ public sealed class NavMeshWorld
     private readonly Lock _instancesLock = new();
 
     [ThreadStatic] private static NavMeshDetourFilter? t_scratchFilter;
+    private static readonly RcRand s_random = new(Random.Shared);
 
     // Boxed because queries read the extents from worker threads and a Float3 is three separate
     // floats: a plain field could be read mid-assignment and snap against a mix of the old and
@@ -639,6 +641,62 @@ public sealed class NavMeshWorld
             hit.Normal = Float3.UnitY;
             hit.Distance = distance;
             hit.Mask = GetPolyAreaMask(lease.Query.GetAttachedNavMesh(), nearestRef);
+            hit.Hit = true;
+            return true;
+        }
+    }
+
+    /// <summary>Pick a random point anywhere on the navmesh. Tiles are picked evenly, then polygons by
+    /// area within the tile. The point can be on an island the caller cannot walk to, use
+    /// <see cref="FindRandomPointAround"/> for one that is reachable.</summary>
+    public bool FindRandomPoint(out NavMeshHit hit, NavMeshQueryFilter filter = default)
+    {
+        hit = default;
+
+        if (!TryRentQuery(out NavMeshQueryLease lease, filter.AgentTypeId))
+            return false;
+
+        using (lease)
+        {
+            DtStatus status = lease.Query.FindRandomPoint(DetourFilter(filter), s_random, out long randomRef, out RcVec3f randomPt);
+            if (status.Failed() || randomRef == 0)
+                return false;
+
+            hit.Position = randomPt.ToFloat3();
+            hit.Normal = Float3.UnitY;
+            hit.Mask = GetPolyAreaMask(lease.Query.GetAttachedNavMesh(), randomRef);
+            hit.Hit = true;
+            return true;
+        }
+    }
+
+    /// <summary>Pick a random point within <paramref name="radius"/> of <paramref name="center"/>,
+    /// weighted by area. The search walks the navmesh outward from the center, so the point is
+    /// connected to it and an agent standing at the center can walk there.</summary>
+    public bool FindRandomPointAround(Float3 center, float radius, out NavMeshHit hit, NavMeshQueryFilter filter = default)
+    {
+        hit = default;
+
+        if (!TryRentQuery(out NavMeshQueryLease lease, filter.AgentTypeId))
+            return false;
+
+        using (lease)
+        {
+            DtNavMeshQuery query = lease.Query;
+            NavMeshDetourFilter detour = DetourFilter(filter);
+            query.FindNearestPoly(center.ToRc(), DefaultQueryExtents.ToRc(), detour, out long startRef, out RcVec3f startPt, out _);
+            if (startRef == 0)
+                return false;
+
+            DtStatus status = query.FindRandomPointWithinCircle(startRef, startPt, radius, detour, s_random, out long randomRef, out RcVec3f randomPt);
+            if (status.Failed() || randomRef == 0)
+                return false;
+
+            Float3 position = randomPt.ToFloat3();
+            hit.Position = position;
+            hit.Normal = Float3.UnitY;
+            hit.Distance = (float)Float3.Distance(center, position);
+            hit.Mask = GetPolyAreaMask(query.GetAttachedNavMesh(), randomRef);
             hit.Hit = true;
             return true;
         }

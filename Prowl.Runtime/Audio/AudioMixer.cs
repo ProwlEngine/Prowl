@@ -21,7 +21,7 @@ namespace Prowl.Runtime.Audio;
 /// to its parent's, so a volume set on a parent scales every descendant. The native side is built on
 /// demand and thrown away when the device closes, so the asset stays pure data.
 /// </remarks>
-public sealed class AudioMixerGroup : EngineObject
+public sealed class AudioMixerGroup : Asset
 {
     /// <summary>Quietest volume, treated as silence rather than a very small gain.</summary>
     public const float MinVolumeDB = -80.0f;
@@ -51,12 +51,10 @@ public sealed class AudioMixerGroup : EngineObject
     // on its own, with no mixer around it to say what it feeds into. This is what lets it find its way
     // back to its siblings, and it is also the dependency edge that makes the mixer ship at all.
     [SerializeField, HideInInspector]
-    private AssetRef<AudioMixer> _owningMixer;
+    private AudioMixer? _owningMixer;
 
     /// <summary>Stable key this group is referenced by, independent of its name and position.</summary>
     public string Identity => _identity;
-
-    internal void SetOwningMixer(Guid mixerId) => _owningMixer = new AssetRef<AudioMixer>(mixerId);
 
     internal void EnsureIdentity(int index)
     {
@@ -66,9 +64,6 @@ public sealed class AudioMixerGroup : EngineObject
 
     [SerializeField, Tooltip("Applied to everything routed into this group, in order.")]
     private List<AudioEffect> _effects = [];
-
-    [SerializeIgnore]
-    private AudioMixer _mixer;
 
     [SerializeIgnore]
     private ma_sound_group_ptr _nativeGroup;
@@ -115,16 +110,17 @@ public sealed class AudioMixerGroup : EngineObject
 
     public string GroupName
     {
-        get => _groupName;
-        set => _groupName = value;
+        get { EnsureLoaded(); return _groupName; }
+        set { EnsureLoaded(); _groupName = value; }
     }
 
     /// <summary>Level in decibels. 0 leaves audio unchanged, <see cref="MinVolumeDB"/> is silence.</summary>
     public float VolumeDB
     {
-        get => _volumeDB;
+        get { EnsureLoaded(); return _volumeDB; }
         set
         {
+            EnsureLoaded();
             _volumeDB = Maths.Clamp(value, MinVolumeDB, MaxVolumeDB);
             ApplyVolume();
         }
@@ -139,9 +135,10 @@ public sealed class AudioMixerGroup : EngineObject
 
     public bool Mute
     {
-        get => _mute;
+        get { EnsureLoaded(); return _mute; }
         set
         {
+            EnsureLoaded();
             _mute = value;
             ApplyVolume();
         }
@@ -169,9 +166,9 @@ public sealed class AudioMixerGroup : EngineObject
             _solo = value;
 
             // Soloing one bus changes what every other bus does, so the whole mixer is re-applied.
-            AudioMixer owner = _mixer;
+            AudioMixer? owner = _owningMixer;
 
-            if (owner.IsValid()) owner.ApplyVolumes();
+            if (owner is not null) owner.ApplyVolumes();
             else ApplyVolume();
         }
     }
@@ -181,9 +178,9 @@ public sealed class AudioMixerGroup : EngineObject
     {
         get
         {
-            AudioMixer owner = _mixer;
+            AudioMixer? owner = _owningMixer;
 
-            if (owner.IsNotValid() || !owner.AnySolo) return false;
+            if (owner is null || !owner.AnySolo) return false;
 
             foreach (AudioMixerGroup soloed in owner.Groups)
             {
@@ -253,25 +250,18 @@ public sealed class AudioMixerGroup : EngineObject
     /// The mixer this group belongs to. Resolved from the owning asset when this group was loaded on
     /// its own rather than as part of its mixer.
     /// </summary>
-    public AudioMixer Mixer
+    public AudioMixer? Mixer
     {
-        get
-        {
-            if (_mixer.IsValid())
-                return _mixer;
-
-            _mixer = _owningMixer.Res;
-            return _mixer;
-        }
+        get { EnsureLoaded(); return _owningMixer; }
     }
 
     internal int ParentIndex
     {
-        get => _parentIndex;
-        set => _parentIndex = value;
+        get { EnsureLoaded(); return _parentIndex; }
+        set { EnsureLoaded(); _parentIndex = value; }
     }
 
-    internal void Bind(AudioMixer mixer) => _mixer = mixer;
+    internal void Bind(AudioMixer mixer) => _owningMixer = mixer;
 
     /// <summary>
     /// The native node audio should be attached to, built on first use. IntPtr.Zero when there is no
@@ -368,7 +358,10 @@ public sealed class AudioMixerGroup : EngineObject
     }
 
     /// <summary>Effects applied to everything routed into this group, in order.</summary>
-    public IReadOnlyList<AudioEffect> Effects => _effects;
+    public IReadOnlyList<AudioEffect> Effects
+    {
+        get { EnsureLoaded(); return _effects; }
+    }
 
     /// <summary>Adds an effect to this bus. The group owns it and destroys it when it is removed.</summary>
     public void AddEffect(AudioEffect effect)
@@ -537,16 +530,12 @@ public sealed class AudioMixerGroup : EngineObject
     /// <summary>
     /// Releases every bus feeding this one, which rebuilds from whatever asks for it next.
     /// </summary>
-    /// <remarks>
-    /// Read from the already bound mixer rather than through <see cref="Mixer"/>, which resolves the
-    /// owning asset. Teardown is the wrong moment to load one, and anything that got as far as
-    /// building a node has a bound mixer already, since that is where its parent came from.
-    /// </remarks>
+    // Teardown is the wrong moment to load the mixer, and a mixer that is not loaded has built nothing to release.
     private void ReleaseChildren()
     {
-        AudioMixer owner = _mixer;
+        AudioMixer? owner = _owningMixer;
 
-        if (owner.IsNotValid())
+        if (owner is null || !owner.IsLoaded)
             return;
 
         foreach (AudioMixerGroup group in owner.Groups)
@@ -562,7 +551,7 @@ public sealed class AudioMixerGroup : EngineObject
         RefreshEffects();
     }
 
-    protected override void OnDispose() => ReleaseNative();
+    protected override void OnUnload() => ReleaseNative();
 
     /// <summary>Converts a decibel level to a linear gain, with <see cref="MinVolumeDB"/> as silence.</summary>
     public static float DecibelsToLinear(float decibels)
@@ -578,7 +567,7 @@ public sealed class AudioMixerGroup : EngineObject
 /// that sources feed into, so volumes can be set per category rather than per source.
 /// </summary>
 [CreateAssetMenu("Audio Mixer", Extension = ".audiomixer", Order = 1100)]
-public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
+public sealed class AudioMixer : Asset, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
     private List<AudioMixerGroup> _groups = [];
@@ -941,7 +930,10 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
     public void OnAfterDeserialize()
     {
         EnsureBound();
-        ValidateHierarchy();
+
+        // Groups read from a cache are other assets, loaded later on the main thread. Only groups written inline can be checked here.
+        if (_groups.TrueForAll(g => g is null || !g.IsFromDatabase))
+            ValidateHierarchy();
     }
 
     /// <summary>
@@ -988,14 +980,16 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
         }
     }
 
+    // A group from the database already knows its mixer from its own content, and may not be loaded yet.
     private void EnsureBound()
     {
         for (int i = 0; i < _groups.Count; i++)
         {
-            if (_groups[i].IsNotValid()) continue;
+            AudioMixerGroup group = _groups[i];
+            if (group.IsNotValid() || group.IsFromDatabase) continue;
 
-            _groups[i].Bind(this);
-            _groups[i].EnsureIdentity(i);
+            group.Bind(this);
+            group.EnsureIdentity(i);
         }
     }
 }

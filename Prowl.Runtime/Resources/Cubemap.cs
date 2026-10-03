@@ -25,10 +25,10 @@ public sealed class Cubemap : Texture, ISerializable
     private int _mipLevels;
 
     /// <summary>Edge length of each (square) face, in texels.</summary>
-    public uint Size { get { EnsureNotDisposed(); return _size; } private set => _size = value; }
+    public uint Size { get { EnsureLoaded(); return _size; } private set => _size = value; }
 
     /// <summary>Number of mip levels allocated (1 when no chain).</summary>
-    public int MipLevels { get { EnsureNotDisposed(); return _mipLevels; } private set => _mipLevels = value; }
+    public int MipLevels { get { EnsureLoaded(); return _mipLevels; } private set => _mipLevels = value; }
 
     private bool _mipChain;
 
@@ -55,7 +55,7 @@ public sealed class Cubemap : Texture, ISerializable
     /// <summary>Allocates (or reallocates) all six faces and mip levels, discarding contents.</summary>
     public void Recreate(uint size, bool mipChain)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateSize(size);
 
         Size = size;
@@ -80,7 +80,7 @@ public sealed class Cubemap : Texture, ISerializable
         SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
     }
 
-    public uint MipSize(int mip) { EnsureNotDisposed(); return Math.Max(1u, Size >> mip); }
+    public uint MipSize(int mip) { EnsureLoaded(); return Math.Max(1u, Size >> mip); }
 
     private static int MipCountFor(uint size)
     {
@@ -95,7 +95,7 @@ public sealed class Cubemap : Texture, ISerializable
     /// <summary>Total bytes for one face at the given mip level.</summary>
     public int FaceByteSize(int mip)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         uint s = MipSize(mip);
         return (int)(s * s) * BytesPerPixel();
     }
@@ -103,7 +103,7 @@ public sealed class Cubemap : Texture, ISerializable
     /// <summary>Upload pixel data into one face's mip level.</summary>
     public unsafe void SetFaceData<T>(int face, Memory<T> data, int mip = 0) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         uint s = MipSize(mip);
         uint bytes = (uint)(s * s) * (uint)BytesPerPixel();
         fixed (void* ptr = data.Span)
@@ -135,7 +135,7 @@ public sealed class Cubemap : Texture, ISerializable
     /// disposed with the cubemap.</summary>
     public Framebuffer GetFaceTarget(int face, int mip, bool withDepth = false)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         int key = (face * 64 + mip) * 2 + (withDepth ? 1 : 0);
         if (_faceTargets.TryGetValue(key, out var fb) && !fb.IsDisposed)
             return fb;
@@ -165,14 +165,20 @@ public sealed class Cubemap : Texture, ISerializable
         return fb;
     }
 
-    protected override void OnDispose()
+    protected internal override long EstimateBytes()
+        => (long)(6 * _size * _size * (ulong)GetBytesPerPixel(ImageFormatUnchecked) * (IsMipmappedUnchecked ? 4.0 / 3.0 : 1.0));
+
+    protected override void OnUnload()
     {
-        foreach (var fb in _faceTargets.Values)
-            fb?.Dispose();
-        _faceTargets.Clear();
+        if (_faceTargets != null)
+        {
+            foreach (var fb in _faceTargets.Values)
+                fb?.Dispose();
+            _faceTargets.Clear();
+        }
         if (_captureDepth.IsValid()) _captureDepth.Dispose();
         _captureDepth = null;
-        base.OnDispose();
+        base.OnUnload();
     }
 
     private static void ValidateSize(uint size)

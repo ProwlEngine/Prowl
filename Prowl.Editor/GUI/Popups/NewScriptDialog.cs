@@ -339,12 +339,12 @@ public static class NewScriptDialog
             .Replace("{[className]}", className);
     }
 
-    [ScriptTemplate("Character Controller",
+    [ScriptTemplate("Player Controller",
         "First/third-person character with WASD + jump. RequireComponent auto-adds a CharacterController when the script is attached.",
         EditorIcons.PersonRunning, Order = 10)]
-    private static string CharacterControllerTemplate(string className)
+    private static string PlayerControllerTemplate(string className)
     {
-        return EditorApplication.GetEmbeddedResourceText("NewCharacterController.cstemplate")
+        return EditorApplication.GetEmbeddedResourceText("NewPlayerController.cstemplate")
             .Replace("{[className]}", className);
     }
 
@@ -358,7 +358,7 @@ public static class NewScriptDialog
     }
 
     [ScriptTemplate("First Person Camera",
-        "Mouse-look yaw/pitch for a camera rig. Only active while the cursor is locked pair with a Character Controller.",
+        "Mouse-look yaw/pitch for a camera rig. Only active while the cursor is locked pair with a Player Controller.",
         EditorIcons.Video, Order = 30)]
     private static string FirstPersonCameraTemplate(string className)
     {

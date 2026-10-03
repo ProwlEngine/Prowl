@@ -120,9 +120,11 @@ public class PrismaticJoint : PhysicsJoint
         get => motorTargetVelocity;
         set
         {
+            if (motorTargetVelocity == value) return;
             motorTargetVelocity = value;
             if (IsLive(prismaticJoint?.Motor))
                 prismaticJoint.Motor.TargetVelocity = value;
+            WakeBodies();
         }
     }
 
@@ -134,9 +136,11 @@ public class PrismaticJoint : PhysicsJoint
         get => motorMaxForce;
         set
         {
+            if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(prismaticJoint?.Motor))
                 prismaticJoint.Motor.MaximumForce = value;
+            WakeBodies();
         }
     }
 
@@ -155,7 +159,9 @@ public class PrismaticJoint : PhysicsJoint
     protected override void CreateConstraint(World world, RigidBody body1, RigidBody body2)
     {
         Jitter2.LinearMath.JVector worldAnchor = LocalToWorld(anchor, Body1.Transform);
-        Jitter2.LinearMath.JVector worldAxis = LocalDirToWorld(axis, Body1.Transform);
+        // Jitter drives and measures the connected side relative to this body, so the axis is reversed to
+        // make a positive motor, angle or distance mean this body moving along +axis.
+        Jitter2.LinearMath.JVector worldAxis = -LocalDirToWorld(axis, Body1.Transform);
 
         var limit = new LinearLimit(minDistance, maxDistance);
 
@@ -164,7 +170,7 @@ public class PrismaticJoint : PhysicsJoint
 
         joint = prismaticJoint;
 
-        if (hasMotor && prismaticJoint.Motor != null)
+        if (hasMotor && IsLive(prismaticJoint.Motor))
         {
             prismaticJoint.Motor.TargetVelocity = motorTargetVelocity;
             prismaticJoint.Motor.MaximumForce = motorMaxForce;

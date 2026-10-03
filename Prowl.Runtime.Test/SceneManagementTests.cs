@@ -360,7 +360,7 @@ public class SceneManagementTests : RuntimeTestBase
         Scene.ProcessPendingLoad();
 
         Assert.Same(second, Scene.Current);
-        Assert.False(first.IsActive);
+        Assert.True(first.IsDisposed); // replaced before it loaded, so nothing else would ever free it
     }
 
     // Loading the scene that is already current used to dispose it and then enable the corpse.

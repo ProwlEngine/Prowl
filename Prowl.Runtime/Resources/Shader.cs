@@ -19,14 +19,14 @@ namespace Prowl.Runtime.Resources;
 /// The Shader class itself doesnt do much, It stores the properties of the shader and the shader code and Keywords.
 /// This is used in conjunction with the Material class to create shader variants with the correct keywords and to render things
 /// </summary>
-public sealed class Shader : EngineObject, ISerializationCallbackReceiver
+public sealed class Shader : Asset, ISerializationCallbackReceiver
 {
     /// <summary>Resolved material-facing default values (Range hints, actual default Texture2D/Texture3D
     /// instances). Converted once from <see cref="ShaderDefinition.Properties"/> at import time,
     /// since the ShaderDef library only knows string-named texture defaults.</summary>
     [SerializeField]
-    private ShaderProperty[] _properties;
-    public IEnumerable<ShaderProperty> Properties { get { EnsureNotDisposed(); return _properties; } }
+    private ShaderProperty[] _properties = [];
+    public IEnumerable<ShaderProperty> Properties { get { EnsureLoaded(); return _properties ?? []; } }
 
     [SerializeField]
     private ShaderDefinition _definition;
@@ -34,7 +34,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     [SerializeField]
     private ShaderSnapshot _snapshot;
 
-    public IEnumerable<ShaderPass> Passes { get { EnsureNotDisposed(); EnsureCreated(); return _definition.Passes ?? []; } }
+    public IEnumerable<ShaderPass> Passes { get { EnsureLoaded(); EnsureCreated(); return _definition?.Passes ?? []; } }
 
     /// <summary>Set by the editor (Prowl.Editor's CompilationWorker) so a shader bound from a cached
     /// snapshot can still compile a missing variant on demand. Never set outside the editor - builds
@@ -68,7 +68,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     /// compiler and only plays back whatever variants were baked ahead of time.</summary>
     private void EnsureCreated()
     {
-        if (_definition.IsCreated)
+        if (_definition == null || _definition.IsCreated)
             return;
 
         if (Application.IsEditor && EditorCompiler != null && EditorFallbackProvider != null)
@@ -79,7 +79,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public ShaderPass GetPass(int passIndex)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         EnsureCreated();
         ShaderPass[] passes = _definition.Passes!;
         passIndex = Maths.Clamp(passIndex, 0, passes.Length - 1);
@@ -90,7 +90,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     /// draw-time variant selection goes through <see cref="GetPass(int)"/> instead).</summary>
     public IReadOnlyList<Variant> GetCompiledVariants(int passIndex)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         PassSnapshot[] passes = _snapshot.Passes ?? [];
         if (passIndex < 0 || passIndex >= passes.Length)
             return [];
@@ -99,14 +99,14 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public ShaderPass GetPass(string passName)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         EnsureCreated();
         return _definition.GetPass(passName);
     }
 
     public int GetPassIndex(string passName)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         return _definition.GetPassIndex(passName);
     }
 
@@ -117,29 +117,25 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public int? GetPassWithTag(string tag, string? tagValue = null)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         EnsureCreated();
         return _definition.GetPassWithTag(tag, tagValue);
     }
 
     public List<int> GetPassesWithTag(string tag, string? tagValue = null)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         EnsureCreated();
         return _definition.GetPassesWithTag(tag, tagValue);
     }
 
     /// <summary>
-    /// Load a default embedded shader. Pulls the shared instance from <see cref="BuiltInAssets"/> if
-    /// initialized, otherwise falls back to a direct parse.
+    /// Load a default embedded shader. Pulls the shared instance from <see cref="BuiltInAssets"/>.
     /// </summary>
-    public static Shader? LoadDefault(DefaultShader shader)
-    {
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(shader)) is Shader cached)
-            return cached;
+    public static Shader? LoadDefault(DefaultShader shader) => BuiltInAssets.Load<Shader>(BuiltInAssets.GuidFor(shader));
 
-        return ParseDefault(shader);
-    }
+    /// <summary>The built-in shader without loading it, for code that runs while another asset loads.</summary>
+    internal static Shader? GetDefault(DefaultShader shader) => AssetDatabase.Get<Shader>(BuiltInAssets.GuidFor(shader));
 
     /// <summary>
     /// Raw load of a precompiled default shader blob invoked by <see cref="BuiltInAssets"/> on first

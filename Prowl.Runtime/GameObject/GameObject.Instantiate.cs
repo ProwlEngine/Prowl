@@ -4,7 +4,6 @@
 using System;
 
 using Prowl.Echo;
-using Prowl.Echo.Cloning;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -257,7 +256,7 @@ public partial class GameObject
 
         try
         {
-            return Cloner.Clone(original);
+            return ObjectCopy.Clone(original);
         }
         catch (Exception ex)
         {

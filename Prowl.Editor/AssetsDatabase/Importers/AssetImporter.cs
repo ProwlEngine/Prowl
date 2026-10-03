@@ -40,4 +40,12 @@ public abstract class AssetImporter
     /// through the dedicated plugin pipeline rather than the asset manifest.
     /// </summary>
     public virtual bool IsEditorOnlyAsset => false;
+
+    /// <summary>
+    /// How the source file holds the asset when it is the asset itself written by Echo, which is what lets an edit
+    /// made in memory be saved back to it. None for a file imported from any other format.
+    /// </summary>
+    public virtual EchoSource Source => EchoSource.None;
 }
+
+public enum EchoSource { None, Text, Binary }

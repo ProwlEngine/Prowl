@@ -55,7 +55,6 @@ public enum DefaultModel
     Sphere,
     Cylinder,
     Plane,
-    SkyDome,
 }
 
 /// <summary>

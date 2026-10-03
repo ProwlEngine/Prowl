@@ -20,6 +20,18 @@ public abstract class PhysicsConstraint : MonoBehaviour
 {
     [SerializeField] protected Rigidbody3D connectedBody;
     [SerializeField] protected bool enabledOnStart = true;
+    [SerializeField] protected bool collideConnected;
+
+    /// <summary>Whether the two connected bodies still collide with each other.</summary>
+    public bool CollideConnected
+    {
+        get => collideConnected;
+        set
+        {
+            collideConnected = value;
+            ApplyCollideConnected();
+        }
+    }
 
     /// <summary>
     /// The rigidbody connected by this constraint. If null, the constraint connects to the world.
@@ -67,15 +79,28 @@ public abstract class PhysicsConstraint : MonoBehaviour
         }
     }
 
+    private PhysicsWorld _registeredWorld;
+
     public override void OnEnable()
     {
+        Resources.Scene scene = GameObject.Scene;
+        _registeredWorld = scene.IsValid() ? scene.Physics : null;
+        _registeredWorld?.RegisterConstraint(this);
         RecreateConstraint();
     }
 
     public override void OnDisable()
     {
+        _registeredWorld?.UnregisterConstraint(this);
+        _registeredWorld = null;
         DestroyConstraint();
     }
+
+    /// <summary>Whether this constraint attaches to the given rigidbody, on either end.</summary>
+    internal bool Connects(Rigidbody3D body) => body == connectedBody || body == Body1;
+
+    /// <summary>Rebuilds the constraint against the bodies as they are now, after one of them was recreated.</summary>
+    internal void Rebind() => RecreateConstraint();
 
     public override void OnValidate()
     {
@@ -120,6 +145,19 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected static bool IsLive(Constraint constraint) => constraint?.IsValid == true;
 
     /// <summary>
+    /// Wakes the bodies this constraint joins. A sleeping body ignores a motor whose speed or strength
+    /// changed until something else disturbs it, so motor setters call this.
+    /// </summary>
+    protected void WakeBodies()
+    {
+        foreach (Constraint constraint in GetConstraints())
+        {
+            if (constraint.Body1.MotionType == MotionType.Dynamic) constraint.Body1.SetActivationState(true);
+            if (constraint.Body2.MotionType == MotionType.Dynamic) constraint.Body2.SetActivationState(true);
+        }
+    }
+
+    /// <summary>
     /// Removes a constraint from the world that owns it. The constraint names its own bodies, so this
     /// still works during teardown, when the owning Rigidbody3D component may already be gone and
     /// reaching back through it would throw.
@@ -140,7 +178,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
         DestroyConstraint();
 
         Rigidbody3D body1 = Body1;
-        if (body1.IsNotValid() || body1._body?.IsValid != true)
+        if (body1.IsNotValid() || !body1.IsSimulated)
             return;
 
         // Reached from property setters as well as the lifecycle, so the scene can be mid-teardown
@@ -152,15 +190,25 @@ public abstract class PhysicsConstraint : MonoBehaviour
         // No connected body means "anchor to the world". Jitter keeps a pinned static NullBody for
         // exactly that; creating a fresh static body here would leak one into the world on every
         // recreate, and this runs from OnEnable, OnValidate and every property setter.
-        RigidBody body2 = connectedBody.IsNotValid() || connectedBody._body?.IsValid != true
+        RigidBody body2 = connectedBody.IsNotValid() || !connectedBody.IsSimulated
             ? world.NullBody
-            : connectedBody._body;
+            : connectedBody.Native;
 
-        CreateConstraint(world, body1._body, body2);
+        CreateConstraint(world, body1.Native, body2);
 
         // Set initial enabled state. Through Active so a joint's constraints all get it, not just the
         // single one GetConstraint can name.
         Active = enabledOnStart;
+        ApplyCollideConnected();
+    }
+
+    private void ApplyCollideConnected()
+    {
+        Resources.Scene scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsNotValid() || scene.Physics == null) return;
+
+        foreach (Constraint constraint in GetConstraints())
+            scene.Physics.SetCollidesConnected(constraint, collideConnected);
     }
 
     #region Gizmos
@@ -252,7 +300,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected Jitter2.LinearMath.JVector LocalToWorld(Float3 localPos, Transform transform)
     {
         Float3 worldPos = transform.TransformPoint(localPos);
-        return new Jitter2.LinearMath.JVector(worldPos.X, worldPos.Y, worldPos.Z);
+        return worldPos.ToJitter();
     }
 
     /// <summary>
@@ -261,6 +309,6 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected Jitter2.LinearMath.JVector LocalDirToWorld(Float3 localDir, Transform transform)
     {
         Float3 worldDir = transform.TransformDirection(localDir);
-        return new Jitter2.LinearMath.JVector(worldDir.X, worldDir.Y, worldDir.Z);
+        return worldDir.ToJitter();
     }
 }

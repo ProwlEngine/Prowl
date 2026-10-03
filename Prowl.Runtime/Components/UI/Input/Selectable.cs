@@ -183,7 +183,7 @@ public class Selectable : UIBehaviour,
     [SerializeIgnore] private Color _fromColor = Color.White;
     [SerializeIgnore] private Color _toColor = Color.White;
     [SerializeIgnore] private float _transitionElapsed;
-    [SerializeIgnore] private AssetRef<Sprite> _authoredSprite;
+    [SerializeIgnore] private Sprite? _authoredSprite;
     [SerializeIgnore] private bool _authoredSpriteCaptured;
 
     /// <summary>The current high-level state. Read-only for derived classes.</summary>
@@ -224,7 +224,7 @@ public class Selectable : UIBehaviour,
             return;
         }
 
-        _transitionElapsed += Time.DeltaTime;
+        _transitionElapsed += Time.UnscaledDeltaTime;
         float t = Maths.Clamp(_transitionElapsed / dur, 0f, 1f);
         _displayedColor = Color.Lerp(_fromColor, _toColor, t);
         TargetGraphic.Color = _displayedColor;
@@ -251,6 +251,8 @@ public class Selectable : UIBehaviour,
     {
         if (e.Button != MouseButton.Left) return;
 
+        // The press belongs to the innermost widget, so an enclosing one doesn't show pressed too.
+        e.Use();
         if (!IsInteractable()) return;
 
         _isPressed = true;
@@ -323,7 +325,7 @@ public class Selectable : UIBehaviour,
             _authoredSpriteCaptured = true;
         }
 
-        AssetRef<Sprite> next = state switch
+        Sprite? next = state switch
         {
             SelectionState.Disabled    => _spriteState.DisabledSprite,
             SelectionState.Pressed     => _spriteState.PressedSprite,
@@ -332,7 +334,7 @@ public class Selectable : UIBehaviour,
             _                          => _authoredSprite,
         };
 
-        image.Sprite = next.IsExplicitNull ? _authoredSprite : next;
+        image.Sprite = next is null ? _authoredSprite : next;
     }
 
     private SelectionState ComputeState()

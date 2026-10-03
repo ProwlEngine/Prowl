@@ -81,6 +81,9 @@ public abstract class Collider : MonoBehaviour
     /// <summary>The Jitter body this collider's shapes are currently on, or null when it is detached.</summary>
     internal Jitter2.Dynamics.RigidBody AttachedBody => _attachedBody;
 
+    /// <summary>The Rigidbody3D whose body this collider's shapes are on, or null for static geometry.</summary>
+    public Rigidbody3D AttachedRigidbody => _attachedRigidbody3D.IsValid() ? _attachedRigidbody3D : null;
+
     /// <summary>
     /// Returns true if this collider is already attached to a rigidbody.
     /// Used to prevent multiple rigidbodies from claiming the same collider.
@@ -101,7 +104,7 @@ public abstract class Collider : MonoBehaviour
 
         // Attach to the new rigidbody
         _attachedRigidbody3D = rigidbody;
-        _attachedBody = rigidbody._body;
+        _attachedBody = rigidbody.Native;
         RegisterShapes();
         return true;
     }
@@ -154,6 +157,7 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     public virtual void Rebuild()
     {
+        AssertOwner();
         if (_attachedBody == null) return; // not in the world yet, OnEnable will build it
         Reattach();
     }
@@ -327,7 +331,7 @@ public abstract class Collider : MonoBehaviour
             return shapes;
 
         Float4x4 linear = Float4x4.CreateTRS(Float3.Zero, rotation, scale);
-        var jTranslation = new JVector(translation.X, translation.Y, translation.Z);
+        var jTranslation = translation.ToJitter();
         var jLinear = new JMatrix(
             linear[0, 0], linear[0, 1], linear[0, 2],
             linear[1, 0], linear[1, 1], linear[1, 2],
@@ -335,7 +339,7 @@ public abstract class Collider : MonoBehaviour
 
         var transformedShapes = new RigidBodyShape[shapes.Length];
         for (int i = 0; i < shapes.Length; i++)
-            transformedShapes[i] = new TransformedShape(shapes[i], jTranslation, jLinear);
+            transformedShapes[i] = new PlacedShape(shapes[i], jTranslation, jLinear);
 
         return transformedShapes;
     }
@@ -345,7 +349,7 @@ public abstract class Collider : MonoBehaviour
     /// static geometry. A disabled rigidbody is skipped because its Jitter body has been removed, so
     /// attaching to it would drop the collider out of the world entirely.
     /// </summary>
-    private Rigidbody3D FindOwningRigidbody()
+    internal Rigidbody3D FindOwningRigidbody()
     {
         foreach (Rigidbody3D rb in GetComponentsInParent<Rigidbody3D>())
             if (rb.IsValid() && rb.EnabledInHierarchy) return rb;
@@ -408,4 +412,27 @@ public abstract class Collider : MonoBehaviour
     protected virtual void OnAutoRebuild() { }
 
     public override void OnValidate() => Rebuild();
+}
+
+internal sealed class PlacedShape : TransformedShape
+{
+    private readonly JMatrix _inverse;
+
+    public PlacedShape(RigidBodyShape shape, in JVector translation, in JMatrix transform) : base(shape, translation, transform)
+    {
+        JMatrix.Inverse(transform, out _inverse);
+    }
+
+    public override bool LocalRayCast(in JVector origin, in JVector direction, out JVector normal, out float lambda)
+    {
+        // Points along the ray keep their lambda through the affine map, and normals go back through the inverse transpose.
+        JVector innerOrigin = JVector.Transform(origin - Translation, _inverse);
+        JVector innerDirection = JVector.Transform(direction, _inverse);
+
+        bool hit = OriginalShape.LocalRayCast(innerOrigin, innerDirection, out JVector innerNormal, out lambda);
+        // A ray starting inside the shape hits at once with no normal, which must stay zero rather than become NaN.
+        bool hasNormal = hit && innerNormal.LengthSquared() > 0f;
+        normal = hasNormal ? JVector.Normalize(JVector.TransposedTransform(innerNormal, _inverse)) : JVector.Zero;
+        return hit;
+    }
 }

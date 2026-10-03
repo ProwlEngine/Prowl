@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
@@ -45,21 +44,13 @@ public class InputActionMapEditor : AssetImporterEditor
     {
         if (asset is not InputActionMap map || map.IsNotValid()) return;
 
-        // Restored onto the live instance so anything already holding this map sees the revert, rather
-        // than being left pointing at the discarded edits.
-        Serializer.DeserializeInto(baseline, map);
+        // Refilled in place, so anything already holding this map sees the revert.
+        EditorAssetBackend.Instance?.RevertToSaved(map);
         _selectedBindingIdx = -1;
     }
 
-    /// <summary>Serializes the map as its file form - AssetID cleared so the whole object is written
-    /// rather than an $assetId reference back to itself.</summary>
-    private static EchoObject Serialize(InputActionMap map)
-    {
-        Guid savedId = map.AssetID;
-        map.AssetID = Guid.Empty;
-        try { return Serializer.Serialize(typeof(object), map); }
-        finally { map.AssetID = savedId; }
-    }
+    /// <summary>Serializes the map as its file form.</summary>
+    private static EchoObject Serialize(InputActionMap map) => Serializer.Serialize(typeof(object), map);
 
     // Listening state which binding slot we're listening for
     private bool _listeningForBinding;
@@ -750,22 +741,7 @@ public class InputActionMapEditor : AssetImporterEditor
     }
 
     private static bool SaveMap(InputActionMap map, AssetEntry entry)
-    {
-        if (Project.Current == null) return false;
-
-        try
-        {
-            string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
-            File.WriteAllText(absolutePath, Serialize(map).WriteToString());
-            EditorAssetBackend.Instance?.Reimport(entry.Guid);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to save input actions '{entry.Path}': {ex.Message}");
-            return false;
-        }
-    }
+        => EditorAssetBackend.Instance?.SaveAsset(entry.Guid, Serialize(map)) ?? false;
 
     private static string FindUniqueName(InputActionMap map, string baseName)
         => Utils.UniqueNames.MakeUnique(baseName, n => map.FindAction(n) != null,

@@ -195,7 +195,7 @@ public static class RenderCommandExtensions
     }
 
     public static void SetTexture(this PropertySet set, PropertyID name, AssetRef<Texture2D> texture)
-        => set.SetTexture(name, texture.Res);
+        => set.SetTexture(name, texture.Get());
 
     // ─────────────────────── Material / per-object properties ───────────────────────
 

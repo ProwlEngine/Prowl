@@ -11,34 +11,21 @@ namespace Prowl.Runtime.Test;
 
 public class GameResourcesTests : IDisposable
 {
-    private sealed class FakeTexture : EngineObject { }
-    private sealed class FakeMesh : EngineObject { }
-    private sealed class FakePrefab : EngineObject { }
-
-    private sealed class FakeBackend : AssetBackendBase
-    {
-        public readonly Dictionary<Guid, EngineObject> Assets = [];
-        public readonly List<Guid> Loaded = [];
-
-        protected override EngineObject? LoadFresh(Guid assetId)
-        {
-            Loaded.Add(assetId);
-            if (!Assets.TryGetValue(assetId, out var asset)) return null;
-            SetLoaded(assetId, asset);
-            return asset;
-        }
-    }
+    private sealed class FakeTexture : Asset { }
+    private sealed class FakeMesh : Asset { }
+    private sealed class FakePrefab : Asset { }
 
     private static readonly Guid Grass = Guid.NewGuid();
     private static readonly Guid Hero = Guid.NewGuid();
     private static readonly Guid HeroBody = Guid.NewGuid();
 
-    private readonly FakeBackend _backend = new();
-    private readonly AssetBackendBase? _previousBackend = AssetDatabase.Current;
+    private readonly MemoryAssetBackend _backend = new();
+    private readonly AssetBackend? _previousBackend = AssetDatabase.Backend;
 
     public GameResourcesTests()
     {
-        AssetDatabase.Current = _backend;
+        AssetDatabase.ClearForTests();
+        AssetDatabase.Backend = _backend;
         Initialize(
             Entry("Art/Resources/Textures/Grass.png", Grass, new FakeTexture()),
             Entry("Art/Resources/Models/Hero.fbx", Hero, new FakePrefab()),
@@ -47,17 +34,19 @@ public class GameResourcesTests : IDisposable
 
     public void Dispose()
     {
-        GameResources.Initialize(null);
-        AssetDatabase.Current = _previousBackend;
+        AssetDatabase.Backend = _previousBackend;
+        AssetDatabase.ClearForTests();
     }
 
-    private ResourceEntry Entry(string assetPath, Guid guid, EngineObject asset, string? subAsset = null)
+    private ResourceEntry Entry(string assetPath, Guid guid, Asset asset, string? subAsset = null)
     {
-        _backend.Assets[guid] = asset;
-        return new ResourceEntry(GameResources.GetLoadPath(assetPath, subAsset)!, guid, asset.GetType().AssemblyQualifiedName!);
+        _backend.Add(guid, asset, assetPath);
+        return new ResourceEntry(AssetDatabase.GetLoadPath(assetPath, subAsset)!, guid, asset.GetType().AssemblyQualifiedName!);
     }
 
-    private static void Initialize(params ResourceEntry[] entries) => GameResources.Initialize(entries);
+    private void Initialize(params ResourceEntry[] entries) => _backend.ResourceEntries = entries;
+
+    private static Guid IdOf(Asset? asset) => asset is null ? Guid.Empty : asset.AssetID;
 
     [Theory]
     [InlineData("Resources/Grass.png", "Grass")]
@@ -69,7 +58,7 @@ public class GameResourcesTests : IDisposable
     [InlineData("Resources/Folder/Resources.png", "Folder/Resources")]
     public void GetLoadPath_IsThePathBelowTheNearestResourcesFolder(string assetPath, string expected)
     {
-        Assert.Equal(expected, GameResources.GetLoadPath(assetPath));
+        Assert.Equal(expected, AssetDatabase.GetLoadPath(assetPath));
     }
 
     [Theory]
@@ -79,13 +68,13 @@ public class GameResourcesTests : IDisposable
     [InlineData("")]
     public void GetLoadPath_IsNullOutsideResourcesFolders(string assetPath)
     {
-        Assert.Null(GameResources.GetLoadPath(assetPath));
+        Assert.Null(AssetDatabase.GetLoadPath(assetPath));
     }
 
     [Fact]
     public void GetLoadPath_AppendsTheSubAssetName()
     {
-        Assert.Equal("Models/Hero#Body", GameResources.GetLoadPath("Art/Resources/Models/Hero.fbx", "Body"));
+        Assert.Equal("Models/Hero#Body", AssetDatabase.GetLoadPath("Art/Resources/Models/Hero.fbx", "Body"));
     }
 
     [Theory]
@@ -96,8 +85,8 @@ public class GameResourcesTests : IDisposable
     [InlineData("Assets/Art/Resources/Textures/Grass.png")]
     public void Assets_ResolveByLoadPathOrCopiedPath(string path)
     {
-        Assert.Equal(Grass, GameResources.GetGuid(path));
-        Assert.True(GameResources.Exists(path));
+        Assert.Equal(Grass, AssetDatabase.FindResourceGuid<Asset>(path));
+        Assert.Equal(Grass, IdOf(AssetDatabase.FindResource<FakeTexture>(path)));
     }
 
     [Theory]
@@ -105,15 +94,15 @@ public class GameResourcesTests : IDisposable
     [InlineData("Art/Resources/Models/Hero.fbx#Body")]
     public void SubAssets_ResolveByLoadPathOrCopiedPath(string path)
     {
-        Assert.Equal(HeroBody, GameResources.GetGuid(path));
+        Assert.Equal(HeroBody, AssetDatabase.FindResourceGuid<Asset>(path));
     }
 
     [Fact]
     public void ParentAndSubAsset_ResolveSeparately()
     {
-        Assert.Equal(Hero, GameResources.GetGuid("Art/Resources/Models/Hero.fbx"));
-        Assert.Equal(HeroBody, GameResources.GetGuid("Art/Resources/Models/Hero.fbx#Body"));
-        Assert.Equal(Guid.Empty, GameResources.GetGuid("Models/Hero#Missing"));
+        Assert.Equal(Hero, AssetDatabase.FindResourceGuid<Asset>("Art/Resources/Models/Hero.fbx"));
+        Assert.Equal(HeroBody, AssetDatabase.FindResourceGuid<Asset>("Art/Resources/Models/Hero.fbx#Body"));
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Asset>("Models/Hero#Missing"));
     }
 
     [Theory]
@@ -123,8 +112,8 @@ public class GameResourcesTests : IDisposable
     [InlineData("")]
     public void PathsThatDoNotMapToAResource_ResolveToNothing(string path)
     {
-        Assert.Equal(Guid.Empty, GameResources.GetGuid(path));
-        Assert.False(GameResources.Exists(path));
+        Assert.Equal(Guid.Empty, AssetDatabase.FindResourceGuid<Asset>(path));
+        Assert.Null(AssetDatabase.FindResource<Asset>(path));
     }
 
     [Fact]
@@ -135,11 +124,11 @@ public class GameResourcesTests : IDisposable
             Entry("Resources/Enemy.png", texture, new FakeTexture()),
             Entry("Resources/Enemy.prefab", prefab, new FakePrefab()));
 
-        Assert.Same(_backend.Assets[prefab], GameResources.Load<FakePrefab>("Enemy"));
-        Assert.Same(_backend.Assets[texture], GameResources.Load<FakeTexture>("Enemy"));
-        Assert.Null(GameResources.Load<FakeMesh>("Enemy"));
-        Assert.Equal(prefab, GameResources.GetGuid<FakePrefab>("Enemy"));
-        Assert.Equal(texture, GameResources.GetGuid("Enemy"));
+        Assert.Equal(prefab, IdOf(AssetDatabase.FindResource<FakePrefab>("Enemy")));
+        Assert.Equal(texture, IdOf(AssetDatabase.FindResource<FakeTexture>("Enemy")));
+        Assert.Null(AssetDatabase.FindResource<FakeMesh>("Enemy"));
+        Assert.Equal(prefab, AssetDatabase.FindResourceGuid<FakePrefab>("Enemy"));
+        Assert.Equal(texture, AssetDatabase.FindResourceGuid<Asset>("Enemy"));
     }
 
     [Fact]
@@ -150,9 +139,9 @@ public class GameResourcesTests : IDisposable
             Entry("Resources/Enemy.png", texture, new FakeTexture()),
             Entry("Resources/Enemy.prefab", prefab, new FakePrefab()));
 
-        GameResources.Load<FakePrefab>("Enemy");
+        AssetDatabase.FindResource<FakePrefab>("Enemy");
 
-        Assert.Equal([prefab], _backend.Loaded);
+        Assert.Equal([prefab], _backend.Reads.Keys);
     }
 
     [Fact]
@@ -163,30 +152,33 @@ public class GameResourcesTests : IDisposable
             Entry("A/Resources/Icons/Heart.png", first, new FakeTexture()),
             Entry("B/Resources/Icons/Heart.png", second, new FakeTexture()));
 
-        Assert.Same(_backend.Assets[first], GameResources.Load<FakeTexture>("Icons/Heart"));
-        Assert.Same(_backend.Assets[first], GameResources.Load<FakeTexture>("B/Resources/Icons/Heart.png"));
+        Assert.Equal(first, IdOf(AssetDatabase.FindResource<FakeTexture>("Icons/Heart")));
+        Assert.Equal(first, IdOf(AssetDatabase.FindResource<FakeTexture>("B/Resources/Icons/Heart.png")));
     }
 
     [Fact]
-    public void UnresolvedTypeName_IsCheckedOnceLoaded()
+    public void UnresolvedTypeName_IsCheckedAgainstTheAsset()
     {
         Guid guid = Guid.NewGuid();
-        _backend.Assets[guid] = new FakeTexture();
-        GameResources.Initialize([new ResourceEntry("Grass", guid, "")]);
+        _backend.Add(guid, new FakeTexture(), "Resources/Grass.png");
+        Initialize(new ResourceEntry("Grass", guid, ""));
 
-        Assert.Null(GameResources.Load<FakePrefab>("Grass"));
-        Assert.Same(_backend.Assets[guid], GameResources.Load<FakeTexture>("Grass"));
+        Assert.Null(AssetDatabase.FindResource<FakePrefab>("Grass"));
+        Assert.Equal(guid, IdOf(AssetDatabase.FindResource<FakeTexture>("Grass")));
     }
 
     [Fact]
-    public void LoadAll_ReturnsEveryResourceOfTheType()
+    public void FindAll_ReturnsEveryResourceOfTheType_Loaded()
     {
-        Assert.Equal([_backend.Assets[Grass]], GameResources.LoadAll<FakeTexture>());
-        Assert.Equal([_backend.Assets[Grass], _backend.Assets[Hero], _backend.Assets[HeroBody]], GameResources.LoadAll<EngineObject>());
+        List<FakeTexture> textures = AssetDatabase.FindAllResources<FakeTexture>();
+
+        Assert.Equal([Grass], textures.Select(IdOf));
+        Assert.All(textures, t => Assert.True(t.IsLoaded));
+        Assert.Equal([Grass, Hero, HeroBody], AssetDatabase.FindAllResources<Asset>().Select(IdOf));
     }
 
     [Fact]
-    public void LoadAll_InAFolderIncludesSubFoldersAndSubAssets()
+    public void FindAll_InAFolderIncludesSubFoldersAndSubAssets()
     {
         Guid heart = Guid.NewGuid(), star = Guid.NewGuid(), starSprite = Guid.NewGuid(), other = Guid.NewGuid();
         Initialize(
@@ -195,16 +187,14 @@ public class GameResourcesTests : IDisposable
             Entry("Resources/Icons/Small/Star.png", starSprite, new FakeTexture(), "Star"),
             Entry("Resources/Icons2/Other.png", other, new FakeTexture()));
 
-        var icons = GameResources.LoadAll<FakeTexture>("Icons");
-
-        Assert.Equal([heart, star, starSprite], icons.Select(i => _backend.Assets.First(a => a.Value == i).Key));
-        Assert.Equal(3, GameResources.LoadAll<FakeTexture>("Resources/Icons").Count);
+        Assert.Equal([heart, star, starSprite], AssetDatabase.FindAllResources<FakeTexture>("Icons").Select(IdOf));
+        Assert.Equal(3, AssetDatabase.FindAllResources<FakeTexture>("Resources/Icons").Count);
     }
 
     [Fact]
-    public void LoadAll_ForAFileReturnsItAndItsSubAssets()
+    public void FindAll_ForAFileReturnsItAndItsSubAssets()
     {
-        Assert.Equal([_backend.Assets[Hero], _backend.Assets[HeroBody]], GameResources.LoadAll<EngineObject>("Models/Hero"));
-        Assert.Equal([_backend.Assets[HeroBody]], GameResources.LoadAll<FakeMesh>("Art/Resources/Models/Hero.fbx"));
+        Assert.Equal([Hero, HeroBody], AssetDatabase.FindAllResources<Asset>("Models/Hero").Select(IdOf));
+        Assert.Equal([HeroBody], AssetDatabase.FindAllResources<FakeMesh>("Art/Resources/Models/Hero.fbx").Select(IdOf));
     }
 }

@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Rendering;
 /// the "Rendering" project setting (see <see cref="RenderPipelineManager"/>) to override the engine's
 /// <see cref="DefaultRenderPipeline"/> - this is the only pipeline every camera renders through.
 /// </summary>
-public abstract class RenderPipelineAsset : EngineObject
+public abstract class RenderPipelineAsset : Asset
 {
     public abstract RenderPipeline<CameraView> Pipeline { get; }
 }

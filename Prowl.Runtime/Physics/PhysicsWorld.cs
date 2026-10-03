@@ -43,10 +43,27 @@ public class PhysicsWorld
     /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
     /// pair is scoped to this world and is dropped when the world is cleared.
     /// </summary>
-    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.IgnoreCollisionBetween(bodyA, bodyB);
+    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => IgnoreCollisionsBetween([(bodyA, bodyB)]);
 
     /// <summary>Undoes <see cref="IgnoreCollisionBetween"/> for a pair.</summary>
-    public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.EnableCollisionBetween(bodyA, bodyB);
+    public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.SetCollisionsBetween([(bodyA, bodyB)], true);
+
+    /// <summary><see cref="IgnoreCollisionBetween"/> for many pairs at once.</summary>
+    public void IgnoreCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs)
+    {
+        _layerFilter.SetCollisionsBetween(pairs, false);
+        _contactFiltersChanged = true;
+    }
+
+    /// <summary><see cref="EnableCollisionBetween"/> for many pairs at once.</summary>
+    public void EnableCollisionsBetween(IEnumerable<(Rigidbody3D A, Rigidbody3D B)> pairs) => _layerFilter.SetCollisionsBetween(pairs, true);
+
+    /// <summary>Lets the two bodies of a constraint collide with each other, or keeps them apart.</summary>
+    internal void SetCollidesConnected(Jitter2.Dynamics.Constraints.Constraint constraint, bool collides)
+    {
+        _layerFilter.SetCollidesConnected(constraint, collides);
+        _contactFiltersChanged = true;
+    }
 
     /// <summary>Forgets every pair passed to <see cref="IgnoreCollisionBetween"/>.</summary>
     public void ClearIgnoredCollisions() => _layerFilter.ClearIgnoredCollisions();
@@ -106,9 +123,9 @@ public class PhysicsWorld
     internal readonly Dictionary<TerrainHeightmapProxy, ITerrainHeightProvider> _terrainProxies = [];
 
     private Float3 _gravity = new(0, -9.81f, 0);
-    private int _solverIterations = 8;
+    private int _solverIterations = 12;
     private int _relaxIterations = 4;
-    private int _substep = 2;
+    private int _substep = 3;
     private float _speculativeRelaxationFactor = 0.9f;
 
     /// <summary>Acceleration applied to every body with <see cref="Rigidbody3D.AffectedByGravity"/>.</summary>
@@ -244,30 +261,12 @@ public class PhysicsWorld
 
             float penetration = 0.0f;
 
-            // A zero normal means the shapes already overlapped at the start of the sweep, where
-            // Sweep reports lambda 0 and no direction. Recover the direction and depth from MPR/EPA.
-            if (normal.LengthSquared() <= 0)
-            {
-                lambda = 0.0f;
+            if (normal.LengthSquared() <= 0 && !ResolveStartContact(_shape, targetShape, _orientation, _origin,
+                    _direction, _maxDistance, ref pointA, ref pointB, out normal, out lambda, out penetration))
+                return;
 
-                bool resolved = NarrowPhase.MprEpa(
-                    _shape, targetShape,
-                    _orientation, targetBody.Data.Orientation,
-                    _origin, targetBody.Data.Position,
-                    out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
-
-                if (resolved && separation.LengthSquared() > 0)
-                {
-                    pointA = deepestA;
-                    pointB = deepestB;
-                    normal = JVector.Normalize(separation);
-                }
-                else
-                {
-                    penetration = 0.0f;
-                    normal = _direction;
-                }
-            }
+            // Starting in contact, a move along the surface or away from it is not stopped by it.
+            if (StartsAlong(lambda, penetration, _direction, normal)) return;
 
             Collider owner = _world.GetShapeOwner(targetShape);
             _hits.Add(new ShapeCastHit
@@ -276,15 +275,76 @@ public class PhysicsWorld
                 Fraction = lambda,
                 Distance = lambda * _maxDistance,
                 Penetration = penetration,
-                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Normal = -(normal.ToProwl()),
+                Point = pointA.ToProwl(),
+                HitPoint = pointB.ToProwl(),
                 Rigidbody = userData.Rigidbody,
                 Shape = targetShape,
                 Collider = owner,
                 Transform = ResolveHitTransform(userData.Rigidbody, owner)
             });
         }
+    }
+
+    // How far a move is tried ahead to tell whether it presses into a surface it starts exactly touching.
+    private const float ContactProbe = 1e-3f;
+
+    // Below this, a move is taken to run along a surface rather than into it.
+    private const float ApproachEpsilon = 1e-4f;
+
+    private static bool StartsAlong(float lambda, float penetration, in JVector direction, in JVector normal)
+        => lambda <= 0f && penetration < ContactProbe && JVector.Dot(direction, normal) <= ApproachEpsilon;
+
+    private static bool ResolveStartContact<TShape>(in TShape shape, RigidBodyShape target, in JQuaternion orientation,
+        in JVector origin, in JVector direction, float maxDistance,
+        ref JVector pointA, ref JVector pointB, out JVector normal, out float lambda, out float penetration)
+        where TShape : ISupportMappable
+    {
+        Jitter2.Dynamics.RigidBody body = target.RigidBody;
+        lambda = 0.0f;
+
+        if (NarrowPhase.MprEpa(shape, target, orientation, body.Data.Orientation, origin, body.Data.Position,
+                out JVector deepestA, out JVector deepestB, out JVector separation, out penetration)
+            && separation.LengthSquared() > 0)
+        {
+            normal = JVector.Normalize(separation);
+            pointA = deepestA;
+            pointB = deepestB;
+            return true;
+        }
+        penetration = 0.0f;
+
+        // Apart by a hair: the closest points give the real direction to the other shape.
+        if (NarrowPhase.Distance(shape, target, orientation, body.Data.Orientation, origin, body.Data.Position,
+                out JVector closestA, out JVector closestB, out JVector toward, out float gap))
+        {
+            float approach = JVector.Dot(direction, toward);
+            if (approach <= ApproachEpsilon)
+            {
+                normal = JVector.Zero;
+                return false;
+            }
+
+            pointA = closestA;
+            pointB = closestB;
+            normal = toward;
+            lambda = maxDistance > 0f ? Math.Clamp(gap / approach / maxDistance, 0f, 1f) : 0f;
+            return true;
+        }
+
+        // Exactly touching: a nudge along the move overlaps only if the move presses in.
+        if (NarrowPhase.MprEpa(shape, target, orientation, body.Data.Orientation, origin + direction * ContactProbe,
+                body.Data.Position, out deepestA, out deepestB, out separation, out _)
+            && separation.LengthSquared() > 0)
+        {
+            pointA = deepestA;
+            pointB = deepestB;
+            normal = JVector.Normalize(separation);
+            return true;
+        }
+
+        normal = JVector.Zero;
+        return false;
     }
 
     private struct OverlapSink<TShape> : ISink<IDynamicTreeProxy>
@@ -294,22 +354,31 @@ public class PhysicsWorld
         private readonly TShape _shape;
         private readonly JQuaternion _orientation;
         private readonly JVector _position;
+        private readonly JBoundingBox _bounds;
         private readonly List<ShapeCastHit> _hits;
         private readonly QueryFilter _filter;
 
         public OverlapSink(PhysicsWorld world, TShape shape, JQuaternion orientation,
-            JVector position, List<ShapeCastHit> hits, QueryFilter filter)
+            JVector position, JBoundingBox bounds, List<ShapeCastHit> hits, QueryFilter filter)
         {
             _world = world;
             _shape = shape;
             _orientation = orientation;
             _position = position;
+            _bounds = bounds;
             _hits = hits;
             _filter = filter;
         }
 
         public void Add(in IDynamicTreeProxy proxy)
         {
+            if (proxy is TerrainHeightmapProxy terrainProxy)
+            {
+                if (_world.TerrainAccepted(terrainProxy, _filter))
+                    _world.OverlapTerrain(_shape, _orientation, _position, terrainProxy, _bounds, _hits);
+                return;
+            }
+
             if (proxy is not RigidBodyShape targetShape || !_world.Accepts(targetShape, _filter))
                 return;
 
@@ -331,9 +400,9 @@ public class PhysicsWorld
                 Hit = true,
                 Fraction = 0,
                 Penetration = penetration,
-                Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
-                Point = new Float3(pointA.X, pointA.Y, pointA.Z),
-                HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
+                Normal = -(normal.ToProwl()),
+                Point = pointA.ToProwl(),
+                HitPoint = pointB.ToProwl(),
                 Rigidbody = userData.Rigidbody,
                 Shape = targetShape,
                 Collider = owner,
@@ -342,8 +411,38 @@ public class PhysicsWorld
         }
     }
 
-    internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
+    internal void RegisterBody(Rigidbody3D body)
+    {
+        _syncBodies.Add(body);
+        if (body.IsSimulated) HookContacts(body.Native);
+    }
+
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
+
+    // Jitter removes a body's constraints along with it, and a constraint created before its connected
+    // body existed fell back to the world. Either way it has to be rebuilt when the body comes back.
+    private readonly HashSet<PhysicsConstraint> _constraints = [];
+    private readonly List<PhysicsConstraint> _rebindConstraints = [];
+
+    internal void RegisterConstraint(PhysicsConstraint constraint) => _constraints.Add(constraint);
+    internal void UnregisterConstraint(PhysicsConstraint constraint) => _constraints.Remove(constraint);
+
+    internal void RebindConstraints(Rigidbody3D body)
+    {
+        foreach (PhysicsConstraint constraint in _constraints)
+            if (constraint.IsValid() && constraint.EnabledInHierarchy && constraint.Connects(body))
+                _rebindConstraints.Add(constraint);
+
+        try
+        {
+            foreach (PhysicsConstraint constraint in _rebindConstraints)
+                constraint.Rebind();
+        }
+        finally
+        {
+            _rebindConstraints.Clear();
+        }
+    }
 
     internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider)
     {
@@ -387,6 +486,29 @@ public class PhysicsWorld
         return owner.IsValid() && owner.GameObject.IsValid() ? owner.GameObject.Transform : null;
     }
 
+    internal MonoBehaviour GetProxyOwner(IDynamicTreeProxy proxy)
+        => proxy is RigidBodyShape shape ? GetShapeOwner(shape) : GetTerrainOwner(proxy);
+
+    /// <summary>
+    /// Whether something cast from <paramref name="body"/> may touch the proxy: the same layer matrix, ignored pairs
+    /// and constraint rules as a collision between them, narrowed further by <paramref name="mask"/>.
+    /// </summary>
+    internal bool CastAccepts(RigidBody body, IDynamicTreeProxy proxy, in LayerMask mask)
+    {
+        int layer = body.Tag is Rigidbody3D.RigidBodyUserData own ? own.Layer : 0;
+        if (proxy is RigidBodyShape shape)
+        {
+            if (shape.RigidBody == body) return false;
+            if (shape.RigidBody.Tag is Rigidbody3D.RigidBodyUserData other && !mask.HasLayer(other.Layer)) return false;
+            return _layerFilter.BodiesCollide(body, shape.RigidBody);
+        }
+
+        MonoBehaviour terrain = GetTerrainOwner(proxy);
+        if (!terrain.IsValid() || !terrain.GameObject.IsValid()) return true;
+        int terrainLayer = terrain.GameObject.LayerIndex;
+        return mask.HasLayer(terrainLayer) && CollisionMatrix.GetLayerCollision(layer, terrainLayer);
+    }
+
     /// <summary>The component that registered the given terrain proxy, or null if it is not terrain.</summary>
     private MonoBehaviour GetTerrainOwner(IDynamicTreeProxy proxy)
     {
@@ -422,6 +544,7 @@ public class PhysicsWorld
 
         bool ignoringBody = filter.IgnoreRigidbody.IsValid();
         if (ignoringBody && userData.Rigidbody == filter.IgnoreRigidbody) return false;
+        if (filter.IgnoreBodies != null && userData.Rigidbody.IsValid() && filter.IgnoreBodies.Contains(userData.Rigidbody)) return false;
 
         // Static colliders share one body per layer, so a shape with no rigidbody of its own still has
         // to be checked against the ignored one, by way of the collider that created it. One lookup
@@ -463,6 +586,7 @@ public class PhysicsWorld
     /// </summary>
     public void SyncTransforms()
     {
+        Tasks.MainThreadContext.AssertMainThread();
         foreach (var body in _syncBodies)
             if (body.IsValid()) body.SyncTransformToBody();
     }
@@ -512,6 +636,12 @@ public class PhysicsWorld
     public event Action<float> PostStep;
 
     /// <summary>
+    /// Raised once the step has fully returned and collision events are out, so handlers may freely
+    /// add, remove or move bodies. Trigger volumes report from here.
+    /// </summary>
+    public event Action<float> StepFinished;
+
+    /// <summary>
     /// Event triggered before each physics substep, with the substep duration (FixedDeltaTime / Substep).
     /// Use this for sub-stepped force/impulse models (e.g. vehicle tyres) that need the body's
     /// re-integrated velocity each substep.
@@ -553,6 +683,11 @@ public class PhysicsWorld
         // Create a new static rigidbody for this layer
         staticBody = World.CreateRigidBody();
         staticBody.MotionType = MotionType.Static;
+
+        // Jitter combines materials by taking the larger value, so anything above zero here would put a
+        // floor under the friction and bounce of every body touching static geometry.
+        staticBody.Friction = 0.0f;
+        staticBody.Restitution = 0.0f;
         staticBody.Tag = new Rigidbody3D.RigidBodyUserData()
         {
             Rigidbody = null, // No Rigidbody3D component associated with this
@@ -599,6 +734,9 @@ public class PhysicsWorld
         _shapeOwners.Clear();
         _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
+        _contactPairs.Clear();
+        _arbiterPairs.Clear();
+        _terrainFilters.Clear();
 
         // World.Clear drops every dynamic tree proxy, terrain included, so the terrain filters would be
         // left chained onto the broad phase testing against proxies that no longer exist. Reset the
@@ -616,7 +754,7 @@ public class PhysicsWorld
         World.SubstepCount = Substep;
         World.SolverIterations = (SolverIterations, RelaxIterations);
 
-        World.Gravity = new JVector(Gravity.X, Gravity.Y, Gravity.Z);
+        World.Gravity = Gravity.ToJitter();
 
         World.SolveMode = EnhancedDeterminism ? SolveMode.Deterministic : SolveMode.Regular;
         World.ThreadModel = ThreadModel == PhysicsThreadModel.Persistent
@@ -630,6 +768,7 @@ public class PhysicsWorld
         // Push any user Transform edits into the bodies before stepping (always - this is the
         // "sync prior to the physics step" that happens regardless of AutoSyncTransforms).
         SyncTransforms();
+        RemoveFilteredContacts();
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
 
@@ -637,6 +776,9 @@ public class PhysicsWorld
         // between. Driven from here rather than a per-body event to keep it one pass with no delegates.
         foreach (var body in _syncBodies)
             if (body.IsValid()) body.CapturePose();
+
+        DispatchCollisions();
+        InvokeStepEvent(StepFinished, Time.FixedDeltaTime, nameof(StepFinished));
     }
 
     /// <summary>
@@ -655,7 +797,7 @@ public class PhysicsWorld
     {
         if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(Raycast))) return false;
 
-        return World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+        return World.DynamicTree.RayCast(origin.ToJitter(), direction.ToJitter(), maxDistance,
             _acceptProxyDelegate, PostFilter, out _, out _, out _);
     }
 
@@ -677,7 +819,7 @@ public class PhysicsWorld
         hitInfo = new RaycastHit();
         if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(Raycast))) return false;
 
-        bool hit = World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+        bool hit = World.DynamicTree.RayCast(origin.ToJitter(), direction.ToJitter(), maxDistance,
             _acceptProxyDelegate, PostFilter,
             out IDynamicTreeProxy shape, out JVector normal, out float lambda);
 
@@ -709,7 +851,7 @@ public class PhysicsWorld
         _rayDirection = direction;
         try
         {
-            World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+            World.DynamicTree.RayCast(origin.ToJitter(), direction.ToJitter(), maxDistance,
                 _acceptProxyDelegate, _collectRayHitDelegate, out _, out _, out _);
         }
         finally
@@ -752,6 +894,8 @@ public class PhysicsWorld
     /// </summary>
     private bool BeginRayQuery(ref Float3 origin, ref Float3 direction, float maxDistance, in QueryFilter filter, string query)
     {
+        // First, since everything after it writes state shared by every query.
+        Tasks.MainThreadContext.AssertMainThread(query);
         if (!ValidateQuery(origin, direction, maxDistance, query)) return false;
 
         direction = Float3.Normalize(direction);
@@ -762,7 +906,6 @@ public class PhysicsWorld
         return true;
     }
 
-    private static JVector ToJ(Float3 v) => new(v.X, v.Y, v.Z);
 
 
     // The tree's filter callbacks are delegates, so binding a filter per call would allocate a closure
@@ -791,15 +934,14 @@ public class PhysicsWorld
     }
 
     /// <summary>
-    /// Marks a query as running, reporting the two ways the shared scratch state can be violated: a
-    /// query off the engine thread, and a second query overlapping this one. Both are tripwires rather
-    /// than recoveries, since the buffers are already committed by the time we could tell. Always pair
-    /// with <see cref="ExitQuery"/> in a finally.
+    /// Marks a query as running. A query off the engine thread throws before touching the shared scratch
+    /// state, and a second query overlapping this one is reported, since its buffers are already committed
+    /// by the time we could tell. Always pair with <see cref="ExitQuery"/> in a finally.
     /// </summary>
     private void EnterQuery(string query)
     {
-        // Jitter's own traversal is thread-safe; this layer is not, so the rule is Prowl's.
-        Debug.EnsureMainThread(query);
+        // Jitter's own traversal is thread safe, this layer is not, so the rule is Prowl's.
+        Tasks.MainThreadContext.AssertMainThread(query);
 
         // Interlocked so the counter stays balanced even when the rule above is already being broken;
         // a torn count would strand this permanently above zero and report every later query.
@@ -886,13 +1028,13 @@ public class PhysicsWorld
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
 
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
+        var jOrigin = origin.ToJitter();
+        var jDirection = direction.ToJitter();
         JVector sweep = jDirection * maxDistance;
 
         // Create a bounding box that encompasses the entire sweep
         JBoundingBox sweepBox = new();
-        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
+        var jOrientation = orientation.ToJitter();
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jOrigin, out JBoundingBox startBox);
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jOrigin + sweep, out JBoundingBox endBox);
 
@@ -965,6 +1107,8 @@ public class PhysicsWorld
                         if (n.LengthSquared() <= 0) continue;
                     }
 
+                    if (StartsAlong(lambda, 0f, JVector.NormalizeSafe(sweep), n)) continue;
+
                     bestLambda = lambda;
                     bestNormal = n;
                     bestPointA = pA;
@@ -983,15 +1127,80 @@ public class PhysicsWorld
                 Hit = true,
                 Fraction = bestLambda,
                 Distance = bestLambda * sweepDistance,
-                Normal = -(new Float3(bestNormal.X, bestNormal.Y, bestNormal.Z)),
-                Point = new Float3(bestPointA.X, bestPointA.Y, bestPointA.Z),
-                HitPoint = new Float3(bestPointB.X, bestPointB.Y, bestPointB.Z),
+                Normal = -(bestNormal.ToProwl()),
+                Point = bestPointA.ToProwl(),
+                HitPoint = bestPointB.ToProwl(),
                 Rigidbody = null,
                 Shape = null,
                 Collider = null,
                 Transform = terrain.IsValid() && terrain.GameObject.IsValid() ? terrain.GameObject.Transform : null,
             });
         }
+    }
+
+    /// <summary>
+    /// Overlaps a shape against the terrain triangles under its bounds, reporting the deepest one.
+    /// </summary>
+    private void OverlapTerrain<TShape>(TShape shape, JQuaternion jOrientation, JVector jPosition,
+        TerrainHeightmapProxy terrainProxy, JBoundingBox bounds, List<ShapeCastHit> hits)
+        where TShape : ISupportMappable
+    {
+        if (!_terrainProxies.TryGetValue(terrainProxy, out ITerrainHeightProvider hp))
+            return;
+
+        if (!hp.TryGetCellRange(bounds, out int minX, out int minZ, out int maxX, out int maxZ))
+            return;
+
+        float bestPenetration = 0.0f;
+        JVector bestNormal = JVector.Zero;
+        JVector bestPointA = JVector.Zero;
+        JVector bestPointB = JVector.Zero;
+
+        for (int x = minX; x < maxX; x++)
+        {
+            for (int z = minZ; z < maxZ; z++)
+            {
+                if (!hp.IsValidCell(x, z) || hp.IsCellHole(x, z)) continue;
+
+                if (!hp.TryGetWorldCorners(x, z, out JVector a, out JVector b, out JVector c, out JVector d))
+                    continue;
+
+                for (int tri = 0; tri < 2; tri++)
+                {
+                    CollisionTriangle triangle;
+                    triangle.A = a;
+                    triangle.B = tri == 0 ? c : d;
+                    triangle.C = tri == 0 ? b : c;
+
+                    bool overlaps = NarrowPhase.MprEpa(
+                        shape, triangle,
+                        jOrientation, JQuaternion.Identity,
+                        jPosition, JVector.Zero,
+                        out JVector pA, out JVector pB, out JVector n, out float penetration);
+
+                    if (!overlaps || !(penetration > bestPenetration)) continue;
+
+                    bestPenetration = penetration;
+                    bestNormal = n;
+                    bestPointA = pA;
+                    bestPointB = pB;
+                }
+            }
+        }
+
+        if (bestPenetration <= 0.0f) return;
+
+        var terrain = hp as MonoBehaviour;
+        hits.Add(new ShapeCastHit
+        {
+            Hit = true,
+            Fraction = 0,
+            Penetration = bestPenetration,
+            Normal = -(bestNormal.ToProwl()),
+            Point = bestPointA.ToProwl(),
+            HitPoint = bestPointB.ToProwl(),
+            Transform = terrain.IsValid() && terrain.GameObject.IsValid() ? terrain.GameObject.Transform : null,
+        });
     }
 
     /// <summary>
@@ -1124,7 +1333,7 @@ public class PhysicsWorld
         var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
-        Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
+        Quaternion capsuleOrientation = Quaternion.FromToRotation(Float3.UnitY, capsuleAxis);
 
         return ShapeCast(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, out hitInfo, filter);
     }
@@ -1157,40 +1366,9 @@ public class PhysicsWorld
         var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
-        Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
+        Quaternion capsuleOrientation = Quaternion.FromToRotation(Float3.UnitY, capsuleAxis);
 
         return ShapeCastAll(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, hits, filter);
-    }
-
-    /// <summary>
-    /// Helper method to calculate the orientation needed to align a capsule (Y-axis aligned) with a given axis.
-    /// </summary>
-    private static Quaternion CalculateCapsuleOrientation(Float3 capsuleAxis, float capsuleLength)
-    {
-        if (capsuleLength <= 1e-6)
-            return Quaternion.Identity;
-
-        Float3 normalizedAxis = capsuleAxis / capsuleLength;
-        Float3 yAxis = new(0, 1, 0);
-
-        // If axis is aligned with Y, no rotation needed
-        if (Maths.Abs(Float3.Dot(normalizedAxis, yAxis) - 1.0) < 1e-6)
-        {
-            return Quaternion.Identity;
-        }
-        // If axis is opposite to Y, rotate 180 degrees around X
-        else if (Maths.Abs(Float3.Dot(normalizedAxis, yAxis) + 1.0) < 1e-6)
-        {
-            return Quaternion.AxisAngle(new Float3(1, 0, 0), Maths.PI);
-        }
-        // Calculate rotation from Y-axis to the capsule axis
-        else
-        {
-            Float3 rotAxis = Float3.Cross(yAxis, normalizedAxis);
-            rotAxis = Float3.Normalize(rotAxis);
-            float angle = Maths.Acos(Float3.Dot(yAxis, normalizedAxis));
-            return Quaternion.AxisAngle(new Float3(rotAxis.X, rotAxis.Y, rotAxis.Z), angle);
-        }
     }
 
     /// <summary>
@@ -1213,7 +1391,7 @@ public class PhysicsWorld
     /// </summary>
     public bool BoxCast(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        var halfExtents = size.ToJitter() * 0.5f;
         return ShapeCast(SupportPrimitives.CreateBox(halfExtents), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
@@ -1237,7 +1415,7 @@ public class PhysicsWorld
     /// </summary>
     public int BoxCastAll(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        var halfExtents = size.ToJitter() * 0.5f;
         return ShapeCastAll(SupportPrimitives.CreateBox(halfExtents), orientation, origin, direction, maxDistance, hits, filter);
     }
 
@@ -1372,12 +1550,12 @@ public class PhysicsWorld
         if (!ValidateQuery(position, nameof(Overlap))) return 0;
 
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
-        var jPosition = new JVector(position.X, position.Y, position.Z);
+        var jPosition = position.ToJitter();
 
         // Create a bounding box for the shape
-        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
+        var jOrientation = orientation.ToJitter();
         ShapeHelper.CalculateBoundingBox(shape, jOrientation, jPosition, out JBoundingBox shapeBounds);
-        var sink = new OverlapSink<TShape>(this, shape, jOrientation, jPosition, hits, filter);
+        var sink = new OverlapSink<TShape>(this, shape, jOrientation, jPosition, shapeBounds, hits, filter);
         World.DynamicTree.Query(ref sink, in shapeBounds);
 
         return hits.Count;
@@ -1437,7 +1615,7 @@ public class PhysicsWorld
         var capsule = SupportPrimitives.CreateCapsule(radius, capsuleLength * 0.5f);
 
         // Calculate orientation to align capsule with the segment
-        Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
+        Quaternion capsuleOrientation = Quaternion.FromToRotation(Float3.UnitY, capsuleAxis);
 
         return Overlap(capsule, capsuleOrientation, capsuleCenter, hits, filter);
     }
@@ -1460,7 +1638,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapBox(Float3 position, Float3 size, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        var halfExtents = new JVector(size.X, size.Y, size.Z) * 0.5f;
+        var halfExtents = size.ToJitter() * 0.5f;
         return Overlap(SupportPrimitives.CreateBox(halfExtents), orientation, position, hits, filter);
     }
 
@@ -1620,6 +1798,317 @@ public class PhysicsWorld
 
     #endregion
 
+    #region Collision Events
+
+    // A touching pair of colliders, or a collider and terrain. One pair can span many shape arbiters at
+    // once (a compound collider, or the triangles of a concave mesh), so it begins when its first arbiter
+    // appears and ends when its last one is gone.
+    private sealed class ContactPair
+    {
+        public ContactSide A, B;
+        public readonly List<(ArbiterKey Key, bool Body1IsB)> Arbiters = [];
+        public bool Begun;
+    }
+
+    private struct ContactSide
+    {
+        public object Owner;
+        public Collider Collider;
+        public Rigidbody3D Rigidbody;
+        public GameObject ColliderObject;
+        public GameObject RigidbodyObject;
+
+        public readonly GameObject Identity => RigidbodyObject.IsValid() ? RigidbodyObject : ColliderObject;
+    }
+
+    private readonly struct OwnerPair(object a, object b) : IEquatable<OwnerPair>
+    {
+        private readonly object _a = a, _b = b;
+
+        public bool Equals(OwnerPair other) =>
+            (ReferenceEquals(_a, other._a) && ReferenceEquals(_b, other._b)) ||
+            (ReferenceEquals(_a, other._b) && ReferenceEquals(_b, other._a));
+
+        public override bool Equals(object obj) => obj is OwnerPair other && Equals(other);
+
+        public override int GetHashCode() => RuntimeHelpers.GetHashCode(_a) ^ RuntimeHelpers.GetHashCode(_b);
+    }
+
+    private readonly Dictionary<OwnerPair, ContactPair> _contactPairs = [];
+    private readonly Dictionary<ArbiterKey, ContactPair> _arbiterPairs = [];
+    private readonly List<ContactPair> _dispatchPairs = [];
+    private readonly Dictionary<TerrainCollisionFilter, ITerrainHeightProvider> _terrainFilters = [];
+
+    // Contacts are only recorded while something in the scene listens for collision events.
+    private bool _trackCollisions;
+
+    /// <summary>Starts or stops recording contacts for collision events.</summary>
+    internal void TrackCollisions(bool track)
+    {
+        if (track == _trackCollisions) return;
+        _trackCollisions = track;
+
+        if (!track)
+        {
+            _contactPairs.Clear();
+            _arbiterPairs.Clear();
+            return;
+        }
+
+        // Contacts that formed while nothing listened are already touching, so they carry on rather than begin.
+        foreach (Rigidbody3D body in _syncBodies)
+        {
+            if (!body.IsValid() || !body.IsSimulated) continue;
+            foreach (Arbiter arbiter in body.Native.Contacts)
+                if (RecordContact(arbiter) is { } pair) pair.Begun = true;
+        }
+    }
+
+    private void HookContacts(Jitter2.Dynamics.RigidBody body)
+    {
+        body.BeginCollide -= OnBeginCollide;
+        body.BeginCollide += OnBeginCollide;
+    }
+
+    // Raised inside the step, once for each body of the arbiter, so it only records. Everything a
+    // handler might do runs from DispatchCollisions once the step is over.
+    private void OnBeginCollide(Arbiter arbiter)
+    {
+        if (_trackCollisions) RecordContact(arbiter);
+    }
+
+    /// <summary>Adds the arbiter to its contact pair, or returns null when it is already recorded.</summary>
+    private ContactPair? RecordContact(Arbiter arbiter)
+    {
+        ArbiterKey key = arbiter.Handle.Data.Key;
+        if (_arbiterPairs.ContainsKey(key)) return null;
+
+        object first = ResolveContactOwner(key.Key1);
+        object second = ResolveContactOwner(key.Key2);
+
+        bool firstIsBody1;
+        if (first is Collider firstCollider) firstIsBody1 = firstCollider.AttachedBody == arbiter.Body1;
+        else if (first != null) firstIsBody1 = arbiter.Body1 == World.NullBody;
+        else firstIsBody1 = !(second is Collider secondCollider && secondCollider.AttachedBody == arbiter.Body1);
+
+        first ??= firstIsBody1 ? arbiter.Body1 : arbiter.Body2;
+        second ??= firstIsBody1 ? arbiter.Body2 : arbiter.Body1;
+
+        var owners = new OwnerPair(first, second);
+        if (!_contactPairs.TryGetValue(owners, out ContactPair pair))
+        {
+            pair = new ContactPair();
+            pair.A.Owner = first;
+            pair.B.Owner = second;
+            _contactPairs[owners] = pair;
+        }
+
+        bool firstIsA = ReferenceEquals(pair.A.Owner, first);
+        pair.Arbiters.Add((key, firstIsBody1 != firstIsA));
+        _arbiterPairs[key] = pair;
+        return pair;
+    }
+
+    private object ResolveContactOwner(ulong id)
+    {
+        if (_shapeOwnersById.TryGetValue(id, out Collider collider) && collider.IsValid()) return collider;
+
+        foreach ((TerrainCollisionFilter filter, ITerrainHeightProvider provider) in _terrainFilters)
+            if (filter.OwnsId(id)) return provider;
+
+        return null;
+    }
+
+    private void DispatchCollisions()
+    {
+        if (_contactPairs.Count == 0) return;
+
+        _dispatchPairs.Clear();
+        _dispatchPairs.AddRange(_contactPairs.Values);
+
+        foreach (ContactPair pair in _dispatchPairs)
+        {
+            DropDeadArbiters(pair);
+
+            if (pair.Arbiters.Count == 0)
+            {
+                _contactPairs.Remove(new OwnerPair(pair.A.Owner, pair.B.Owner));
+                if (pair.Begun) RaiseCollision(pair, SceneCallbacks.CollisionEnd, default, default, 0.0f);
+                continue;
+            }
+
+            RefreshSide(ref pair.A);
+            RefreshSide(ref pair.B);
+
+            SceneCallbacks kind = pair.Begun ? SceneCallbacks.CollisionStay : SceneCallbacks.CollisionBegin;
+            pair.Begun = true;
+
+            if (kind == SceneCallbacks.CollisionStay && IsAsleep(pair)) continue;
+            if (!HasRecipient(pair.A, kind) && !HasRecipient(pair.B, kind)) continue;
+
+            ReadContacts(pair, out Float3 point, out Float3 normal, out float impulse);
+            RaiseCollision(pair, kind, point, normal, impulse);
+        }
+
+        _dispatchPairs.Clear();
+    }
+
+    private void DropDeadArbiters(ContactPair pair)
+    {
+        for (int i = pair.Arbiters.Count - 1; i >= 0; i--)
+        {
+            ArbiterKey key = pair.Arbiters[i].Key;
+            if (World.GetArbiter(key.Key1, key.Key2, out _)) continue;
+
+            pair.Arbiters.RemoveAt(i);
+            _arbiterPairs.Remove(key);
+        }
+    }
+
+    private static void RefreshSide(ref ContactSide side)
+    {
+        switch (side.Owner)
+        {
+            case Collider collider when collider.IsValid():
+                side.Collider = collider;
+                side.ColliderObject = collider.GameObject;
+                side.Rigidbody = collider.AttachedRigidbody;
+                side.RigidbodyObject = side.Rigidbody.IsValid() ? side.Rigidbody.GameObject : null;
+                break;
+
+            case MonoBehaviour terrain when terrain.IsValid():
+                side.ColliderObject = terrain.GameObject;
+                break;
+
+            case Jitter2.Dynamics.RigidBody body when body.Tag is Rigidbody3D.RigidBodyUserData data && data.Rigidbody.IsValid():
+                side.Rigidbody = data.Rigidbody;
+                side.RigidbodyObject = data.Rigidbody.GameObject;
+                break;
+        }
+    }
+
+    private bool IsAsleep(ContactPair pair)
+    {
+        foreach ((ArbiterKey key, _) in pair.Arbiters)
+            if (World.GetArbiter(key.Key1, key.Key2, out Arbiter arbiter) && (arbiter.Body1.IsActive || arbiter.Body2.IsActive))
+                return false;
+
+        return true;
+    }
+
+    private static bool HasRecipient(in ContactSide side, SceneCallbacks kind)
+        => SceneDispatcher.HasRecipient(side.ColliderObject, kind) ||
+           (side.RigidbodyObject != side.ColliderObject && SceneDispatcher.HasRecipient(side.RigidbodyObject, kind));
+
+    /// <summary>Averages every live contact point of the pair, weighted by impulse, with the normal pointing from B to A.</summary>
+    private void ReadContacts(ContactPair pair, out Float3 point, out Float3 normal, out float impulse)
+    {
+        JVector pointSum = JVector.Zero, normalSum = JVector.Zero;
+        float weightSum = 0.0f, impulseSum = 0.0f;
+
+        foreach ((ArbiterKey key, bool body1IsB) in pair.Arbiters)
+        {
+            if (!World.GetArbiter(key.Key1, key.Key2, out Arbiter arbiter)) continue;
+
+            ref ContactData data = ref arbiter.Handle.Data;
+            JVector position1 = arbiter.Body1.Position;
+            JVector position2 = arbiter.Body2.Position;
+            // Jitter's normal points from Body1 toward Body2, as its solver pushes Body2 along it.
+            float sign = body1IsB ? 1.0f : -1.0f;
+
+            for (int i = 0; i < 4; i++)
+            {
+                if ((data.UsageMask & (ContactData.MaskContact0 << i)) == 0) continue;
+
+                ref ContactData.Contact contact = ref ContactAt(ref data, i);
+                float weight = MathF.Max(contact.Impulse, 1e-6f);
+                JVector world = (position1 + contact.RelativePosition1 + position2 + contact.RelativePosition2) * 0.5f;
+                pointSum += world * weight;
+                normalSum += contact.Normal * (sign * weight);
+                weightSum += weight;
+                impulseSum += contact.Impulse;
+            }
+        }
+
+        impulse = impulseSum;
+        point = weightSum > 0.0f ? (pointSum * (1.0f / weightSum)).ToProwl() : Float3.Zero;
+        normal = normalSum.LengthSquared() > 0.0f ? JVector.Normalize(normalSum).ToProwl() : Float3.Zero;
+    }
+
+    private static ref ContactData.Contact ContactAt(ref ContactData data, int index)
+    {
+        switch (index)
+        {
+            case 0: return ref data.Contact0;
+            case 1: return ref data.Contact1;
+            case 2: return ref data.Contact2;
+            default: return ref data.Contact3;
+        }
+    }
+
+    private static void RaiseCollision(ContactPair pair, SceneCallbacks kind, Float3 point, Float3 normal, float impulse)
+    {
+        ContactSide a = pair.A, b = pair.B;
+        Raise(kind, a, new Collision(b.Rigidbody, b.Collider, a.Collider, b.Identity, point, normal, impulse));
+        Raise(kind, b, new Collision(a.Rigidbody, a.Collider, b.Collider, a.Identity, point, -normal, impulse));
+    }
+
+    private static void Raise(SceneCallbacks kind, in ContactSide side, in Collision collision)
+    {
+        Send(kind, side.ColliderObject, collision);
+        if (side.RigidbodyObject != side.ColliderObject) Send(kind, side.RigidbodyObject, collision);
+    }
+
+    private static void Send(SceneCallbacks kind, GameObject go, in Collision collision)
+    {
+        if (go.IsNotValid()) return;
+
+        switch (kind)
+        {
+            case SceneCallbacks.CollisionBegin: SceneDispatcher.CollisionBegin(go, collision); break;
+            case SceneCallbacks.CollisionStay: SceneDispatcher.CollisionStay(go, collision); break;
+            case SceneCallbacks.CollisionEnd: SceneDispatcher.CollisionEnd(go, collision); break;
+        }
+    }
+
+    // Filters only decide which new contacts form, so a pair that stops colliding while it already
+    // touches has its contacts removed here, or the solver would keep resolving them.
+    private bool _contactFiltersChanged;
+    private uint _collisionMatrixVersion = CollisionMatrix.Version;
+    private readonly HashSet<Arbiter> _filteredArbiters = [];
+
+    internal void MarkContactFiltersChanged() => _contactFiltersChanged = true;
+
+    private void RemoveFilteredContacts()
+    {
+        uint matrixVersion = CollisionMatrix.Version;
+        if (!_contactFiltersChanged && matrixVersion == _collisionMatrixVersion) return;
+
+        _contactFiltersChanged = false;
+        _collisionMatrixVersion = matrixVersion;
+
+        foreach (Rigidbody3D body in _syncBodies)
+        {
+            if (!body.IsValid() || !body.IsSimulated) continue;
+
+            foreach (Arbiter arbiter in body.Native.Contacts)
+                if (!_layerFilter.BodiesCollide(arbiter.Body1, arbiter.Body2))
+                    _filteredArbiters.Add(arbiter);
+        }
+
+        foreach (Arbiter arbiter in _filteredArbiters)
+        {
+            if (arbiter.Body1.MotionType == MotionType.Dynamic) arbiter.Body1.SetActivationState(true);
+            if (arbiter.Body2.MotionType == MotionType.Dynamic) arbiter.Body2.SetActivationState(true);
+            World.Remove(arbiter);
+        }
+
+        _filteredArbiters.Clear();
+    }
+
+    #endregion
+
+
     #region Terrain Collision
 
     /// <summary>
@@ -1638,6 +2127,7 @@ public class PhysicsWorld
         _compositeBroadPhaseFilter.AddFilter(collisionFilter);
 
         _terrainProxies[heightmapProxy] = heightProvider;
+        _terrainFilters[collisionFilter] = heightProvider;
     }
 
     /// <summary>
@@ -1663,6 +2153,7 @@ public class PhysicsWorld
             return;
 
         _terrainProxies.Remove(heightmapProxy);
+        _terrainFilters.Remove(collisionFilter);
 
         if (heightmapProxy.SetIndex != -1)
         {

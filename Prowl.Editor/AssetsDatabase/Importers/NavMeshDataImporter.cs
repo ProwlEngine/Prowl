@@ -14,5 +14,7 @@ public class NavMeshDataImporter : AssetImporter
     /// binary, so it fails the import rather than loading wrong — rebake it.</summary>
     public override int Version => 2;
 
+    public override EchoSource Source => EchoSource.Binary;
+
     public override bool Import(ImportContext ctx) => ImportHelper.ImportEchoBinary<NavMeshData>(ctx, "nav mesh data");
 }

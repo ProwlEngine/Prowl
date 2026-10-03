@@ -11,16 +11,8 @@ namespace Prowl.Editor.GUI;
 /// <summary>Manages a lazy PreviewRenderer and invalidates it when the displayed subject changes.</summary>
 public sealed class PreviewWidget : IDisposable
 {
-    // ============================================================
-    // Per-asset lookup
-    // ============================================================
-
-    /// <summary>Renderers held at once. Each owns a render target, so this is a real budget rather
-    /// than an arbitrary cap - the least recently asked for is disposed past it.</summary>
-    private const int MaxLive = 8;
-
+    // A preview keeps its subject in a live scene, which keeps everything it shows loaded, so each lives only while drawn.
     private static readonly Dictionary<Guid, PreviewWidget> s_byAsset = new();
-    private static readonly List<Guid> s_recent = new(); // least recent first
 
     /// <summary> Gets or creates a PreviewWidget for the specified asset, reusing an existing one if its dimensions and grid setting match. Editors are shared between inspector panels - EditorRegistries caches a single instance per asset type - so a widget held as an editor field is reconfigured by every panel every frame, and they all end up drawing whichever asset set it up last. Keying on the asset gives each its own. </summary>
     public static PreviewWidget For(Guid asset, int width = 256, int height = 256, bool showGrid = false)
@@ -28,43 +20,45 @@ public sealed class PreviewWidget : IDisposable
         if (s_byAsset.TryGetValue(asset, out PreviewWidget? existing))
         {
             if (existing._width == width && existing._height == height && existing._showGrid == showGrid)
-            {
-                s_recent.Remove(asset);
-                s_recent.Add(asset);
                 return existing;
-            }
-
-            // Dimensions or grid setting don't match - discard the old widget and create a new one.
-            s_byAsset.Remove(asset);
-            s_recent.Remove(asset);
             existing.Dispose();
         }
 
         var created = new PreviewWidget(width, height, showGrid);
         s_byAsset[asset] = created;
-        s_recent.Add(asset);
-
-        while (s_recent.Count > MaxLive)
-        {
-            Guid oldest = s_recent[0];
-            s_recent.RemoveAt(0);
-            if (s_byAsset.Remove(oldest, out PreviewWidget? evicted))
-                evicted.Dispose();
-        }
-
         return created;
+    }
+
+    /// <summary>Makes an asset's preview set up again on its next draw, if it has one.</summary>
+    public static void Invalidate(Guid asset)
+    {
+        if (s_byAsset.TryGetValue(asset, out PreviewWidget? widget)) widget.Invalidate();
+    }
+
+    /// <summary>Disposes every preview nothing drew since the last call. Called once a frame, before drawing.</summary>
+    public static void ReleaseUndrawn()
+    {
+        List<Guid>? undrawn = null;
+        foreach (var (asset, widget) in s_byAsset)
+        {
+            if (!widget._drawn) (undrawn ??= []).Add(asset);
+            widget._drawn = false;
+        }
+        if (undrawn == null) return;
+        foreach (Guid asset in undrawn)
+            Discard(asset);
     }
 
     /// <summary>Drops the preview for an asset, e.g. once it no longer exists.</summary>
     public static void Discard(Guid asset)
     {
-        s_recent.Remove(asset);
         if (s_byAsset.Remove(asset, out PreviewWidget? widget))
             widget.Dispose();
     }
 
     private PreviewRenderer? _renderer;
     private EngineObject? _last;
+    private bool _drawn;
     private readonly int _width;
     private readonly int _height;
     private readonly bool _showGrid;
@@ -80,6 +74,7 @@ public sealed class PreviewWidget : IDisposable
     /// <summary> Returns the cached PreviewRenderer for the given subject, calling the setup action if the subject has changed or the renderer was just created. </summary>
     public PreviewRenderer Get(EngineObject subject, Action<PreviewRenderer> setup)
     {
+        _drawn = true;
         if (_renderer == null)
         {
             _renderer = new PreviewRenderer(_width, _height);

@@ -8,5 +8,7 @@ public class CustomAssetImporter : AssetImporter
 {
     public override int Version => 1;
 
+    public override EchoSource Source => EchoSource.Text;
+
     public override bool Import(ImportContext ctx) => ImportHelper.ImportEchoObject(ctx, "custom asset");
 }

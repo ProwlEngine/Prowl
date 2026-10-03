@@ -7,9 +7,9 @@ using Xunit;
 
 namespace Prowl.Editor.Test;
 
-/// <summary>A user-style custom asset: an EngineObject with a create menu entry and plain fields.</summary>
+/// <summary>A user-style custom asset: an Asset with a create menu entry and plain fields.</summary>
 [CreateAssetMenu("Test Custom Asset", Extension = ".customtest", Order = 9000)]
-public sealed class CustomTestAsset : EngineObject
+public sealed class CustomTestAsset : Asset
 {
     public int Rounds = 3;
     public string Label = "unnamed";
@@ -45,7 +45,7 @@ public class CustomAssetInspectorTests : EditorTestHarness
 
         var entry = Assets.GetEntry("Custom.customtest");
         Assert.NotNull(entry);
-        Assert.True(typeof(EngineObject).IsAssignableFrom(entry!.MainAssetType));
+        Assert.True(typeof(Asset).IsAssignableFrom(entry!.MainAssetType));
 
         var loaded = AssetDatabase.Get(guid);
         Assert.NotNull(loaded);
@@ -64,7 +64,7 @@ public class CustomAssetInspectorTests : EditorTestHarness
         Assets.SaveAsset(asset);
 
         AssetDatabase.ClearForTests();
-        var reloaded = AssetDatabase.Get(guid) as CustomTestAsset;
+        var reloaded = AssetDatabase.Load<CustomTestAsset>(guid);
 
         Assert.NotNull(reloaded);
         Assert.Equal(42, reloaded!.Rounds);
@@ -73,16 +73,15 @@ public class CustomAssetInspectorTests : EditorTestHarness
     }
 
     [Fact]
-    public void ReimportDropsUnsavedFieldEdits()
+    public void RevertDropsUnsavedFieldEdits_InTheSameObject()
     {
         // What the Revert button does: throw away edits that were never written.
         Guid guid = CreateCustomAsset("Custom.customtest", out CustomTestAsset asset);
         asset.Rounds = 99;
 
-        Assets.Reimport(guid);
-        var reloaded = AssetDatabase.Get(guid) as CustomTestAsset;
+        Assets.RevertToSaved(asset);
 
-        Assert.NotNull(reloaded);
-        Assert.Equal(3, reloaded!.Rounds);
+        Assert.Same(asset, AssetDatabase.Get(guid));
+        Assert.Equal(3, asset.Rounds);
     }
 }

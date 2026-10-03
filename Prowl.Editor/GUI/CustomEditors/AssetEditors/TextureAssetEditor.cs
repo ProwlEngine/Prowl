@@ -46,8 +46,7 @@ public class TextureAssetEditor : ImportSettingsEditor
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
         var m = Origami.Current.Metrics;
-        AssetRef<Texture2D> texture = (AssetRef<Texture2D>)(Texture2D)asset;
-        Texture2D? tex = texture.Res;
+        Texture2D? tex = asset as Texture2D;
 
         if (tex.IsValid())
         {

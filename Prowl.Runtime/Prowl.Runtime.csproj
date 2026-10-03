@@ -27,16 +27,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jitter2" Version="2.8.13" />
+    <PackageReference Include="Jitter2" Version="2.9.0" />
     <PackageReference Include="Prowl.Aperture" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Quill" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Motion" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Graphite" Version="$(ProwlGraphiteVersion)" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlGraphiteVersion)" />
     <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />

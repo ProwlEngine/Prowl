@@ -3,7 +3,6 @@
 
 using System;
 
-using Prowl.Echo.Cloning;
 
 using Xunit;
 
@@ -178,7 +177,7 @@ public class ComponentTests : RuntimeTestBase
         ThrowsWhenArmed.Armed = true;
         try
         {
-            copy = Cloner.Clone(go);
+            copy = ObjectCopy.Clone(go);
         }
         finally
         {

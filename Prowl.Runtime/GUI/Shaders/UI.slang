@@ -56,6 +56,8 @@ struct FragmentData
 
     // Backdrop blur
     Sampler2D<float4> backdropTexture;  // blurred copy of the framebuffer behind the shape
+    Sampler2D<float4> backdropSharpTexture;  // unblurred copy of the framebuffer behind the shape
+    float backdropMix;          // 0 = sharp copy, 1 = blurred copy
     float2 viewportSize;          // framebuffer size in pixels, for screen->uv mapping
     float backdropBlurAmount;   // > 0 when the current fill is frosted glass
 };
@@ -181,7 +183,7 @@ float4 Fragment(VertexOutput input) : SV_Target
         // so the sampled V is flipped there; top-left-origin backends (Vulkan, D3D11) sample upright.
         if (!IsUVOriginTopLeft)
             uv.y = 1.0 - uv.y;
-        float3 blurred = DrawData.backdropTexture.Sample(uv).rgb;
+        float3 blurred = lerp(DrawData.backdropSharpTexture.Sample(uv).rgb, DrawData.backdropTexture.Sample(uv).rgb, DrawData.backdropMix);
         // fill is premultiplied; over-composite it onto the opaque blurred backdrop
         float3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;
         

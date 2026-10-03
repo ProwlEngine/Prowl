@@ -6,7 +6,6 @@ using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
-using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Runtime.UI;
@@ -66,11 +65,11 @@ internal static class DefaultGameObjectCreators
     {
         var go = HierarchyPanel.CreateGameObject("Terrain", MenuContext.ActiveGameObject);
         var terrain = go.AddComponent<TerrainComponent>();
-        terrain.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Terrain));
+        terrain.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Terrain));
         go.AddComponent<TerrainCollider>();
 
         var terrainData = new TerrainData();
-        terrain.Data = new AssetRef<TerrainData>(terrainData);
+        terrain.Data = terrainData;
 
         var db = EditorAssetBackend.Instance;
         if (db != null)
@@ -85,11 +84,7 @@ internal static class DefaultGameObjectCreators
     {
         var go = HierarchyPanel.CreateGameObject("Particle System", MenuContext.ActiveGameObject);
         var ps = go.AddComponent<ParticleSystemComponent>();
-        ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
-        ps.Emission.Enabled = true;
-        ps.Emission.RateOverTime = new MinMaxCurve(10f);
-        ps.Emission.Shape = EmissionShape.Cone;
-        ps.Initial.Enabled = true;
+        ps.Renderer.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
         ps.Initial.StartLifetime = new MinMaxCurve(2f);
         ps.Initial.StartSpeed = new MinMaxCurve(3f);
         ps.Initial.StartSize = new MinMaxCurve(0.2f);
@@ -350,8 +345,8 @@ internal static class DefaultGameObjectCreators
     {
         var go = HierarchyPanel.CreateGameObject(name, MenuContext.ActiveGameObject);
         var renderer = go.AddComponent<MeshRenderer>();
-        renderer.Mesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(model));
-        renderer.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
+        renderer.Mesh = AssetDatabase.Get<Mesh>(BuiltInAssets.GuidForMesh(model));
+        renderer.Material = AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
     }
 
     private static GameObject NewUIElement(string name, GameObject? parent)

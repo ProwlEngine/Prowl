@@ -130,13 +130,6 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
     // Open / close
     // ============================================================
 
-    public override void OnPointerDown(PointerEventData e)
-    {
-        base.OnPointerDown(e);
-        // Consume the press so it doesn't fall through; the toggle happens on click.
-        if (e.Button == MouseButton.Left && IsInteractable()) e.Use();
-    }
-
     public void OnPointerClick(PointerEventData e)
     {
         if (e.Button != MouseButton.Left || !IsInteractable()) return;

@@ -30,15 +30,15 @@ namespace Prowl.Runtime;
 [ComponentIcon("T")] // Text
 public class TextMeshComponent : MonoBehaviour
 {
-    [SerializeField] private AssetRef<FontAsset> _font;
-    public AssetRef<FontAsset> Font { get => _font; set => SetField(ref _font, value); }
+    [SerializeField] private FontAsset? _font;
+    public FontAsset? Font { get => _font; set => SetField(ref _font, value); }
 
     /// <summary>The assigned font, or the engine's embedded default font when none is set.</summary>
     public FontAsset? ResolvedFont
     {
         get
         {
-            FontAsset? res = _font.Res;
+            FontAsset? res = _font;
             return res.IsValid() ? res : FontAsset.LoadDefault();
         }
     }
@@ -74,8 +74,8 @@ public class TextMeshComponent : MonoBehaviour
     [SerializeField] private TAlignment _anchor = TAlignment.CenterMiddle;
     public TAlignment Anchor { get => _anchor; set => SetField(ref _anchor, value); }
 
-    [SerializeField] private AssetRef<Material> _material;
-    public AssetRef<Material> Material { get => _material; set => SetField(ref _material, value); }
+    [SerializeField] private Material? _material;
+    public Material? Material { get => _material; set => SetField(ref _material, value); }
 
     // Shared world-space text material (Default/DefaultTextMesh - SDF, tagged Transparent so the scene
     // pipeline draws it). Distinct from the canvas text material, which is UI-tagged and only drawn by
@@ -93,7 +93,7 @@ public class TextMeshComponent : MonoBehaviour
 
     private Material ResolveMaterial()
     {
-        Material? res = _material.Res;
+        Material? res = _material;
         return res.IsValid() ? res : SharedMaterial;
     }
 
@@ -125,7 +125,7 @@ public class TextMeshComponent : MonoBehaviour
     {
         // The shared atlas can grow (new glyph / pixel-size), which shifts every glyph's UVs; rebuild
         // when that happens, when a property changed, or when the mesh hasn't been built yet.
-        int atlasVersion = UIFontSystem.Default.System.AtlasVersion;
+        int atlasVersion = unchecked(UIFontSystem.Default.System.AtlasVersion * 31 + (_font is FontAsset f ? f.ContentVersion : 0));
         if (_dirty || _mesh == null || atlasVersion != _lastAtlasVersion)
         {
             RebuildMesh();

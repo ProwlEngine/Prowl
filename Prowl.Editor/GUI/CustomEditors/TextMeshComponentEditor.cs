@@ -38,8 +38,8 @@ public class TextMeshComponentEditor : CustomEditor
         // ── Main Settings ─────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_main", "Main Settings").Show();
 
-        PropertyGridUtils.DrawField(paper, $"{id}_font", "Font Asset", typeof(AssetRef<FontAsset>), text.Font,
-            v => text.Font = (AssetRef<FontAsset>)v!, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_font", "Font Asset", typeof(FontAsset), text.Font,
+            v => text.Font = v as FontAsset, 0);
 
         paper.Box($"{id}_sp0.1").Height(6);
 
@@ -80,8 +80,8 @@ public class TextMeshComponentEditor : CustomEditor
         // ── Extra Settings ────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_extra", "Extra Settings").Show();
 
-        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), text.Material,
-            v => text.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Runtime.Resources.Material), text.Material,
+            v => text.Material = v as Runtime.Resources.Material, 0);
     }
 
 }

@@ -20,10 +20,10 @@ namespace Prowl.Runtime;
 [ComponentIcon("\uf1b3")] // Cubes
 public sealed class MeshCollider : Collider
 {
-    [SerializeField] private AssetRef<Mesh> mesh;
+    [SerializeField] private Mesh? mesh;
     [SerializeField] private bool convex = false;
 
-    public AssetRef<Mesh> Mesh
+    public Mesh? Mesh
     {
         get => mesh;
         set
@@ -48,7 +48,7 @@ public sealed class MeshCollider : Collider
     }
 
     // Cached convex hull shape and its tessellation for gizmo drawing rebuilt when mesh or convex flag changes.
-    [SerializeIgnore] private ConvexHullShape? _cachedConvexShape;
+    [SerializeIgnore] private PointCloudShape? _cachedConvexShape;
     [SerializeIgnore] private List<JTriangle>? _cachedHullTris;
 
     public override RigidBodyShape[] CreateShapes() => BuildShapes(Float4x4.Identity);
@@ -76,7 +76,7 @@ public sealed class MeshCollider : Collider
         }
 
         if (convex)
-            return [new ConvexHullShape(baked.Triangles)];
+            return [BuildSampledConvexShape(baked)];
 
         // Triangles have no volume, so a dynamic body built from them cannot derive an inertia tensor
         // and falls back to a box approximation. Concave dynamic collision is not really supported.
@@ -107,6 +107,17 @@ public sealed class MeshCollider : Collider
     }
 
     /// <summary>
+    /// A convex shape around any mesh. ConvexHullShape needs points that already lie on a valid hull, so
+    /// a concave or arbitrary mesh breaks it; sampling the hull and using a point cloud accepts anything,
+    /// and bounds the point count whatever the source mesh's size.
+    /// </summary>
+    private static PointCloudShape BuildSampledConvexShape(BakedPhysicsMesh baked)
+    {
+        List<JVector> points = ShapeHelper.SampleHull(baked.TriangleMesh.Vertices, subdivisions: 3);
+        return new PointCloudShape(points);
+    }
+
+    /// <summary>
     /// Copies a baked mesh with its vertices moved into another space. Topology and adjacency are
     /// preserved, so the internal-edge filter still sees a connected mesh.
     /// </summary>
@@ -116,8 +127,8 @@ public sealed class MeshCollider : Collider
         var vertices = new JVector[sourceVertices.Length];
         for (int i = 0; i < sourceVertices.Length; i++)
         {
-            Float3 v = Float4x4.TransformPoint(new Float3(sourceVertices[i].X, sourceVertices[i].Y, sourceVertices[i].Z), transform);
-            vertices[i] = new JVector(v.X, v.Y, v.Z);
+            Float3 v = Float4x4.TransformPoint(sourceVertices[i].ToProwl(), transform);
+            vertices[i] = v.ToJitter();
         }
 
         // A mirrored transform reverses winding, which would flip every triangle normal and make the
@@ -137,21 +148,33 @@ public sealed class MeshCollider : Collider
     }
 
     /// <summary>
-    /// The mesh to build collision from: the assigned one, else a sibling MeshRenderer's. Physics needs
-    /// it present now (a collider is built once, so a transient streaming null would leave it
-    /// permanently missing), so the load is blocking and prioritized.
+    /// The mesh to build collision from: the assigned one, else a sibling MeshRenderer's. Loaded now, since
+    /// the shapes are built once.
     /// </summary>
-    internal Mesh ResolveMesh()
+    internal Mesh? ResolveMesh()
     {
-        mesh.EnsureLoaded();
-        if (mesh.Res != null) return mesh.Res;
+        Mesh? resolved = SourceMesh();
+        if (resolved is not null) resolved.Load();
+        return resolved;
+    }
 
-        var mr = GetComponent<MeshRenderer>();
-        if (mr.IsNotValid()) return null;
+    private Mesh? SourceMesh()
+    {
+        if (mesh is not null) return mesh;
+        MeshRenderer? mr = GetComponent<MeshRenderer>();
+        return mr.IsValid() ? mr.Mesh : null;
+    }
 
-        AssetRef<Mesh> rendererMesh = mr.Mesh;
-        rendererMesh.EnsureLoaded();
-        return rendererMesh.Res;
+    // A reimported mesh is the same object with new triangles, so the shapes are built again.
+    private void OnAssetReloaded(Asset asset, ReloadReason reason)
+    {
+        if (ReferenceEquals(asset, SourceMesh())) Rebuild();
+    }
+
+    public override void OnDisable()
+    {
+        AssetDatabase.Reloaded -= OnAssetReloaded;
+        base.OnDisable();
     }
 
     protected override void OnAutoRebuild()
@@ -166,6 +189,7 @@ public sealed class MeshCollider : Collider
     // Rebuild rather than OnValidate, because the Mesh and Convex setters go straight to Rebuild.
     public override void Rebuild()
     {
+        AssertOwner();
         _cachedConvexShape = null;
         _cachedHullTris = null;
         base.Rebuild();
@@ -173,7 +197,7 @@ public sealed class MeshCollider : Collider
 
     public override void OnEnable()
     {
-        if (mesh.Res == null)
+        if (mesh == null)
         {
             var mr = GetComponent<MeshRenderer>();
             if (mr.IsValid())
@@ -182,16 +206,17 @@ public sealed class MeshCollider : Collider
                 Debug.LogWarning("MeshCollider could not find a MeshRenderer to get the mesh from.");
         }
 
+        AssetDatabase.Reloaded += OnAssetReloaded;
         base.OnEnable();
     }
 
     public override void DrawGizmos()
     {
-        var m = mesh.Res;
+        var m = mesh;
         if (m == null)
         {
             var mr = GetComponent<MeshRenderer>();
-            if (mr != null) m = mr.Mesh.Res;
+            if (mr != null) m = mr.Mesh;
         }
         if (m == null) return;
 
@@ -238,7 +263,7 @@ public sealed class MeshCollider : Collider
         {
             var baked = PhysicsWorld.BakeMesh(m);
             if (baked.Triangles.Count == 0) return;
-            _cachedConvexShape = new ConvexHullShape(baked.Triangles);
+            _cachedConvexShape = BuildSampledConvexShape(baked);
         }
 
         _cachedHullTris ??= ShapeHelper.Tessellate(_cachedConvexShape, 2);

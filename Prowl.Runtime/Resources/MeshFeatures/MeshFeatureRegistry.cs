@@ -67,31 +67,22 @@ public static class MeshFeatureRegistry
         if (_initialized) return;
         _initialized = true;
 
-        foreach (var assembly in RuntimeUtils.AssemblySource())
+        foreach (var type in RuntimeUtils.FindTypesImplementing(typeof(MeshFeatureSpec)))
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
+            try
             {
-                if (type.IsAbstract || !typeof(MeshFeatureSpec).IsAssignableFrom(type)) continue;
-
-                try
+                var spec = (MeshFeatureSpec)Activator.CreateInstance(type)!;
+                if (_specs.ContainsKey(spec.Key))
                 {
-                    var spec = (MeshFeatureSpec)Activator.CreateInstance(type)!;
-                    if (_specs.ContainsKey(spec.Key))
-                    {
-                        Debug.LogWarning($"Duplicate mesh feature key '{spec.Key}'; ignoring {type.FullName}.");
-                        continue;
-                    }
-                    _specs.Add(spec.Key, spec);
-                    _aggregateVersion += spec.Version;
+                    Debug.LogWarning($"Duplicate mesh feature key '{spec.Key}'; ignoring {type.FullName}.");
+                    continue;
                 }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Failed to register MeshFeatureSpec {type.FullName}: {ex.Message}");
-                }
+                _specs.Add(spec.Key, spec);
+                _aggregateVersion += spec.Version;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to register MeshFeatureSpec {type.FullName}: {ex.Message}");
             }
         }
 

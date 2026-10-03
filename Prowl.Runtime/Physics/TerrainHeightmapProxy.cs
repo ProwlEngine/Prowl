@@ -54,8 +54,8 @@ public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
         // length alone is what keeps lambda the same parameter in both spaces, so the hit distance the
         // caller gets back needs no correction even when the terrain is scaled.
         Float4x4 worldToLocal = _heightProvider.WorldToLocal;
-        Float3 localOrigin = Float4x4.TransformPoint(new Float3(origin.X, origin.Y, origin.Z), worldToLocal);
-        Float3 localDir = Float4x4.TransformNormal(new Float3(direction.X, direction.Y, direction.Z), worldToLocal);
+        Float3 localOrigin = Float4x4.TransformPoint(origin.ToProwl(), worldToLocal);
+        Float3 localDir = Float4x4.TransformNormal(direction.ToProwl(), worldToLocal);
 
         Float3 gridOrigin = localOrigin / cellSize;
 
@@ -169,8 +169,8 @@ public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
         //  |    \  |
         //  d ----- c
 
-        var rayOrigin = new JVector(localOrigin.X, localOrigin.Y, localOrigin.Z);
-        var rayDir = new JVector(localDir.X, localDir.Y, localDir.Z);
+        var rayOrigin = localOrigin.ToJitter();
+        var rayDir = localDir.ToJitter();
 
         new JTriangle(a, c, b).RayIntersect(rayOrigin, rayDir, JTriangle.CullMode.BackFacing, out JVector normal0, out float lambda0);
         new JTriangle(a, d, c).RayIntersect(rayOrigin, rayDir, JTriangle.CullMode.BackFacing, out JVector normal1, out float lambda1);
@@ -184,11 +184,11 @@ public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
         // A normal is a direction, and under a scaled transform it needs the inverse transpose. The
         // terrain matrix has no shear, so transforming by the inverse's transpose is just this.
         Float3 worldNormal = Float4x4.TransformNormal(
-            new Float3(localNormal.X, localNormal.Y, localNormal.Z),
+            localNormal.ToProwl(),
             Float4x4.Transpose(_heightProvider.WorldToLocal));
 
         worldNormal = Float3.Normalize(worldNormal);
-        normal = new JVector(worldNormal.X, worldNormal.Y, worldNormal.Z);
+        normal = worldNormal.ToJitter();
         return true;
     }
 }
@@ -305,6 +305,6 @@ public interface ITerrainHeightProvider
     private static JVector ToWorld(Float3 local, in Float4x4 localToWorld)
     {
         Float3 world = Float4x4.TransformPoint(local, localToWorld);
-        return new JVector(world.X, world.Y, world.Z);
+        return world.ToJitter();
     }
 }

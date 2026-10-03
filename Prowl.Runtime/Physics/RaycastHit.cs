@@ -57,7 +57,7 @@ public struct RaycastHit
     internal void SetFromJitterResult(PhysicsWorld world, DynamicTree.RayCastResult result, Float3 origin, Float3 direction)
     {
         Hit = true;
-        Normal = new Float3(result.Normal.X, result.Normal.Y, result.Normal.Z);
+        Normal = result.Normal.ToProwl();
         Distance = result.Lambda;
         Point = origin + (direction * Distance);
 

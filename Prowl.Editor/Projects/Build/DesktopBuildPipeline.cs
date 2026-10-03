@@ -354,20 +354,24 @@ public class DesktopBuildPipeline : BuildPipeline
         string outputDirectory = CreateBuildDirectory(request);
         context.Log($"Building into {outputDirectory}");
 
-        // Always save the current scene: the build reads the cache, which comes from the .scene file.
-        if (EditorSceneManager.CurrentScenePath != null)
+        // Always save the current scene: the build reads the cache, which comes from the .scene file. The open scene
+        // and the asset database belong to the main thread.
+        Core.EditorApplication.RunOnMainThread(() =>
         {
-            EditorSceneManager.Save();
-            context.Log("Auto-saved current scene.");
-        }
-        else
-        {
-            Runtime.Debug.LogWarning("[Build] Current scene has no save path. Save it first for accurate build.");
-        }
+            if (EditorSceneManager.CurrentScenePath != null)
+            {
+                EditorSceneManager.Save();
+                context.Log("Auto-saved current scene.");
+            }
+            else
+            {
+                Runtime.Debug.LogWarning("[Build] Current scene has no save path. Save it first for accurate build.");
+            }
 
-        var db = EditorAssetBackend.Instance;
-        foreach (var scene in request.Scenes)
-            db?.Reimport(scene);
+            var db = EditorAssetBackend.Instance;
+            foreach (var scene in request.Scenes)
+                db?.Reimport(scene);
+        });
 
         string buildTempDir = request.TempPath;
         if (Directory.Exists(buildTempDir))

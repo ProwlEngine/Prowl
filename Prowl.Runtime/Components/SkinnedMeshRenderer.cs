@@ -25,10 +25,10 @@ namespace Prowl.Runtime;
 public class SkinnedMeshRenderer : MonoBehaviour
 {
     /// <summary>The mesh to render (may contain submeshes).</summary>
-    public AssetRef<Mesh> SharedMesh;
+    public Mesh? SharedMesh;
 
     /// <summary>Materials array one per submesh. If fewer materials than submeshes, last material is reused.</summary>
-    public List<AssetRef<Material>> Materials = new();
+    public List<Material> Materials = new();
 
     /// <summary>Path to the root bone, relative to this GO's hierarchy root.</summary>
     [SerializeField]
@@ -80,20 +80,20 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// <summary>Number of blend shapes on the shared mesh (0 if none).</summary>
     public int BlendShapeCount
     {
-        get { var mesh = SharedMesh.Res; return mesh.IsValid() ? mesh.BlendShapeCount : 0; }
+        get { var mesh = SharedMesh; return mesh.IsValid() ? mesh.BlendShapeCount : 0; }
     }
 
     /// <summary>Index of a blend shape by name, or -1 if not found.</summary>
     public int GetBlendShapeIndex(string name)
     {
-        var mesh = SharedMesh.Res;
+        var mesh = SharedMesh;
         return mesh.IsValid() ? mesh.GetBlendShapeIndex(name) : -1;
     }
 
     /// <summary>The blend shape's name, or empty if out of range.</summary>
     public string GetBlendShapeName(int index)
     {
-        var mesh = SharedMesh.Res;
+        var mesh = SharedMesh;
         return mesh.IsValid() ? mesh.GetBlendShapeName(index) : string.Empty;
     }
 

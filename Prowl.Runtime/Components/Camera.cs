@@ -110,6 +110,12 @@ public class Camera : MonoBehaviour
         }
     }
 
+    /// <summary>True when <see cref="ProjectionMatrix"/> was set by hand rather than computed from the field of view and clip planes.</summary>
+    public bool HasCustomProjectionMatrix => _customProjectionMatrix;
+
+    /// <summary>True when <see cref="NonJitteredProjectionMatrix"/> was set by hand.</summary>
+    public bool HasCustomNonJitteredProjectionMatrix => _customNonJitteredProjectionMatrix;
+
     public Float4x4 ViewMatrix { get; private set; }
 
     /// <summary>
@@ -136,7 +142,8 @@ public class Camera : MonoBehaviour
         var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconCamera);
         if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
 
-        float aspect = 1280 / 720;
+        // The aspect of the camera's last render, 16:9 before it has rendered.
+        float aspect = _aspect > 0 ? _aspect : 16f / 9f;
         Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * GetViewMatrix();
 
         Frustum frustum = Frustum.FromMatrix(viewProjectionMatrix);

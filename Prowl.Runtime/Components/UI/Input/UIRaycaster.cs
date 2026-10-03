@@ -57,7 +57,7 @@ internal static class UIRaycaster
             int dfs = 0;
             GameObject? localHit = null;
             int localDfs = -1;
-            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
+            WalkRecurse(canvas, canvas.GameObject, rayO, rayD, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
             if (localHit == null) continue;
 
             // Rank with the same key the renderer sorts by (SortOrder, then a per-canvas discriminator,
@@ -115,7 +115,7 @@ internal static class UIRaycaster
             int dfs = 0;
             GameObject? localHit = null;
             int localDfs = -1;
-            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
+            WalkRecurse(canvas, canvas.GameObject, rayO, rayD, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
             if (localHit == null) continue;
 
             bestT = t;
@@ -191,31 +191,22 @@ internal static class UIRaycaster
         return true;
     }
 
-    // pt is the pointer on the canvas plane (used for the RectMask scissor, which is canvas-aligned);
-    // (rayO, rayD) is the same pointer as a design-space ray, intersected with each element's own quad
-    // so out-of-plane (3D) element rotation is respected. blocksRaycasts is inherited from the enclosing
+    // (rayO, rayD) is the pointer as a design-space ray, intersected with each element's own quad so
+    // out-of-plane (3D) element rotation is respected. blocksRaycasts is inherited from the enclosing
     // CanvasGroups, matching how the render walk threads UIContext down.
-    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, Float3 rayO, Float3 rayD, Rect? scissor, bool blocksRaycasts, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
+    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float3 rayO, Float3 rayD, bool blocksRaycasts, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
     {
         foreach (GameObject child in parent.Children)
         {
             if (!child.EnabledInHierarchy) continue;
             if (child.GetComponent<GameCanvas>() != null) continue; // nested canvas owns its own tree
 
-            Rect? childScissor = scissor;
+            // Outside a mask nothing under it can be hit. Each mask is tested where it is met, so nested
+            // masks intersect naturally.
             RectMask? rectMask = child.GetComponent<RectMask>();
-            if (rectMask != null && rectMask.EnabledInHierarchy)
-            {
-                Rect mr = rectMask.GetClipRectInCanvasPixels();
-                childScissor = scissor is null ? mr : IntersectRect(scissor.Value, mr);
-                if (childScissor.Value.Size.X <= 0f || childScissor.Value.Size.Y <= 0f) continue;
-            }
-            if (childScissor is { } cs && !RectContainsPoint(cs, pt))
-            {
-                // Pointer falls outside the active scissor - every descendant inherits this scissor,
-                // so none of them can possibly hit. Skip the whole subtree.
+            if (rectMask != null && rectMask.EnabledInHierarchy && child.RectTransform is { } maskRt
+                && !RayHitsMask(canvas, rectMask, maskRt, rayO, rayD))
                 continue;
-            }
 
             // A CanvasGroup with BlocksRaycasts off makes the whole subtree transparent to the pointer -
             // children still draw, they just don't consume input. IgnoreParentGroups restarts the chain.
@@ -234,7 +225,7 @@ internal static class UIRaycaster
                 bestDfs = dfs;
             }
 
-            WalkRecurse(canvas, child, pt, rayO, rayD, childScissor, childBlocks, ref dfs, ref bestGO, ref bestDfs);
+            WalkRecurse(canvas, child, rayO, rayD, childBlocks, ref dfs, ref bestGO, ref bestDfs);
         }
     }
 
@@ -250,19 +241,42 @@ internal static class UIRaycaster
         return false;
     }
 
-    internal static Rect IntersectRect(Rect a, Rect b)
+    /// <summary>
+    /// Intersects a ray with the Z=0 plane of <paramref name="model"/>'s local space and returns the hit in
+    /// that space. False when the ray runs parallel to the plane or the plane is behind it.
+    /// </summary>
+    private static bool TryRayToLocal(Float4x4 model, Float3 rayOrigin, Float3 rayDir, out Float3 local, out float t)
     {
-        float minX = System.MathF.Max(a.Min.X, b.Min.X);
-        float minY = System.MathF.Max(a.Min.Y, b.Min.Y);
-        float maxX = System.MathF.Min(a.Max.X, b.Max.X);
-        float maxY = System.MathF.Min(a.Max.Y, b.Max.Y);
-        if (maxX < minX) maxX = minX;
-        if (maxY < minY) maxY = minY;
-        return new Rect(minX, minY, maxX, maxY);
+        local = default;
+        t = 0f;
+        Float4x4 inv = model.Invert();
+        Float3 lo = Float4x4.TransformPoint(rayOrigin, inv);
+        Float3 ld = Float4x4.TransformPoint(rayOrigin + rayDir, inv) - lo;
+        if (Maths.Abs(ld.Z) < 1e-9f) return false;
+
+        t = -lo.Z / ld.Z;
+        if (t < 0f) return false;
+
+        local = lo + ld * t;
+        return true;
     }
 
-    internal static bool RectContainsPoint(Rect r, Float2 p)
-        => p.X >= r.Min.X && p.X <= r.Max.X && p.Y >= r.Min.Y && p.Y <= r.Max.Y;
+    /// <summary>
+    /// True when the ray lands inside the mask's clip region on the mask's own plane, matching the shader
+    /// clip: padding, rotation, scale and rounded corners all count.
+    /// </summary>
+    private static bool RayHitsMask(GameCanvas canvas, RectMask mask, RectTransform maskRt, Float3 rayOrigin, Float3 rayDir)
+    {
+        if (!TryRayToLocal(canvas.BuildRectModel(maskRt), rayOrigin, rayDir, out Float3 p, out _)) return false;
+
+        UIClip clip = GameCanvas.ComputeClip(mask);
+        Float4 r = clip.Rect;
+        float cx = (r.X + r.Z) * 0.5f, cy = (r.Y + r.W) * 0.5f;
+        float dx = Maths.Abs(p.X - cx) - ((r.Z - r.X) * 0.5f - clip.Radius);
+        float dy = Maths.Abs(p.Y - cy) - ((r.W - r.Y) * 0.5f - clip.Radius);
+        float outside = Float2.Length(new Float2(Maths.Max(dx, 0f), Maths.Max(dy, 0f)));
+        return outside + Maths.Min(Maths.Max(dx, dy), 0f) - clip.Radius <= 0f;
+    }
 
     /// <summary>
     /// True if a ray hits the element's quad. <paramref name="model"/> maps the element's pivot-centered
@@ -276,16 +290,8 @@ internal static class UIRaycaster
         t = 0f;
         Rect cr = rt.ComputedRect;
         if (cr.Size.X <= 0 || cr.Size.Y <= 0) return false;
+        if (!TryRayToLocal(model, rayOrigin, rayDir, out Float3 lh, out t)) return false;
 
-        Float4x4 inv = model.Invert();
-        Float3 lo = Float4x4.TransformPoint(rayOrigin, inv);
-        Float3 ld = Float4x4.TransformPoint(rayOrigin + rayDir, inv) - lo;
-        if (Maths.Abs(ld.Z) < 1e-9f) return false;
-
-        t = -lo.Z / ld.Z;
-        if (t < 0f) return false;
-
-        Float3 lh = lo + ld * t;
         Float2 pivot = rt.Pivot;
         float w = cr.Size.X, h = cr.Size.Y;
         return lh.X >= -pivot.X * w && lh.X <= (1f - pivot.X) * w

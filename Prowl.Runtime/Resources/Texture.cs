@@ -19,16 +19,30 @@ namespace Prowl.Runtime.Resources;
 /// dimensions are known).
 /// </para>
 /// </summary>
-public abstract class Texture : EngineObject
+public abstract class Texture : Asset
 {
     private protected const SamplerFilter DefaultFilter = SamplerFilter.MinPoint_MagPoint_MipPoint;
     private protected const SamplerFilter DefaultMipmapFilter = SamplerFilter.MinPoint_MagPoint_MipLinear;
 
     /// <summary>The backing Graphite GPU texture. Null until a derived type allocates storage.</summary>
-    public GraphiteTexture Handle { get; private protected set; }
+    public GraphiteTexture Handle { get { EnsureLoaded(); return _handle; } private protected set => _handle = value; }
+    private GraphiteTexture _handle;
 
-    /// <summary>The Graphite sampler describing how this texture is filtered and wrapped.</summary>
-    public Sampler Sampler { get; private set; }
+    private protected GraphiteTexture HandleUnchecked => _handle;
+    private protected PixelFormat ImageFormatUnchecked => ImageFormat;
+    private protected bool IsMipmappedUnchecked => IsMipmapped;
+
+    /// <summary>The Graphite sampler describing how this texture is filtered and wrapped, created on first use.</summary>
+    public Sampler Sampler
+    {
+        get
+        {
+            EnsureLoaded();
+            return _sampler ??= CreateSampler();
+        }
+    }
+
+    private Sampler _sampler;
 
     /// <summary>The type of this <see cref="Texture"/>, such as 2D, 3D, CubeMap.</summary>
     public readonly TextureType Type;
@@ -49,7 +63,7 @@ public abstract class Texture : EngineObject
     private readonly bool isNotMipmappable;
 
     /// <summary>Gets whether this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
-    public bool IsMipmappable { get { EnsureNotDisposed(); return !isNotMipmappable; } }
+    public bool IsMipmappable { get { EnsureLoaded(); return !isNotMipmappable; } }
 
     public bool IsCubemap { get; private protected set; }
 
@@ -72,21 +86,20 @@ public abstract class Texture : EngineObject
         RebuildSampler();
     }
 
-    /// <summary>Recreates <see cref="Sampler"/> from the current filter and address-mode state.</summary>
+    /// <summary>Drops <see cref="Sampler"/> so the next read builds it from the current filter and address-mode state.</summary>
     private protected void RebuildSampler()
     {
-        // Defer the old sampler's disposal: a filter/wrap change can swap it while an in-flight
-        // frame still binds it.
-        Graphics.DisposeDeferred(Sampler);
+        Graphics.DisposeDeferred(_sampler);
+        _sampler = null;
+    }
 
+    private Sampler CreateSampler()
+    {
         GraphicsDevice device = Graphics.Device;
         if (device == null)
-        {
-            Sampler = null!;
-            return;
-        }
+            return null!;
 
-        Sampler = device.ResourceFactory.CreateSampler(new SamplerDescription
+        Sampler sampler = device.ResourceFactory.CreateSampler(new SamplerDescription
         {
             AddressModeU = AddressModeU,
             AddressModeV = AddressModeV,
@@ -95,7 +108,8 @@ public abstract class Texture : EngineObject
             MinimumLod = 0,
             MaximumLod = uint.MaxValue,
         });
-        Sampler.Name = $"{Name} Sampler";
+        sampler.Name = $"{Name} Sampler";
+        return sampler;
     }
 
     /// <summary>Sets this <see cref="Texture"/>'s sampling filter.</summary>
@@ -124,7 +138,7 @@ public abstract class Texture : EngineObject
     /// <exception cref="InvalidOperationException"/>
     public void GenerateMipmaps()
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
 
         if (isNotMipmappable)
             throw new InvalidOperationException(string.Concat("This texture type is not mipmappable! Type: ", Type.ToString()));
@@ -135,20 +149,18 @@ public abstract class Texture : EngineObject
         SetTextureFilters(DefaultMipmapFilter);
     }
 
-    protected override void OnDispose()
+    protected override void OnUnload()
     {
-        // Defer the GPU handle's disposal: it may still be bound by an in-flight frame (e.g. the UI
-        // drawing this texture while it is reimported). Freeing it now is a use-after-free that
-        // stalls the device on SwapBuffers.
-        Graphics.DisposeDeferred(Handle);
-        Graphics.DisposeDeferred(Sampler);
+        Graphics.DisposeDeferred(_handle);
+        Graphics.DisposeDeferred(_sampler);
+        _handle = null;
+        _sampler = null;
     }
 
-    // Safety net: once nothing references this Texture, the idle-timeout sweep in
-    // EditorAssetBackend/PlayerAssetBackend no longer keeps it alive either, so something must
-    // still free the GPU handle. Handle.Dispose() only enqueues a thread-safe render-thread command
-    // (see GraphicsTexture.Dispose), so calling it from the finalizer thread is safe.
-    ~Texture() => Dispose();
+    ~Texture()
+    {
+        if (!Registered) Dispose();
+    }
 
     /// <summary>
     /// Gets whether the specified <see cref="TextureType"/> type is mipmappable.

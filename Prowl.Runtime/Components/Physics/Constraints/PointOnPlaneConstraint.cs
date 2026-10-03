@@ -22,8 +22,8 @@ public class PointOnPlaneConstraint : PhysicsConstraint
     [SerializeField] private Float3 planeNormal = Float3.UnitY;
     [SerializeField] private Float3 anchor1 = Float3.Zero;
     [SerializeField] private Float3 anchor2 = Float3.Zero;
-    [SerializeField] private float minDistance = float.NegativeInfinity;
-    [SerializeField] private float maxDistance = float.PositiveInfinity;
+    [SerializeField] private float minDistance = 0.0f;
+    [SerializeField] private float maxDistance = 0.0f;
     [SerializeField] private float softness = 0.00001f;
     [SerializeField] private float biasFactor = 0.01f;
 
@@ -69,7 +69,8 @@ public class PointOnPlaneConstraint : PhysicsConstraint
     }
 
     /// <summary>
-    /// Minimum allowed distance from the plane. Use float.NegativeInfinity for no minimum.
+    /// Minimum allowed distance from the plane. When it is not below <see cref="MaxDistance"/> the point
+    /// is held halfway between the two. Use float.NegativeInfinity for no minimum.
     /// </summary>
     public float MinDistance
     {
@@ -123,7 +124,7 @@ public class PointOnPlaneConstraint : PhysicsConstraint
     /// <summary>
     /// Gets the accumulated impulse applied by this constraint.
     /// </summary>
-    public float Impulse => constraint?.Impulse ?? 0.0f;
+    public float Impulse => IsLive(constraint) ? constraint.Impulse : 0.0f;
 
     protected override Constraint GetConstraint() => constraint;
 
@@ -133,7 +134,7 @@ public class PointOnPlaneConstraint : PhysicsConstraint
         JVector worldAnchor1 = LocalToWorld(anchor1, Body1.Transform);
         JVector worldAnchor2 = connectedBody.IsValid()
             ? LocalToWorld(anchor2, connectedBody.Transform)
-            : new JVector(anchor2.X, anchor2.Y, anchor2.Z);
+            : anchor2.ToJitter();
 
         constraint = world.CreateConstraint<PointOnPlane>(body1, body2);
 

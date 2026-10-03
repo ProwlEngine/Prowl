@@ -44,8 +44,8 @@ public readonly struct SubAssetIdentity
 }
 
 /// <summary>
-/// Import context passed to importers. Holds the entry GUID so sub-assets get
-/// correct deterministic IDs immediately enabling proper AssetRef serialization.
+/// Import context passed to importers. Holds the entry GUID so sub-assets get their deterministic IDs
+/// immediately, which is what makes other imported objects reference them by GUID.
 /// </summary>
 public class ImportContext
 {
@@ -63,13 +63,19 @@ public class ImportContext
     public string FileName => Path.GetFileNameWithoutExtension(AbsolutePath);
 
     /// <summary>The primary imported object.</summary>
-    public EngineObject? MainAsset { get; private set; }
+    public Asset? MainAsset { get; private set; }
 
     /// <summary>All sub-assets.</summary>
-    public List<EngineObject> SubAssets { get; } = [];
+    public List<Asset> SubAssets { get; } = [];
 
     /// <summary>Asset GUIDs that this asset depends on.</summary>
     public HashSet<Guid> Dependencies { get; } = [];
+
+    /// <summary>Asset GUIDs this asset names through an AssetRef, which ship without loading with it.</summary>
+    public HashSet<Guid> SoftDependencies { get; } = [];
+
+    /// <summary>Prefabs this asset has instances of, which only the editor follows.</summary>
+    public HashSet<Guid> EditorDependencies { get; } = [];
 
     public ImportContext(Guid assetGuid, string absolutePath, Echo.EchoObject? settings)
     {
@@ -81,14 +87,14 @@ public class ImportContext
     /// <summary>Register the primary imported object. Naming is the importer's responsibility (use
     /// <see cref="FileName"/> for the common case); a null/blank Name is treated as an importer bug
     /// and throws, since it would otherwise surface as EngineObject's "New{TypeName}" default.</summary>
-    public void SetMainAsset(EngineObject asset)
+    public void SetMainAsset(Asset asset)
     {
         if (string.IsNullOrWhiteSpace(asset.Name))
             throw new InvalidOperationException(
                 $"Importer produced a main asset of type '{asset.GetType().Name}' with no Name. " +
                 $"Assign one (e.g. ctx.{nameof(FileName)}) before calling {nameof(SetMainAsset)}.");
 
-        asset.AssetID = AssetGuid;
+        asset.SetIdentity(AssetGuid, "");
         MainAsset = asset;
     }
 
@@ -102,7 +108,7 @@ public class ImportContext
     /// the resolved identity (for composing a child's, see <see cref="SubAssetIdentity.Key"/>). The ID is
     /// assigned immediately so AssetRef serialization works correctly.
     /// </summary>
-    public string AddSubAsset(string name, EngineObject asset, SubAssetIdentity identity)
+    public string AddSubAsset(string name, Asset asset, SubAssetIdentity identity)
     {
         // The name is the sub-asset's display name, so it must be present and unique. Naming is the
         // importer's job.
@@ -131,13 +137,13 @@ public class ImportContext
                 $"'{uniqueName}', a {asset.GetType().Name}). Identities must be unique within an import - " +
                 "derive the key from something that tells the two apart, such as a persistent per-item id.");
 
-        asset.AssetID = AssetEntry.DeriveSubAssetGuid(AssetGuid, identityKey);
+        asset.SetIdentity(AssetEntry.DeriveSubAssetGuid(AssetGuid, identityKey), "");
         SubAssets.Add(asset);
         return identityKey;
     }
 
     /// <summary>Registration order within the type, so adding a material can't shift every animation.</summary>
-    private string NextOrderIdentity(EngineObject asset)
+    private string NextOrderIdentity(Asset asset)
     {
         Type type = asset.GetType();
         int index = _typeCounts.GetValueOrDefault(type);

@@ -56,7 +56,7 @@ public class HingeJoint : PhysicsJoint
     /// <summary>
     /// Minimum angle limit in degrees.
     /// </summary>
-    public float MinAngleDegrees
+    public float MinAngle
     {
         get => minAngleDegrees;
         set
@@ -69,7 +69,7 @@ public class HingeJoint : PhysicsJoint
     /// <summary>
     /// Maximum angle limit in degrees.
     /// </summary>
-    public float MaxAngleDegrees
+    public float MaxAngle
     {
         get => maxAngleDegrees;
         set
@@ -103,9 +103,11 @@ public class HingeJoint : PhysicsJoint
         get => motorTargetVelocity;
         set
         {
+            if (motorTargetVelocity == value) return;
             motorTargetVelocity = value;
             if (IsLive(hingeJoint?.Motor))
                 hingeJoint.Motor.TargetVelocity = value;
+            WakeBodies();
         }
     }
 
@@ -117,9 +119,11 @@ public class HingeJoint : PhysicsJoint
         get => motorMaxForce;
         set
         {
+            if (motorMaxForce == value) return;
             motorMaxForce = value;
             if (IsLive(hingeJoint?.Motor))
                 hingeJoint.Motor.MaximumForce = value;
+            WakeBodies();
         }
     }
 
@@ -138,7 +142,9 @@ public class HingeJoint : PhysicsJoint
     protected override void CreateConstraint(World world, RigidBody body1, RigidBody body2)
     {
         Jitter2.LinearMath.JVector worldAnchor = LocalToWorld(anchor, Body1.Transform);
-        Jitter2.LinearMath.JVector worldAxis = LocalDirToWorld(axis, Body1.Transform);
+        // Jitter drives and measures the connected side relative to this body, so the axis is reversed to
+        // make a positive motor, angle or distance mean this body moving along +axis.
+        Jitter2.LinearMath.JVector worldAxis = -LocalDirToWorld(axis, Body1.Transform);
 
         var angleLimit = AngularLimit.FromDegree(minAngleDegrees, maxAngleDegrees);
 
@@ -147,7 +153,7 @@ public class HingeJoint : PhysicsJoint
 
         joint = hingeJoint;
 
-        if (hasMotor && hingeJoint.Motor != null)
+        if (hasMotor && IsLive(hingeJoint.Motor))
         {
             hingeJoint.Motor.TargetVelocity = motorTargetVelocity;
             hingeJoint.Motor.MaximumForce = motorMaxForce;

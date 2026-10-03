@@ -25,10 +25,17 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     private bool _isRegistered;
     private uint _lastTransformVersion;
 
+    // What the registration was built from. The triangle ID range is sized from the resolution, so a new
+    // resolution or asset needs a fresh registration, while size and height only move the bounds
+    private TerrainData? _registeredData;
+    private int _registeredResolution;
+    private float _registeredSize;
+    private float _registeredHeight;
+
     #region ITerrainHeightProvider samples directly from TerrainData
 
-    public int Width => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
-    public int Height => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
+    public int Width => _terrain.IsValid() && _terrain.Data.IsValid() ? _terrain.Data.HeightmapResolution : 0;
+    public int Height => _terrain.IsValid() && _terrain.Data.IsValid() ? _terrain.Data.HeightmapResolution : 0;
 
     /// <summary>
     /// The grid placement, refreshed from the transform once per frame rather than read per query. The
@@ -57,7 +64,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         _localToWorld = Transform.LocalToWorldMatrix;
         _worldToLocal = Transform.WorldToLocalMatrix;
 
-        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
+        var data = _terrain.IsValid() ? _terrain.Data : null;
         if (data.IsNotValid() || data.HeightmapResolution < 2)
         {
             _cellSize = 0.0f;
@@ -86,15 +93,15 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         }
 
         _worldBounds = new JBoundingBox(
-            new JVector(worldMin.X, worldMin.Y, worldMin.Z),
-            new JVector(worldMax.X, worldMax.Y, worldMax.Z));
+            worldMin.ToJitter(),
+            worldMax.ToJitter());
     }
 
     /// <summary>Height in terrain-local units. Placement and scale come from <see cref="LocalToWorld"/>.</summary>
     public bool TryGetHeight(int x, int z, out float height)
     {
         height = 0;
-        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
+        var data = _terrain.IsValid() ? _terrain.Data : null;
         if (data == null || data.Heights == null) return false;
 
         int res = data.HeightmapResolution;
@@ -106,13 +113,13 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
     public bool IsValidCell(int x, int z)
     {
-        int res = _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
+        int res = _terrain.IsValid() && _terrain.Data.IsValid() ? _terrain.Data.HeightmapResolution : 0;
         return x >= 0 && x < res - 1 && z >= 0 && z < res - 1;
     }
 
     public bool IsCellHole(int x, int z)
     {
-        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
+        var data = _terrain.IsValid() ? _terrain.Data : null;
         return data != null && data.IsCellHole(x, z);
     }
 
@@ -157,8 +164,8 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         // Collider registration happens once: block-load the terrain data (prioritized) so a
         // transient null from async streaming doesn't leave the terrain without collision.
-        _terrain.Data.EnsureLoaded();
-        var terrainData = _terrain.Data.Res;
+        if (_terrain.Data is { } stored) stored.Load();
+        var terrainData = _terrain.Data;
         if (terrainData == null) return;
 
         var physics = GameObject.Scene.Physics;
@@ -170,19 +177,39 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         physics.RegisterTerrain(_heightmapProxy, _collisionFilter, this);
         _lastTransformVersion = ComputeWorldTransformVersion();
+        _registeredData = terrainData;
+        _registeredResolution = terrainData.HeightmapResolution;
+        _registeredSize = terrainData.Size;
+        _registeredHeight = terrainData.Height;
         _isRegistered = true;
     }
 
     public override void Update()
     {
-        if (!_isRegistered) return;
+        if (!_isRegistered)
+        {
+            // Picks the collider up once its terrain has data to collide with
+            RegisterWithPhysics();
+            return;
+        }
+
+        var data = _terrain.IsValid() ? _terrain.Data : null;
+        if (data != _registeredData || data.IsNotValid() || data.HeightmapResolution != _registeredResolution)
+        {
+            UnregisterFromPhysics();
+            RegisterWithPhysics();
+            return;
+        }
 
         // Re-read the placement and re-fit the broad-phase bounds when the terrain (or an ancestor)
-        // moves. Doing it here, on the main thread, is what lets the filter sample it from workers.
+        // moves or the data is resized. Doing it here, on the main thread, is what lets the filter
+        // sample it from workers.
         uint version = ComputeWorldTransformVersion();
-        if (version == _lastTransformVersion) return;
+        if (version == _lastTransformVersion && data.Size == _registeredSize && data.Height == _registeredHeight) return;
 
         _lastTransformVersion = version;
+        _registeredSize = data.Size;
+        _registeredHeight = data.Height;
         RefreshPlacement();
 
         var scene = GameObject.IsValid() ? GameObject.Scene : null;
@@ -208,6 +235,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         _heightmapProxy = null;
         _collisionFilter = null;
+        _registeredData = null;
         _isRegistered = false;
     }
 
@@ -216,7 +244,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     /// </summary>
     public float GetWorldHeight(float worldX, float worldZ)
     {
-        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
+        var data = _terrain.IsValid() ? _terrain.Data : null;
         if (data == null) return 0;
 
         Float3 localPos = Transform.InverseTransformPoint(new Float3(worldX, 0, worldZ));

@@ -11,10 +11,16 @@ using Xunit;
 
 namespace Prowl.Editor.Test;
 
-/// <summary>A component that references another asset, for dependency-tracking tests.</summary>
+/// <summary>A component that names a scene lazily, for soft dependency tests.</summary>
 public sealed class AssetRefComponent : MonoBehaviour
 {
-    public AssetRef<Scene> Ref;
+    public AssetRef<SceneAsset> Ref;
+}
+
+/// <summary>A component that holds a material in a plain field, for hard dependency tests.</summary>
+public sealed class MaterialHolder : MonoBehaviour
+{
+    public Material? Material;
 }
 
 /// <summary>An importer that always throws, to test that one bad asset can't abort a whole scan/import batch.</summary>
@@ -27,23 +33,33 @@ public sealed class ThrowingTestImporter : AssetImporter
 }
 
 /// <summary>
-/// Thorough tests for the editor asset database: create/import/resolve, GUID stability across
-/// re-open, the metadata cache, move/delete/rename, queries, dependency tracking, idle-timeout
-/// eviction, locking, sub-asset family behavior, and edge cases.
+/// The editor asset database: create/import/resolve, GUID stability across re-open, move/delete/rename, queries,
+/// dependency tracking, and what the new model promises about identity: one object per GUID that reimports, saves,
+/// deletes and renames all act on in place.
 /// </summary>
 public class AssetDatabaseTests : EditorTestHarness
 {
-    public AssetDatabaseTests()
+    private Guid CreateScene(string path) => CreateSceneAsset(new Scene(), path);
+
+    private Material CreateMaterial(string path, float value = 1f)
     {
-        AssetDatabase.ClearForTests();
+        var material = new Material();
+        material.SetFloat("_Value", value);
+        Assets.CreateAsset(material, path);
+        return material;
     }
 
-    private Guid CreateScene(string path) => CreateSceneAsset(new Scene(), path);
+    private void WriteMaterialFile(string path, float value)
+    {
+        var material = new Material();
+        material.SetFloat("_Value", value);
+        File.WriteAllText(AssetAbsolutePath(path), Serializer.Serialize(typeof(object), material).WriteToString());
+    }
 
     #region Create / Import / Resolve
 
     [Fact]
-    public void CreateAsset_WritesFileAndMeta()
+    public void CreateScene_WritesFileAndMeta()
     {
         CreateScene("S.scene");
         Assert.True(File.Exists(AssetAbsolutePath("S.scene")));
@@ -51,24 +67,25 @@ public class AssetDatabaseTests : EditorTestHarness
     }
 
     [Fact]
-    public void CreateAsset_AssignsGuidAndPathToInstance()
+    public void CreateAsset_MakesTheCallersObjectTheAsset()
     {
-        var scene = new Scene();
-        Assets.CreateAsset(scene, "S.scene");
+        Material material = CreateMaterial("M.mat");
 
-        Assert.NotEqual(Guid.Empty, scene.AssetID);
-        Assert.Equal("S.scene", scene.AssetPath);
+        Assert.NotEqual(Guid.Empty, material.AssetID);
+        Assert.Equal("M.mat", material.AssetPath);
+        Assert.Same(material, AssetDatabase.Get(material.AssetID));
+        Assert.True(material.IsLoaded);
     }
 
     [Fact]
-    public void CreateAsset_ResolvableByGuid()
+    public void AScene_ImportsAsItsStoredForm()
     {
         Guid g = CreateScene("S.scene");
-        Assert.IsType<Scene>(Assets.Get(g));
+        Assert.IsType<SceneAsset>(AssetDatabase.Load<Asset>(g));
     }
 
     [Fact]
-    public void CreateAsset_IndexedByPath_RoundTrips()
+    public void CreateScene_IndexedByPath_RoundTrips()
     {
         Guid g = CreateScene("S.scene");
         Assert.Equal(g, Assets.PathToGuid("S.scene"));
@@ -76,7 +93,7 @@ public class AssetDatabaseTests : EditorTestHarness
     }
 
     [Fact]
-    public void CreateAsset_NestedFolders_AreCreated()
+    public void CreateScene_NestedFolders_AreCreated()
     {
         Guid g = CreateScene("A/B/C/Deep.scene");
         Assert.NotEqual(Guid.Empty, g);
@@ -84,7 +101,7 @@ public class AssetDatabaseTests : EditorTestHarness
     }
 
     [Fact]
-    public void CreateAsset_ShowsInEntryListings()
+    public void CreateScene_ShowsInEntryListings()
     {
         CreateScene("S.scene");
         Assert.Contains(Assets.GetAllAssetPaths(), p => p == "S.scene");
@@ -123,49 +140,60 @@ public class AssetDatabaseTests : EditorTestHarness
 
     #endregion
 
-    #region Get / GetCached
+    #region Identity
 
     [Fact]
-    public void Get_EmptyGuid_ReturnsNull() => Assert.Null(Assets.Get(Guid.Empty));
+    public void Get_EmptyGuid_ReturnsNull() => Assert.Null(AssetDatabase.Get(Guid.Empty));
 
     [Fact]
-    public void Get_UnknownGuid_ReturnsNull() => Assert.Null(Assets.Get(Guid.NewGuid()));
-
-    [Fact]
-    public void Get_CachesInstance()
+    public void Get_UnknownGuid_ReturnsNothingUntyped_AndAMissingAssetTyped()
     {
-        var scene = new Scene();
-        Assets.CreateAsset(scene, "S.scene");
+        Guid unknown = Guid.NewGuid();
 
-        var a = Assets.Get(scene.AssetID);
-        var b = Assets.Get(scene.AssetID);
+        Assert.Null(AssetDatabase.Get(unknown));
+        SceneAsset? missing = AssetDatabase.Get<SceneAsset>(unknown);
+        Assert.NotNull(missing);
+        Assert.True(missing!.IsMissing);
+        Assert.Equal(unknown, missing.AssetID);
+    }
+
+    [Fact]
+    public void Get_ReturnsOneObjectPerGuid_WithoutLoadingIt()
+    {
+        Guid g = CreateScene("S.scene");
+        ReopenDatabase();
+        AssetDatabase.ClearForTests();
+
+        Asset? a = AssetDatabase.Get(g);
+        Asset? b = AssetDatabase.Get(g);
 
         Assert.NotNull(a);
-        Assert.Same(a, b); // repeated Get returns the same cached instance
+        Assert.Same(a, b);
+        Assert.Equal(AssetState.Unloaded, a!.State);
+
+        a.Load();
+        Assert.True(a.IsLoaded);
+        Assert.Same(a, AssetDatabase.Get(g));
     }
 
     [Fact]
-    public void GetCached_NullUntilLoaded_ThenCached()
+    public void ADatabaseAsset_CannotBeDisposed()
     {
-        Guid g = CreateScene("S.scene");
-        ReopenDatabase(); // fresh db: nothing deserialized yet
-
-        Assert.Null(Assets.GetCached(g));
-        var loaded = Assets.Get(g);
-        Assert.NotNull(loaded);
-        Assert.Same(loaded, Assets.GetCached(g));
+        Material material = CreateMaterial("M.mat");
+        Assert.Throws<InvalidOperationException>(material.Dispose);
     }
 
     [Fact]
-    public void GetLoadedAssets_DoesNotCountAsActivity()
+    public void AStub_ReadsBackAsTheSameObject()
     {
-        Guid g = CreateScene("S.scene");
-        AssetDatabase.TryGetLastTouched(g, out var before);
+        Material material = CreateMaterial("M.mat");
+        var holder = new GameObject("Holder");
+        holder.AddComponent<MaterialHolder>().Material = material;
 
-        _ = Assets.GetLoadedAssets().ToList();
+        EchoObject echo = Serializer.Serialize(typeof(object), holder);
+        var copy = Serializer.Deserialize<GameObject>(echo)!;
 
-        AssetDatabase.TryGetLastTouched(g, out var after);
-        Assert.Equal(before, after);
+        Assert.Same(material, copy.GetComponent<MaterialHolder>()!.Material);
     }
 
     #endregion
@@ -208,7 +236,6 @@ public class AssetDatabaseTests : EditorTestHarness
     [Fact]
     public void Reopen_PicksUpFileAddedOutOfBand()
     {
-        // Write an asset straight to disk (not through the database), then reopen.
         File.WriteAllText(AssetAbsolutePath("Extra.scene"),
             Serializer.Serialize(typeof(object), new Scene()).WriteToString());
 
@@ -216,7 +243,7 @@ public class AssetDatabaseTests : EditorTestHarness
 
         Guid g = Assets.PathToGuid("Extra.scene");
         Assert.NotEqual(Guid.Empty, g);
-        Assert.NotNull(Assets.Get(g));
+        Assert.NotNull(AssetDatabase.Load<SceneAsset>(g));
     }
 
     [Fact]
@@ -267,6 +294,19 @@ public class AssetDatabaseTests : EditorTestHarness
     }
 
     [Fact]
+    public void MoveAsset_KeepsTheObject_AndRenamesIt_EvenUnloaded()
+    {
+        Guid g = CreateScene("S.scene");
+        Asset asset = AssetDatabase.Get(g)!;
+
+        Assert.True(Assets.MoveAsset("S.scene", "Sub/Renamed.scene"));
+
+        Assert.Same(asset, AssetDatabase.Get(g));
+        Assert.Equal("Sub/Renamed.scene", asset.AssetPath);
+        Assert.Equal("Renamed", asset.Name);
+    }
+
+    [Fact]
     public void MoveAsset_ToOccupiedPath_Fails()
     {
         CreateScene("A.scene");
@@ -289,15 +329,13 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Equal("texture.scene", Assets.GetEntry(Assets.PathToGuid("texture.scene"))?.Path);
     }
 
-    // NormalizePath only swaps backslashes for forward slashes - it never rejects ".." segments or
-    // rooted paths, so a relative path escaping Assets/ lands wherever Path.Combine/the OS resolves it.
     [Fact]
     public void CreateAsset_PathTraversal_IsRejected()
     {
-        string escapedPath = Path.GetFullPath(Path.Combine(Project.AssetsPath, "../../../Escaped.scene"));
+        string escapedPath = Path.GetFullPath(Path.Combine(Project.AssetsPath, "../../../Escaped.mat"));
         try
         {
-            Assets.CreateAsset(new Scene(), "../../../Escaped.scene");
+            Assets.CreateAsset(new Material(), "../../../Escaped.mat");
 
             Assert.False(File.Exists(escapedPath),
                 "CreateAsset must not be able to write outside the Assets folder via '..' segments.");
@@ -319,6 +357,7 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.True(ok);
         Assert.Equal(g, Assets.PathToGuid("New/S.scene"));
         Assert.True(File.Exists(AssetAbsolutePath("New/S.scene")));
+        Assert.Equal("New/S.scene", AssetDatabase.Get(g)!.AssetPath);
     }
 
     // A moved script keeps its content and timestamp, so nothing else asks for a recompile - but the
@@ -348,52 +387,150 @@ public class AssetDatabaseTests : EditorTestHarness
     }
 
     [Fact]
-    public void DeleteAsset_RemovesFileMetaIndexAndCache()
+    public void DeleteAsset_RemovesFileMetaAndIndex_AndLeavesTheObjectMissing()
     {
         Guid g = CreateScene("S.scene");
+        Asset asset = AssetDatabase.Load<Asset>(g)!;
 
         Assets.DeleteAsset("S.scene");
 
         Assert.False(File.Exists(AssetAbsolutePath("S.scene")));
         Assert.False(File.Exists(AssetAbsolutePath("S.scene.meta")));
         Assert.Equal(Guid.Empty, Assets.PathToGuid("S.scene"));
-        Assert.Null(Assets.Get(g));
+        Assert.Same(asset, AssetDatabase.Get(g));
+        Assert.True(asset.IsMissing);
+        Assert.Equal(g, asset.AssetID);
     }
 
     [Fact]
-    public void SaveAsset_PersistsChangesToDisk()
+    public void ADeletedAssetRestored_ComesBackInTheSameObject()
     {
-        var scene = new Scene();
-        Guid g = CreateSceneAsset(scene, "S.scene");
-        scene.Add(new GameObject("Added"));
+        Material material = CreateMaterial("M.mat", 3f);
+        string file = File.ReadAllText(AssetAbsolutePath("M.mat"));
+        string meta = File.ReadAllText(AssetAbsolutePath("M.mat.meta"));
 
-        Assets.SaveAsset(scene);
+        Assets.DeleteAsset("M.mat");
+        Assert.True(material.IsMissing);
+
+        File.WriteAllText(AssetAbsolutePath("M.mat"), file);
+        File.WriteAllText(AssetAbsolutePath("M.mat.meta"), meta);
+        Assets.Refresh();
+
+        Assert.Same(material, AssetDatabase.Load<Material>(material.AssetID));
+        Assert.True(material.IsLoaded);
+        Assert.Equal(3f, material._properties.GetFloat("_Value"));
+    }
+
+    [Fact]
+    public void SaveAsset_RefillsTheSameObject_AndWritesTheFile()
+    {
+        Material material = CreateMaterial("M.mat");
+        material.SetFloat("_Value", 7f);
+        int version = material.ContentVersion;
+
+        Assets.SaveAsset(material);
+
+        Assert.Same(material, AssetDatabase.Get(material.AssetID));
+        Assert.True(material.ContentVersion > version);
+        Assert.Equal(7f, material._properties.GetFloat("_Value"));
+
         ReopenDatabase();
-
-        var loaded = Assets.Get(g) as Scene;
-        Assert.NotNull(loaded);
-        Assert.Equal(1, loaded!.Count);
-        Assert.Equal("Added", loaded.AllObjects.First().Name);
+        AssetDatabase.ClearForTests();
+        Assert.Equal(7f, AssetDatabase.Load<Material>(material.AssetID)!._properties.GetFloat("_Value"));
     }
 
     [Fact]
-    public void Reimport_PicksUpOnDiskEdit_AndReplacesInstance()
+    public void Reimport_PicksUpOnDiskEdit_InTheSameObject()
     {
-        Guid g = CreateScene("S.scene");
-        var before = Assets.Get(g);
+        Material material = CreateMaterial("M.mat", 1f);
+        int version = material.ContentVersion;
 
-        // Overwrite the file with a scene that has an object.
-        var edited = new Scene();
-        edited.Add(new GameObject("X"));
-        File.WriteAllText(AssetAbsolutePath("S.scene"),
-            Serializer.Serialize(typeof(object), edited).WriteToString());
+        WriteMaterialFile("M.mat", 5f);
+        Assets.Reimport(material.AssetID);
 
+        Assert.Same(material, AssetDatabase.Get(material.AssetID));
+        Assert.True(material.ContentVersion > version);
+        Assert.Equal(5f, material._properties.GetFloat("_Value"));
+    }
+
+    [Fact]
+    public void Reimport_OfAnUnloadedAsset_LoadsTheNewContentLater()
+    {
+        Guid g = CreateMaterial("M.mat", 1f).AssetID;
+        ReopenDatabase();
+        AssetDatabase.ClearForTests();
+        Material shell = AssetDatabase.Get<Material>(g)!;
+
+        WriteMaterialFile("M.mat", 9f);
         Assets.Reimport(g);
-        var after = Assets.Get(g) as Scene;
 
-        Assert.NotNull(after);
-        Assert.NotSame(before, after);
-        Assert.Equal(1, after!.Count);
+        Assert.Equal(AssetState.Unloaded, shell.State);
+        shell.Load();
+        Assert.Equal(9f, shell._properties.GetFloat("_Value"));
+    }
+
+    [Fact]
+    public void RevertToSaved_PutsTheObjectBack_InPlace()
+    {
+        Material material = CreateMaterial("M.mat", 2f);
+        material.SetFloat("_Value", 8f);
+
+        Assets.RevertToSaved(material);
+
+        Assert.Equal(2f, material._properties.GetFloat("_Value"));
+    }
+
+    #endregion
+
+    #region Residency
+
+    [Fact]
+    public void AnUnusedAsset_IsUnloaded_AndReloadsInTheSameObject()
+    {
+        Material material = CreateMaterial("M.mat", 4f);
+
+        AssetDatabase.UnloadUnused();
+
+        Assert.Equal(AssetState.Unloaded, material.State);
+        material.Load();
+        Assert.Same(material, AssetDatabase.Get(material.AssetID));
+        Assert.Equal(4f, material._properties.GetFloat("_Value"));
+    }
+
+    [Fact]
+    public void AHeldAsset_StaysLoaded_UntilReleased()
+    {
+        Material material = CreateMaterial("M.mat");
+        object owner = new();
+
+        AssetDatabase.Hold(material, owner);
+        AssetDatabase.UnloadUnused();
+        Assert.True(material.IsLoaded);
+
+        AssetDatabase.Release(material, owner);
+        AssetDatabase.UnloadUnused();
+        Assert.False(material.IsLoaded);
+    }
+
+    [Fact]
+    public void AnAssetALiveSceneUses_StaysLoaded()
+    {
+        Material material = CreateMaterial("M.mat");
+        var scene = new Scene();
+        try
+        {
+            var go = new GameObject("Holder");
+            scene.Add(go);
+            go.AddComponent<MaterialHolder>().Material = material;
+
+            AssetDatabase.UnloadUnused();
+
+            Assert.True(material.IsLoaded);
+        }
+        finally
+        {
+            scene.Dispose();
+        }
     }
 
     #endregion
@@ -406,7 +543,7 @@ public class AssetDatabaseTests : EditorTestHarness
         CreateScene("S.scene");
         CreatePrefabAsset(new GameObject("P"), "P.prefab");
 
-        var scenes = Assets.FindAssetsOfType<Scene>().ToList();
+        var scenes = Assets.FindAssetsOfType<SceneAsset>().ToList();
 
         Assert.Single(scenes);
         Assert.Equal("S.scene", scenes[0].Path);
@@ -416,9 +553,6 @@ public class AssetDatabaseTests : EditorTestHarness
 
     #region Import Batch Resilience
 
-    // ScanAssets/ImportDirty call importer.DefaultSettings()/Import() with no try/catch around most of
-    // it, so one throwing importer aborts the entire scan - every other asset (including ones already
-    // successfully imported before restart) never finishes reconciling, and Initialize() itself throws.
     [Fact]
     public void OneImporterThrowing_DoesNotAbortWholeScan()
     {
@@ -428,36 +562,26 @@ public class AssetDatabaseTests : EditorTestHarness
         var ex = Record.Exception(() => ReopenDatabase());
 
         Assert.Null(ex);
-        // The real guarantee under test: Good.scene must have actually finished reconciling, not
-        // merely "reopening didn't throw" - a scan that silently gives up after the bad asset would
-        // also pass a no-exception-only check.
         Assert.NotEqual(Guid.Empty, Assets.PathToGuid("Good.scene"));
-        Assert.NotNull(Assets.Get(Assets.PathToGuid("Good.scene")));
+        Assert.NotNull(AssetDatabase.Load<SceneAsset>(Assets.PathToGuid("Good.scene")));
     }
 
     #endregion
 
     #region Folder Index Cache
 
-    // CreateAsset never calls InvalidateFolderIndex (unlike DeleteAsset/MoveAsset/MoveFolder), so once
-    // the folder cache has been built, a newly created asset is invisible to GetFolderFiles until some
-    // other operation happens to mark it dirty again.
     [Fact]
     public void CreateAsset_IsVisibleInFolderIndex()
     {
-        CreateScene("A.scene");
+        CreateMaterial("A.mat");
         Assets.GetFolderFiles(""); // build the folder index cache
 
-        CreateScene("B.scene");
+        CreateMaterial("B.mat");
 
         var files = Assets.GetFolderFiles("");
-        Assert.Contains(files, f => f.Name == "B.scene");
+        Assert.Contains(files, f => f.Name == "B.mat");
     }
 
-    // BuildFolderIndex keys folders without a trailing slash, but GetFolderFiles/GetSubFolders only
-    // swap backslashes (NormalizePath) and never trim one - so a caller passing a trailing slash
-    // (MoveFolder does its own TrimEnd('/') before calling in, but nothing enforces that elsewhere)
-    // misses the cached entry entirely.
     [Fact]
     public void GetFolderFiles_TrailingSlash_StillFindsFiles()
     {
@@ -471,226 +595,78 @@ public class AssetDatabaseTests : EditorTestHarness
     #region Dependencies
 
     [Fact]
-    public void Prefab_TracksAssetReferenceDependency()
+    public void Prefab_TracksAHardDependency_ThroughAPlainField()
+    {
+        Material material = CreateMaterial("M.mat");
+
+        var go = new GameObject("Holder");
+        go.AddComponent<MaterialHolder>().Material = material;
+        Guid prefabGuid = CreatePrefabAsset(go, "Holder.prefab");
+
+        var entry = Assets.GetEntry(prefabGuid)!;
+        Assert.Contains(material.AssetID, entry.Dependencies);
+        Assert.DoesNotContain(material.AssetID, entry.SoftDependencies);
+    }
+
+    [Fact]
+    public void Prefab_TracksASoftDependency_ThroughAnAssetRef()
     {
         Guid sceneGuid = CreateScene("Referenced.scene");
 
         var go = new GameObject("Holder");
-        go.AddComponent<AssetRefComponent>().Ref = new AssetRef<Scene>(sceneGuid);
+        go.AddComponent<AssetRefComponent>().Ref = new AssetRef<SceneAsset>(sceneGuid);
         Guid prefabGuid = CreatePrefabAsset(go, "Holder.prefab");
 
-        var entry = Assets.GetEntry(prefabGuid);
-        Assert.NotNull(entry);
-        Assert.Contains(sceneGuid, entry!.Dependencies);
+        var entry = Assets.GetEntry(prefabGuid)!;
+        Assert.Contains(sceneGuid, entry.SoftDependencies);
+        Assert.DoesNotContain(sceneGuid, entry.Dependencies);
     }
 
-    // PrefabUtility.CompareField builds each override's Value via Serializer.Serialize(fieldType, val)
-    // with no tracking context, so an AssetRef GUID living only inside an override blob (not mirrored
-    // in the live component field) never reaches ctx.Dependencies during serialize. PrefabImporter's
-    // raw-echo walk catches it anyway by also checking "AssetID", but SceneImporter's walk only checks
-    // "PrefabAssetId".
+    // An override blob is serialized ahead of time with no tracking context, so only the walk of the
+    // stored tree can find what it references.
     [Fact]
-    public void Scene_TracksAssetRefInsidePrefabOverride()
+    public void Scene_TracksAnAssetInsideAPrefabOverride()
     {
-        Guid orphanGuid = CreateScene("Orphaned.scene");
+        Material material = CreateMaterial("M.mat");
 
         var go = new GameObject("Holder");
-        go.AddComponent<AssetRefComponent>(); // live Ref field stays Guid.Empty
+        go.AddComponent<MaterialHolder>();
         go.PrefabAssetId = Guid.NewGuid();
         go.PrefabOverrides.Add(new PropertyOverride
         {
-            Path = "AssetRefComponent.Ref",
-            Value = Serializer.Serialize(typeof(AssetRef<Scene>), new AssetRef<Scene>(orphanGuid))
+            Path = "MaterialHolder.Material",
+            Value = Serializer.Serialize(typeof(Material), material, new SerializationContext { RootByReference = true })
         });
 
         var scene = new Scene();
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
 
-        var entry = Assets.GetEntry(sceneGuid);
-        Assert.NotNull(entry);
-        Assert.Contains(orphanGuid, entry!.Dependencies);
+        Assert.Contains(material.AssetID, Assets.GetEntry(sceneGuid)!.Dependencies);
     }
 
-    // Audio's own dependency tracking lives with the rest of the audio asset tests, in AudioAssetTests.
-
-    #endregion
-
-    #region Idle Eviction
-
+    // A player never reads which prefab an instance came from, so a prefab only instanced in scenes does not ship.
     [Fact]
-    public void IdleAsset_IsDisposedAndEvicted_AfterSweep()
+    public void Scene_RecordsItsPrefabInstances_AsEditorEdges()
     {
-        Guid guid = CreateScene("Idle.scene");
-        var loaded = Assets.GetLoadedAsset(guid);
-        Assert.NotNull(loaded);
-        Assert.False(loaded.IsDisposed);
+        Guid prefabGuid = CreatePrefabAsset(new GameObject("P"), "P.prefab");
+        var instance = GameObject.Instantiate(GetPrefab(prefabGuid)!)!;
+        var scene = instance.Scene!;
+        scene.Remove(instance);
 
-        AssetDatabase.ForceIdle(guid);
-        Assets.ForceIdleSweep();
+        var holder = new Scene();
+        holder.Add(instance);
+        Guid sceneGuid = CreateSceneAsset(holder, "Main.scene");
 
-        Assert.True(loaded.IsDisposed);
-        Assert.Null(Assets.GetLoadedAsset(guid));
-    }
-
-    [Fact]
-    public void RecentlyTouchedAsset_SurvivesSweep_AndResolvesToSameInstance()
-    {
-        Guid guid = CreateScene("Fresh.scene");
-        var loaded = Assets.GetLoadedAsset(guid); // touches it - not idle
-
-        Assets.ForceIdleSweep();
-
-        Assert.False(loaded.IsDisposed);
-        Assert.Same(loaded, Assets.Get(guid));
-    }
-
-    [Fact]
-    public void AssetRefEquality_HoldsAcrossEvictionAndReload()
-    {
-        Guid guid = CreateScene("EqScene.scene");
-
-        var refFirst = new AssetRef<Scene>(guid);
-        refFirst.EnsureLoaded();
-        Assert.NotNull(refFirst.Res);
-
-        AssetDatabase.ForceIdle(guid);
-        Assets.ForceIdleSweep();
-        Assert.Null(Assets.GetLoadedAsset(guid)); // sanity: really evicted
-
-        var refSecond = new AssetRef<Scene>(guid);
-        refSecond.EnsureLoaded();
-        Assert.NotNull(refSecond.Res);
-
-        // A fresh, never-resolved AssetRef for the same GUID compares equal via AssetID alone,
-        // regardless of which instance (before/after eviction) either side has cached.
-        var refA = new AssetRef<Scene>(guid);
-        Assert.True(refA == refSecond);
-        Assert.Equal(refA.GetHashCode(), refSecond.GetHashCode());
-    }
-
-    [Fact]
-    public void ReloadCount_IncrementsEachTimeAssetIsReloadedFromDisk()
-    {
-        Guid guid = CreateScene("Reload.scene");
-        int before = Assets.GetReloadCount(guid);
-
-        AssetDatabase.ForceIdle(guid);
-        Assets.ForceIdleSweep();
-        Assets.Get(guid); // reload from disk
-
-        Assert.Equal(before + 1, Assets.GetReloadCount(guid));
-    }
-
-    [Fact]
-    public void ForceIdleSweep_UpdatesLastSweepUtc()
-    {
-        // A fresh backend has never swept, so this must start far in the past - otherwise the
-        // "recent" assertion below would trivially pass even if ForceIdleSweep did nothing.
-        Assert.True((DateTime.UtcNow - Assets.LastSweepUtc).TotalDays > 1);
-
-        Assets.ForceIdleSweep();
-
-        Assert.True((DateTime.UtcNow - Assets.LastSweepUtc).TotalSeconds < 2);
-    }
-
-    // TickIdleSweep is meant to be called every frame - MaybeSweepIdle's own gate must make repeated
-    // calls cheap by only actually scanning once per IdleSweepInterval. ForceIdleSweep just reset that
-    // gate, so an immediately-following TickIdleSweep must be a no-op even for an idle asset.
-    [Fact]
-    public void TickIdleSweep_RespectsInterval_NoOpRightAfterAFullSweep()
-    {
-        Guid guid = CreateScene("Tick.scene");
-        Assets.ForceIdleSweep(); // resets the interval gate
-
-        AssetDatabase.ForceIdle(guid);
-        Assets.TickIdleSweep();
-
-        Assert.NotNull(Assets.GetLoadedAsset(guid));
+        var entry = Assets.GetEntry(sceneGuid)!;
+        Assert.Contains(prefabGuid, entry.EditorDependencies);
+        Assert.DoesNotContain(prefabGuid, entry.Dependencies);
+        Assert.DoesNotContain(prefabGuid, Assets.Dependencies.GetDependencies(sceneGuid));
     }
 
     #endregion
 
-    #region Locking
-
-    [Fact]
-    public void LockPermanent_PreventsIdleEviction_UntilUnlocked()
-    {
-        Guid guid = CreateScene("LockedPermanent.scene");
-        AssetDatabase.LockPermanent(guid);
-
-        AssetDatabase.ForceIdle(guid);
-        Assets.ForceIdleSweep();
-
-        Assert.NotNull(Assets.GetLoadedAsset(guid)); // locked - the sweep must have skipped it
-
-        AssetDatabase.Unlock(guid);
-        AssetDatabase.ForceIdle(guid);
-        Assets.ForceIdleSweep();
-
-        Assert.Null(Assets.GetLoadedAsset(guid));
-    }
-
-    [Fact]
-    public void LockPermanent_Twice_IsIdempotent_SingleUnlockReleasesIt()
-    {
-        Guid guid = CreateScene("DoubleLock.scene");
-        AssetDatabase.LockPermanent(guid);
-        AssetDatabase.LockPermanent(guid);
-
-        AssetDatabase.Unlock(guid);
-
-        Assert.False(AssetDatabase.IsLocked(guid));
-    }
-
-    [Fact]
-    public void Unlock_WhenNotLocked_IsNoOp()
-    {
-        Guid guid = CreateScene("NeverLocked.scene");
-        var ex = Record.Exception(() => AssetDatabase.Unlock(guid));
-
-        Assert.Null(ex);
-        Assert.False(AssetDatabase.IsLocked(guid));
-    }
-
-    [Fact]
-    public void LockToScene_PreventsIdleEviction_ThenReleasesOnSceneDispose()
-    {
-        Guid guid = CreateScene("LockedToScene.scene");
-        var owningScene = new Scene();
-        AssetDatabase.LockToScene(guid, owningScene);
-
-        AssetDatabase.ForceIdle(guid);
-        Assets.ForceIdleSweep();
-
-        Assert.NotNull(Assets.GetLoadedAsset(guid)); // locked - the sweep must have skipped it
-
-        owningScene.Dispose(); // releases the lock (see AssetDatabase.ReleaseSceneLocks)
-        AssetDatabase.ForceIdle(guid);
-        Assets.ForceIdleSweep();
-
-        Assert.Null(Assets.GetLoadedAsset(guid));
-    }
-
-    [Fact]
-    public void LockToScene_TwoScenes_OneDisposing_DoesNotReleaseTheOthersLock()
-    {
-        Guid guid = CreateScene("SharedLock.scene");
-        var sceneA = new Scene();
-        var sceneB = new Scene();
-        AssetDatabase.LockToScene(guid, sceneA);
-        AssetDatabase.LockToScene(guid, sceneB);
-
-        sceneA.Dispose();
-        Assert.True(AssetDatabase.IsLocked(guid)); // sceneB still holds it
-
-        sceneB.Dispose();
-        Assert.False(AssetDatabase.IsLocked(guid));
-    }
-
-    #endregion
-
-    #region Sub-Asset Family Behavior
+    #region Sub-Assets
 
     private (Guid texGuid, Guid spriteGuid) CreateTextureWithSprite(string path)
     {
@@ -701,71 +677,52 @@ public class AssetDatabaseTests : EditorTestHarness
 
         TextureSpriteMeta.Save(texGuid, new SpriteImportSettings { Mode = SpriteMode.Single });
         Guid spriteGuid = Assets.GetSubAssets(texGuid)[0].Guid;
-        Assert.NotNull(Assets.GetLoadedAsset(spriteGuid));
         return (texGuid, spriteGuid);
     }
 
+    // A sub-asset has its own cache, so it loads, unloads and refills on its own.
     [Fact]
-    public void SubAsset_ReloadsAfterEviction_WhenParentReimports()
+    public void ASubAsset_LoadsOnItsOwn_AndRefillsOnReimport()
     {
-        var (texGuid, spriteGuid) = CreateTextureWithSprite("SubAssetReload.png");
+        var (texGuid, spriteGuid) = CreateTextureWithSprite("Sprite.png");
 
-        AssetDatabase.ForceIdle(texGuid);
-        AssetDatabase.ForceIdle(spriteGuid);
-        Assets.ForceIdleSweep();
-        Assert.Null(Assets.GetLoadedAsset(spriteGuid)); // sanity: the sub-asset really was evicted
+        Sprite sprite = AssetDatabase.Load<Sprite>(spriteGuid)!;
+        Assert.True(sprite.IsLoaded);
+        int version = sprite.ContentVersion;
 
         Assets.Reimport(texGuid);
 
-        Assert.NotNull(Assets.GetLoadedAsset(spriteGuid));
-    }
-
-    // A sub-asset never loads except as a side effect of loading its parent, so it can't be
-    // independently idle-evicted either - ResolveFamily routes its touch/idle checks to the parent.
-    [Fact]
-    public void SubAssetAndParent_AreEvictedTogether_NeverPartially()
-    {
-        var (texGuid, spriteGuid) = CreateTextureWithSprite("SubAssetFamilyEviction.png");
-
-        // Forcing just the sub-asset idle must resolve to the shared family entry.
-        AssetDatabase.ForceIdle(spriteGuid);
-        Assets.ForceIdleSweep();
-
-        Assert.Null(Assets.GetLoadedAsset(texGuid));    // parent evicted too
-        Assert.Null(Assets.GetLoadedAsset(spriteGuid)); // sub evicted
+        Assert.Same(sprite, AssetDatabase.Get(spriteGuid));
+        Assert.True(sprite.ContentVersion > version);
+        Assert.Same(AssetDatabase.Get(texGuid), sprite.Texture);
     }
 
     [Fact]
-    public void TouchingSubAsset_KeepsWholeFamilyAlive()
+    public void ASubAssetAReimportDrops_IsMissing()
     {
-        var (texGuid, spriteGuid) = CreateTextureWithSprite("SubAssetFamilyTouch.png");
-        AssetDatabase.ForceIdle(texGuid); // baseline: whole family idle
+        var (texGuid, spriteGuid) = CreateTextureWithSprite("Sprite.png");
+        Sprite sprite = AssetDatabase.Load<Sprite>(spriteGuid)!;
 
-        Assets.Get(spriteGuid); // touching only the sub-asset...
+        TextureSpriteMeta.Save(texGuid, new SpriteImportSettings { Mode = SpriteMode.None });
 
-        Assets.ForceIdleSweep();
-
-        Assert.NotNull(Assets.GetLoadedAsset(texGuid));    // ...keeps the parent alive too
-        Assert.NotNull(Assets.GetLoadedAsset(spriteGuid));
+        Assert.True(sprite.IsMissing);
+        Assert.Same(sprite, AssetDatabase.Get(spriteGuid));
     }
 
+    #endregion
+
+    #region Saving
+
     [Fact]
-    public void LockingSubAsset_LocksTheWholeFamily()
+    public void SavingATexture_NeverWritesOverItsImage()
     {
-        var (texGuid, spriteGuid) = CreateTextureWithSprite("SubAssetFamilyLock.png");
+        TestImages.WriteSolidPng(AssetAbsolutePath("Grass.png"), 4, 1, 2, 3);
+        Guid guid = Assets.ImportFile("Grass.png");
+        byte[] image = File.ReadAllBytes(AssetAbsolutePath("Grass.png"));
+        var texture = AssetDatabase.Load<Texture2D>(guid)!;
 
-        AssetDatabase.LockPermanent(spriteGuid);
-        Assert.True(AssetDatabase.IsLocked(texGuid)); // locking the sub locked the parent too
-
-        AssetDatabase.ForceIdle(texGuid);
-        Assets.ForceIdleSweep();
-        Assert.NotNull(Assets.GetLoadedAsset(texGuid));
-        Assert.NotNull(Assets.GetLoadedAsset(spriteGuid));
-
-        AssetDatabase.Unlock(spriteGuid); // unlocking via the sub releases the same family lock
-        AssetDatabase.ForceIdle(texGuid);
-        Assets.ForceIdleSweep();
-        Assert.Null(Assets.GetLoadedAsset(texGuid));
+        Assert.False(Assets.SaveAsset(texture));
+        Assert.Equal(image, File.ReadAllBytes(AssetAbsolutePath("Grass.png")));
     }
 
     #endregion
@@ -781,12 +738,12 @@ public class AssetDatabaseTests : EditorTestHarness
 
         Guid g = Assets.PathToGuid("notes.xyz");
         Assert.NotEqual(Guid.Empty, g);
-        Assert.Null(Assets.Get(g));
+        Assert.Null(AssetDatabase.Get(g));
     }
 
     /// <summary>
     /// A .navmesh is written and read as binary Echo. Its payload is compressed voxelization
-    /// blobs, which as text become base64 — bigger, slower to parse, and no more readable. A
+    /// blobs, which as text become base64 - bigger, slower to parse, and no more readable. A
     /// text one does not parse as binary, so it fails the import outright rather than loading
     /// as something wrong; rebaking is the migration.
     /// </summary>
@@ -801,12 +758,12 @@ public class AssetDatabaseTests : EditorTestHarness
         Guid guid = Assets.ImportFile("Baked.navmesh");
         Assert.NotEqual(Guid.Empty, guid);
 
-        var loaded = Assets.Get(guid) as NavMeshData;
+        var loaded = AssetDatabase.Load<NavMeshData>(guid);
         Assert.NotNull(loaded);
         Assert.Equal(baked!.CacheLayers.Count, loaded!.CacheLayers.Count);
 
         File.WriteAllText(AssetAbsolutePath("Legacy.navmesh"), echo.WriteToString());
-        Assert.Null(Assets.Get(Assets.ImportFile("Legacy.navmesh")));
+        Assert.Null(AssetDatabase.Get(Assets.ImportFile("Legacy.navmesh")));
     }
 
     /// <summary>A rebake goes over the asset the surface references, so renaming the file does not
@@ -827,7 +784,7 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.EndsWith(".navmesh", Navigation.NavMeshBakeService.BakePath(surface));
         Assert.DoesNotContain("Renamed By User", Navigation.NavMeshBakeService.BakePath(surface));
 
-        surface.NavMeshData = new AssetRef<NavMeshData>(guid);
+        surface.NavMeshData = AssetDatabase.Get<NavMeshData>(guid);
 
         Assert.Equal("Renamed By User.navmesh", Navigation.NavMeshBakeService.BakePath(surface));
     }
@@ -849,17 +806,17 @@ public class AssetDatabaseTests : EditorTestHarness
             var original = new GameObject("Original");
             scene.Add(original);
             var originalSurface = original.AddComponent<NavMeshSurface>();
-            originalSurface.NavMeshData = new AssetRef<NavMeshData>(guid);
+            originalSurface.NavMeshData = AssetDatabase.Get<NavMeshData>(guid);
 
             var duplicate = new GameObject("Duplicate");
             scene.Add(duplicate);
             var duplicateSurface = duplicate.AddComponent<NavMeshSurface>();
-            duplicateSurface.NavMeshData = new AssetRef<NavMeshData>(guid);
+            duplicateSurface.NavMeshData = AssetDatabase.Get<NavMeshData>(guid);
 
             Assert.NotEqual("Shared.navmesh", Navigation.NavMeshBakeService.BakePath(duplicateSurface));
 
             // Once nothing else references it, the surface bakes over its own file again.
-            duplicateSurface.NavMeshData = default;
+            duplicateSurface.NavMeshData = null;
             Assert.Equal("Shared.navmesh", Navigation.NavMeshBakeService.BakePath(originalSurface));
         }
         finally
@@ -899,7 +856,8 @@ public class AssetDatabaseTests : EditorTestHarness
             }
 
             Assert.Equal("Done", bake.Status);
-            Assert.NotEqual(Guid.Empty, surface.NavMeshData.AssetID);
+            Assert.NotNull(surface.NavMeshData);
+            Assert.NotEqual(Guid.Empty, surface.NavMeshData!.AssetID);
             Assert.StartsWith("Scene_navmesh/", Navigation.NavMeshBakeService.BakePath(surface));
             Assert.NotNull(surface.Instance);
         }

@@ -13,7 +13,7 @@ using Xunit;
 namespace Prowl.Editor.Test;
 
 /// <summary>
-/// Confirms a sub-asset's own dependency graph entry (e.g. a Sprite's AssetRef to its Texture2D)
+/// Confirms a sub-asset's own dependency graph entry (e.g. a Sprite's reference to its Texture2D)
 /// survives a simulated editor restart, not just the current session - SubAssetEntry persists its
 /// own Dependencies and EditorAssetDatabase re-seeds them from the metadata cache on startup.
 /// </summary>
@@ -72,14 +72,12 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
 
             public class PersistCheckComponent : MonoBehaviour
             {
-                public AssetRef<Sprite> MySprite;
+                public Sprite? MySprite;
 
                 public override void Start()
                 {
-                    MySprite.EnsureLoaded();
-                    var sprite = MySprite.Res;
-                    if (sprite.IsValid()) sprite.Texture.EnsureLoaded();
-                    var tex = sprite.IsValid() ? sprite.Texture.Res : null;
+                    var sprite = MySprite;
+                    var tex = sprite.IsValid() ? sprite.Texture : null;
                     System.Console.WriteLine($"PROWL_SPRITE_CHECK|spriteValid={sprite.IsValid()}|texValid={tex.IsValid()}|width={(tex.IsValid() ? tex.Width : 0)}|height={(tex.IsValid() ? tex.Height : 0)}");
                 }
             }
@@ -95,7 +93,7 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
         var scene = new Scene();
         var go = new GameObject("PersistChecker");
         var comp = go.AddComponent(compType!);
-        compType!.GetField("MySprite")!.SetValue(comp, new AssetRef<Sprite>(spriteGuid));
+        compType!.GetField("MySprite")!.SetValue(comp, AssetDatabase.Get<Sprite>(spriteGuid));
         scene.Add(go);
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
         Assert.NotEqual(Guid.Empty, sceneGuid);

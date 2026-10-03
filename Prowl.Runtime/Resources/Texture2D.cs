@@ -19,10 +19,10 @@ public sealed class Texture2D : Texture, ISerializable
     private uint _height;
 
     /// <summary>The width of this <see cref="Texture2D"/>.</summary>
-    public uint Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
+    public uint Width { get { EnsureLoaded(); return _width; } private set => _width = value; }
 
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
-    public uint Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
+    public uint Height { get { EnsureLoaded(); return _height; } private set => _height = value; }
 
     private bool _generateMipmaps;
 
@@ -64,7 +64,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
         if (Graphics.Device == null)
@@ -80,7 +80,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
         ValidateByteCapacity(data.Length * sizeof(T), (long)rectWidth * rectHeight * ImageFormat.GetSizeInBytes(), nameof(data));
 
@@ -93,7 +93,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         SetData(data, 0, 0, Width, Height);
     }
 
@@ -153,7 +153,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe void RecreateImage(uint width, uint height)
     {
-        EnsureNotDisposed();
+        EnsureLoaded();
         ValidateTextureSize(width, height);
 
         Width = width;
@@ -205,6 +205,9 @@ public sealed class Texture2D : Texture, ISerializable
         if (rectWidth > Width - rectX || rectHeight > Height - rectY)
             throw new ArgumentOutOfRangeException("Specified area is outside of the texture's storage");
     }
+
+    protected internal override long EstimateBytes()
+        => (long)(_width * _height * (ulong)GetBytesPerPixel(ImageFormatUnchecked) * (IsMipmappedUnchecked ? 4.0 / 3.0 : 1.0));
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
@@ -321,9 +324,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public static Texture2D LoadFromFile(string filePath, bool generateMipmaps = false)
     {
-        Texture2D texture = FromFile(filePath, generateMipmaps);
-        texture.AssetPath = filePath;
-        return texture;
+        return FromFile(filePath, generateMipmaps);
     }
 
     /// <summary>
@@ -337,12 +338,10 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>
     /// Get the shared instance of a default embedded texture.
     /// </summary>
-    public static Texture2D LoadDefault(DefaultTexture texture)
-    {
-        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(texture)) is Texture2D cached)
-            return cached;
-        return ParseDefault(texture);
-    }
+    public static Texture2D LoadDefault(DefaultTexture texture) => BuiltInAssets.Load<Texture2D>(BuiltInAssets.GuidFor(texture));
+
+    /// <summary>The built-in texture without loading it, for code that runs while another asset loads.</summary>
+    internal static Texture2D GetDefault(DefaultTexture texture) => AssetDatabase.Get<Texture2D>(BuiltInAssets.GuidFor(texture))!;
 
     /// <summary>
     /// Raw load of a default embedded texture invoked by <see cref="BuiltInAssets"/>

@@ -51,23 +51,16 @@ public class MaterialAssetEditor : AssetImporterEditor
     protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
         => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
 
-    /// <summary>Serializes a material the way its .mat file and cache entry are written: AssetID cleared,
-    /// so the whole object is emitted rather than an $assetId reference back to itself.</summary>
-    private static EchoObject SerializePersisted(Material material)
-    {
-        Guid savedId = material.AssetID;
-        material.AssetID = Guid.Empty;
-        try { return Serializer.Serialize(typeof(object), material); }
-        finally { material.AssetID = savedId; }
-    }
+    /// <summary>Serializes a material the way its .mat file and cache entry are written.</summary>
+    private static EchoObject SerializePersisted(Material material) => Serializer.Serialize(typeof(object), material);
 
     protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
     {
         if (asset is not Material material || material.IsNotValid()) return false;
-        if (!Write(material, entry)) return false; // a failed write was logged and stays pending
+        // A failed write was logged and stays pending.
+        if (EditorAssetBackend.Instance?.SaveAsset(entry.Guid, SerializePersisted(material)) != true) return false;
 
         _pending.Remove(entry.Guid);
-        EditorAssetBackend.Instance?.Reimport(entry.Guid);
         return true;
     }
 
@@ -75,9 +68,8 @@ public class MaterialAssetEditor : AssetImporterEditor
     {
         if (asset is not Material material || material.IsNotValid()) return;
 
-        // Restored onto the live instance rather than swapped for a fresh one, so everything already
-        // referencing this material shows the revert immediately and keeps its GPU state.
-        Serializer.DeserializeInto(baseline, material);
+        // Refilled in place, so everything already referencing this material shows the revert immediately.
+        EditorAssetBackend.Instance?.RevertToSaved(material);
 
         _pending.Remove(entry.Guid);
         PreviewWidget.For(entry.Guid).Invalidate();
@@ -147,7 +139,8 @@ public class MaterialAssetEditor : AssetImporterEditor
         EditorGUI.Row(paper, $"{id}_shader", "Shader", () =>
         {
             string none = Loc.Get("inspector.shader_none");
-            string label = EditorAssetBackend.Instance?.GetShaderMenuPath(material.ShaderRef.AssetID, none) ?? none;
+            Guid current = material.Shader is { } shader ? shader.AssetID : Guid.Empty;
+            string label = EditorAssetBackend.Instance?.GetShaderMenuPath(current, none) ?? none;
 
             var trigger = paper.Row($"{id}_shader_btn")
                 .Height(EditorTheme.RowHeight)
@@ -187,9 +180,9 @@ public class MaterialAssetEditor : AssetImporterEditor
                         MenuTreePopup.Popover(paper, $"{id}_shader_pick", trigHandle, _shaderEntries, _shaderMenu,
                             picked =>
                             {
-                                if (picked.Tag is Guid guid && guid != material.ShaderRef.AssetID)
+                                if (picked.Tag is Guid guid && guid != current && AssetDatabase.Load<Shader>(guid) is { IsLoaded: true } pickedShader)
                                 {
-                                    material.ShaderRef = new AssetRef<Shader>(guid);
+                                    material.Shader = pickedShader;
                                     MarkDirty(material, entry);
                                 }
                                 CloseShaderPicker();
@@ -276,20 +269,4 @@ public class MaterialAssetEditor : AssetImporterEditor
         return label;
     }
 
-    /// <summary>Serialize one material over its .mat file. Returns false (and logs) on failure.</summary>
-    private static bool Write(Material material, AssetEntry entry)
-    {
-        string absolutePath = Path.Combine(Project.Current!.AssetsPath, entry.Path);
-        try
-        {
-            EchoObject echo = SerializePersisted(material);
-            File.WriteAllText(absolutePath, echo.WriteToString());
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to save material '{entry.Path}': {ex.Message}");
-            return false;
-        }
-    }
 }

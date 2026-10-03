@@ -249,7 +249,7 @@ public static class EditorGUI
         if (font == null) return width;
 
         using (paper.Column(id).Width(width).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
-        using (paper.Column($"{id}_grp").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+        using (paper.Column($"{id}_grp").Height(UnitValue.Auto).Margin(0, 0, 0, UnitValue.StretchOne)
             .Padding(8, 8, 10, 10).Gap(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         {
             foreach (var (cid, label, icon) in cats)
@@ -363,6 +363,49 @@ public static class EditorGUI
             .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => onClick());
+    }
+
+    /// <summary>A small pill that toggles, lit with the accent while on.</summary>
+    public static void Chip(Paper paper, string id, string label, bool on, Action toggle, float height = 20f)
+    {
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        var m = Origami.Current.Metrics;
+        paper.Box(id).Width(UnitValue.Auto).Height(height).Margin(0, 6, 0, 0).Padding(8, 8, 0, 0)
+            .Rounded(m.SmallRounding)
+            .BackgroundColor(on ? EditorTheme.WithAlpha(EditorTheme.Accent, 60) : EditorTheme.WithAlpha(EditorTheme.Ink300, 22))
+            .Hovered.BackgroundColor(on ? EditorTheme.WithAlpha(EditorTheme.Accent, 90) : EditorTheme.WithAlpha(EditorTheme.Ink300, 40)).End()
+            .Text(label, font).TextColor(on ? EditorTheme.AccentBright : EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSizeSmall * 0.95f).Alignment(TextAlignment.MiddleCenter)
+            .Cursor(PaperCursor.Pointer)
+            .OnClick(0, (_, _) => toggle());
+    }
+
+    /// <summary>A small panel button, filled with the accent while <paramref name="active"/>.</summary>
+    public static ElementBuilder PillButton(Paper paper, string id, string label, bool active, Action onClick)
+    {
+        var m = Origami.Current.Metrics;
+        return paper.Box(id).Width(UnitValue.Auto).Height(26).Padding(12, 12, 0, 0).Rounded(m.SmallRounding)
+            .BackgroundColor(active ? EditorTheme.Accent : EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Hovered.BackgroundColor(active ? EditorTheme.AccentBright : EditorTheme.Neutral400).End()
+            .Text(label, EditorTheme.DefaultFont!).TextColor(active ? Color.White : EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
+    }
+
+    /// <summary>A quiet explanatory line, for the places an inspector has something to say.</summary>
+    public static void Note(Paper paper, string id, string text)
+    {
+        var m = Origami.Current.Metrics;
+        paper.Box(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.Spacing, m.Spacing)
+            .Padding(m.Padding, m.Padding, m.SpacingMedium, m.SpacingMedium)
+            .Rounded(m.SmallRounding).BackgroundColor(EditorTheme.Neutral300).IsNotInteractable()
+            .Text(text, EditorTheme.DefaultFont!).TextColor(EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSizeSmall).Wrap(Scribe.TextWrapMode.Wrap)
+            .Alignment(TextAlignment.MiddleLeft);
     }
 
     /// <summary>A colored call-to-action button. Pass <paramref name="grow"/> = true to stretch width.</summary>

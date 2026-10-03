@@ -78,6 +78,8 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     private const float BlurOffsetStep = 0.25f;
     // A blur radius maps to a standard deviation of a quarter of it.
     private const float SigmaPerRadius = 0.25f;
+    private const float CaptureSigma = 0.866f;
+    private const int BlurBaseShift = 2;
 
     private GraphicsDevice _device;
 
@@ -98,6 +100,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     public RenderResourceID SceneResourceId => _sceneId;
 
     private readonly RenderResourceID _sceneId;
+    private readonly RenderResourceID _captureId;
     private readonly RenderResourceID[] _blurIds = new RenderResourceID[MaxBlurLevels];
     private readonly RenderResourceID _vboId;
     private readonly RenderResourceID _eboId;
@@ -106,6 +109,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     private readonly uint _indexBufferBytes;
 
     private TextureHandle _sceneHandle;
+    private TextureHandle _captureHandle;
     private readonly TextureHandle[] _blurHandles = new TextureHandle[MaxBlurLevels];
     private BufferHandle _vboHandle;
     private BufferHandle _eboHandle;
@@ -155,6 +159,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         _sceneId = resourceId;
         _vboId = $"{resourceId}Vbo";
         _eboId = $"{resourceId}Ebo";
+        _captureId = $"{resourceId}Capture";
         for (int i = 0; i < _blurIds.Length; i++)
             _blurIds[i] = $"{resourceId}Blur{i}";
     }
@@ -327,8 +332,9 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     {
         _sceneHandle = builder.GetOutputTexture(_sceneId, GraphTextureDesc.ViewSized(depth: false));
 
+        _captureHandle = builder.GetOutputTexture(_captureId, GraphTextureDesc.ViewSized(depth: false, scale: 0.5f));
         for (int i = 0; i < _blurHandles.Length; i++)
-            _blurHandles[i] = builder.GetOutputTexture(_blurIds[i], GraphTextureDesc.ViewSized(depth: false, scale: 1f / (1 << (i + 1))));
+            _blurHandles[i] = builder.GetOutputTexture(_blurIds[i], GraphTextureDesc.ViewSized(depth: false, scale: 1f / (1 << (i + BlurBaseShift))));
 
         _vboHandle = builder.GetOutputBuffer(_vboId, GraphBufferDesc.Of(_vertexBufferBytes, BufferUsage.VertexBuffer));
         _eboHandle = builder.GetOutputBuffer(_eboId, GraphBufferDesc.Of(_indexBufferBytes, BufferUsage.IndexBuffer));
@@ -346,7 +352,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         IReadOnlyList<DrawCall> drawCalls = _pendingDrawCalls;
 
         RenderTexture sceneRT = context.GetRenderTexture(_sceneHandle);
-        RenderTexture ResolveBlur(int level) => context.GetRenderTexture(_blurHandles[level]);
+        RenderTexture ResolveBlur(int level) => context.GetRenderTexture(level < 0 ? _captureHandle : _blurHandles[level]);
         DeviceBuffer vbo = context.GetRenderBuffer(_vboHandle);
         DeviceBuffer ebo = context.GetRenderBuffer(_eboHandle);
 
@@ -470,11 +476,12 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         float fbScale = (float)canvas.FramebufferScale;
         Brush brush = drawCall.Brush;
         float blur = brush.BackdropBlur;
+        float blurMix = 1f;
 
         // Backdrop blur: blur the scene drawn so far into blur level 0, then composite the shape over it.
         if (blur > 0f)
         {
-            RenderBackdropBlur(cmd, blur, sceneRT, resolveBlur);
+            blurMix = RenderBackdropBlur(cmd, blur, sceneRT, resolveBlur);
             cmd.SetFramebuffer(sceneRT.Framebuffer);
         }
 
@@ -521,9 +528,16 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
 
         // backdropTexture always needs a bound sampler; use the blurred scene when blurring, else any texture.
         if (blur > 0f)
+        {
             _properties.SetTexture("backdropTexture", resolveBlur(0).ColorTextures[0], _sampler);
+            _properties.SetTexture("backdropSharpTexture", resolveBlur(-1).ColorTextures[0], _sampler);
+        }
         else
+        {
             _properties.SetTexture("backdropTexture", texture.Handle, texture.Sampler);
+            _properties.SetTexture("backdropSharpTexture", texture.Handle, texture.Sampler);
+        }
+        _properties.SetFloat("backdropMix", blurMix);
 
         CanvasVertexSource source = new()
         {
@@ -543,9 +557,20 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     /// Maps a pixel blur radius onto dual-Kawase iterations and a sample offset using the measured
     /// <see cref="BlurSigmaTable"/>, so blur strength follows the radius smoothly.
     /// </summary>
-    private static void ComputeBlurParams(float radius, out int iterations, out float offset)
+    private static void ComputeBlurParams(float radius, out int iterations, out float offset, out float blurMix)
     {
         float sigma = radius * SigmaPerRadius;
+        float minSigma = BlurSigmaTable[0, 0];
+        iterations = 1;
+        offset = BlurOffsetMin;
+        blurMix = 1f;
+
+        if (sigma <= minSigma)
+        {
+            float capture = CaptureSigma * CaptureSigma;
+            blurMix = Math.Clamp((sigma * sigma - capture) / (minSigma * minSigma - capture), 0f, 1f);
+            return;
+        }
 
         int rows = BlurSigmaTable.GetLength(0), cols = BlurSigmaTable.GetLength(1);
         int row = 0;
@@ -559,18 +584,19 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         offset = BlurOffsetMin + (col - 1 + t) * BlurOffsetStep;
     }
 
-    private void RenderBackdropBlur(CommandBuffer cmd, float radius, RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur)
+    private float RenderBackdropBlur(CommandBuffer cmd, float radius, RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur)
     {
-        ComputeBlurParams(radius, out int iterations, out float offset);
+        ComputeBlurParams(radius, out int iterations, out float offset, out float blurMix);
 
-        // Downsample pass
-        BlurPass(cmd, sceneRT.ColorTextures[0], TexelSize(sceneRT), resolveBlur, 0, false, offset);
+        BlurPass(cmd, sceneRT.ColorTextures[0], TexelSize(sceneRT), resolveBlur, -1, false, 0f);
+        BlurPass(cmd, resolveBlur(-1).ColorTextures[0], TexelSize(resolveBlur(-1)), resolveBlur, 0, false, 1f);
         for (int i = 0; i < iterations; i++)
             BlurPass(cmd, resolveBlur(i).ColorTextures[0], TexelSize(resolveBlur(i)), resolveBlur, i + 1, false, offset);
 
-        // Upsample pass
         for (int i = iterations; i > 0; i--)
             BlurPass(cmd, resolveBlur(i).ColorTextures[0], TexelSize(resolveBlur(i)), resolveBlur, i - 1, true, offset);
+
+        return blurMix;
     }
 
     private static Int2 TexelSize(RenderTexture rt) => new((int)rt.Desc.Width, (int)rt.Desc.Height);
@@ -584,7 +610,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         cmd.SetFramebuffer(dst.Framebuffer);
 
         _properties.SetTexture("sourceTexture", source, _sampler);
-        _properties.SetFloat2("halfPixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
+        _properties.SetFloat2("halfPixel", new Float2((upsample ? 0.25f : 0.5f) / basis.X, (upsample ? 0.25f : 0.5f) / basis.Y));
         _properties.SetFloat("offset", offset);
 
         cmd.SetShader(upsample ? _blurProgramOn : _blurProgramOff);

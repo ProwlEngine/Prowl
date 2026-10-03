@@ -38,10 +38,10 @@ public sealed class AudioSource : MonoBehaviour
     // Audio clip and playback settings
     [Header("Playback")]
     [SerializeField, Tooltip("The clip this source plays.")]
-    private AssetRef<AudioClip> _clip;
+    private AudioClip? _clip;
     [SerializeField, Tooltip("Start playing as soon as the component is enabled.")]
     private bool _playOnStart = false;
-    // Set when OnEnable wanted to auto-play but the clip was still streaming in (async loading);
+    // Set when OnEnable wanted to auto-play but the clip was still loading, as one assigned at runtime can be.
     // Update performs the play once the clip arrives.
     private bool _pendingAutoPlay = false;
     [SerializeField]
@@ -70,7 +70,7 @@ public sealed class AudioSource : MonoBehaviour
 
     [Header("Routing")]
     [SerializeField, Tooltip("Mixer group this source feeds into. Empty routes straight to the master output.")]
-    private AssetRef<AudioMixerGroup> _outputGroup;
+    private AudioMixerGroup? _outputGroup;
 
     /// <summary>
     /// The mixer group this source feeds into, or null to go straight to the master output. Setting it
@@ -78,7 +78,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public AudioMixerGroup OutputGroup
     {
-        get => _outputGroup.Res;
+        get => _outputGroup;
         set
         {
             _outputGroup = value;
@@ -185,21 +185,7 @@ public sealed class AudioSource : MonoBehaviour
     /// The clip this source plays. Assigning a different one stops playback, since what was playing
     /// was the previous clip. Starting the new one is <see cref="Play"/>'s job.
     /// </summary>
-    /// <remarks>
-    /// Reading this resolves the reference, which loads the clip if it has not been already. Use
-    /// <see cref="ClipRef"/> to read or assign without triggering that.
-    /// </remarks>
     public AudioClip? Clip
-    {
-        get => _clip.Res;
-        set => ClipRef = value;
-    }
-
-    /// <summary>
-    /// The clip reference, without resolving it. Assigning through here neither loads the outgoing
-    /// clip nor the incoming one.
-    /// </summary>
-    public AssetRef<AudioClip> ClipRef
     {
         get => _clip;
         set
@@ -476,7 +462,7 @@ public sealed class AudioSource : MonoBehaviour
     {
         get
         {
-            AudioClip clip = _clip.Res;
+            AudioClip clip = _clip;
             int rate = clip.IsValid() ? clip.SampleRate : 0;
             return rate > 0 ? rate : AudioContext.SampleRate;
         }
@@ -689,7 +675,7 @@ public sealed class AudioSource : MonoBehaviour
     /// Returns false if the clip hasn't streamed in yet so the caller can defer.</summary>
     private bool TryAutoPlay()
     {
-        if (_clip.Res == null) return false;
+        if (_clip == null) return false;
 
         if (_playOnStart)
             Play();
@@ -811,7 +797,7 @@ public sealed class AudioSource : MonoBehaviour
         _resumePlaying = false;
         _resumeCursor = 0;
 
-        if (!resume || _clip.Res == null) return;
+        if (!resume || _clip == null) return;
 
         Play();
         Cursor = resumeFrom;
@@ -900,14 +886,15 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void Play()
     {
-        if (_soundGroup.pointer == IntPtr.Zero || _clip.Res == null) return;
+        AssertOwner();
+        if (_soundGroup.pointer == IntPtr.Zero || _clip == null) return;
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
         _mainSource.atEnd = false;
         _isPaused = false;
         MiniAudioExNative.ma_ex_audio_source_set_loop(_mainSource.handle, _loop ? (uint)1 : 0);
 
-        StartVoice(_mainSource, _clip.Res);
+        StartVoice(_mainSource, _clip);
     }
 
     /// <summary>
@@ -966,6 +953,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void PlayProcedural()
     {
+        AssertOwner();
         if (_soundGroup.pointer == IntPtr.Zero) return;
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
@@ -982,6 +970,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void Stop()
     {
+        AssertOwner();
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
         MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
@@ -997,6 +986,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void Pause()
     {
+        AssertOwner();
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
         if (_isPaused || !IsPlaying) return;
 
@@ -1014,6 +1004,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </remarks>
     public void Resume()
     {
+        AssertOwner();
         if (!_isPaused) return;
 
         ulong resumeFrom = _pausedCursor;
@@ -1040,6 +1031,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </remarks>
     public void PlayOneShot(AudioClip clip, float volumeScale = 1.0f)
     {
+        AssertOwner();
         if (_soundGroup.pointer == IntPtr.Zero || clip == null) return;
 
         SourceInfo voice = AcquireOneShotVoice();
@@ -1058,6 +1050,7 @@ public sealed class AudioSource : MonoBehaviour
     /// <summary>Stops every one shot voice this source is sounding. Leaves the main playback alone.</summary>
     public void StopOneShots()
     {
+        AssertOwner();
         foreach (SourceInfo voice in _oneShots)
         {
             if (voice.handle != IntPtr.Zero)
@@ -1243,6 +1236,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void AddEffect(AudioEffect effect)
     {
+        AssertOwner();
         if (effect == null) return;
 
         if (!effect.TryClaim(this))
@@ -1263,6 +1257,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void RemoveEffect(AudioEffect effect)
     {
+        AssertOwner();
         if (effect == null) return;
 
         if (!_effects.Remove(effect)) return;
@@ -1283,6 +1278,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void RemoveEffect(int index)
     {
+        AssertOwner();
         if (index < 0 || index >= _effects.Count) return;
 
         RemoveEffect(_effects[index]);
@@ -1293,6 +1289,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void ClearEffects()
     {
+        AssertOwner();
         AudioEffect[] removed = _effects.ToArray();
         _effects.Clear();
         _chain.Publish(_effects);
@@ -1310,6 +1307,7 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void RefreshEffects()
     {
+        AssertOwner();
         DropEffectsNoLongerListed();
 
         for (int i = _effects.Count - 1; i >= 0; i--)
@@ -1418,7 +1416,7 @@ public sealed class AudioSource : MonoBehaviour
         if (!AudioContext.IsInitialized || _soundGroup.pointer == IntPtr.Zero)
             return;
 
-        AudioMixerGroup group = _outputGroup.Res;
+        AudioMixerGroup group = _outputGroup;
         IntPtr target = group.IsValid() ? group.NativeNode : IntPtr.Zero;
         int generation = group.IsValid() ? group.NodeGeneration : 0;
 

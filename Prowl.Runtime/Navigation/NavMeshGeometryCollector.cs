@@ -257,8 +257,8 @@ public static class NavMeshGeometryCollector
     {
         if (renderer.IsNotValid() || !renderer.EnabledInHierarchy) return;
         // Block-loaded: a mesh still streaming in would silently drop out of the bake.
-        renderer.Mesh.EnsureLoaded();
-        AddMesh(renderer.Mesh.Res, renderer.Transform.LocalToWorldMatrix, area, results, bounds);
+        if (renderer.Mesh is { } stored) stored.Load();
+        AddMesh(renderer.Mesh, renderer.Transform.LocalToWorldMatrix, area, results, bounds);
     }
 
     /// <summary>
@@ -342,8 +342,8 @@ public static class NavMeshGeometryCollector
     {
         if (terrain.IsNotValid() || !terrain.EnabledInHierarchy) return;
 
-        terrain.Data.EnsureLoaded();
-        TerrainData? data = terrain.Data.Res;
+        if (terrain.Data is { } storedData) storedData.Load();
+        TerrainData? data = terrain.Data;
         if (data.IsNotValid()) return;
 
         int res = data!.HeightmapResolution;

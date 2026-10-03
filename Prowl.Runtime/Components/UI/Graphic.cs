@@ -30,8 +30,8 @@ public abstract class Graphic : UIBehaviour
     }
 
     /// <summary>Material override. When unset the graphic draws with <see cref="DefaultMaterial"/>.</summary>
-    [SerializeField] private AssetRef<Material> _material;
-    public AssetRef<Material> Material
+    [SerializeField] private Material? _material;
+    public Material? Material
     {
         get => _material;
         set => SetField(ref _material, value, UIDirtyFlags.Material);
@@ -43,7 +43,16 @@ public abstract class Graphic : UIBehaviour
     public Color Color
     {
         get => _color;
-        set => SetField(ref _color, value, UIDirtyFlags.Vertices);
+        set
+        {
+            // Color only changes this element's vertices, so it re-bakes in place instead of rebuilding the
+            // canvas. Selectable tint fades set it every frame.
+            if (_color == value) return;
+            _color = value;
+            DirtyFlags |= UIDirtyFlags.Vertices;
+            GameCanvas? canvas = GetCanvas();
+            if (canvas.IsValid()) canvas.MarkRebake(this);
+        }
     }
 
     /// <summary>The material used when no override is assigned.</summary>
@@ -51,7 +60,7 @@ public abstract class Graphic : UIBehaviour
 
     public override Material GetMaterial()
     {
-        Material? m = _material.Res;
+        Material? m = _material;
         return m.IsValid() ? m : DefaultMaterial;
     }
 }

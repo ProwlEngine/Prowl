@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Echo.Cloning;
 using Xunit;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -16,7 +15,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         public string Text = "";
         public GameObject? TargetObject;
         public Marker? TargetComponent;
-        public AssetRef<Material> Material;
+        public Material? Material;
         public List<GameObject> Many = [];
     }
 
@@ -48,7 +47,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         marker.Number = 7;
         marker.Text = "hello";
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.NotSame(source, clone);
         Assert.Equal("root", clone.Name);
@@ -65,7 +64,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     {
         GameObject source = Build("root", out _);
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.Same(clone, clone.GetComponent<Marker>()!.GameObject);
     }
@@ -78,7 +77,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         childMarker.Number = 3;
         child.SetParent(source);
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.Single(clone.Children);
         Assert.NotSame(child, clone.Children[0]);
@@ -97,7 +96,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         middle.SetParent(root);
         leaf.SetParent(middle);
 
-        GameObject clone = Cloner.Clone(root);
+        GameObject clone = ObjectCopy.Clone(root);
 
         Assert.Equal(9, clone.Children[0].Children[0].GetComponent<Marker>()!.Number);
         Assert.Equal("leaf", clone.Children[0].Children[0].Name);
@@ -110,7 +109,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         source.Transform.LocalPosition = new Float3(1, 2, 3);
         source.Transform.LocalScale = new Float3(2, 2, 2);
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.Equal(new Float3(1, 2, 3), clone.Transform.LocalPosition);
         Assert.Equal(new Float3(2, 2, 2), clone.Transform.LocalScale);
@@ -127,7 +126,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         source.Enabled = false;
         source.IsStatic = true;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.Equal(3, clone.LayerIndex);
         Assert.Equal(2, clone.TagIndex);
@@ -142,7 +141,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         source.AddComponent<Marker>().Number = 1;
         source.AddComponent<Marker>().Number = 2;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         List<Marker> markers = clone.GetComponents<Marker>().ToList();
         Assert.Equal(2, markers.Count);
@@ -155,7 +154,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     {
         GameObject source = Build("root", out _);
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.NotNull(clone.GetComponent<Marker>());
         Assert.Single(clone.GetComponents<Marker>());
@@ -170,7 +169,7 @@ public class GameObjectCloneTests : RuntimeTestBase
     {
         GameObject source = Build("root", out Marker marker);
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.NotEqual(source.Identifier, clone.Identifier);
         Assert.NotEqual(source.InstanceID, clone.InstanceID);
@@ -178,16 +177,16 @@ public class GameObjectCloneTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Clone_DoesNotCarryTheSourcesAssetIdentity()
+    public void AClonedAsset_IsARuntimeAsset()
     {
-        GameObject source = Build("root", out _);
-        source.AssetID = Guid.NewGuid();
-        source.AssetPath = "Assets/Thing.prefab";
+        var source = new Material { Name = "Rock" };
+        source.SetIdentity(Guid.NewGuid(), "Rock.mat");
 
-        GameObject clone = Cloner.Clone(source);
+        Material clone = ObjectCopy.Clone(source);
 
         Assert.Equal(Guid.Empty, clone.AssetID);
         Assert.Equal(string.Empty, clone.AssetPath);
+        Assert.True(clone.IsLoaded);
     }
 
     #endregion
@@ -204,7 +203,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         marker.TargetObject = child;
         marker.TargetComponent = childMarker;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
         Marker cloned = clone.GetComponent<Marker>()!;
 
         Assert.Same(clone.Children[0], cloned.TargetObject);
@@ -219,7 +218,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         marker.TargetObject = outsider;
         marker.TargetComponent = outsiderMarker;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
         Marker cloned = clone.GetComponent<Marker>()!;
 
         Assert.Same(outsider, cloned.TargetObject);
@@ -232,7 +231,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject source = Build("root", out Marker marker);
         marker.TargetObject = source;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.Same(clone, clone.GetComponent<Marker>()!.TargetObject);
     }
@@ -248,7 +247,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         marker.Many.Add(a);
         marker.Many.Add(b);
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
         Marker cloned = clone.GetComponent<Marker>()!;
 
         Assert.Equal(2, cloned.Many.Count);
@@ -263,9 +262,9 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject source = Build("root", out Marker marker);
         marker.Material = material;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
-        Assert.Same(material, clone.GetComponent<Marker>()!.Material.Res);
+        Assert.Same(material, clone.GetComponent<Marker>()!.Material);
     }
 
     #endregion
@@ -278,7 +277,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject source = Build("root", out Marker marker);
         marker.Number = 1;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
         clone.GetComponent<Marker>()!.Number = 99;
         clone.Name = "changed";
 
@@ -293,7 +292,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject source = Build("root", out _);
         scene.Add(source);
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.Null(clone.Scene);
         Assert.Null(clone.Parent);
@@ -311,7 +310,7 @@ public class GameObjectCloneTests : RuntimeTestBase
 
         GameObject target = Build("target", out Marker targetMarker);
 
-        Cloner.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
 
         Assert.Same(targetMarker, target.GetComponent<Marker>());
         Assert.Equal(5, targetMarker.Number);
@@ -327,7 +326,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         Guid objectId = target.Identifier;
         Guid componentId = targetMarker.Identifier;
 
-        Cloner.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
 
         Assert.Equal(objectId, target.Identifier);
         Assert.Equal(componentId, targetMarker.Identifier);
@@ -342,7 +341,7 @@ public class GameObjectCloneTests : RuntimeTestBase
 
         var target = new GameObject("target");
 
-        Cloner.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
 
         Assert.NotNull(target.GetComponent<Marker>());
         Assert.Single(target.Children);
@@ -361,11 +360,11 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject targetChild = Build("existing", out _);
         targetChild.SetParent(target);
 
-        var context = new CloneContext();
-        context.AddTarget(sourceChild, targetChild);
-        context.AddTarget(sourceMarker, targetMarker);
+        var context = new CopyMap();
+        context.Fill(sourceChild, targetChild);
+        context.Fill(sourceMarker, targetMarker);
 
-        Cloner.CopyTo(source, target, context);
+        ObjectCopy.CopyTo(source, target, context);
 
         Assert.Same(targetChild, target.Children[0]);
         Assert.Same(targetMarker, target.GetComponent<Marker>());
@@ -384,9 +383,26 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject targetChild = Build("existing", out _);
         targetChild.SetParent(target);
 
-        Cloner.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
 
         Assert.Same(targetChild, target.GetComponent<Marker>()!.TargetObject);
+    }
+
+    [Fact]
+    public void CopyTo_FillsAMissingScript_RatherThanAddingAnother()
+    {
+        var holder = new GameObject("holder");
+        holder.AddComponent<Marker>().Number = 3;
+        Echo.EchoObject echo = Echo.Serializer.Serialize(typeof(object), holder);
+        echo["Components"][0]["$type"] = new Echo.EchoObject("Gone.Script, Gone");
+        GameObject source = Echo.Serializer.Deserialize<GameObject>(echo)!;
+        GameObject target = ObjectCopy.Clone(source);
+
+        ObjectCopy.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
+
+        Assert.Single(target.GetComponents<MonoBehaviour>());
+        Assert.IsType<MissingMonobehaviour>(target.GetComponents<MonoBehaviour>().Single());
     }
 
     [Fact]
@@ -397,7 +413,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject target = Build("target", out _);
         scene.Add(target);
 
-        Cloner.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
 
         Assert.Same(scene, target.Scene);
     }
@@ -414,7 +430,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         markerA.TargetObject = b;
         markerB.TargetObject = a;
 
-        List<GameObject> clones = Cloner.CloneAll([a, b]);
+        List<GameObject> clones = ObjectCopy.CloneAll([a, b]);
 
         Assert.Same(clones[1], clones[0].GetComponent<Marker>()!.TargetObject);
         Assert.Same(clones[0], clones[1].GetComponent<Marker>()!.TargetObject);
@@ -427,8 +443,8 @@ public class GameObjectCloneTests : RuntimeTestBase
         GameObject b = Build("b", out _);
         markerA.TargetObject = b;
 
-        GameObject cloneA = Cloner.Clone(a);
-        GameObject cloneB = Cloner.Clone(b);
+        GameObject cloneA = ObjectCopy.Clone(a);
+        GameObject cloneB = ObjectCopy.Clone(b);
 
         Assert.Same(b, cloneA.GetComponent<Marker>()!.TargetObject);
         Assert.NotSame(cloneB, cloneA.GetComponent<Marker>()!.TargetObject);
@@ -448,7 +464,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         target.Transform.LocalPosition = new Float3(1, 2, 3);
         _ = target.Transform.Position;
 
-        Cloner.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
 
         Assert.Equal(new Float3(10, 0, 0), target.Transform.Position);
     }
@@ -467,7 +483,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         targetChild.SetParent(target);
         _ = targetChild.Transform.Position;
 
-        Cloner.CopyTo(source, target);
+        ObjectCopy.CopyTo(source, target);
 
         Assert.Equal(new Float3(105, 0, 0), target.Children[0].Transform.Position);
     }
@@ -483,7 +499,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         source.AddComponent<Requires>().Value = 4;
         int before = source.GetComponents<MonoBehaviour>().Count();
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.Equal(before, clone.GetComponents<MonoBehaviour>().Count());
         Assert.NotNull(clone.GetComponent<Required>());
@@ -497,7 +513,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         source.AddComponent<Marker>().Enabled = false;
         source.Enabled = false;
 
-        GameObject clone = Cloner.Clone(source);
+        GameObject clone = ObjectCopy.Clone(source);
 
         Assert.False(clone.Enabled);
         Assert.False(clone.GetComponent<Marker>()!.Enabled);
@@ -510,7 +526,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         foreach (string name in new[] { "a", "b", "c", "d" })
             new GameObject(name).SetParent(root);
 
-        GameObject clone = Cloner.Clone(root);
+        GameObject clone = ObjectCopy.Clone(root);
 
         Assert.Equal("a,b,c,d", string.Join(",", clone.Children.Select(c => c.Name)));
     }
@@ -522,7 +538,7 @@ public class GameObjectCloneTests : RuntimeTestBase
         var child = new GameObject("child");
         child.SetParent(root);
 
-        GameObject clone = Cloner.Clone(child);
+        GameObject clone = ObjectCopy.Clone(child);
 
         Assert.Null(clone.Parent);
         Assert.Single(root.Children);

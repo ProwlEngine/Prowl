@@ -26,10 +26,10 @@ public class TerrainComponent : MonoBehaviour
     #region Configuration
 
     /// <summary>The terrain data asset containing heightmap, splatmap, and layer configuration.</summary>
-    public AssetRef<TerrainData> Data;
+    public TerrainData? Data;
 
     /// <summary>Base material. Terrain clones this internally to set its own properties.</summary>
-    public AssetRef<Material> Material;
+    public Material? Material;
 
     /// <summary>Maximum LOD subdivision levels for the quadtree.</summary>
     public int MaxLODLevel = 4;
@@ -44,7 +44,7 @@ public class TerrainComponent : MonoBehaviour
     public float LODQuality = 1f;
 
     /// <summary>Detail material override. If null, uses the built-in Grass material.</summary>
-    public AssetRef<Material> DetailMaterial;
+    public Material? DetailMaterial;
 
     /// <summary>How far details are drawn, in world units.</summary>
     public float DetailDistance = 150f;
@@ -114,7 +114,7 @@ public class TerrainComponent : MonoBehaviour
     /// <summary>Push terrain transform, heightmap and wind state onto a grass material.</summary>
     internal void ApplyDetailUniforms(Material material)
     {
-        var data = Data.Res;
+        var data = Data;
         if (data == null) return;
 
         Float4x4 terrainToWorld = Transform.LocalToWorldMatrix;
@@ -128,14 +128,18 @@ public class TerrainComponent : MonoBehaviour
         var heightmap = data.GetHeightmapTexture();
         if (heightmap != null) material.SetTexture("_Heightmap", heightmap);
 
+        var holes = data.GetHolesTexture();
+        if (holes != null) material.SetTexture("_HolesMap", holes);
+        material.SetInt("_HasHoles", holes != null ? 1 : 0);
+
         ApplyWindZones(material);
     }
 
     /// <summary>Shortcut to terrain size from the data asset.</summary>
-    public float TerrainSize { get { var d = Data.Res; return d.IsValid() ? d.Size : 1024f; } }
+    public float TerrainSize { get { var d = Data; return d.IsValid() ? d.Size : 1024f; } }
 
     /// <summary>Shortcut to terrain height from the data asset.</summary>
-    public float TerrainHeight { get { var d = Data.Res; return d.IsValid() ? d.Height : 100f; } }
+    public float TerrainHeight { get { var d = Data; return d.IsValid() ? d.Height : 100f; } }
 
     #endregion
 
@@ -196,7 +200,7 @@ public class TerrainComponent : MonoBehaviour
 
     public override void OnRenderCollect(SceneCuller culler)
     {
-        var terrainData = Data.Res;
+        var terrainData = Data;
         if (terrainData == null) return;
 
         Camera? camera = ResolveMainCamera(GameObject.Scene);
@@ -253,9 +257,9 @@ public class TerrainComponent : MonoBehaviour
 
             if (s_defaultWhite.IsNotValid()) s_defaultWhite = Texture2D.LoadDefault(DefaultTexture.White);
             if (s_defaultNormal.IsNotValid()) s_defaultNormal = Texture2D.LoadDefault(DefaultTexture.Normal);
-            var albedoTex = layer.Albedo.Res;
+            var albedoTex = layer.Albedo;
             _properties.SetTexture(prefix, albedoTex.IsValid() ? albedoTex : s_defaultWhite);
-            var normalTex = layer.NormalMap.Res;
+            var normalTex = layer.NormalMap;
             _properties.SetTexture(prefix + "Normal", normalTex.IsValid() ? normalTex : s_defaultNormal);
 
             _properties.SetFloat(prefix + "Tiling", layer.Tiling);
@@ -316,7 +320,7 @@ public class TerrainComponent : MonoBehaviour
 
     private Material? GetMaterialInstance()
     {
-        var sourceMat = Material.Res;
+        var sourceMat = Material;
         if (sourceMat == null)
         {
             if (s_defaultTerrainMat.IsNotValid()) s_defaultTerrainMat = Resources.Material.LoadDefault(DefaultMaterial.Terrain);
@@ -332,7 +336,7 @@ public class TerrainComponent : MonoBehaviour
 
     private Material? GetDetailMaterialInstance()
     {
-        var sourceMat = DetailMaterial.Res;
+        var sourceMat = DetailMaterial;
         if (sourceMat == null)
         {
             if (s_defaultDetailMat.IsNotValid()) s_defaultDetailMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
@@ -359,7 +363,7 @@ public class TerrainComponent : MonoBehaviour
         hitPoint = Float3.Zero;
         terrainUV = Float2.Zero;
 
-        var terrainData = Data.Res;
+        var terrainData = Data;
         if (terrainData == null || terrainData.Heights == null) return false;
 
         float size = terrainData.Size;
@@ -450,13 +454,17 @@ public class TerrainComponent : MonoBehaviour
         {
             for (int x = 0; x < resolution; x++)
             {
-                int vertIndex = z * (resolution + 1) + x;
-                indices[triIndex++] = (uint)(vertIndex);
-                indices[triIndex++] = (uint)(vertIndex + resolution + 1);
-                indices[triIndex++] = (uint)(vertIndex + 1);
-                indices[triIndex++] = (uint)(vertIndex + 1);
-                indices[triIndex++] = (uint)(vertIndex + resolution + 1);
-                indices[triIndex++] = (uint)(vertIndex + resolution + 2);
+                // Split along the (x, z) to (x+1, z+1) diagonal, the same one physics and the navmesh use
+                uint a = (uint)(z * (resolution + 1) + x);
+                uint b = a + 1;
+                uint d = a + (uint)resolution + 1;
+                uint c = d + 1;
+                indices[triIndex++] = a;
+                indices[triIndex++] = d;
+                indices[triIndex++] = c;
+                indices[triIndex++] = a;
+                indices[triIndex++] = c;
+                indices[triIndex++] = b;
             }
         }
 

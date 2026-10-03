@@ -160,5 +160,5 @@ public static class AssetCollector
     }
 
     /// <summary>Check if an asset path is under a Resources/ folder.</summary>
-    private static bool IsResourcesAsset(string relativePath) => Runtime.GameResources.GetLoadPath(relativePath) != null;
+    private static bool IsResourcesAsset(string relativePath) => Runtime.AssetDatabase.GetLoadPath(relativePath) != null;
 }

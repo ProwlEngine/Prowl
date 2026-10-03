@@ -51,9 +51,15 @@ public abstract class EditorTestHarness : IDisposable
         Project = Project.Create(_root, "TestProject");
         Project.SetActive(addToRecent: false); // don't pollute the user's recent-projects list
 
+        // Every GUID in a test is new, but the registry of asset objects outlives any one project.
+        AssetDatabase.ClearForTests();
+
         Assets = new EditorAssetBackend(Project);
-        Assets.Initialize(); // registers itself as AssetDatabase.Current
+        Assets.Initialize(); // registers itself as AssetDatabase.Backend
     }
+
+    /// <summary>The asset with this GUID, loaded.</summary>
+    protected static T? Load<T>(Guid guid) where T : Asset => AssetDatabase.Load<T>(guid);
 
     /// <summary>Absolute path to a path relative to the project's Assets folder.</summary>
     protected string AssetAbsolutePath(string relativePath) => Path.Combine(Project.AssetsPath, relativePath);
@@ -91,10 +97,7 @@ public abstract class EditorTestHarness : IDisposable
     /// </summary>
     protected Guid WritePrefabFileRaw(GameObject source, string relativePath)
     {
-        Guid savedId = source.AssetID;
-        source.AssetID = Guid.Empty;
         EchoObject echo = Serializer.Serialize(typeof(object), source);
-        source.AssetID = savedId;
 
         string abs = AssetAbsolutePath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
@@ -126,13 +129,15 @@ public abstract class EditorTestHarness : IDisposable
     }
 
     /// <summary>Resolve a prefab asset by GUID.</summary>
-    protected PrefabAsset? GetPrefab(Guid guid) => AssetDatabase.Get(guid) as PrefabAsset;
+    protected PrefabAsset? GetPrefab(Guid guid) => AssetDatabase.Load<PrefabAsset>(guid);
 
-    /// <summary>Persist a Scene as a .scene asset and return its GUID.</summary>
+    /// <summary>Persist a Scene as a .scene file, the way the editor saves one, and return its GUID.</summary>
     protected Guid CreateSceneAsset(Scene scene, string relativePath = "Scene.scene")
     {
-        Assets.CreateAsset(scene, relativePath);
-        return scene.AssetID;
+        string abs = AssetAbsolutePath(relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
+        File.WriteAllText(abs, Serializer.Serialize(typeof(object), scene).WriteToString());
+        return Assets.ImportFile(relativePath);
     }
 
     /// <summary>

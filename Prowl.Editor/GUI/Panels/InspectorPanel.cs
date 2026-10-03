@@ -278,17 +278,24 @@ public class InspectorPanel : DockPanel
             }
             else
             {
-                DrawSelectionHeader(paper, font, active);
-                Origami.Separator(paper, "insp_sep_header").Show();
-
                 if (active is ContentItem contentItem)
+                {
+                    DrawAssetHeader(paper, font, contentItem);
+                    Origami.Separator(paper, "insp_sep_header").Show();
                     DrawAssetInspector(paper, font, contentItem);
-                else if (active is ConsoleLogSelection logEntry)
-                    DrawConsoleLogInspector(paper, font, logEntry);
-                else if (active is EngineObject engineObj)
-                    DrawEngineObjectInspector(paper, font, engineObj);
+                }
                 else
-                    DrawGenericInspector(paper, font, active);
+                {
+                    // In place of a header, the gap the theme puts between sections.
+                    paper.Box("insp_top").Height(Origami.Current.Metrics.SpacingLarge).IsNotInteractable();
+
+                    if (active is ConsoleLogSelection logEntry)
+                        DrawConsoleLogInspector(paper, font, logEntry);
+                    else if (active is EngineObject engineObj)
+                        DrawEngineObjectInspector(paper, font, engineObj);
+                    else
+                        DrawGenericInspector(paper, font, active);
+                }
             }
 
             // Multi-selection summary (GameObjects already get a full multi-object inspector above)
@@ -372,30 +379,11 @@ public class InspectorPanel : DockPanel
             .Alignment(TextAlignment.MiddleCenter);
     }
 
-    private void DrawSelectionHeader(Paper paper, Scribe.FontFile font, object active)
+    private void DrawAssetHeader(Paper paper, Scribe.FontFile font, ContentItem ci)
     {
-        string icon;
-        string name;
-        string typeName;
-
-        if (active is ContentItem ci)
-        {
-            icon = ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant());
-            name = ci.Name;
-            typeName = ci.IsFolder ? Loc.Get("inspector.folder") : ci.TypeLabel;
-        }
-        else if (active is EngineObject eo)
-        {
-            icon = EditorIcons.Cube;
-            name = eo.Name;
-            typeName = eo.GetType().Name;
-        }
-        else
-        {
-            icon = EditorIcons.CircleInfo;
-            name = active.ToString() ?? Loc.Get("inspector.unknown");
-            typeName = active.GetType().Name;
-        }
+        string icon = ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant());
+        string name = ci.Name;
+        string typeName = ci.IsFolder ? Loc.Get("inspector.folder") : ci.TypeLabel;
 
         using (paper.Row("insp_header")
             .Height(40).Padding(4, 0, 4, 4).Gap(8)
@@ -620,7 +608,7 @@ public class InspectorPanel : DockPanel
 
     private static (int Files, int Folders)? GetFolderCounts(string relativePath, string absPath)
     {
-        int version = EditorAssetBackend.Instance?.ContentVersion ?? -1;
+        int version = EditorAssetBackend.Instance?.IndexVersion ?? -1;
         if (_folderCountsVersion != version)
         {
             _folderCounts.Clear();
@@ -746,9 +734,9 @@ public class InspectorPanel : DockPanel
         Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  {Loc.Get("inspector.extract_as_asset")}", () => ExtractSubAsset(item, parentEntry, subEntry, asset)).Show();
     }
 
-    private void ExtractSubAsset(ContentItem item, AssetEntry? parentEntry, SubAssetEntry? subEntry, EngineObject? asset)
+    private void ExtractSubAsset(ContentItem item, AssetEntry? parentEntry, SubAssetEntry? subEntry, EngineObject? obj)
     {
-        if (asset == null || parentEntry == null || Project.Current == null) return;
+        if (obj is not Asset asset || parentEntry == null || Project.Current == null) return;
 
         var db = EditorAssetBackend.Instance;
         if (db == null) return;
@@ -767,10 +755,8 @@ public class InspectorPanel : DockPanel
         string fileName = $"{item.Name}{ext}";
         string relativePath = string.IsNullOrEmpty(parentDir) ? fileName : $"{parentDir}/{fileName}";
 
-        // Serialize the asset to the file
-        // Clear the sub-asset's AssetID so it serializes as a full object, not a reference
-        var originalId = asset.AssetID;
-        asset.AssetID = Guid.Empty;
+        // Written as the root, so in full, with whatever it references kept as references.
+        asset.Load();
         try
         {
             var echo = Echo.Serializer.Serialize(typeof(object), asset);
@@ -787,27 +773,21 @@ public class InspectorPanel : DockPanel
         {
             Runtime.Debug.LogError($"Failed to extract sub-asset: {ex.Message}");
         }
-        finally
-        {
-            asset.AssetID = originalId; // Restore
-        }
     }
-
-    /// <summary>Assets with edits not yet written, so moving away and back keeps the Save button up.</summary>
-    private readonly HashSet<Guid> _unsavedAssets = [];
 
     /// <summary>
     /// Draws an asset's own serialized fields for types that have no editor of their own, which is
     /// what makes a custom <see cref="EngineObject"/> asset editable without writing one.
     /// </summary>
+    private readonly HashSet<Guid> _unsavedAssets = [];
+
     private void DrawAssetFieldsFallback(Paper paper, ContentItem item, AssetEntry? entry)
     {
         if (entry?.MainAssetType == null) return;
         if (!typeof(EngineObject).IsAssignableFrom(entry.MainAssetType)) return;
 
         Guid guid = item.Guid != Guid.Empty ? item.Guid : entry.Guid;
-        EngineObject? asset = Runtime.AssetDatabase.Get(guid);
-        if (asset.IsNotValid()) return;
+        if (Runtime.AssetDatabase.Load<Asset>(guid) is not { IsLoaded: true } asset) return;
 
         Origami.Header(paper, "insp_h_fields", Loc.Get("inspector.properties")).Underline().Show();
         PropertyGridUtils.Draw(paper, "insp_asset_fields", asset, _ => _unsavedAssets.Add(guid));
@@ -824,14 +804,13 @@ public class InspectorPanel : DockPanel
             Origami.Button(paper, "insp_asset_fields_save",
                 $"{EditorIcons.FloppyDisk}  {Loc.Get("inspector.save_and_reimport")}", () =>
                 {
-                    db.SaveAsset(asset);
-                    _unsavedAssets.Remove(guid);
+                    if (db.SaveAsset(asset)) _unsavedAssets.Remove(guid);
                 }).Show();
 
             Origami.Button(paper, "insp_asset_fields_revert",
                 $"{EditorIcons.ArrowsRotate}  {Loc.Get("dialog.revert")}", () =>
                 {
-                    db.Reimport(guid);
+                    Runtime.AssetDatabase.Refill(asset, ReloadReason.Revert);
                     _unsavedAssets.Remove(guid);
                 }).Show();
         }
@@ -844,10 +823,11 @@ public class InspectorPanel : DockPanel
         Origami.Label(paper, "insp_eo_name", $"{Loc.Get("inspector.name")}: {obj.Name}").Show();
         Origami.Label(paper, "insp_eo_id", $"{Loc.Get("inspector.instance_id")}: {obj.InstanceID}").Show();
 
-        if (obj.AssetID != Guid.Empty)
-            Origami.Label(paper, "insp_eo_assetid", $"{Loc.Get("inspector.asset_id")}: {obj.AssetID}").Show();
-        if (!string.IsNullOrEmpty(obj.AssetPath))
-            Origami.Label(paper, "insp_eo_assetpath", $"{Loc.Get("inspector.asset_path")}: {obj.AssetPath}").Show();
+        if (obj is Asset { IsFromDatabase: true } asset)
+        {
+            Origami.Label(paper, "insp_eo_assetid", $"{Loc.Get("inspector.asset_id")}: {asset.AssetID}").Show();
+            Origami.Label(paper, "insp_eo_assetpath", $"{Loc.Get("inspector.asset_path")}: {asset.AssetPath}").Show();
+        }
 
         // Use PropertyGrid for reflection-based editing
         Origami.Header(paper, "insp_h_props", Loc.Get("inspector.properties")).Underline().Show();
@@ -923,6 +903,13 @@ public class InspectorPanel : DockPanel
 
     private void DrawGenericInspector(Paper paper, Scribe.FontFile font, object obj)
     {
+        // An editor registered for the type draws it, the same as it would for a component.
+        if (EditorRegistries.GetCustomEditor(obj.GetType()) is { } editor)
+        {
+            editor.OnGUI(paper, "insp_custom", obj);
+            return;
+        }
+
         Origami.Header(paper, "insp_h_generic", obj.GetType().Name).Show();
         Origami.Label(paper, "insp_generic_str", obj.ToString() ?? "null").Show();
 

@@ -160,6 +160,7 @@ public abstract class HorizontalOrVerticalLayoutGroup : LayoutGroup
         float crossSize = IsVertical ? contentW : contentH;
 
         bool forceExpandMain = IsVertical ? _childForceExpandHeight : _childForceExpandWidth;
+        bool controlMain = IsVertical ? _childControlHeight : _childControlWidth;
         bool controlCross = IsVertical ? _childControlWidth : _childControlHeight;
 
         EnsureScratch(n);
@@ -177,19 +178,26 @@ public abstract class HorizontalOrVerticalLayoutGroup : LayoutGroup
             totalShrink += Maths.Max(0f, pref[i] - min[i]);
         }
 
+        // A child the group doesn't control keeps its own preferred size, the same way the cross axis does.
         float extra = mainSize - totalPref;
+        float used = _spacing * (n - 1);
         for (int i = 0; i < n; i++)
         {
-            if (extra > 0f && totalFlex > 0f)
+            if (!controlMain)
+                size[i] = pref[i];
+            else if (extra > 0f && totalFlex > 0f)
                 size[i] = pref[i] + extra * (flex[i] / totalFlex);
             else if (extra < 0f && totalShrink > 0f)
                 size[i] = Maths.Max(min[i], pref[i] + extra * (Maths.Max(0f, pref[i] - min[i]) / totalShrink));
             else
                 size[i] = pref[i];
+            used += size[i];
         }
 
         // Vertical fills top-to-bottom (+Y up: start at content top and walk down); horizontal left-to-right.
-        float pos = IsVertical ? content.Max.Y : content.Min.X;
+        // When the children don't fill the axis, ChildAlignment places the run within it.
+        float slack = Maths.Max(0f, mainSize - used);
+        float pos = IsVertical ? content.Max.Y - slack * (1f - VerticalFactor()) : content.Min.X + slack * HorizontalFactor();
         for (int i = 0; i < n; i++)
         {
             float cross = controlCross ? crossSize : Maths.Min(CrossOf(LayoutUtility.GetPreferredSize(kids[i])), crossSize);

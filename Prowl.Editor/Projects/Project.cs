@@ -1,6 +1,9 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+
+using Prowl.Editor.Migration;
 
 namespace Prowl.Editor.Projects;
 
@@ -10,6 +13,9 @@ namespace Prowl.Editor.Projects;
 /// </summary>
 public class Project
 {
+    /// <summary> The engine version projects are saved with. A project from an older version is migrated when opened. </summary>
+    public static readonly EngineVersion CurrentVersion = EngineVersion.Parse("1.0-preview.5");
+
     /// <summary> Gets the currently active project, or null if no project is open. </summary>
     public static Project? Current { get; private set; }
 
@@ -17,6 +23,13 @@ public class Project
     public string Name { get; private set; }
     /// <summary> Gets the absolute root path of the project. </summary>
     public string RootPath { get; private set; }
+    /// <summary> The engine version the project was last saved with. </summary>
+    public EngineVersion Version { get; private set; } = CurrentVersion;
+    /// <summary> How many of the migration steps of <see cref="Version"/> the project has been through. </summary>
+    public int AppliedSteps { get; private set; } = ProjectMigration.StepCount(CurrentVersion);
+
+    public bool IsFromNewerEngine => Version > CurrentVersion || (Version == CurrentVersion && AppliedSteps > ProjectMigration.StepCount(CurrentVersion));
+    public bool NeedsMigration => !IsFromNewerEngine && ProjectMigration.PendingSteps(this).Count > 0;
 
     // Standard directories
     public string AssetsPath => Path.Combine(RootPath, "Assets");
@@ -24,6 +37,7 @@ public class Project
     public string CachePath => Path.Combine(RootPath, "Library", "cache");
     public string ThumbnailsPath => Path.Combine(RootPath, "Library", "thumbnails");
     public string ProjectSettingsPath => Path.Combine(RootPath, "ProjectSettings");
+    public string BackupsPath => Path.Combine(RootPath, "Backups");
     public string PackagesPath => Path.Combine(RootPath, "Packages");
     public string TempPath => Path.Combine(RootPath, "Temp");
     public string LogsPath => Path.Combine(RootPath, "Logs");
@@ -65,7 +79,7 @@ public class Project
         if (!File.Exists(gitignore))
         {
             File.WriteAllText(gitignore,
-                "Library/\nTemp/\nLogs/\n*.csproj\n*.sln\n*.slnx\n.vs/\nbin/\nobj/\n# MacOS\n.DS_Store\n");
+                "Library/\nTemp/\nLogs/\nBackups/\n*.csproj\n*.sln\n*.slnx\n.vs/\nbin/\nobj/\n# MacOS\n.DS_Store\n");
         }
 
         // Non-destructive MSBuild customization surface. The generated .csproj files are rewritten on
@@ -104,29 +118,60 @@ public class Project
         if (!Directory.Exists(assetsDir))
             throw new InvalidOperationException($"Not a valid Prowl project: missing Assets/ folder in '{rootPath}'");
 
-        // Find the project name from .prowl file or folder name
-        string name = Path.GetFileName(rootPath);
-        var prowlFiles = Directory.GetFiles(rootPath, "*.prowl");
-        if (prowlFiles.Length > 0)
-        {
-            try
-            {
-                string json = File.ReadAllText(prowlFiles[0]);
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("name", out var nameProp))
-                    name = nameProp.GetString() ?? name;
-            }
-            catch { }
-        }
+        (string? name, string versionText, int? appliedSteps) = ReadProwlFile(rootPath);
+        if (!EngineVersion.TryParse(versionText, out EngineVersion version))
+            throw new InvalidOperationException($"'{rootPath}' was saved with an unrecognized engine version '{versionText}'");
 
-        var project = new Project(rootPath, name);
+        var project = new Project(rootPath, name ?? Path.GetFileName(rootPath))
+        {
+            Version = version,
+            AppliedSteps = appliedSteps ?? ProjectMigration.StepCount(version),
+        };
         project.EnsureDirectories();
 
         // Write .prowl file if missing
-        if (prowlFiles.Length == 0)
+        if (name == null)
             project.WriteProwlFile();
 
         return project;
+    }
+
+    /// <summary> The version a project folder was last saved with, without opening it. </summary>
+    public static string ReadVersion(string rootPath) => ReadProwlFile(rootPath).Version;
+
+    // A project without a .prowl file, or one that predates versions, is from before versions were written.
+    // Without appliedSteps, the project went through every step of its version.
+    private static (string? Name, string Version, int? AppliedSteps) ReadProwlFile(string rootPath)
+    {
+        string[] prowlFiles = Directory.Exists(rootPath) ? Directory.GetFiles(rootPath, "*.prowl") : [];
+        if (prowlFiles.Length == 0) return (null, "", null);
+
+        string name = Path.GetFileName(rootPath);
+        string version = "";
+        int? appliedSteps = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(prowlFiles[0]));
+            if (doc.RootElement.TryGetProperty("name", out var nameProp))
+                name = nameProp.GetString() ?? name;
+            if (doc.RootElement.TryGetProperty("version", out var versionProp))
+                version = versionProp.GetString() ?? "";
+            if (doc.RootElement.TryGetProperty("appliedSteps", out var stepsProp) && stepsProp.TryGetInt32(out int steps))
+                appliedSteps = steps;
+        }
+        catch { }
+        return (name, version, appliedSteps);
+    }
+
+    /// <summary> Records that the project is now in the current version's format. </summary>
+    public void MarkCurrent() => MarkMigrated(CurrentVersion, ProjectMigration.StepCount(CurrentVersion));
+
+    /// <summary> Records that the project has been through the first appliedSteps steps of version. </summary>
+    public void MarkMigrated(EngineVersion version, int appliedSteps)
+    {
+        Version = version;
+        AppliedSteps = appliedSteps;
+        WriteProwlFile();
     }
 
     /// <summary>
@@ -138,6 +183,9 @@ public class Project
     /// </param>
     public void SetActive(bool addToRecent = true)
     {
+        if (Version < CurrentVersion && !NeedsMigration)
+            MarkCurrent();
+
         Current = this;
         if (addToRecent)
             RecentProjects.AddRecent(RootPath, Name);
@@ -174,16 +222,20 @@ public class Project
 
     private void WriteProwlFile()
     {
-        var data = new
-        {
-            name = Name,
-            engine = "Prowl",
-            version = "0.0.1",
-            created = DateTime.UtcNow.ToString("o")
-        };
+        JsonObject data = (File.Exists(ProwlFilePath) ? TryParse(File.ReadAllText(ProwlFilePath)) : null) ?? new JsonObject();
+        data["name"] = Name;
+        data["engine"] = "Prowl";
+        data["version"] = Version.ToString();
+        data["appliedSteps"] = AppliedSteps;
+        data["created"] ??= DateTime.UtcNow.ToString("o");
 
-        string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(ProwlFilePath, json);
+        File.WriteAllText(ProwlFilePath, data.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static JsonObject? TryParse(string json)
+    {
+        try { return JsonNode.Parse(json) as JsonObject; }
+        catch (JsonException) { return null; }
     }
 
     private const string DirectoryBuildPropsTemplate =
