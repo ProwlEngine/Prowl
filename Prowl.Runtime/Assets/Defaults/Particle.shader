@@ -199,14 +199,14 @@ Pass "Particle"
                     // Zero alpha texels can still add light, so only drop the ones that add nothing.
                     if (coverage < 0.002 && max(premultiplied.r, max(premultiplied.g, premultiplied.b)) < 0.002)
                         discard;
-                    fragColor = vec4(mix(_FogColor.rgb * coverage, premultiplied, visibility), coverage);
+                    fragColor = vec4(mix(FogColor(vWorldPos) * coverage, premultiplied, visibility), coverage);
                 }
                 else
                 {
                     alpha *= fade;
                     if (alpha < 0.002)
                         discard;
-                    fragColor = vec4(mix(_FogColor.rgb, rgb, visibility) * alpha, alpha);
+                    fragColor = vec4(mix(FogColor(vWorldPos), rgb, visibility) * alpha, alpha);
                 }
 			}
 		}

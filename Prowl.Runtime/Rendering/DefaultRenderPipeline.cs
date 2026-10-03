@@ -494,6 +494,7 @@ public class DefaultRenderPipeline : RenderPipeline
         fogParams.W = fog.End / fogRange;
 
         PropertyState.SetGlobalColor("_FogColor", fog.Color);
+        PropertyState.SetGlobalVector("_FogSky", new Float2(fog.UseSky ? 1 : 0, fog.SkySunGlow ? 1 : 0));
         PropertyState.SetGlobalVector("_FogParams", fogParams);
         PropertyState.SetGlobalVector("_FogStates", new Float3(
             fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,
@@ -691,10 +692,9 @@ public class DefaultRenderPipeline : RenderPipeline
 
         void DrawProcedural()
         {
-            var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
+            var sun = lights.FirstOrDefault(l => l.GetLightType() == LightType.Directional);
             // The sky wants the direction toward the sun, lights report the way they shine.
-            var toSun = sun != null ? -sun.GetLightDirection() : Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f));
-            ProceduralSky.Apply(s_skybox, toSun);
+            s_skybox.SetVector("_SunDir", sun != null ? -sun.GetLightDirection() : Float3.Normalize(new Float3(-0.5f, 0.7f, -0.5f)));
             cmd.DrawMesh(s_skyCube, s_skybox);
         }
     }

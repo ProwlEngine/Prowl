@@ -368,6 +368,8 @@
   "env.start_distance": "起始距离",
   "env.end_distance": "结束距离",
   "env.density": "密度",
+  "env.fog_use_sky": "使用天空",
+  "env.fog_sun_glow": "太阳光晕",
   "env.ambient_lighting": "环境光照",
   "env.strength": "强度",
   "env.sky_color": "天空颜色",

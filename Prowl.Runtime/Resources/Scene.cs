@@ -399,6 +399,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public float End = 100;
         public float Density = 0.01f;
 
+        /// <summary>Colors the fog with the procedural sky in each view direction instead of Color.</summary>
+        public bool UseSky = false;
+
+        /// <summary>Keeps the glow around the sun in sky colored fog.</summary>
+        public bool SkySunGlow = false;
+
         public bool IsFogLinear => Mode == FogMode.Linear;
 
         public FogParams()

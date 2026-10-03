@@ -368,6 +368,8 @@
   "env.start_distance": "Odleglosc poczatkowa",
   "env.end_distance": "Odleglosc koncowa",
   "env.density": "Gestosc",
+  "env.fog_use_sky": "Uzyj nieba",
+  "env.fog_sun_glow": "Poswiata slonca",
   "env.ambient_lighting": "Oswietlenie otoczenia",
   "env.strength": "Sila",
   "env.sky_color": "Kolor nieba",

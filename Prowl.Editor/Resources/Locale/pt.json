@@ -368,6 +368,8 @@
   "env.start_distance": "Distancia inicial",
   "env.end_distance": "Distancia final",
   "env.density": "Densidade",
+  "env.fog_use_sky": "Usar ceu",
+  "env.fog_sun_glow": "Brilho do sol",
   "env.ambient_lighting": "Iluminacao ambiente",
   "env.strength": "Intensidade",
   "env.sky_color": "Cor do ceu",

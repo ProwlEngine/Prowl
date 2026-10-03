@@ -368,6 +368,8 @@
   "env.start_distance": "시작 거리",
   "env.end_distance": "끝 거리",
   "env.density": "밀도",
+  "env.fog_use_sky": "하늘 사용",
+  "env.fog_sun_glow": "태양 광채",
   "env.ambient_lighting": "앰비언트 조명",
   "env.strength": "강도",
   "env.sky_color": "하늘 색상",

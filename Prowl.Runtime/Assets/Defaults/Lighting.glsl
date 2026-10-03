@@ -80,6 +80,7 @@ uniform vec4 _SpotShadowAtlasParams[MAX_SHADOW_CASTERS]; // xy: atlasPos, z: atl
 uniform vec4 _FogColor;
 uniform vec4 _FogParams;
 uniform vec3 _FogStates;
+uniform vec2 _FogSky; // x: color the fog with the sky, y: keep the sun glow
 
 // ============================================================
 //  Ambient lighting uniforms
@@ -806,6 +807,22 @@ vec3 ShadeSH9(vec3 n)
 //  Fog
 // ============================================================
 
+// The fog color seen toward worldPos, either the flat fog color or the sky behind it
+vec3 FogColor(vec3 worldPos)
+{
+    if (_FogSky.x < 0.5)
+        return _FogColor.rgb;
+
+    vec3 toPoint = worldPos - _WorldSpaceCameraPos.xyz;
+    vec3 sun = _DirectionalLightEnabled != 0 ? normalize(_DirectionalLightDirection) : normalize(vec3(-0.5, 0.7, -0.5));
+    vec3 c = prowlSky(toPoint / max(length(toPoint), 1e-4), sun, _FogSky.y) * 40.0;
+
+    // The same exposure and tonemap the skybox uses, so the fog meets the sky seamlessly
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 tc = c / (c + 1.0);
+    return mix(c / (l + 1.0), tc, tc);
+}
+
 vec3 ApplyFog(vec3 color, vec3 worldPos)
 {
     if (_FogStates.x + _FogStates.y + _FogStates.z < 0.5)
@@ -816,7 +833,7 @@ vec3 ApplyFog(vec3 color, vec3 worldPos)
     prowlFog += (fogCoord * _FogParams.z + _FogParams.w) * _FogStates.x;
     prowlFog += exp2(-fogCoord * _FogParams.y) * _FogStates.y;
     prowlFog += exp2(-fogCoord * fogCoord * _FogParams.x * _FogParams.x) * _FogStates.z;
-    return mix(_FogColor.rgb, color, clamp(prowlFog, 0.0, 1.0));
+    return mix(FogColor(worldPos), color, clamp(prowlFog, 0.0, 1.0));
 }
 
 #endif
