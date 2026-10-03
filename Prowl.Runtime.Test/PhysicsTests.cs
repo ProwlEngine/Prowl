@@ -792,6 +792,32 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Same(floor, recorder.Ends[0].Collider.GameObject);
     }
 
+    // Contacts are not recorded while nothing listens, so the first listener has to pick up the ones
+    // already touching. They continue like any contact that began earlier: Stay, then End, never Begin.
+    [Fact]
+    public void FirstCollisionListener_PicksUpContactsAlreadyTouching()
+    {
+        var scene = CreatePhysicsScene();
+        scene.Physics.AllowSleep = false;
+        GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
+
+        var rb = AddDynamicBox(scene, new Float3(0, 2, 0), gravity: true);
+        Tick(scene, 180);
+
+        var recorder = rb.GameObject.AddComponent<CollisionRecorder>();
+        Tick(scene, 10);
+
+        Assert.Empty(recorder.Begins);
+        Assert.NotEmpty(recorder.Stays);
+        Assert.Same(floor, recorder.Stays[0].Collider.GameObject);
+
+        rb.AffectedByGravity = false;
+        rb.LinearVelocity = new Float3(0, 40, 0);
+        Tick(scene, 60);
+
+        Assert.Same(floor, Assert.Single(recorder.Ends).Collider.GameObject);
+    }
+
     private GameObject AddStaticRigidbodyFloor(Scene scene, out Rigidbody3D floorBody)
     {
         var floor = CreateGameObject("Floor");

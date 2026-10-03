@@ -376,8 +376,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (go is null || go.IsDisposed) continue;
 
             foreach (MonoBehaviour comp in go._components)
-                if (comp is not null && !comp.IsDisposed && comp.EnabledInHierarchy)
-                    _dispatcher.Register(comp);
+            {
+                if (comp is null || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
+                comp._countedCollisionListener = false;
+                _dispatcher.Register(comp);
+            }
         }
     }
 
@@ -1054,6 +1057,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         _dispatcher.RunFixedUpdate();
 
+        Physics.TrackCollisions(_dispatcher.CollisionListeners > 0);
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
         try { Physics.Update(); }
         // A solver that blows up does so every frame, so report it once rather than per frame.

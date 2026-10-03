@@ -1839,6 +1839,31 @@ public class PhysicsWorld
     private readonly List<ContactPair> _dispatchPairs = [];
     private readonly Dictionary<TerrainCollisionFilter, ITerrainHeightProvider> _terrainFilters = [];
 
+    // Contacts are only recorded while something in the scene listens for collision events.
+    private bool _trackCollisions;
+
+    /// <summary>Starts or stops recording contacts for collision events.</summary>
+    internal void TrackCollisions(bool track)
+    {
+        if (track == _trackCollisions) return;
+        _trackCollisions = track;
+
+        if (!track)
+        {
+            _contactPairs.Clear();
+            _arbiterPairs.Clear();
+            return;
+        }
+
+        // Contacts that formed while nothing listened are already touching, so they carry on rather than begin.
+        foreach (Rigidbody3D body in _syncBodies)
+        {
+            if (!body.IsValid() || !body.IsSimulated) continue;
+            foreach (Arbiter arbiter in body.Native.Contacts)
+                if (RecordContact(arbiter) is { } pair) pair.Begun = true;
+        }
+    }
+
     private void HookContacts(Jitter2.Dynamics.RigidBody body)
     {
         body.BeginCollide -= OnBeginCollide;
@@ -1849,8 +1874,14 @@ public class PhysicsWorld
     // handler might do runs from DispatchCollisions once the step is over.
     private void OnBeginCollide(Arbiter arbiter)
     {
+        if (_trackCollisions) RecordContact(arbiter);
+    }
+
+    /// <summary>Adds the arbiter to its contact pair, or returns null when it is already recorded.</summary>
+    private ContactPair? RecordContact(Arbiter arbiter)
+    {
         ArbiterKey key = arbiter.Handle.Data.Key;
-        if (_arbiterPairs.ContainsKey(key)) return;
+        if (_arbiterPairs.ContainsKey(key)) return null;
 
         object first = ResolveContactOwner(key.Key1);
         object second = ResolveContactOwner(key.Key2);
@@ -1875,6 +1906,7 @@ public class PhysicsWorld
         bool firstIsA = ReferenceEquals(pair.A.Owner, first);
         pair.Arbiters.Add((key, firstIsBody1 != firstIsA));
         _arbiterPairs[key] = pair;
+        return pair;
     }
 
     private object ResolveContactOwner(ulong id)

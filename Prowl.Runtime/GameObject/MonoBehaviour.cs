@@ -95,6 +95,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [SerializeIgnore, ReloadIgnore]
     internal int _dispatchSlot;
 
+    /// <summary>Whether the dispatcher counts this component among the scene's collision listeners.</summary>
+    [SerializeIgnore, ReloadIgnore]
+    internal bool _countedCollisionListener;
+
     /// <summary>Cached [ExecutionOrder], the primary sort key for every per-frame channel.</summary>
     [SerializeIgnore, ReloadIgnore]
     internal int _dispatchOrder;

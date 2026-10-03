@@ -35,6 +35,8 @@ internal enum SceneCallbacks
     TriggerExit = 1 << 11,
     CollisionStay = 1 << 12,
 
+    AnyCollision = CollisionBegin | CollisionStay | CollisionEnd,
+
     /// <summary>Everything the per-frame loops dispatch. A component with none of these is never registered.</summary>
     AnyFrame = Start | Update | LateUpdate | FixedUpdate | RenderCollect | DrawGizmos | OnGui,
 
@@ -114,6 +116,9 @@ internal sealed class SceneDispatcher
 
     // ---- registration --------------------------------------------------------------------------------
 
+    /// <summary>Enabled components that listen for a collision event. Physics tracks no contacts while there are none.</summary>
+    public int CollisionListeners { get; private set; }
+
     private MonoBehaviour[] _registered = new MonoBehaviour[64];
     private int _count;
     private int _sequence;
@@ -132,9 +137,14 @@ internal sealed class SceneDispatcher
     /// </summary>
     public void Register(MonoBehaviour c)
     {
-        if (c._dispatchSlot != 0) return;
-
         SceneCallbacks callbacks = CallbacksOf(c);
+        if ((callbacks & SceneCallbacks.AnyCollision) != 0 && !c._countedCollisionListener)
+        {
+            c._countedCollisionListener = true;
+            CollisionListeners++;
+        }
+
+        if (c._dispatchSlot != 0) return;
 
         // A component with no per-frame callback is never in the arrays at all, so it costs nothing to have
         // and never lengthens a channel rebuild. Its physics callbacks still dispatch, from the mask alone.
@@ -154,6 +164,12 @@ internal sealed class SceneDispatcher
     /// <summary>Stops dispatching a component's per-frame callbacks. Constant time.</summary>
     public void Unregister(MonoBehaviour c)
     {
+        if (c._countedCollisionListener)
+        {
+            c._countedCollisionListener = false;
+            CollisionListeners--;
+        }
+
         int slot = c._dispatchSlot;
         if (slot == 0) return;
 
@@ -188,6 +204,7 @@ internal sealed class SceneDispatcher
 
         _count = 0;
         _sequence = 0;
+        CollisionListeners = 0;
 
         _start.Clear(); _update.Clear(); _lateUpdate.Clear(); _fixedUpdate.Clear();
         _renderCollect.Clear(); _drawGizmos.Clear(); _onGui.Clear();
