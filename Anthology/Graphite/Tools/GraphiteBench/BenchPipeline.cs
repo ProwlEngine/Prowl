@@ -36,11 +36,10 @@ public sealed class BenchPass : IPass<BenchView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<BenchView> context)
+    public void Render(RenderContext<BenchView> context, CommandBuffer cmd)
     {
         long start = Stopwatch.GetTimestamp();
 
-        CommandBuffer cmd = context.GetCommandBuffer(Name);
 
         cmd.SetFramebuffer(_scene.Framebuffer);
         if (_index == 0)
@@ -51,7 +50,6 @@ public sealed class BenchPass : IPass<BenchView>
 
         long recorded = Stopwatch.GetTimestamp();
 
-        context.SubmitCommandBuffer(cmd);
 
         long submitted = Stopwatch.GetTimestamp();
 

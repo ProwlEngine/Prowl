@@ -40,11 +40,9 @@ file sealed class ClearingRasterPass : RasterPass<RasterView>
     public override void Setup(RenderContextBuilder builder)
         => SetTarget(builder, _id, GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
 
-    public override void Render(RenderContext<RasterView> context)
+    public override void Render(RenderContext<RasterView> context, CommandBuffer cmd)
     {
-        CommandBuffer cmd = context.GetCommandBuffer(Name);
         BindTarget(context, cmd);
-        context.SubmitCommandBuffer(cmd);
     }
 }
 
@@ -64,12 +62,10 @@ file sealed class CopyReadbackPass : IPass<RasterView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext<RasterView> context)
+    public void Render(RenderContext<RasterView> context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
-        CommandBuffer cmd = context.GetCommandBuffer(Name);
         cmd.CopyTexture(target.ColorTextures[0], _readback);
-        context.SubmitCommandBuffer(cmd);
     }
 }
 

@@ -46,7 +46,7 @@ internal sealed class TestPass : IPass<TestView>
             builder.DeclareOutputTexture(name, desc);
     }
 
-    public void Render(RenderContext<TestView> context) { }
+    public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
 }
 
 /// <summary>Test pass reading/writing buffers, for testing buffer ordering.</summary>
@@ -75,7 +75,7 @@ internal sealed class TestBufferPass : IPass<TestView>
             builder.DeclareOutputBuffer(name, desc);
     }
 
-    public void Render(RenderContext<TestView> context) { }
+    public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
 }
 
 internal static class Desc
@@ -101,5 +101,5 @@ internal sealed class TestBackbufferPass : IPass<TestView>
         builder.DeclareBackbuffer();
     }
 
-    public void Render(RenderContext<TestView> context) { }
+    public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
 }

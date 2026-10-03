@@ -52,7 +52,7 @@ file sealed class ResolvingPass : IPass<ResourceView>
     public void Setup(RenderContextBuilder builder)
         => _handle = _isOutput ? builder.DeclareOutputTexture(_id, _desc) : builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext<ResourceView> context)
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
     {
         for (int i = 0; i < _resolvesPerRender; i++)
             Resolved.Add(context.GetRenderTexture(_handle));
@@ -65,7 +65,7 @@ file sealed class UndeclaredResolvePass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<ResourceView> context)
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
         => context.GetRenderTexture(new TextureHandle(RenderResourceID.Intern("resourcetest_undeclared")));
 }
 
@@ -75,7 +75,7 @@ file sealed class DefaultHandleResolvePass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<ResourceView> context)
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
         => context.GetRenderTexture(default);
 }
 
@@ -101,7 +101,7 @@ file sealed class TwoOutputPass : IPass<ResourceView>
         builder.DeclareOutputTexture(_b, _desc);
     }
 
-    public void Render(RenderContext<ResourceView> context) { }
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) { }
 }
 
 file sealed class ZeroOutputPass : IPass<ResourceView>
@@ -112,7 +112,7 @@ file sealed class ZeroOutputPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<ResourceView> context) { }
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) { }
 }
 
 file sealed class HistoryResolvingPass : IPass<ResourceView>
@@ -134,7 +134,7 @@ file sealed class HistoryResolvingPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
 
-    public void Render(RenderContext<ResourceView> context)
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
     {
         Current.Add(context.GetRenderTexture(_handle, 0));
         Previous.Add(context.GetRenderTexture(_handle, 1));
@@ -158,7 +158,7 @@ file sealed class ImportingPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareImportedTexture(_id, _external);
 
-    public void Render(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
 }
 
 file sealed class BackbufferResolvingPass : IPass<ResourceView>
@@ -171,7 +171,7 @@ file sealed class BackbufferResolvingPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareBackbuffer();
 
-    public void Render(RenderContext<ResourceView> context)
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd)
         => SawFramebuffer = context.GetRenderTexture(_backbuffer).Framebuffer != null;
 }
 
@@ -191,7 +191,7 @@ file sealed class ReadingPass : IPass<ResourceView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id);
 
-    public void Render(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
+    public void Render(RenderContext<ResourceView> context, CommandBuffer cmd) => Resolved = context.GetRenderTexture(_handle);
 }
 
 file sealed class RecordingProfiler : IProfiler

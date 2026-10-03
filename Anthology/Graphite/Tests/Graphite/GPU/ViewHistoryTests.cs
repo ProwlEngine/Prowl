@@ -42,7 +42,7 @@ file sealed class ViewHistoryPass : IPass<HistoryView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputTexture(_id, _desc, history: 1);
 
-    public void Render(RenderContext<HistoryView> context)
+    public void Render(RenderContext<HistoryView> context, CommandBuffer cmd)
     {
         int view = context.View.ViewId;
         Record(Valid, view, context.IsHistoryValid(_handle));
@@ -73,7 +73,7 @@ file sealed class ViewBufferHistoryPass : IPass<HistoryView>
     public void Setup(RenderContextBuilder builder)
         => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(16, 16), history: 1);
 
-    public void Render(RenderContext<HistoryView> context)
+    public void Render(RenderContext<HistoryView> context, CommandBuffer cmd)
     {
         int view = context.View.ViewId;
         if (!Current.ContainsKey(view))

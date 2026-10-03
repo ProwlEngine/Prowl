@@ -46,7 +46,7 @@ file sealed class RecordingPass : IPass<DispatchView>
             _scratch = builder.DeclareOutputTexture("Scratch", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
     }
 
-    public void Render(RenderContext<DispatchView> context)
+    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
     {
         RenderCount++;
         ViewWidths.Add(context.View.PixelWidth);
@@ -62,7 +62,7 @@ file sealed class LeakingCommandBufferPass : IPass<DispatchView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<DispatchView> context)
+    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
     {
         context.GetCommandBuffer("Leaked");
     }
@@ -79,7 +79,7 @@ file sealed class BackbufferPass : IPass<DispatchView>
 
     public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareBackbuffer();
 
-    public void Render(RenderContext<DispatchView> context)
+    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
     {
         RenderCount++;
         SawFramebuffer = context.GetRenderTexture(_backbuffer).Framebuffer != null;
