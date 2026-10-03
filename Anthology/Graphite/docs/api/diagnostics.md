@@ -169,15 +169,13 @@ All failures are `RenderException`. Validation is on unless `GraphiteValidation`
 Metadata is arbitrary `object` data you attach to a pass or to the draws since the last call. `WantsMetadata` is true when the profiler reads metadata, so the example builds metadata only then.
 
 ```csharp
-public void Render(RenderContext<SceneView> context)
+public void Render(RenderContext<SceneView> context, CommandBuffer cmd)
 {
     if (context.WantsMetadata)
         context.RecordPassMetadata(new { Kind = "Opaque", Objects = 128 });
 
-    CommandBuffer cmd = context.GetCommandBuffer("Opaque");
     if (cmd.WantsMetadata)
         cmd.RecordMetadata("Terrain chunk 4");
-    context.SubmitCommandBuffer(cmd);
 }
 ```
 

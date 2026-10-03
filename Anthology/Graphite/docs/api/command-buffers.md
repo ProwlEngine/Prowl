@@ -17,7 +17,7 @@ Reference for `CommandBuffer` (draw, dispatch, state) and `TransferCommandBuffer
 
 ## Overview
 
-A `CommandBuffer` records GPU work: bind a shader, a framebuffer, vertex data and properties, then draw or dispatch. In the render graph you do not create or begin them. `RenderContext.GetCommandBuffer` hands you one that is already recording, and `RenderContext.SubmitCommandBuffer` queues it for the current execution. `TransferCommandBuffer` is a separate, smaller type for one-off uploads and readback outside the frame flow.
+A `CommandBuffer` records GPU work: bind a shader, a framebuffer, vertex data and properties, then draw or dispatch. In the render graph you do not create, begin or submit them. Each pass's `Render` receives one that is already recording, and the graph queues it for the current execution afterwards. `RenderContext.GetCommandBuffer` rents extra ones. `TransferCommandBuffer` is a separate, smaller type for one-off uploads and readback outside the frame flow.
 
 Both derive from `CommandBufferBase`, which carries the copy and update operations.
 
@@ -26,25 +26,23 @@ Both derive from `CommandBufferBase`, which carries the copy and update operatio
 From [PBRRenderer](../../Samples/PBRRenderer/Program.cs#L67):
 
 ```csharp
-CommandBuffer cmd = context.GetCommandBuffer(Name);
 BindTarget(context, cmd);
 cmd.SetShader(_shader);
 cmd.SetVertexSource(_model.Mesh);
 cmd.SetProperties(_properties);
 cmd.DrawIndexed();
-context.SubmitCommandBuffer(cmd);
 ```
 
 ## CommandBuffer lifecycle
 
 | Step | Who | Notes |
 |------|-----|-------|
-| Rent and begin | `RenderContext.GetCommandBuffer(name)` | Begin resets all cached state: framebuffer, shaders, vertex source, merged properties |
+| Rent and begin | The graph, before `Render` (or `RenderContext.GetCommandBuffer(name)` for extras) | Begin resets all cached state: framebuffer, shaders, vertex source, merged properties |
 | Record | You | Not thread-safe. |
-| Submit | `RenderContext.SubmitCommandBuffer(cmd)` | Closes any open render pass and adds it to the execution. It stays open as the execution's tail so the next pass's barriers can be appended, and is ended when the next buffer or a transfer is submitted, or the execution completes |
+| Submit | The graph, after `Render` (or `RenderContext.SubmitCommandBuffer(cmd)` for extras) | Closes any open render pass and adds it to the execution. It stays open as the execution's tail so the next pass's barriers can be appended, and is ended when the next buffer or a transfer is submitted, or the execution completes |
 | Recycle | Device | When the execution's ring slot is reused |
 
-`Begin` and `End` on `CommandBuffer` are internal. A buffer that is rented and never submitted triggers a warning through `GraphicsDevice.OnWarning` after the pass and is dropped.
+`Begin` and `End` on `CommandBuffer` are internal. An extra buffer that is rented and never submitted triggers a warning through `GraphicsDevice.OnWarning` after the pass and is dropped.
 
 Each rented buffer is tagged with its execution and the current pass, which is how the profiler attributes draws to passes.
 
@@ -112,11 +110,9 @@ A full-screen triangle with no vertex buffers is `cmd.Draw(3)` with `VertexSourc
 A compute pass:
 
 ```csharp
-CommandBuffer cmd = context.GetCommandBuffer("Cull");
 cmd.SetComputeShader(_cullProgram);
 cmd.SetProperties(_cullProperties);
 cmd.Dispatch((count + 63) / 64, 1, 1);
-context.SubmitCommandBuffer(cmd);
 ```
 
 When validation is enabled (`GraphicsDevice.ValidationEnabled`), a draw throws `RenderException` unless a graphics program, a framebuffer and a vertex source are all bound, and indexed draws also need the source to return an index buffer. A draw with no vertex data still needs a source, use `VertexSource.None`; `null` is never allowed. Dispatch does not require a framebuffer; the backend ends any active render pass before dispatching.
@@ -190,7 +186,7 @@ For uploads and readback that do not belong to a pass. It has no draw, dispatch,
 | `UpdateTexture` | `void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, uint x, uint y, uint z, uint width, uint height, uint depth, uint mipLevel, uint arrayLayer)` | Same from a pointer |
 | inherited | `UpdateBuffer`, `CopyBuffer`, `CopyTexture`, `GenerateMipmaps` | From `CommandBufferBase` |
 
-Create one with `ResourceFactory.CreateTransferCommandBuffer()` and submit with `GraphicsDevice.SubmitAndWait(cmd)`, which blocks until the GPU finishes. The buffer is reusable across Begin/End/submit cycles. Inside a graph pass, `context.GetTransferCommandBuffer` and `context.SubmitTransferCommandBuffer` apply; that submit is non-blocking and first flushes everything recorded so far.
+Create one with `ResourceFactory.CreateTransferCommandBuffer()` and submit with `GraphicsDevice.SubmitAndWait(cmd)`, which blocks until the GPU finishes. The buffer is reusable across Begin/End/submit cycles. Inside a graph pass, `context.GetTransferCommandBuffer` returns a pooled one that is already begun and reclaimed by the context, and `context.SubmitTransferCommandBuffer` submits it without blocking after flushing everything recorded so far.
 
 ```csharp
 TransferCommandBuffer upload = device.ResourceFactory.CreateTransferCommandBuffer();
@@ -223,11 +219,11 @@ foreach (DrawItem item in items)
 
 ### Multiple command buffers per pass
 
-A pass may rent, record and submit more than one buffer. Submission order is recording order within the execution.
+A pass may rent more buffers with `GetCommandBuffer`. Submit the given `cmd` first, then the others; submission order is recording order within the execution.
 
 ### Early out without renting
 
-Preconditions are checked before `GetCommandBuffer`, as a pass should before using an optional resource, because renting without submitting is a warning.
+The graph always supplies and submits the pass's `cmd`, so a pass that has nothing to do just returns. Extra buffers should be rented only once the pass knows it will submit them.
 
 ## Pitfalls
 
