@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.Rendering;
 

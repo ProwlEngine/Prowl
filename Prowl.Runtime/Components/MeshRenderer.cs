@@ -35,6 +35,7 @@ public class MeshRenderer : MonoBehaviour
     // The command buffer snapshots these at encode time, so mutating them next frame is safe.
     [System.NonSerialized] private PropertyState[] _propCache;
     [System.NonSerialized] private MeshRenderable[] _renderableCache;
+    [System.NonSerialized] private Mesh _propMesh;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
@@ -60,20 +61,34 @@ public class MeshRenderer : MonoBehaviour
             Material? mat = s < Materials.Count ? Materials[s] : Materials[^1];
             if (mat is not { IsLoaded: true }) continue;
 
+            // Refilled in place, so a renderer whose values did not change keeps its draw snapshot. A new mesh
+            // or GI mode would leave keys behind, so those start from empty.
             PropertyState props = _propCache[s];
-            props.Clear();
-            props.SetInt("_ObjectID", InstanceID);
-            // A blend-shape mesh forces the BLENDSHAPES shader variant (keyword is mesh-derived).
-            // MeshRenderer doesn't drive morph weights, so pin the morph loop to a no-op rather than
-            // inherit a stale count from a previous skinned draw using the same program.
-            if (mesh.HasBlendShapes)
-                props.SetInt("morphActiveCount", 0);
-            LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
+            if (_propMesh != mesh) props.Clear();
+            int giMode = props.GetInt("_GIMode");
+            FillProperties(props, mesh, giAnchor);
+            if (props.GetInt("_GIMode") != giMode)
+            {
+                props.Clear();
+                FillProperties(props, mesh, giAnchor);
+            }
 
             MeshRenderable renderable = _renderableCache[s] ??= new MeshRenderable(mesh, mat, world, 0);
             renderable.Set(mesh, mat, world, GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1);
             renderables.Add(renderable);
         }
+        _propMesh = mesh;
+    }
+
+    private void FillProperties(PropertyState props, Mesh mesh, Float3 giAnchor)
+    {
+        props.SetInt("_ObjectID", InstanceID);
+        // A blend-shape mesh forces the BLENDSHAPES shader variant (keyword is mesh-derived).
+        // MeshRenderer doesn't drive morph weights, so pin the morph loop to a no-op rather than
+        // inherit a stale count from a previous skinned draw using the same program.
+        if (mesh.HasBlendShapes)
+            props.SetInt("morphActiveCount", 0);
+        LightmapBinding.Fill(props, GameObject, giAnchor, mesh.HasUV2);
     }
 
     /// <summary>

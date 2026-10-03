@@ -39,6 +39,7 @@ internal static class PropertyStatePool
             ps = new PropertyState();
         ps.ApplyOverride(source);
         ps.ResolveHandles();
+        ps._sourceVersion = source._version;
         ps._snapshotHolds = 2;
         source._lastSnapshot = ps;
         if (last != null) Return(last);
