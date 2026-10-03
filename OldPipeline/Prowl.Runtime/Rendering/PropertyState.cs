@@ -13,7 +13,7 @@ using Texture2D = Prowl.Runtime.Resources.Texture2D;
 
 namespace Prowl.Runtime.Rendering;
 
-public partial class PropertyState
+public partial class PropertyState : ISerializationCallbackReceiver
 {
     // Internal so the command executor (PropertyApply) can walk these directly without
     // forcing every access through allocating accessor methods. Keep [SerializeField]
@@ -86,29 +86,47 @@ public partial class PropertyState
         hash = HashDictionary(_vectors4, hash);
         hash = HashDictionary(_colors, hash);
         hash = HashDictionary(_matrices, hash);
+        hash = HashDictionary(_matrixArr, hash);
         hash = HashDictionary(_textures, hash);
         hash = HashDictionary(_textures3D, hash);
+        hash = HashDictionary(_texturesCube, hash);
         hash = HashDictionary(_buffers, hash);
 
         return hash;
     }
 
-    // Setters
-    public void SetColor(string name, Color value) => _colors[name] = value;
-    public void SetVector(string name, Float2 value) => _vectors2[name] = (Float2)value;
-    public void SetVector(string name, Float3 value) => _vectors3[name] = (Float3)value;
-    public void SetVector(string name, Float4 value) => _vectors4[name] = (Float4)value;
-    public void SetFloat(string name, float value) => _floats[name] = value;
-    public void SetInt(string name, int value) => _ints[name] = value;
-    public void SetMatrix(string name, Float4x4 value) => _matrices[name] = (Float4x4)value;
-    public void SetMatrices(string name, Float4x4[] value) => _matrixArr[name] = [.. value.Select(x => (Float4x4)x)];
-    public void SetTexture(string name, Texture2D value) => _textures[name] = value;
-    public void SetTexture3D(string name, Texture3D value) => _textures3D[name] = value;
-    public void SetTextureCube(string name, Cubemap value) => _texturesCube[name] = value;
+    // Bumped by every change, so a snapshot can tell it still matches without comparing every entry.
+    [SerializeIgnore] internal int _version;
+
+    public void OnBeforeSerialize() { }
+    public void OnAfterDeserialize() => _version++;
+
+    // Setters. Setting a value that is already there is not a change.
+    public void SetColor(string name, Color value) => Set(_colors, name, value);
+    public void SetVector(string name, Float2 value) => Set(_vectors2, name, value);
+    public void SetVector(string name, Float3 value) => Set(_vectors3, name, value);
+    public void SetVector(string name, Float4 value) => Set(_vectors4, name, value);
+    public void SetFloat(string name, float value) => Set(_floats, name, value);
+    public void SetInt(string name, int value) => Set(_ints, name, value);
+    public void SetMatrix(string name, Float4x4 value) => Set(_matrices, name, value);
+    public void SetMatrices(string name, Float4x4[] value) { _matrixArr[name] = [.. value]; _version++; }
+    public void SetTexture(string name, Texture2D value) => Set(_textures, name, value);
+    public void SetTexture3D(string name, Texture3D value) => Set(_textures3D, name, value);
+    public void SetTextureCube(string name, Cubemap value) => Set(_texturesCube, name, value);
+
+    private void Set<T>(Dictionary<string, T> values, string name, T value)
+    {
+        ref T? slot = ref CollectionsMarshal.GetValueRefOrAddDefault(values, name, out bool exists);
+        if (exists && EqualityComparer<T>.Default.Equals(slot, value)) return;
+        slot = value;
+        _version++;
+    }
+
     public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
         _buffers[name] = value;
         _bufferBindings[name] = bindingPoint;
+        _version++;
     }
 
     /// <summary>Yield the names of every property that has a value set on this
@@ -135,6 +153,7 @@ public partial class PropertyState
     /// shader's live default value.</summary>
     public void RemoveProperty(string name)
     {
+        _version++;
         _floats.Remove(name);
         _ints.Remove(name);
         _vectors2.Remove(name);
@@ -179,6 +198,7 @@ public partial class PropertyState
 
     public void Clear()
     {
+        _version++;
         _textures.Clear();
         _textures3D.Clear();
         _texturesCube.Clear();
@@ -197,6 +217,7 @@ public partial class PropertyState
 
     public void ApplyOverride(PropertyState properties)
     {
+        _version++;
         foreach (KeyValuePair<string, Color> item in properties._colors)
             _colors[item.Key] = item.Value;
         foreach (KeyValuePair<string, Float2> item in properties._vectors2)
@@ -228,20 +249,23 @@ public partial class PropertyState
 
     /// <summary>
     /// Resolves every texture to the GPU handle a draw binds. Main thread, when a draw is encoded. A texture still
-    /// loading binds white this frame, and one that is missing binds nothing.
+    /// loading binds white this frame, and one that is missing or disposed binds nothing so the shader default fills in.
     /// </summary>
     internal void ResolveHandles()
     {
         _boundTextures.Clear();
         foreach (KeyValuePair<string, Texture2D> item in _textures)
-        {
-            if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
-            else if (item.Value is { IsMissing: false }) _boundTextures[item.Key] = Texture2D.LoadDefault(DefaultTexture.White).Handle;
-        }
+            if (Bindable2D(item.Value) is { } handle) _boundTextures[item.Key] = handle;
         foreach (KeyValuePair<string, Texture3D> item in _textures3D)
             if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
         foreach (KeyValuePair<string, Cubemap> item in _texturesCube)
             if (Bindable(item.Value) is { } handle) _boundTextures[item.Key] = handle;
+    }
+
+    private static GraphicsTexture? Bindable2D(Texture2D? texture)
+    {
+        if (Bindable(texture) is { } handle) return handle;
+        return texture is { IsMissing: false } ? Texture2D.LoadDefault(DefaultTexture.White).Handle : null;
     }
 
     private static GraphicsTexture? Bindable(Texture? texture)
@@ -250,6 +274,81 @@ public partial class PropertyState
         if (texture.IsLoaded) return texture.Handle;
         if (texture.State == AssetState.Unloaded) AssetLoader.Request(texture);
         return null;
+    }
+
+    // The snapshot last taken of this state, handed out again while it still matches.
+    [SerializeIgnore] internal PropertyState? _lastSnapshot;
+
+    // Holds on this snapshot, one from its source and one per command buffer that encoded it.
+    [SerializeIgnore] internal int _snapshotHolds;
+
+    // The source version this snapshot was taken at or last found equal to.
+    [SerializeIgnore] internal int _sourceVersion;
+
+    /// <summary>
+    /// Whether this snapshot is exactly what a fresh snapshot of <paramref name="source"/> would be. While the source
+    /// has not changed since the last check only the texture handles are looked at, otherwise every entry is compared.
+    /// </summary>
+    internal bool SnapshotMatches(PropertyState source)
+    {
+        if (_sourceVersion != source._version)
+        {
+            if (!SameValues(source)) return false;
+            _sourceVersion = source._version;
+        }
+        return SameHandles();
+    }
+
+    private bool SameValues(PropertyState source)
+    {
+        if (!SameValues(_floats, source._floats) || !SameValues(_ints, source._ints)
+            || !SameValues(_vectors2, source._vectors2) || !SameValues(_vectors3, source._vectors3)
+            || !SameValues(_vectors4, source._vectors4) || !SameValues(_colors, source._colors)
+            || !SameValues(_matrices, source._matrices) || !SameValues(_bufferBindings, source._bufferBindings)
+            || !SameRefs(_matrixArr, source._matrixArr) || !SameRefs(_buffers, source._buffers)
+            || !SameRefs(_textures, source._textures) || !SameRefs(_textures3D, source._textures3D)
+            || !SameRefs(_texturesCube, source._texturesCube))
+            return false;
+        return true;
+    }
+
+    // Textures resolve again in case one finished loading or was replaced since.
+    private bool SameHandles()
+    {
+        int bound = 0;
+        foreach (KeyValuePair<string, Texture2D> item in _textures)
+            if (!SameHandle(item.Key, Bindable2D(item.Value), ref bound)) return false;
+        foreach (KeyValuePair<string, Texture3D> item in _textures3D)
+            if (!SameHandle(item.Key, Bindable(item.Value), ref bound)) return false;
+        foreach (KeyValuePair<string, Cubemap> item in _texturesCube)
+            if (!SameHandle(item.Key, Bindable(item.Value), ref bound)) return false;
+        return bound == _boundTextures.Count;
+    }
+
+    private bool SameHandle(string name, GraphicsTexture? handle, ref int bound)
+    {
+        if (handle == null) return !_boundTextures.ContainsKey(name);
+        bound++;
+        return _boundTextures.TryGetValue(name, out GraphicsTexture? current) && ReferenceEquals(current, handle);
+    }
+
+    private static bool SameValues<T>(Dictionary<string, T> a, Dictionary<string, T> b)
+    {
+        if (a.Count != b.Count) return false;
+        if (a.Count == 0) return true;
+        EqualityComparer<T> comparer = EqualityComparer<T>.Default;
+        foreach (KeyValuePair<string, T> item in b)
+            if (!a.TryGetValue(item.Key, out T? value) || !comparer.Equals(value, item.Value)) return false;
+        return true;
+    }
+
+    private static bool SameRefs<T>(Dictionary<string, T> a, Dictionary<string, T> b) where T : class
+    {
+        if (a.Count != b.Count) return false;
+        if (a.Count == 0) return true;
+        foreach (KeyValuePair<string, T> item in b)
+            if (!a.TryGetValue(item.Key, out T? value) || !ReferenceEquals(value, item.Value)) return false;
+        return true;
     }
 }
 

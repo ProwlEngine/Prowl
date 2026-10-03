@@ -15,8 +15,8 @@ namespace Prowl.Runtime.Rendering;
 /// texture.
 ///
 /// <para>
-/// One directional light is treated specially: it never enters either BVH and is uploaded via
-/// the existing cascade-shadow uniform path on the render pipeline.
+/// Directional lights never enter either BVH. The brightest is uploaded via the cascade-shadow
+/// uniform path; up to <see cref="MaxExtraDirectionalLights"/> others light the scene unshadowed.
 /// </para>
 ///
 /// <para>
@@ -33,6 +33,10 @@ public sealed class SceneLightSystem : IDisposable
     /// uniform-array sizes in <c>Lighting.glsl</c> if you raise it.</summary>
     public const int MaxShadowCasters = 4;
 
+    /// <summary>How many directional lights beyond the main one light the scene (unshadowed). Must
+    /// match <c>MAX_EXTRA_DIRECTIONAL_LIGHTS</c> in <c>Lighting.glsl</c>.</summary>
+    public const int MaxExtraDirectionalLights = 4;
+
     private readonly LightBVH _staticBVH = new();
     private readonly LightBVH _dynamicBVH = new();
     private readonly LightBVHTextures _staticTex = new();
@@ -45,16 +49,21 @@ public sealed class SceneLightSystem : IDisposable
 
     // Per-frame results.
     private IRenderableLight _directional;
+    private readonly List<IRenderableLight> _extraDirectionals = new();
     private readonly List<IRenderableLight> _shadowCasters = new();
+    private readonly List<IRenderableLight> _previousCasters = new();
 
     public LightBVH StaticBVH => _staticBVH;
     public LightBVH DynamicBVH => _dynamicBVH;
     public LightBVHTextures StaticTextures => _staticTex;
     public LightBVHTextures DynamicTextures => _dynamicTex;
 
-    /// <summary>The directional light selected this frame, or null. Render pipeline takes this
+    /// <summary>The brightest directional light this frame, or null. Render pipeline takes this
     /// for cascade shadows + the directional uniform slot.</summary>
     public IRenderableLight Directional => _directional;
+
+    /// <summary>The other directional lights this frame, lit without shadows.</summary>
+    public IReadOnlyList<IRenderableLight> ExtraDirectionals => _extraDirectionals;
 
     /// <summary>Lights that won shadow atlas slots this frame, in order. The pipeline calls
     /// <c>RenderShadows</c> on each.</summary>
@@ -82,9 +91,8 @@ public sealed class SceneLightSystem : IDisposable
         _ = cullingMask; // see remark above
         _seenThisFrame.Clear();
         _directional = null;
+        _extraDirectionals.Clear();
         _shadowCasters.Clear();
-
-        IRenderableLight bestDirectional = null;
 
         var localCandidates = new List<(IRenderableLight light, float distSq, bool wantsShadow)>();
 
@@ -100,7 +108,7 @@ public sealed class SceneLightSystem : IDisposable
 
             if (light.GetLightType() == LightType.Directional)
             {
-                bestDirectional ??= light;
+                _extraDirectionals.Add(light);
                 continue;
             }
 
@@ -123,12 +131,11 @@ public sealed class SceneLightSystem : IDisposable
                     _staticBVH.Add(light, in data);
                     _membership[light] = Membership.Static;
                 }
-                else if (current == Membership.Dynamic)
+                else
                 {
                     // Refit / topology check happens inside Update; unchanged data is a no-op.
-                    _dynamicBVH.Update(light, in data);
+                    (current == Membership.Static ? _staticBVH : _dynamicBVH).Update(light, in data);
                 }
-                // Static + still static: don't update. The BVH should only change on add/remove.
             }
             else
             {
@@ -152,7 +159,7 @@ public sealed class SceneLightSystem : IDisposable
             }
         }
 
-        _directional = bestDirectional;
+        PickDirectionals();
 
         // Second pass: drop registrations for lights that didn't show up.
         // Iterate over a snapshot since we mutate _membership inside the loop.
@@ -187,20 +194,62 @@ public sealed class SceneLightSystem : IDisposable
                 bvh.SetShadowSlot(l, slot);
             }
         }
-        // Clear stale slots on lights that were shadow casters last frame but aren't now.
-        for (int i = casterCount; i < localCandidates.Count; i++)
+        // Clear stale slots on lights that were shadow casters last frame but aren't now,
+        // including ones that stopped casting shadows entirely.
+        foreach (var l in _previousCasters)
         {
-            var l = localCandidates[i].light;
-            if (_membership.TryGetValue(l, out var m))
+            if (!_shadowCasters.Contains(l) && _membership.TryGetValue(l, out var m))
                 (m == Membership.Static ? _staticBVH : _dynamicBVH).SetShadowSlot(l, -1);
         }
+        _previousCasters.Clear();
+        _previousCasters.AddRange(_shadowCasters);
 
-        // Build / refit and upload. Static rebuild happens only when add/remove/transition fired
-        // above; dynamic rebuilds when refit invariant breaks.
+        // Build / refit and upload. Either tree rebuilds on add/remove/transition or when a light
+        // escapes its loose bounds.
         _staticBVH.Sync();
         _dynamicBVH.Sync();
         _staticTex.Sync(_staticBVH);
         _dynamicTex.Sync(_dynamicBVH);
+    }
+
+    // _extraDirectionals holds every directional on entry. The brightest becomes the main light, which
+    // owns the cascades, and the rest stay as extras up to the shader's limit.
+    private void PickDirectionals()
+    {
+        if (_extraDirectionals.Count == 0) return;
+
+        int main = 0;
+        float mainIntensity = _extraDirectionals[0].GetForwardLightData().Intensity;
+        for (int i = 1; i < _extraDirectionals.Count; i++)
+        {
+            float intensity = _extraDirectionals[i].GetForwardLightData().Intensity;
+            if (intensity > mainIntensity)
+            {
+                main = i;
+                mainIntensity = intensity;
+            }
+        }
+
+        _directional = _extraDirectionals[main];
+        _extraDirectionals.RemoveAt(main);
+
+        foreach (var extra in _extraDirectionals)
+        {
+            if (extra.DoCastShadows())
+            {
+                Debug.LogWarningOnce("ExtraDirectionalShadows",
+                    "Only the brightest directional light casts shadows. The other directional lights light the scene without shadows.");
+                break;
+            }
+        }
+
+        if (_extraDirectionals.Count > MaxExtraDirectionalLights)
+        {
+            Debug.LogWarningOnce("TooManyDirectionalLights",
+                $"Only {MaxExtraDirectionalLights + 1} directional lights are supported. The dimmest ones are ignored.");
+            _extraDirectionals.Sort((a, b) => b.GetForwardLightData().Intensity.CompareTo(a.GetForwardLightData().Intensity));
+            _extraDirectionals.RemoveRange(MaxExtraDirectionalLights, _extraDirectionals.Count - MaxExtraDirectionalLights);
+        }
     }
 
     private static bool IsStaticLight(IRenderableLight light)
@@ -298,6 +347,14 @@ public sealed class SceneLightSystem : IDisposable
         // Written before the early-out: cascade selection in the shader reads this every frame,
         // so it has to stay fresh even on frames with no directional light at all.
         cmd.SetGlobalVector("_ShadowFocusPos", shadowFocusPosition);
+
+        cmd.SetGlobalInt("_ExtraDirectionalLightCount", _extraDirectionals.Count);
+        for (int i = 0; i < _extraDirectionals.Count; i++)
+        {
+            var extra = _extraDirectionals[i].GetForwardLightData();
+            cmd.SetGlobalVector($"_ExtraDirectionalLightDirection[{i}]", extra.Direction);
+            cmd.SetGlobalVector($"_ExtraDirectionalLightColor[{i}]", extra.Color * extra.Intensity);
+        }
 
         if (_directional == null)
         {
@@ -408,6 +465,8 @@ public sealed class SceneLightSystem : IDisposable
         _membership.Clear();
         _seenThisFrame.Clear();
         _shadowCasters.Clear();
+        _previousCasters.Clear();
         _directional = null;
+        _extraDirectionals.Clear();
     }
 }

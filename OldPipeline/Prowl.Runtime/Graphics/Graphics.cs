@@ -56,16 +56,49 @@ public static unsafe class Graphics
     //   main: EndFrameAndWait -> push frame-end sentinel, block on frameDone
     //   render: hits sentinel, SwapBuffers, signal frameDone
 
-    private sealed class CBJob
+    private readonly record struct RenderJob(CommandBuffer? Cmd, WaitedJob? Waited = null, bool IsFrameEnd = false);
+
+    // A job whose submitter blocks until it has run, and sees any exception it threw.
+    private sealed class WaitedJob
     {
-        public CommandBuffer? Cmd;
-        public System.Threading.ManualResetEventSlim? Done;
+        public readonly System.Threading.ManualResetEventSlim Done = new(false);
         public System.Runtime.ExceptionServices.ExceptionDispatchInfo? Error;
-        public bool IsFrameEnd;
     }
 
-    private static readonly System.Collections.Concurrent.BlockingCollection<CBJob> s_renderQueue = new();
+    // Submitters enqueue without locking and only wake the render thread when it is asleep, since a
+    // lock shared with the render thread makes every submit contend with it.
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<RenderJob> s_renderQueue = new();
+    private static readonly System.Threading.ManualResetEventSlim s_renderWake = new(false);
+    private static int s_renderSleeping;
+    private static volatile bool s_renderQueueClosed;
     private static System.Threading.Thread? s_renderThread;
+
+    private static void Enqueue(RenderJob job)
+    {
+        s_renderQueue.Enqueue(job);
+        System.Threading.Interlocked.MemoryBarrier();
+        if (System.Threading.Volatile.Read(ref s_renderSleeping) != 0)
+            s_renderWake.Set();
+    }
+
+    /// <summary>The next job, spinning briefly then sleeping until one arrives. False once the queue is closed and empty.</summary>
+    private static bool TakeJob(out RenderJob job)
+    {
+        var spin = new System.Threading.SpinWait();
+        while (true)
+        {
+            if (s_renderQueue.TryDequeue(out job)) return true;
+            if (s_renderQueueClosed) return false;
+            if (!spin.NextSpinWillYield) { spin.SpinOnce(); continue; }
+
+            s_renderWake.Reset();
+            System.Threading.Interlocked.Exchange(ref s_renderSleeping, 1);
+            if (s_renderQueue.IsEmpty && !s_renderQueueClosed)
+                s_renderWake.Wait();
+            System.Threading.Volatile.Write(ref s_renderSleeping, 0);
+            spin.Reset();
+        }
+    }
 
     internal static bool IsRenderThread => s_renderThread != null && System.Threading.Thread.CurrentThread == s_renderThread;
     private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
@@ -81,23 +114,22 @@ public static unsafe class Graphics
     /// </summary>
     internal static void SetSwapInterval(int interval) => System.Threading.Volatile.Write(ref s_wantedSwapInterval, interval);
 
-    /// <summary>Enqueue a CB for the render thread to execute. Fire-and-forget.</summary>
+    /// <summary>Enqueue a CB for the render thread to execute. The buffer is recycled once it has run
+    /// and the owner has disposed it, so rent it with <c>using</c>.</summary>
     public static void Submit(CommandBuffer cmd)
     {
         if (cmd == null) return;
-        if (cmd._inPool)
-            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
-        // No graphics device: drop GPU work and recycle the buffer instead of queueing it for a
-        // render thread that will never drain it (which would leak the buffer).
+        if (cmd._submitted || cmd._inPool)
+            throw new System.InvalidOperationException("CommandBuffer has already been submitted.");
+        cmd._submitted = true;
+        // No graphics device: drop GPU work instead of queueing it for a render thread that will
+        // never drain it.
         if (IsHeadless)
         {
-            cmd._ownerReleased = true;
-            CommandBufferPool.Return(cmd);
+            cmd.Release();
             return;
         }
-        cmd._submitted = true;
-        cmd._ownerReleased = true;
-        s_renderQueue.Add(new CBJob { Cmd = cmd });
+        Enqueue(new RenderJob(cmd));
     }
 
     /// <summary>Enqueue and block until the render thread has finished the CB.
@@ -106,23 +138,21 @@ public static unsafe class Graphics
     public static void SubmitAndWait(CommandBuffer cmd)
     {
         if (cmd == null) return;
-        if (cmd._inPool)
-            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
+        if (cmd._submitted || cmd._inPool)
+            throw new System.InvalidOperationException("CommandBuffer has already been submitted.");
+        cmd._submitted = true;
         // No graphics device: nothing executes, so don't block waiting on a render thread. Any
         // read-back this would have filled keeps its default (zeroed) contents.
         if (IsHeadless)
         {
-            cmd._ownerReleased = true;
-            CommandBufferPool.Return(cmd);
+            cmd.Release();
             return;
         }
-        cmd._submitted = true;
-        cmd._ownerReleased = true;
-        var job = new CBJob { Cmd = cmd, Done = new System.Threading.ManualResetEventSlim(false) };
-        s_renderQueue.Add(job);
-        job.Done.Wait();
-        job.Done.Dispose();
-        job.Error?.Throw();
+        var waited = new WaitedJob();
+        Enqueue(new RenderJob(cmd, waited));
+        waited.Done.Wait();
+        waited.Done.Dispose();
+        waited.Error?.Throw();
     }
 
     internal static void BeginFrame()
@@ -139,7 +169,7 @@ public static unsafe class Graphics
 
     internal static void EndFrameAndWait()
     {
-        s_renderQueue.Add(new CBJob { IsFrameEnd = true });
+        Enqueue(new RenderJob(null, IsFrameEnd: true));
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         s_renderFrameDone.Wait();
         long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
@@ -254,9 +284,7 @@ public static unsafe class Graphics
             // frame-end sentinel pushed by EndFrameAndWait.
             while (true)
             {
-                CBJob job;
-                try { job = s_renderQueue.Take(); }
-                catch (System.InvalidOperationException) { break; } // CompleteAdding + drained
+                if (!TakeJob(out RenderJob job)) break;
 
                 if (job.IsFrameEnd)
                 {
@@ -266,22 +294,22 @@ public static unsafe class Graphics
                     finally { s_renderFrameDone.Set(); }
                     continue;
                 }
-                if (job.Cmd == null) { job.Done?.Set(); continue; }
+                if (job.Cmd == null) { job.Waited?.Done.Set(); continue; }
 
                 var cmd = job.Cmd;
                 bool pushed = PushCBDebugGroup(cmd.Name);
                 try { Executor.Execute(cmd); }
                 catch (Exception ex)
                 {
-                    job.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
-                    if (job.Done == null)
+                    if (job.Waited != null) job.Waited.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                    else
                         Debug.LogError($"Render thread CB '{cmd.Name ?? "<?>"}' execute failed: {ex}");
                 }
                 finally
                 {
                     if (pushed) PopCBDebugGroup();
-                    CommandBufferPool.Return(cmd);
-                    job.Done?.Set();
+                    cmd.Release();
+                    job.Waited?.Done.Set();
                 }
             }
         }
@@ -302,10 +330,10 @@ public static unsafe class Graphics
 
     public static void Dispose()
     {
-        // CompleteAdding makes the render thread's Take throw once the queue is
-        // drained, so it finishes any pending work (including shutdown resource
-        // disposes enqueued during Closing) and then exits cleanly.
-        try { s_renderQueue.CompleteAdding(); } catch { }
+        // Closing the queue lets the render thread finish any pending work (including
+        // shutdown resource disposes enqueued during Closing) and then exit cleanly.
+        s_renderQueueClosed = true;
+        s_renderWake.Set();
         s_renderThread?.Join();
         try { Window.InternalWindow.GLContext?.MakeCurrent(); } catch { }
         GL.Dispose();

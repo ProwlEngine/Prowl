@@ -138,7 +138,7 @@ Pass "Grass"
                 float sizeT = blade.noise * min(1.0, blade.density * 2.0);
                 scaleX = mix(_ProtoSize.x, _ProtoSize.y, sizeT) * blade.fade;
                 scaleY = mix(_ProtoSize.z, _ProtoSize.w, sizeT) * blade.fade;
-                localPosition = vec3(blade.localXZ.x, scatterSampleHeight(blade.terrainUV), blade.localXZ.y);
+                localPosition = vec3(blade.localXZ.x, terrainHeight(blade.terrainUV), blade.localXZ.y);
                 localRight = vec3(cos(blade.rotation), 0.0, sin(blade.rotation));
                 windPhase = blade.windPhase;
                 bendFactor = _ProtoBendFactor;
@@ -399,7 +399,7 @@ Pass "GrassPrepass"
                 float sizeT = blade.noise * min(1.0, blade.density * 2.0);
                 scaleX = mix(_ProtoSize.x, _ProtoSize.y, sizeT) * blade.fade;
                 scaleY = mix(_ProtoSize.z, _ProtoSize.w, sizeT) * blade.fade;
-                localPosition = vec3(blade.localXZ.x, scatterSampleHeight(blade.terrainUV), blade.localXZ.y);
+                localPosition = vec3(blade.localXZ.x, terrainHeight(blade.terrainUV), blade.localXZ.y);
                 localRight = vec3(cos(blade.rotation), 0.0, sin(blade.rotation));
                 windPhase = blade.windPhase;
                 bendFactor = _ProtoBendFactor;

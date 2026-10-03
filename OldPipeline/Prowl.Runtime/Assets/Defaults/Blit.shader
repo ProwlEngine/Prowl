@@ -9,7 +9,7 @@ Pass "Gizmos"
     Tags { "RenderOrder" = "Opaque" }
 
     // Rasterizer culling mode
-    Blend Alpha
+    Blend Off
     Cull None
     ZTest Off
     ZWrite Off

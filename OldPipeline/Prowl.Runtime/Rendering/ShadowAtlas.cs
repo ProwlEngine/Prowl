@@ -31,6 +31,7 @@ public static class ShadowAtlas
     }
 
     private static List<FreeRect> freeRects = [];
+    private static readonly List<FreeRect> s_newRects = [];
 
     public static void TryInitialize()
     {
@@ -102,7 +103,8 @@ public static class ShadowAtlas
 
         // Split the chosen rectangle using the Guillotine method
         // We split along the shorter leftover axis for better space utilization
-        List<FreeRect> newRects = new List<FreeRect>();
+        List<FreeRect> newRects = s_newRects;
+        newRects.Clear();
 
         int leftoverWidth = chosen.Width - width;
         int leftoverHeight = chosen.Height - height;

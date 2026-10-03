@@ -2,47 +2,127 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
+using System.Threading;
 
+using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.ParticleSystem.Modules;
 
 /// <summary>
-/// When enabled, every alive particle emits a point light into the scene. Lights register
-/// with the dynamic <c>SceneLightSystem</c> BVH and so contribute to the same forward-lit
-/// surfaces all other lights do, including BRDF, fog scattering, etc. Particles never cast
-/// shadows (they'd swamp the closest-N atlas budget instantly).
-///
-/// Cost: each frame the particle proxies refit the dynamic BVH. For 1000 particles that's
-/// ~one tree rebuild per frame, low microseconds. Don't enable this on million-particle
-/// debris systems unless you've measured it.
+/// Attaches a point light to some of the particles. Lights join the scene's dynamic light BVH like any
+/// other light, and never cast shadows. Keep <see cref="MaxLights"/> tight, every light costs shading time
+/// on every surface it reaches.
 /// </summary>
 [Serializable]
 public class LightModule : ParticleSystemModule
 {
-    /// <summary>Tint multiplied with the particle's colour (or used directly when
-    /// <see cref="UseParticleColor"/> is false).</summary>
-    public Color Color = Color.White;
+    [Range(0f, 1f), Tooltip("Share of particles that get a light.")]
+    public float Ratio = 1f;
 
-    /// <summary>If true, the emitted light's RGB comes from the particle's current colour
-    /// (after any ColorOverLifetime processing); the module's <see cref="Color"/> tints it.
-    /// If false, the module's colour is used directly.</summary>
+    [Tooltip("Hard cap on lights from this system.")]
+    public int MaxLights = 20;
+
+    [Tooltip("Multiply the light color by the particle's color.")]
     public bool UseParticleColor = true;
 
-    /// <summary>Base intensity scalar, applied on top of the colour.</summary>
-    public float Intensity = 1.0f;
+    public Color Color = Color.White;
 
-    /// <summary>Light range in world units. Larger ranges give visibly bigger BVH AABBs and
-    /// so cost more fragments per pixel; keep this tight to the actual visible glow.</summary>
-    public float Range = 2.0f;
+    [Tooltip("Sampled over each particle's life.")]
+    public MinMaxCurve Intensity = new(new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f)));
 
-    /// <summary>When true, the light's effective range scales with the particle's current
-    /// size (range becomes <c>Range * particle.Size / particle.StartSize</c>). Useful for
-    /// expanding fireballs / shrinking sparks.</summary>
-    public bool ScaleRangeByParticleSize = false;
+    [Tooltip("World units, sampled over each particle's life.")]
+    public MinMaxCurve Range = new(2f);
 
-    /// <summary>When true, the light fades to zero intensity as the particle approaches the
-    /// end of its lifetime (<c>intensity *= 1 - normalizedLifetime</c>). When false, the
-    /// intensity stays at <see cref="Intensity"/> for the particle's whole life.</summary>
-    public bool FadeWithLifetime = true;
+    [Tooltip("Scale the range by the particle's size.")]
+    public bool SizeAffectsRange = false;
+
+    [Tooltip("Scale the intensity by the particle's alpha.")]
+    public bool AlphaAffectsIntensity = true;
+
+    private static int s_nextLightId;
+
+    private ParticleLightProxy[] _proxies = Array.Empty<ParticleLightProxy>();
+    private ForwardLightData[] _data = Array.Empty<ForwardLightData>();
+    private int _active;
+    private int _layer;
+    private long _builtFrame = -1;
+
+    /// <summary>Adds this frame's particle lights. The selection is built once per frame and shared by every camera.</summary>
+    internal void Collect(ParticleSystemComponent system, List<IRenderableLight> lights)
+    {
+        if (_builtFrame != Time.FrameCount)
+        {
+            Build(system);
+            _builtFrame = Time.FrameCount;
+        }
+
+        for (int i = 0; i < _active; i++)
+            lights.Add(_proxies[i]);
+    }
+
+    private void Build(ParticleSystemComponent system)
+    {
+        _active = 0;
+        _layer = system.GameObject.LayerIndex;
+
+        int max = Math.Clamp(MaxLights, 0, 4096);
+        ReadOnlySpan<Particle> particles = system.Particles;
+        float sizeScale = system.SizeScale;
+
+        for (int i = 0; i < particles.Length && _active < max; i++)
+        {
+            ref readonly Particle p = ref particles[i];
+            if (Ratio < 1f && p.Random(0x141) >= Ratio) continue;
+
+            EnsureCapacity(_active + 1);
+
+            float age = p.NormalizedAge;
+            Color rgb = UseParticleColor ? p.Color * Color : Color;
+            float intensity = Intensity.Evaluate(age, p.Random(0x142));
+            if (AlphaAffectsIntensity) intensity *= Maths.Saturate(p.Color.A);
+            float range = MathF.Max(0.01f, Range.Evaluate(age, p.Random(0x143)));
+            if (SizeAffectsRange) range *= (MathF.Abs(p.Size.X) + MathF.Abs(p.Size.Y)) * 0.5f * sizeScale;
+
+            _data[_active] = new ForwardLightData
+            {
+                Type = LightType.Point,
+                Position = system.SimPointToWorld(p.Position),
+                Direction = Float3.UnitY,
+                Color = new Float3(rgb.R, rgb.G, rgb.B),
+                Intensity = MathF.Max(0f, intensity),
+                Range = range,
+            };
+            _active++;
+        }
+    }
+
+    private void EnsureCapacity(int count)
+    {
+        if (_proxies.Length >= count) return;
+
+        int size = Math.Max(count, _proxies.Length * 2);
+        int old = _proxies.Length;
+        Array.Resize(ref _proxies, size);
+        Array.Resize(ref _data, size);
+        for (int i = old; i < size; i++)
+            _proxies[i] = new ParticleLightProxy(this, i, Interlocked.Decrement(ref s_nextLightId));
+    }
+
+    /// <summary>
+    /// One stable light per slot. The light BVH keys lights by reference, so reusing the same proxy lets
+    /// it refit a leaf in place when the light moves instead of rebuilding its topology.
+    /// Ids count down from -1 so they never meet a component's instance id.
+    /// </summary>
+    private sealed class ParticleLightProxy(LightModule owner, int slot, int id) : IRenderableLight
+    {
+        public int GetLightID() => id;
+        public int GetLayer() => owner._layer;
+        public LightType GetLightType() => LightType.Point;
+        public Float3 GetLightPosition() => owner._data[slot].Position;
+        public Float3 GetLightDirection() => Float3.UnitY;
+        public bool DoCastShadows() => false;
+        public ForwardLightData GetForwardLightData() => owner._data[slot];
+    }
 }

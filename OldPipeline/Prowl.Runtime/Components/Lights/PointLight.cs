@@ -88,6 +88,9 @@ public class PointLight : Light
         // Create perspective projection for all faces (90 degree FOV for cubemap)
         Float4x4 projection = Float4x4.CreatePerspectiveFov(Maths.PI / 2.0f, 1.0f, 0.1f, Range);
 
+        // Every face sits inside the light's range, so each face only tests what the range kept.
+        bool[] outsideRange = pipeline.CullOutsideSphere(renderables, lightPos, Range);
+
         // Render each face
         for (int faceIndex = 0; faceIndex < 6; faceIndex++)
         {
@@ -105,7 +108,7 @@ public class PointLight : Light
             Float3 right = Float3.Normalize(Float3.Cross(up, forward));
             ViewerData viewerData = new ViewerData(lightPos, forward, right, up);
 
-            bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
+            bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything, outsideRange);
 
             // Push this face's view/proj into the global UBO BEFORE the face CB
             // encodes draws otherwise all six faces would batch into one CB and

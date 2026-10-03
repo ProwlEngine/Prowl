@@ -14,7 +14,8 @@
 #include "LightBVH"
 
 // ============================================================
-//  Directional light (a single one per scene)
+//  Directional lights: the brightest one is the main light and owns the shadow cascades,
+//  the rest light unshadowed.
 // ============================================================
 
 uniform int   _DirectionalLightEnabled;     // 0 / 1
@@ -26,6 +27,14 @@ uniform float _DirectionalLightShadowBias;
 uniform float _DirectionalLightShadowNormalBias;
 uniform float _DirectionalLightShadowStrength;
 uniform float _DirectionalLightShadowQuality;
+
+#ifndef MAX_EXTRA_DIRECTIONAL_LIGHTS
+#define MAX_EXTRA_DIRECTIONAL_LIGHTS 4
+#endif
+
+uniform int  _ExtraDirectionalLightCount;
+uniform vec3 _ExtraDirectionalLightDirection[MAX_EXTRA_DIRECTIONAL_LIGHTS];
+uniform vec3 _ExtraDirectionalLightColor[MAX_EXTRA_DIRECTIONAL_LIGHTS]; // color * intensity
 
 // ============================================================
 //  Local-light shadow atlas (closest N point + spot lights share these slots)
@@ -71,6 +80,7 @@ uniform vec4 _SpotShadowAtlasParams[MAX_SHADOW_CASTERS]; // xy: atlasPos, z: atl
 uniform vec4 _FogColor;
 uniform vec4 _FogParams;
 uniform vec3 _FogStates;
+uniform vec2 _FogSky; // x: color the fog with the sky, y: keep the sun glow
 
 // ============================================================
 //  Ambient lighting uniforms
@@ -183,6 +193,7 @@ float SamplePointShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 world
     int idx = shadowSlot * 6 + faceIndex;
     mat4 shadowMatrix = _PointShadowMatrices[idx];
     vec4 faceParams = _PointShadowFaceParams[idx];
+    if (faceParams.z <= 0.0) return 0.0;
 
     vec3 worldPosBiased = worldPos + normalize(worldNormal) * L.ShadowNormalBias;
     vec4 lightSpacePos = shadowMatrix * vec4(worldPosBiased, 1.0);
@@ -390,17 +401,27 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
 //  Directional evaluator
 // ============================================================
 
-vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
-                         vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
-{
-    if (_DirectionalLightEnabled == 0) return vec3(0.0);
+// Directional lights shine along their Transform.Forward, and the direction uploaded to the
+// shaders is -Forward: it points FROM the surface TO the light, so it already IS the
+// surface-to-light "L" vector. Don't negate it.
 
-    // Prowl convention: a directional light's Transform.Forward points FROM the surface TO
-    // the sun, so it already IS the surface-to-light "L" vector. The shadow camera flips it
-    // separately (it wants the shining direction). Don't negate here.
-    vec3 lightDir = normalize(_DirectionalLightDirection);
+float MainDirectionalShadowFactor(vec3 worldPos, vec3 worldNormal)
+{
+#ifdef SG_NO_SHADOWS
+    return 1.0;
+#else
+    float shadow = (_DirectionalLightShadowEnabled != 0)
+        ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
+    return 1.0 - shadow;
+#endif
+}
+
+// One directional light. lightColor is color * intensity.
+vec3 ShadeDirectional(vec3 lightDir, vec3 lightColor, float shadowFactor, vec3 worldNormal, vec3 viewDir,
+                      vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
+{
     vec3 halfDir = normalize(lightDir + viewDir);
-    vec3 radiance = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0);
+    vec3 radiance = lightColor * 8.0;
 
     float NdotL = max(dot(worldNormal, lightDir), 0.0);
     float NdotV = abs(dot(worldNormal, viewDir));
@@ -420,26 +441,30 @@ vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
     vec3 diffuse = kD * albedo * diffuseTerm;
 
-    float shadowFactor;
-#ifdef SG_NO_SHADOWS
-    shadowFactor = 1.0;
-#else
-    float shadow = (_DirectionalLightShadowEnabled != 0)
-        ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
-    shadowFactor = 1.0 - shadow;
-#endif
-
     return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
 }
 
-vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
-                              vec3 worldTangent, vec3 worldBitangent,
-                              vec3 albedo, float metallic, float mt, float mb,
-                              float perceptualRoughness, float ao, vec3 F0)
+vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                         vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
-    if (_DirectionalLightEnabled == 0) return vec3(0.0);
+    vec3 total = vec3(0.0);
+    if (_DirectionalLightEnabled != 0)
+        total += ShadeDirectional(normalize(_DirectionalLightDirection), _DirectionalLightColor * _DirectionalLightIntensity,
+                                  MainDirectionalShadowFactor(worldPos, worldNormal),
+                                  worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
 
-    vec3 lightDir = normalize(_DirectionalLightDirection);
+    int extraCount = min(_ExtraDirectionalLightCount, MAX_EXTRA_DIRECTIONAL_LIGHTS);
+    for (int i = 0; i < extraCount; i++)
+        total += ShadeDirectional(normalize(_ExtraDirectionalLightDirection[i]), _ExtraDirectionalLightColor[i], 1.0,
+                                  worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
+    return total;
+}
+
+vec3 ShadeDirectionalAniso(vec3 lightDir, vec3 lightColor, float shadowFactor, vec3 worldNormal, vec3 viewDir,
+                           vec3 worldTangent, vec3 worldBitangent,
+                           vec3 albedo, float metallic, float mt, float mb,
+                           float perceptualRoughness, float ao, vec3 F0)
+{
     vec3 halfDir = normalize(lightDir + viewDir);
 
     float NdotL = max(dot(worldNormal, lightDir), 0.0);
@@ -462,17 +487,27 @@ vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, perceptualRoughness) * NdotL;
 
-    float shadowFactor;
-#ifdef SG_NO_SHADOWS
-    shadowFactor = 1.0;
-#else
-    float shadow = (_DirectionalLightShadowEnabled != 0)
-        ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
-    shadowFactor = 1.0 - shadow;
-#endif
+    vec3 radiance = lightColor * 8.0 * shadowFactor;
+    return (kD * albedo * diffuseTerm + specularTerm * F) * radiance * ao;
+}
 
-    vec3 lightColor = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0) * shadowFactor;
-    return (kD * albedo * diffuseTerm + specularTerm * F) * lightColor * ao;
+vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                              vec3 worldTangent, vec3 worldBitangent,
+                              vec3 albedo, float metallic, float mt, float mb,
+                              float perceptualRoughness, float ao, vec3 F0)
+{
+    vec3 total = vec3(0.0);
+    if (_DirectionalLightEnabled != 0)
+        total += ShadeDirectionalAniso(normalize(_DirectionalLightDirection), _DirectionalLightColor * _DirectionalLightIntensity,
+                                       MainDirectionalShadowFactor(worldPos, worldNormal), worldNormal, viewDir,
+                                       worldTangent, worldBitangent, albedo, metallic, mt, mb, perceptualRoughness, ao, F0);
+
+    int extraCount = min(_ExtraDirectionalLightCount, MAX_EXTRA_DIRECTIONAL_LIGHTS);
+    for (int i = 0; i < extraCount; i++)
+        total += ShadeDirectionalAniso(normalize(_ExtraDirectionalLightDirection[i]), _ExtraDirectionalLightColor[i], 1.0,
+                                       worldNormal, viewDir, worldTangent, worldBitangent,
+                                       albedo, metallic, mt, mb, perceptualRoughness, ao, F0);
+    return total;
 }
 
 // ============================================================
@@ -630,6 +665,39 @@ vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNorma
     return result;
 }
 
+// One directional light with translucency. lightColor is color * intensity.
+vec3 ShadeDirectionalTranslucent(vec3 lightDir, vec3 lightColor, float shadowFactor, vec3 worldNormal, vec3 viewDir,
+                                 vec3 albedo, float metallic, float roughness, float ao, vec3 F0,
+                                 float translucency, float scatterPower, float scatterDist, float scatterScale)
+{
+    vec3 result = vec3(0.0);
+
+    // PBR
+    float NdotL = max(dot(worldNormal, lightDir), 0.0);
+    if (NdotL > 0.0) {
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float NdotV = abs(dot(worldNormal, viewDir));
+        float LdotH = max(dot(lightDir, halfDir), 0.0);
+
+        float NDF = DistributionGGX(worldNormal, halfDir, roughness);
+        float G = GeometrySmith(worldNormal, viewDir, lightDir, roughness);
+        vec3 F = FresnelSchlick(LdotH, F0);
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        vec3 specular = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);
+        float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
+        result += (kD * albedo * diffuseTerm + specular) * (lightColor * 8.0) * NdotL * shadowFactor * ao;
+    }
+
+    // Translucency (same shadow, no distance attenuation for directional)
+    if (translucency > 0.0) {
+        vec3 scatter = CalculateTranslucency(lightDir, viewDir, worldNormal,
+                           translucency, scatterPower, scatterDist, scatterScale, lightColor);
+        result += scatter * albedo * shadowFactor;
+    }
+
+    return result;
+}
+
 // ============================================================
 //  Forward lighting with translucency (single-pass, unified)
 //  PBR + translucency share the same attenuation and shadow.
@@ -642,48 +710,21 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
 {
     roughness = ApplySpecularAA(roughness, worldNormal);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    bool hasTrans = translucency > 0.0;
 
     vec3 totalLight = vec3(0.0);
 
-    // ---- Directional light ----
-    if (_DirectionalLightEnabled != 0) {
-        vec3 lightDir = normalize(_DirectionalLightDirection);
-        vec3 radiance = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0);
+    // ---- Directional lights ----
+    if (_DirectionalLightEnabled != 0)
+        totalLight += ShadeDirectionalTranslucent(normalize(_DirectionalLightDirection),
+                          _DirectionalLightColor * _DirectionalLightIntensity, MainDirectionalShadowFactor(worldPos, worldNormal),
+                          worldNormal, viewDir, albedo, metallic, roughness, ao, F0,
+                          translucency, scatterPower, scatterDist, scatterScale);
 
-        float shadowFactor;
-#ifdef SG_NO_SHADOWS
-        shadowFactor = 1.0;
-#else
-        float shadow = (_DirectionalLightShadowEnabled != 0)
-            ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
-        shadowFactor = 1.0 - shadow;
-#endif
-
-        // PBR
-        float NdotL = max(dot(worldNormal, lightDir), 0.0);
-        if (NdotL > 0.0) {
-            vec3 halfDir = normalize(lightDir + viewDir);
-            float NdotV = abs(dot(worldNormal, viewDir));
-            float LdotH = max(dot(lightDir, halfDir), 0.0);
-
-            float NDF = DistributionGGX(worldNormal, halfDir, roughness);
-            float G = GeometrySmith(worldNormal, viewDir, lightDir, roughness);
-            vec3 F = FresnelSchlick(LdotH, F0);
-            vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
-            vec3 specular = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);
-            float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
-            totalLight += (kD * albedo * diffuseTerm + specular) * radiance * NdotL * shadowFactor * ao;
-        }
-
-        // Translucency (same shadow, no distance attenuation for directional)
-        if (hasTrans) {
-            vec3 scatter = CalculateTranslucency(lightDir, viewDir, worldNormal,
-                               translucency, scatterPower, scatterDist, scatterScale,
-                               _DirectionalLightColor * _DirectionalLightIntensity);
-            totalLight += scatter * albedo * shadowFactor;
-        }
-    }
+    int extraCount = min(_ExtraDirectionalLightCount, MAX_EXTRA_DIRECTIONAL_LIGHTS);
+    for (int i = 0; i < extraCount; i++)
+        totalLight += ShadeDirectionalTranslucent(normalize(_ExtraDirectionalLightDirection[i]), _ExtraDirectionalLightColor[i], 1.0,
+                          worldNormal, viewDir, albedo, metallic, roughness, ao, F0,
+                          translucency, scatterPower, scatterDist, scatterScale);
 
     // ---- Static BVH ----
     if (_StaticLightRoot >= 0) {
@@ -766,6 +807,22 @@ vec3 ShadeSH9(vec3 n)
 //  Fog
 // ============================================================
 
+// The fog color seen toward worldPos, either the flat fog color or the sky behind it
+vec3 FogColor(vec3 worldPos)
+{
+    if (_FogSky.x < 0.5)
+        return _FogColor.rgb;
+
+    vec3 toPoint = worldPos - _WorldSpaceCameraPos.xyz;
+    vec3 sun = _DirectionalLightEnabled != 0 ? normalize(_DirectionalLightDirection) : normalize(vec3(-0.5, 0.7, -0.5));
+    vec3 c = prowlSky(toPoint / max(length(toPoint), 1e-4), sun, _FogSky.y) * 40.0;
+
+    // The same exposure and tonemap the skybox uses, so the fog meets the sky seamlessly
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 tc = c / (c + 1.0);
+    return mix(c / (l + 1.0), tc, tc);
+}
+
 vec3 ApplyFog(vec3 color, vec3 worldPos)
 {
     if (_FogStates.x + _FogStates.y + _FogStates.z < 0.5)
@@ -776,7 +833,7 @@ vec3 ApplyFog(vec3 color, vec3 worldPos)
     prowlFog += (fogCoord * _FogParams.z + _FogParams.w) * _FogStates.x;
     prowlFog += exp2(-fogCoord * _FogParams.y) * _FogStates.y;
     prowlFog += exp2(-fogCoord * fogCoord * _FogParams.x * _FogParams.x) * _FogStates.z;
-    return mix(_FogColor.rgb, color, clamp(prowlFog, 0.0, 1.0));
+    return mix(FogColor(worldPos), color, clamp(prowlFog, 0.0, 1.0));
 }
 
 #endif

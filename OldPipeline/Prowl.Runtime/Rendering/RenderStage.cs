@@ -16,6 +16,12 @@ public enum RenderStage
     AfterOpaques,
 
     /// <summary>
+    /// Runs after transparent objects, before world space UI and post-processing. Still HDR scene color.
+    /// For effects that should cover everything in the world, like volumetric fog.
+    /// </summary>
+    AfterTransparents,
+
+    /// <summary>
     /// Runs after all rendering (including transparents) as final post-processing.
     /// Perfect for tonemapping, color grading, bloom, DOF, FXAA, etc.
     /// </summary>

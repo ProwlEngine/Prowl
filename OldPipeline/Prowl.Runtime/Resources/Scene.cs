@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Prowl.Echo;
 using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
@@ -17,6 +18,7 @@ namespace Prowl.Runtime.Resources;
 /// A live world of GameObjects. Its stored form is a <see cref="SceneAsset"/>, and any number of scenes can be
 /// instantiated from one, like the editor's edit copy and play copy.
 /// </summary>
+[CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
 public class Scene : EngineObject, ISerializationCallbackReceiver
 {
     #region Scene Manager
@@ -57,6 +59,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             if (_current is null || _current.IsDisposed)
             {
+                // Before anything is created, so a read from another thread cannot leave an inactive scene current.
+                MainThreadContext.AssertMainThread(nameof(Current));
                 _current = new Scene { Name = "Untitled" };
                 _current.Enable();
             }
@@ -69,6 +73,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private static Scene? _pendingScene;
 
+    /// <summary>
+    /// Ends the async session at the next scene swap, between the outgoing scene's teardown and the incoming
+    /// scene's start. The editor sets it when entering and leaving play mode.
+    /// </summary>
+    internal static bool EndSessionOnSwap;
+
     /// <summary>Whether a <see cref="Load"/> is queued and has not been applied yet, so <see cref="Current"/>
     /// is still the outgoing scene.</summary>
     public static bool IsLoadPending => _pendingScene != null;
@@ -80,6 +90,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static void Load(Scene scene)
     {
+        MainThreadContext.AssertMainThread();
         if (scene == null)
             throw new ArgumentNullException(nameof(scene));
 
@@ -112,6 +123,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static SceneLoad LoadAsync(SceneAsset asset)
     {
+        MainThreadContext.AssertMainThread();
         _pendingLoad?.Cancel();
         DropPendingScene(except: null);
         _pendingLoad = new SceneLoad(asset);
@@ -146,6 +158,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static void DontDestroyOnLoad(GameObject go)
     {
+        MainThreadContext.AssertMainThread();
         if (go.IsNotValid())
         {
             Debug.LogWarning("[Scene] DontDestroyOnLoad on a null or destroyed GameObject does nothing.");
@@ -168,7 +181,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// scene on the next load.
     /// </summary>
     public static void CancelDontDestroyOnLoad(GameObject go)
-        => _preserved.RemoveAll(p => ReferenceEquals(p, go));
+    {
+        MainThreadContext.AssertMainThread();
+        _preserved.RemoveAll(p => ReferenceEquals(p, go));
+    }
 
     /// <summary>
     /// Destroys everything <see cref="DontDestroyOnLoad"/> is holding and empties the registry.
@@ -222,14 +238,22 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         Scene next = _pendingScene;
         _pendingScene = null;
 
+        bool endSession = EndSessionOnSwap;
+        EndSessionOnSwap = false;
+
         if (next.IsDisposed)
         {
             Debug.LogWarning("[Scene] The scene queued for loading was disposed before the frame ended, so it was skipped.");
+            if (endSession) MainThreadContext.Restart();
             return;
         }
 
         // Loading the scene that is already current would dispose it and then enable the corpse.
-        if (ReferenceEquals(next, _current)) return;
+        if (ReferenceEquals(next, _current))
+        {
+            if (endSession) MainThreadContext.Restart();
+            return;
+        }
 
         // Preserved objects leave before the outgoing scene is disposed, and join the incoming one
         // after it is enabled, so they are never registered with a scene that is being torn down.
@@ -238,15 +262,27 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (ReferenceEquals(go.Scene, _current))
                 _current!.Detach(go);
 
+        // A failure in either step below is reported and the swap carries on, so the incoming scene always
+        // becomes current and the session always ends when it was asked to, rather than leaving both half done.
+
         // Everything the incoming scene uses is loaded before any of it enables, so OnEnable never sees an asset still loading.
-        AssetDatabase.LoadEverythingReached();
+        try { AssetDatabase.LoadEverythingReached(); }
+        catch (Exception e) { Debug.LogError($"[Scene] Loading what '{next.Name}' uses threw: {e.Message}\n{e.StackTrace}"); }
 
         if (_current is not null && !_current.IsDisposed)
         {
-            if (_current.IsActive)
-                _current.Disable();
-            _current.Dispose();
+            try
+            {
+                if (_current.IsActive)
+                    _current.Disable();
+                _current.Dispose();
+            }
+            catch (Exception e) { Debug.LogError($"[Scene] Tearing down '{_current.Name}' threw: {e.Message}\n{e.StackTrace}"); }
         }
+
+        // Between the two scenes, so the outgoing one's teardown belongs to its own session and the incoming
+        // one starts in a fresh one.
+        if (endSession) MainThreadContext.Restart();
 
         _current = next;
         _current.Enable();
@@ -340,8 +376,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             if (go is null || go.IsDisposed) continue;
 
             foreach (MonoBehaviour comp in go._components)
-                if (comp is not null && !comp.IsDisposed && comp.EnabledInHierarchy)
-                    _dispatcher.Register(comp);
+            {
+                if (comp is null || comp.IsDisposed || !comp.EnabledInHierarchy) continue;
+                comp._countedCollisionListener = false;
+                _dispatcher.Register(comp);
+            }
         }
     }
 
@@ -362,6 +401,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public float Start = 20;
         public float End = 100;
         public float Density = 0.01f;
+
+        /// <summary>Colors the fog with the procedural sky in each view direction instead of Color.</summary>
+        public bool UseSky = false;
+
+        /// <summary>Keeps the glow around the sun in sky colored fog.</summary>
+        public bool SkySunGlow = false;
 
         public bool IsFogLinear => Mode == FogMode.Linear;
 
@@ -569,6 +614,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Enable()
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertMainThread();
+        using var session = MainThreadContext.EnterSession();
         if (_isActive) return; // already enabled, nothing to deliver
 
         _isActive = true;
@@ -601,6 +648,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Disable()
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        using var session = MainThreadContext.EnterSession();
         if (!_isActive) return; // already disabled, nothing to deliver
 
         // Create a copy to avoid collection modification during enumeration
@@ -633,6 +682,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Add(GameObject obj)
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
+        MainThreadContext.AssertOwner(obj);
         if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene.Remove(obj);
         AddObject(obj);
     }
@@ -644,6 +695,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void SetRootIndex(GameObject obj, int index)
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
         if (obj.Scene != this || obj.Parent.IsValid()) return;
         int current = _allObj.IndexOf(obj);
         if (current < 0) return;
@@ -686,6 +738,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Remove(GameObject obj)
     {
         EnsureNotDisposed();
+        MainThreadContext.AssertOwner(this);
 
         if (object.ReferenceEquals(obj, null))
         {
@@ -898,6 +951,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             obj.Scene = null;
     }
 
+    private protected override void AssertCanDispose() => MainThreadContext.AssertOwner(this, nameof(Dispose));
+
     protected override void OnDispose()
     {
         base.OnDispose();
@@ -967,6 +1022,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Update()
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunStart();
 
         // Navigation (crowd steering) advances on the variable update, before component Updates
@@ -994,12 +1050,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void FixedUpdate()
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _dispatcher.RunStart();
 
         _dispatcher.RunFixedUpdate();
 
+        Physics.TrackCollisions(_dispatcher.CollisionListeners > 0);
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
         try { Physics.Update(); }
         // A solver that blows up does so every frame, so report it once rather than per frame.
@@ -1015,6 +1073,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunRenderCollect(camera, renderables, lights);
     }
 
@@ -1024,6 +1083,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void DrawGizmos()
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunDrawGizmos();
 
         Flush();
@@ -1036,6 +1096,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void OnGui(Paper paper)
     {
         if (IsDisposed) return;
+        using var session = MainThreadContext.EnterSession();
         _dispatcher.RunOnGui(paper);
 
         Flush();
@@ -1076,8 +1137,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Renders all cameras in this scene, sorted by depth.
     /// </summary>
     /// <param name="target">Optional render target to render into</param>
+    /// <param name="displayGizmos">Draw the gizmos and Debug.Draw shapes queued this frame on top</param>
     /// <returns>True if any cameras were rendered, false otherwise</returns>
-    public bool Render(RenderTexture? target = null)
+    public bool Render(RenderTexture? target = null, bool displayGizmos = false)
     {
         if (IsDisposed) return false;
         // Renderables are now collected per-camera inside pipeline.Render()
@@ -1099,7 +1161,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 // A camera with its own Target asset draws there; everything else draws into `target`
                 // (null for the backbuffer). Nothing on the camera is touched, so there is nothing to
                 // restore and nothing a scene save could catch mid-render.
-                pipeline.Render(cam, new RenderingData { FallbackTarget = target });
+                pipeline.Render(cam, new RenderingData { FallbackTarget = target, DisplayGizmos = displayGizmos });
             }
             catch (Exception ex)
             {

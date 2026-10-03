@@ -137,8 +137,13 @@ public class EnvironmentPanel : DockPanel
 
         if (fog.Mode != Scene.FogParams.FogMode.Off)
         {
-            EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
-                Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Dirty(); }).Show());
+            EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.fog_use_sky"), fog.UseSky, v => { fog.UseSky = v; Dirty(); });
+
+            if (fog.UseSky)
+                EditorGUI.SettingsToggle(paper, $"{id}_glow", Loc.Get("env.fog_sun_glow"), fog.SkySunGlow, v => { fog.SkySunGlow = v; Dirty(); });
+            else
+                EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
+                    Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Dirty(); }).Show());
 
             if (fog.Mode == Scene.FogParams.FogMode.Linear)
             {

@@ -59,19 +59,55 @@ internal sealed class CommandExecutor
     // full Material) since the snapshotted properties already capture the overrides.
     private Resources.Shader? _boundShader;
 
-    // Globals walk runs per draw GraphicsProgram.uniformCache dedupes the actual
-    // uniform uploads, so the cost is just dictionary enumeration.
-
-    // No cross-draw texture-unit cache. Slot assignment in PrepareDraw is dynamic
-    // (depends on how many globals + material props are bound this draw), so a
-    // cached "unit X = texture Y" mapping would desync within a single frame.
-
     // Per-uniform SetTexture opcodes can be encoded BEFORE the draw, but their
     // texture-slot allocation must wait until AFTER PrepareDraw has bound globals
     // and the material/instance property blocks otherwise they race for slot 0
     // and the global walk silently overwrites the per-uniform binding. Buffer them
     // here and flush at the tail of PrepareDraw.
     private readonly List<(string name, GraphicsTexture tex)> _pendingDirectTextures = new(8);
+
+    // What a draw applies before its instance properties: the globals, the material and the shader
+    // defaults. The next draw with the same program, material snapshot and shader reuses it as long as
+    // only opcodes that cannot disturb it ran in between and nothing wrote over a uniform it set.
+    private bool _prefixValid;
+    private GraphicsProgram? _prefixProgram;
+    private PropertyState? _prefixProperties;
+    private Resources.Shader? _prefixShader;
+    private int _prefixSlots;
+    private int _prefixDraw;
+    private readonly HashSet<string> _prefixNames = [];
+
+    // The texture each unit last had bound, so binding the same one again skips GL.
+    private const int MirroredUnits = 64;
+    private readonly uint[] _unitHandles = new uint[MirroredUnits];
+    private readonly TextureTarget[] _unitTargets = new TextureTarget[MirroredUnits];
+    private int _activeUnit;
+
+    private static readonly bool[] s_keepsPrefix = BuildKeepsPrefix();
+
+    private static bool[] BuildKeepsPrefix()
+    {
+        var keeps = new bool[Enum.GetValues<CommandOpcode>().Length + 1];
+        foreach (CommandOpcode op in (ReadOnlySpan<CommandOpcode>)[
+            CommandOpcode.SetRenderTarget, CommandOpcode.SetRenderTargets, CommandOpcode.SetViewport,
+            CommandOpcode.SetScissor, CommandOpcode.DisableScissor, CommandOpcode.ClearRenderTarget,
+            CommandOpcode.SetRasterState, CommandOpcode.SetShader, CommandOpcode.SetProperties,
+            CommandOpcode.SetMaterialProperties, CommandOpcode.ClearProperties,
+            CommandOpcode.SetInstanceProperties, CommandOpcode.ClearInstanceProperties,
+            CommandOpcode.SetUniformFloat, CommandOpcode.SetUniformInt, CommandOpcode.SetUniformVec2,
+            CommandOpcode.SetUniformVec3, CommandOpcode.SetUniformVec4, CommandOpcode.SetUniformMatrix,
+            CommandOpcode.SetUniformMatrixArray, CommandOpcode.SetUniformTexture, CommandOpcode.SetUniformBuffer,
+            CommandOpcode.UpdateBuffer, CommandOpcode.DrawIndexed, CommandOpcode.DrawIndexedInstanced,
+            CommandOpcode.DrawArrays, CommandOpcode.BeginSample, CommandOpcode.EndSample])
+            keeps[(int)op] = true;
+        return keeps;
+    }
+
+    private void InvalidatePrefix()
+    {
+        _prefixValid = false;
+        PropertyApply.StopWatching();
+    }
 
     // ─────────────────────── Entry point ───────────────────────
 
@@ -82,21 +118,32 @@ internal sealed class CommandExecutor
         var store = cmd._store;
         int pos = 0;
 
+        // Property bindings are snapshots owned by the buffer that encoded them, and go back to the
+        // pool with it, so each buffer starts with none bound.
+        _boundProperties = null;
+        _boundShader = null;
+        _boundInstanceProperties = null;
+        _pendingDirectTextures.Clear();
+        InvalidatePrefix();
+
         while (pos < stream.Length)
         {
             CommandOpcode op = ReadOpcode(stream, ref pos);
+            if (_prefixValid && ((int)op >= s_keepsPrefix.Length || !s_keepsPrefix[(int)op]))
+                InvalidatePrefix();
+
             switch (op)
             {
                 case CommandOpcode.SetRenderTarget:
                 {
-                    var fb = (GraphicsFrameBuffer?)objects[ReadU16(stream, ref pos)];
+                    var fb = (GraphicsFrameBuffer?)objects[ReadI32(stream, ref pos)];
                     ApplyRenderTarget(fb, fb);
                     break;
                 }
                 case CommandOpcode.SetRenderTargets:
                 {
-                    var draw = (GraphicsFrameBuffer?)objects[ReadU16(stream, ref pos)];
-                    var read = (GraphicsFrameBuffer?)objects[ReadU16(stream, ref pos)];
+                    var draw = (GraphicsFrameBuffer?)objects[ReadI32(stream, ref pos)];
+                    var read = (GraphicsFrameBuffer?)objects[ReadI32(stream, ref pos)];
                     ApplyRenderTarget(draw, read);
                     break;
                 }
@@ -165,7 +212,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetShader:
                 {
-                    var prog = (GraphicsProgram?)objects[ReadU16(stream, ref pos)];
+                    var prog = (GraphicsProgram?)objects[ReadI32(stream, ref pos)];
                     BindProgram(prog);
                     // Pending per-uniform texture binds were meant for the previous
                     // shader's uniform layout drop them so they don't get applied to
@@ -175,14 +222,14 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetProperties:
                 {
-                    _boundProperties = (PropertyState?)objects[ReadU16(stream, ref pos)];
+                    _boundProperties = (PropertyState?)objects[ReadI32(stream, ref pos)];
                     _boundShader = null;
                     break;
                 }
                 case CommandOpcode.SetMaterialProperties:
                 {
-                    _boundProperties = (PropertyState?)objects[ReadU16(stream, ref pos)];
-                    _boundShader = (Resources.Shader?)objects[ReadU16(stream, ref pos)];
+                    _boundProperties = (PropertyState?)objects[ReadI32(stream, ref pos)];
+                    _boundShader = (Resources.Shader?)objects[ReadI32(stream, ref pos)];
                     break;
                 }
                 case CommandOpcode.ClearProperties:
@@ -193,7 +240,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetInstanceProperties:
                 {
-                    _boundInstanceProperties = (PropertyState?)objects[ReadU16(stream, ref pos)];
+                    _boundInstanceProperties = (PropertyState?)objects[ReadI32(stream, ref pos)];
                     break;
                 }
                 case CommandOpcode.ClearInstanceProperties:
@@ -205,71 +252,71 @@ internal sealed class CommandExecutor
                 {
                     // Direct dict write public PropertyState.SetGlobalTexture
                     // would recursively submit a CB from inside the executor.
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
-                    var tex = (Texture2D?)objects[ReadU16(stream, ref pos)];
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
+                    var tex = (Texture2D?)objects[ReadI32(stream, ref pos)];
                     if (tex != null) PropertyState.s_globalTextures[name] = tex;
                     else PropertyState.s_globalTextures.Remove(name);
                     break;
                 }
                 case CommandOpcode.ClearGlobalTexture:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalTextures.Remove(name);
                     break;
                 }
                 case CommandOpcode.SetGlobalInt:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalInts[name] = ReadI32(stream, ref pos);
                     break;
                 }
                 case CommandOpcode.SetGlobalFloat:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalFloats[name] = ReadF32(stream, ref pos);
                     break;
                 }
                 case CommandOpcode.SetGlobalVec2:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalVectors2[name] = ReadStruct<Float2>(stream, ref pos);
                     break;
                 }
                 case CommandOpcode.SetGlobalVec3:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalVectors3[name] = ReadStruct<Float3>(stream, ref pos);
                     break;
                 }
                 case CommandOpcode.SetGlobalVec4:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalVectors4[name] = ReadStruct<Float4>(stream, ref pos);
                     break;
                 }
                 case CommandOpcode.SetGlobalColor:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalColors[name] = ReadStruct<Color>(stream, ref pos);
                     break;
                 }
                 case CommandOpcode.SetGlobalMatrix:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     PropertyState.s_globalMatrices[name] = ReadStruct<Float4x4>(stream, ref pos);
                     break;
                 }
                 case CommandOpcode.SetGlobalMatrices:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
-                    var values = (Float4x4[])objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
+                    var values = (Float4x4[])objects[ReadI32(stream, ref pos)]!;
                     PropertyState.SetGlobalMatricesInternal(name, values);
                     break;
                 }
                 case CommandOpcode.SetGlobalBuffer:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
-                    var buf = (GraphicsBuffer)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
+                    var buf = (GraphicsBuffer)objects[ReadI32(stream, ref pos)]!;
                     uint binding = ReadU32(stream, ref pos);
                     PropertyState.s_globalBuffers[name] = buf;
                     PropertyState.s_globalBufferBindings[name] = binding;
@@ -277,16 +324,16 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetGlobalTexture3D:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
-                    var tex = (Texture3D?)objects[ReadU16(stream, ref pos)];
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
+                    var tex = (Texture3D?)objects[ReadI32(stream, ref pos)];
                     if (tex != null) PropertyState.s_globalTextures3D[name] = tex;
                     else PropertyState.s_globalTextures3D.Remove(name);
                     break;
                 }
                 case CommandOpcode.SetGlobalTextureCube:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
-                    var tex = (Cubemap?)objects[ReadU16(stream, ref pos)];
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
+                    var tex = (Cubemap?)objects[ReadI32(stream, ref pos)];
                     if (tex != null) PropertyState.s_globalTexturesCube[name] = tex;
                     else PropertyState.s_globalTexturesCube.Remove(name);
                     break;
@@ -298,7 +345,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformFloat:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     float v = ReadF32(stream, ref pos);
                     if (_boundProgram == null) break;
                     PropertyApply.SetFloatCached(_boundProgram, name, v);
@@ -306,7 +353,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformInt:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     int v = ReadI32(stream, ref pos);
                     if (_boundProgram == null) break;
                     PropertyApply.SetIntCached(_boundProgram, name, v);
@@ -314,7 +361,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformVec2:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     Float2 v = new(ReadF32(stream, ref pos), ReadF32(stream, ref pos));
                     if (_boundProgram == null) break;
                     PropertyApply.SetVec2Cached(_boundProgram, name, v);
@@ -322,7 +369,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformVec3:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     Float3 v = new(ReadF32(stream, ref pos), ReadF32(stream, ref pos), ReadF32(stream, ref pos));
                     if (_boundProgram == null) break;
                     PropertyApply.SetVec3Cached(_boundProgram, name, v);
@@ -330,7 +377,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformVec4:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     Float4 v = new(ReadF32(stream, ref pos), ReadF32(stream, ref pos), ReadF32(stream, ref pos), ReadF32(stream, ref pos));
                     if (_boundProgram == null) break;
                     PropertyApply.SetVec4Cached(_boundProgram, name, v);
@@ -338,7 +385,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformMatrix:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     Float4x4 m = ReadStruct<Float4x4>(stream, ref pos);
                     if (_boundProgram == null) break;
                     PropertyApply.SetMatrixCached(_boundProgram, name, in m);
@@ -346,7 +393,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformMatrixArray:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
                     uint count = ReadU32(stream, ref pos);
                     var blob = ReadBlob<Float4x4>(stream, ref pos, store);
                     if (_boundProgram == null) break;
@@ -355,8 +402,8 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformTexture:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
-                    var tex = (GraphicsTexture?)objects[ReadU16(stream, ref pos)];
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
+                    var tex = (GraphicsTexture?)objects[ReadI32(stream, ref pos)];
                     if (tex == null) break;
                     // Defer binding to PrepareDraw so the slot allocation happens
                     // after globals/material/instance have consumed their slots.
@@ -365,8 +412,8 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetUniformBuffer:
                 {
-                    string name = (string)objects[ReadU16(stream, ref pos)]!;
-                    var buf = (GraphicsBuffer?)objects[ReadU16(stream, ref pos)];
+                    string name = (string)objects[ReadI32(stream, ref pos)]!;
+                    var buf = (GraphicsBuffer?)objects[ReadI32(stream, ref pos)];
                     uint binding = ReadU32(stream, ref pos);
                     if (_boundProgram == null || buf == null) break;
                     PropertyApply.BindUniformBuffer(_boundProgram, name, buf, binding);
@@ -374,7 +421,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.UpdateBuffer:
                 {
-                    var buf = (GraphicsBuffer?)objects[ReadU16(stream, ref pos)];
+                    var buf = (GraphicsBuffer?)objects[ReadI32(stream, ref pos)];
                     uint dstOffset = ReadU32(stream, ref pos);
                     var blob = ReadBlob<byte>(stream, ref pos, store);
                     if (buf != null) DoUpdateBuffer(buf, dstOffset, blob);
@@ -382,7 +429,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.UpdateTexture:
                 {
-                    var tex = (GraphicsTexture?)objects[ReadU16(stream, ref pos)];
+                    var tex = (GraphicsTexture?)objects[ReadI32(stream, ref pos)];
                     int x = ReadI32(stream, ref pos);
                     int y = ReadI32(stream, ref pos);
                     uint w = ReadU32(stream, ref pos);
@@ -394,13 +441,13 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.GenerateMipmap:
                 {
-                    var tex = (GraphicsTexture?)objects[ReadU16(stream, ref pos)];
+                    var tex = (GraphicsTexture?)objects[ReadI32(stream, ref pos)];
                     tex?.GenerateMipmap();
                     break;
                 }
                 case CommandOpcode.DrawIndexed:
                 {
-                    var vao = (GraphicsVertexArray?)objects[ReadU16(stream, ref pos)];
+                    var vao = (GraphicsVertexArray?)objects[ReadI32(stream, ref pos)];
                     Topology topo = (Topology)ReadU8(stream, ref pos);
                     uint indexCount = ReadU32(stream, ref pos);
                     uint startIndex = ReadU32(stream, ref pos);
@@ -411,7 +458,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.DrawIndexedInstanced:
                 {
-                    var vao = (GraphicsVertexArray?)objects[ReadU16(stream, ref pos)];
+                    var vao = (GraphicsVertexArray?)objects[ReadI32(stream, ref pos)];
                     Topology topo = (Topology)ReadU8(stream, ref pos);
                     uint indexCount = ReadU32(stream, ref pos);
                     uint instanceCount = ReadU32(stream, ref pos);
@@ -423,7 +470,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.DrawArrays:
                 {
-                    var vao = (GraphicsVertexArray?)objects[ReadU16(stream, ref pos)];
+                    var vao = (GraphicsVertexArray?)objects[ReadI32(stream, ref pos)];
                     Topology topo = (Topology)ReadU8(stream, ref pos);
                     int first = ReadI32(stream, ref pos);
                     uint count = ReadU32(stream, ref pos);
@@ -432,7 +479,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.CreateBuffer:
                 {
-                    var buf = (GraphicsBuffer)objects[ReadU16(stream, ref pos)]!;
+                    var buf = (GraphicsBuffer)objects[ReadI32(stream, ref pos)]!;
                     bool dynamic = ReadU8(stream, ref pos) != 0;
                     var data = ReadBlob<byte>(stream, ref pos, store);
                     buf.Handle = Graphics.GL.GenBuffer();
@@ -451,7 +498,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.DisposeBuffer:
                 {
-                    var buf = (GraphicsBuffer)objects[ReadU16(stream, ref pos)]!;
+                    var buf = (GraphicsBuffer)objects[ReadI32(stream, ref pos)]!;
                     if (buf.Handle != 0)
                     {
                         Graphics.GL.DeleteBuffer(buf.Handle);
@@ -461,15 +508,18 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.CreateTexture:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     tex.Handle = Graphics.GL.GenTexture();
                     break;
                 }
                 case CommandOpcode.DisposeTexture:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     if (tex.Handle != 0)
                     {
+                        // GL unbinds a deleted texture from every unit, and may hand its name out again.
+                        for (int unit = 0; unit < MirroredUnits; unit++)
+                            if (_unitHandles[unit] == tex.Handle) _unitHandles[unit] = 0;
                         Graphics.GL.DeleteTexture(tex.Handle);
                         tex.Handle = 0;
                     }
@@ -477,7 +527,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.AllocateTexture2D:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int mip = ReadI32(stream, ref pos);
                     uint w = ReadU32(stream, ref pos);
                     uint h = ReadU32(stream, ref pos);
@@ -499,7 +549,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.AllocateTextureCubeFace:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int face = ReadI32(stream, ref pos);
                     int mip = ReadI32(stream, ref pos);
                     uint size = ReadU32(stream, ref pos);
@@ -521,7 +571,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.AllocateTexture3D:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int mip = ReadI32(stream, ref pos);
                     uint w = ReadU32(stream, ref pos);
                     uint h = ReadU32(stream, ref pos);
@@ -543,7 +593,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.UpdateTexture3D:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int mip = ReadI32(stream, ref pos);
                     int x = ReadI32(stream, ref pos);
                     int y = ReadI32(stream, ref pos);
@@ -562,7 +612,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetTextureWrap:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     byte axis = ReadU8(stream, ref pos);
                     var mode = (TextureWrap)ReadU8(stream, ref pos);
                     switch (axis)
@@ -575,7 +625,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetTextureFiltersOp:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     var min = (TextureMin)ReadU8(stream, ref pos);
                     var mag = (TextureMag)ReadU8(stream, ref pos);
                     tex.SetTextureFilters(min, mag);
@@ -583,16 +633,16 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.SetTextureCompareMode:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     bool enabled = ReadU8(stream, ref pos) != 0;
                     tex.SetCompareMode(enabled);
                     break;
                 }
                 case CommandOpcode.GetTextureData:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int mip = ReadI32(stream, ref pos);
-                    var destination = (byte[])objects[ReadU16(stream, ref pos)]!;
+                    var destination = (byte[])objects[ReadI32(stream, ref pos)]!;
                     unsafe
                     {
                         fixed (byte* p = destination)
@@ -602,10 +652,10 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.GetTextureCubeFaceData:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int face = ReadI32(stream, ref pos);
                     int mip = ReadI32(stream, ref pos);
-                    var destination = (byte[])objects[ReadU16(stream, ref pos)]!;
+                    var destination = (byte[])objects[ReadI32(stream, ref pos)]!;
                     unsafe
                     {
                         fixed (byte* p = destination)
@@ -615,7 +665,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.GetTextureDataPtr:
                 {
-                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int mip = ReadI32(stream, ref pos);
                     long raw = ReadStruct<long>(stream, ref pos);
                     unsafe { tex.GetTexImage(mip, (void*)(nint)raw); }
@@ -623,7 +673,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.Screenshot:
                 {
-                    var texture = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    var texture = (GraphicsTexture)objects[ReadI32(stream, ref pos)]!;
                     int width = ReadI32(stream, ref pos);
                     int height = ReadI32(stream, ref pos);
                     texture.Bind();
@@ -632,7 +682,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.CreateVertexArrayOp:
                 {
-                    var vao = (GraphicsVertexArray)objects[ReadU16(stream, ref pos)]!;
+                    var vao = (GraphicsVertexArray)objects[ReadI32(stream, ref pos)]!;
                     vao.CreateGLObject();
                     // CreateGLObject binds the new VAO to configure it then leaves GL on
                     // VAO 0. Sync the mirror so the next BindVAO doesn't skip as redundant.
@@ -641,7 +691,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.DisposeVertexArray:
                 {
-                    var vao = (GraphicsVertexArray)objects[ReadU16(stream, ref pos)]!;
+                    var vao = (GraphicsVertexArray)objects[ReadI32(stream, ref pos)]!;
                     if (vao.Handle != 0)
                     {
                         // GL implicitly unbinds a deleted VAO mirror that here.
@@ -653,7 +703,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.CreateFramebufferOp:
                 {
-                    var fb = (GraphicsFrameBuffer)objects[ReadU16(stream, ref pos)]!;
+                    var fb = (GraphicsFrameBuffer)objects[ReadI32(stream, ref pos)]!;
                     fb.CreateGLObject();
                     // CreateGLObject binds the new FBO to attach textures then leaves GL on
                     // FBO 0. Sync the mirrors so the next ApplyRenderTarget doesn't skip.
@@ -663,7 +713,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.DisposeFramebuffer:
                 {
-                    var fb = (GraphicsFrameBuffer)objects[ReadU16(stream, ref pos)]!;
+                    var fb = (GraphicsFrameBuffer)objects[ReadI32(stream, ref pos)]!;
                     if (fb.Handle != 0)
                     {
                         if (_lastDrawFb == fb.Handle) _lastDrawFb = 0;
@@ -675,13 +725,13 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.CompileShader:
                 {
-                    var program = (GraphicsProgram)objects[ReadU16(stream, ref pos)]!;
+                    var program = (GraphicsProgram)objects[ReadI32(stream, ref pos)]!;
                     program.CreateGLObject();
                     break;
                 }
                 case CommandOpcode.DisposeShader:
                 {
-                    var program = (GraphicsProgram)objects[ReadU16(stream, ref pos)]!;
+                    var program = (GraphicsProgram)objects[ReadI32(stream, ref pos)]!;
                     if (program.Handle != 0)
                     {
                         if (GraphicsProgram.currentProgram != null && GraphicsProgram.currentProgram.Handle == program.Handle)
@@ -693,7 +743,7 @@ internal sealed class CommandExecutor
                 }
                 case CommandOpcode.BeginSample:
                 {
-                    string label = (string)objects[ReadU16(stream, ref pos)]!;
+                    string label = (string)objects[ReadI32(stream, ref pos)]!;
                     DoBeginSample(label);
                     break;
                 }
@@ -895,28 +945,48 @@ internal sealed class CommandExecutor
 
         if (_boundProgram == null) return;
 
-        _texSlotCounter = 0;
+        bool reusePrefix = _prefixValid && !PropertyApply.WatchedTouched
+            && ReferenceEquals(_prefixProgram, _boundProgram)
+            && ReferenceEquals(_prefixProperties, _boundProperties)
+            && ReferenceEquals(_prefixShader, _boundShader);
 
-        // GlobalUniforms UBO must be bound on every draw shaders that read camera
-        // matrices, time, screen size, etc. expect block 0 to hold this buffer.
-        // Done here (rather than per encoding site) so the high-level cmd.DrawMesh /
-        // cmd.Blit paths get it automatically; the low-level cmd.DrawIndexed path
-        // in DrawRenderables also benefits without needing an explicit cmd.SetBuffer.
-        // PropertyApply.BindUniformBuffer skips when the program doesn't declare the
-        // block, so shaders that don't use it pay nothing.
-        var globalBuf = Rendering.GlobalUniforms.GetBuffer();
-        if (globalBuf != null)
-            PropertyApply.BindUniformBuffer(_boundProgram, "GlobalUniforms", globalBuf, 0);
+        if (!reusePrefix)
+        {
+            _texSlotCounter = 0;
+            _prefixDraw = ++DrawNumber;
+            PropertyApply.BeginRecording(_prefixNames);
 
-        // Global property block (PropertyState statics).
-        PropertyApply.ApplyGlobals(_boundProgram, this);
+            // GlobalUniforms UBO must be bound for every program, shaders that read camera
+            // matrices, time, screen size, etc. expect block 0 to hold this buffer.
+            // Done here (rather than per encoding site) so the high-level cmd.DrawMesh /
+            // cmd.Blit paths get it automatically; the low-level cmd.DrawIndexed path
+            // in DrawRenderables also benefits without needing an explicit cmd.SetBuffer.
+            // PropertyApply.BindUniformBuffer skips when the program doesn't declare the
+            // block, so shaders that don't use it pay nothing.
+            var globalBuf = Rendering.GlobalUniforms.GetBuffer();
+            if (globalBuf != null)
+                PropertyApply.BindUniformBuffer(_boundProgram, "GlobalUniforms", globalBuf, 0);
 
-        if (_boundProperties != null)
-            PropertyApply.ApplyMaterial(_boundProperties, _boundProgram, this);
+            // Global property block (PropertyState statics).
+            PropertyApply.ApplyGlobals(_boundProgram, this);
 
-        // Shader defaults fill in anything the material didn't override.
-        if (_boundShader != null && _boundShader.IsValid())
-            PropertyApply.FillShaderDefaults(_boundShader, _boundProperties, _boundProgram, this);
+            if (_boundProperties != null)
+                PropertyApply.ApplyMaterial(_boundProperties, _boundProgram, this);
+
+            // Shader defaults fill in anything the material didn't override.
+            if (_boundShader != null && _boundShader.IsValid())
+                PropertyApply.FillShaderDefaults(_boundShader, _boundProperties, _boundProgram, this);
+
+            _prefixSlots = _texSlotCounter;
+            _prefixProgram = _boundProgram;
+            _prefixProperties = _boundProperties;
+            _prefixShader = _boundShader;
+            _prefixValid = true;
+        }
+
+        PropertyApply.Watch(_prefixNames);
+        _texSlotCounter = _prefixSlots;
+        DrawNumber++;
 
         if (_boundInstanceProperties != null)
             PropertyApply.ApplyInstance(_boundInstanceProperties, _boundProgram, this);
@@ -927,12 +997,21 @@ internal sealed class CommandExecutor
         for (int i = 0; i < _pendingDirectTextures.Count; i++)
         {
             var (name, tex) = _pendingDirectTextures[i];
-            int slot = AllocateTextureSlot();
-            BindTextureToUnit(slot, tex);
-            PropertyApply.SetIntCached(_boundProgram, name, slot);
+            PropertyApply.BindTexUniform(_boundProgram, name, tex, this);
         }
         _pendingDirectTextures.Clear();
+
+        // A sampler nothing bound this draw still holds the unit it had last time, and that unit now
+        // holds whatever an earlier draw left there. Point it at an empty unit so it reads nothing.
+        var samplers = _boundProgram.samplers;
+        var boundDraw = _boundProgram.samplerBoundDraw;
+        for (int i = 0; i < samplers.Length; i++)
+            if (boundDraw[i] != DrawNumber && boundDraw[i] != _prefixDraw)
+                PropertyApply.SetSamplerUnit(_boundProgram, i, samplers[i].EmptyUnit);
     }
+
+    /// <summary>Counts draws, so a program can tell which of its samplers this draw has bound.</summary>
+    internal int DrawNumber { get; private set; }
 
     // ─────────────────────── Texture slot management ───────────────────────
 
@@ -944,8 +1023,21 @@ internal sealed class CommandExecutor
 
     internal void BindTextureToUnit(int unit, GraphicsTexture tex)
     {
-        Graphics.GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + unit));
+        if (unit < MirroredUnits && _unitHandles[unit] == tex.Handle && _unitTargets[unit] == tex.Target) return;
+        if (unit != _activeUnit)
+        {
+            Graphics.GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + unit));
+            _activeUnit = unit;
+        }
         tex.Bind();
+    }
+
+    /// <summary>Records a texture bound to the active unit, by this executor or anything else on the render thread.</summary>
+    internal void OnTextureBound(TextureTarget target, uint handle)
+    {
+        if (_activeUnit >= MirroredUnits) return;
+        _unitHandles[_activeUnit] = handle;
+        _unitTargets[_activeUnit] = target;
     }
 
     // Debug markers. Compiled out in release builds the per-call overhead
@@ -974,9 +1066,6 @@ internal sealed class CommandExecutor
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static byte ReadU8(ReadOnlySpan<byte> s, ref int pos) { byte v = s[pos]; pos += 1; return v; }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ushort ReadU16(ReadOnlySpan<byte> s, ref int pos) { var v = MemoryMarshal.Read<ushort>(s.Slice(pos)); pos += sizeof(ushort); return v; }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int ReadI32(ReadOnlySpan<byte> s, ref int pos) { var v = MemoryMarshal.Read<int>(s.Slice(pos)); pos += sizeof(int); return v; }

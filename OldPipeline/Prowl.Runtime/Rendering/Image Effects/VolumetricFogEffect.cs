@@ -18,7 +18,7 @@ namespace Prowl.Runtime.Rendering;
 /// </summary>
 public sealed class VolumetricFogEffect : ImageEffect
 {
-    public override RenderStage Stage => RenderStage.AfterOpaques;
+    public override RenderStage Stage => RenderStage.AfterTransparents;
 
     // ── Global fog properties ──
     /// <summary>Base fog density everywhere in the world. Volumes can add more on top.</summary>
@@ -126,6 +126,9 @@ public sealed class VolumetricFogEffect : ImageEffect
             _historyValid = false;
         }
 
+        // A camera cut (Camera.ResetMotionHistory) or a freshly enabled camera has nothing to reproject from.
+        if (!context.Camera.HasPreviousViewProjectionMatrix) _historyValid = false;
+
         using var cmd = Graphics.GetCommandBuffer("VolumetricFog");
 
         // Pass 0 Ray march into low-res.
@@ -191,10 +194,31 @@ public sealed class VolumetricFogEffect : ImageEffect
         _mat.SetInt("_FogEnableSpotShadows", EnableSpotLightShadows ? 1 : 0);
     }
 
+    // Uniform names for each volume slot, built once instead of formatted every frame.
+    private static readonly string[] s_shapeNames = SlotNames("_FogVolumeShape");
+    private static readonly string[] s_positionNames = SlotNames("_FogVolumePosition");
+    private static readonly string[] s_sizeNames = SlotNames("_FogVolumeSize");
+    private static readonly string[] s_worldToLocalNames = SlotNames("_FogVolumeWorldToLocal");
+    private static readonly string[] s_densityNames = SlotNames("_FogVolumeDensity");
+    private static readonly string[] s_colorNames = SlotNames("_FogVolumeColor");
+    private static readonly string[] s_falloffNames = SlotNames("_FogVolumeFalloff");
+    private static readonly string[] s_coneAngleNames = SlotNames("_FogVolumeConeAngle");
+
+    private static string[] SlotNames(string uniform)
+    {
+        var names = new string[MaxFogVolumes];
+        for (int i = 0; i < MaxFogVolumes; i++) names[i] = $"{uniform}[{i}]";
+        return names;
+    }
+
+    private readonly List<(FogVolume vol, float distSq)> _collected = new();
+
     private void UploadFogVolumes(RenderContext context)
     {
-        var scene = Resources.Scene.Current;
-        var collected = new List<(FogVolume vol, float distSq)>();
+        // The volumes of the scene being rendered, which isn't always the active one (previews, additive scenes).
+        var scene = context.Camera.GameObject.Scene;
+        var collected = _collected;
+        collected.Clear();
 
         if (scene != null)
         {
@@ -238,14 +262,14 @@ public sealed class VolumetricFogEffect : ImageEffect
                 coneAngle = v.ConeAngle;
             }
 
-            _mat.SetInt($"_FogVolumeShape[{i}]", shape);
-            _mat.SetVector($"_FogVolumePosition[{i}]", pos);
-            _mat.SetVector($"_FogVolumeSize[{i}]", size);
-            _mat.SetMatrix($"_FogVolumeWorldToLocal[{i}]", worldToLocal);
-            _mat.SetFloat($"_FogVolumeDensity[{i}]", density);
-            _mat.SetColor($"_FogVolumeColor[{i}]", color);
-            _mat.SetFloat($"_FogVolumeFalloff[{i}]", falloff);
-            _mat.SetFloat($"_FogVolumeConeAngle[{i}]", coneAngle);
+            _mat.SetInt(s_shapeNames[i], shape);
+            _mat.SetVector(s_positionNames[i], pos);
+            _mat.SetVector(s_sizeNames[i], size);
+            _mat.SetMatrix(s_worldToLocalNames[i], worldToLocal);
+            _mat.SetFloat(s_densityNames[i], density);
+            _mat.SetColor(s_colorNames[i], color);
+            _mat.SetFloat(s_falloffNames[i], falloff);
+            _mat.SetFloat(s_coneAngleNames[i], coneAngle);
         }
 
         _mat.SetInt("_FogVolumeCount", count);

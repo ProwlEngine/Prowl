@@ -31,6 +31,10 @@ public sealed class TAAEffect : ImageEffect
     /// <summary>How much of the history to keep (0..0.99). Higher = smoother but ghosts more.</summary>
     public float BlendFactor = 0.95f;
 
+    /// <summary>How much history to keep where the image moves fast (0..0.99). Lower trails less on
+    /// fast pans; it stays above zero so moving pixels are still anti-aliased instead of shimmering.</summary>
+    public float MotionBlendFactor = 0.85f;
+
     /// <summary>Scale for motion-based neighborhood tightening. Higher = more aggressive ghosting rejection.</summary>
     public float MotionScale = 2.0f;
 
@@ -46,6 +50,8 @@ public sealed class TAAEffect : ImageEffect
     private int _frameIndex;
     private Float2 _jitter;
     private Float2 _previousJitter;
+    private Float4x4? _userProjection;
+    private Float4x4? _userNonJitteredProjection;
 
     /// <summary>
     /// Current sub-pixel jitter offset in pixel coordinates.
@@ -68,6 +74,10 @@ public sealed class TAAEffect : ImageEffect
 
         // Map from [0,1] to [-0.5, 0.5] pixel offset
         _jitter = new Float2(haltonX - 0.5f, haltonY - 0.5f);
+
+        // Remember any projection the user set by hand so OnPostRender can put it back.
+        _userProjection = camera.HasCustomProjectionMatrix ? camera.ProjectionMatrix : null;
+        _userNonJitteredProjection = camera.HasCustomNonJitteredProjectionMatrix ? camera.NonJitteredProjectionMatrix : null;
 
         // Save the unjittered projection before applying jitter.
         // NonJitteredProjectionMatrix is used by the pipeline for motion vectors.
@@ -105,8 +115,10 @@ public sealed class TAAEffect : ImageEffect
     public override void OnPostRender(Camera camera)
     {
         // Reset the projection matrix back to unjittered so other systems
-        // (picking, gizmos, etc.) don't see the jittered matrix.
+        // (picking, gizmos, etc.) don't see the jittered matrix, keeping one the user set by hand.
         camera.ResetProjectionMatrix();
+        if (_userProjection is { } projection) camera.ProjectionMatrix = projection;
+        if (_userNonJitteredProjection is { } nonJittered) camera.NonJitteredProjectionMatrix = nonJittered;
     }
 
     public override void OnRenderEffect(RenderContext context)
@@ -127,11 +139,14 @@ public sealed class TAAEffect : ImageEffect
 
         if (_history.IsNotValid()) _history = new RenderTexture(w, h, false, [format]);
 
+        // A camera cut (Camera.ResetMotionHistory) or a freshly enabled camera has nothing to reproject from.
+        if (!context.Camera.HasPreviousViewProjectionMatrix) _historyValid = false;
+
         // Set uniforms
         _mat.SetVector("_Resolution", new Float2(w, h));
-        _mat.SetVector("_Jitter", _jitter);
         _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
         _mat.SetFloat("_BlendFactor", Maths.Clamp(BlendFactor, 0.0f, 0.99f));
+        _mat.SetFloat("_MotionBlendFactor", Maths.Clamp(MotionBlendFactor, 0.0f, 0.99f));
         _mat.SetFloat("_MotionScale", Math.Max(0.0f, MotionScale));
         _mat.SetFloat("_Sharpness", Maths.Clamp(Sharpness, 0.0f, 1.0f));
         _mat.SetTexture("_HistoryTex", _history.MainTexture);
@@ -152,8 +167,11 @@ public sealed class TAAEffect : ImageEffect
         cmd.Blit(resolved, _history, null, 0);
         _historyValid = true;
 
-        // Copy resolved back to scene color
-        cmd.Blit(resolved, context.SceneColor, null, 0);
+        // Sharpen on the way back to scene color, after the history copy so it never feeds back.
+        if (Sharpness > 0f)
+            cmd.Blit(resolved, context.SceneColor, _mat, 1);
+        else
+            cmd.Blit(resolved, context.SceneColor, null, 0);
         Graphics.Submit(cmd);
         RenderTexture.ReleaseTemporaryRT(resolved);
     }

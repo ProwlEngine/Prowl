@@ -93,7 +93,9 @@ Pass "DefaultText"
 				float sd = texture(_MainTex, texCoord0).r;
 				float screenPxDistance = sdfScreenPxRange(texCoord0) * (sd - 0.5);
 				float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
-				fragColor = vColor * _MainColor * coverage * uiClipCoverage(worldPos);
+				// Straight alpha blending scales color by alpha itself, so coverage and clip only go into alpha.
+				vec4 color = vColor * _MainColor;
+				fragColor = vec4(color.rgb, color.a * coverage * uiClipCoverage(worldPos));
 			}
 		}
 	ENDGLSL

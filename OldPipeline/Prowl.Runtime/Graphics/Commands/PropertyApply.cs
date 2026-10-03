@@ -31,9 +31,10 @@ internal static class PropertyApply
     public static void SetFloatCached(GraphicsProgram p, string name, float v)
     {
         var cache = p.uniformCache;
-        if (cache.floats.TryGetValue(name, out var cv) && cv == v) return;
+        if (cache.floats.TryGetValue(name, out var cv) && cv == v) { Touch(name); return; }
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+        Touch(name);
         Graphics.GL.Uniform1(loc, v);
         cache.floats[name] = v;
     }
@@ -41,9 +42,10 @@ internal static class PropertyApply
     public static void SetIntCached(GraphicsProgram p, string name, int v)
     {
         var cache = p.uniformCache;
-        if (cache.ints.TryGetValue(name, out var cv) && cv == v) return;
+        if (cache.ints.TryGetValue(name, out var cv) && cv == v) { Touch(name); return; }
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+        Touch(name);
         Graphics.GL.Uniform1(loc, v);
         cache.ints[name] = v;
     }
@@ -51,9 +53,10 @@ internal static class PropertyApply
     public static void SetVec2Cached(GraphicsProgram p, string name, Float2 v)
     {
         var cache = p.uniformCache;
-        if (cache.vectors2.TryGetValue(name, out var cv) && cv.Equals(v)) return;
+        if (cache.vectors2.TryGetValue(name, out var cv) && cv.Equals(v)) { Touch(name); return; }
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+        Touch(name);
         Graphics.GL.Uniform2(loc, v);
         cache.vectors2[name] = v;
     }
@@ -61,9 +64,10 @@ internal static class PropertyApply
     public static void SetVec3Cached(GraphicsProgram p, string name, Float3 v)
     {
         var cache = p.uniformCache;
-        if (cache.vectors3.TryGetValue(name, out var cv) && cv.Equals(v)) return;
+        if (cache.vectors3.TryGetValue(name, out var cv) && cv.Equals(v)) { Touch(name); return; }
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+        Touch(name);
         Graphics.GL.Uniform3(loc, v);
         cache.vectors3[name] = v;
     }
@@ -71,20 +75,23 @@ internal static class PropertyApply
     public static void SetVec4Cached(GraphicsProgram p, string name, Float4 v)
     {
         var cache = p.uniformCache;
-        if (cache.vectors4.TryGetValue(name, out var cv) && cv.Equals(v)) return;
+        if (cache.vectors4.TryGetValue(name, out var cv) && cv.Equals(v)) { Touch(name); return; }
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+        Touch(name);
         Graphics.GL.Uniform4(loc, v);
         cache.vectors4[name] = v;
     }
 
     public static void SetMatrixCached(GraphicsProgram p, string name, in Float4x4 m)
     {
-        // Matrices skip the cache compare (struct is large; comparison cost dwarfs
-        // the upload savings). Matches the previous Graphics.SetUniformMatrix behavior.
+        var cache = p.uniformCache;
+        if (cache.matrices.TryGetValue(name, out var cv) && cv.Equals(m)) { Touch(name); return; }
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+        Touch(name);
         Graphics.GL.UniformMatrix4(loc, 1u, false, in FirstElement(in m));
+        cache.matrices[name] = m;
     }
 
     // The first of the sixteen column major floats, for handing a matrix or matrix array to GL.
@@ -95,6 +102,7 @@ internal static class PropertyApply
         if (data.Length == 0) return;
         int loc = LocationOf(p, name);
         if (loc < 0) return;
+        Touch(name);
         Graphics.GL.UniformMatrix4(loc, count, false, in FirstElement(in data[0]));
     }
 
@@ -102,6 +110,8 @@ internal static class PropertyApply
     {
         uint blockIdx = BlockIndexOf(p, name);
         if (blockIdx == 0xFFFFFFFFu) return; // not found
+        // Binding points are shared by every program, so any later bind may replace one the prefix made.
+        if (s_watched != null) s_watchedTouched = true;
         Graphics.GL.UniformBlockBinding(p.Handle, blockIdx, bindingPoint);
         Graphics.GL.BindBufferBase(BufferTargetARB.UniformBuffer, bindingPoint, buf.Handle);
     }
@@ -185,14 +195,14 @@ internal static class PropertyApply
                     }
                     break;
                 case ShaderPropertyType.Texture2D:
-                    if (overrides == null || !overrides._textures.ContainsKey(name))
+                    if (overrides == null || !overrides._boundTextures.ContainsKey(name))
                     {
                         if (prop.Texture2DValue is { IsDisposed: false, HandleIfLoaded: { } handle2D })
                             BindTexUniform(p, name, handle2D, exec);
                     }
                     break;
                 case ShaderPropertyType.Texture3D:
-                    if (overrides == null || !overrides._textures3D.ContainsKey(name))
+                    if (overrides == null || !overrides._boundTextures.ContainsKey(name))
                     {
                         if (prop.Texture3DValue is { IsDisposed: false, HandleIfLoaded: { } handle3D })
                             BindTexUniform(p, name, handle3D, exec);
@@ -250,6 +260,7 @@ internal static class PropertyApply
             if (kv.Value == null || kv.Value.Length == 0) continue;
             int loc = LocationOf(p, kv.Key);
             if (loc < 0) continue;
+            Touch(kv.Key);
             Graphics.GL.UniformMatrix4(loc, (uint)kv.Value.Length, false, in FirstElement(in kv.Value[0]));
         }
     }
@@ -261,6 +272,7 @@ internal static class PropertyApply
             if (kv.Value == null || kv.Value.Length == 0) continue;
             int loc = LocationOf(p, kv.Key);
             if (loc < 0) continue;
+            Touch(kv.Key);
             Graphics.GL.UniformMatrix4(loc, (uint)kv.Value.Length, false, in kv.Value[0].M11);
         }
     }
@@ -304,18 +316,72 @@ internal static class PropertyApply
         }
     }
 
-    private static void BindTexUniform(GraphicsProgram p, string name, GraphicsTexture tex, CommandExecutor exec)
+    internal static void BindTexUniform(GraphicsProgram p, string name, GraphicsTexture tex, CommandExecutor exec)
     {
-        int slot = exec.AllocateTextureSlot();
-        exec.BindTextureToUnit(slot, tex);
-        // Sampler slot uniforms cannot use the int cache: PrepareDraw resets the
-        // slot counter every draw, so the same uniform may legitimately need a
-        // different slot value next time. A cache hit would skip the Uniform1
-        // update and the shader would sample whatever texture is at the stale
-        // slot. Always write directly.
+        // Textures the program doesn't sample take no unit.
         int loc = LocationOf(p, name);
         if (loc < 0) return;
-        Graphics.GL.Uniform1(loc, slot);
+        Touch(name);
+
+        int slot = exec.AllocateTextureSlot();
+        exec.BindTextureToUnit(slot, tex);
+
+        if (p.samplerIndexByLocation.TryGetValue(loc, out int sampler))
+        {
+            p.samplerBoundDraw[sampler] = exec.DrawNumber;
+            SetSamplerUnit(p, sampler, slot);
+        }
+        else
+        {
+            Graphics.GL.Uniform1(loc, slot);
+        }
+    }
+
+    /// <summary>Points a sampler at a texture unit, skipping the write when it already reads that unit.</summary>
+    internal static void SetSamplerUnit(GraphicsProgram p, int sampler, int unit)
+    {
+        if (p.samplerUnits[sampler] == unit) return;
+        Graphics.GL.Uniform1(p.samplers[sampler].Location, unit);
+        p.samplerUnits[sampler] = unit;
+    }
+
+    // ─────────────────────── Prefix tracking ───────────────────────
+    // The executor reuses what one draw applied before its instance properties for the next draw.
+    // While that prefix applies, every uniform it sets is recorded. Afterwards the names are watched,
+    // and a later write to one of them means the prefix no longer holds. Render thread only.
+
+    private static HashSet<string>? s_recording;
+    private static HashSet<string>? s_watched;
+    private static bool s_watchedTouched;
+
+    internal static void BeginRecording(HashSet<string> names)
+    {
+        names.Clear();
+        s_recording = names;
+        s_watched = null;
+    }
+
+    internal static void Watch(HashSet<string> names)
+    {
+        s_recording = null;
+        s_watched = names;
+        s_watchedTouched = false;
+    }
+
+    internal static void StopWatching()
+    {
+        s_recording = null;
+        s_watched = null;
+    }
+
+    /// <summary>Whether anything wrote over the prefix since <see cref="Watch"/>.</summary>
+    internal static bool WatchedTouched => s_watchedTouched;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void Touch(string name)
+    {
+        if (s_recording != null) s_recording.Add(name);
+        else if (s_watched != null && s_watched.Contains(name)) s_watchedTouched = true;
     }
 
     // ─────────────────────── Uniform location / block index ───────────────────────

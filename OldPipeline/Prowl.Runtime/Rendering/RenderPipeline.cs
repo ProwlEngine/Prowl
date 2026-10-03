@@ -3,11 +3,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.Rendering;
 
@@ -66,6 +67,12 @@ public interface IRenderable
     /// <param name="model">Model matrix (only used for single-instance rendering)</param>
     /// <param name="instanceData">Instance data array for GPU instancing, or null for single-instance rendering</param>
     public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData);
+
+    /// <summary>
+    /// How many leading entries of <paramref name="instanceData"/> to draw. Renderables that reuse a
+    /// larger pooled array report the live count so they never have to allocate an exact sized one.
+    /// </summary>
+    public int GetInstanceCount(InstanceData[] instanceData) => instanceData.Length;
 
     /// <summary>
     /// World-to-object matrix (the inverse of the model matrix), bound as <c>prowl_WorldToObject</c>
@@ -182,52 +189,36 @@ public abstract class RenderPipeline : EngineObject
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
     }
 
-    public HashSet<int> ActiveObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }
-
-    private Dictionary<int, Float4x4> s_prevModelMatrices = [];
-    private HashSet<int> s_activeObjectIds = [];
-    private const int CLEANUP_INTERVAL_FRAMES = 120; // Clean up every 120 frames
-    private int s_framesSinceLastCleanup = 0;
-
-    private void CleanupUnusedModelMatrices()
+    // Model matrices for motion vectors, per camera: last render's to read and this render's to fill.
+    private sealed class MotionHistory
     {
-        // Increment frame counter
-        s_framesSinceLastCleanup++;
-
-        // Only perform cleanup at specified interval
-        if (s_framesSinceLastCleanup < CLEANUP_INTERVAL_FRAMES)
-            return;
-
-        s_framesSinceLastCleanup = 0;
-
-        // Remove all matrices that weren't used in this frame
-        var unusedKeys = s_prevModelMatrices.Keys
-            .Where(key => !ActiveObjectIds.Contains(key))
-            .ToList();
-
-        foreach (int key in unusedKeys)
-            s_prevModelMatrices.Remove(key);
-
-        // Clear the active IDs set for next frame
-        ActiveObjectIds.Clear();
+        public Dictionary<long, Float4x4> Previous = [];
+        public Dictionary<long, Float4x4> Current = [];
     }
+
+    private readonly ConditionalWeakTable<Camera, MotionHistory> _motionHistories = new();
+    private MotionHistory? _motion;
 
     /// <summary>
-    /// Tracks an object's model matrix for motion vector computation.
-    /// Returns the previous frame's model matrix (or current if first frame).
+    /// Starts motion vector tracking for <paramref name="camera"/>. Call at the start of a render;
+    /// <see cref="Render"/> ends it.
     /// </summary>
-    private Float4x4 TrackModelMatrix(int objectId, Float4x4 currentModel)
+    protected void BeginMotionTracking(Camera camera) => _motion = _motionHistories.GetValue(camera, _ => new MotionHistory());
+
+    /// <summary>
+    /// Records a renderable's model matrix for this render and returns the one from the camera's last
+    /// render, or the current one when it wasn't drawn then.
+    /// </summary>
+    internal Float4x4 TrackModelMatrix(int objectId, int subMeshIndex, in Float4x4 currentModel)
     {
-        // Mark this object ID as active this frame
-        ActiveObjectIds.Add(objectId);
+        if (_motion == null) return currentModel;
 
-        Float4x4 prevModel;
-        if (!s_prevModelMatrices.TryGetValue(objectId, out prevModel))
-            prevModel = currentModel; // First frame, use current matrix
-
-        s_prevModelMatrices[objectId] = currentModel;
-        return prevModel;
+        long key = ((long)objectId << 32) | (uint)subMeshIndex;
+        _motion.Current[key] = currentModel;
+        return _motion.Previous.TryGetValue(key, out Float4x4 prevModel) ? prevModel : currentModel;
     }
+
+    private static int s_lastCollectCount;
 
     /// <summary>
     /// Collects renderables and lights from the scene for the given camera.
@@ -235,16 +226,21 @@ public abstract class RenderPipeline : EngineObject
     /// </summary>
     public static (List<IRenderable> renderables, List<IRenderableLight> lights) CollectRenderables(Scene scene, Camera camera)
     {
-        var renderables = new List<IRenderable>();
+        // Sized from the last collect, so a big scene does not regrow its list from empty every frame.
+        var renderables = new List<IRenderable>(s_lastCollectCount);
         var lights = new List<IRenderableLight>();
         scene.CollectRenderables(camera, renderables, lights);
+        s_lastCollectCount = renderables.Count;
         return (renderables, lights);
     }
 
     public virtual void Render(Camera camera, in RenderingData data)
     {
-        // Clean up unused matrices after rendering
-        CleanupUnusedModelMatrices();
+        if (_motion == null) return;
+
+        (_motion.Previous, _motion.Current) = (_motion.Current, _motion.Previous);
+        _motion.Current.Clear();
+        _motion = null;
     }
 
     /// <summary>
@@ -253,16 +249,25 @@ public abstract class RenderPipeline : EngineObject
     /// HashSet and turns the per-object membership test in every pass into an O(1) array read
     /// instead of a hash lookup.
     /// </summary>
-    public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask)
+    /// <param name="alreadyCulled">Renderables an earlier, wider test culled, which stay culled without testing again.</param>
+    public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask, bool[]? alreadyCulled = null)
     {
         EnsureWorldBounds(renderables);
 
+        ReadOnlySpan<Plane> planes = worldFrustum?.Planes;
         bool[] culledRenderableIndices = new bool[renderables.Count];
         int culled = 0;
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
+            if (alreadyCulled != null && alreadyCulled[renderIndex])
+            {
+                culledRenderableIndices[renderIndex] = true;
+                culled++;
+                continue;
+            }
+
             bool frustumCull = worldFrustum != null
-                && (!_boundsRenderable[renderIndex] || !worldFrustum.Value.Intersects(_worldBounds[renderIndex]));
+                && (!_boundsRenderable[renderIndex] || !BoxInsidePlanes(planes, in _worldBounds[renderIndex]));
 
             if (frustumCull || cullingMask.HasLayer(renderables[renderIndex].GetLayer()) == false)
             {
@@ -274,6 +279,43 @@ public abstract class RenderPipeline : EngineObject
         int collected = renderables.Count;
         RenderStats.AddRenderables(collected, culled, collected - culled);
 
+        return culledRenderableIndices;
+    }
+
+    /// <summary>
+    /// The same test as <see cref="Frustum.Intersects(AABB)"/>, reading the planes in place: a box is out once its
+    /// corner furthest along a plane's normal is still behind that plane.
+    /// </summary>
+    private static bool BoxInsidePlanes(ReadOnlySpan<Plane> planes, in AABB box)
+    {
+        for (int i = 0; i < planes.Length; i++)
+        {
+            Float3 n = planes[i].Normal;
+            float x = n.X >= 0f ? box.Max.X : box.Min.X;
+            float y = n.Y >= 0f ? box.Max.Y : box.Min.Y;
+            float z = n.Z >= 0f ? box.Max.Z : box.Min.Z;
+            if (n.X * x + n.Y * y + n.Z * z - planes[i].D < -Intersection.INTERSECTION_EPSILON)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Culls every renderable whose bounds miss the sphere, as a cheap first pass for views that all sit inside
+    /// it, such as the faces of a point light. Not counted in the render stats, the views that use it are.
+    /// </summary>
+    public bool[] CullOutsideSphere(IReadOnlyList<IRenderable> renderables, Float3 center, float radius)
+    {
+        EnsureWorldBounds(renderables);
+
+        bool[] culledRenderableIndices = new bool[renderables.Count];
+        float radiusSq = radius * radius;
+        for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
+        {
+            AABB bounds = _worldBounds[renderIndex];
+            Float3 closest = Maths.Clamp(center, bounds.Min, bounds.Max);
+            culledRenderableIndices[renderIndex] = !_boundsRenderable[renderIndex] || Float3.LengthSquared(closest - center) > radiusSq;
+        }
         return culledRenderableIndices;
     }
 
@@ -310,6 +352,7 @@ public abstract class RenderPipeline : EngineObject
     private readonly List<RenderBatch> _batches = new();
     private readonly Dictionary<(ulong, int, Mesh), int> _batchLookup = new();
     private readonly List<List<int>> _indexListPool = new();
+    private readonly List<int> _lastBatches = new();
     private int _indexListRented;
 
     // Per-frame world-space AABB cache shared by the main cull and every shadow cascade cull, so each
@@ -418,7 +461,8 @@ public abstract class RenderPipeline : EngineObject
         GlobalUniforms.SetTime(new Float4(Time.TimeSinceStartup * 0.5f, Time.TimeSinceStartup, Time.TimeSinceStartup * 2, Time.FrameCount));
         GlobalUniforms.SetSinTime(new Float4(Maths.Sin(Time.TimeSinceStartup / 8), Maths.Sin(Time.TimeSinceStartup / 4), Maths.Sin(Time.TimeSinceStartup / 2), Maths.Sin(Time.TimeSinceStartup)));
         GlobalUniforms.SetCosTime(new Float4(Maths.Cos(Time.TimeSinceStartup / 8), Maths.Cos(Time.TimeSinceStartup / 4), Maths.Cos(Time.TimeSinceStartup / 2), Maths.Cos(Time.TimeSinceStartup)));
-        GlobalUniforms.SetDeltaTime(new Float4(Time.DeltaTime, 1.0f / Time.DeltaTime, Time.SmoothDeltaTime, 1.0f / Time.SmoothDeltaTime));
+        float dt = Time.DeltaTime, smoothDt = Time.SmoothDeltaTime;
+        GlobalUniforms.SetDeltaTime(new Float4(dt, dt > 0 ? 1.0f / dt : 0f, smoothDt, smoothDt > 0 ? 1.0f / smoothDt : 0f));
 
         // Upload the global uniform buffer
         GlobalUniforms.Upload();
@@ -460,7 +504,14 @@ public abstract class RenderPipeline : EngineObject
         public List<int> RenderableIndices;  // Indices of objects in this batch
         public bool IsInstanced;       // True if this batch uses GPU instancing
         public int InstancedRenderableIndex;  // Index of the instanced renderable (if IsInstanced is true)
+        public int Order;              // Creation order, keeps equal sort keys in their original order
     }
+
+    private static readonly Comparison<RenderBatch> s_batchOrder = (a, b) =>
+    {
+        int c = a.SortKey.CompareTo(b.SortKey);
+        return c != 0 ? c : a.Order.CompareTo(b.Order);
+    };
 
     /// <summary>
     /// Renders all given objects with optimized batching. Objects are grouped by (material, mesh, pass)
@@ -478,7 +529,9 @@ public abstract class RenderPipeline : EngineObject
     /// <param name="currentRT">Currently bound color render target, used for the
     /// GrabTexture handshake (read FB for the blit-into-grab-RT). Pass null if no
     /// pass in this batch will request a grab texture.</param>
-    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
+    /// <param name="preserveOrder">Draw in the order of <paramref name="renderables"/>, only merging
+    /// neighbours into one batch. Needed for sorted lists such as back to front transparents.</param>
+    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null, bool preserveOrder = false)
     {
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(shaderTag);
         bool hasSortOffsets = false;
@@ -496,6 +549,12 @@ public abstract class RenderPipeline : EngineObject
         batches.Clear();
         batchLookup.Clear();
         _indexListRented = 0;
+
+        // Neighbours with the same material and mesh land in the same batches, so the lookup is skipped for them.
+        Material? lastMaterial = null;
+        Mesh? lastMesh = null;
+        List<int> lastBatches = _lastBatches;
+        lastBatches.Clear();
 
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
@@ -519,23 +578,24 @@ public abstract class RenderPipeline : EngineObject
             // instanced path and draw nothing, rather than falling through to the single-instance
             // path and drawing one untransformed copy of its mesh.
             bool isProcedural = renderable is IProceduralInstanced;
-            if (isProcedural || (instanceData != null && instanceData.Length > 0))
+            if (isProcedural || (instanceData != null && renderable.GetInstanceCount(instanceData) > 0))
             {
                 // Get material hash for batching
                 ulong instancedMaterialHash = material.GetStateHash();
 
                 // Find ALL shader passes matching the requested tag and add to batches
                 int instancedPassIndex = -1;
-                foreach (ShaderPass pass in material.Shader.Passes)
+                foreach (ShaderPass pass in material.Shader.LoadedPasses)
                 {
                     instancedPassIndex++;
 
                     if (hasRenderOrder && !pass.HasTag(shaderTag, tagValue))
                         continue;
 
-                    // Compute sort key for this pass (same as non-instanced)
-                    int sortKey = hasRenderOrder ? instancedPassIndex + pass.GetTagSortOffset(shaderTag) : instancedPassIndex;
-                    hasSortOffsets |= sortKey != instancedPassIndex;
+                    // Only the tag offset orders batches. Pass indices belong to their own shader, and the
+                    // creation order already keeps one material's passes in sequence.
+                    int sortKey = hasRenderOrder ? pass.GetTagSortOffset(shaderTag) : 0;
+                    hasSortOffsets |= sortKey != 0;
 
                     // Create batch for instanced renderable
                     // Each instanced renderable gets its own batch since it draws all instances in one call
@@ -548,12 +608,23 @@ public abstract class RenderPipeline : EngineObject
                         SortKey = sortKey,
                         IsInstanced = true,
                         InstancedRenderableIndex = renderIndex,
-                        RenderableIndices = null  // Not used for instanced batches
+                        RenderableIndices = null,  // Not used for instanced batches
+                        Order = batches.Count
                     };
                     batches.Add(newBatch);
                 }
                 continue;
             }
+
+            if (!preserveOrder && ReferenceEquals(material, lastMaterial) && ReferenceEquals(mesh, lastMesh))
+            {
+                foreach (int batch in lastBatches)
+                    batches[batch].RenderableIndices.Add(renderIndex);
+                continue;
+            }
+            lastMaterial = material;
+            lastMesh = mesh;
+            lastBatches.Clear();
 
             // Get material hash for batching - materials with identical uniforms will batch together
             ulong materialHash = material.GetStateHash();
@@ -561,7 +632,7 @@ public abstract class RenderPipeline : EngineObject
             // Find ALL shader passes matching the requested tag (e.g., "Opaque", "Transparent", "ShadowCaster")
             // Multi-pass rendering: materials can have multiple passes with the same tag (e.g., terrain with many texture layers)
             int passIndex = -1;
-            foreach (ShaderPass pass in material.Shader.Passes)
+            foreach (ShaderPass pass in material.Shader.LoadedPasses)
             {
                 passIndex++;
 
@@ -572,16 +643,16 @@ public abstract class RenderPipeline : EngineObject
                 // Found matching pass - add to appropriate batch
                 // Batch key: (material hash, pass index, mesh) ensures each pass gets its own batch
                 var batchKey = (materialHash, passIndex, mesh);
-                if (batchLookup.TryGetValue(batchKey, out int batchIndex))
+                if (batchLookup.TryGetValue(batchKey, out int batchIndex) && (!preserveOrder || batchIndex == batches.Count - 1))
                 {
                     // Batch already exists - add this object to it
                     batches[batchIndex].RenderableIndices.Add(renderIndex);
+                    lastBatches.Add(batchIndex);
                 }
                 else
                 {
-                    // Compute sort key for this pass
-                    int sortKey = hasRenderOrder ? passIndex + pass.GetTagSortOffset(shaderTag) : passIndex;
-                    hasSortOffsets |= sortKey != passIndex;
+                    int sortKey = hasRenderOrder ? pass.GetTagSortOffset(shaderTag) : 0;
+                    hasSortOffsets |= sortKey != 0;
 
                     // Create new batch for this unique material+pass+mesh combination
                     List<int> indices = RentIndexList();
@@ -593,9 +664,11 @@ public abstract class RenderPipeline : EngineObject
                         PassIndex = passIndex,
                         MaterialHash = materialHash,
                         SortKey = sortKey,
-                        RenderableIndices = indices
+                        RenderableIndices = indices,
+                        Order = batches.Count
                     };
                     batchLookup[batchKey] = batches.Count;
+                    lastBatches.Add(batches.Count);
                     batches.Add(newBatch);
                 }
 
@@ -607,7 +680,7 @@ public abstract class RenderPipeline : EngineObject
         // Sort batches by their sort key (respects tag offsets like "Transparent+1000")
         if (hasSortOffsets)
         {
-            batches.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
+            batches.Sort(s_batchOrder);
         }
 
         for (int i = 0; i < batches.Count; i++)
@@ -673,10 +746,10 @@ public abstract class RenderPipeline : EngineObject
                 // Restore both targets back to the original RT.
                 cmd.SetRenderTarget(currentRT.frameBuffer);
 
+                // The grab target comes from the shared pool, so the mipmapped filter is set in the
+                // command buffer and put back below before anything else can borrow the target.
                 cmd.GenerateMipmap(grabRT.MainTexture);
-                // Filter is a sticky texture property; setting it directly is fine and
-                // doesn't need to go through the CB (no ordering constraint vs draws).
-                grabRT.MainTexture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
+                cmd.EncodeSetTextureFilters(grabRT.MainTexture.Handle, TextureMin.LinearMipmapLinear, TextureMag.Linear);
 
                 // Encode the global set as a CB opcode so it's ordered against the
                 // draws below at EXECUTE time. Writing PropertyState.SetGlobalTexture
@@ -706,10 +779,9 @@ public abstract class RenderPipeline : EngineObject
 
                 renderable.GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
 
-                int instanceId = properties.GetInt("_ObjectID");
                 Float4x4 prevModel = model;
-                if (updatePreviousMatrices && instanceId != 0)
-                    prevModel = TrackModelMatrix(instanceId, model);
+                if (updatePreviousMatrices && properties.GetInt("_ObjectID") is int instanceId and not 0)
+                    prevModel = TrackModelMatrix(instanceId, renderable.GetSubMeshIndex(), in model);
 
                 cmd.SetInstanceProperties(properties);
 
@@ -745,6 +817,7 @@ public abstract class RenderPipeline : EngineObject
                 cmd.ClearGlobalTexture(pass.GrabTextureName);
                 if (pass.HasGrabDepth)
                     cmd.ClearGlobalTexture(pass.GrabDepthTextureName);
+                cmd.EncodeSetTextureFilters(grabRT.MainTexture.Handle, grabRT.MainTexture.MinFilter, grabRT.MainTexture.MagFilter);
                 RenderTexture.ReleaseTemporaryRT(grabRT);
                 grabRT = null;
             }
@@ -765,9 +838,8 @@ public abstract class RenderPipeline : EngineObject
         bool procedural = renderable is IProceduralInstanced;
         int proceduralCount = procedural ? ((IProceduralInstanced)renderable).InstanceCount : 0;
 
-        if (!procedural && (instanceData == null || instanceData.Length == 0))
-            return;
-        if (procedural && proceduralCount <= 0)
+        int instanceCount = procedural ? proceduralCount : instanceData == null ? 0 : Math.Min(renderable.GetInstanceCount(instanceData), instanceData.Length);
+        if (instanceCount <= 0)
             return;
 
         // Ensure the shared instance VAO + buffer exist. The actual data upload is
@@ -785,11 +857,10 @@ public abstract class RenderPipeline : EngineObject
         }
         else
         {
-            vao = mesh.EnsureInstanceVAO(instanceData!.Length, out instanceBuf);
+            vao = mesh.EnsureInstanceVAO(instanceCount, out instanceBuf);
         }
         if (vao == null) return;
 
-        int instanceCount = procedural ? proceduralCount : instanceData!.Length;
         int indexCount = mesh.IndexCount;
         bool useIndex32 = mesh.IndexFormat == IndexFormat.UInt32;
 
@@ -822,6 +893,8 @@ public abstract class RenderPipeline : EngineObject
 
         if (sharedProperties != null)
             cmd.SetInstanceProperties(sharedProperties);
+        else
+            cmd.ClearInstanceProperties();
 
         // Upload THIS batch's instance data immediately before the draw so the
         // shared instance buffer holds the right contents when the draw executes.
@@ -836,7 +909,7 @@ public abstract class RenderPipeline : EngineObject
         }
         else
         {
-            cmd.DrawIndexedInstanced(vao, Topology.Triangles, (uint)indexCount, (uint)instanceCount, 0, 0, useIndex32);
+            cmd.DrawIndexedInstanced(vao, mesh.MeshTopology, (uint)indexCount, (uint)instanceCount, 0, 0, useIndex32);
         }
 
         material.SetKeyword("GPU_INSTANCING", false);

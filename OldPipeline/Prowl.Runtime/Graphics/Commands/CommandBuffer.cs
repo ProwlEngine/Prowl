@@ -38,13 +38,13 @@ public sealed class CommandBuffer : IDisposable
 {
     // --- Stream backing ---
     // _stream holds fixed-size payloads packed end-to-end after each CommandHeader.
-    // Object refs are encoded as ushort indices into _objects.
+    // Object refs are encoded as int indices into _objects.
     // Blobs (matrix arrays, upload data) are parked into _store.
     internal byte[] _stream;
     internal int _streamPos;
 
     internal readonly List<object?> _objects = new(64);
-    internal readonly Dictionary<string, ushort> _nameMap = new(32);
+    internal readonly Dictionary<string, int> _nameMap = new(32);
     internal readonly TransientStore _store = new();
 
     // PropertyState snapshots rented from the pool for SetMaterialProperties (and
@@ -56,11 +56,11 @@ public sealed class CommandBuffer : IDisposable
     public string? Name { get; set; }
 
     internal bool _submitted;
+    private bool _disposed;
 
-    /// <summary>Set by Submit, cleared only by OnRent (NOT by OnReturn). Lets Dispose
-    /// stay correct even if the render thread has already executed and re-rented this
-    /// buffer to another caller before our using-block fires.</summary>
-    internal bool _ownerReleased;
+    // A submitted buffer goes back to the pool only once the render thread has run it AND the
+    // owner has disposed it, so a late Dispose can never recycle a buffer someone else now holds.
+    private int _releases;
 
     internal bool _inPool;
 
@@ -77,7 +77,8 @@ public sealed class CommandBuffer : IDisposable
         Name = name;
         _submitted = false;
         _inPool = false;
-        _ownerReleased = false;
+        _disposed = false;
+        _releases = 0;
     }
 
     /// <summary>Pool calls this after execution to wipe the buffer for reuse.</summary>
@@ -105,12 +106,21 @@ public sealed class CommandBuffer : IDisposable
         _store.Dispose();
     }
 
-    /// <summary>No-op if Submit was called (render thread returns the buffer).
-    /// Returns to pool if the buffer was rented but never submitted.</summary>
+    /// <summary>Gives up the owner's hold. A buffer that was never submitted goes straight back to the
+    /// pool; a submitted one follows once the render thread is done with it.</summary>
     public void Dispose()
     {
-        if (_ownerReleased) return;
-        CommandBufferPool.Return(this);
+        if (_disposed || _inPool) return;
+        _disposed = true;
+        if (_submitted) Release();
+        else CommandBufferPool.Return(this);
+    }
+
+    /// <summary>Called once by the owner through Dispose and once after the buffer has executed.</summary>
+    internal void Release()
+    {
+        if (System.Threading.Interlocked.Increment(ref _releases) == 2)
+            CommandBufferPool.Return(this);
     }
 
     // ─────────────────────── Render target / viewport / clear ───────────────────────
@@ -263,6 +273,7 @@ public sealed class CommandBuffer : IDisposable
 
     public void ClearGlobalTexture(string name)
     {
+        s_boundGlobals.Remove(name);
         WriteHeader(CommandOpcode.ClearGlobalTexture);
         Write(InternName(name));
     }
@@ -351,6 +362,7 @@ public sealed class CommandBuffer : IDisposable
 
     public void ClearAllGlobals()
     {
+        s_boundGlobals.Clear();
         WriteHeader(CommandOpcode.ClearAllGlobals);
     }
 
@@ -547,6 +559,8 @@ public sealed class CommandBuffer : IDisposable
         material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
         material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
         material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
+        material.SetKeyword("BLENDSHAPES", mesh.HasBlendShapes);
+        material.SetKeyword("GPU_INSTANCING", false);
 
         var pass = material.Shader.GetPass(passIndex);
         if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variant) || variant == null)
@@ -863,9 +877,7 @@ public sealed class CommandBuffer : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void WriteHeader(CommandOpcode op)
     {
-        // _inPool (not _submitted): OnReturn resets _submitted to false, so
-        // checking it wouldn't catch the common "encoded after Submit" misuse.
-        if (_inPool) throw new InvalidOperationException("CommandBuffer has been returned to the pool; encoding is closed. Did you encode after Graphics.Submit?");
+        if (_submitted || _inPool) throw new InvalidOperationException("CommandBuffer has been submitted or returned to the pool; encoding is closed. Did you encode after Graphics.Submit?");
         EnsureCapacity(sizeof(ushort));
         MemoryMarshal.Write(_stream.AsSpan(_streamPos), in op);
         _streamPos += sizeof(ushort);
@@ -899,18 +911,16 @@ public sealed class CommandBuffer : IDisposable
         _stream = next;
     }
 
-    private ushort PushObject(object? obj)
+    private int PushObject(object? obj)
     {
         int idx = _objects.Count;
-        if (idx > ushort.MaxValue)
-            throw new InvalidOperationException("CommandBuffer object reference table exceeded 65k entries.");
         _objects.Add(obj);
-        return (ushort)idx;
+        return idx;
     }
 
-    private ushort InternName(string name)
+    private int InternName(string name)
     {
-        if (_nameMap.TryGetValue(name, out ushort idx)) return idx;
+        if (_nameMap.TryGetValue(name, out int idx)) return idx;
         idx = PushObject(name);
         _nameMap[name] = idx;
         return idx;
