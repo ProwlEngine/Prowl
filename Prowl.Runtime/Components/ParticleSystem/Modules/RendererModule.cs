@@ -191,7 +191,7 @@ public class RendererModule : ParticleSystemModule
         TrailModule trails = system.Trails;
         Float4x4 view = camera.ViewMatrix;
         Float4x4 projection = camera.ProjectionMatrix;
-        Frustum frustum = Frustum.FromMatrix(projection * view);
+        Frustum frustum = ViewFrustum(projection * view);
         Float3 cameraPosition = camera.Transform.Position;
         Float3 cameraForward = camera.Transform.Forward;
         bool visible = false;
@@ -242,6 +242,20 @@ public class RendererModule : ParticleSystemModule
         return visible;
     }
 
+    // Every system collects for the same view in turn, so its frustum is built once rather than per system.
+    private static Float4x4 s_frustumViewProjection;
+    private static Frustum s_frustum;
+
+    private static Frustum ViewFrustum(Float4x4 viewProjection)
+    {
+        if (s_frustum.Planes == null || !viewProjection.Equals(s_frustumViewProjection))
+        {
+            s_frustum = Frustum.FromMatrix(viewProjection);
+            s_frustumViewProjection = viewProjection;
+        }
+        return s_frustum;
+    }
+
     /// <summary>
     /// The sorting fudge as an offset along the view, clamped so the sort point never passes the camera,
     /// where it would count as far away and flip the order the fudge asked for.
@@ -272,9 +286,9 @@ public class RendererModule : ParticleSystemModule
         return 2f / MathF.Max(MathF.Abs(projection.c1.Y), 1e-6f) * (orthographic ? 1f : MathF.Max(depth, 1e-4f));
     }
 
+    // The same keys every time, so the values are set in place and an unchanged system keeps its draw snapshot.
     private void ConfigureProperties(PropertyState properties, ParticleSystemComponent system, int mode, Float4 sheet)
     {
-        properties.Clear();
         properties.SetInt("_ObjectID", system.InstanceID);
         properties.SetInt("_ParticleMode", mode);
         properties.SetVector("_ParticleSheet", sheet);
@@ -302,7 +316,8 @@ public class RendererModule : ParticleSystemModule
                 _ => 0f
             };
         }
-        if (SortMode != ParticleSortMode.None)
+        // Additive particles look the same in any order.
+        if (SortMode != ParticleSortMode.None && BlendMode != ParticleBlendMode.Additive)
             Array.Sort(_sortKeys, _sortIndices, 0, count);
 
         // The view matrix rows are the camera's screen axes.
