@@ -681,16 +681,6 @@ public class Mesh : Asset, ISerializable
             return null;
         }
 
-        var instanceFormat = new VertexFormat(new[]
-        {
-            new Element((VertexSemantic)8, VertexType.Float, 4, divisor: 1),  // ModelRow0
-            new Element((VertexSemantic)9, VertexType.Float, 4, divisor: 1),  // ModelRow1
-            new Element((VertexSemantic)10, VertexType.Float, 4, divisor: 1), // ModelRow2
-            new Element((VertexSemantic)11, VertexType.Float, 4, divisor: 1), // ModelRow3
-            new Element((VertexSemantic)12, VertexType.Float, 4, divisor: 1), // Color (RGBA)
-            new Element((VertexSemantic)13, VertexType.Float, 4, divisor: 1), // CustomData
-        });
-
         if (instanceBuffer == null || instanceCount > instanceBufferCapacity)
         {
             // Grow with 50% headroom to amortise resizes.
@@ -712,6 +702,15 @@ public class Mesh : Asset, ISerializable
 
         if (instancedVAO == null)
         {
+            var instanceFormat = new VertexFormat(new[]
+            {
+                new Element((VertexSemantic)8, VertexType.Float, 4, divisor: 1),  // ModelRow0
+                new Element((VertexSemantic)9, VertexType.Float, 4, divisor: 1),  // ModelRow1
+                new Element((VertexSemantic)10, VertexType.Float, 4, divisor: 1), // ModelRow2
+                new Element((VertexSemantic)11, VertexType.Float, 4, divisor: 1), // ModelRow3
+                new Element((VertexSemantic)12, VertexType.Float, 4, divisor: 1), // Color (RGBA)
+                new Element((VertexSemantic)13, VertexType.Float, 4, divisor: 1), // CustomData
+            });
             var meshFormat = GetVertexLayout(this);
             instancedVAO = Graphics.CreateVertexArray(
                 meshFormat,
