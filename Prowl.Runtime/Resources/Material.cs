@@ -139,12 +139,20 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
     /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
     public Material Clone() { EnsureLoaded(); return new Material(this); }
 
+    // Keywords the renderer sets from the mesh it is drawing. Batches are already split by mesh, so these stay out of
+    // the state hash, and the renderer switching them for every draw does not make the hash rebuild.
+    private static readonly HashSet<string> s_drawKeywords =
+    [
+        "HAS_NORMALS", "HAS_TANGENTS", "HAS_UV", "HAS_UV2", "HAS_COLORS",
+        "HAS_BONEINDICES", "HAS_BONEWEIGHTS", "SKINNED", "BLENDSHAPES", "GPU_INSTANCING",
+    ];
+
     public void SetKeyword(string keyword, bool value)
     {
         EnsureLoaded();
         if (_localKeywords.TryGetValue(keyword, out bool current) && current == value) return;
         _localKeywords[keyword] = value;
-        MarkDirty();
+        if (!s_drawKeywords.Contains(keyword)) MarkDirty();
     }
 
     // Every public Set marks the property as user-overridden so subsequent shader
@@ -275,13 +283,11 @@ public sealed class Material : Asset, ISerializationCallbackReceiver
 
     private ulong HashKeywords(ulong hash)
     {
-        foreach (var kv in _localKeywords.OrderBy(x => x.Key, StringComparer.Ordinal))
-        {
-            if (!kv.Value) continue;
-            hash ^= (ulong)kv.Key.GetHashCode();
-            hash *= 1099511628211UL;
-        }
-        return hash;
+        ulong sum = 0;
+        foreach (KeyValuePair<string, bool> kv in _localKeywords)
+            if (kv.Value && !s_drawKeywords.Contains(kv.Key))
+                sum += PropertyState.Mix((ulong)(uint)kv.Key.GetHashCode());
+        return (hash ^ PropertyState.Mix(sum)) * 1099511628211UL;
     }
 
     /// <summary>
