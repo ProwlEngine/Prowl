@@ -408,10 +408,13 @@ public sealed class CommandBuffer : IDisposable
         SetVector(name, new Float4((float)c.R, (float)c.G, (float)c.B, (float)c.A));
     }
 
-    public void SetMatrix(string name, in Float4x4 m)
+    public void SetMatrix(string name, in Float4x4 m) => SetMatrix(InternName(name), in m);
+
+    /// <summary>Sets a matrix by a name already interned with <see cref="NameIndex"/>, for loops that set the same one per draw.</summary>
+    internal void SetMatrix(int nameIndex, in Float4x4 m)
     {
         WriteHeader(CommandOpcode.SetUniformMatrix);
-        Write(InternName(name));
+        Write(nameIndex);
         Write(in m);
     }
 
@@ -495,9 +498,13 @@ public sealed class CommandBuffer : IDisposable
 
     public void DrawIndexed(GraphicsVertexArray vao, Topology topo, uint indexCount,
                             uint startIndex = 0, int baseVertex = 0, bool index32bit = false)
+        => DrawIndexed(PushObject(vao), topo, indexCount, startIndex, baseVertex, index32bit);
+
+    /// <summary>Draws a vertex array already pushed with <see cref="ObjectIndex"/>, for loops that draw the same one many times.</summary>
+    internal void DrawIndexed(int vaoIndex, Topology topo, uint indexCount, uint startIndex, int baseVertex, bool index32bit)
     {
         WriteHeader(CommandOpcode.DrawIndexed);
-        Write(PushObject(vao));
+        Write(vaoIndex);
         Write((byte)topo);
         Write(indexCount);
         Write(startIndex);
@@ -917,6 +924,12 @@ public sealed class CommandBuffer : IDisposable
         _objects.Add(obj);
         return idx;
     }
+
+    /// <summary>Stores an object once so several commands can refer to it by the returned index.</summary>
+    internal int ObjectIndex(object obj) => PushObject(obj);
+
+    /// <summary>The index of an interned uniform name, for commands that take one directly.</summary>
+    internal int NameIndex(string name) => InternName(name);
 
     private int InternName(string name)
     {

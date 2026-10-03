@@ -772,6 +772,16 @@ public abstract class RenderPipeline : EngineObject
 
             cmd.SetMaterialProperties(material);
 
+            // Everything that only depends on the mesh is read and stored once for the whole batch.
+            int vao = cmd.ObjectIndex(mesh.VertexArrayObject);
+            int objectToWorld = cmd.NameIndex("prowl_ObjectToWorld");
+            int worldToObject = needsWorldToObject ? cmd.NameIndex("prowl_WorldToObject") : -1;
+            int prevObjectToWorld = updatePreviousMatrices ? cmd.NameIndex("prowl_PrevObjectToWorld") : -1;
+            bool i32 = mesh.IndexFormat == IndexFormat.UInt32;
+            int subMeshCount = mesh.SubMeshCount;
+            Topology meshTopology = mesh.MeshTopology;
+            uint meshIndexCount = (uint)mesh.IndexCount;
+
             // ========== PHASE 3: Draw Objects in Batch ==========
             foreach (int renderIndex in batch.RenderableIndices)
             {
@@ -779,34 +789,33 @@ public abstract class RenderPipeline : EngineObject
 
                 renderable.GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
 
+                int subIdx = renderable.GetSubMeshIndex();
                 Float4x4 prevModel = model;
                 if (updatePreviousMatrices && properties.GetInt("_ObjectID") is int instanceId and not 0)
-                    prevModel = TrackModelMatrix(instanceId, renderable.GetSubMeshIndex(), in model);
+                    prevModel = TrackModelMatrix(instanceId, subIdx, in model);
 
                 cmd.SetInstanceProperties(properties);
 
                 // Per-object transform uniforms. Encoded after SetInstanceProperties so
                 // they apply last and can't be clobbered by an instance property of the
                 // same name (matches today's order).
-                cmd.SetMatrix("prowl_ObjectToWorld", in model);
+                cmd.SetMatrix(objectToWorld, in model);
                 if (needsWorldToObject)
                 {
                     Float4x4 inv = renderable.GetWorldToObjectMatrix(in model);
-                    cmd.SetMatrix("prowl_WorldToObject", in inv);
+                    cmd.SetMatrix(worldToObject, in inv);
                 }
                 if (updatePreviousMatrices)
-                    cmd.SetMatrix("prowl_PrevObjectToWorld", in prevModel);
+                    cmd.SetMatrix(prevObjectToWorld, in prevModel);
 
-                int subIdx = renderable.GetSubMeshIndex();
-                bool i32 = mesh.IndexFormat == IndexFormat.UInt32;
-                if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
+                if (subIdx >= 0 && subIdx < subMeshCount)
                 {
                     var sub = mesh.GetSubMesh(subIdx);
-                    cmd.DrawIndexed(mesh.VertexArrayObject, sub.Topology, (uint)sub.IndexCount, (uint)sub.IndexStart, 0, i32);
+                    cmd.DrawIndexed(vao, sub.Topology, (uint)sub.IndexCount, (uint)sub.IndexStart, 0, i32);
                 }
                 else
                 {
-                    cmd.DrawIndexed(mesh.VertexArrayObject, mesh.MeshTopology, (uint)mesh.IndexCount, 0, 0, i32);
+                    cmd.DrawIndexed(vao, meshTopology, meshIndexCount, 0, 0, i32);
                 }
             }
 
