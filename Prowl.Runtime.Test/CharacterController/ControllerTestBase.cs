@@ -13,9 +13,22 @@ using ColliderShape = Prowl.Runtime.CharacterController.ColliderShape;
 
 namespace Prowl.Runtime.Test.Controller;
 
+/// <summary>Which way gravity pulls in a test world.</summary>
+public enum Gravity
+{
+    Upright,
+    UpsideDown,
+    Sideways,
+    Diagonal,
+}
+
 /// <summary>
 /// Builds small worlds out of boxes and drives a controller through them the way a game does: a
 /// velocity with gravity, a walking speed, and the odd jump, one 60 Hz frame at a time.
+/// <para/>
+/// Every world is built in a frame turned to match <see cref="Gravity"/>, with the controller's up
+/// turned the same way. Tests describe positions and directions in that frame, as if it were
+/// upright, so the same test proves the controller behaves the same whichever way gravity pulls.
 /// </summary>
 public abstract class ControllerTestBase : RuntimeTestBase
 {
@@ -26,6 +39,31 @@ public abstract class ControllerTestBase : RuntimeTestBase
     protected static readonly Float3 South = new(0f, 0f, -1f);
     protected static readonly Float3 East = new(1f, 0f, 0f);
     protected static readonly Float3 West = new(-1f, 0f, 0f);
+
+    /// <summary>The turn from the frame tests are written in to the world.</summary>
+    protected readonly Quaternion Frame;
+
+    protected ControllerTestBase(Gravity gravity) => Frame = FrameFor(gravity);
+
+    private static Quaternion FrameFor(Gravity gravity) => gravity switch
+    {
+        Gravity.UpsideDown => Quaternion.FromEuler(180f, 0f, 0f),
+        Gravity.Sideways => Quaternion.FromEuler(0f, 0f, 90f),
+        Gravity.Diagonal => Quaternion.FromEuler(35f, 20f, 50f),
+        _ => Quaternion.Identity,
+    };
+
+    protected Float3 ToWorld(Float3 local) => Frame * local;
+
+    protected Float3 ToLocal(Float3 world) => Quaternion.Inverse(Frame) * world;
+
+    protected Float3 LocalPosition(GameObject go) => ToLocal(go.Transform.Position);
+
+    /// <summary>Moves something by a distance given in the test's frame.</summary>
+    protected void MoveBy(GameObject go, Float3 local) => go.Transform.Position += ToWorld(local);
+
+    /// <summary>Turns something to a rotation given in the test's frame.</summary>
+    protected void SetRotation(GameObject go, Quaternion local) => go.Transform.Rotation = Frame * local;
 
     protected Scene World()
     {
@@ -47,23 +85,27 @@ public abstract class ControllerTestBase : RuntimeTestBase
     protected GameObject Box(Scene scene, Float3 center, Float3 size, Quaternion rotation, string name = "Box")
     {
         GameObject go = CreateGameObject(name);
-        go.Transform.Position = center;
-        go.Transform.Rotation = rotation;
+        go.Transform.Position = ToWorld(center);
+        go.Transform.Rotation = Frame * rotation;
         go.AddComponent<BoxCollider>().Size = size;
         scene.Add(go);
         return go;
     }
 
-    protected GameObject Pillar(Scene scene, Float3 foot, float radius, float height)
+    protected GameObject Cylinder(Scene scene, Float3 center, float radius, float height, Quaternion rotation, string name = "Cylinder")
     {
-        GameObject go = CreateGameObject("Pillar");
-        go.Transform.Position = foot + new Float3(0f, height * 0.5f, 0f);
+        GameObject go = CreateGameObject(name);
+        go.Transform.Position = ToWorld(center);
+        go.Transform.Rotation = Frame * rotation;
         CylinderCollider cylinder = go.AddComponent<CylinderCollider>();
         cylinder.Radius = radius;
         cylinder.Height = height;
         scene.Add(go);
         return go;
     }
+
+    protected GameObject Pillar(Scene scene, Float3 foot, float radius, float height)
+        => Cylinder(scene, foot + new Float3(0f, height * 0.5f, 0f), radius, height, Quaternion.Identity, "Pillar");
 
     /// <summary>A ramp rising from <paramref name="foot"/> on the floor along +Z turned by <paramref name="yaw"/>, <paramref name="length"/> long along its surface.</summary>
     protected GameObject Ramp(Scene scene, Float3 foot, float degrees, float length, float width = 6f, float thickness = 0.4f, float yaw = 0f)
@@ -112,15 +154,16 @@ public abstract class ControllerTestBase : RuntimeTestBase
     protected Walker Spawn(Scene scene, Float3 at, ColliderShape shape = ColliderShape.Capsule, float radius = 0.4f, float height = 1.8f)
     {
         GameObject go = CreateGameObject("Player");
-        go.Transform.Position = at;
+        go.Transform.Position = ToWorld(at);
         CharacterController controller = go.AddComponent<CharacterController>();
         controller.Shape = shape;
         controller.Radius = radius;
         controller.Height = height;
+        controller.Up = ToWorld(Float3.UnitY);
         scene.Add(go);
-        controller.Teleport(at);
 
-        var walker = new Walker(controller);
+        var walker = new Walker(controller, Frame);
+        walker.Teleport(at);
         walker.Settle();
         return walker;
     }
@@ -159,24 +202,29 @@ public abstract class ControllerTestBase : RuntimeTestBase
         {
             float angle = i * MathF.PI / 4f;
             Float3 direction = new(MathF.Sin(angle), 0f, MathF.Cos(angle));
-            walker.Controller.Teleport(from);
+            walker.Teleport(from);
             walker.Velocity = Float3.Zero;
             walker.Run(direction * WalkSpeed, 0.25f);
             Float3 moved = walker.Position - from;
             best = MathF.Max(best, MathF.Sqrt(moved.X * moved.X + moved.Z * moved.Z));
         }
 
-        walker.Controller.Teleport(from);
+        walker.Teleport(from);
         Assert.True(best > 0.3f, $"stuck at {from}: the furthest it got in any direction was {best:0.000} m");
     }
 
     /// <summary>
-    /// A player loop: each frame runs the scene's update, which is what moves colliders whose
-    /// Transform changed, then walks at a velocity, falls under gravity and jumps when asked.
+    /// A player loop in the test's frame: each frame runs the scene's update, which is what moves
+    /// colliders whose Transform changed, then walks at a velocity, falls under gravity along the
+    /// frame's down and jumps when asked.
     /// </summary>
     protected sealed class Walker
     {
         public readonly CharacterController Controller;
+        private readonly Quaternion _frame;
+        private readonly Quaternion _toLocal;
+
+        /// <summary>The velocity it walks and falls at, in the test's frame.</summary>
         public Float3 Velocity;
         public float Gravity = 20f;
         public float JumpSpeed = 6.5f;
@@ -186,10 +234,27 @@ public abstract class ControllerTestBase : RuntimeTestBase
         public int GroundedFrames;
         public int Frames;
 
-        public Walker(CharacterController controller) => Controller = controller;
+        public Walker(CharacterController controller, Quaternion frame)
+        {
+            Controller = controller;
+            _frame = frame;
+            _toLocal = Quaternion.Inverse(frame);
+        }
 
-        public Float3 Position => Controller.GameObject.Transform.Position;
+        public Float3 Position => _toLocal * Controller.GameObject.Transform.Position;
         public bool Grounded => Controller.IsGrounded;
+
+        /// <summary>The controller's own achieved velocity, in the test's frame.</summary>
+        public Float3 Achieved => _toLocal * Controller.Velocity;
+
+        /// <summary>How fast what it stands on carried it, in the test's frame.</summary>
+        public Float3 GroundVelocity => _toLocal * Controller.GroundVelocity;
+
+        public void Teleport(Float3 local) => Controller.Teleport(_frame * local);
+
+        public CharacterController.CollisionFlags Move(Float3 local) => Controller.Move(_frame * local);
+
+        public bool Cast(Float3 localDirection, float distance) => Controller.Cast(_frame * localDirection, distance, out _);
 
         public CharacterController.CollisionFlags Step(Float3 walk, bool jump = false)
         {
@@ -202,9 +267,9 @@ public abstract class ControllerTestBase : RuntimeTestBase
             if (jump && Controller.IsGrounded) vertical = JumpSpeed;
 
             Velocity = new Float3(walk.X, vertical, walk.Z);
-            CharacterController.CollisionFlags flags = Controller.Move(Velocity * Dt);
+            CharacterController.CollisionFlags flags = Move(Velocity * Dt);
             if (flags.HasFlag(CharacterController.CollisionFlags.Above) && Velocity.Y > 0f) Velocity.Y = 0f;
-            if (KeepsMomentum && !Controller.IsGrounded) Velocity.Y = MathF.Max(Velocity.Y, Controller.Velocity.Y);
+            if (KeepsMomentum && !Controller.IsGrounded) Velocity.Y = MathF.Max(Velocity.Y, Achieved.Y);
 
             Frames++;
             if (Controller.IsGrounded) GroundedFrames++;

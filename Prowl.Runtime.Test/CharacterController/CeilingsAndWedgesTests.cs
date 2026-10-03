@@ -13,7 +13,7 @@ using CollisionFlags = Prowl.Runtime.CharacterController.CollisionFlags;
 
 namespace Prowl.Runtime.Test.Controller;
 
-public class CeilingsAndWedgesTests : ControllerTestBase
+public abstract class CeilingsAndWedgesTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     /// <summary>
     /// Pressing into a ceiling that slopes down to the floor while walking at an angle to it has to
@@ -238,3 +238,8 @@ public class CeilingsAndWedgesTests : ControllerTestBase
         AssertNotInside(walker);
     }
 }
+
+public sealed class CeilingsAndWedgesUpright() : CeilingsAndWedgesTests(Gravity.Upright);
+public sealed class CeilingsAndWedgesUpsideDown() : CeilingsAndWedgesTests(Gravity.UpsideDown);
+public sealed class CeilingsAndWedgesSideways() : CeilingsAndWedgesTests(Gravity.Sideways);
+public sealed class CeilingsAndWedgesDiagonal() : CeilingsAndWedgesTests(Gravity.Diagonal);

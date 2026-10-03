@@ -13,7 +13,7 @@ using ColliderShape = Prowl.Runtime.CharacterController.ColliderShape;
 namespace Prowl.Runtime.Test.Controller;
 
 /// <summary>Platforms here are plain colliders moved by their Transform between frames, the way an animated or scripted platform moves.</summary>
-public class PlatformsTests : ControllerTestBase
+public abstract class PlatformsTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     private const float PlatformTop = 1f;
 
@@ -34,9 +34,9 @@ public class PlatformsTests : ControllerTestBase
         (_, GameObject platform, Walker walker) = StandOnPlatform(shape);
         walker.ResetCounts();
 
-        walker.Run(Float3.Zero, 2f, () => platform.Transform.Position += East * 3f * Dt);
+        walker.Run(Float3.Zero, 2f, () => MoveBy(platform, East * 3f * Dt));
 
-        Assert.True(MathF.Abs(walker.Position.X - platform.Transform.Position.X) < 0.05f, $"fell behind to {walker.Position}, the platform is at {platform.Transform.Position}");
+        Assert.True(MathF.Abs(walker.Position.X - LocalPosition(platform).X) < 0.05f, $"fell behind to {walker.Position}, the platform is at {LocalPosition(platform)}");
         Assert.Equal(walker.Frames, walker.GroundedFrames);
     }
 
@@ -48,9 +48,9 @@ public class PlatformsTests : ControllerTestBase
         (_, GameObject platform, Walker walker) = StandOnPlatform(shape);
         walker.ResetCounts();
 
-        walker.Run(Float3.Zero, 1.5f, () => platform.Transform.Position += Float3.UnitY * 2f * Dt);
+        walker.Run(Float3.Zero, 1.5f, () => MoveBy(platform, Float3.UnitY * 2f * Dt));
 
-        float top = platform.Transform.Position.Y + 0.25f;
+        float top = LocalPosition(platform).Y + 0.25f;
         Assert.True(MathF.Abs(walker.Position.Y - top) < 0.05f, $"stood at {walker.Position.Y} on a lift whose top is {top}");
         Assert.Equal(walker.Frames, walker.GroundedFrames);
         AssertNotInside(walker);
@@ -62,14 +62,14 @@ public class PlatformsTests : ControllerTestBase
     public void AFallingLiftKeepsTheControllerOnIt(ColliderShape shape)
     {
         (_, GameObject platform, Walker walker) = StandOnPlatform(shape);
-        platform.Transform.Position += Float3.UnitY * 4f;
-        walker.Controller.Teleport(walker.Position + Float3.UnitY * 4f);
+        MoveBy(platform, Float3.UnitY * 4f);
+        walker.Teleport(walker.Position + Float3.UnitY * 4f);
         walker.Settle();
         walker.ResetCounts();
 
-        walker.Run(Float3.Zero, 1f, () => platform.Transform.Position -= Float3.UnitY * 3f * Dt);
+        walker.Run(Float3.Zero, 1f, () => MoveBy(platform, -(Float3.UnitY * 3f * Dt)));
 
-        float top = platform.Transform.Position.Y + 0.25f;
+        float top = LocalPosition(platform).Y + 0.25f;
         Assert.True(MathF.Abs(walker.Position.Y - top) < 0.05f, $"hovered at {walker.Position.Y} over a lift whose top is {top}");
         Assert.Equal(walker.Frames, walker.GroundedFrames);
     }
@@ -86,7 +86,7 @@ public class PlatformsTests : ControllerTestBase
         walker.Run(Float3.Zero, 1f, () =>
         {
             yaw += 90f * Dt;
-            platform.Transform.Rotation = Quaternion.FromEuler(0f, yaw, 0f);
+            SetRotation(platform, Quaternion.FromEuler(0f, yaw, 0f));
             reported += walker.Controller.GroundYawDelta;
         });
         reported += walker.Controller.GroundYawDelta;
@@ -107,7 +107,7 @@ public class PlatformsTests : ControllerTestBase
         walker.Run(Float3.Zero, 1f, () =>
         {
             yaw += 90f * Dt;
-            platform.Transform.Rotation = Quaternion.FromEuler(0f, yaw, 0f);
+            SetRotation(platform, Quaternion.FromEuler(0f, yaw, 0f));
         });
 
         Float3 facing = walker.Controller.GameObject.Transform.Rotation * North;
@@ -127,13 +127,7 @@ public class PlatformsTests : ControllerTestBase
         var rollers = new GameObject[2];
         for (int i = 0; i < 2; i++)
         {
-            rollers[i] = CreateGameObject("Roller");
-            rollers[i].Transform.Position = new Float3(0f, 0.6f, i * 1.2f);
-            rollers[i].Transform.Rotation = Quaternion.FromEuler(0f, 0f, 90f);
-            CylinderCollider cylinder = rollers[i].AddComponent<CylinderCollider>();
-            cylinder.Radius = 0.6f;
-            cylinder.Height = 6f;
-            scene.Add(rollers[i]);
+            rollers[i] = Cylinder(scene, new Float3(0f, 0.6f, i * 1.2f), 0.6f, 6f, Quaternion.FromEuler(0f, 0f, 90f), "Roller");
         }
         Walker walker = Spawn(scene, new Float3(0f, 1.2f, 0f), shape);
         Assert.True(walker.Grounded, "did not settle on the first roller");
@@ -143,7 +137,7 @@ public class PlatformsTests : ControllerTestBase
         {
             spin += 150f * Dt;
             foreach (GameObject roller in rollers)
-                roller.Transform.Rotation = Quaternion.FromEuler(spin, 0f, 0f) * Quaternion.FromEuler(0f, 0f, 90f);
+                SetRotation(roller, Quaternion.FromEuler(spin, 0f, 0f) * Quaternion.FromEuler(0f, 0f, 90f));
         });
 
         Assert.True(walker.Position.Z > 1.2f, $"stuck between the rollers at {walker.Position}");
@@ -156,7 +150,7 @@ public class PlatformsTests : ControllerTestBase
         (_, GameObject platform, Walker walker) = StandOnPlatform(ColliderShape.Capsule);
         walker.Controller.RideMovingPlatforms = false;
 
-        walker.Run(Float3.Zero, 0.3f, () => platform.Transform.Position += East * 3f * Dt);
+        walker.Run(Float3.Zero, 0.3f, () => MoveBy(platform, East * 3f * Dt));
 
         Assert.True(MathF.Abs(walker.Position.X) < 0.05f, $"was carried to {walker.Position}");
     }
@@ -171,7 +165,7 @@ public class PlatformsTests : ControllerTestBase
 
         walker.Run(Float3.Zero, 1.5f, () =>
         {
-            platform.Transform.Position += East * 2f * Dt;
+            MoveBy(platform, East * 2f * Dt);
             Assert.True(DeepestOverlap(walker.Controller) < 0.01f, $"was dragged into the wall at {walker.Position}");
         });
 
@@ -185,9 +179,9 @@ public class PlatformsTests : ControllerTestBase
     {
         (_, GameObject platform, Walker walker) = StandOnPlatform(shape);
 
-        walker.Run(Float3.Zero, 0.5f, () => platform.Transform.Position += East * 3f * Dt);
+        walker.Run(Float3.Zero, 0.5f, () => MoveBy(platform, East * 3f * Dt));
 
-        Assert.Equal(3f, walker.Controller.GroundVelocity.X, 1);
+        Assert.Equal(3f, walker.GroundVelocity.X, 1);
         Assert.True(Float3.Length(walker.Controller.Velocity) < 0.05f, $"reported its own velocity as {walker.Controller.Velocity}");
     }
 
@@ -198,7 +192,7 @@ public class PlatformsTests : ControllerTestBase
     {
         (_, GameObject platform, Walker walker) = StandOnPlatform(shape, new Float3(0f, 0f, -1.5f), size: 8f);
 
-        walker.Run(North * 1.5f, 1f, () => platform.Transform.Position += East * 2f * Dt);
+        walker.Run(North * 1.5f, 1f, () => MoveBy(platform, East * 2f * Dt));
 
         Assert.True(MathF.Abs(walker.Position.X - 2f) < 0.1f, $"ended at {walker.Position}");
         Assert.True(MathF.Abs(walker.Position.Z - 0f) < 0.1f, $"ended at {walker.Position}");
@@ -215,7 +209,7 @@ public class PlatformsTests : ControllerTestBase
         body.MotionType = Jitter2.Dynamics.MotionType.Kinematic;
         Walker walker = Spawn(scene, new Float3(0f, PlatformTop, 0f), shape);
 
-        body.LinearVelocity = new Float3(2f, 0f, 0f);
+        body.LinearVelocity = ToWorld(new Float3(2f, 0f, 0f));
         for (int i = 0; i < 60; i++)
         {
             Tick(scene);
@@ -223,7 +217,7 @@ public class PlatformsTests : ControllerTestBase
         }
 
         Assert.True(walker.Grounded);
-        Assert.True(MathF.Abs(walker.Position.X - platform.Transform.Position.X) < 0.1f, $"stood at {walker.Position} on a platform at {platform.Transform.Position}");
+        Assert.True(MathF.Abs(walker.Position.X - LocalPosition(platform).X) < 0.1f, $"stood at {walker.Position} on a platform at {LocalPosition(platform)}");
     }
 
     [Theory]
@@ -237,7 +231,7 @@ public class PlatformsTests : ControllerTestBase
 
         for (int i = 0; i < 20; i++)
         {
-            platform.Transform.Position += East * 3f * Dt;
+            MoveBy(platform, East * 3f * Dt);
             walker.Step(Float3.Zero);
         }
 
@@ -253,10 +247,10 @@ public class PlatformsTests : ControllerTestBase
         GameObject wall = Box(scene, new Float3(-2f, 1.5f, 0f), new Float3(0.5f, 3f, 6f), name: "Pusher");
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
-        walker.Run(Float3.Zero, 1.5f, () => wall.Transform.Position += East * 2f * Dt);
+        walker.Run(Float3.Zero, 1.5f, () => MoveBy(wall, East * 2f * Dt));
 
         AssertNotInside(walker);
-        Assert.True(walker.Position.X > wall.Transform.Position.X + 0.25f + 0.3f, $"was left at {walker.Position} with the wall at {wall.Transform.Position}");
+        Assert.True(walker.Position.X > LocalPosition(wall).X + 0.25f + 0.3f, $"was left at {walker.Position} with the wall at {LocalPosition(wall)}");
         Assert.True(walker.Grounded);
     }
 
@@ -267,7 +261,7 @@ public class PlatformsTests : ControllerTestBase
     {
         (_, GameObject platform, Walker walker) = StandOnPlatform(shape);
 
-        walker.Run(North * WalkSpeed, 1.5f, () => platform.Transform.Position += East * 1f * Dt);
+        walker.Run(North * WalkSpeed, 1.5f, () => MoveBy(platform, East * 1f * Dt));
 
         Assert.True(walker.Position.Y < 0.05f && walker.Grounded, $"ended at {walker.Position}");
         Assert.True(walker.Position.Z > 3f);
@@ -286,3 +280,8 @@ public class PlatformsTests : ControllerTestBase
         Assert.Same(body, walker.Controller.GroundBody);
     }
 }
+
+public sealed class PlatformsUpright() : PlatformsTests(Gravity.Upright);
+public sealed class PlatformsUpsideDown() : PlatformsTests(Gravity.UpsideDown);
+public sealed class PlatformsSideways() : PlatformsTests(Gravity.Sideways);
+public sealed class PlatformsDiagonal() : PlatformsTests(Gravity.Diagonal);

@@ -12,7 +12,7 @@ using ColliderShape = Prowl.Runtime.CharacterController.ColliderShape;
 
 namespace Prowl.Runtime.Test.Controller;
 
-public class AirTests : ControllerTestBase
+public abstract class AirTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -41,7 +41,7 @@ public class AirTests : ControllerTestBase
     {
         Scene scene = WorldWithFloor();
         Walker walker = Spawn(scene, new Float3(0f, 3f, 0f), shape);
-        walker.Controller.Teleport(new Float3(0f, 3f, 0f));
+        walker.Teleport(new Float3(0f, 3f, 0f));
         walker.Velocity = Float3.Zero;
 
         walker.Run(North * WalkSpeed, 1.5f);
@@ -257,4 +257,101 @@ public class AirTests : ControllerTestBase
         Assert.True(walker.Position.X > 3.5f, $"never got out, ended at {walker.Position}");
         Assert.True(fastest < WalkSpeed * 1.5f, $"was shot out at {fastest:0.0} m/s");
     }
+
+    /// <summary>Walked out until part of the shape is over a drop, it is still standing on the edge, so it can still jump.</summary>
+    [Theory]
+    [InlineData(ColliderShape.Capsule, 0.3f)]
+    [InlineData(ColliderShape.Capsule, 0.6f)]
+    [InlineData(ColliderShape.Capsule, 0.9f)]
+    [InlineData(ColliderShape.Cylinder, 0.3f)]
+    [InlineData(ColliderShape.Cylinder, 0.6f)]
+    [InlineData(ColliderShape.Cylinder, 0.9f)]
+    public void HangingPartlyOverAnEdgeStillStandsAndCanJump(ColliderShape shape, float overhang)
+    {
+        Scene scene = WorldWithFloor();
+        Box(scene, new Float3(0f, 1f, -3f), new Float3(4f, 2f, 6f));
+        Walker walker = Spawn(scene, new Float3(0f, 2f, -2f), shape);
+        while (walker.Position.Z < walker.Controller.Radius * overhang && walker.Frames < 300) walker.Step(North * 0.5f);
+        walker.Settle();
+
+        // A rounded bottom far over the edge rests on the corner a little below the top.
+        Assert.True(walker.Grounded && walker.Position.Y > 2f - walker.Controller.Radius, $"{overhang:0%} of its radius over the edge it was not standing, at {walker.Position}");
+
+        walker.Jump();
+        walker.Run(Float3.Zero, 0.2f);
+        Assert.True(walker.Position.Y > 2.4f, $"could not jump from the edge, only rose to {walker.Position.Y}");
+    }
+
+    [Theory]
+    [InlineData(ColliderShape.Capsule)]
+    [InlineData(ColliderShape.Cylinder)]
+    public void WalkingUpToAnEdgeAndStoppingHalfOverItStaysOnIt(ColliderShape shape)
+    {
+        Scene scene = WorldWithFloor();
+        Box(scene, new Float3(0f, 1f, -3f), new Float3(4f, 2f, 6f));
+        Walker walker = Spawn(scene, new Float3(0f, 2f, -3f), shape);
+        float stopAt = walker.Controller.Radius * 0.5f;
+
+        while (walker.Position.Z < stopAt && walker.Frames < 300) walker.Step(North * 1.5f);
+        walker.Settle(1f);
+
+        Assert.True(walker.Grounded && walker.Position.Y > 1.9f, $"lost the ground at the edge, at {walker.Position}");
+    }
+
+    /// <summary>
+    /// Jumping at a block about as tall as the jump, still walking into it, ends either back on the floor
+    /// or up on top, and is never held up partway as if a corner caught at the side were ground.
+    /// </summary>
+    [Theory]
+    [InlineData(ColliderShape.Capsule, 1.0f)]
+    [InlineData(ColliderShape.Capsule, 1.1f)]
+    [InlineData(ColliderShape.Capsule, 1.15f)]
+    [InlineData(ColliderShape.Capsule, 1.25f)]
+    [InlineData(ColliderShape.Capsule, 1.4f)]
+    [InlineData(ColliderShape.Cylinder, 1.0f)]
+    [InlineData(ColliderShape.Cylinder, 1.1f)]
+    [InlineData(ColliderShape.Cylinder, 1.15f)]
+    [InlineData(ColliderShape.Cylinder, 1.25f)]
+    [InlineData(ColliderShape.Cylinder, 1.4f)]
+    public void JumpingAtABlockAboutAsTallAsTheJumpNeverHangsOnItsEdge(ColliderShape shape, float height)
+    {
+        Scene scene = WorldWithFloor();
+        Box(scene, new Float3(0f, height * 0.5f, 12f), new Float3(4f, height, 20f));
+        Walker walker = Spawn(scene, new Float3(0f, 0f, 1f), shape);
+        walker.Run(North * WalkSpeed, 0.1f);
+        int hanging = 0;
+
+        walker.Jump(North * WalkSpeed);
+        walker.Run(North * WalkSpeed, 1.5f, () =>
+        {
+            if (walker.Grounded && walker.Position.Y > 0.1f && walker.Position.Y < height - 0.1f) hanging++;
+        });
+
+        float apex = walker.JumpSpeed * walker.JumpSpeed / (2f * walker.Gravity);
+        Assert.Equal(0, hanging);
+        Assert.True(walker.Grounded, $"never settled, at {walker.Position}");
+        if (height > apex + 0.1f) Assert.True(walker.Position.Y < 0.05f, $"got onto a {height} m block with a {apex:0.00} m jump, at {walker.Position}");
+        else Assert.True(walker.Position.Y < 0.05f || walker.Position.Y > height - 0.05f, $"ended partway up at {walker.Position}");
+    }
+
+    [Theory]
+    [InlineData(ColliderShape.Capsule)]
+    [InlineData(ColliderShape.Cylinder)]
+    public void JumpingAtABlockJustLowEnoughLandsOnTop(ColliderShape shape)
+    {
+        Scene scene = WorldWithFloor();
+        Box(scene, new Float3(0f, 0.4f, 3.5f), new Float3(4f, 0.8f, 3f));
+        Walker walker = Spawn(scene, new Float3(0f, 0f, 1f), shape);
+        walker.Run(North * WalkSpeed, 0.1f);
+
+        walker.Jump(North * WalkSpeed);
+        walker.Run(North * WalkSpeed, 0.6f);
+
+        Assert.True(walker.Grounded && walker.Position.Y > 0.75f, $"did not land on top, ended at {walker.Position}");
+    }
 }
+
+public sealed class AirUpright() : AirTests(Gravity.Upright);
+public sealed class AirUpsideDown() : AirTests(Gravity.UpsideDown);
+public sealed class AirSideways() : AirTests(Gravity.Sideways);
+public sealed class AirDiagonal() : AirTests(Gravity.Diagonal);

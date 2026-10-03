@@ -13,7 +13,7 @@ using ColliderShape = Prowl.Runtime.CharacterController.ColliderShape;
 namespace Prowl.Runtime.Test.Controller;
 
 /// <summary>Corners, seams, bad input and cluttered worlds: the places a controller gets stuck or ends up inside things.</summary>
-public class RobustnessTests : ControllerTestBase
+public abstract class RobustnessTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     [Theory]
     [InlineData(ColliderShape.Capsule)]
@@ -93,7 +93,7 @@ public class RobustnessTests : ControllerTestBase
         Walker walker = Spawn(scene, Float3.Zero);
         Float3 before = walker.Position;
 
-        walker.Controller.Move(new Float3(bad, 0f, 1f));
+        walker.Move(new Float3(bad, 0f, 1f));
 
         AssertFinite(walker);
         Assert.True(Float3.Length(walker.Position - before) < 0.01f, $"moved to {walker.Position}");
@@ -109,7 +109,7 @@ public class RobustnessTests : ControllerTestBase
         Box(scene, new Float3(0f, 1.5f, 5f), new Float3(8f, 3f, 0.05f));
         Walker walker = Spawn(scene, Float3.Zero, shape);
 
-        walker.Controller.Move(new Float3(0f, -0.1f, 150f));
+        walker.Move(new Float3(0f, -0.1f, 150f));
 
         Assert.True(walker.Position.Z < 5f, $"went through to {walker.Position}");
     }
@@ -138,7 +138,7 @@ public class RobustnessTests : ControllerTestBase
         SlopedCeiling(scene, new Float3(0f, 0f, 0f), 2f, 25f);
         Walker walker = Spawn(scene, new Float3(0f, 0f, -3f), shape);
 
-        walker.Controller.Teleport(new Float3(0f, 0f, 1.2f));
+        walker.Teleport(new Float3(0f, 0f, 1.2f));
         walker.Run(South * WalkSpeed, 1f);
 
         AssertFinite(walker);
@@ -218,7 +218,7 @@ public class RobustnessTests : ControllerTestBase
         Scene scene = WorldWithFloor();
         Walker walker = Spawn(scene, Float3.Zero);
 
-        CharacterController.CollisionFlags flags = walker.Controller.Move(new Float3(0f, -0.01f, 0f));
+        CharacterController.CollisionFlags flags = walker.Move(new Float3(0f, -0.01f, 0f));
 
         Assert.Equal(CharacterController.CollisionFlags.Below, flags);
         Assert.Single(walker.Controller.Hits);
@@ -230,9 +230,9 @@ public class RobustnessTests : ControllerTestBase
         Scene scene = WorldWithFloor();
         GameObject platform = Box(scene, new Float3(0f, 0.75f, 0f), new Float3(3f, 0.5f, 3f));
         Walker walker = Spawn(scene, new Float3(0f, 1f, 0f));
-        walker.Controller.Teleport(new Float3(10f, 0f, 0f));
+        walker.Teleport(new Float3(10f, 0f, 0f));
 
-        platform.Transform.Position += East * 2f;
+        MoveBy(platform, East * 2f);
         walker.Step(Float3.Zero);
 
         Assert.True(MathF.Abs(walker.Position.X - 10f) < 0.01f, $"was dragged to {walker.Position}");
@@ -307,7 +307,7 @@ public class RobustnessTests : ControllerTestBase
             }
 
             Float3 direction = Float3.Normalize(walk);
-            bool clear = walker.Grounded && !walker.Controller.Cast(direction, Float3.Length(walk) * Dt + 0.05f, out _);
+            bool clear = walker.Grounded && !walker.Cast(direction, Float3.Length(walk) * Dt + 0.05f);
             Float3 before = walker.Position;
 
             walker.Step(walk, jump: random.NextDouble() < 0.01);
@@ -329,3 +329,8 @@ public class RobustnessTests : ControllerTestBase
         Assert.True(stalls <= checks / 50, $"stalled on {stalls} of {checks} frames where the way ahead was clear");
     }
 }
+
+public sealed class RobustnessUpright() : RobustnessTests(Gravity.Upright);
+public sealed class RobustnessUpsideDown() : RobustnessTests(Gravity.UpsideDown);
+public sealed class RobustnessSideways() : RobustnessTests(Gravity.Sideways);
+public sealed class RobustnessDiagonal() : RobustnessTests(Gravity.Diagonal);

@@ -10,7 +10,7 @@ using ColliderShape = Prowl.Runtime.CharacterController.ColliderShape;
 
 namespace Prowl.Runtime.Test.Controller;
 
-public class StairsTests : ControllerTestBase
+public abstract class StairsTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     [Theory]
     [InlineData(ColliderShape.Capsule, 0.15f, 0.3f)]
@@ -275,3 +275,8 @@ public class StairsTests : ControllerTestBase
         }
     }
 }
+
+public sealed class StairsUpright() : StairsTests(Gravity.Upright);
+public sealed class StairsUpsideDown() : StairsTests(Gravity.UpsideDown);
+public sealed class StairsSideways() : StairsTests(Gravity.Sideways);
+public sealed class StairsDiagonal() : StairsTests(Gravity.Diagonal);

@@ -63,6 +63,39 @@ public class CharacterController : MonoBehaviour
     /// <summary>Whether standing on something that moves or turns carries the controller with it.</summary>
     public bool RideMovingPlatforms = true;
 
+    /// <summary>
+    /// Which way is up for this controller, the opposite of the gravity the game applies. The shape
+    /// stands along it, slopes, steps and ceilings are measured against it, and walking runs across it.
+    /// Set it every frame for gravity that changes, such as walking round a planet.
+    /// <para/>
+    /// Changing it turns the controller in place. A small turn pivots about the feet, so they stay
+    /// planted on a curved world, and a large one about the middle of the shape, so a sudden flip
+    /// turns the controller over where it is rather than swinging its head through the floor.
+    /// </summary>
+    public Float3 Up
+    {
+        get => _up;
+        set
+        {
+            if (!IsFinite(value) || Float3.LengthSquared(value) <= 1e-8f) return;
+            Float3 next = Float3.Normalize(value);
+
+            float angle = Float3.AngleBetween(_up, next);
+            if (angle > 1e-5f && GameObject.IsValid())
+            {
+                float pivot = Height * 0.5f * Maths.Clamp(angle / (Maths.PI * 0.5f), 0f, 1f);
+                Float3 shift = _up * pivot - next * pivot;
+                GameObject.Transform.Position += shift;
+                ShiftPlatformPoints(shift);
+            }
+
+            _up = next;
+            if (IsGrounded && Rise(_groundNormal) < MinWalkableNormalY) SetAirborne();
+        }
+    }
+
+    private Float3 Down => -_up;
+
     /// <summary>How many times a move may push the controller out of geometry it is already inside.</summary>
     public int MaxDepenetrationIterations = 8;
 
@@ -78,8 +111,7 @@ public class CharacterController : MonoBehaviour
     private const float WallNormalY = 0.1f;
     private const int MaxPlatforms = 4;
 
-    private static readonly Float3 Up = new(0f, 1f, 0f);
-    private static readonly Float3 Down = new(0f, -1f, 0f);
+    private Float3 _up = Float3.UnitY;
 
     private Rigidbody3D _selfBody;
     private bool _selfBodyResolved;
@@ -94,10 +126,11 @@ public class CharacterController : MonoBehaviour
     private Float3 _achievedVelocity;
 
     private ShapeCastHit _groundHit;
-    private Float3 _groundNormal = Up;
+    private Float3 _groundNormal = Float3.UnitY;
     private readonly Platform[] _platforms = new Platform[MaxPlatforms];
     private int _platformCount;
     private bool _leftGround;
+    private bool _keepingGround;
     private bool _supported;
     private ShapeCastHit _support;
 
@@ -144,7 +177,7 @@ public class CharacterController : MonoBehaviour
     public float GroundYawDelta { get; private set; }
 
     /// <summary>The walkable surface normal under the controller, or up when it is not grounded.</summary>
-    public Float3 GroundNormal => IsGrounded ? _groundNormal : Up;
+    public Float3 GroundNormal => IsGrounded ? _groundNormal : _up;
 
     /// <summary>The angle in degrees of the surface under the controller, or zero when not grounded.</summary>
     public float GroundSlopeAngle => IsGrounded ? SlopeAngle(_groundNormal) : 0.0f;
@@ -162,7 +195,7 @@ public class CharacterController : MonoBehaviour
     public Float3 Bottom => GameObject.Transform.Position;
 
     /// <summary>The top of the controller in world space.</summary>
-    public Float3 Top => GameObject.Transform.Position + new Float3(0, Height, 0);
+    public Float3 Top => GameObject.Transform.Position + _up * Height;
 
     private float MinWalkableNormalY => Maths.Cos(MaxSlopeAngle * Maths.Deg2Rad);
 
@@ -210,16 +243,18 @@ public class CharacterController : MonoBehaviour
         position = Depenetrate(position);
         Float3 start = position;
 
-        bool walking = IsGrounded && motion.Y <= 0f;
-        bool rising = !walking && motion.Y > 0f;
+        _keepingGround = IsGrounded;
+        float vertical = Rise(motion);
+        bool walking = IsGrounded && vertical <= 0f;
+        bool rising = !walking && vertical > 0f;
         _leftGround = false;
         _supported = false;
 
         if (walking)
         {
-            position = WalkAlongGround(position, new Float3(motion.X, 0f, motion.Z), _groundNormal);
-            if (!_leftGround && !SnapToGround(ref position) && motion.Y < 0f)
-                position = SlideThroughAir(position, new Float3(0f, motion.Y, 0f));
+            position = WalkAlongGround(position, Flat(motion), _groundNormal);
+            if (!_leftGround && !SnapToGround(ref position) && vertical < 0f)
+                position = SlideThroughAir(position, _up * vertical);
         }
         else
         {
@@ -229,16 +264,16 @@ public class CharacterController : MonoBehaviour
         GameObject.Transform.Position = position;
         _achievedVelocity = Time.DeltaTime > 0.0f ? (position - start) / Time.DeltaTime : Float3.Zero;
 
-        if (_leftGround || (rising && position.Y > start.Y + Epsilon)) SetAirborne();
+        if (_leftGround || (rising && Rise(position - start) > Epsilon)) SetAirborne();
         else ProbeGround(position);
 
         // Wedged between faces too steep to stand on, such as the bottom of a V, the fall is held up
         // just as surely as by flat ground, so it counts as ground rather than an endless fall.
-        if (!IsGrounded && !_leftGround && _supported && motion.Y < 0f)
+        if (!IsGrounded && !_leftGround && _supported && vertical < 0f)
         {
             IsGrounded = true;
             _groundHit = _support;
-            _groundNormal = Up;
+            _groundNormal = _up;
         }
 
         RememberPlatforms(position);
@@ -264,6 +299,7 @@ public class CharacterController : MonoBehaviour
 
         position = Depenetrate(position);
         GameObject.Transform.Position = position;
+        _keepingGround = true;
         ProbeGround(position);
         RememberPlatforms(position);
     }
@@ -318,7 +354,7 @@ public class CharacterController : MonoBehaviour
             position += direction * travelled;
             horizontal *= 1f - travelled / length;
 
-            if (groundChanges < 4 && hit.Normal.Y >= MinWalkableNormalY)
+            if (groundChanges < 4 && Rise(hit.Normal) >= MinWalkableNormalY)
             {
                 ground = hit.Normal;
                 groundChanges++;
@@ -336,10 +372,10 @@ public class CharacterController : MonoBehaviour
             // to the caller's gravity, rather than stopping dead as a wall would.
             // Only a run into the slope carries up it. Pressed against it, or just slid back off it, it holds
             // like a wall, or held input would hop up and slide back over and over.
-            if (hit.Normal.Y > WallNormalY && RanInto(hit.Normal, length) && !StandableNormal(hit, out _))
+            if (Rise(hit.Normal) > WallNormalY && RanInto(hit.Normal, length) && !StandableNormal(hit, position, out _))
             {
                 Float3 up = Float3.ProjectOntoPlane(AlongGround(horizontal, ground), hit.Normal);
-                if (up.Y > Epsilon)
+                if (Rise(up) > Epsilon)
                 {
                     _leftGround = true;
                     return SlideThroughAir(position, up);
@@ -347,13 +383,13 @@ public class CharacterController : MonoBehaviour
             }
 
             // Following a ground that tilts the move up into a ceiling it already touches gets nowhere, so walk level instead.
-            if (hit.Normal.Y < 0f && travelled < Epsilon && ground.Y < 1f - Epsilon)
+            if (Rise(hit.Normal) < 0f && travelled < Epsilon && Rise(ground) < 1f - Epsilon)
             {
-                ground = Up;
+                ground = _up;
                 continue;
             }
 
-            Float3 wall = new(hit.Normal.X, 0f, hit.Normal.Z);
+            Float3 wall = Flat(hit.Normal);
             if (Float3.LengthSquared(wall) < 1e-6f) break;
             if (planes == MaxPlanes) break;
 
@@ -369,18 +405,18 @@ public class CharacterController : MonoBehaviour
     private bool RanInto(Float3 normal, float length)
     {
         if (Time.DeltaTime <= 0f) return false;
-        Float3 into = new(-normal.X, 0f, -normal.Z);
+        Float3 into = -Flat(normal);
         if (Float3.LengthSquared(into) < 1e-6f) return false;
-        Float3 last = new(_achievedVelocity.X, 0f, _achievedVelocity.Z);
+        Float3 last = Flat(_achievedVelocity);
         return Float3.Dot(last, Float3.Normalize(into)) * Time.DeltaTime > length * 0.5f;
     }
 
     // The motion along the ground plane heading the way asked, at the speed asked.
-    private static Float3 AlongGround(Float3 horizontal, Float3 ground)
+    private Float3 AlongGround(Float3 horizontal, Float3 ground)
     {
-        if (ground.Y < 1e-3f) return horizontal;
-        float rise = -(ground.X * horizontal.X + ground.Z * horizontal.Z) / ground.Y;
-        Float3 along = new(horizontal.X, rise, horizontal.Z);
+        float upright = Rise(ground);
+        if (upright < 1e-3f) return horizontal;
+        Float3 along = horizontal - _up * (Float3.Dot(ground, horizontal) / upright);
         float length = Float3.Length(along);
         return length > Epsilon ? along * (Float3.Length(horizontal) / length) : horizontal;
     }
@@ -392,9 +428,9 @@ public class CharacterController : MonoBehaviour
     /// </summary>
     private bool TryStepUp(ref Float3 position, ref Float3 horizontal, in ShapeCastHit blocker, out Float3 landing)
     {
-        landing = Up;
-        if (StepSize <= 0f || blocker.Normal.Y < -0.01f) return false;
-        if (blocker.HitPoint.Y - position.Y > StepSize + SkinWidth * 2f) return false;
+        landing = _up;
+        if (StepSize <= 0f || Rise(blocker.Normal) < -0.01f) return false;
+        if (Rise(blocker.HitPoint - position) > StepSize + SkinWidth * 2f) return false;
 
         float distance = Float3.Length(horizontal);
         if (distance < Epsilon) return false;
@@ -416,10 +452,11 @@ public class CharacterController : MonoBehaviour
 
         Float3 over = raised + forward * ahead;
         if (!Sweep(over, Down, rise + SkinWidth, out ShapeCastHit below)) return false;
-        if (!StandableNormal(below, out landing, forward)) return false;
+        if (!StandableNormal(below, over, out landing, forward)) return false;
 
         Float3 landed = over + Down * Maths.Max(0f, below.Distance - SkinWidth);
-        if (landed.Y < position.Y - SkinWidth || landed.Y > position.Y + StepSize + SkinWidth * 2f) return false;
+        float climbed = Rise(landed - position);
+        if (climbed < -SkinWidth || climbed > StepSize + SkinWidth * 2f) return false;
 
         Record(below);
         position = landed;
@@ -445,19 +482,19 @@ public class CharacterController : MonoBehaviour
     private bool FindGround(Float3 position, float reach, out ShapeCastHit ground, out Float3 normal, out float drop)
     {
         ground = default;
-        normal = Up;
+        normal = _up;
         drop = 0f;
 
         int count = Shape == ColliderShape.Capsule
             ? GameObject.Scene.Physics.CapsuleCastAll(CapsuleBottom(position), CapsuleTop(position), EffectiveRadius, Down, reach, _groundHits, _filter)
-            : GameObject.Scene.Physics.CylinderCastAll(ShapeCenter(position), EffectiveRadius, Height, Quaternion.Identity, Down, reach, _groundHits, _filter);
+            : GameObject.Scene.Physics.CylinderCastAll(ShapeCenter(position), EffectiveRadius, Height, Orientation, Down, reach, _groundHits, _filter);
         if (count == 0) return false;
 
         float nearest = _groundHits[0].Distance;
         foreach (ShapeCastHit hit in _groundHits)
         {
             if (hit.Distance > nearest + SkinWidth) break;
-            if (!StandableNormal(hit, out normal)) continue;
+            if (!StandableNormal(hit, position, out normal)) continue;
 
             ground = hit;
             drop = Maths.Max(0f, nearest - SkinWidth);
@@ -493,10 +530,10 @@ public class CharacterController : MonoBehaviour
             position += direction * travelled;
             motion *= 1f - travelled / length;
 
-            if (direction.Y < 0f && StandableNormal(hit, out Float3 ground))
+            if (Rise(direction) < 0f && StandableNormal(hit, position, out Float3 ground))
             {
                 _groundNormal = ground;
-                return WalkAlongGround(position, new Float3(motion.X, 0f, motion.Z), ground);
+                return WalkAlongGround(position, Flat(motion), ground);
             }
 
             if (planes == MaxPlanes) break;
@@ -506,9 +543,9 @@ public class CharacterController : MonoBehaviour
             Float3 normal = hit.Normal;
             _planes[planes++] = normal;
             Float3 clipped = ClipToPlanes(motion, planes);
-            if (normal.Y > 0f && clipped.Y > Maths.Max(motion.Y, 0f) + Epsilon)
+            if (Rise(normal) > 0f && Rise(clipped) > Maths.Max(Rise(motion), 0f) + Epsilon)
             {
-                Float3 wall = new(normal.X, 0f, normal.Z);
+                Float3 wall = Flat(normal);
                 if (Float3.LengthSquared(wall) > 1e-6f)
                 {
                     _planes[planes - 1] = Float3.Normalize(wall);
@@ -517,7 +554,7 @@ public class CharacterController : MonoBehaviour
             }
 
             // A fall held up by the crease of two upward faces, as at the bottom of a V, is resting.
-            if (motion.Y < 0f && clipped.Y > motion.Y * 0.1f && normal.Y > 0.05f && FormsCrease(normal, planes - 1))
+            if (Rise(motion) < 0f && Rise(clipped) > Rise(motion) * 0.1f && Rise(normal) > 0.05f && FormsCrease(normal, planes - 1))
             {
                 _supported = true;
                 _support = hit;
@@ -532,7 +569,7 @@ public class CharacterController : MonoBehaviour
     private bool FormsCrease(Float3 normal, int count)
     {
         for (int i = 0; i < count; i++)
-            if (_planes[i].Y > 0.05f && Float3.Dot(_planes[i], normal) < 0.99f) return true;
+            if (Rise(_planes[i]) > 0.05f && Float3.Dot(_planes[i], normal) < 0.99f) return true;
         return false;
     }
 
@@ -599,37 +636,52 @@ public class CharacterController : MonoBehaviour
     {
         IsGrounded = false;
         _groundHit = default;
-        _groundNormal = Up;
+        _groundNormal = _up;
     }
 
     /// <summary>
     /// Whether a hit is something the controller can stand on, and the normal of the face it stands on.
     /// A rounded shape meets the edge of a face at an angle, so the face itself is found with a short ray
-    /// just inside the contact, and the controller stands on that face for as long as it touches its edge.
+    /// just inside the contact. Already standing, the controller keeps standing on that face for as long
+    /// as the bottom of its shape touches the edge. Coming down from the air it lands on the edge only with
+    /// its middle over the face; with its middle outside it rolls off, the way a corner caught at the top
+    /// of a jump that fell short should be.
     /// </summary>
-    private bool StandableNormal(in ShapeCastHit hit, out Float3 normal, Float3 inwardHint = default)
+    private bool StandableNormal(in ShapeCastHit hit, Float3 position, out Float3 normal, Float3 inwardHint = default)
     {
         normal = hit.Normal;
         float minY = MinWalkableNormalY;
 
-        Float3 inward = new(inwardHint.X, 0f, inwardHint.Z);
-        if (Float3.LengthSquared(inward) <= Epsilon) inward = new Float3(-normal.X, 0f, -normal.Z);
-        if (Float3.LengthSquared(inward) <= 1e-6f) return normal.Y >= minY;
+        Float3 inward = Flat(inwardHint);
+        if (Float3.LengthSquared(inward) <= Epsilon) inward = -Flat(normal);
+        if (Float3.LengthSquared(inward) <= 1e-6f) return Rise(normal) >= minY;
         inward = Float3.Normalize(inward);
 
         if (!WalkableFaceBelow(hit.HitPoint + inward * LedgeProbeInset, LedgeProbeHeight, out Float3 face))
-            return normal.Y >= minY;
+            return Rise(normal) >= minY;
 
+        bool onTheFace = Float3.Dot(face, normal) > 0.98f;
         normal = face;
-        return true;
+        if (onTheFace) return true;
+
+        // An edge only holds the controller up where it meets the bottom of the shape. Met on the side, the
+        // face beyond it is out of reach however walkable it is.
+        if (Rise(hit.HitPoint - position) > BottomBand) return false;
+
+        // The contact leans away from the face, so the middle of the shape is out past the edge.
+        return _keepingGround;
     }
+
+    // How far above the feet the shape still counts as its bottom: the round end of a capsule below its
+    // widest point, or just the flat base of a cylinder.
+    private float BottomBand => Shape == ColliderShape.Capsule ? EffectiveRadius * 0.9f : SkinWidth + 0.05f;
 
     // A walkable face straight down from just above a point, within reach below it.
     private bool WalkableFaceBelow(Float3 point, float reach, out Float3 normal)
     {
-        normal = Up;
-        if (!GameObject.Scene.Physics.Raycast(point + Up * LedgeProbeHeight, Down, out RaycastHit ray, LedgeProbeHeight + reach, _filter)) return false;
-        if (!IsFinite(ray.Normal) || ray.Distance <= 0f || ray.Normal.Y < MinWalkableNormalY) return false;
+        normal = _up;
+        if (!GameObject.Scene.Physics.Raycast(point + _up * LedgeProbeHeight, Down, out RaycastHit ray, LedgeProbeHeight + reach, _filter)) return false;
+        if (!IsFinite(ray.Normal) || ray.Distance <= 0f || Rise(ray.Normal) < MinWalkableNormalY) return false;
 
         normal = ray.Normal;
         return true;
@@ -667,9 +719,8 @@ public class CharacterController : MonoBehaviour
         if (_platforms[0].Owner.IsValid())
         {
             Quaternion turn = _platforms[0].Owner.Transform.Rotation * Quaternion.Inverse(_platforms[0].Rotation);
-            Float3 facing = turn * Float3.UnitZ;
             GroundRotationDelta = turn;
-            GroundYawDelta = Maths.Atan2(facing.X, facing.Z) * Maths.Rad2Deg;
+            GroundYawDelta = YawAboutUp(turn);
         }
 
         if (moving == 0) return position;
@@ -723,8 +774,30 @@ public class CharacterController : MonoBehaviour
         foreach (ShapeCastHit under in _overlaps)
         {
             if (_platformCount == MaxPlatforms) break;
-            if (under.Normal.Y > 0.3f) AddPlatform(under.Collider, under.Transform, position);
+            if (Rise(under.Normal) > 0.3f) AddPlatform(under.Collider, under.Transform, position);
         }
+    }
+
+    // Keeps the points remembered on platforms with the controller when it is moved without walking there.
+    private void ShiftPlatformPoints(Float3 shift)
+    {
+        for (int i = 0; i < _platformCount; i++)
+        {
+            ref Platform platform = ref _platforms[i];
+            if (platform.Owner.IsNotValid()) continue;
+            Transform owner = platform.Owner.Transform;
+            platform.LocalPoint = owner.InverseTransformPoint(owner.TransformPoint(platform.LocalPoint) + shift);
+        }
+    }
+
+    // How far a rotation turns things about the up axis, in degrees.
+    private float YawAboutUp(Quaternion turn)
+    {
+        Float3 reference = Flat(Float3.UnitZ);
+        if (Float3.LengthSquared(reference) < 0.01f) reference = Flat(Float3.UnitX);
+        Float3 turned = Flat(turn * reference);
+        if (Float3.LengthSquared(turned) < 1e-8f) return 0f;
+        return Float3.SignedAngleBetween(Float3.Normalize(reference), Float3.Normalize(turned), _up) * Maths.Rad2Deg;
     }
 
     private void AddPlatform(Collider collider, Transform transform, Float3 position)
@@ -783,7 +856,7 @@ public class CharacterController : MonoBehaviour
         if (Shape == ColliderShape.Capsule)
             return GameObject.Scene.Physics.OverlapCapsule(CapsuleBottom(position), CapsuleTop(position), EffectiveRadius, results, _filter);
 
-        return GameObject.Scene.Physics.OverlapCylinder(ShapeCenter(position), EffectiveRadius, Height, Quaternion.Identity, results, _filter);
+        return GameObject.Scene.Physics.OverlapCylinder(ShapeCenter(position), EffectiveRadius, Height, Orientation, results, _filter);
     }
 
     /// <summary>Notes something the move touched and which side of the controller it was on. The same surface is only listed once.</summary>
@@ -791,8 +864,9 @@ public class CharacterController : MonoBehaviour
     {
         const float Facing = 0.5f;
 
-        if (hit.Normal.Y > Facing) _flags |= CollisionFlags.Below;
-        else if (hit.Normal.Y < -Facing) _flags |= CollisionFlags.Above;
+        float rise = Rise(hit.Normal);
+        if (rise > Facing) _flags |= CollisionFlags.Below;
+        else if (rise < -Facing) _flags |= CollisionFlags.Above;
         else _flags |= CollisionFlags.Sides;
 
         foreach (ShapeCastHit seen in _hits)
@@ -849,25 +923,32 @@ public class CharacterController : MonoBehaviour
 
         if (Shape == ColliderShape.Capsule)
         {
-            Float3 bottom = position + new Float3(0, effectiveRadius, 0);
-            Float3 top = position + new Float3(0, Maths.Max(height - effectiveRadius, effectiveRadius + 0.001f), 0);
+            Float3 bottom = position + _up * effectiveRadius;
+            Float3 top = position + _up * Maths.Max(height - effectiveRadius, effectiveRadius + 0.001f);
             return GameObject.Scene.Physics.CheckCapsule(bottom, top, effectiveRadius, filter);
         }
 
-        return GameObject.Scene.Physics.CheckCylinder(position + new Float3(0, height * 0.5f, 0), effectiveRadius, height, Quaternion.Identity, filter);
+        return GameObject.Scene.Physics.CheckCylinder(position + _up * (height * 0.5f), effectiveRadius, height, Orientation, filter);
     }
 
     // ----------------------------------------------------------------
     //  Shape
     // ----------------------------------------------------------------
 
-    private Float3 ShapeCenter(Float3 position) => position + new Float3(0, Height * 0.5f, 0);
+    private Float3 ShapeCenter(Float3 position) => position + _up * (Height * 0.5f);
 
-    private Float3 CapsuleBottom(Float3 position) => position + new Float3(0, EffectiveRadius, 0);
+    private Float3 CapsuleBottom(Float3 position) => position + _up * EffectiveRadius;
 
     // Jitter rejects a capsule of zero length, which a height at or below twice the radius would make.
     private Float3 CapsuleTop(Float3 position)
-        => position + new Float3(0, Maths.Max(Height - EffectiveRadius, EffectiveRadius + 0.001f), 0);
+        => position + _up * Maths.Max(Height - EffectiveRadius, EffectiveRadius + 0.001f);
+
+    // Stands the cylinder along the controller's up.
+    private Quaternion Orientation => Quaternion.FromToRotation(Float3.UnitY, _up);
+
+    private float Rise(Float3 v) => Float3.Dot(v, _up);
+
+    private Float3 Flat(Float3 v) => v - _up * Float3.Dot(v, _up);
 
     private float EffectiveRadius => Maths.Max(Radius - SkinWidth, 0.001f);
 
@@ -876,10 +957,10 @@ public class CharacterController : MonoBehaviour
         if (Shape == ColliderShape.Capsule)
             return GameObject.Scene.Physics.CapsuleCast(CapsuleBottom(position), CapsuleTop(position), EffectiveRadius, direction, distance, out hit, _filter);
 
-        return GameObject.Scene.Physics.CylinderCast(ShapeCenter(position), EffectiveRadius, Height, Quaternion.Identity, direction, distance, out hit, _filter);
+        return GameObject.Scene.Physics.CylinderCast(ShapeCenter(position), EffectiveRadius, Height, Orientation, direction, distance, out hit, _filter);
     }
 
-    private static float SlopeAngle(Float3 normal) => Maths.Acos(Maths.Clamp(normal.Y, -1.0f, 1.0f)) * Maths.Rad2Deg;
+    private float SlopeAngle(Float3 normal) => Maths.Acos(Maths.Clamp(Rise(normal), -1.0f, 1.0f)) * Maths.Rad2Deg;
 
     private static bool IsFinite(Float3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
 
@@ -892,7 +973,7 @@ public class CharacterController : MonoBehaviour
         if (Shape == ColliderShape.Capsule)
             Debug.DrawWireCapsule(CapsuleBottom(position), CapsuleTop(position), Radius, Color.Cyan, 16);
         else
-            Debug.DrawWireCylinder(ShapeCenter(position), Quaternion.Identity, Radius, Height, Color.Cyan, 16);
+            Debug.DrawWireCylinder(ShapeCenter(position), Orientation, Radius, Height, Color.Cyan, 16);
 
         if (_groundHit.Hit) _groundHit.DrawGizmos();
 
@@ -900,14 +981,14 @@ public class CharacterController : MonoBehaviour
         {
             if (Shape == ColliderShape.Capsule)
             {
-                Float3 bottom = position + new Float3(0, _failedAttemptRadius, 0);
-                Float3 top = position + new Float3(0, _failedAttemptHeight - _failedAttemptRadius, 0);
+                Float3 bottom = position + _up * _failedAttemptRadius;
+                Float3 top = position + _up * (_failedAttemptHeight - _failedAttemptRadius);
                 Debug.DrawWireCapsule(bottom, top, _failedAttemptRadius, Color.Red, 16);
             }
             else
             {
-                Float3 center = position + new Float3(0, _failedAttemptHeight * 0.5f, 0);
-                Debug.DrawWireCylinder(center, Quaternion.Identity, _failedAttemptRadius, _failedAttemptHeight, Color.Red, 16);
+                Float3 center = position + _up * (_failedAttemptHeight * 0.5f);
+                Debug.DrawWireCylinder(center, Orientation, _failedAttemptRadius, _failedAttemptHeight, Color.Red, 16);
             }
         }
     }

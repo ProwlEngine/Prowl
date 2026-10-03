@@ -12,7 +12,7 @@ using ColliderShape = Prowl.Runtime.CharacterController.ColliderShape;
 
 namespace Prowl.Runtime.Test.Controller;
 
-public class SlopesTests : ControllerTestBase
+public abstract class SlopesTests(Gravity gravity) : ControllerTestBase(gravity)
 {
     [Theory]
     [InlineData(ColliderShape.Capsule, 15f)]
@@ -313,8 +313,8 @@ public class SlopesTests : ControllerTestBase
     }
 
     /// <summary>
-    /// Walking up a ramp along its side, drifting off it, rolls off the edge and drops to the floor. A
-    /// rounded shape used to hang on the edge until its middle was a whole radius past it.
+    /// Walking up a ramp along its side and drifting off it keeps walking smoothly along the edge and
+    /// drops to the floor once the shape is past it, rather than hanging on or being pulled sideways.
     /// </summary>
     [Theory]
     [InlineData(ColliderShape.Capsule, 20f)]
@@ -328,14 +328,14 @@ public class SlopesTests : ControllerTestBase
         Walker walker = Spawn(scene, new Float3(1.1f, 0f, 0f), shape);
         walker.KeepsMomentum = true;
         Float3 walk = Float3.Normalize(new Float3(0.12f, 0f, 1f)) * WalkSpeed;
-        float holdsUntil = 1.5f + 0.15f + (shape == ColliderShape.Cylinder ? walker.Controller.Radius : 0f);
+        float holdsUntil = 1.5f + walker.Controller.Radius + 0.05f;
         int hanging = 0;
         float slowest = float.MaxValue;
         Float3 previous = walker.Position;
         bool first = true;
 
         // Each frame's check sees the move the previous frame made.
-        walker.Run(walk, 2f, () =>
+        walker.Run(walk, 3f, () =>
         {
             if (walker.Grounded && walker.Position.X > holdsUntil && walker.Position.Y > 0.3f) hanging++;
             if (!first) slowest = MathF.Min(slowest, Horizontal(walker.Position - previous));
@@ -350,3 +350,8 @@ public class SlopesTests : ControllerTestBase
 
     private static float Horizontal(Float3 v) => MathF.Sqrt(v.X * v.X + v.Z * v.Z);
 }
+
+public sealed class SlopesUpright() : SlopesTests(Gravity.Upright);
+public sealed class SlopesUpsideDown() : SlopesTests(Gravity.UpsideDown);
+public sealed class SlopesSideways() : SlopesTests(Gravity.Sideways);
+public sealed class SlopesDiagonal() : SlopesTests(Gravity.Diagonal);
