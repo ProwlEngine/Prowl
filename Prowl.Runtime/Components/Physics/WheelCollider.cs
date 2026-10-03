@@ -920,7 +920,7 @@ public sealed class WheelCollider : MonoBehaviour
     {
         if (body.MotionType != MotionType.Dynamic) return;
         ref RigidBodyData data = ref body.Data;
-        data.Velocity += impulse * data.InverseMass;
+        data.Velocity += JVector.Multiply(impulse, data.InverseMassVector);
         data.AngularVelocity += JVector.Transform(JVector.Cross(point - data.Position, impulse), data.InverseInertiaWorld);
     }
 
