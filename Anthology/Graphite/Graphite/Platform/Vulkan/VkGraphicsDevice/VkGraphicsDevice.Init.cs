@@ -144,9 +144,28 @@ internal unsafe partial class VkGraphicsDevice
         {
             Vk.EnumeratePhysicalDevices(Instance, ref deviceCount, devicesPtr);
         }
-        // Just use the first enumerated device.
-        // apologies to the dual-GPU crowd.
         PhysicalDevice = physicalDevices[0];
+        int bestScore = -1;
+        foreach (PhysicalDevice candidate in physicalDevices)
+        {
+            Vk.GetPhysicalDeviceProperties(candidate, out PhysicalDeviceProperties candidateProps);
+            if (candidateProps.ApiVersion < new Version32(1, 2, 0))
+                continue;
+
+            int score = candidateProps.DeviceType switch
+            {
+                PhysicalDeviceType.DiscreteGpu => 4,
+                PhysicalDeviceType.IntegratedGpu => 3,
+                PhysicalDeviceType.VirtualGpu => 2,
+                PhysicalDeviceType.Cpu => 1,
+                _ => 0
+            };
+            if (score > bestScore)
+            {
+                bestScore = score;
+                PhysicalDevice = candidate;
+            }
+        }
 
         Vk.GetPhysicalDeviceProperties(PhysicalDevice, out _physicalDeviceProperties);
         fixed (byte* utf8NamePtr = _physicalDeviceProperties.DeviceName)
