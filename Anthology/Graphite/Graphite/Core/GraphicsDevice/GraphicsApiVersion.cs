@@ -34,7 +34,7 @@ public readonly struct GraphicsApiVersion
     /// <summary>
     /// True if any version number is nonzero, i.e. initialized.
     /// </summary>
-    public bool IsKnown => Major != 0 && Minor != 0 && Subminor != 0 && Patch != 0;
+    public bool IsKnown => Major != 0 || Minor != 0 || Subminor != 0 || Patch != 0;
 
 
     /// <summary>
