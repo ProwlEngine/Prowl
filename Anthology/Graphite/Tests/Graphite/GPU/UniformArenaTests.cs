@@ -92,7 +92,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     }
 
     [SkippableFact]
-    public void ApplyOther_SwapsInSameValueViaDifferentEntryObject_StillDispatchesCorrectly()
+    public void SetPropertiesSecondSet_SwapsInSameValueViaDifferentEntryObject_StillDispatchesCorrectly()
     {
 
         ComputeProgram program = CreateTwoBlockProgram();
@@ -104,9 +104,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
         props.SetInt("valueB", 100);
         props.SetBuffer("Output", output1, readOnly: false);
 
-        // A fresh PropertySet carries a brand new PropertyEntry for valueA with the exact same
-        // value, plus a genuinely different valueB. ApplyOther merges both into props, swapping
-        // the valueA entry's object identity without changing its bytes.
         PropertySet other = new();
         other.SetInt("valueA", 42);
         other.SetInt("valueB", 200);
@@ -120,11 +117,10 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
             cl1.Dispatch(1, 1, 1);
             context.SubmitCommandBuffer(cl1);
 
-            props.ApplyOther(other);
-
             CommandBuffer cl2 = context.GetCommandBuffer("AfterMerge");
             cl2.SetComputeShader(program);
             cl2.SetProperties(props);
+            cl2.SetProperties(other);
             cl2.Dispatch(1, 1, 1);
             context.SubmitCommandBuffer(cl2);
         });

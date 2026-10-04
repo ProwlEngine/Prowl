@@ -25,7 +25,7 @@
     ring lifecycle, `MaxExecutingTasks` throttling, transient allocation and its hard cap, fences,
     and `ShaderProgram` lifetime.
   - `PropertySetBindingTests` - end-to-end `PropertySet` binding through `CommandBuffer`:
-    transient vs. read-only vs. writable uniform buffers, structured buffers, `ApplyOther`, and
+    transient vs. read-only vs. writable uniform buffers, structured buffers, and
     the missing-property handler.
   - `CrossSetBindingTests` - binding spread across three descriptor sets: a structured buffer
     outside set 0, a texture/sampler pair in a third set, descriptor-set cache reuse and

@@ -157,28 +157,6 @@ public sealed partial class PropertySet
     }
 
 
-    /// <summary>
-    /// Merges other set in, overwrites matches.
-    /// </summary>
-    public void ApplyOther(PropertySet other)
-    {
-        bool dirtyResources = false;
-
-        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
-        {
-            PropertyEntry entry = kv.Value;
-            bool isUniform = entry.Kind == PropertyEntryKind.Uniform;
-
-            _entries[kv.Key] = entry;
-
-            if (!isUniform) dirtyResources = true;
-        }
-
-        if (dirtyResources) unchecked { _resourceVersion++; }
-        unchecked { _version++; }
-    }
-
-
     internal void MergeFrom(PropertySet other, System.Collections.Generic.List<PropertyID> changedKeys)
     {
         bool dirtyResources = false;

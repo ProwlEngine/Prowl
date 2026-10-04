@@ -8,7 +8,7 @@ namespace Prowl.Graphite.Tests;
 // End-to-end coverage of the PropertySet binding API through CommandBuffer.SetProperties. The
 // value-type plumbing is covered by CPU/PropertySetTests; this suite verifies the binding
 // actually reaches the GPU: transient vs. read-only vs. writable uniform buffers, structured
-// buffers, ApplyOther merging, and the missing-property handler. Everything runs through the
+// buffers, and the missing-property handler. Everything runs through the
 // BasicComputeTest kernel (Destination[i] = Source[i]; Source[i] *= 2) so results are
 // deterministic and easy to read back.
 public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -77,24 +77,6 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         Assert.Equal(Side, map[0]);
         Assert.Equal(Side, map[1]);
         GD.Unmap(readback);
-    }
-
-    [SkippableFact]
-    public void ApplyOther_MergesEntriesFromBothSets()
-    {
-
-        float[] result = RunCompute((props, source, destination) =>
-        {
-            PropertySet other = new();
-            other.SetInt("Height", (int)Side);
-            other.SetBuffer("Source", source, readOnly: false);
-            other.SetBuffer("Destination", destination, readOnly: false);
-
-            props.SetInt("Width", (int)Side);
-            props.ApplyOther(other);
-        });
-
-        AssertCopiedSource(result);
     }
 
     [SkippableFact]
