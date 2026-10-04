@@ -124,6 +124,13 @@ public abstract class Texture : Asset
         Graphics.SetTextureFilters(Handle, _isMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
     }
 
+    /// <summary>Records that every mip level was uploaded by hand rather than generated.</summary>
+    private protected void MarkMipmapped()
+    {
+        _isMipmapped = true;
+        Graphics.SetTextureFilters(Handle, DefaultMipmapMinFilter, DefaultMagFilter);
+    }
+
     protected override void OnUnload()
     {
         _handle?.Dispose();

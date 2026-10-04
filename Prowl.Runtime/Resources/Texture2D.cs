@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Aperture;
@@ -90,6 +91,30 @@ public sealed class Texture2D : Texture, ISerializable
     {
         EnsureLoaded();
         SetData(data, 0, 0, Width, Height);
+    }
+
+    /// <summary>
+    /// Uploads every mip level from <paramref name="levels"/>, level 0 first, each half the size of the one
+    /// before down to 1x1. For data whose mips cannot come from a plain box filter, such as alpha that has to
+    /// keep its coverage.
+    /// </summary>
+    public unsafe void SetMipChain(IReadOnlyList<byte[]> levels)
+    {
+        EnsureLoaded();
+        int bpp = GetBytesPerPixel(ImageFormat);
+        uint w = Width, h = Height;
+        for (int mip = 0; mip < levels.Count; mip++)
+        {
+            ValidateByteCapacity(levels[mip].Length, (long)w * h * bpp, nameof(levels));
+            fixed (byte* ptr = levels[mip])
+            {
+                if (mip == 0) Graphics.TexSubImage2D(Handle, 0, 0, 0, w, h, ptr);
+                else Graphics.TexImage2D(Handle, mip, w, h, 0, ptr);
+            }
+            w = Math.Max(1, w / 2);
+            h = Math.Max(1, h / 2);
+        }
+        if (levels.Count > 1) MarkMipmapped();
     }
 
     /// <summary>
