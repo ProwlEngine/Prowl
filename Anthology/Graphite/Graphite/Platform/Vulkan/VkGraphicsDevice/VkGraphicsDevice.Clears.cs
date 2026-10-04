@@ -72,7 +72,7 @@ internal unsafe partial class VkGraphicsDevice
                 return;
 
             _initPool = null;
-            pool.EndAndSubmit(_initCb, waitAcquire: false);
+            pool.EndAndSubmit(_initCb);
         }
     }
 

@@ -42,14 +42,10 @@ internal sealed unsafe class SharedCommandPool
         return _cb;
     }
 
-    public void EndAndSubmit(Silk.NET.Vulkan.CommandBuffer cb, bool waitAcquire = true)
+    public void EndAndSubmit(Silk.NET.Vulkan.CommandBuffer cb)
     {
         _gd.Vk.EndCommandBuffer(cb).CheckResult();
-        _gd.SubmitCommandBuffer(null, cb, waitAcquire: waitAcquire);
-        lock (_gd._stagingResourcesLock)
-        {
-            _gd._submittedSharedCommandPools.Add(cb, this);
-        }
+        _gd.SubmitSharedCommandBuffer(this, cb);
     }
 
     internal void Destroy()

@@ -24,7 +24,7 @@ internal unsafe partial class VkGraphicsDevice
         InstanceCreateInfo instanceCI = new(sType: StructureType.InstanceCreateInfo);
         ApplicationInfo applicationInfo = new(sType: StructureType.ApplicationInfo)
         {
-            ApiVersion = new Version32(1, 0, 0),
+            ApiVersion = new Version32(1, 2, 0),
             ApplicationVersion = new Version32(1, 0, 0),
             EngineVersion = new Version32(1, 0, 0),
             PApplicationName = Name,
@@ -159,6 +159,13 @@ internal unsafe partial class VkGraphicsDevice
             _deviceName = Util.GetString(utf8NamePtr);
         }
 
+        uint deviceApiVersion = _physicalDeviceProperties.ApiVersion;
+        if (deviceApiVersion < new Version32(1, 2, 0))
+        {
+            throw new RenderException(
+                $"Vulkan 1.2 is required, but '{_deviceName}' only supports {deviceApiVersion >> 22}.{(deviceApiVersion >> 12) & 0x3FF}.");
+        }
+
         _vendorName = "id:" + _physicalDeviceProperties.VendorID.ToString("x8");
         _apiVersion = GraphicsApiVersion.Unknown;
         DriverInfo = "version:" + _physicalDeviceProperties.DriverVersion.ToString("x8");
@@ -272,7 +279,15 @@ internal unsafe partial class VkGraphicsDevice
                 $"The following Vulkan device extensions were not available: {missingList}");
         }
 
-        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo);
+        PhysicalDeviceVulkan12Features vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features);
+        PhysicalDeviceFeatures2 supportedFeatures = new(sType: StructureType.PhysicalDeviceFeatures2, pNext: &vulkan12Features);
+        Vk.GetPhysicalDeviceFeatures2(PhysicalDevice, &supportedFeatures);
+        if (!vulkan12Features.TimelineSemaphore)
+            throw new RenderException($"The Vulkan device '{_deviceName}' does not support timeline semaphores.");
+
+        vulkan12Features = new(sType: StructureType.PhysicalDeviceVulkan12Features, timelineSemaphore: true);
+
+        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: &vulkan12Features);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
 
@@ -300,6 +315,8 @@ internal unsafe partial class VkGraphicsDevice
         }
 
         Vk.GetDeviceQueue(Device, GraphicsQueueIndex, 0, out GraphicsQueue);
+
+        CreateTimelineSemaphore();
 
         Vk.TryGetInstanceExtension(Instance, out KhrSurface);
         Vk.TryGetDeviceExtension(Instance, Device, out KhrSwapchain);

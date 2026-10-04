@@ -10,10 +10,6 @@ internal unsafe partial class VkGraphicsDevice
     private readonly Stack<SharedCommandPool> _sharedGraphicsCommandPools = new();
     private readonly object _graphicsCommandPoolLock = new();
 
-    internal readonly object _stagingResourcesLock = new();
-    internal readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, SharedCommandPool> _submittedSharedCommandPools
-        = [];
-
     private SharedCommandPool GetFreeCommandPool()
     {
         lock (_graphicsCommandPoolLock)

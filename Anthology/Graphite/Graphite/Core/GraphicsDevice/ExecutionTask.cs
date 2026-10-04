@@ -1,7 +1,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// One dispatched work graph. Owns a ring slot, a transient bump allocator, and a completion fence.
+/// One dispatched work graph. Owns a ring slot and a transient bump allocator.
 /// </summary>
 public abstract partial class ExecutionTask
 {
@@ -10,9 +10,6 @@ public abstract partial class ExecutionTask
 
     /// <summary>Slot index in the device ring.</summary>
     public abstract uint RingSlot { get; }
-
-    /// <summary>Signals when this execution's GPU work is done. Recycled on ring slot reuse.</summary>
-    internal abstract Fence CompletionFence { get; }
 
     /// <summary>Owning device.</summary>
     public abstract GraphicsDevice Device { get; }
@@ -56,7 +53,7 @@ public abstract partial class ExecutionTask
     internal virtual void TrackRentedCommandBuffer(CommandBuffer commandBuffer) { }
 
     /// <summary>
-    /// Allocates a transient uniform buffer range from the bump allocator. Valid until completion fence signals.
+    /// Allocates a transient uniform buffer range from the bump allocator. Valid until the execution completes.
     /// </summary>
     /// <remarks>Uniform buffers only. Don't bind as vertex, index, or structured buffer.</remarks>
     /// <param name="sizeInBytes">Bytes to allocate.</param>

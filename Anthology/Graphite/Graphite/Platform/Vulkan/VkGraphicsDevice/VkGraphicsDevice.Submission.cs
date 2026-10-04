@@ -1,19 +1,17 @@
 using System.Buffers;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 using Silk.NET.Vulkan;
 
-using VkFenceHandle = Silk.NET.Vulkan.Fence;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice
 {
-    private readonly object _submittedFencesLock = new();
-    private readonly ConcurrentQueue<VkFenceHandle> _availableSubmissionFences = new();
-    private readonly List<FenceSubmissionInfo> _submittedFences = [];
+    private readonly object _pendingLock = new();
+    private readonly Queue<PendingSubmission> _pending = new();
+    private VkSemaphore _timelineSemaphore;
     private int _graphicsQueueSubmitCount;
 
     /// <summary>Test hook: total vkQueueSubmit calls made against the graphics queue.</summary>
@@ -23,6 +21,7 @@ internal unsafe partial class VkGraphicsDevice
 
     private VkSemaphore[] _acquireWaitSemaphores = new VkSemaphore[1];
     private PipelineStageFlags[] _acquireWaitStages = new PipelineStageFlags[1];
+    private ulong[] _acquireWaitValues = new ulong[1];
 
     private int AddAcquireWait_NoLock(int count, VkSwapchain swapchain)
     {
@@ -34,6 +33,7 @@ internal unsafe partial class VkGraphicsDevice
         {
             System.Array.Resize(ref _acquireWaitSemaphores, count * 2);
             System.Array.Resize(ref _acquireWaitStages, count * 2);
+            System.Array.Resize(ref _acquireWaitValues, count * 2);
         }
 
         _acquireWaitSemaphores[count] = pending;
@@ -105,23 +105,84 @@ internal unsafe partial class VkGraphicsDevice
             Vk.QueueWaitIdle(GraphicsQueue);
     }
 
+    private void CreateTimelineSemaphore()
+    {
+        SemaphoreTypeCreateInfo typeCI = new(sType: StructureType.SemaphoreTypeCreateInfo)
+        {
+            SemaphoreType = SemaphoreType.Timeline,
+            InitialValue = 0,
+        };
+        SemaphoreCreateInfo semaphoreCI = new(sType: StructureType.SemaphoreCreateInfo, pNext: &typeCI);
+        Vk.CreateSemaphore(Device, in semaphoreCI, null, out _timelineSemaphore).CheckResult();
+    }
+
+    internal ulong GetCompletedSerial()
+    {
+        Vk.GetSemaphoreCounterValue(Device, _timelineSemaphore, out ulong value).CheckResult();
+        return value;
+    }
+
+    internal bool WaitForSerial(ulong serial, ulong nanosecondTimeout)
+    {
+        VkSemaphore timeline = _timelineSemaphore;
+        SemaphoreWaitInfo waitInfo = new(sType: StructureType.SemaphoreWaitInfo)
+        {
+            SemaphoreCount = 1,
+            PSemaphores = &timeline,
+            PValues = &serial,
+        };
+        return Vk.WaitSemaphores(Device, in waitInfo, nanosecondTimeout) == Result.Success;
+    }
+
+    private ulong SubmitSignalingTimeline_NoLock(Silk.NET.Vulkan.CommandBuffer* commandBuffers, uint commandBufferCount, int waitCount)
+    {
+        ulong serial = NextSubmitSerial();
+        VkSemaphore timeline = _timelineSemaphore;
+
+        fixed (VkSemaphore* waits = _acquireWaitSemaphores)
+        fixed (PipelineStageFlags* stages = _acquireWaitStages)
+        fixed (ulong* waitValues = _acquireWaitValues)
+        {
+            TimelineSemaphoreSubmitInfo timelineInfo = new(sType: StructureType.TimelineSemaphoreSubmitInfo)
+            {
+                WaitSemaphoreValueCount = (uint)waitCount,
+                PWaitSemaphoreValues = waitValues,
+                SignalSemaphoreValueCount = 1,
+                PSignalSemaphoreValues = &serial,
+            };
+            SubmitInfo si = new(sType: StructureType.SubmitInfo)
+            {
+                PNext = &timelineInfo,
+                WaitSemaphoreCount = (uint)waitCount,
+                PWaitSemaphores = waits,
+                PWaitDstStageMask = stages,
+                CommandBufferCount = commandBufferCount,
+                PCommandBuffers = commandBuffers,
+                SignalSemaphoreCount = 1,
+                PSignalSemaphores = &timeline,
+            };
+
+            _graphicsQueueSubmitCount++;
+            Vk.QueueSubmit(GraphicsQueue, 1, &si, default).CheckResult();
+        }
+
+        FlushValidationErrors();
+        return serial;
+    }
+
     /// <summary>
-    /// Submits an execution's queued command buffers as one vkQueueSubmit. A null slot fence takes a
-    /// pooled one instead, for a mid-execution flush.
+    /// Submits an execution's queued command buffers as one vkQueueSubmit and returns its serial. An empty
+    /// batch is only submitted when it is the execution's final one, so the execution still gets a serial.
     /// </summary>
-    internal void SubmitExecutionBatch(List<VkCommandBuffer> commandBuffers, VkFenceHandle? slotFence)
+    internal ulong SubmitExecutionBatch(List<VkCommandBuffer> commandBuffers, bool isFinal)
     {
         FlushPendingInitCommands();
         int count = commandBuffers.Count;
-        if (count == 0 && slotFence == null)
-            return;
+        if (count == 0 && !isFinal)
+            return 0;
 
-        CheckSubmittedFences();
+        PollSubmissions();
 
-        bool poolFence = slotFence == null;
-        VkFenceHandle fence = slotFence ?? GetFreeSubmissionFence();
-
-        ulong serial = 0;
         Silk.NET.Vulkan.CommandBuffer[] handles = ArrayPool<Silk.NET.Vulkan.CommandBuffer>.Shared.Rent(count + 1);
         try
         {
@@ -133,42 +194,30 @@ internal unsafe partial class VkGraphicsDevice
                 handles[i] = handle;
             }
 
-            fixed (Silk.NET.Vulkan.CommandBuffer* pHandles = handles)
+            lock (_graphicsQueueLock)
             {
-                SubmitInfo si = new(sType: StructureType.SubmitInfo)
-                {
-                    CommandBufferCount = (uint)count,
-                    PCommandBuffers = count > 0 ? pHandles : null,
-                };
+                int waitCount = GatherAcquireWaits_NoLock(commandBuffers);
+                ulong serial;
+                fixed (Silk.NET.Vulkan.CommandBuffer* pHandles = handles)
+                    serial = SubmitSignalingTimeline_NoLock(pHandles, (uint)count, waitCount);
 
-                lock (_graphicsQueueLock)
+                lock (_pendingLock)
                 {
-                    int waitCount = GatherAcquireWaits_NoLock(commandBuffers);
-                    fixed (VkSemaphore* waits = _acquireWaitSemaphores)
-                    fixed (PipelineStageFlags* stages = _acquireWaitStages)
+                    for (int i = 0; i < count; i++)
                     {
-                        si.WaitSemaphoreCount = (uint)waitCount;
-                        si.PWaitSemaphores = waits;
-                        si.PWaitDstStageMask = stages;
-                        _graphicsQueueSubmitCount++;
-                        if (count > 0)
-                            serial = NextSubmitSerial();
-                        Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+                        VkCommandBuffer cb = commandBuffers[i];
+                        _pending.Enqueue(new PendingSubmission
+                        {
+                            Serial = serial,
+                            CommandBuffer = cb,
+                            Handle = handles[i],
+                            TimingPool = cb.TakePendingTimingPool(),
+                            StatsPool = cb.TakePendingStatsPool(),
+                        });
                     }
-                    FlushValidationErrors();
                 }
-            }
 
-            lock (_submittedFencesLock)
-            {
-                for (int i = 0; i < count; i++)
-                {
-                    VkCommandBuffer cb = commandBuffers[i];
-                    _submittedFences.Add(new FenceSubmissionInfo(
-                        fence, cb, handles[i], cb.TakePendingTimingPool(), cb.TakePendingStatsPool(),
-                        cb.Name, isTransfer: false, cb.Pass, transferId: 0,
-                        ownsFence: poolFence && i == count - 1, serial: serial));
-                }
+                return serial;
             }
         }
         finally
@@ -206,240 +255,118 @@ internal unsafe partial class VkGraphicsDevice
     private void SubmitRecorded(VkCommandBuffer cb, VkGpuSubmission submission)
     {
         FlushPendingInitCommands();
-        CheckSubmittedFences();
-
-        VkFenceHandle fence = GetFreeSubmissionFence();
-        submission.Fence = fence;
+        PollSubmissions();
 
         Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
         cb.CommandBufferSubmitted(handle);
 
-        SubmitInfo si = new(sType: StructureType.SubmitInfo)
-        {
-            CommandBufferCount = 1,
-            PCommandBuffers = &handle
-        };
-
-        ulong recordedSerial;
         lock (_graphicsQueueLock)
         {
             int waitCount = GatherAcquireWaits_NoLock(cb);
-            fixed (VkSemaphore* waits = _acquireWaitSemaphores)
-            fixed (PipelineStageFlags* stages = _acquireWaitStages)
-            {
-                si.WaitSemaphoreCount = (uint)waitCount;
-                si.PWaitSemaphores = waits;
-                si.PWaitDstStageMask = stages;
-                _graphicsQueueSubmitCount++;
-                recordedSerial = NextSubmitSerial();
-                Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
-            }
-            FlushValidationErrors();
-        }
+            ulong serial = SubmitSignalingTimeline_NoLock(&handle, 1, waitCount);
+            submission.Serial = serial;
 
-        lock (_submittedFencesLock)
-        {
-            _submittedFences.Add(new FenceSubmissionInfo(
-                fence, cb, handle, cb.TakePendingTimingPool(), cb.TakePendingStatsPool(),
-                cb.Name, isTransfer: true, pass: null, transferId: 0, submission: submission, serial: recordedSerial));
+            lock (_pendingLock)
+            {
+                _pending.Enqueue(new PendingSubmission
+                {
+                    Serial = serial,
+                    CommandBuffer = cb,
+                    Handle = handle,
+                    TimingPool = cb.TakePendingTimingPool(),
+                    StatsPool = cb.TakePendingStatsPool(),
+                    IsTransfer = true,
+                    Submission = submission,
+                });
+            }
         }
     }
 
-    internal void PollSubmissions() => CheckSubmittedFences();
-
-    internal void SubmitCommandBuffer(
-        VkCommandBuffer? vkCL,
-        Silk.NET.Vulkan.CommandBuffer vkCB,
-        QueryPool? timingPool = null,
-        QueryPool? statsPool = null,
-        string bufferName = "",
-        bool isTransfer = false,
-        PassInfo? pass = null,
-        ulong transferId = 0,
-        bool waitAcquire = true)
+    internal void SubmitSharedCommandBuffer(SharedCommandPool pool, Silk.NET.Vulkan.CommandBuffer vkCB)
     {
         FlushPendingInitCommands();
-        CheckSubmittedFences();
+        PollSubmissions();
 
-        SubmitInfo si = new(sType: StructureType.SubmitInfo)
-        {
-            CommandBufferCount = 1,
-            PCommandBuffers = &vkCB
-        };
-
-        VkFenceHandle vkFence = GetFreeSubmissionFence();
-
-        ulong commandSerial;
         lock (_graphicsQueueLock)
         {
-            int waitCount = waitAcquire ? GatherAcquireWaits_NoLock(vkCL) : 0;
-            fixed (VkSemaphore* waits = _acquireWaitSemaphores)
-            fixed (PipelineStageFlags* stages = _acquireWaitStages)
-            {
-                si.WaitSemaphoreCount = (uint)waitCount;
-                si.PWaitSemaphores = waits;
-                si.PWaitDstStageMask = stages;
-                _graphicsQueueSubmitCount++;
-                commandSerial = NextSubmitSerial();
-                Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
-            }
-            FlushValidationErrors();
-        }
+            ulong serial = SubmitSignalingTimeline_NoLock(&vkCB, 1, 0);
 
-        lock (_submittedFencesLock)
-        {
-            _submittedFences.Add(new FenceSubmissionInfo(vkFence, vkCL, vkCB, timingPool, statsPool, bufferName, isTransfer, pass, transferId, serial: commandSerial));
+            lock (_pendingLock)
+            {
+                _pending.Enqueue(new PendingSubmission
+                {
+                    Serial = serial,
+                    Handle = vkCB,
+                    SharedPool = pool,
+                });
+            }
         }
     }
 
-    private void CheckSubmittedFences()
+    internal void PollSubmissions()
     {
-        ulong retiredSerial = 0;
-        lock (_submittedFencesLock)
+        ulong completed = GetCompletedSerial();
+
+        List<PendingSubmission>? done = null;
+        lock (_pendingLock)
         {
-            for (int i = 0; i < _submittedFences.Count; i++)
+            while (_pending.Count > 0 && _pending.Peek().Serial <= completed)
+                (done ??= []).Add(_pending.Dequeue());
+        }
+
+        if (done != null)
+        {
+            foreach (PendingSubmission submission in done)
+                CompleteSubmission(in submission);
+        }
+
+        if (completed != 0)
+            RetireThrough(completed);
+    }
+
+    private void CompleteSubmission(in PendingSubmission pending)
+    {
+        if (pending.CommandBuffer is { } cb)
+        {
+            cb.CommandBufferCompleted(pending.Handle);
+
+            if (pending.TimingPool is { } timingPool)
             {
-                FenceSubmissionInfo fsi = _submittedFences[i];
-                if (Vk.GetFenceStatus(Device, fsi.Fence) == Result.Success)
-                {
-                    CompleteFenceSubmission(fsi);
-                    if (fsi.Serial > retiredSerial)
-                        retiredSerial = fsi.Serial;
-                    _submittedFences.RemoveAt(i);
-                    i -= 1;
-                }
+                double milliseconds = ResolveTiming(timingPool);
+                Profiler?.RecordExecutionTime(cb.ProfilerInfo, pending.IsTransfer, milliseconds);
+            }
+
+            if (pending.StatsPool is { } statsPool)
+            {
+                GpuVertexStats stats = ResolvePipelineStats(statsPool);
+                Profiler?.RecordGpuVertexStats(cb.ProfilerInfo, in stats);
+            }
+
+            if (pending.Submission != null)
+                _recordCommandBufferPool.Return(cb);
+        }
+
+        if (pending.SharedPool is { } sharedPool)
+        {
+            lock (_graphicsCommandPoolLock)
+            {
+                if (sharedPool.IsCached)
+                    _sharedGraphicsCommandPools.Push(sharedPool);
                 else
-                {
-                    break; // Submissions are in order; later submissions cannot complete if this one hasn't.
-                }
-            }
-        }
-
-        if (retiredSerial != 0)
-            RetireThrough(retiredSerial);
-    }
-
-    private void CompleteFenceSubmission(FenceSubmissionInfo fsi)
-    {
-        VkFenceHandle fence = fsi.Fence;
-        Silk.NET.Vulkan.CommandBuffer completedCB = fsi.VulkanCommandBuffer;
-
-        fsi.CommandBuffer?.CommandBufferCompleted(completedCB);
-
-        CommandBufferInfo profilerInfo = fsi.CommandBuffer?.ProfilerInfo ?? new(fsi.TransferId, fsi.BufferName, null);
-
-        if (fsi.TimingPool is { } pool)
-        {
-            double milliseconds = ResolveTiming(pool);
-            Profiler?.RecordExecutionTime(profilerInfo, fsi.IsTransfer, milliseconds);
-        }
-
-        if (fsi.StatsPool is { } statsPool)
-        {
-            GpuVertexStats stats = ResolvePipelineStats(statsPool);
-            Profiler?.RecordGpuVertexStats(profilerInfo, in stats);
-        }
-
-        if (fsi.Submission is { } submission)
-        {
-            lock (submission.SyncRoot)
-            {
-                submission.MarkComplete();
-                Vk.ResetFences(Device, 1, &fence).CheckResult();
-                ReturnSubmissionFence(fence);
-            }
-            if (fsi.CommandBuffer != null)
-                _recordCommandBufferPool.Return(fsi.CommandBuffer);
-        }
-        else if (fsi.OwnsFence)
-        {
-            Vk.ResetFences(Device, 1, &fence).CheckResult();
-            ReturnSubmissionFence(fence);
-        }
-
-        lock (_stagingResourcesLock)
-        {
-            if (_submittedSharedCommandPools.TryGetValue(completedCB, out SharedCommandPool? sharedPool))
-            {
-                _submittedSharedCommandPools.Remove(completedCB);
-                lock (_graphicsCommandPoolLock)
-                {
-                    if (sharedPool.IsCached)
-                    {
-                        _sharedGraphicsCommandPools.Push(sharedPool);
-                    }
-                    else
-                    {
-                        sharedPool.Destroy();
-                    }
-                }
+                    sharedPool.Destroy();
             }
         }
     }
 
-    private void ReturnSubmissionFence(VkFenceHandle fence)
+    private struct PendingSubmission
     {
-        _availableSubmissionFences.Enqueue(fence);
-    }
-
-    private VkFenceHandle GetFreeSubmissionFence()
-    {
-        if (_availableSubmissionFences.TryDequeue(out VkFenceHandle availableFence))
-        {
-            return availableFence;
-        }
-        else
-        {
-            FenceCreateInfo fenceCI = new(sType: StructureType.FenceCreateInfo);
-            VkFenceHandle newFence;
-            Vk.CreateFence(Device, &fenceCI, null, &newFence).CheckResult();
-            return newFence;
-        }
-    }
-
-    private struct FenceSubmissionInfo
-    {
-        public VkFenceHandle Fence;
+        public ulong Serial;
         public VkCommandBuffer? CommandBuffer;
-        public Silk.NET.Vulkan.CommandBuffer VulkanCommandBuffer;
+        public Silk.NET.Vulkan.CommandBuffer Handle;
         public QueryPool? TimingPool;
         public QueryPool? StatsPool;
-        public string BufferName;
         public bool IsTransfer;
-        public PassInfo? Pass;
-        public ulong TransferId;
-        public ulong Serial;
         public VkGpuSubmission? Submission;
-
-        /// <summary>False when the fence is a slot fence, or is shared with a later entry.</summary>
-        public bool OwnsFence;
-
-        public FenceSubmissionInfo(
-            VkFenceHandle fence,
-            VkCommandBuffer? commandBuffer,
-            Silk.NET.Vulkan.CommandBuffer vulkanCommandBuffer,
-            QueryPool? timingPool,
-            QueryPool? statsPool,
-            string bufferName,
-            bool isTransfer,
-            PassInfo? pass,
-            ulong transferId,
-            bool ownsFence = true,
-            VkGpuSubmission? submission = null,
-            ulong serial = 0)
-        {
-            Serial = serial;
-            Submission = submission;
-            OwnsFence = ownsFence;
-            Fence = fence;
-            CommandBuffer = commandBuffer;
-            VulkanCommandBuffer = vulkanCommandBuffer;
-            TimingPool = timingPool;
-            StatsPool = statsPool;
-            BufferName = bufferName;
-            IsTransfer = isTransfer;
-            Pass = pass;
-            TransferId = transferId;
-        }
+        public SharedCommandPool? SharedPool;
     }
 }

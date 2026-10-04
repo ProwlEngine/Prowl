@@ -128,9 +128,6 @@ internal unsafe partial class VkGraphicsDevice
             case VkTextureView texView:
                 SetDebugMarkerName(DebugReportObjectTypeEXT.ImageViewExt, texView.ImageView.Handle, name);
                 break;
-            case VkFence fence:
-                SetDebugMarkerName(DebugReportObjectTypeEXT.FenceExt, fence.DeviceFence.Handle, name);
-                break;
             case VkSwapchain sc:
                 SetDebugMarkerName(DebugReportObjectTypeEXT.SwapchainKhrExt, sc.DeviceSwapchain.Handle, name);
                 break;

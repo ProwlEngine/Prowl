@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 using Silk.NET.Vulkan;
-
-using VkFenceHandle = Silk.NET.Vulkan.Fence;
 
 namespace Prowl.Graphite.Vk;
 
@@ -11,8 +10,7 @@ internal unsafe partial class VkGraphicsDevice
 {
     private struct SlotState
     {
-        public VkFenceHandle Fence;
-        public VkFence FenceWrapper;
+        public ulong FinalSerial;
         public VkUniformArena UniformArena;
         public List<VkCommandBuffer> RentedCommandBuffers;
         public List<VkCommandBuffer> QueuedCommandBuffers;
@@ -28,16 +26,12 @@ internal unsafe partial class VkGraphicsDevice
         _slots = new SlotState[_maxExecutingTasks];
         for (uint i = 0; i < _maxExecutingTasks; i++)
         {
-            VkFence slotWrapper = new(this, false);
-
             VkBuffer primary = new(this, new BufferDescription(_transientInitialSize,
                 BufferUsage.Dynamic | BufferUsage.UniformBuffer));
             primary.Name = $"TransientPrimary[{i}]";
 
             _slots[i] = new SlotState
             {
-                Fence = slotWrapper.DeviceFence,
-                FenceWrapper = slotWrapper,
                 UniformArena = new VkUniformArena(this, primary),
                 RentedCommandBuffers = [],
                 QueuedCommandBuffers = [],
@@ -50,15 +44,9 @@ internal unsafe partial class VkGraphicsDevice
     {
         ref SlotState slot = ref _slots[ringSlot];
 
-        // Retire anything still riding this slot's fence before it goes unsignaled again.
-        CheckSubmittedFences();
+        PollSubmissions();
+        Volatile.Write(ref slot.FinalSerial, 0);
 
-        // The base class only hands out a slot whose previous execution has completed and been reclaimed,
-        // so no fence wait is needed here; just recycle the slot's fence and transient memory.
-        VkFenceHandle slotFence = slot.Fence;
-        Vk.ResetFences(Device, 1, in slotFence).CheckResult();
-
-        // Return overflow buffers to the free pool and reset transient head
         List<VkBuffer> overflow = slot.UniformArena.OverflowBuffers;
         if (overflow.Count > 0)
         {
@@ -82,26 +70,26 @@ internal unsafe partial class VkGraphicsDevice
 
         slot.CurrentExecutionId = executionId;
 
-        return new VkExecutionTask(this, executionId, ringSlot, slot.FenceWrapper,
+        return new VkExecutionTask(this, executionId, ringSlot,
             slot.UniformArena, slot.RentedCommandBuffers, slot.QueuedCommandBuffers);
     }
 
     private protected override void CompleteExecutionCore(ExecutionTask task)
     {
         VkExecutionTask vkTask = Util.AssertSubtype<ExecutionTask, VkExecutionTask>(task);
-        vkTask.FinalSubmit(_slots[task.RingSlot].Fence);
+        ulong serial = vkTask.FinalSubmit();
+        Volatile.Write(ref _slots[task.RingSlot].FinalSerial, serial);
     }
 
     private protected override bool IsExecutionCompleteCore(ExecutionTask task)
     {
         ref SlotState slot = ref _slots[task.RingSlot];
 
-        // The slot was reused by a newer execution, so this one has definitely finished.
         if (slot.CurrentExecutionId != task.Id)
             return true;
 
-        Result status = Vk.GetFenceStatus(Device, slot.Fence);
-        return status == Result.Success;
+        ulong serial = Volatile.Read(ref slot.FinalSerial);
+        return serial != 0 && GetCompletedSerial() >= serial;
     }
 
     private protected override bool WaitForExecutionCore(ExecutionTask task, ulong nanosecondTimeout)
@@ -111,9 +99,8 @@ internal unsafe partial class VkGraphicsDevice
         if (slot.CurrentExecutionId != task.Id)
             return true;
 
-        VkFenceHandle fence = slot.Fence;
-        Result result = Vk.WaitForFences(Device, 1, in fence, true, nanosecondTimeout);
-        return result == Result.Success;
+        ulong serial = Volatile.Read(ref slot.FinalSerial);
+        return serial != 0 && WaitForSerial(serial, nanosecondTimeout);
     }
 
     internal VkBuffer CreateTransientBuffer(uint sizeInBytes)
@@ -146,7 +133,6 @@ internal unsafe partial class VkGraphicsDevice
                 slot.UniformArena?.PrimaryBuffer.Dispose();
                 foreach (VkBuffer overflow in slot.UniformArena?.OverflowBuffers ?? [])
                     overflow.Dispose();
-                slot.FenceWrapper?.Dispose();
             }
         }
 

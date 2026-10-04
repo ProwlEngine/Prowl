@@ -8,7 +8,6 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
 
 using VkApi = Silk.NET.Vulkan.Vk;
-using VkFenceHandle = Silk.NET.Vulkan.Fence;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Graphite.Vk;
@@ -156,7 +155,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             Vk.QueueWaitIdle(GraphicsQueue);
         }
 
-        CheckSubmittedFences();
+        PollSubmissions();
         FlushValidationErrors();
     }
 
@@ -164,11 +163,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     {
         DisposeSlots();
 
-        Debug.Assert(_submittedFences.Count == 0);
-        foreach (VkFenceHandle fence in _availableSubmissionFences)
-        {
-            Vk.DestroyFence(Device, fence, null);
-        }
+        Debug.Assert(_pending.Count == 0);
 
         _mainSwapchain?.Dispose();
         DestroyDebugCallback();
@@ -189,6 +184,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         Vk.DeviceWaitIdle(Device).CheckResult();
 
+        Vk.DestroySemaphore(Device, _timelineSemaphore, null);
         Vk.DestroyDevice(Device, null);
         Vk.DestroyInstance(Instance, null);
     }

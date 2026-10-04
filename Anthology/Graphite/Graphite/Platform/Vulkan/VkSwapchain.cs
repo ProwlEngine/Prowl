@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using Silk.NET.Core;
 using Silk.NET.Vulkan;
 
-using VkFenceHandle = Silk.NET.Vulkan.Fence;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Graphite.Vk;
