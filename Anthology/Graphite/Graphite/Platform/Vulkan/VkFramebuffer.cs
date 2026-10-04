@@ -12,7 +12,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkFramebufferHandle _deviceFramebuffer;
-    private readonly RenderPass[] _renderPasses = new RenderPass[6];
+    private readonly RenderPass[] _renderPasses = new RenderPass[3 * RenderPassOps.Count];
     private readonly uint _colorAttachmentCount;
     private readonly List<ImageView> _attachmentViews = [];
 
@@ -38,21 +38,20 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
     }
 
-    public override RenderPass GetRenderPass(FramebufferMode mode, bool clear)
+    public override RenderPass GetRenderPass(FramebufferMode mode, RenderPassOps ops)
     {
-        int index = (int)mode * 2 + (clear ? 1 : 0);
+        int index = (int)mode * RenderPassOps.Count + ops.Index;
         lock (_renderPasses)
         {
             if (_renderPasses[index].Handle == default)
-                _renderPasses[index] = CreateRenderPass(_colorAttachmentCount, mode, clear);
+                _renderPasses[index] = CreateRenderPass(_colorAttachmentCount, mode, ops);
             return _renderPasses[index];
         }
     }
 
-    private RenderPass CreateRenderPass(uint colorAttachmentCount, FramebufferMode mode, bool clear)
+    private RenderPass CreateRenderPass(uint colorAttachmentCount, FramebufferMode mode, RenderPassOps ops)
     {
         bool graphMode = mode != FramebufferMode.Resting;
-        AttachmentLoadOp loadOp = clear ? AttachmentLoadOp.Clear : AttachmentLoadOp.Load;
 
         AttachmentDescription* attachments = stackalloc AttachmentDescription[(int)colorAttachmentCount + 1];
         AttachmentReference* colorAttachmentRefs = stackalloc AttachmentReference[(int)colorAttachmentCount];
@@ -66,11 +65,11 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
             {
                 Format = vkColorTex.VkFormat,
                 Samples = vkColorTex.VkSampleCount,
-                LoadOp = loadOp,
-                StoreOp = AttachmentStoreOp.Store,
+                LoadOp = ops.ColorLoad,
+                StoreOp = ops.ColorStore,
                 StencilLoadOp = AttachmentLoadOp.DontCare,
                 StencilStoreOp = AttachmentStoreOp.DontCare,
-                InitialLayout = clear ? ImageLayout.Undefined : outside,
+                InitialLayout = ops.ColorLoad == AttachmentLoadOp.Load ? outside : ImageLayout.Undefined,
                 FinalLayout = outside,
             };
             colorAttachmentRefs[i] = new AttachmentReference((uint)i, ImageLayout.ColorAttachmentOptimal);
@@ -84,17 +83,18 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
             bool readOnly = mode == FramebufferMode.GraphDepthReadOnly;
             ImageLayout inside = readOnly ? ImageLayout.DepthStencilReadOnlyOptimal : ImageLayout.DepthStencilAttachmentOptimal;
             ImageLayout outside = graphMode ? inside : VkBarriers.RestingLayout(vkDepthTex);
-            AttachmentLoadOp depthLoadOp = readOnly ? AttachmentLoadOp.Load : loadOp;
+            AttachmentLoadOp depthLoadOp = readOnly ? AttachmentLoadOp.Load : ops.DepthLoad;
+            AttachmentStoreOp depthStoreOp = readOnly ? AttachmentStoreOp.Store : ops.DepthStore;
             depthAttachmentRef = new AttachmentReference(attachmentCount, inside);
             attachments[attachmentCount++] = new AttachmentDescription
             {
                 Format = vkDepthTex.VkFormat,
                 Samples = vkDepthTex.VkSampleCount,
                 LoadOp = depthLoadOp,
-                StoreOp = AttachmentStoreOp.Store,
+                StoreOp = depthStoreOp,
                 StencilLoadOp = hasStencil ? depthLoadOp : AttachmentLoadOp.DontCare,
-                StencilStoreOp = hasStencil ? AttachmentStoreOp.Store : AttachmentStoreOp.DontCare,
-                InitialLayout = clear && !readOnly ? ImageLayout.Undefined : outside,
+                StencilStoreOp = hasStencil ? depthStoreOp : AttachmentStoreOp.DontCare,
+                InitialLayout = depthLoadOp == AttachmentLoadOp.Load ? outside : ImageLayout.Undefined,
                 FinalLayout = outside,
             };
         }
@@ -212,7 +212,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         fbCI.AttachmentCount = fbAttachmentsCount;
         fbCI.PAttachments = fbAttachments;
         fbCI.Layers = 1;
-        fbCI.RenderPass = GetRenderPass(FramebufferMode.Resting, clear: false);
+        fbCI.RenderPass = GetRenderPass(FramebufferMode.Resting, RenderPassOps.Load);
 
         _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out deviceFramebuffer).CheckResult();
     }

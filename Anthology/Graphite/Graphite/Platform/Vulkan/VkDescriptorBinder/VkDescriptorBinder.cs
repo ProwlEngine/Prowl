@@ -121,7 +121,8 @@ internal unsafe sealed partial class VkDescriptorBinder
         if (isGraphics
             && renderPassActive
             && ReferenceEquals(program, _lastPreparedProgram)
-            && _cbOwner.ActivePropertiesEpoch == _lastPreparedEpoch)
+            && _cbOwner.ActivePropertiesEpoch == _lastPreparedEpoch
+            && TrackedEntriesUnchanged(setCount))
         {
             return false;
         }
@@ -168,6 +169,17 @@ internal unsafe sealed partial class VkDescriptorBinder
         if (firstChanged < 0) return false;
 
         _preparedFirstSet = (uint)firstChanged;
+        return true;
+    }
+
+    private bool TrackedEntriesUnchanged(uint setCount)
+    {
+        for (int i = 0; i < (int)setCount; i++)
+        {
+            if (!_setBindStates[i].EntriesUnchanged())
+                return false;
+        }
+
         return true;
     }
 

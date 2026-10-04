@@ -7,90 +7,33 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// Updates part of a texture with new data.
+    /// Updates a texture region from a pointer.
     /// </summary>
     /// <param name="texture">Texture to update.</param>
     /// <param name="source">Pointer to packed pixel data for the region.</param>
     /// <param name="sizeInBytes">Bytes to upload. Must match region size.</param>
-    /// <param name="x">Min X of the region.</param>
-    /// <param name="y">Min Y of the region.</param>
-    /// <param name="z">Min Z of the region.</param>
-    /// <param name="width">Region width in texels.</param>
-    /// <param name="height">Region height in texels.</param>
-    /// <param name="depth">Region depth in texels.</param>
-    /// <param name="mipLevel">Mip level. Under the texture's mip count.</param>
-    /// <param name="arrayLayer">Array layer. Under the texture's layer count.</param>
-    public void UpdateTexture(
-        Texture texture,
-        IntPtr source,
-        uint sizeInBytes,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer)
-    {
-        UpdateTexture_CheckParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-        UpdateTextureCore(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-        Profiler?.Record(BufferOpBin.Update, sizeInBytes);
-    }
-
-    /// <summary>
-    /// Updates part of a texture with data from a span. Arrays and Span convert implicitly.
-    /// </summary>
-    /// <typeparam name="T">Blittable pixel type.</typeparam>
-    /// <param name="texture">Texture to update.</param>
-    /// <param name="source">Span with packed pixel data for the region.</param>
-    /// <param name="x">Min X of the region.</param>
-    /// <param name="y">Min Y of the region.</param>
-    /// <param name="z">Min Z of the region.</param>
-    /// <param name="width">Region width in texels.</param>
-    /// <param name="height">Region height in texels.</param>
-    /// <param name="depth">Region depth in texels.</param>
-    /// <param name="mipLevel">Mip level. Under the texture's mip count.</param>
-    /// <param name="arrayLayer">Array layer. Under the texture's layer count.</param>
-    public unsafe void UpdateTexture<T>(
-        Texture texture,
-        ReadOnlySpan<T> source,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer) where T : unmanaged
-    {
-        fixed (void* pin = &MemoryMarshal.GetReference(source))
-        {
-            UpdateTexture(
-                texture,
-                (IntPtr)pin,
-                (uint)(sizeof(T) * source.Length),
-                x, y, z,
-                width, height, depth,
-                mipLevel, arrayLayer);
-        }
-    }
-
-    /// <summary>
-    /// Updates a texture region from a pointer.
-    /// </summary>
+    /// <param name="region">Region to write.</param>
     public void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, in TextureRegion region)
     {
-        UpdateTexture(
+        UpdateTexture_CheckParameters(
+            texture,
+            sizeInBytes, region);
+        UpdateTextureCore(
             texture,
             source,
-            sizeInBytes,
-            region.X, region.Y, region.Z,
-            region.Width, region.Height, region.Depth,
-            region.MipLevel, region.ArrayLayer);
+            sizeInBytes, region);
+        Profiler?.Record(BufferOpBin.Update, sizeInBytes);
     }
 
     /// <summary>
     /// Updates a texture region from a span.
     /// </summary>
-    public void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source, in TextureRegion region) where T : unmanaged
+    public unsafe void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source, in TextureRegion region) where T : unmanaged
     {
-        UpdateTexture(
-            texture,
-            source,
-            region.X, region.Y, region.Z,
-            region.Width, region.Height, region.Depth,
-            region.MipLevel, region.ArrayLayer);
+        fixed (void* pin = &MemoryMarshal.GetReference(source))
+        {
+            UpdateTexture(texture, (IntPtr)pin, (uint)(sizeof(T) * source.Length), region);
+        }
     }
 
     /// <summary>
@@ -167,10 +110,7 @@ public abstract partial class GraphicsDevice
     private protected abstract void UpdateTextureCore(
         Texture texture,
         IntPtr source,
-        uint sizeInBytes,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer);
+        uint sizeInBytes, in TextureRegion region);
 
     private protected abstract void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);
 }

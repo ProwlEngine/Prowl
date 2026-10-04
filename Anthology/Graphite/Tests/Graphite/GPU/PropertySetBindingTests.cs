@@ -65,7 +65,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
         float[] result = RunCompute((props, source, destination) =>
         {
-            props.SetBuffer("Params", ubo, readOnly: false);
+            props.SetUniformBuffer("Params", ubo);
             props.SetInt("Width", (int)Side);
             props.SetInt("Height", (int)Side);
             props.SetBuffer("Source", source, readOnly: false);

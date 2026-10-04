@@ -80,7 +80,7 @@ internal sealed class TestBufferPass : IPass<TestView>
 
 internal static class Desc
 {
-    public static GraphTextureDesc Color() => GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm);
+    public static GraphTextureDesc Color() => GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm);
     public static GraphBufferDesc Storage() => GraphBufferDesc.Structured(16, 4);
 }
 

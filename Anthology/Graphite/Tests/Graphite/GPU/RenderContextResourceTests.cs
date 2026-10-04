@@ -215,6 +215,7 @@ file sealed class RecordingProfiler : IProfiler
     public void BeginPass(in PassInfo pass) { }
     public void EndPass(in PassInfo pass) { }
     public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
+    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 
     public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer)
     {
@@ -244,7 +245,7 @@ file sealed class RecordingProfiler : IProfiler
 public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private static GraphTextureDesc ColorDesc(float scale = 1f)
-        => GraphTextureDesc.ViewSized(false, scale, PixelFormat.R8_G8_B8_A8_UNorm);
+        => GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, scale);
 
     [Fact]
     public void GetRenderTexture_SameHandleWithinContext_ReturnsCachedInstance()

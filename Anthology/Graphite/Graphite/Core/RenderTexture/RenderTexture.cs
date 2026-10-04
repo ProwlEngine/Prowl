@@ -71,19 +71,17 @@ public sealed class RenderTexture : IDisposable
         Framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures));
     }
 
-    private static PixelFormat? s_depthFormat;
-
     /// <summary>Depth-stencil format render textures use: D24_UNorm_S8_UInt, or D32_Float_S8_UInt when the device lacks it.</summary>
     public static PixelFormat ResolveDepthFormat(GraphicsDevice device)
     {
-        if (s_depthFormat is { } cached)
+        if (device.ResolvedDepthFormat is { } cached)
             return cached;
 
         const TextureUsage usage = TextureUsage.DepthStencil | TextureUsage.Sampled;
         PixelFormat format = device.GetPixelFormatSupport(PixelFormat.D24_UNorm_S8_UInt, TextureType.Texture2D, usage)
             ? PixelFormat.D24_UNorm_S8_UInt
             : PixelFormat.D32_Float_S8_UInt;
-        s_depthFormat = format;
+        device.ResolvedDepthFormat = format;
         return format;
     }
 

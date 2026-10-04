@@ -120,6 +120,7 @@ internal unsafe partial class VkGraphicsDevice
     /// </summary>
     internal void SubmitExecutionBatch(List<VkCommandBuffer> commandBuffers, VkFenceHandle? slotFence)
     {
+        FlushPendingInitCommands();
         int count = commandBuffers.Count;
         if (count == 0 && slotFence == null)
             return;
@@ -196,6 +197,7 @@ internal unsafe partial class VkGraphicsDevice
     /// </summary>
     internal void SubmitAndWaitTransfer(Silk.NET.Vulkan.CommandBuffer cb, QueryPool? timingPool, string bufferName, ulong bufferId)
     {
+        FlushPendingInitCommands();
         VkFenceHandle fence = GetFreeSubmissionFence();
 
         SubmitInfo si = new(sType: StructureType.SubmitInfo)
@@ -245,8 +247,10 @@ internal unsafe partial class VkGraphicsDevice
         string bufferName = "",
         bool isTransfer = false,
         PassInfo? pass = null,
-        ulong transferId = 0)
+        ulong transferId = 0,
+        bool waitAcquire = true)
     {
+        FlushPendingInitCommands();
         CheckSubmittedFences();
 
         bool useExtraFence = fence != null;
@@ -272,7 +276,7 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
-            int waitCount = GatherAcquireWaits_NoLock();
+            int waitCount = waitAcquire ? GatherAcquireWaits_NoLock() : 0;
             fixed (VkSemaphore* waits = _acquireWaitSemaphores)
             fixed (PipelineStageFlags* stages = _acquireWaitStages)
             {
@@ -345,6 +349,7 @@ internal unsafe partial class VkGraphicsDevice
             ReturnSubmissionFence(fence);
         }
 
+        List<ResourceRefCount>? retained = null;
         lock (_stagingResourcesLock)
         {
             if (_submittedStagingTextures.TryGetValue(completedCB, out VkTexture? stagingTex))
@@ -367,6 +372,8 @@ internal unsafe partial class VkGraphicsDevice
             if (_submittedSharedCommandPools.TryGetValue(completedCB, out SharedCommandPool? sharedPool))
             {
                 _submittedSharedCommandPools.Remove(completedCB);
+                retained = sharedPool.Retained.Count > 0 ? [.. sharedPool.Retained] : null;
+                sharedPool.Retained.Clear();
                 lock (_graphicsCommandPoolLock)
                 {
                     if (sharedPool.IsCached)
@@ -379,6 +386,11 @@ internal unsafe partial class VkGraphicsDevice
                     }
                 }
             }
+        }
+        if (retained != null)
+        {
+            foreach (ResourceRefCount refCount in retained)
+                refCount.Decrement();
         }
     }
 

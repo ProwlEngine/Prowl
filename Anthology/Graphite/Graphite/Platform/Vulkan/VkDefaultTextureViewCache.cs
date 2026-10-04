@@ -29,6 +29,18 @@ internal sealed class VkDefaultTextureViewCache
         }
     }
 
+    public void Remove(VkTexture texture)
+    {
+        VkTextureView? view;
+        lock (_lock)
+        {
+            if (!_views.Remove(texture, out view))
+                return;
+        }
+
+        view.Dispose();
+    }
+
     public void Dispose()
     {
         lock (_lock)

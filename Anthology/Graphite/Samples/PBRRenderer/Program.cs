@@ -55,7 +55,7 @@ internal sealed class ScenePass : RasterPass<SceneView>
     public void Advance(float dt) => _angle += dt * 0.5f;
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
+        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true), ops: TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
@@ -96,7 +96,7 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
     public override void Setup(RenderContextBuilder builder)
     {
         _sceneHandle = builder.DeclareInputTexture("Scene");
-        _bloomHalfHandle = SetTarget(builder, "BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
+        _bloomHalfHandle = SetTarget(builder, "BloomHalf", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, 0.5f));
     }
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
@@ -140,7 +140,7 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
     public override void Setup(RenderContextBuilder builder)
     {
         _bloomHalfHandle = builder.DeclareInputTexture("BloomHalf");
-        _bloomFullHandle = SetTarget(builder, "BloomFull", GraphTextureDesc.ViewSized(false, 1f));
+        _bloomFullHandle = SetTarget(builder, "BloomFull", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, 1f));
     }
 
     public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)

@@ -13,6 +13,19 @@ internal enum FramebufferMode
     GraphDepthReadOnly,
 }
 
+internal readonly record struct RenderPassOps(
+    AttachmentLoadOp ColorLoad,
+    AttachmentLoadOp DepthLoad,
+    AttachmentStoreOp ColorStore,
+    AttachmentStoreOp DepthStore)
+{
+    public const int Count = 36;
+
+    public static RenderPassOps Load => new(AttachmentLoadOp.Load, AttachmentLoadOp.Load, AttachmentStoreOp.Store, AttachmentStoreOp.Store);
+
+    public int Index => (int)ColorLoad * 12 + (int)DepthLoad * 4 + (int)ColorStore * 2 + (int)DepthStore;
+}
+
 internal abstract class VkFramebufferBase : Framebuffer
 {
     public VkFramebufferBase(
@@ -41,6 +54,6 @@ internal abstract class VkFramebufferBase : Framebuffer
     protected abstract void DestroyNative();
 
     public abstract VkFramebufferHandle CurrentFramebuffer { get; }
-    public abstract RenderPass GetRenderPass(FramebufferMode mode, bool clear);
+    public abstract RenderPass GetRenderPass(FramebufferMode mode, RenderPassOps ops);
     public abstract uint AttachmentCount { get; }
 }

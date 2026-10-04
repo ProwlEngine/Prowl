@@ -10,7 +10,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private const uint MinStagingBufferSize = 64;
-    private const uint MaxStagingBufferSize = 512;
+    private const uint MaxStagingBufferSize = 16 * 1024 * 1024;
 
     private const int SharedCommandPoolCount = 4;
     private readonly Stack<SharedCommandPool> _sharedGraphicsCommandPools = new();
@@ -107,15 +107,11 @@ internal unsafe partial class VkGraphicsDevice
         Texture texture,
         IntPtr source,
         uint sizeInBytes,
-        uint x,
-        uint y,
-        uint z,
-        uint width,
-        uint height,
-        uint depth,
-        uint mipLevel,
-        uint arrayLayer)
+        in TextureRegion region)
     {
+        uint x = region.X, y = region.Y, z = region.Z;
+        uint width = region.Width, height = region.Height, depth = region.Depth;
+        uint mipLevel = region.MipLevel, arrayLayer = region.ArrayLayer;
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
         bool isStaging = (vkTex.Usage & TextureUsage.Staging) != 0;
         if (isStaging)
@@ -140,7 +136,7 @@ internal unsafe partial class VkGraphicsDevice
         else
         {
             VkTexture stagingTex = GetFreeStagingTexture(width, height, depth, texture.Format);
-            UpdateTexture(stagingTex, source, sizeInBytes, 0, 0, 0, width, height, depth, 0, 0);
+            UpdateTexture(stagingTex, source, sizeInBytes, new TextureRegion(0, 0, 0, width, height, depth));
             SharedCommandPool pool = GetFreeCommandPool();
             Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
             VkCommandBuffer.CopyTextureCore_VkCommandBuffer(
@@ -200,7 +196,9 @@ internal unsafe partial class VkGraphicsDevice
             }
         }
 
-        uint newBufferSize = Math.Max(MinStagingBufferSize, size);
+        uint newBufferSize = size <= MaxStagingBufferSize
+            ? Math.Max(MinStagingBufferSize, System.Numerics.BitOperations.RoundUpToPowerOf2(size))
+            : size;
         VkBuffer newBuffer = (VkBuffer)ResourceFactory.CreateBuffer(
             new BufferDescription(newBufferSize, BufferUsage.Staging));
         return newBuffer;

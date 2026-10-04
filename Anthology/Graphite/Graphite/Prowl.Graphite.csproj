@@ -16,6 +16,12 @@
         <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
     </PropertyGroup>
 
+    <ItemGroup Condition="'$(ExcludeVulkan)' == 'true'">
+        <Compile Remove="Platform/Vulkan/**" />
+        <Compile Remove="Profiling/Platform/Vulkan/**" />
+        <Compile Remove="ValidationLayers/Platform/Vulkan/**" />
+    </ItemGroup>
+
     <ItemGroup>
         <!-- Silk.NET Vulkan -->
         <PackageReference Include="Silk.NET.Vulkan" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />

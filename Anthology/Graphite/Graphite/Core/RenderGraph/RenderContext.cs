@@ -24,7 +24,6 @@ public sealed class RenderContext<TView>
     private GraphResource[]? _currentPassOutputs;
     private ResourceAccess[]? _currentAccesses;
     private string? _currentScopeName;
-    private bool _scopeTransitioned;
     private TextureBarrier[]? _deferredBarriers;
     private BufferAccess _deferredBufferSrc;
     private BufferAccess _deferredBufferDst;
@@ -74,7 +73,6 @@ public sealed class RenderContext<TView>
         _currentPassOutputs = declaredOutputs;
         _currentAccesses = accesses;
         _currentScopeName = scopeName;
-        _scopeTransitioned = false;
     }
 
     internal void TransitionForAccesses(string scopeName, ResourceAccess[] accesses)
@@ -93,8 +91,8 @@ public sealed class RenderContext<TView>
 
                 RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
                 foreach (Texture color in texture.ColorTextures)
-                    AddTextureTransition(color, ResourceAccess.ToState(access.TextureInitial));
-                if (texture.DepthTexture != null && access.DepthState(access.TextureInitial) is TextureState depthTarget)
+                    AddTextureTransition(color, ResourceAccess.ToState(access.TextureUsage));
+                if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) is TextureState depthTarget)
                     AddTextureTransition(texture.DepthTexture, depthTarget);
             }
             else
@@ -120,74 +118,6 @@ public sealed class RenderContext<TView>
         CommandBufferBase.BumpGraphStateVersion();
         RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
         FlushDeferredBarriers(scopeName);
-    }
-
-    /// <summary>
-    /// Moves a declared texture to another of its declared kinds mid-pass, recording into the pass's only open command buffer.
-    /// Throws if the pass holds zero or several open command buffers; use the overload taking a command buffer then.
-    /// </summary>
-    public void Transition(TextureHandle handle, TextureUsageKind usage)
-    {
-        if (_currentAccesses == null)
-            throw new InvalidOperationException("Transition is only valid while a pass is rendering.");
-        if (_pendingCommandBuffers.Count != 1)
-        {
-            throw new InvalidOperationException(
-                $"Pass '{_currentScopeName}' holds {_pendingCommandBuffers.Count} open command buffers, so the transition target is ambiguous. Use Transition(cmd, handle, usage).");
-        }
-
-        Transition(_pendingCommandBuffers[0], handle, usage);
-    }
-
-    /// <summary>
-    /// Moves a declared texture to another of its declared kinds mid-pass, recording the barrier into cmd.
-    /// After a transition the pass must submit its command buffers in the order it rented them.
-    /// </summary>
-    public void Transition(CommandBuffer cmd, TextureHandle handle, TextureUsageKind usage)
-    {
-        ArgumentNullException.ThrowIfNull(cmd);
-        if (!handle.IsValid)
-            throw new ArgumentException("Cannot transition a default texture handle.", nameof(handle));
-        if (_currentAccesses == null)
-            throw new InvalidOperationException("Transition is only valid while a pass is rendering.");
-        if (!_pendingCommandBuffers.Contains(cmd))
-            throw new InvalidOperationException("Transition needs a command buffer rented by the running pass and not yet submitted.");
-
-        ResourceAccess access = FindTextureAccess(handle.Id);
-        if (usage == 0 || (usage & (usage - 1)) != 0 || (access.TextureUsage & usage) == 0)
-        {
-            throw new ArgumentException(
-                $"Pass '{_currentScopeName}' declared '{RenderResourceID.ToString(handle.Id)}' as {access.TextureUsage}; cannot transition it to {usage}.",
-                nameof(usage));
-        }
-
-        RenderTexture texture = GetRenderTexture(handle);
-        _barriers.Clear();
-        foreach (Texture color in texture.ColorTextures)
-            AddTextureTransition(color, ResourceAccess.ToState(usage));
-        if (texture.DepthTexture != null && access.DepthUsage == null && access.DepthState(usage) is TextureState depthTarget)
-            AddTextureTransition(texture.DepthTexture, depthTarget);
-
-        _scopeTransitioned = true;
-        if (_barriers.Count > 0)
-            cmd.RecordBarriers(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_barriers), BufferAccess.None, BufferAccess.None);
-        CommitBarrierStates();
-    }
-
-    private ResourceAccess FindTextureAccess(RenderResourceID id)
-    {
-        ResourceAccess? found = null;
-        foreach (ResourceAccess access in _currentAccesses!)
-        {
-            if (!access.IsTexture || access.Id != id)
-                continue;
-            if (access.IsOutput)
-                return access;
-            found ??= access;
-        }
-
-        return found ?? throw new InvalidOperationException(
-            $"Pass '{_currentScopeName}' uses texture '{RenderResourceID.ToString(id)}' without declaring it in Setup.");
     }
 
     private static bool HasTextureOutput(ResourceAccess[] accesses, RenderResourceID id)
@@ -350,12 +280,6 @@ public sealed class RenderContext<TView>
     /// <param name="cmd">Command buffer to submit.</param>
     public void SubmitCommandBuffer(CommandBuffer cmd)
     {
-        if (_scopeTransitioned && _pendingCommandBuffers.Count > 0 && !ReferenceEquals(_pendingCommandBuffers[0], cmd))
-        {
-            throw new InvalidOperationException(
-                $"Pass '{_currentScopeName}' called Transition, so its command buffers must be submitted in the order they were rented.");
-        }
-
         if (_barrierHost != null)
         {
             if (!ReferenceEquals(_barrierHost, cmd))

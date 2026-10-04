@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 using Silk.NET.Vulkan;
 
 namespace Prowl.Graphite.Vk;
@@ -9,6 +11,8 @@ internal sealed unsafe class SharedCommandPool
     private readonly Silk.NET.Vulkan.CommandBuffer _cb;
 
     public bool IsCached { get; }
+
+    public List<ResourceRefCount> Retained { get; } = [];
 
     public SharedCommandPool(VkGraphicsDevice gd, bool isCached)
     {
@@ -40,10 +44,10 @@ internal sealed unsafe class SharedCommandPool
         return _cb;
     }
 
-    public void EndAndSubmit(Silk.NET.Vulkan.CommandBuffer cb)
+    public void EndAndSubmit(Silk.NET.Vulkan.CommandBuffer cb, bool waitAcquire = true)
     {
         _gd.Vk.EndCommandBuffer(cb).CheckResult();
-        _gd.SubmitCommandBuffer(null, cb, null);
+        _gd.SubmitCommandBuffer(null, cb, null, waitAcquire: waitAcquire);
         lock (_gd._stagingResourcesLock)
         {
             _gd._submittedSharedCommandPools.Add(cb, this);

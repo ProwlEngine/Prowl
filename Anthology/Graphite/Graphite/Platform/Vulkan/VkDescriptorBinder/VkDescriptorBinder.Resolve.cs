@@ -106,20 +106,17 @@ internal unsafe sealed partial class VkDescriptorBinder
         missing = false;
         PropertyEntry? uboEntry = FindProperty(elem.Name, PropertyEntryKind.Buffer);
 
-        // A read-only buffer is bound with its existing contents; any scalar writes are ignored.
-        if (uboEntry is { ReadOnly: true })
-            return uboEntry.Buffer!.Value;
-
-        // Loose uniform fields go into the explicit writable buffer if bound, else a per-draw transient.
-        if (elem.UniformFields is { Length: > 0 })
+        if (uboEntry is { BackedBlock: true } && elem.UniformFields is { Length: > 0 })
         {
-            return GetOrBuildImplicitUbo(
-                elem.UniformFields, meta.UniformBlockSlots[elemIndex], meta.UniformBlockSizes[elemIndex], uboEntry?.Buffer);
+            return GetOrBuildBackedUbo(
+                elem.Name, elem.UniformFields, meta.UniformBlockSlots[elemIndex], meta.UniformBlockSizes[elemIndex], uboEntry.Buffer!.Value);
         }
 
-        // No loose uniform fields declared: bind the explicit buffer directly.
         if (uboEntry != null)
             return uboEntry.Buffer!.Value;
+
+        if (elem.UniformFields is { Length: > 0 })
+            return GetOrBuildTransientUbo(elem.UniformFields, meta.UniformBlockSlots[elemIndex], meta.UniformBlockSizes[elemIndex]);
 
         missing = true;
         return AllocateExecutionTransient(16);
@@ -176,13 +173,11 @@ internal unsafe sealed partial class VkDescriptorBinder
         return range;
     }
 
-    // Memoized the same way as the transient path, keyed on the explicit buffer's identity, offset and
-    // content version plus each field's source entry and version. A hit skips every write for the draw.
-    private DeviceBufferRange GetOrBuildImplicitUbo(
-        UniformBlockField[] fields, int blockSlot, uint blockSize, DeviceBufferRange? writableTarget)
+    private DeviceBufferRange GetOrBuildBackedUbo(
+        PropertyID name, UniformBlockField[] fields, int blockSlot, uint blockSize, DeviceBufferRange target)
     {
-        if (writableTarget is not { } target)
-            return GetOrBuildTransientUbo(fields, blockSlot, blockSize);
+        if (GraphicsDevice.ValidationEnabled)
+            ValidateBackedUbo(name, blockSize, target);
 
         VkUniformArena.Block block = CurrentExecution().UniformArena.GetBlock(blockSlot, fields, blockSize);
 
@@ -190,6 +185,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             return target;
 
         Span<byte> scratch = block.Scratch.AsSpan(0, (int)blockSize);
+        scratch.Clear();
 
         for (int i = 0; i < fields.Length; i++)
         {
@@ -198,45 +194,28 @@ internal unsafe sealed partial class VkDescriptorBinder
             block.ExplicitSources[i] = uEntry;
             block.ExplicitVersions[i] = uEntry?.Version ?? 0;
 
-            if (uEntry == null)
-                continue;
-
-            ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
-                ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
-                (int)field.Size);
-            src.CopyTo(scratch.Slice((int)field.Offset, (int)field.Size));
+            if (uEntry != null)
+                CopyUniform(uEntry, scratch.Slice((int)field.Offset, (int)field.Size));
         }
 
-        // One write per byte-contiguous run of set fields, so gaps left by unset fields stay intact.
         fixed (byte* scratchPtr = block.Scratch)
-        {
-            int runStart = -1;
-            for (int i = 0; i < fields.Length; i++)
-            {
-                if (block.ExplicitSources[i] == null)
-                    continue;
-
-                if (runStart < 0)
-                    runStart = i;
-
-                if (i + 1 < fields.Length
-                    && block.ExplicitSources[i + 1] != null
-                    && fields[i].Offset + fields[i].Size == fields[i + 1].Offset)
-                {
-                    continue;
-                }
-
-                uint start = fields[runStart].Offset;
-                uint length = fields[i].Offset + fields[i].Size - start;
-                _gd.UpdateBuffer(target.Buffer, target.Offset + start, (IntPtr)(scratchPtr + start), length);
-                runStart = -1;
-            }
-        }
+            _gd.UpdateBuffer(target.Buffer, target.Offset, (IntPtr)scratchPtr, blockSize);
 
         block.ExplicitBuffer = target.Buffer;
         block.ExplicitOffset = target.Offset;
         block.ExplicitContentVersion = target.Buffer.ContentVersion;
         return target;
+    }
+
+    private void ValidateBackedUbo(PropertyID name, uint blockSize, DeviceBufferRange target)
+    {
+        string label = PropertyID.ToString(name) ?? name.ToString();
+        if ((target.Buffer.Usage & BufferUsage.UniformBuffer) == 0)
+            throw new RenderException($"Uniform block '{label}' is backed by a buffer without {nameof(BufferUsage)}.{nameof(BufferUsage.UniformBuffer)}.");
+        if ((ulong)target.Offset + blockSize > target.Buffer.SizeInBytes || target.SizeInBytes < blockSize)
+            throw new RenderException($"Uniform block '{label}' needs {blockSize} bytes at offset {target.Offset}, which does not fit the bound range or buffer.");
+        if (target.Offset % _gd.UniformBufferMinOffsetAlignment != 0)
+            throw new RenderException($"Uniform block '{label}' is backed at offset {target.Offset}, which is not a multiple of the device's uniform offset alignment {_gd.UniformBufferMinOffsetAlignment}.");
     }
 
     private bool ExplicitTargetUnchanged(UniformBlockField[] fields, VkUniformArena.Block block, DeviceBufferRange target)
@@ -310,10 +289,26 @@ internal unsafe sealed partial class VkDescriptorBinder
             if (uEntry == null)
                 continue;
 
-            ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
-                ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
-                (int)field.Size);
-            src.CopyTo(dst.Slice((int)field.Offset, (int)field.Size));
+            CopyUniform(uEntry, dst.Slice((int)field.Offset, (int)field.Size));
         }
     }
+
+    private static void CopyUniform(PropertyEntry entry, Span<byte> dst)
+    {
+        int count = Math.Min(dst.Length, (int)UniformSize(entry.UniformType));
+        MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), count).CopyTo(dst);
+        dst.Slice(count).Clear();
+    }
+
+    private static uint UniformSize(UniformScalarType type) => type switch
+    {
+        UniformScalarType.Float1 or UniformScalarType.Int1 => 4,
+        UniformScalarType.Float2 or UniformScalarType.Int2 or UniformScalarType.Double1 => 8,
+        UniformScalarType.Float3 or UniformScalarType.Int3 => 12,
+        UniformScalarType.Float4 or UniformScalarType.Int4 or UniformScalarType.Double2 => 16,
+        UniformScalarType.Double3 => 24,
+        UniformScalarType.Double4 => 32,
+        UniformScalarType.Float4x4 => 64,
+        _ => 128,
+    };
 }

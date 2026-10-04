@@ -38,7 +38,7 @@ file sealed class ClearingRasterPass : RasterPass<RasterView>
     public override string Name => "ClearRaster";
 
     public override void Setup(RenderContextBuilder builder)
-        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
+        => SetTarget(builder, _id, GraphTextureDesc.ViewSized(PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(_clear));
 
     public override void Render(RenderContext<RasterView> context, CommandBuffer cmd)
     {

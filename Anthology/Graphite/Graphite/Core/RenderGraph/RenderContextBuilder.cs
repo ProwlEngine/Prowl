@@ -24,10 +24,9 @@ public sealed class RenderContextBuilder
     public TextureHandle DeclareInputTexture(
         RenderResourceID id,
         TextureUsageKind usage = TextureUsageKind.Sampled,
-        TextureUsageKind? initial = null,
         TextureUsageKind? depthUsage = null)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, initial, depthUsage, isOutput: false));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: false));
         Inputs.Add(id);
         return new TextureHandle(id);
     }
@@ -42,10 +41,9 @@ public sealed class RenderContextBuilder
         int history = 0,
         TargetLoadStoreOps? ops = null,
         TextureUsageKind usage = TextureUsageKind.Attachment,
-        TextureUsageKind? initial = null,
         TextureUsageKind? depthUsage = null)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, initial, depthUsage, isOutput: true));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true));
         Outputs.Add(new GraphTextureResource(id, desc, history, ops));
         return new TextureHandle(id);
     }
@@ -57,10 +55,9 @@ public sealed class RenderContextBuilder
         RenderResourceID id,
         RenderTexture existing,
         TextureUsageKind usage = TextureUsageKind.Attachment,
-        TextureUsageKind? initial = null,
         TextureUsageKind? depthUsage = null)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, initial, depthUsage, isOutput: true));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true));
         Outputs.Add(new GraphImportedTextureResource(id, existing));
         return new TextureHandle(id);
     }
@@ -91,13 +88,12 @@ public sealed class RenderContextBuilder
     /// </summary>
     public TextureHandle DeclareViewTarget(
         TargetLoadStoreOps? ops = null,
-        TextureUsageKind usage = TextureUsageKind.Attachment,
-        TextureUsageKind? initial = null)
+        TextureUsageKind usage = TextureUsageKind.Attachment)
     {
         if ((usage & ~(TextureUsageKind.Attachment | TextureUsageKind.TransferDst)) != 0)
             throw new ArgumentException($"The view target only supports Attachment and TransferDst, not {usage}.", nameof(usage));
 
-        Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, initial, null, isOutput: true));
+        Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, null, isOutput: true));
         Outputs.Add(new GraphViewTargetResource(ops));
         return new TextureHandle(GraphViewTargetResource.ViewTargetId);
     }

@@ -19,6 +19,24 @@ public class RenderGraphSolverTests
         => graph.OrderedPasses.Select(n => n.Pass.Name).ToList();
 
     [Fact]
+    public void Build_TwoWritersWithDifferentDescriptions_Throws()
+    {
+        var a = new TestPass("A", outputs: new[] { ("conflict_shared", Desc.Color()) });
+        var b = new TestPass("B", outputs: new[] { ("conflict_shared", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true)) });
+
+        Assert.Throws<InvalidOperationException>(() => Build(a, b));
+    }
+
+    [Fact]
+    public void Build_TwoWritersWithSameDescription_Succeeds()
+    {
+        var a = new TestPass("A", outputs: new[] { ("agree_shared", Desc.Color()) });
+        var b = new TestPass("B", outputs: new[] { ("agree_shared", Desc.Color()) });
+
+        Assert.Equal(2, Build(a, b).OrderedPasses.Count);
+    }
+
+    [Fact]
     public void Build_OrdersReaderAfterWriter_RegardlessOfInsertionOrder()
     {
         var writer = new TestPass("Writer",

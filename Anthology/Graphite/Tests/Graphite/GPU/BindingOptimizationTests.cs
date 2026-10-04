@@ -216,6 +216,95 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         Assert.Equal(new Color(0f, 1f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
     }
 
+    [Fact]
+    public void MutatedVertexSource_OneRecording_SecondDrawBindsNewBuffer()
+    {
+        const uint size = 50;
+        const uint norm = 1000;
+
+        GraphicsProgram program = CreateUIntColorPointProgram();
+
+        UIntPointVertex vertexA = new() { Position = new(10.5f, 10.5f), Color = new Int4 { X = (int)norm } };
+        UIntPointVertex vertexB = new() { Position = new(40.5f, 40.5f), Color = new Int4 { Y = (int)norm } };
+        DeviceBuffer bufferB = CreatePointVertexBuffer(vertexB);
+
+        VertexSource source = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexA));
+
+        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
+
+        PropertySet props = new();
+        props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
+        props.SetInt("ColorNormalizationFactor", (int)norm);
+
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.SetFramebuffer(fb);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFullViewport();
+            cl.SetShader(program);
+            cl.SetProperties(props);
+            cl.SetVertexSource(source);
+            cl.Draw(1);
+            source.SetBuffer("POSITION", bufferB);
+            cl.Draw(1);
+            context.SubmitCommandBuffer(cl);
+        });
+
+        Texture readback = GetReadback(target);
+        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        Color pixelB = map[40, FlipY(40, size)];
+        GD.Unmap(readback);
+
+        Assert.Equal(new Color(0f, 1f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
+    }
+
+    [Fact]
+    public void InPlacePropertyChange_OneRenderPass_PickedUpWithoutReapply()
+    {
+        const uint size = 50;
+        const uint norm = 1000;
+
+        GraphicsProgram program = CreateUIntColorPointProgram();
+
+        UIntPointVertex vertexA = new() { Position = new(10.5f, 10.5f), Color = new Int4 { X = (int)norm } };
+        UIntPointVertex vertexB = new() { Position = new(40.5f, 40.5f), Color = new Int4 { Y = (int)norm } };
+
+        VertexSource sourceA = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexA));
+        VertexSource sourceB = new VertexSource(PrimitiveTopology.PointList).SetBuffer("POSITION", CreatePointVertexBuffer(vertexB));
+
+        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
+
+        PropertySet props = new();
+        props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
+        props.SetInt("ColorNormalizationFactor", (int)norm);
+
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.SetFramebuffer(fb);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFullViewport();
+            cl.SetShader(program);
+            cl.SetProperties(props);
+            cl.SetVertexSource(sourceA);
+            cl.Draw(1);
+            props.SetInt("ColorNormalizationFactor", (int)norm * 2);
+            cl.SetVertexSource(sourceB);
+            cl.Draw(1);
+            context.SubmitCommandBuffer(cl);
+        });
+
+        Texture readback = GetReadback(target);
+        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        Color pixelA = map[10, FlipY(10, size)];
+        Color pixelB = map[40, FlipY(40, size)];
+        GD.Unmap(readback);
+
+        Assert.Equal(new Color(1f, 0f, 0f, 1f), pixelA, ColorFuzzyComparer.Instance);
+        Assert.Equal(new Color(0f, 0.5f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
+    }
+
     // ---- Narrowed bind emission: skip-when-unchanged, firstSet narrowing, program-change invalidation ----
 
     [Fact]

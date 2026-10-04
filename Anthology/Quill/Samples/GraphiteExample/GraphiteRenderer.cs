@@ -267,7 +267,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         }
 
         public void Setup(RenderContextBuilder builder)
-            => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.ViewSized(false, 1f, TargetFormat));
+            => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.ViewSized(TargetFormat));
 
         public void Render(RenderContext<CanvasView> context)
         {

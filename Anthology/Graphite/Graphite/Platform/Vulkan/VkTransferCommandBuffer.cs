@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 
 using Silk.NET.Vulkan;
 
@@ -13,6 +16,8 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
     private readonly CommandPool _pool;
     private Silk.NET.Vulkan.CommandBuffer _cb;
     private QueryPool? _pendingTimingPool;
+    private readonly List<VkBuffer> _stagingInUse = [];
+    private readonly List<VkBuffer> _stagingFree = [];
 
     public override GraphicsDevice Device => _gd;
 
@@ -40,6 +45,8 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
 
     public override void Begin()
     {
+        _stagingFree.AddRange(_stagingInUse);
+        _stagingInUse.Clear();
         _gd.Vk.ResetCommandBuffer(_cb, 0).CheckResult();
 
         CommandBufferBeginInfo beginInfo = new(sType: StructureType.CommandBufferBeginInfo)
@@ -74,18 +81,128 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
 
     private protected override void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)
     {
-        _gd.UpdateBuffer(buffer, bufferOffsetInBytes, source, sizeInBytes);
+        VkBuffer staging = RentStaging(source, sizeInBytes);
+
+        MemoryBarrier barrier = new()
+        {
+            SType = StructureType.MemoryBarrier,
+            SrcAccessMask = AccessFlags.MemoryReadBit | AccessFlags.MemoryWriteBit,
+            DstAccessMask = AccessFlags.TransferWriteBit
+        };
+        _gd.Vk.CmdPipelineBarrier(_cb, PipelineStageFlags.AllCommandsBit, PipelineStageFlags.TransferBit, 0, 1, in barrier, 0, null, 0, null);
+
+        CopyBufferCore(staging, 0, buffer, bufferOffsetInBytes, sizeInBytes);
+        _gd.Profiler?.Record(BufferOpBin.Update, sizeInBytes);
     }
 
     private protected override void UpdateTextureCore(
         Texture texture,
         IntPtr source,
         uint sizeInBytes,
+        in TextureRegion region)
+    {
+        uint x = region.X, y = region.Y, z = region.Z;
+        uint width = region.Width, height = region.Height, depth = region.Depth;
+        uint mipLevel = region.MipLevel, arrayLayer = region.ArrayLayer;
+        VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
+        VkBuffer staging = RentStaging(source, sizeInBytes);
+        if (vkTex.IsStaging)
+        {
+            CopyToStagingTexture(staging, vkTex, x, y, z, width, height, depth, mipLevel, arrayLayer);
+            _gd.Profiler?.Record(BufferOpBin.Update, sizeInBytes);
+            return;
+        }
+
+        ImageLayout layout = VkBarriers.CurrentLayout(this, vkTex);
+
+        VkBarriers.Transition(_gd, _cb, vkTex, layout, ImageLayout.TransferDstOptimal, mipLevel, 1, arrayLayer, 1);
+
+        BufferImageCopy copy = new()
+        {
+            BufferOffset = 0,
+            BufferRowLength = 0,
+            BufferImageHeight = 0,
+            ImageSubresource = new ImageSubresourceLayers
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                MipLevel = mipLevel,
+                BaseArrayLayer = arrayLayer,
+                LayerCount = 1
+            },
+            ImageOffset = new Offset3D { X = (int)x, Y = (int)y, Z = (int)z },
+            ImageExtent = new Extent3D { Width = width, Height = height, Depth = depth }
+        };
+        _gd.Vk.CmdCopyBufferToImage(_cb, staging.DeviceBuffer, vkTex.OptimalDeviceImage, ImageLayout.TransferDstOptimal, 1, in copy);
+
+        VkBarriers.Transition(_gd, _cb, vkTex, ImageLayout.TransferDstOptimal, layout, mipLevel, 1, arrayLayer, 1);
+        _gd.Profiler?.Record(BufferOpBin.Update, sizeInBytes);
+    }
+
+    private void CopyToStagingTexture(
+        VkBuffer staging, VkTexture texture,
         uint x, uint y, uint z,
         uint width, uint height, uint depth,
         uint mipLevel, uint arrayLayer)
     {
-        _gd.UpdateTexture(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
+        PixelFormat format = texture.Format;
+        SubresourceLayout layout = texture.GetSubresourceLayout(texture.CalculateSubresource(mipLevel, arrayLayer));
+        uint blockSize = FormatHelpers.IsCompressedFormat(format) ? 4u : 1u;
+        uint elementBytes = blockSize > 1 ? FormatHelpers.GetBlockSizeInBytes(format) : format.GetSizeInBytes();
+        uint rowBytes = FormatHelpers.GetRowPitch(width, format);
+        uint rows = FormatHelpers.GetNumRows(height, format);
+
+        BufferCopy[] regions = new BufferCopy[rows * depth];
+        for (uint slice = 0; slice < depth; slice++)
+        {
+            for (uint row = 0; row < rows; row++)
+            {
+                regions[slice * rows + row] = new BufferCopy
+                {
+                    SrcOffset = (slice * rows + row) * (ulong)rowBytes,
+                    DstOffset = layout.Offset
+                        + (z + slice) * layout.DepthPitch
+                        + (y / blockSize + row) * layout.RowPitch
+                        + x / blockSize * elementBytes,
+                    Size = rowBytes
+                };
+            }
+        }
+
+        MemoryBarrier barrier = new()
+        {
+            SType = StructureType.MemoryBarrier,
+            SrcAccessMask = AccessFlags.MemoryReadBit | AccessFlags.MemoryWriteBit,
+            DstAccessMask = AccessFlags.TransferWriteBit
+        };
+        _gd.Vk.CmdPipelineBarrier(_cb, PipelineStageFlags.AllCommandsBit, PipelineStageFlags.TransferBit, 0, 1, in barrier, 0, null, 0, null);
+
+        fixed (BufferCopy* regionsPtr = regions)
+            _gd.Vk.CmdCopyBuffer(_cb, staging.DeviceBuffer, texture.StagingBuffer, (uint)regions.Length, regionsPtr);
+
+        barrier.SrcAccessMask = AccessFlags.TransferWriteBit;
+        barrier.DstAccessMask = AccessFlags.TransferReadBit | AccessFlags.HostReadBit;
+        _gd.Vk.CmdPipelineBarrier(_cb, PipelineStageFlags.TransferBit, PipelineStageFlags.TransferBit | PipelineStageFlags.HostBit, 0, 1, in barrier, 0, null, 0, null);
+    }
+
+    private VkBuffer RentStaging(IntPtr source, uint sizeInBytes)
+    {
+        VkBuffer? staging = null;
+        for (int i = 0; i < _stagingFree.Count; i++)
+        {
+            if (_stagingFree[i].SizeInBytes >= sizeInBytes)
+            {
+                staging = _stagingFree[i];
+                _stagingFree.RemoveAt(i);
+                break;
+            }
+        }
+
+        staging ??= (VkBuffer)_gd.ResourceFactory.CreateBuffer(
+            new BufferDescription(Math.Max(64u, BitOperations.RoundUpToPowerOf2(sizeInBytes)), BufferUsage.Staging));
+        _stagingInUse.Add(staging);
+
+        Unsafe.CopyBlock(staging.Memory.BlockMappedPointer, source.ToPointer(), sizeInBytes);
+        return staging;
     }
 
     private protected override void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
@@ -154,6 +271,13 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
 
     private protected override void DisposeCore()
     {
+        foreach (VkBuffer staging in _stagingInUse)
+            staging.Dispose();
+        foreach (VkBuffer staging in _stagingFree)
+            staging.Dispose();
+        _stagingInUse.Clear();
+        _stagingFree.Clear();
+
         _gd.Vk.DestroyCommandPool(_gd.Device, _pool, null);
     }
 }

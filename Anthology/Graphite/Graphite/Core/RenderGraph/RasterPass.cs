@@ -58,6 +58,7 @@ public abstract class RasterPass<TView> : IPass<TView>
         TargetLoadStoreOps ops = context.GetTargetOps(_target.Id);
 
         cmd.SetFramebuffer(target.Framebuffer);
+        cmd.SetAttachmentOps(ops);
 
         if (ops.Color.Load == LoadAction.Clear)
         {

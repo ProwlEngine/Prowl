@@ -84,7 +84,7 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
         else
         {
             // Round up to the nearest multiple of bufferImageGranularity.
-            size = ((size / _bufferImageGranularity) + 1) * _bufferImageGranularity;
+            size = (size + _bufferImageGranularity - 1) / _bufferImageGranularity * _bufferImageGranularity;
         }
         _totalAllocatedBytes += size;
 

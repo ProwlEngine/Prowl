@@ -145,7 +145,7 @@ public class RenderPipeline<TView> : IDisposable
                     foreach (RenderResourceID output in node.Outputs)
                     {
                         context.ResolveForProfiler(output, out RenderTexture? texture, out DeviceBuffer? buffer);
-                        profiler.RecordPassRead(passInfo, output, texture, buffer);
+                        profiler.RecordPassWrite(passInfo, output, texture, buffer);
                     }
                 }
 

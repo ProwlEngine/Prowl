@@ -65,7 +65,7 @@ public class TextureGraphite : IDisposable
     public unsafe void SetTextureData(GraphicsDevice device, IntRect rect, byte[] data)
     {
         fixed (byte* dataPtr = data)
-            device.UpdateTexture(Texture, (nint)dataPtr, (uint)data.Length, (uint)rect.Min.X, (uint)rect.Min.Y, 0, (uint)rect.Size.X, (uint)rect.Size.Y, 1, 0, 0);
+            device.UpdateTexture(Texture, (nint)dataPtr, (uint)data.Length, new TextureRegion((uint)rect.Min.X, (uint)rect.Min.Y, 0, (uint)rect.Size.X, (uint)rect.Size.Y, 1));
     }
 
 
