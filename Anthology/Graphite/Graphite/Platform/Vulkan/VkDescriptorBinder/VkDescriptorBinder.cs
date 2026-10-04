@@ -76,6 +76,7 @@ internal unsafe sealed partial class VkDescriptorBinder
     private SetBindState[] _setBindStates = Array.Empty<SetBindState>();
     private ShaderProgram _bindCacheProgram;
     private SetBindState? _trackState;
+    private byte[] _uboScratch = Array.Empty<byte>();
 
     // Set count and first-changed-set index from the most recent Prepare() call that returned true;
     // EmitBind() reads them back so callers don't have to re-derive them from the program.

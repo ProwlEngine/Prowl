@@ -8,36 +8,6 @@ namespace Prowl.Graphite.Vk;
 /// </summary>
 internal unsafe sealed class VkUniformArena
 {
-    internal sealed class Block
-    {
-        public ulong ExecutionId;
-        public DeviceBufferRange Range;
-        public readonly UniformBlockField[] Fields;
-        public readonly PropertyEntry?[] Sources;
-        public readonly uint[] Versions;
-        public byte[] Packed;
-        public byte[] Scratch;
-
-        public DeviceBuffer? ExplicitBuffer;
-        public uint ExplicitOffset;
-        public uint ExplicitContentVersion;
-        public readonly PropertyEntry?[] ExplicitSources;
-        public readonly uint[] ExplicitVersions;
-
-        public Block(UniformBlockField[] fields, uint size)
-        {
-            Fields = fields;
-            Sources = new PropertyEntry?[fields.Length];
-            Versions = new uint[fields.Length];
-            Packed = new byte[size];
-            Scratch = new byte[size];
-            ExplicitSources = new PropertyEntry?[fields.Length];
-            ExplicitVersions = new uint[fields.Length];
-        }
-
-        public void CommitScratch() => (Packed, Scratch) = (Scratch, Packed);
-    }
-
     private readonly VkGraphicsDevice _gd;
     private readonly VkBuffer _primary;
     private readonly byte* _primaryMapped;
@@ -47,8 +17,6 @@ internal unsafe sealed class VkUniformArena
     private byte* _activeMapped;
     private uint _activeSize;
     private uint _head;
-
-    private Block?[] _blocks = Array.Empty<Block>();
 
     public VkUniformArena(VkGraphicsDevice gd, VkBuffer primary)
     {
@@ -106,20 +74,6 @@ internal unsafe sealed class VkUniformArena
         _head = alignedHead + sizeInBytes;
         range = new DeviceBufferRange(_active, alignedHead, sizeInBytes);
         return new Span<byte>(_activeMapped + alignedHead, (int)sizeInBytes);
-    }
-
-    // Slots are recycled when a program is disposed, so a block only belongs to the caller if it was
-    // built for this exact field array.
-    public Block GetBlock(int slot, UniformBlockField[] fields, uint size)
-    {
-        if (_blocks.Length <= slot)
-            Array.Resize(ref _blocks, Math.Max(slot + 1, _blocks.Length * 2));
-
-        Block? block = _blocks[slot];
-        if (block == null || !ReferenceEquals(block.Fields, fields))
-            _blocks[slot] = block = new Block(fields, size);
-
-        return block;
     }
 
     private void Grow(uint sizeInBytes)
