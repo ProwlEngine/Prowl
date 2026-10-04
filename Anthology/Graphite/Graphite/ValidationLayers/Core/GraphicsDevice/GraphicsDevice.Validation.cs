@@ -12,21 +12,6 @@ public abstract partial class GraphicsDevice
         ValidationEnabled = options.GraphiteValidation;
     }
 
-    private static void SubmitAndWait_CheckEnded(TransferCommandBuffer commandBuffer)
-    {
-        if (!ValidationEnabled)
-            return;
-
-        if (commandBuffer == null)
-        {
-            throw new RenderException("Cannot submit a null TransferCommandBuffer.");
-        }
-        if (!commandBuffer.HasEnded)
-        {
-            throw new RenderException("TransferCommandBuffer.End() must be called before submitting.");
-        }
-    }
-
     private void SyncToVerticalBlank_CheckMainSwapchain()
     {
         if (!ValidationEnabled)

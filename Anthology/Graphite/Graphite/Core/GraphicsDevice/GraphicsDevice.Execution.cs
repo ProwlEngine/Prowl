@@ -181,27 +181,15 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Submits a recorded transfer command buffer now and blocks till the GPU finishes it. Not tied to the execution ring or fences at all. For one-off transfer work like readback or streaming uploads.
+    /// Records transfer work into a pooled command buffer and submits it now, outside any graph. Only update, copy and mipmap commands are allowed. Wait on the result or drop it for fire-and-forget uploads.
     /// </summary>
-    /// <param name="commandBuffer">Recorded transfer command buffer, already Ended.</param>
-    public void SubmitAndWait(TransferCommandBuffer commandBuffer)
+    /// <param name="record">Records the work. Runs synchronously on the calling thread.</param>
+    /// <param name="name">Optional debug name.</param>
+    /// <returns>Handle that completes when the GPU is done.</returns>
+    public GpuSubmission Record(System.Action<CommandBuffer> record, string name = "")
     {
-        SubmitAndWait_CheckEnded(commandBuffer);
-        SubmitAndWaitCore(commandBuffer);
-
-        Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: true);
-    }
-
-    /// <summary>
-    /// Submits a recorded transfer command buffer without blocking the calling thread. Not tied to the execution ring or fences.
-    /// </summary>
-    /// <param name="commandBuffer">Recorded transfer command buffer, already Ended.</param>
-    internal void SubmitTransfer(TransferCommandBuffer commandBuffer)
-    {
-        SubmitAndWait_CheckEnded(commandBuffer);
-        SubmitTransferCore(commandBuffer);
-
-        Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: true);
+        ValidationHelpers.RequireNotNull(record, nameof(record), nameof(Record));
+        return RecordCore(record, name);
     }
 
     /// <summary>
@@ -251,6 +239,5 @@ public abstract partial class GraphicsDevice
     private protected abstract bool IsExecutionCompleteCore(ExecutionTask task);
     private protected abstract bool WaitForExecutionCore(ExecutionTask task, ulong nanosecondTimeout);
     private protected abstract void WaitForIdleCore();
-    private protected abstract void SubmitAndWaitCore(TransferCommandBuffer commandBuffer);
-    private protected abstract void SubmitTransferCore(TransferCommandBuffer commandBuffer);
+    private protected abstract GpuSubmission RecordCore(System.Action<CommandBuffer> record, string name);
 }

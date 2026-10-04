@@ -49,7 +49,7 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
         => PassWrites.Add((pass, resource, texture, buffer));
 
-    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer) { }
+    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture) { }
 
     public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) => Draws.Add(info);
     public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
@@ -255,7 +255,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void SubmitTransfer_RecordsTransferSubmit()
+    public void Record_RecordsTransferSubmit()
     {
         RecordingProfiler profiler = new();
         using GraphicsDevice device = CreateProfiledDevice(profiler);
@@ -263,11 +263,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
 
-        TransferCommandBuffer transfer = device.ResourceFactory.CreateTransferCommandBuffer();
-        transfer.Begin();
-        transfer.CopyBuffer(source, 0, destination, 0, 256);
-        transfer.End();
-        device.SubmitAndWait(transfer);
+        device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
 
         Assert.Contains(profiler.Submits, s => s.IsTransfer);
     }
@@ -355,7 +351,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void SubmitAndWaitTransfer_WithTiming_RecordsExecutionTime()
+    public void Record_WithTiming_RecordsExecutionTime()
     {
         RecordingProfiler profiler = new() { RequestGPUStatistics = true };
         using GraphicsDevice device = CreateProfiledDevice(profiler);
@@ -363,11 +359,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
         DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
 
-        TransferCommandBuffer transfer = device.ResourceFactory.CreateTransferCommandBuffer();
-        transfer.Begin();
-        transfer.CopyBuffer(source, 0, destination, 0, 256);
-        transfer.End();
-        device.SubmitAndWait(transfer);
+        device.Record(transfer => transfer.CopyBuffer(source, 0, destination, 0, 256)).Wait();
 
         (CommandBufferInfo _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
         Assert.True(isTransfer);

@@ -179,17 +179,15 @@ public class RenderPipeline<TView> : IDisposable
             return;
 
         Framebuffer[] outputs = framebuffers.ToArray();
-        TransferCommandBuffer transfer = context.GetTransferCommandBuffer($"{node.Pass.Name} Capture");
+        CommandBuffer capture = context.GetCommandBuffer($"{node.Pass.Name} Capture");
         try
         {
-            profiler.Capture(passInfo, outputs, transfer);
+            profiler.Capture(passInfo, outputs, capture);
         }
         finally
         {
-            if (!transfer.HasEnded)
-                transfer.End();
+            context.SubmitCommandBuffer(capture);
         }
-        context.SubmitTransferCommandBuffer(transfer);
     }
 
     /// <summary>Disposes passes that are disposable.</summary>

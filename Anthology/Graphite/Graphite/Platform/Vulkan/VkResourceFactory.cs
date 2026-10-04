@@ -19,11 +19,6 @@ internal class VkResourceFactory : ResourceFactory
         return new VkCommandBuffer(_gd, ref description);
     }
 
-    public override TransferCommandBuffer CreateTransferCommandBuffer()
-    {
-        return new VkTransferCommandBuffer(_gd);
-    }
-
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
     {
         return new VkFramebuffer(_gd, ref description);

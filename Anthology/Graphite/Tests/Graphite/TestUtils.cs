@@ -141,9 +141,6 @@ internal sealed class TrackingResourceFactory : ResourceFactory
     public override CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description)
         => Track(_inner.CreateCommandBuffer(ref description));
 
-    public override TransferCommandBuffer CreateTransferCommandBuffer()
-        => Track(_inner.CreateTransferCommandBuffer());
-
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
         => Track(_inner.CreateFramebuffer(ref description));
 
@@ -331,7 +328,7 @@ public sealed class TestCountingProfiler : IProfiler
 #nullable restore
 
     public bool RequestCapture => false;
-    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer) { }
+    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture) { }
 
     public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
     public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }

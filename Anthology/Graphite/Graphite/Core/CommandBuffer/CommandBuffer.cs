@@ -78,4 +78,15 @@ public abstract partial class CommandBuffer : CommandBufferBase
     internal abstract void RecordBarriers(System.ReadOnlySpan<TextureBarrier> textures, BufferAccess bufferSrc, BufferAccess bufferDst);
 
     internal abstract void SealRenderPass();
+
+    internal abstract void RecordFullBarrier();
+
+    internal void RequireGraphExecution(string operation)
+    {
+        if (Execution == null)
+        {
+            throw new RenderException(
+                $"{operation} needs a command buffer rented from a render context. Work recorded through GraphicsDevice.Record can only transfer: update, copy and mipmap generation.");
+        }
+    }
 }

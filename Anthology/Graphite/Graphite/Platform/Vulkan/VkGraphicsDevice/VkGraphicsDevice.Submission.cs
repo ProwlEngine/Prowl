@@ -183,27 +183,47 @@ internal unsafe partial class VkGraphicsDevice
         }
     }
 
-    private protected override void SubmitTransferCore(TransferCommandBuffer commandBuffer)
+    private protected override GpuSubmission RecordCore(System.Action<CommandBuffer> record, string name)
     {
-        VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
-        SubmitCommandBuffer(
-            null, vkCb.CommandBuffer, null,
-            timingPool: vkCb.TakePendingTimingPool(), statsPool: null, bufferName: vkCb.Name, isTransfer: true, pass: null,
-            transferId: vkCb.Id);
+        VkCommandBuffer cb = _recordCommandBufferPool.Rent();
+        try
+        {
+            cb.Name = name;
+            cb.Begin();
+            cb.RecordFullBarrier();
+            record(cb);
+            cb.RecordFullBarrier();
+            cb.End();
+        }
+        catch
+        {
+            if (cb.IsRecording)
+                cb.End();
+            _recordCommandBufferPool.Return(cb);
+            throw;
+        }
+
+        VkGpuSubmission submission = new(this);
+        SubmitRecorded(cb, submission);
+        Profiler?.RecordSubmit(cb.ProfilerInfo, isTransfer: true);
+        return submission;
     }
 
-    /// <summary>
-    /// Submits a one-shot command buffer and blocks until GPU finishes. Doesn't touch frame ring state, safe anytime.
-    /// </summary>
-    internal void SubmitAndWaitTransfer(Silk.NET.Vulkan.CommandBuffer cb, QueryPool? timingPool, string bufferName, ulong bufferId)
+    private void SubmitRecorded(VkCommandBuffer cb, VkGpuSubmission submission)
     {
         FlushPendingInitCommands();
+        CheckSubmittedFences();
+
         VkFenceHandle fence = GetFreeSubmissionFence();
+        submission.Fence = fence;
+
+        Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
+        cb.CommandBufferSubmitted(handle);
 
         SubmitInfo si = new(sType: StructureType.SubmitInfo)
         {
             CommandBufferCount = 1,
-            PCommandBuffers = &cb
+            PCommandBuffers = &handle
         };
 
         lock (_graphicsQueueLock)
@@ -221,22 +241,15 @@ internal unsafe partial class VkGraphicsDevice
             FlushValidationErrors();
         }
 
-        Vk.WaitForFences(Device, 1, &fence, true, ulong.MaxValue).CheckResult();
-        Vk.ResetFences(Device, 1, &fence).CheckResult();
-        ReturnSubmissionFence(fence);
-
-        if (timingPool is { } pool)
+        lock (_submittedFencesLock)
         {
-            double milliseconds = ResolveTiming(pool);
-            Profiler?.RecordExecutionTime(new CommandBufferInfo(bufferId, bufferName, null), isTransfer: true, milliseconds);
+            _submittedFences.Add(new FenceSubmissionInfo(
+                fence, cb, handle, cb.TakePendingTimingPool(), cb.TakePendingStatsPool(),
+                cb.Name, isTransfer: true, pass: null, transferId: 0, submission: submission));
         }
     }
 
-    private protected override void SubmitAndWaitCore(TransferCommandBuffer commandBuffer)
-    {
-        VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
-        vkCb.SubmitAndWait();
-    }
+    internal void PollSubmissions() => CheckSubmittedFences();
 
     internal void SubmitCommandBuffer(
         VkCommandBuffer? vkCL,
@@ -343,7 +356,18 @@ internal unsafe partial class VkGraphicsDevice
             Profiler?.RecordGpuVertexStats(profilerInfo, in stats);
         }
 
-        if (fsi.OwnsFence)
+        if (fsi.Submission is { } submission)
+        {
+            lock (submission.SyncRoot)
+            {
+                submission.MarkComplete();
+                Vk.ResetFences(Device, 1, &fence).CheckResult();
+                ReturnSubmissionFence(fence);
+            }
+            if (fsi.CommandBuffer != null)
+                _recordCommandBufferPool.Return(fsi.CommandBuffer);
+        }
+        else if (fsi.OwnsFence)
         {
             Vk.ResetFences(Device, 1, &fence).CheckResult();
             ReturnSubmissionFence(fence);
@@ -425,6 +449,7 @@ internal unsafe partial class VkGraphicsDevice
         public bool IsTransfer;
         public PassInfo? Pass;
         public ulong TransferId;
+        public VkGpuSubmission? Submission;
 
         /// <summary>False when the fence is a slot fence, or is shared with a later entry.</summary>
         public bool OwnsFence;
@@ -439,8 +464,10 @@ internal unsafe partial class VkGraphicsDevice
             bool isTransfer,
             PassInfo? pass,
             ulong transferId,
-            bool ownsFence = true)
+            bool ownsFence = true,
+            VkGpuSubmission? submission = null)
         {
+            Submission = submission;
             OwnsFence = ownsFence;
             Fence = fence;
             CommandBuffer = commandBuffer;

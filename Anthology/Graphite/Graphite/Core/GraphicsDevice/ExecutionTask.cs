@@ -58,12 +58,6 @@ public abstract partial class ExecutionTask
     internal virtual void TrackRentedCommandBuffer(CommandBuffer commandBuffer) { }
 
     /// <summary>
-    /// Tracks a rented transfer command buffer so it's reclaimed when GPU work retires. No-op if backend doesn't pool.
-    /// </summary>
-    /// <param name="commandBuffer">Buffer rented via the render context.</param>
-    internal virtual void TrackRentedTransferCommandBuffer(TransferCommandBuffer commandBuffer) { }
-
-    /// <summary>
     /// Allocates a transient uniform buffer range from the bump allocator. Valid until completion fence signals.
     /// </summary>
     /// <remarks>Uniform buffers only. Don't bind as vertex, index, or structured buffer.</remarks>

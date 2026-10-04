@@ -332,36 +332,6 @@ public sealed class RenderContext<TView>
         FlushDeferredBarriers(scopeName);
     }
 
-    /// <summary>
-    /// Rents a transfer command buffer, copies only, already begun. Submit via SubmitTransferCommandBuffer. Pooled and reclaimed when the execution retires, don't dispose it.
-    /// </summary>
-    /// <param name="name">Optional debug name.</param>
-    public TransferCommandBuffer GetTransferCommandBuffer(string name = "")
-    {
-        TransferCommandBuffer cb = _device.RentGraphTransferCommandBuffer();
-        _task.TrackRentedTransferCommandBuffer(cb);
-        cb.Name = name;
-        cb.Begin();
-        cb.GraphStates = _textureStates;
-        return cb;
-    }
-
-    /// <summary>Submits a transfer command buffer, non-blocking.</summary>
-    /// <param name="cmd">Transfer command buffer to submit.</param>
-    public void SubmitTransferCommandBuffer(TransferCommandBuffer cmd)
-    {
-        if (_barrierHost != null)
-        {
-            throw new InvalidOperationException(
-                $"Pass '{_currentScopeName}' must submit its first rented command buffer before a transfer, because it carries the barriers the pass starts with.");
-        }
-
-        FlushDeferredBarriers(_currentScopeName ?? "Transfer");
-        _task.CloseTail();
-        _task.FlushSubmissions();
-        _device.SubmitTransfer(cmd);
-    }
-
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>
     public DeviceBufferRange AllocateTransient(uint sizeInBytes) => _task.AllocateTransientInternal(sizeInBytes);

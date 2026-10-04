@@ -12,7 +12,6 @@ internal sealed class VkExecutionTask : ExecutionTask
     private readonly VkFence _slotFenceWrapper;
     private readonly VkUniformArena _uniformArena;
     private readonly List<VkCommandBuffer> _rentedCommandBuffers;
-    private readonly List<VkTransferCommandBuffer> _rentedTransferCommandBuffers;
     private readonly List<VkCommandBuffer> _queuedCommandBuffers;
 
     public override ulong Id => _id;
@@ -27,7 +26,6 @@ internal sealed class VkExecutionTask : ExecutionTask
         VkFence slotFenceWrapper,
         VkUniformArena uniformArena,
         List<VkCommandBuffer> rentedCommandBuffers,
-        List<VkTransferCommandBuffer> rentedTransferCommandBuffers,
         List<VkCommandBuffer> queuedCommandBuffers)
     {
         _gd = gd;
@@ -36,7 +34,6 @@ internal sealed class VkExecutionTask : ExecutionTask
         _slotFenceWrapper = slotFenceWrapper;
         _uniformArena = uniformArena;
         _rentedCommandBuffers = rentedCommandBuffers;
-        _rentedTransferCommandBuffers = rentedTransferCommandBuffers;
         _queuedCommandBuffers = queuedCommandBuffers;
     }
 
@@ -47,13 +44,6 @@ internal sealed class VkExecutionTask : ExecutionTask
     internal override void TrackRentedCommandBuffer(CommandBuffer commandBuffer)
     {
         _rentedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandBuffer));
-    }
-
-
-    /// <inheritdoc/>
-    internal override void TrackRentedTransferCommandBuffer(TransferCommandBuffer commandBuffer)
-    {
-        _rentedTransferCommandBuffers.Add(Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer));
     }
 
 

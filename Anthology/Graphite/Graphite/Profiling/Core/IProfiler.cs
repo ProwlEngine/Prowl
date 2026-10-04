@@ -53,5 +53,5 @@ public interface IProfiler
 
     // hookpoint in between pass execution to copy a pass's outputs in-flight before full submit
     bool RequestCapture { get; }
-    void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer);
+    void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture);
 }

@@ -62,5 +62,5 @@ public sealed class BenchProfiler : IProfiler
     public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 
     public bool RequestCapture => false;
-    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer) { }
+    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, CommandBuffer capture) { }
 }

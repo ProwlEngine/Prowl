@@ -52,11 +52,9 @@ file sealed class MidExecutionTransferPass : IPass<SubmitBatchingView>
 
     public void Render(RenderContext<SubmitBatchingView> context, CommandBuffer cmd)
     {
-        TransferCommandBuffer transfer = context.GetTransferCommandBuffer("MidExecutionTransfer");
-        transfer.Begin();
-        transfer.CopyBuffer(_source, 0, _staging, 0, _source.SizeInBytes);
-        transfer.End();
-        context.SubmitTransferCommandBuffer(transfer);
+        CommandBuffer copy = context.GetCommandBuffer("MidExecutionCopy");
+        copy.CopyBuffer(_source, 0, _staging, 0, _source.SizeInBytes);
+        context.SubmitCommandBuffer(copy);
     }
 }
 

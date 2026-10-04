@@ -5,9 +5,8 @@ using System.Runtime.InteropServices;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Shared transfer surface of every command buffer kind: buffer updates, copies and mipmap generation.
-/// A backend implements the four Core members once and gets both <see cref="CommandBuffer"/> and
-/// <see cref="TransferCommandBuffer"/> out of it.
+/// Transfer surface of a command buffer: buffer and texture updates, copies and mipmap generation.
+/// These work both inside a graph and in work recorded through <see cref="GraphicsDevice.Record"/>.
 /// </summary>
 public abstract class CommandBufferBase : GraphicsResource
 {
@@ -230,4 +229,40 @@ public abstract class CommandBufferBase : GraphicsResource
     }
 
     private protected abstract void GenerateMipmapsCore(Texture texture);
+
+    /// <summary>Updates a texture region from a pointer.</summary>
+    /// <param name="texture">Texture to update.</param>
+    /// <param name="source">Pointer to data.</param>
+    /// <param name="sizeInBytes">Total upload bytes.</param>
+    /// <param name="region">Region to write.</param>
+    public void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, in TextureRegion region)
+    {
+        GraphicsDevice.UpdateTexture_CheckParameters(texture, sizeInBytes, region);
+        UpdateTextureCore(texture, source, sizeInBytes, region);
+    }
+
+    /// <summary>Updates a texture region from a span.</summary>
+    /// <param name="texture">Texture to update.</param>
+    /// <param name="source">Data to upload.</param>
+    /// <param name="region">Region to write.</param>
+    public unsafe void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source, in TextureRegion region) where T : unmanaged
+    {
+        fixed (void* pin = &MemoryMarshal.GetReference(source))
+        {
+            UpdateTexture(texture, (IntPtr)pin, (uint)(sizeof(T) * source.Length), region);
+        }
+    }
+
+    /// <summary>Replaces all of mip 0, layer 0 with the span.</summary>
+    /// <param name="texture">Texture to update.</param>
+    /// <param name="source">Data to upload.</param>
+    public void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source) where T : unmanaged
+    {
+        UpdateTexture(texture, source, TextureRegion.Whole(texture));
+    }
+
+    private protected abstract void UpdateTextureCore(
+        Texture texture,
+        IntPtr source,
+        uint sizeInBytes, in TextureRegion region);
 }

@@ -15,6 +15,8 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     /// </summary>
     internal bool CanRecycle => !_commandBufferBegun && !IsDisposed;
 
+    internal bool IsRecording => _commandBufferBegun;
+
     private bool _commandBufferBegun;
     private bool _commandBufferEnded;
 

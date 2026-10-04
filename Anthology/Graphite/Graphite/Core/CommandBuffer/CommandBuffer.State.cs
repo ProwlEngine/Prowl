@@ -11,6 +11,7 @@ public abstract partial class CommandBuffer
     /// <param name="program">Shader to set.</param>
     public void SetShader(GraphicsProgram program)
     {
+        RequireGraphExecution(nameof(SetShader));
         ValidationHelpers.RequireNotNullRender(program, nameof(GraphicsProgram), nameof(SetShader));
         bool changed = !ReferenceEquals(_shaderProgram, program);
         if (!changed) return;
@@ -34,6 +35,7 @@ public abstract partial class CommandBuffer
     /// <param name="program">Compute shader to set.</param>
     public void SetComputeShader(ComputeProgram program)
     {
+        RequireGraphExecution(nameof(SetComputeShader));
         ValidationHelpers.RequireNotNullRender(program, nameof(ComputeProgram), nameof(SetComputeShader));
         if (ReferenceEquals(_computeProgram, program)) return;
 
@@ -109,6 +111,7 @@ public abstract partial class CommandBuffer
     /// <param name="fb">Framebuffer to set.</param>
     public void SetFramebuffer(Framebuffer fb)
     {
+        RequireGraphExecution(nameof(SetFramebuffer));
         if (_framebuffer != fb)
         {
             _framebuffer = fb;
@@ -141,6 +144,7 @@ public abstract partial class CommandBuffer
     /// <param name="clearColor">Clear value.</param>
     public void ClearColorTarget(uint index, Color clearColor)
     {
+        RequireGraphExecution(nameof(ClearColorTarget));
         ClearColorTarget_CheckFramebuffer(index);
         ClearColorTargetCore(index, clearColor);
     }
@@ -159,6 +163,7 @@ public abstract partial class CommandBuffer
     /// <param name="stencil">Stencil clear value.</param>
     public void ClearDepthStencil(float depth, byte stencil)
     {
+        RequireGraphExecution(nameof(ClearDepthStencil));
         ClearDepthStencil_CheckFramebuffer();
         ClearDepthStencilCore(depth, stencil);
     }

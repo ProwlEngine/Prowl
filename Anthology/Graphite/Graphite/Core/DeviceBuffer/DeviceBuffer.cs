@@ -48,7 +48,7 @@ public abstract partial class DeviceBuffer : GraphicsResource, BindableResource,
 
     internal void MarkInFlight(GraphicsDevice device, ulong executionId)
     {
-        if (_description.TransientWrites)
+        if (_description.TransientWrites || executionId == 0)
             return;
 
         _inFlightDevice = device;

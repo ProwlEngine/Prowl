@@ -200,12 +200,6 @@ public abstract partial class ResourceFactory
     public abstract CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description);
 
     /// <summary>
-    /// Makes a transfer command buffer, for transfers outside the frame system.
-    /// </summary>
-    /// <returns>New transfer command buffer.</returns>
-    public abstract TransferCommandBuffer CreateTransferCommandBuffer();
-
-    /// <summary>
     /// Makes a fence.
     /// </summary>
     /// <param name="signaled">Start signaled or not.</param>
