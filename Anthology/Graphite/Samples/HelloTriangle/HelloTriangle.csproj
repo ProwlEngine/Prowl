@@ -5,6 +5,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <None Include="Shader.slang" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
     </ItemGroup>
 </Project>
