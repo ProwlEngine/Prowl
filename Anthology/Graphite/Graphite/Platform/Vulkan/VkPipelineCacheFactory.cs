@@ -137,7 +137,7 @@ internal static unsafe class VkPipelineCacheFactory
             bindingDescs[binding] = new VertexInputBindingDescription()
             {
                 Binding = (uint)binding,
-                InputRate = (inputDesc.InstanceStepRate != 0) ? VertexInputRate.Instance : VertexInputRate.Vertex,
+                InputRate = (inputDesc.StepRate == VertexStepRate.PerInstance) ? VertexInputRate.Instance : VertexInputRate.Vertex,
                 Stride = inputDesc.Stride
             };
 
