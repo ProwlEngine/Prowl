@@ -215,7 +215,7 @@ Or pass the `RenderTexture` itself to get its first color attachment.
 - `PropertySet` is not thread-safe.
 - Names are case-sensitive strings; a typo binds a default silently unless `OnMissingProperty` is set.
 - Setting a texture under a name that held a uniform converts the entry. The old value is gone.
-- The merge shares entry objects between your set and the command buffer's table. After rewriting a value in a set that is already applied, call `SetProperties` with it again before the next draw; otherwise a draw inside the same render pass can reuse the previous bindings.
+- The merge shares entry objects between your set and the command buffer's table. Rewriting a value or resource that is already in an applied set is picked up by the next draw. Adding a name the set did not have when it was applied needs another `SetProperties` call.
 - Uniform payload per entry is 128 bytes, the size of a `Double4x4`. Large arrays belong in buffers.
 - `SetTexture` with a `RenderTexture` binds only color attachment 0. Other attachments of an MRT target bind from `ColorTextures[i]`.
 - `ClearProperties` only clears the command buffer's merged table, not your `PropertySet`. Beginning a command buffer also clears it, so rented buffers always start empty.
