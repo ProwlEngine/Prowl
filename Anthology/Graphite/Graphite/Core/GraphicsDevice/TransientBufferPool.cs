@@ -17,7 +17,11 @@ internal sealed class TransientBufferPool(GraphicsDevice device) : System.IDispo
     private readonly object _lock = new();
     private readonly Dictionary<BufferDescription, List<Pooled>> _free = [];
     private readonly List<Pooled> _rented = [];
+    private readonly List<BufferDescription> _emptyKeys = [];
+    private ulong _lastEvictionExecutionId;
     private bool _disposed;
+
+    internal const ulong RetentionExecutions = 120;
 
     /// <summary>Rents a buffer matching desc. Goes back to free-list once executionId completes.</summary>
     public DeviceBuffer Rent(in BufferDescription desc, ulong executionId)
@@ -31,12 +35,14 @@ internal sealed class TransientBufferPool(GraphicsDevice device) : System.IDispo
                 throw new RenderException("Cannot rent from a disposed transient buffer pool.");
 
             ReclaimCompleted();
+            EvictUnused(executionId);
 
             if (_free.TryGetValue(desc, out List<Pooled>? list) && list.Count > 0)
             {
                 Pooled recycled = list[^1];
                 list.RemoveAt(list.Count - 1);
                 recycled.RentedExecutionId = executionId;
+                recycled.LastRentedExecutionId = executionId;
                 _rented.Add(recycled);
                 return recycled.Buffer;
             }
@@ -44,6 +50,7 @@ internal sealed class TransientBufferPool(GraphicsDevice device) : System.IDispo
             Pooled created = new(_device.ResourceFactory.CreateBuffer(desc), desc);
             created.Buffer.SetTransientWrites(true);
             created.RentedExecutionId = executionId;
+            created.LastRentedExecutionId = executionId;
             _rented.Add(created);
             return created.Buffer;
         }
@@ -67,6 +74,34 @@ internal sealed class TransientBufferPool(GraphicsDevice device) : System.IDispo
             }
             list.Add(pooled);
         }
+    }
+
+    private void EvictUnused(ulong executionId)
+    {
+        if (executionId == _lastEvictionExecutionId)
+            return;
+
+        _lastEvictionExecutionId = executionId;
+        foreach (KeyValuePair<BufferDescription, List<Pooled>> pair in _free)
+        {
+            List<Pooled> list = pair.Value;
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                Pooled entry = list[i];
+                if (executionId - entry.LastRentedExecutionId <= RetentionExecutions)
+                    continue;
+
+                list.RemoveAt(i);
+                entry.Buffer.Dispose();
+            }
+
+            if (list.Count == 0)
+                _emptyKeys.Add(pair.Key);
+        }
+
+        foreach (BufferDescription key in _emptyKeys)
+            _free.Remove(key);
+        _emptyKeys.Clear();
     }
 
     public void Dispose()
@@ -93,5 +128,6 @@ internal sealed class TransientBufferPool(GraphicsDevice device) : System.IDispo
         public DeviceBuffer Buffer { get; } = buffer;
         public BufferDescription Desc { get; } = desc;
         public ulong RentedExecutionId;
+        public ulong LastRentedExecutionId;
     }
 }

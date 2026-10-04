@@ -19,7 +19,11 @@ internal sealed class TransientTexturePool(GraphicsDevice device) : IDisposable
     private readonly object _lock = new();
     private readonly Dictionary<RenderTextureDescription, List<PooledBundle>> _free = [];
     private readonly List<PooledBundle> _rented = [];
+    private readonly List<RenderTextureDescription> _emptyKeys = [];
+    private ulong _lastEvictionExecutionId;
     private bool _disposed;
+
+    internal const ulong RetentionExecutions = 120;
 
     /// <summary>
     /// Rents a bundle matching desc. Goes back to the free-list once executionId completes.
@@ -37,18 +41,21 @@ internal sealed class TransientTexturePool(GraphicsDevice device) : IDisposable
                 throw new RenderException("Cannot rent from a disposed transient texture pool.");
 
             ReclaimCompleted();
+            EvictUnused(executionId);
 
             if (_free.TryGetValue(desc, out List<PooledBundle>? list) && list.Count > 0)
             {
                 PooledBundle recycled = list[^1];
                 list.RemoveAt(list.Count - 1);
                 recycled.RentedExecutionId = executionId;
+                recycled.LastRentedExecutionId = executionId;
                 _rented.Add(recycled);
                 return recycled;
             }
 
             PooledBundle created = Create(desc);
             created.RentedExecutionId = executionId;
+            created.LastRentedExecutionId = executionId;
             _rented.Add(created);
             return created;
         }
@@ -76,6 +83,34 @@ internal sealed class TransientTexturePool(GraphicsDevice device) : IDisposable
 
     private PooledBundle Create(in RenderTextureDescription desc)
         => new(_device.ResourceFactory.CreateRenderTexture(desc));
+
+    private void EvictUnused(ulong executionId)
+    {
+        if (executionId == _lastEvictionExecutionId)
+            return;
+
+        _lastEvictionExecutionId = executionId;
+        foreach (KeyValuePair<RenderTextureDescription, List<PooledBundle>> pair in _free)
+        {
+            List<PooledBundle> list = pair.Value;
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                PooledBundle entry = list[i];
+                if (executionId - entry.LastRentedExecutionId <= RetentionExecutions)
+                    continue;
+
+                list.RemoveAt(i);
+                entry.DisposeResources();
+            }
+
+            if (list.Count == 0)
+                _emptyKeys.Add(pair.Key);
+        }
+
+        foreach (RenderTextureDescription key in _emptyKeys)
+            _free.Remove(key);
+        _emptyKeys.Clear();
+    }
 
     public void Dispose()
     {
@@ -106,6 +141,7 @@ internal sealed class TransientTexturePool(GraphicsDevice device) : IDisposable
 
         /// <summary>Owning execution. 0 means free.</summary>
         public ulong RentedExecutionId;
+        public ulong LastRentedExecutionId;
 
         public void DisposeResources() => Texture.Dispose();
     }

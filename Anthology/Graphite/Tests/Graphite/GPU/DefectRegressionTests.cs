@@ -71,6 +71,26 @@ public abstract class DefectRegressionTests<T> : GraphicsDeviceTestBase<T> where
         Assert.Equal(new uint[] { 0x11111111, 0x22222222, 0x33333333, 0x44444444 }, result);
     }
 
+    [Fact]
+    public void TransientTexturePool_EvictsEntriesUnusedForRetentionWindow()
+    {
+        ExecutionTask first = GD.BeginExecution();
+        RenderTexture old = GD.RentTransientRenderTexture(first, new RenderTextureDescription(8, 8, PixelFormat.R8_G8_B8_A8_UNorm, false));
+        GD.CompleteExecution(first);
+        GD.WaitForIdle();
+
+        for (ulong i = 0; i <= TransientTexturePool.RetentionExecutions; i++)
+            GD.CompleteExecution(GD.BeginExecution());
+        GD.WaitForIdle();
+
+        ExecutionTask last = GD.BeginExecution();
+        GD.RentTransientRenderTexture(last, new RenderTextureDescription(16, 16, PixelFormat.R8_G8_B8_A8_UNorm, false));
+        GD.CompleteExecution(last);
+        GD.WaitForIdle();
+
+        Assert.True(old.ColorTextures[0].IsDisposed);
+    }
+
 }
 
 #if TEST_VULKAN
