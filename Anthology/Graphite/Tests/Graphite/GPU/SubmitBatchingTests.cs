@@ -137,7 +137,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
-    public void ExecutionWithNoCommandBuffers_StillSignalsCompletionFence()
+    public void ExecutionWithNoCommandBuffers_StillCompletes()
     {
         ExecutionTask task = GD.BeginExecution();
         GD.CompleteExecution(task);
