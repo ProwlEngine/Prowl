@@ -10,7 +10,6 @@ internal sealed class VkExecutionTask : ExecutionTask
     private readonly uint _ringSlot;
 
     private readonly VkUniformArena _uniformArena;
-    private readonly List<VkCommandBuffer> _rentedCommandBuffers;
     private readonly List<VkCommandBuffer> _queuedCommandBuffers;
 
     public override ulong Id => _id;
@@ -22,25 +21,16 @@ internal sealed class VkExecutionTask : ExecutionTask
         ulong id,
         uint ringSlot,
         VkUniformArena uniformArena,
-        List<VkCommandBuffer> rentedCommandBuffers,
         List<VkCommandBuffer> queuedCommandBuffers)
     {
         _gd = gd;
         _id = id;
         _ringSlot = ringSlot;
         _uniformArena = uniformArena;
-        _rentedCommandBuffers = rentedCommandBuffers;
         _queuedCommandBuffers = queuedCommandBuffers;
     }
 
     internal VkUniformArena UniformArena => _uniformArena;
-
-
-    /// <inheritdoc/>
-    internal override void TrackRentedCommandBuffer(CommandBuffer commandBuffer)
-    {
-        _rentedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandBuffer));
-    }
 
 
     /// <inheritdoc/>

@@ -47,12 +47,6 @@ public abstract partial class ExecutionTask
     internal virtual void FlushSubmissions() { }
 
     /// <summary>
-    /// Tracks a rented command buffer so it's reclaimed when GPU work retires. No-op if backend doesn't pool.
-    /// </summary>
-    /// <param name="commandBuffer">Buffer rented via the render context.</param>
-    internal virtual void TrackRentedCommandBuffer(CommandBuffer commandBuffer) { }
-
-    /// <summary>
     /// Allocates a transient uniform buffer range from the bump allocator. Valid until the execution completes.
     /// </summary>
     /// <remarks>Uniform buffers only. Don't bind as vertex, index, or structured buffer.</remarks>

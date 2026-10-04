@@ -19,8 +19,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     private readonly BackendInfoVulkan _vulkanInfo;
     private readonly VkSwapchain _mainSwapchain;
-    private readonly VkGraphCommandBufferPool _graphCommandBufferPool;
-    private readonly VkGraphCommandBufferPool _recordCommandBufferPool;
     private readonly VkDescriptorSetCacheRegistry _descriptorSetCaches = new();
     private readonly VkDefaultTextureViewCache _defaultTextureViews;
 
@@ -60,8 +58,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
 
         ResourceFactory = new VkResourceFactory(this);
-        _graphCommandBufferPool = new VkGraphCommandBufferPool(this);
-        _recordCommandBufferPool = new VkGraphCommandBufferPool(this);
         _defaultTextureViews = new VkDefaultTextureViewCache(ResourceFactory);
 
         InitializeFrameOptions(options);
@@ -79,11 +75,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             PInitialData = null,
         };
         Vk.CreatePipelineCache(Device, in pcCI, null, out DriverPipelineCache).CheckResult();
-
-        for (int i = 0; i < SharedCommandPoolCount; i++)
-        {
-            _sharedGraphicsCommandPools.Push(new SharedCommandPool(this, true));
-        }
 
         _vulkanInfo = new BackendInfoVulkan(this);
 
@@ -104,12 +95,35 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     internal void ReleaseDefaultView(VkTexture texture) => _defaultTextureViews.Remove(texture);
 
-    internal override CommandBuffer RentGraphCommandBuffer() => _graphCommandBufferPool.Rent();
+    internal override CommandBuffer RentGraphCommandBuffer(ExecutionTask task)
+    {
+        ref SlotState slot = ref _slots[task.RingSlot];
+        lock (slot.Wrappers)
+        {
+            if (slot.WrappersInUse < slot.Wrappers.Count)
+                return slot.Wrappers[slot.WrappersInUse++];
 
-    internal void ReturnGraphCommandBuffer(VkCommandBuffer cb) => _graphCommandBufferPool.Return(cb);
+            VkCommandBuffer cb = new(this, slot.Pool);
+            slot.Wrappers.Add(cb);
+            slot.WrappersInUse++;
+            return cb;
+        }
+    }
 
     /// <summary>Test hook: total distinct graph command buffers ever allocated.</summary>
-    internal int PooledGraphCommandBufferCount => _graphCommandBufferPool.AllocatedCount;
+    internal int PooledGraphCommandBufferCount
+    {
+        get
+        {
+            int total = 0;
+            foreach (ref SlotState slot in _slots.AsSpan())
+            {
+                lock (slot.Wrappers)
+                    total += slot.Wrappers.Count;
+            }
+            return total;
+        }
+    }
 
     private protected override void SwapBuffersCore(Swapchain swapchain)
     {
@@ -167,12 +181,9 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         _mainSwapchain?.Dispose();
         DestroyDebugCallback();
 
-        _graphCommandBufferPool.Dispose();
-        _recordCommandBufferPool.Dispose();
-
         _defaultTextureViews.Dispose();
 
-        DisposeStagingResources();
+        DisposeCommandPools();
 
         WaitForGraphicsQueueIdle();
         FlushAllRetired();

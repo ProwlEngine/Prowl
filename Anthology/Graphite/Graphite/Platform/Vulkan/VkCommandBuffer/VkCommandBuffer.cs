@@ -1,4 +1,5 @@
-using System.Diagnostics;
+using System;
+using System.Runtime.CompilerServices;
 
 using Silk.NET.Vulkan;
 
@@ -10,15 +11,10 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private CommandPool _pool;
     private Silk.NET.Vulkan.CommandBuffer _cb;
 
-    /// <summary>
-    /// True if not mid-recording, safe to reset and reuse. Begun-but-not-ended must dispose instead.
-    /// </summary>
-    internal bool CanRecycle => !_commandBufferBegun && !IsDisposed;
-
     internal bool IsRecording => _commandBufferBegun;
 
     private bool _commandBufferBegun;
-    private bool _commandBufferEnded;
+    private readonly System.Collections.Generic.List<VkBuffer> _stagingBuffers = [];
 
     private readonly VkDescriptorBinder _descriptorBinder;
 
@@ -35,19 +31,11 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     public Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
 
 
-    public VkCommandBuffer(VkGraphicsDevice gd)
+    public VkCommandBuffer(VkGraphicsDevice gd, CommandPool pool)
         : base(gd)
     {
         _gd = gd;
-        CommandPoolCreateInfo poolCI = new()
-        {
-            SType = StructureType.CommandPoolCreateInfo,
-            Flags = CommandPoolCreateFlags.ResetCommandBufferBit,
-            QueueFamilyIndex = gd.GraphicsQueueIndex
-        };
-        _gd.Vk.CreateCommandPool(_gd.Device, in poolCI, null, out _pool).CheckResult();
-
-        _cb = GetNextCommandBuffer();
+        _pool = pool;
         _descriptorBinder = new VkDescriptorBinder(this, gd);
 
         Constructor_RecordAllocation();
@@ -63,18 +51,10 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                 "CommandBuffer must be in its initial state, or End() must have been called, for Begin() to be valid to call.");
         }
         _usedSwapchains.Clear();
-        if (_commandBufferEnded)
-        {
-            _commandBufferEnded = false;
-            HasEnded = false;
-            _cb = GetNextCommandBuffer();
-            if (_currentStagingInfo != null)
-            {
-                RecycleStagingInfo(_currentStagingInfo);
-            }
-        }
-
-        _currentStagingInfo = GetStagingResourceInfo();
+        HasEnded = false;
+        _cb = _gd.AllocatePrimaryCommandBuffer(_pool);
+        if (Name.Length > 0)
+            _gd.SetResourceName(this, Name);
 
         CommandBufferBeginInfo beginInfo = new()
         {
@@ -102,7 +82,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         }
 
         _commandBufferBegun = false;
-        _commandBufferEnded = true;
         HasEnded = true;
 
         if (!_currentFramebufferEverActive && _currentFramebuffer != null)
@@ -118,7 +97,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _gd.EndTiming(_cb, _pendingTimingPool);
         _gd.EndPipelineStats(_cb, _pendingStatsPool);
         _gd.Vk.EndCommandBuffer(_cb);
-        _submittedCommandBuffers.Add(_cb);
     }
 
     // Reads and clears the timing pool End() wrote into, for the submission path to attach to
@@ -138,24 +116,41 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         return pool;
     }
 
-    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
+    internal void SetPool(CommandPool pool) => _pool = pool;
+
+    internal void ResetForReuse()
+    {
+        _commandBufferBegun = false;
+        HasEnded = false;
+        _cb = default;
+        ReleaseStagingBuffers();
+    }
+
+    private VkBuffer GetFilledStagingBuffer(IntPtr source, uint sizeInBytes)
+    {
+        VkBuffer staging = (VkBuffer)_gd.ResourceFactory.CreateBuffer(new BufferDescription(sizeInBytes, BufferUsage.Staging));
+        staging.Name = $"Staging Buffer (CommandBuffer {Name})";
+        Unsafe.CopyBlock((byte*)staging.Memory.BlockMappedPointer, source.ToPointer(), sizeInBytes);
+        _stagingBuffers.Add(staging);
+        return staging;
+    }
+
+    internal void ReleaseStagingBuffers()
+    {
+        foreach (VkBuffer buffer in _stagingBuffers)
+            buffer.Dispose();
+        _stagingBuffers.Clear();
+    }
+
+    private protected override void NameChanged(string name)
+    {
+        if (_cb.Handle != 0)
+            _gd.SetResourceName(this, name);
+    }
 
     private protected override void DisposeCore()
     {
-        _gd.DisposeWhenRetired(DestroyNative);
-    }
-
-    private void DestroyNative()
-    {
-        _gd.Vk.DestroyCommandPool(_gd.Device, _pool, null);
-
-        Debug.Assert(_submittedStagingInfos.Count == 0);
-
-        foreach (VkBuffer buffer in _availableStagingBuffers)
-        {
-            buffer.Dispose();
-        }
-
+        ReleaseStagingBuffers();
         DisposeCore_RecordFree();
     }
 }

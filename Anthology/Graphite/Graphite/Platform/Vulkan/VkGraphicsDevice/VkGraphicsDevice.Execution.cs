@@ -12,7 +12,9 @@ internal unsafe partial class VkGraphicsDevice
     {
         public ulong FinalSerial;
         public VkUniformArena UniformArena;
-        public List<VkCommandBuffer> RentedCommandBuffers;
+        public CommandPool Pool;
+        public List<VkCommandBuffer> Wrappers;
+        public int WrappersInUse;
         public List<VkCommandBuffer> QueuedCommandBuffers;
         public ulong CurrentExecutionId;
     }
@@ -33,7 +35,8 @@ internal unsafe partial class VkGraphicsDevice
             _slots[i] = new SlotState
             {
                 UniformArena = new VkUniformArena(this, primary),
-                RentedCommandBuffers = [],
+                Pool = CreateCommandPool(),
+                Wrappers = [],
                 QueuedCommandBuffers = [],
                 CurrentExecutionId = 0,
             };
@@ -58,12 +61,12 @@ internal unsafe partial class VkGraphicsDevice
         }
         slot.UniformArena.BeginExecution();
 
-        // The slot's previous execution is complete, so its rented command buffers can be reclaimed.
-        if (slot.RentedCommandBuffers.Count > 0)
+        ResetCommandPool(slot.Pool);
+        lock (slot.Wrappers)
         {
-            foreach (VkCommandBuffer rented in slot.RentedCommandBuffers)
-                _graphCommandBufferPool.Return(rented);
-            slot.RentedCommandBuffers.Clear();
+            for (int i = 0; i < slot.WrappersInUse; i++)
+                slot.Wrappers[i].ResetForReuse();
+            slot.WrappersInUse = 0;
         }
 
         _descriptorSetCaches.SweepAll(executionId, _maxExecutingTasks);
@@ -71,7 +74,7 @@ internal unsafe partial class VkGraphicsDevice
         slot.CurrentExecutionId = executionId;
 
         return new VkExecutionTask(this, executionId, ringSlot,
-            slot.UniformArena, slot.RentedCommandBuffers, slot.QueuedCommandBuffers);
+            slot.UniformArena, slot.QueuedCommandBuffers);
     }
 
     private protected override void CompleteExecutionCore(ExecutionTask task)
@@ -130,6 +133,9 @@ internal unsafe partial class VkGraphicsDevice
         {
             foreach (ref SlotState slot in _slots.AsSpan())
             {
+                foreach (VkCommandBuffer wrapper in slot.Wrappers)
+                    wrapper.Dispose();
+                Vk.DestroyCommandPool(Device, slot.Pool, null);
                 slot.UniformArena?.PrimaryBuffer.Dispose();
                 foreach (VkBuffer overflow in slot.UniformArena?.OverflowBuffers ?? [])
                     overflow.Dispose();

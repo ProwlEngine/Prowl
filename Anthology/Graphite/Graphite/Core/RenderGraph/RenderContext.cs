@@ -251,12 +251,11 @@ public sealed class RenderContext<TView>
     /// <param name="name">Optional debug name.</param>
     public CommandBuffer GetCommandBuffer(string name = "")
     {
-        CommandBuffer cb = _device.RentGraphCommandBuffer();
+        CommandBuffer cb = _device.RentGraphCommandBuffer(_task);
 
         cb.Execution = _task;
         cb.Pass = _currentPass;
         cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
-        _task.TrackRentedCommandBuffer(cb);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
 

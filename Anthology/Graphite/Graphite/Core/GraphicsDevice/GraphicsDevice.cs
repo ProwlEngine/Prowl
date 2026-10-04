@@ -51,7 +51,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <summary>
     /// Rents a command buffer for a graph pass to record into.
     /// </summary>
-    internal abstract CommandBuffer RentGraphCommandBuffer();
+    internal abstract CommandBuffer RentGraphCommandBuffer(ExecutionTask task);
 
     /// <summary>
     /// Main swapchain for this device, or null if none.

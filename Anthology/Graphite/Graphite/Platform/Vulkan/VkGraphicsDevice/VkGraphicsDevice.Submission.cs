@@ -190,7 +190,6 @@ internal unsafe partial class VkGraphicsDevice
             {
                 VkCommandBuffer cb = commandBuffers[i];
                 Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
-                cb.CommandBufferSubmitted(handle);
                 handles[i] = handle;
             }
 
@@ -210,7 +209,6 @@ internal unsafe partial class VkGraphicsDevice
                         {
                             Serial = serial,
                             CommandBuffer = cb,
-                            Handle = handles[i],
                             TimingPool = cb.TakePendingTimingPool(),
                             StatsPool = cb.TakePendingStatsPool(),
                         });
@@ -228,7 +226,7 @@ internal unsafe partial class VkGraphicsDevice
 
     private protected override GpuSubmission RecordCore(System.Action<CommandBuffer> record, string name)
     {
-        VkCommandBuffer cb = _recordCommandBufferPool.Rent();
+        VkCommandBuffer cb = RentRecordCommandBuffer();
         try
         {
             cb.Name = name;
@@ -242,7 +240,8 @@ internal unsafe partial class VkGraphicsDevice
         {
             if (cb.IsRecording)
                 cb.End();
-            _recordCommandBufferPool.Return(cb);
+            TagImmediatePool(cb.CommandPool, 0);
+            ReturnRecordCommandBuffer(cb);
             throw;
         }
 
@@ -258,13 +257,13 @@ internal unsafe partial class VkGraphicsDevice
         PollSubmissions();
 
         Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
-        cb.CommandBufferSubmitted(handle);
 
         lock (_graphicsQueueLock)
         {
             int waitCount = GatherAcquireWaits_NoLock(cb);
             ulong serial = SubmitSignalingTimeline_NoLock(&handle, 1, waitCount);
             submission.Serial = serial;
+            TagImmediatePool(cb.CommandPool, serial);
 
             lock (_pendingLock)
             {
@@ -272,32 +271,10 @@ internal unsafe partial class VkGraphicsDevice
                 {
                     Serial = serial,
                     CommandBuffer = cb,
-                    Handle = handle,
                     TimingPool = cb.TakePendingTimingPool(),
                     StatsPool = cb.TakePendingStatsPool(),
                     IsTransfer = true,
                     Submission = submission,
-                });
-            }
-        }
-    }
-
-    internal void SubmitSharedCommandBuffer(SharedCommandPool pool, Silk.NET.Vulkan.CommandBuffer vkCB)
-    {
-        FlushPendingInitCommands();
-        PollSubmissions();
-
-        lock (_graphicsQueueLock)
-        {
-            ulong serial = SubmitSignalingTimeline_NoLock(&vkCB, 1, 0);
-
-            lock (_pendingLock)
-            {
-                _pending.Enqueue(new PendingSubmission
-                {
-                    Serial = serial,
-                    Handle = vkCB,
-                    SharedPool = pool,
                 });
             }
         }
@@ -328,8 +305,6 @@ internal unsafe partial class VkGraphicsDevice
     {
         if (pending.CommandBuffer is { } cb)
         {
-            cb.CommandBufferCompleted(pending.Handle);
-
             if (pending.TimingPool is { } timingPool)
             {
                 double milliseconds = ResolveTiming(timingPool);
@@ -343,18 +318,7 @@ internal unsafe partial class VkGraphicsDevice
             }
 
             if (pending.Submission != null)
-                _recordCommandBufferPool.Return(cb);
-        }
-
-        if (pending.SharedPool is { } sharedPool)
-        {
-            lock (_graphicsCommandPoolLock)
-            {
-                if (sharedPool.IsCached)
-                    _sharedGraphicsCommandPools.Push(sharedPool);
-                else
-                    sharedPool.Destroy();
-            }
+                ReturnRecordCommandBuffer(cb);
         }
     }
 
@@ -362,11 +326,9 @@ internal unsafe partial class VkGraphicsDevice
     {
         public ulong Serial;
         public VkCommandBuffer? CommandBuffer;
-        public Silk.NET.Vulkan.CommandBuffer Handle;
         public QueryPool? TimingPool;
         public QueryPool? StatsPool;
         public bool IsTransfer;
         public VkGpuSubmission? Submission;
-        public SharedCommandPool? SharedPool;
     }
 }
