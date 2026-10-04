@@ -120,16 +120,6 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds render texture's first color texture to slot, optional sampler.
-    /// </summary>
-    public void SetTexture(PropertyID name, RenderTexture renderTexture, Sampler? sampler = null)
-    {
-        ValidationHelpers.RequireNotNull(null, renderTexture, nameof(renderTexture), nameof(SetTexture));
-        SetTexture(name, renderTexture.ColorTextures[0], sampler);
-    }
-
-
-    /// <summary>
     /// Binds sampler to slot, independent of texture.
     /// </summary>
     public void SetSampler(PropertyID name, Sampler sampler)
