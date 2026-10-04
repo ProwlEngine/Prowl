@@ -288,8 +288,6 @@ Key pieces:
   when the ring slot it is about to reuse has not yet completed on the GPU.
 - `ExecutionTask.Id` / `ExecutionTask.RingSlot` - a monotonic id (starting at 1; 0 is the "none"
   sentinel) and the `[0, MaxExecutingTasks)` slot it occupies.
-- `ExecutionTask.CompletionFence` - owned and recycled by the ring. Do not reset it or hold the
-  reference past the next `BeginExecution` for the same ring slot.
 - `IsExecutionComplete` / `WaitForExecution` / `LastCompletedExecutionId` / `ExecutingTasks` /
   `ActiveExecutions` - poll, block on, or query execution completion. These also opportunistically
   advance the device's notion of the last completed execution.
