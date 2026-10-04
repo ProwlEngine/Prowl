@@ -1133,6 +1133,26 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         return cameras;
     }
 
+    /// <summary>The enabled camera drawing to the screen with the highest depth, or null. Same filter as <see cref="GatherActiveCameras"/>.</summary>
+    internal Camera? FindMainCamera()
+    {
+        Camera? main = null;
+        for (int i = 0; i < _allObj.Count; i++)
+        {
+            GameObject go = _allObj[i];
+            if (go.IsDisposed || !go.EnabledInHierarchy) continue;
+            if ((go.HideFlags & HideFlags.HideAndDontSave) != 0) continue;
+
+            foreach (MonoBehaviour component in go._components)
+            {
+                if (component is Camera camera && camera.EnabledInHierarchy && camera.Target == null
+                    && (main == null || camera.Depth > main.Depth))
+                    main = camera;
+            }
+        }
+        return main;
+    }
+
     /// <summary>
     /// Renders all cameras in this scene, sorted by depth.
     /// </summary>

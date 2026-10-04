@@ -85,6 +85,30 @@ public class Camera : MonoBehaviour
     //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
     public int Depth = -1;
 
+    private static Camera? s_main;
+    private static Scene? s_mainScene;
+    private static long s_mainFrame = -1;
+
+    /// <summary>
+    /// The camera shown on top: the enabled camera with the highest <see cref="Depth"/> in the current scene
+    /// that draws to the screen. Cameras drawing into a render texture and editor helper cameras are never main.
+    /// Found once per frame, null when there is none.
+    /// </summary>
+    public static Camera? Main
+    {
+        get
+        {
+            Scene scene = Scene.Current;
+            if (s_mainFrame != Time.FrameCount || s_mainScene != scene || (s_main != null && s_main.IsNotValid()))
+            {
+                s_main = scene.FindMainCamera();
+                s_mainScene = scene;
+                s_mainFrame = Time.FrameCount;
+            }
+            return s_main;
+        }
+    }
+
     public RenderPipeline? Pipeline;
 
     /// <summary>
