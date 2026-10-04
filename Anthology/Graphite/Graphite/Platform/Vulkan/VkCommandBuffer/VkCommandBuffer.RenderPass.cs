@@ -133,9 +133,8 @@ internal unsafe partial class VkCommandBuffer
         Util.ClearArray(_validColorClearValues);
         Util.EnsureArrayMinimumSize(ref _validColorClearValues, clearValueCount);
 
-        if (fb is VkSwapchainFramebuffer scFB)
-        {
-        }
+        if (fb is VkSwapchainFramebuffer scFB && !_usedSwapchains.Contains(scFB.Swapchain))
+            _usedSwapchains.Add(scFB.Swapchain);
     }
 
     private FramebufferMode ResolveFramebufferMode(VkFramebufferBase fb)

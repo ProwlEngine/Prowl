@@ -81,8 +81,6 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         _framebuffer = new VkSwapchainFramebuffer(gd, this, _surface, description.Width, description.Height, description.DepthFormat);
 
-        _gd.RegisterSwapchain(this);
-
         if (CreateSwapchain(description.Width, description.Height))
             AcquireNextImage();
     }
@@ -175,7 +173,7 @@ internal unsafe partial class VkSwapchain : Swapchain
     private void RecreateAndReacquire(uint width, uint height)
     {
         _recreatePending = false;
-        _gd.ConsumePendingAcquires();
+        _gd.ConsumePendingAcquires(this);
         _imageAcquired = false;
         if (CreateSwapchain(width, height))
             AcquireNextImage();
@@ -379,8 +377,7 @@ internal unsafe partial class VkSwapchain : Swapchain
 
     private void DestroyNative()
     {
-        _gd.UnregisterSwapchain(this);
-        _gd.ConsumePendingAcquires();
+        _gd.ConsumePendingAcquires(this);
         _gd.WaitForGraphicsQueueIdle();
 
         foreach (VkSemaphore semaphore in _freeAcquireSemaphores)

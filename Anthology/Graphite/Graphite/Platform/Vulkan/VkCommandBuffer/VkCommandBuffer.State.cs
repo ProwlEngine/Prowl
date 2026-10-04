@@ -10,6 +10,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkCommandBuffer
 {
     private VkFramebufferBase _currentFramebuffer;
+    private readonly List<VkSwapchain> _usedSwapchains = [];
     private bool _currentFramebufferEverActive;
     private RenderPass _activeRenderPass;
     private FramebufferMode _currentFramebufferMode;

@@ -123,7 +123,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         }
 
         VkSemaphore presentSemaphore = vkSC.PresentSemaphore;
-        SignalPresentSemaphore(presentSemaphore);
+        SignalPresentSemaphore(vkSC, presentSemaphore);
 
         SwapchainKHR deviceSwapchain = vkSC.DeviceSwapchain;
         uint imageIndex = vkSC.ImageIndex;

@@ -53,6 +53,8 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         Constructor_RecordAllocation();
     }
 
+    internal System.Collections.Generic.IReadOnlyList<VkSwapchain> UsedSwapchains => _usedSwapchains;
+
     internal override void Begin()
     {
         if (_commandBufferBegun)
@@ -60,6 +62,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             throw new RenderException(
                 "CommandBuffer must be in its initial state, or End() must have been called, for Begin() to be valid to call.");
         }
+        _usedSwapchains.Clear();
         if (_commandBufferEnded)
         {
             _commandBufferEnded = false;

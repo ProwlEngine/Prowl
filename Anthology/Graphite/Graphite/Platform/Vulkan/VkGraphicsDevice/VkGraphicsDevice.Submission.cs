@@ -21,47 +21,51 @@ internal unsafe partial class VkGraphicsDevice
 
     private const PipelineStageFlags AcquireWaitStages = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.TransferBit;
 
-    private readonly List<VkSwapchain> _swapchains = [];
     private VkSemaphore[] _acquireWaitSemaphores = new VkSemaphore[1];
     private PipelineStageFlags[] _acquireWaitStages = new PipelineStageFlags[1];
 
-    internal void RegisterSwapchain(VkSwapchain swapchain)
+    private int AddAcquireWait_NoLock(int count, VkSwapchain swapchain)
     {
-        lock (_graphicsQueueLock)
-            _swapchains.Add(swapchain);
+        VkSemaphore pending = swapchain.TakePendingAcquire();
+        if (pending.Handle == 0)
+            return count;
+
+        if (count == _acquireWaitSemaphores.Length)
+        {
+            System.Array.Resize(ref _acquireWaitSemaphores, count * 2);
+            System.Array.Resize(ref _acquireWaitStages, count * 2);
+        }
+
+        _acquireWaitSemaphores[count] = pending;
+        _acquireWaitStages[count] = AcquireWaitStages;
+        return count + 1;
     }
 
-    internal void UnregisterSwapchain(VkSwapchain swapchain)
-    {
-        lock (_graphicsQueueLock)
-            _swapchains.Remove(swapchain);
-    }
-
-    private int GatherAcquireWaits_NoLock()
+    private int GatherAcquireWaits_NoLock(VkCommandBuffer? cb)
     {
         int count = 0;
-        foreach (VkSwapchain swapchain in _swapchains)
+        if (cb == null)
+            return count;
+
+        foreach (VkSwapchain swapchain in cb.UsedSwapchains)
+            count = AddAcquireWait_NoLock(count, swapchain);
+        return count;
+    }
+
+    private int GatherAcquireWaits_NoLock(List<VkCommandBuffer> commandBuffers)
+    {
+        int count = 0;
+        foreach (VkCommandBuffer cb in commandBuffers)
         {
-            VkSemaphore pending = swapchain.TakePendingAcquire();
-            if (pending.Handle == 0)
-                continue;
-
-            if (count == _acquireWaitSemaphores.Length)
-            {
-                System.Array.Resize(ref _acquireWaitSemaphores, count * 2);
-                System.Array.Resize(ref _acquireWaitStages, count * 2);
-            }
-
-            _acquireWaitSemaphores[count] = pending;
-            _acquireWaitStages[count] = AcquireWaitStages;
-            count++;
+            foreach (VkSwapchain swapchain in cb.UsedSwapchains)
+                count = AddAcquireWait_NoLock(count, swapchain);
         }
         return count;
     }
 
-    private void SubmitSemaphoresOnly_NoLock(VkSemaphore* signal)
+    private void SubmitSemaphoresOnly_NoLock(VkSwapchain swapchain, VkSemaphore* signal)
     {
-        int waitCount = GatherAcquireWaits_NoLock();
+        int waitCount = AddAcquireWait_NoLock(0, swapchain);
         if (waitCount == 0 && signal == null)
             return;
 
@@ -83,16 +87,16 @@ internal unsafe partial class VkGraphicsDevice
         }
     }
 
-    internal void ConsumePendingAcquires()
+    internal void ConsumePendingAcquires(VkSwapchain swapchain)
     {
         lock (_graphicsQueueLock)
-            SubmitSemaphoresOnly_NoLock(null);
+            SubmitSemaphoresOnly_NoLock(swapchain, null);
     }
 
-    internal void SignalPresentSemaphore(VkSemaphore semaphore)
+    internal void SignalPresentSemaphore(VkSwapchain swapchain, VkSemaphore semaphore)
     {
         lock (_graphicsQueueLock)
-            SubmitSemaphoresOnly_NoLock(&semaphore);
+            SubmitSemaphoresOnly_NoLock(swapchain, &semaphore);
     }
 
     internal void WaitForGraphicsQueueIdle()
@@ -139,7 +143,7 @@ internal unsafe partial class VkGraphicsDevice
 
                 lock (_graphicsQueueLock)
                 {
-                    int waitCount = GatherAcquireWaits_NoLock();
+                    int waitCount = GatherAcquireWaits_NoLock(commandBuffers);
                     fixed (VkSemaphore* waits = _acquireWaitSemaphores)
                     fixed (PipelineStageFlags* stages = _acquireWaitStages)
                     {
@@ -219,7 +223,7 @@ internal unsafe partial class VkGraphicsDevice
         ulong recordedSerial;
         lock (_graphicsQueueLock)
         {
-            int waitCount = GatherAcquireWaits_NoLock();
+            int waitCount = GatherAcquireWaits_NoLock(cb);
             fixed (VkSemaphore* waits = _acquireWaitSemaphores)
             fixed (PipelineStageFlags* stages = _acquireWaitStages)
             {
@@ -268,7 +272,7 @@ internal unsafe partial class VkGraphicsDevice
         ulong commandSerial;
         lock (_graphicsQueueLock)
         {
-            int waitCount = waitAcquire ? GatherAcquireWaits_NoLock() : 0;
+            int waitCount = waitAcquire ? GatherAcquireWaits_NoLock(vkCL) : 0;
             fixed (VkSemaphore* waits = _acquireWaitSemaphores)
             fixed (PipelineStageFlags* stages = _acquireWaitStages)
             {
