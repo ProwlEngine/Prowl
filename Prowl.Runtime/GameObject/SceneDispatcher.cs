@@ -34,6 +34,9 @@ internal enum SceneCallbacks
     TriggerStay = 1 << 10,
     TriggerExit = 1 << 11,
     CollisionStay = 1 << 12,
+    CharacterEnter = 1 << 13,
+    CharacterStay = 1 << 14,
+    CharacterExit = 1 << 15,
 
     AnyCollision = CollisionBegin | CollisionStay | CollisionEnd,
 
@@ -91,6 +94,9 @@ internal sealed class SceneDispatcher
         if (Overrides(type, nameof(MonoBehaviour.OnTriggerEnter))) callbacks |= SceneCallbacks.TriggerEnter;
         if (Overrides(type, nameof(MonoBehaviour.OnTriggerStay))) callbacks |= SceneCallbacks.TriggerStay;
         if (Overrides(type, nameof(MonoBehaviour.OnTriggerExit))) callbacks |= SceneCallbacks.TriggerExit;
+        if (Overrides(type, nameof(MonoBehaviour.OnCharacterEnter))) callbacks |= SceneCallbacks.CharacterEnter;
+        if (Overrides(type, nameof(MonoBehaviour.OnCharacterStay))) callbacks |= SceneCallbacks.CharacterStay;
+        if (Overrides(type, nameof(MonoBehaviour.OnCharacterExit))) callbacks |= SceneCallbacks.CharacterExit;
 
         return callbacks;
     }
@@ -494,6 +500,42 @@ internal sealed class SceneDispatcher
         if (count == 1) { single.InternalOnTriggerExit(other); return; }
 
         try { for (int i = 0; i < count; i++) many![i].InternalOnTriggerExit(other); }
+        finally { Release(many!, count); }
+    }
+
+    public static void CharacterEnter(GameObject go, CharacterController character)
+    {
+        if (go is null) return;
+
+        int count = Collect(go, SceneCallbacks.CharacterEnter, out MonoBehaviour single, out MonoBehaviour[]? many);
+        if (count == 0) return;
+        if (count == 1) { single.InternalOnCharacterEnter(character); return; }
+
+        try { for (int i = 0; i < count; i++) many![i].InternalOnCharacterEnter(character); }
+        finally { Release(many!, count); }
+    }
+
+    public static void CharacterStay(GameObject go, CharacterController character)
+    {
+        if (go is null) return;
+
+        int count = Collect(go, SceneCallbacks.CharacterStay, out MonoBehaviour single, out MonoBehaviour[]? many);
+        if (count == 0) return;
+        if (count == 1) { single.InternalOnCharacterStay(character); return; }
+
+        try { for (int i = 0; i < count; i++) many![i].InternalOnCharacterStay(character); }
+        finally { Release(many!, count); }
+    }
+
+    public static void CharacterExit(GameObject go, CharacterController character)
+    {
+        if (go is null) return;
+
+        int count = Collect(go, SceneCallbacks.CharacterExit, out MonoBehaviour single, out MonoBehaviour[]? many);
+        if (count == 0) return;
+        if (count == 1) { single.InternalOnCharacterExit(character); return; }
+
+        try { for (int i = 0; i < count; i++) many![i].InternalOnCharacterExit(character); }
         finally { Release(many!, count); }
     }
 

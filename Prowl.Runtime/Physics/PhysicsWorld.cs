@@ -39,6 +39,9 @@ public enum PhysicsThreadModel
 /// </summary>
 public class PhysicsWorld
 {
+    /// <summary>Enabled character controllers in this world. They have no body, so trigger volumes test them directly.</summary>
+    internal readonly List<CharacterController> Characters = new();
+
     /// <summary>
     /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
     /// pair is scoped to this world and is dropped when the world is cleared.

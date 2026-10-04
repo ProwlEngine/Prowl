@@ -204,6 +204,66 @@ public class SceneCameraGatherTests : RuntimeTestBase
     }
 
     [Fact]
+    public void FindMainCamera_PicksHighestDepth()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject low = CreateGameObject("Low");
+        GameObject high = CreateGameObject("High");
+        low.AddComponent<Camera>().Depth = 0;
+        Camera expected = high.AddComponent<Camera>();
+        expected.Depth = 4;
+        scene.Add(low);
+        scene.Add(high);
+
+        Assert.Same(expected, scene.FindMainCamera());
+    }
+
+    [Fact]
+    public void FindMainCamera_SkipsDisabledCamerasAndEditorHelpers()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject game = CreateGameObject("Game");
+        Camera expected = game.AddComponent<Camera>();
+
+        GameObject disabled = CreateGameObject("Disabled");
+        Camera off = disabled.AddComponent<Camera>();
+        off.Depth = 10;
+
+        GameObject helper = CreateGameObject("SceneViewCamera");
+        helper.HideFlags = HideFlags.HideAndDontSave;
+        helper.AddComponent<Camera>().Depth = 20;
+
+        scene.Add(game);
+        scene.Add(disabled);
+        scene.Add(helper);
+        off.Enabled = false;
+
+        Assert.Same(expected, scene.FindMainCamera());
+    }
+
+    [Fact]
+    public void Main_ReadsTheCurrentScene_AndForgetsADestroyedCamera()
+    {
+        Scene scene = CreateScene();
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+
+        GameObject first = CreateGameObject("First");
+        Camera firstCam = first.AddComponent<Camera>();
+        firstCam.Depth = 5;
+        GameObject second = CreateGameObject("Second");
+        Camera secondCam = second.AddComponent<Camera>();
+        scene.Add(first);
+        scene.Add(second);
+
+        Assert.Same(firstCam, Camera.Main);
+
+        first.Dispose();
+
+        Assert.Same(secondCam, Camera.Main);
+    }
+
+    [Fact]
     public void MixedHierarchy_MatchesLegacyExactly()
     {
         Scene scene = CreateScene(enable: true);

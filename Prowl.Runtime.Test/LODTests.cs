@@ -147,6 +147,23 @@ public class LODTests
     }
 
     private static Float4 ExpectedWeights(float x) => new(x / GridCells, 1f - x / GridCells, 0, 0);
+
+    /// <summary>Skinning as bone to weight, which is what deforms the mesh whatever order the slots come in.</summary>
+    private static Dictionary<int, float> Skin(Float4 bones, Float4 weights)
+    {
+        var skin = new Dictionary<int, float>();
+        void Add(float bone, float weight)
+        {
+            if (weight == 0) return;
+            int b = (int)MathF.Round(bone);
+            skin[b] = skin.GetValueOrDefault(b) + weight;
+        }
+        Add(bones.X, weights.X);
+        Add(bones.Y, weights.Y);
+        Add(bones.Z, weights.Z);
+        Add(bones.W, weights.W);
+        return skin;
+    }
     private static Float3 ExpectedOffset(float x) => new(0, x * 0.1f, 0);
 
     [Fact]
@@ -168,8 +185,7 @@ public class LODTests
         var offsets = mesh.BlendShapes[0].Frames[0].DeltaVertices;
         for (int i = 0; i < positions.Length; i++)
         {
-            Assert.Equal(ExpectedWeights(positions[i].X), weights[i]);
-            Assert.Equal(new Float4(0, 1, 0, 0), indices[i]);
+            Assert.Equal(Skin(new Float4(0, 1, 0, 0), ExpectedWeights(positions[i].X)), Skin(indices[i], weights[i]));
             Assert.Equal(ExpectedOffset(positions[i].X), offsets[i]);
         }
     }
@@ -221,7 +237,7 @@ public class LODTests
     /// vertices with flipped normals, the way double sided cards are authored. With a skin split, the
     /// middle column is duplicated so triangles left of it are bound to bone 0 and right of it to bone 1.
     /// </summary>
-    private static Mesh Card(int n, bool back = false, bool skinSplit = false)
+    private static Mesh Card(int n, bool back = false, bool skinSplit = false, bool interleaved = false)
     {
         var positions = new List<Float3>();
         var normals = new List<Float3>();
@@ -264,10 +280,17 @@ public class LODTests
                     if (split.TryGetValue(a, out int sa)) a = sa;
                     if (split.TryGetValue(d, out int sd)) d = sd;
                 }
-                indices.AddRange([(uint)a, (uint)d, (uint)c, (uint)a, (uint)c, (uint)b]);
+                uint fa = (uint)a, fb = (uint)b, fc = (uint)c, fd = (uint)d;
+                uint ba = (uint)(backStart + a), bb = (uint)(backStart + b), bc = (uint)(backStart + c), bd = (uint)(backStart + d);
+                if (back && interleaved)
+                {
+                    // Front, back, front, back across the quad, the order vertex cache optimisers produce
+                    indices.AddRange([fa, fd, fc, ba, bb, bc, fa, fc, fb, ba, bc, bd]);
+                    continue;
+                }
+                indices.AddRange([fa, fd, fc, fa, fc, fb]);
                 if (back)
-                    indices.AddRange([(uint)(backStart + a), (uint)(backStart + c), (uint)(backStart + d),
-                                      (uint)(backStart + a), (uint)(backStart + b), (uint)(backStart + c)]);
+                    indices.AddRange([ba, bc, bd, ba, bb, bc]);
             }
         }
 
@@ -307,11 +330,12 @@ public class LODTests
 
         var positions = mesh.Vertices;
         var weights = mesh.BoneWeights;
+        var bones = mesh.BoneIndices;
         var leftSeam = new HashSet<Float3>();
         var rightSeam = new HashSet<Float3>();
         for (int i = 0; i < positions.Length; i++)
         {
-            bool isLeft = weights[i].X == 1;
+            bool isLeft = Skin(bones[i], weights[i]).GetValueOrDefault(0) == 1;
             Assert.True(isLeft ? positions[i].X <= n / 2 : positions[i].X >= n / 2);
             if (positions[i].X == n / 2) (isLeft ? leftSeam : rightSeam).Add(positions[i]);
         }
@@ -345,7 +369,78 @@ public class LODTests
 
         using Mesh back = MeshGeometry.ToMesh(MeshGeometry.ToGeometryData(triangle), triangle);
 
-        Assert.All(back.BoneIndices, i => Assert.Equal(new Float4(3, 1, 0, 0), i));
+        var expected = new Dictionary<int, float> { [3] = 0.5f, [1] = 0.5f };
+        for (int i = 0; i < back.VertexCount; i++)
+            Assert.Equal(expected, Skin(back.BoneIndices[i], back.BoneWeights[i]));
+    }
+
+    [Fact]
+    public void DoubleSidedCardsSimplifyWhateverTheTriangleOrder()
+    {
+        using var card = Card(8, back: true, interleaved: true);
+
+        GeometryData geometry = MeshGeometry.ToGeometryData(card);
+        Assert.Equal(2 * 81, geometry.Vertices.Count);
+
+        MeshLOD lod = MeshLODGenerator.Generate(card, 0.25f);
+        using Mesh mesh = lod.Mesh;
+        Assert.InRange(lod.Triangles, geometry.Faces.Count / 4 - 1, geometry.Faces.Count / 4);
+    }
+
+    [Fact]
+    public void CardsSpreadFromTheirPivotSurvive()
+    {
+        // Every corner at the pivot, the way shader spread billboards are authored
+        using var billboard = new Mesh();
+        billboard.Vertices = [Float3.Zero, Float3.Zero, Float3.Zero, Float3.Zero];
+        billboard.UV = [new Float2(0, 0), new Float2(1, 0), new Float2(1, 1), new Float2(0, 1)];
+        billboard.Indices = [0, 1, 2, 0, 2, 3];
+
+        var levels = MeshLODGenerator.GenerateChain(billboard, [1f, 0.5f]);
+
+        Assert.All(levels, level => Assert.Equal(6, level.Mesh.IndexCount));
+        foreach (var level in levels) level.Mesh.Dispose();
+    }
+
+    [Fact]
+    public void EmptyGeometryMakesAnEmptyMesh()
+    {
+        using var source = Mesh.CreateTriangle(Float3.Zero, Float3.UnitX, Float3.UnitY);
+        source.SetSubMeshCount(2);
+        source.SetSubMesh(0, new SubMeshDescriptor(0, 3));
+
+        using Mesh mesh = MeshGeometry.ToMesh(new GeometryData(), source);
+
+        Assert.Equal(0, mesh.VertexCount);
+        Assert.Equal(2, mesh.SubMeshCount);
+    }
+
+    [Fact]
+    public void BoneSlotOrderDoesNotMakeASeam()
+    {
+        // The same bones in a different slot order, and a stray index on an unused slot, deform identically
+        using var card = Card(4);
+        var bones = card.BoneIndices;
+        var weights = card.BoneWeights;
+        for (int i = 0; i < bones.Length; i++)
+        {
+            bones[i] = i % 2 == 0 ? new Float4(0, 1, 7, 0) : new Float4(1, 0, 0, 9);
+            weights[i] = i % 2 == 0 ? new Float4(0.25f, 0.75f, 0, 0) : new Float4(0.75f, 0.25f, 0, 0);
+        }
+        card.BoneIndices = bones;
+        card.BoneWeights = weights;
+
+        GeometryData geometry = MeshGeometry.ToGeometryData(card);
+
+        foreach (var face in geometry.Faces)
+        {
+            var loop = face.Loop!;
+            do
+            {
+                Assert.Equal(new[] { 0, 0, 0, 1 }, ((GeometryData.IntAttributeValue)loop.Attributes[MeshGeometry.BoneIndices]).Data);
+                loop = loop.Next!;
+            } while (loop != face.Loop);
+        }
     }
 
     #endregion

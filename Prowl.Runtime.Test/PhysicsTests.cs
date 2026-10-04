@@ -522,6 +522,105 @@ public class PhysicsTests : RuntimeTestBase
         public override void OnTriggerEnter(Rigidbody3D other) => Entered.Add(other);
         public override void OnTriggerStay(Rigidbody3D other) => StayCount++;
         public override void OnTriggerExit(Rigidbody3D other) => Exited.Add(other);
+
+        public readonly List<CharacterController> CharactersEntered = new();
+        public readonly List<CharacterController> CharactersExited = new();
+        public int CharacterStayCount;
+
+        public override void OnCharacterEnter(CharacterController character) => CharactersEntered.Add(character);
+        public override void OnCharacterStay(CharacterController character) => CharacterStayCount++;
+        public override void OnCharacterExit(CharacterController character) => CharactersExited.Add(character);
+    }
+
+    private CharacterController AddCharacter(Scene scene, Float3 feet, int layer = 0)
+    {
+        var go = CreateGameObject("Character");
+        go.Transform.Position = feet;
+        go.LayerIndex = layer;
+        var character = go.AddComponent<CharacterController>();
+        scene.Add(go);
+        return character;
+    }
+
+    [Fact]
+    public void Trigger_CharacterInside_RaisesCharacterEnterNotTriggerEnter()
+    {
+        var scene = CreatePhysicsScene();
+        var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
+        var character = AddCharacter(scene, new Float3(0, -1, 0));
+
+        StepPhysics(scene);
+
+        Assert.Contains(character, Recorder(trigger).CharactersEntered);
+        Assert.Contains(character, trigger.OverlappingCharacters);
+        Assert.Empty(Recorder(trigger).Entered);
+    }
+
+    [Fact]
+    public void Trigger_CharacterStaying_RaisesCharacterStay()
+    {
+        var scene = CreatePhysicsScene();
+        var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
+        AddCharacter(scene, new Float3(0, -1, 0));
+
+        StepPhysics(scene, 3);
+
+        Assert.Single(Recorder(trigger).CharactersEntered);
+        Assert.Equal(2, Recorder(trigger).CharacterStayCount);
+    }
+
+    [Fact]
+    public void Trigger_CharacterLeaving_RaisesCharacterExit()
+    {
+        var scene = CreatePhysicsScene();
+        var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
+        var character = AddCharacter(scene, new Float3(0, -1, 0));
+
+        StepPhysics(scene);
+        character.Teleport(new Float3(50, 0, 0));
+        StepPhysics(scene);
+
+        Assert.Contains(character, Recorder(trigger).CharactersExited);
+        Assert.Empty(trigger.OverlappingCharacters);
+    }
+
+    [Fact]
+    public void Trigger_CharacterOutside_IsNotReported()
+    {
+        var scene = CreatePhysicsScene();
+        var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(2, 2, 2));
+        AddCharacter(scene, new Float3(5, 0, 0));
+
+        StepPhysics(scene);
+
+        Assert.Empty(Recorder(trigger).CharactersEntered);
+    }
+
+    [Fact]
+    public void Trigger_LayerMask_FiltersCharacters()
+    {
+        var scene = CreatePhysicsScene();
+        var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
+        trigger.LayerMask = OnlyLayer(3);
+        AddCharacter(scene, new Float3(0, -1, 0), layer: 5);
+
+        StepPhysics(scene);
+
+        Assert.Empty(Recorder(trigger).CharactersEntered);
+    }
+
+    [Fact]
+    public void Trigger_DisabledCharacter_RaisesCharacterExit()
+    {
+        var scene = CreatePhysicsScene();
+        var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
+        var character = AddCharacter(scene, new Float3(0, -1, 0));
+
+        StepPhysics(scene);
+        character.Enabled = false;
+        StepPhysics(scene);
+
+        Assert.Contains(character, Recorder(trigger).CharactersExited);
     }
 
     private TriggerVolume AddBoxTrigger(Scene scene, Float3 position, Float3 size)

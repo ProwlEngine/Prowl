@@ -15,6 +15,48 @@ public class InputActionTests
         bool IInputHandler.GetKey(KeyCode key) => Held.Contains(key);
     }
 
+    private sealed class PressedThisFrame : NullInputHandler, IInputHandler
+    {
+        public KeyCode? Key;
+        public int? MouseButton;
+        public bool HeldKey;
+        bool IInputHandler.GetKeyDown(KeyCode key) => key == Key;
+        bool IInputHandler.GetMouseButtonDown(int button) => button == MouseButton;
+        bool IInputHandler.IsAnyKeyDown => HeldKey;
+    }
+
+    private static void WithInput(IInputHandler handler, Action test)
+    {
+        Input.PushHandler(handler);
+        try { test(); }
+        finally { Input.PopHandler(); }
+    }
+
+    [Fact]
+    public void AnyKeyDown_TrueOnlyOnThePressFrame()
+    {
+        var input = new PressedThisFrame { HeldKey = true };
+        WithInput(input, () =>
+        {
+            Assert.True(Input.AnyKey);
+            Assert.False(Input.AnyKeyDown);
+
+            input.Key = KeyCode.Q;
+            Assert.True(Input.AnyKeyDown);
+        });
+    }
+
+    [Fact]
+    public void AnyButtonDown_CountsMouseButtons_AnyKeyDownDoesNot()
+    {
+        var input = new PressedThisFrame { MouseButton = 1 };
+        WithInput(input, () =>
+        {
+            Assert.False(Input.AnyKeyDown);
+            Assert.True(Input.AnyButtonDown);
+        });
+    }
+
     [Fact]
     public void Tap_StillFiresAfterAPressTooLongToBeATap()
     {

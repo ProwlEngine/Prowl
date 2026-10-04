@@ -442,6 +442,15 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Called once when <paramref name="other"/> leaves a <see cref="TriggerVolume"/> on this GameObject.</summary>
     public virtual void OnTriggerExit(Rigidbody3D other) { }
 
+    /// <summary>Called once when <paramref name="character"/> first enters a <see cref="TriggerVolume"/> on this GameObject.</summary>
+    public virtual void OnCharacterEnter(CharacterController character) { }
+
+    /// <summary>Called each fixed step while <paramref name="character"/> stays inside a <see cref="TriggerVolume"/> on this GameObject.</summary>
+    public virtual void OnCharacterStay(CharacterController character) { }
+
+    /// <summary>Called once when <paramref name="character"/> leaves a <see cref="TriggerVolume"/> on this GameObject.</summary>
+    public virtual void OnCharacterExit(CharacterController character) { }
+
     /// <summary>Gated Start only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalStart()
     {
@@ -549,6 +558,27 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         if (!ShouldExecuteGameplay) return;
         try { OnTriggerExit(other); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerExit() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnCharacterEnter(CharacterController character)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnCharacterEnter(character); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterEnter() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnCharacterStay(CharacterController character)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnCharacterStay(character); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterStay() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnCharacterExit(CharacterController character)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnCharacterExit(character); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCharacterExit() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     // Implemented explicitly so the identity rules below always run. They used to live in the virtual

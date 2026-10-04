@@ -4,6 +4,10 @@
 using System;
 using System.Collections.Generic;
 
+using Jitter2.Collision;
+using Jitter2.Collision.Shapes;
+using Jitter2.LinearMath;
+
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -215,7 +219,43 @@ public class CharacterController : MonoBehaviour
         _selfBodyResolved = true;
     }
 
-    public override void OnEnable() => ResolveSelfBody();
+    private PhysicsWorld? _registeredWorld;
+
+    public override void OnEnable()
+    {
+        ResolveSelfBody();
+
+        // Registered so trigger volumes can find the controller, which has no body for their overlap query.
+        _registeredWorld = GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        _registeredWorld?.Characters.Add(this);
+    }
+
+    public override void OnDisable()
+    {
+        _registeredWorld?.Characters.Remove(this);
+        _registeredWorld = null;
+    }
+
+    /// <summary>Whether the controller's full shape (skin included) overlaps the given query shape.</summary>
+    internal bool OverlapsShape<TShape>(in TShape shape, Quaternion orientation, Float3 position) where TShape : ISupportMappable
+    {
+        Float3 feet = GameObject.Transform.Position;
+        JQuaternion queryOrientation = orientation.ToJitter();
+        JVector queryPosition = position.ToJitter();
+
+        if (Shape == ColliderShape.Capsule)
+        {
+            Float3 bottom = feet + _up * Radius;
+            Float3 top = feet + _up * Maths.Max(Height - Radius, Radius + 0.001f);
+            var capsule = SupportPrimitives.CreateCapsule(Radius, Float3.Length(top - bottom) * 0.5f);
+            return NarrowPhase.MprEpa(shape, capsule, queryOrientation, Orientation.ToJitter(), queryPosition, ((top + bottom) * 0.5f).ToJitter(),
+                out _, out _, out _, out _);
+        }
+
+        var cylinder = SupportPrimitives.CreateCylinder(Radius, Height * 0.5f);
+        return NarrowPhase.MprEpa(shape, cylinder, queryOrientation, Orientation.ToJitter(), queryPosition, ShapeCenter(feet).ToJitter(),
+            out _, out _, out _, out _);
+    }
 
     private QueryFilter BuildFilter()
     {
