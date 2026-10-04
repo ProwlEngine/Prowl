@@ -44,10 +44,8 @@
   - `TransientTexturePoolTests` - the device-level transient render-texture pool
     (`GraphicsDevice.RentGraphTransientRenderTexture`): desc-keyed reuse once an
     execution's fence signals, no reuse while a bundle is still in flight, and leak-free disposal.
-  - `BufferSafetyTests` - the implicit-reallocation ("orphaning") path: writing a buffer that is
-    still in flight retires its native resource behind a stable managed identity, and the retired
-    resource is freed once the ring cycles. Also covers the `TransientWrites` opt-out and the
-    repeat-reallocation warning.
+  - `BufferSafetyTests` - CPU writes to a buffer that is still in flight: the upload is a queued
+    copy, so work already submitted reads the old contents and later work reads the new ones.
   - `BufferResourceTests` - graph buffer resources: writer/reader resolving one transient buffer, and
     a compute pass writing a graph buffer copied back for verification.
   - `BufferTests` / `TextureTests` (+ `TextureTests.RegressionTests`) - buffer and texture
