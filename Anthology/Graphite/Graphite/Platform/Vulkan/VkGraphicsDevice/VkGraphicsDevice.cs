@@ -21,6 +21,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     private readonly BackendInfoVulkan _vulkanInfo;
     private readonly VkSwapchain _mainSwapchain;
     private readonly VkGraphCommandBufferPool _graphCommandBufferPool;
+    private readonly VkGraphTransferCommandBufferPool _graphTransferCommandBufferPool;
     private readonly VkDescriptorSetCacheRegistry _descriptorSetCaches = new();
     private readonly VkDefaultTextureViewCache _defaultTextureViews;
 
@@ -71,6 +72,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         ResourceFactory = new VkResourceFactory(this);
         _graphCommandBufferPool = new VkGraphCommandBufferPool(this);
+        _graphTransferCommandBufferPool = new VkGraphTransferCommandBufferPool(this);
         _defaultTextureViews = new VkDefaultTextureViewCache(ResourceFactory);
 
         InitializeFrameOptions(options);
@@ -115,6 +117,10 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     internal VkTextureView GetOrCreateDefaultView(VkTexture texture) => _defaultTextureViews.GetOrCreate(texture);
 
     internal override CommandBuffer RentGraphCommandBuffer() => _graphCommandBufferPool.Rent();
+
+    internal override TransferCommandBuffer RentGraphTransferCommandBuffer() => _graphTransferCommandBufferPool.Rent();
+
+    internal void ReturnGraphTransferCommandBuffer(VkTransferCommandBuffer cb) => _graphTransferCommandBufferPool.Return(cb);
 
     internal void ReturnGraphCommandBuffer(VkCommandBuffer cb) => _graphCommandBufferPool.Return(cb);
 
@@ -181,6 +187,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         DestroyDebugCallback();
 
         _graphCommandBufferPool.Dispose();
+        _graphTransferCommandBufferPool.Dispose();
 
         DescriptorPoolManager.DestroyAll();
         _defaultTextureViews.Dispose();

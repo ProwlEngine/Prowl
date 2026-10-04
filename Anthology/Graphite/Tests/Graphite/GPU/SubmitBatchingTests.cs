@@ -29,11 +29,9 @@ file sealed class BufferWritePass : IPass<SubmitBatchingView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<SubmitBatchingView> context)
+    public void Render(RenderContext<SubmitBatchingView> context, CommandBuffer cl)
     {
-        CommandBuffer cl = context.GetCommandBuffer(_name);
         cl.CopyBuffer(_source, 0, _destination, 0, _destination.SizeInBytes);
-        context.SubmitCommandBuffer(cl);
     }
 }
 
@@ -52,7 +50,7 @@ file sealed class MidExecutionTransferPass : IPass<SubmitBatchingView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<SubmitBatchingView> context)
+    public void Render(RenderContext<SubmitBatchingView> context, CommandBuffer cmd)
     {
         TransferCommandBuffer transfer = context.GetTransferCommandBuffer("MidExecutionTransfer");
         transfer.Begin();

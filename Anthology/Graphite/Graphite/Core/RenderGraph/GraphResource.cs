@@ -247,16 +247,17 @@ public sealed class GraphImportedTextureResource : GraphResource
 }
 
 /// <summary>
-/// The device's main swapchain image for this execution. Writing it from any pass presents the frame after dispatch.
+/// The view's target for this execution: its <see cref="IRenderView.TargetFramebuffer"/> or the main swapchain image
+/// when <see cref="IRenderView.TargetSwapchain"/> is set. Write-only. Passes that write it are skipped for views with neither.
 /// </summary>
-public sealed class GraphBackbufferResource : GraphResource
+public sealed class GraphViewTargetResource : GraphResource
 {
-    /// <summary>Reserved ID every backbuffer declaration uses.</summary>
-    public static readonly RenderResourceID BackbufferId = RenderResourceID.Intern("Graphite.Backbuffer");
+    /// <summary>Reserved ID every view target declaration uses.</summary>
+    public static readonly RenderResourceID ViewTargetId = RenderResourceID.Intern("Graphite.ViewTarget");
 
     /// <summary>Load/store ops applied when bound as a raster target. Clears by default.</summary>
     public TargetLoadStoreOps Ops { get; }
 
-    internal GraphBackbufferResource(TargetLoadStoreOps? ops = null) : base(BackbufferId)
+    internal GraphViewTargetResource(TargetLoadStoreOps? ops = null) : base(ViewTargetId)
         => Ops = ops ?? TargetLoadStoreOps.ForLifetime(persistent: false);
 }

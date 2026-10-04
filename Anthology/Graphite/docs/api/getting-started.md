@@ -168,16 +168,14 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override string Name => "Triangle";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
+    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
-    public override void Render(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
-        CommandBuffer cmd = context.GetCommandBuffer("Triangle");
         BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_mesh.Source);
         cmd.Draw(3);
-        context.SubmitCommandBuffer(cmd);
     }
 }
 
@@ -276,7 +274,7 @@ public static class Program
 
 **Vertex data.** A command buffer asks an `IVertexSource` for one buffer per vertex layout slot of the bound shader. The reflected layouts here are `POSITION0` and `COLOR0`, each in its own slot, so a `VertexSource` with a buffer set under each name serves both. Without `SetIndexBuffer` the draw is non-indexed. Implement `IVertexSource` yourself only for custom resolution. Buffers are created through the `ResourceFactory` and filled with `UpdateBuffer` ([Buffers and textures](buffers-and-textures.md), [Command buffers](command-buffers.md)).
 
-**Render graph.** All drawing goes through a render graph, even for a single pass. A view (`SceneView`) describes what is being rendered and how large it is. A `RenderPipeline` owns the passes; this one adds a single pass that declares the default backbuffer as its target in `Setup` and records its draw in `Render`. `BindTarget` binds the backbuffer and applies its clear. Command buffers come from `context.GetCommandBuffer`, already begun, and are handed back with `SubmitCommandBuffer`. Because a pass wrote the backbuffer, the device presents it once the dispatch finishes ([Render graph](render-graph.md), [internals: render graph](../internals/03-render-graph.md)).
+**Render graph.** All drawing goes through a render graph, even for a single pass. A view (`SceneView`) describes what is being rendered and how large it is. A `RenderPipeline` owns the passes; this one adds a single pass that declares the view target as its target in `Setup` and records its draw in `Render`. `BindTarget` binds the view target and applies its clear. The view sets `TargetSwapchain` to draw into the swapchain. `Render` receives a command buffer that is already begun, and the graph submits it afterwards. Because a pass wrote the view target of a swapchain view, the device presents it once the dispatch finishes ([Render graph](render-graph.md), [internals: render graph](../internals/03-render-graph.md)).
 
 **Frame and shutdown.** `DispatchGraph` is the whole frame: it begins an execution, runs the pipeline for each view, completes the execution and swaps buffers itself; the window does not swap on its own. It returns an `ExecutionTask` you can ignore or wait on. On resize, `ResizeMainWindow` rebuilds the swapchain framebuffer; the view is updated too so anything sized from it follows the window, and minimized windows (size 0) are skipped. Shutdown disposes created resources first and the device last. `Dispose` on the device waits for the GPU to go idle and frees the programs ShaderDef created for you.
 
@@ -286,12 +284,12 @@ flowchart LR
     B --> C["Setup and run passes per view"]
     C --> D["Passes record and submit"]
     D --> E["CompleteExecution"]
-    E --> F["SwapBuffers if a pass wrote the backbuffer"]
+    E --> F["SwapBuffers if a swapchain view wrote the view target"]
 ```
 
 ## Next steps
 
-- [Render graph](render-graph.md): add offscreen passes and graph textures ahead of the backbuffer pass.
+- [Render graph](render-graph.md): add offscreen passes and graph textures ahead of the view target pass.
 - [Property sets](property-sets.md): feed uniforms, textures and samplers to your shaders.
 - [Shader programs](shader-programs.md): keywords, variants and program lifetime.
 - [Buffers and textures](buffers-and-textures.md): create, update and read back GPU resources.

@@ -109,7 +109,7 @@ The "null" resources are what a draw binds when a shader asks for a slot your `P
 
 | Member | Signature | Description |
 |--------|-----------|-------------|
-| `DispatchGraph` | `ExecutionTask DispatchGraph<T>(RenderPipeline<T> pipeline, IReadOnlyList<T> views) where T : IRenderView` | Runs the pipeline for each view as one execution, completes it, then presents if any pass called `Present()`. Returns the task without waiting |
+| `DispatchGraph` | `ExecutionTask DispatchGraph<T>(RenderPipeline<T> pipeline, IReadOnlyList<T> views) where T : IRenderView` | Runs the pipeline for each view as one execution, completes it, then presents if a view with `TargetSwapchain` ran a pass that wrote the view target. Returns the task without waiting |
 | `BeginExecution` | `ExecutionTask BeginExecution()` | Takes a ring slot, blocking on the oldest in-flight task if all are busy. Used by `DispatchGraph` |
 | `CompleteExecution` | `void CompleteExecution(ExecutionTask task)` | Marks CPU recording done. Non-blocking |
 | `IsExecutionComplete` | `bool IsExecutionComplete(ExecutionTask task)` | Poll GPU completion |

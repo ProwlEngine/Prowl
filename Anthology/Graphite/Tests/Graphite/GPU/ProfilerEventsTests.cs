@@ -91,11 +91,9 @@ file sealed class ClearingRasterPass : RasterPass<ProfilerView>
     public override void Setup(RenderContextBuilder builder)
         => SetTarget(builder, _id, GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R32_G32_B32_A32_Float), ops: TargetLoadStoreOps.Clear(new Color(0, 0, 0, 1)));
 
-    public override void Render(RenderContext<ProfilerView> context)
+    public override void Render(RenderContext<ProfilerView> context, CommandBuffer cmd)
     {
-        CommandBuffer cmd = context.GetCommandBuffer(Name);
         BindTarget(context, cmd);
-        context.SubmitCommandBuffer(cmd);
     }
 }
 
@@ -115,12 +113,10 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputTexture(_id, TextureUsageKind.TransferSrc);
 
-    public void Render(RenderContext<ProfilerView> context)
+    public void Render(RenderContext<ProfilerView> context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
-        CommandBuffer cmd = context.GetCommandBuffer(Name);
         cmd.CopyTexture(target.ColorTextures[0], _readback);
-        context.SubmitCommandBuffer(cmd);
     }
 }
 

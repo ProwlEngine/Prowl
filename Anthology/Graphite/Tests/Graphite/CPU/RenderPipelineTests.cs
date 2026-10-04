@@ -17,7 +17,7 @@ file sealed class CountingPass : IPass<TestView>
         builder.DeclareOutputTexture("pipeline_counting_out", Desc.Color());
     }
 
-    public void Render(RenderContext<TestView> context) { }
+    public void Render(RenderContext<TestView> context, CommandBuffer cmd) { }
 }
 
 file sealed class CountingPipeline : RenderPipeline<TestView>

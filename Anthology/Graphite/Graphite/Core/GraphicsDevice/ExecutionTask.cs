@@ -32,6 +32,7 @@ public abstract partial class ExecutionTask
         CloseTail();
         commandBuffer.SealRenderPass();
         _openTail = commandBuffer;
+        Device.Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: false);
     }
 
     internal void CloseTail()
@@ -55,6 +56,12 @@ public abstract partial class ExecutionTask
     /// </summary>
     /// <param name="commandBuffer">Buffer rented via the render context.</param>
     internal virtual void TrackRentedCommandBuffer(CommandBuffer commandBuffer) { }
+
+    /// <summary>
+    /// Tracks a rented transfer command buffer so it's reclaimed when GPU work retires. No-op if backend doesn't pool.
+    /// </summary>
+    /// <param name="commandBuffer">Buffer rented via the render context.</param>
+    internal virtual void TrackRentedTransferCommandBuffer(TransferCommandBuffer commandBuffer) { }
 
     /// <summary>
     /// Allocates a transient uniform buffer range from the bump allocator. Valid until completion fence signals.

@@ -24,12 +24,10 @@ PropertySet sceneProperties = new();
 sceneProperties.SetTexture("AlbedoTexture", albedo, device.LinearSampler);
 sceneProperties.SetFloat4("BaseColor", new Float4(1, 1, 1, 1));
 
-CommandBuffer cmd = context.GetCommandBuffer("Scene");
 cmd.SetShader(shader);
 cmd.SetVertexSource(mesh);
 cmd.SetProperties(sceneProperties);
 cmd.DrawIndexed();
-context.SubmitCommandBuffer(cmd);
 ```
 
 Per-frame values are written into the same set before recording:

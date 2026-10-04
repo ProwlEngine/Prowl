@@ -3,9 +3,8 @@ using System;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Base for a raster pass with one declared target. Only owns target setup: declare target in Setup via
-/// SetTarget/SetTargets, then in Render rent a command buffer, call BindTarget, draw, submit. Doesn't rent
-/// or submit buffers itself - that's on the pass body. Need full control? Use raw IPass instead.
+/// Base for a raster pass with one declared target: declare it in Setup, call BindTarget on the given command buffer in Render.
+/// The graph submits that buffer. Need full control? Use raw IPass instead.
 /// </summary>
 public abstract class RasterPass<TView> : IPass<TView>
     where TView : IRenderView
@@ -19,8 +18,8 @@ public abstract class RasterPass<TView> : IPass<TView>
     /// <summary>Declare target and other reads/writes here. Call SetTarget/SetTargets.</summary>
     public abstract void Setup(RenderContextBuilder builder);
 
-    /// <summary>Rent a command buffer, call BindTarget, draw, submit.</summary>
-    public abstract void Render(RenderContext<TView> context);
+    /// <summary>Call BindTarget on cmd, then draw. The graph submits cmd.</summary>
+    public abstract void Render(RenderContext<TView> context, CommandBuffer cmd);
 
     /// <summary>
     /// Declares a single-target framebuffer with load/store ops. Handle resolves to the render target in Render.
@@ -32,10 +31,10 @@ public abstract class RasterPass<TView> : IPass<TView>
         return _target;
     }
 
-    /// <summary>Declares the main swapchain image as this pass's target. The frame presents after dispatch.</summary>
-    protected TextureHandle SetBackbufferTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null)
+    /// <summary>Declares the view's target as this pass's target. The pass is skipped for a view with no target.</summary>
+    protected TextureHandle SetViewTarget(RenderContextBuilder builder, TargetLoadStoreOps? ops = null)
     {
-        _target = builder.DeclareBackbuffer(ops);
+        _target = builder.DeclareViewTarget(ops);
         _hasTarget = true;
         return _target;
     }

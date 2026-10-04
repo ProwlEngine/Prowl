@@ -26,9 +26,9 @@ file readonly struct BarrierView : IRenderView
 file sealed class LambdaPass : IPass<BarrierView>
 {
     private readonly Action<RenderContextBuilder> _setup;
-    private readonly Action<RenderContext<BarrierView>> _render;
+    private readonly Action<RenderContext<BarrierView>, CommandBuffer> _render;
 
-    public LambdaPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext<BarrierView>> render)
+    public LambdaPass(string name, Action<RenderContextBuilder> setup, Action<RenderContext<BarrierView>, CommandBuffer> render)
     {
         Name = name;
         _setup = setup;
@@ -37,7 +37,7 @@ file sealed class LambdaPass : IPass<BarrierView>
 
     public string Name { get; }
     public void Setup(RenderContextBuilder builder) => _setup(builder);
-    public void Render(RenderContext<BarrierView> context) => _render(context);
+    public void Render(RenderContext<BarrierView> context, CommandBuffer cmd) => _render(context, cmd);
 }
 
 file static class BarrierPasses
@@ -48,11 +48,9 @@ file static class BarrierPasses
         return new LambdaPass(
             "Upload",
             builder => handle = builder.DeclareOutputTexture(id, desc, usage: TextureUsageKind.TransferDst),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Upload");
                 cmd.CopyTexture(source, context.GetRenderTexture(handle).ColorTextures[0]);
-                context.SubmitCommandBuffer(cmd);
             });
     }
 
@@ -62,11 +60,9 @@ file static class BarrierPasses
         return new LambdaPass(
             "Readback",
             builder => handle = builder.DeclareInputTexture(id, TextureUsageKind.TransferSrc),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Readback");
                 cmd.CopyTexture(context.GetRenderTexture(handle).ColorTextures[0], staging);
-                context.SubmitCommandBuffer(cmd);
             });
     }
 }
@@ -189,23 +185,19 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass upload = new(
             "Upload",
             builder => uploadHandle = builder.DeclareOutputTexture(id, desc, usage: TextureUsageKind.TransferDst),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Upload");
                 cmd.CopyTexture(source, context.GetRenderTexture(uploadHandle).ColorTextures[0]);
-                context.SubmitCommandBuffer(cmd);
             });
 
         TextureHandle loadHandle = default;
         LambdaPass load = new(
             "Load",
             builder => loadHandle = builder.DeclareOutputTexture(id, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded)),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Load");
                 cmd.SetFramebuffer(context.GetRenderTexture(loadHandle).Framebuffer);
                 cmd.SetFullViewport();
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([upload, load, BarrierPasses.Readback(id, staging)]);
@@ -252,12 +244,10 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass write = new(
             "WriteHistory",
             builder => writeHandle = builder.DeclareOutputTexture(historyId, desc, history: 1),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("WriteHistory");
                 cmd.SetFramebuffer(context.GetRenderTexture(writeHandle).Framebuffer);
                 cmd.ClearColorTarget(0, frameColor);
-                context.SubmitCommandBuffer(cmd);
             });
 
         TextureHandle historyHandle = default;
@@ -269,9 +259,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 historyHandle = builder.DeclareInputTexture(historyId);
                 outputHandle = builder.DeclareOutputTexture(outputId, desc);
             },
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("SampleHistory");
                 Framebuffer target = context.GetRenderTexture(outputHandle).Framebuffer;
                 if (context.IsHistoryValid(historyHandle))
                 {
@@ -283,7 +272,6 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                     cmd.SetFramebuffer(target);
                     cmd.ClearColorTarget(0, Color.Black);
                 }
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([write, sample, BarrierPasses.Readback(outputId, staging)]);
@@ -316,15 +304,13 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass generate = new(
             "Generate",
             builder => storageHandle = builder.DeclareOutputTexture(storageId, desc, usage: TextureUsageKind.Storage),
-            context =>
+            (context, cmd) =>
             {
                 PropertySet props = new();
                 props.SetTexture("ComputeOutput", context.GetRenderTexture(storageHandle).ColorTextures[0]);
-                CommandBuffer cmd = context.GetCommandBuffer("Generate");
                 cmd.SetComputeShader(compute);
                 cmd.SetProperties(props);
                 cmd.Dispatch(1, 1, 1);
-                context.SubmitCommandBuffer(cmd);
             });
 
         TextureHandle sampledHandle = default;
@@ -336,15 +322,13 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 sampledHandle = builder.DeclareInputTexture(storageId);
                 outputHandle = builder.DeclareOutputTexture(outputId, desc);
             },
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Sample");
                 DrawSampled(
                     cmd, program,
                     context.GetRenderTexture(outputHandle).Framebuffer,
                     context.GetRenderTexture(sampledHandle).ColorTextures[0],
                     GD.PointSampler);
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([generate, sample, BarrierPasses.Readback(outputId, staging)]);
@@ -387,15 +371,13 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass generate = new(
             "GenerateVertices",
             builder => writeHandle = builder.DeclareOutputBuffer(verticesId, GraphBufferDesc.Structured(4, stride)),
-            context =>
+            (context, cmd) =>
             {
                 PropertySet props = new();
                 props.SetBuffer("OutputVertices", context.GetRenderBuffer(writeHandle), readOnly: false);
-                CommandBuffer cmd = context.GetCommandBuffer("GenerateVertices");
                 cmd.SetComputeShader(compute);
                 cmd.SetProperties(props);
                 cmd.Dispatch(1, 1, 1);
-                context.SubmitCommandBuffer(cmd);
             });
 
         BufferHandle readHandle = default;
@@ -407,11 +389,10 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 readHandle = builder.DeclareInputBuffer(verticesId, BufferUsageKind.ShaderRead);
                 outputHandle = builder.DeclareOutputTexture(outputId, GraphTextureDesc.Sized((int)size, (int)size, false, Format));
             },
-            context =>
+            (context, cmd) =>
             {
                 PropertySet props = new();
                 props.SetBuffer("InputVertices", context.GetRenderBuffer(readHandle), readOnly: true);
-                CommandBuffer cmd = context.GetCommandBuffer("DrawVertices");
                 cmd.SetFramebuffer(context.GetRenderTexture(outputHandle).Framebuffer);
                 cmd.ClearColorTarget(0, Color.Black);
                 cmd.SetFullViewport();
@@ -419,7 +400,6 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 cmd.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
                 cmd.SetProperties(props);
                 cmd.Draw(4);
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([generate, draw, BarrierPasses.Readback(outputId, staging)]);
@@ -442,13 +422,11 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass depth = new(
             "WriteDepth",
             builder => depthHandle = builder.DeclareOutputTexture(id, desc),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("WriteDepth");
                 cmd.SetFramebuffer(context.GetRenderTexture(depthHandle).Framebuffer);
                 cmd.ClearColorTarget(0, Color.Black);
                 cmd.ClearDepthStencil(0.25f, 0);
-                context.SubmitCommandBuffer(cmd);
             });
 
         TextureHandle fogHandle = default;
@@ -458,21 +436,19 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 id, desc,
                 ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded),
                 depthUsage: TextureUsageKind.DepthReadOnly),
-            context =>
+            (context, cmd) =>
             {
                 RenderTexture scene = context.GetRenderTexture(fogHandle);
                 PropertySet props = new();
                 props.SetTexture("Tex", scene.DepthTexture!, GD.PointSampler);
                 props.SetSampler("Smp", GD.PointSampler);
 
-                CommandBuffer cmd = context.GetCommandBuffer("Fog");
                 cmd.SetFramebuffer(scene.Framebuffer);
                 cmd.SetFullViewport();
                 cmd.SetShader(program);
                 cmd.SetVertexSource(VertexSource.None);
                 cmd.SetProperties(props);
                 cmd.Draw(3);
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([depth, fog, BarrierPasses.Readback(id, staging)]);
@@ -495,30 +471,18 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         GraphTextureDesc desc = GraphTextureDesc.Sized(4, 4, true, Format);
 
         TextureHandle handle = default;
-        List<Exception> errors = new();
         LambdaPass pass = new(
             "ClearReadOnlyDepth",
             builder => handle = builder.DeclareOutputTexture(id, desc, depthUsage: TextureUsageKind.DepthReadOnly),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("ClearReadOnlyDepth");
                 cmd.SetFramebuffer(context.GetRenderTexture(handle).Framebuffer);
                 cmd.ClearDepthStencil(1f, 0);
-                try
-                {
-                    context.SubmitCommandBuffer(cmd);
-                }
-                catch (RenderException e)
-                {
-                    errors.Add(e);
-                }
             });
 
         using RenderPipeline<BarrierView> pipeline = new([pass]);
-        GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) });
+        Assert.Throws<RenderException>(() => GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 4) }));
         GD.WaitForIdle();
-
-        Assert.Single(errors);
     }
 
     [Fact]
@@ -536,12 +500,10 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass seed = new(
             "Seed",
             builder => seedHandle = builder.DeclareOutputTexture(a, desc),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Seed");
                 cmd.SetFramebuffer(context.GetRenderTexture(seedHandle).Framebuffer);
                 cmd.ClearColorTarget(0, Color.Red);
-                context.SubmitCommandBuffer(cmd);
             });
 
         TextureHandle aHandle = default;
@@ -554,11 +516,10 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                     usage: both, initial: TextureUsageKind.Sampled);
                 bHandle = builder.DeclareOutputTexture(b, desc, usage: both, initial: TextureUsageKind.Attachment);
             },
-            context =>
+            (context, cmd) =>
             {
                 RenderTexture texA = context.GetRenderTexture(aHandle);
                 RenderTexture texB = context.GetRenderTexture(bHandle);
-                CommandBuffer cmd = context.GetCommandBuffer("PingPong");
 
                 DrawSampled(cmd, program, texB.Framebuffer, texA.ColorTextures[0], GD.PointSampler);
 
@@ -570,18 +531,15 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 DrawSampled(cmd, program, texB.Framebuffer, texA.ColorTextures[0], GD.PointSampler);
 
                 context.Transition(cmd, bHandle, TextureUsageKind.Sampled);
-                context.SubmitCommandBuffer(cmd);
             });
 
         TextureHandle readHandle = default;
         LambdaPass readback = new(
             "Readback",
             builder => readHandle = builder.DeclareInputTexture(b, TextureUsageKind.TransferSrc),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Readback");
                 cmd.CopyTexture(context.GetRenderTexture(readHandle).ColorTextures[0], staging);
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([seed, pingPong, readback]);
@@ -603,9 +561,9 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "Order",
             builder => handle = builder.DeclareOutputTexture(id, desc,
                 usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled, initial: TextureUsageKind.Attachment),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer first = context.GetCommandBuffer("First");
+                CommandBuffer first = cmd;
                 CommandBuffer second = context.GetCommandBuffer("Second");
                 context.Transition(second, handle, TextureUsageKind.Sampled);
                 try
@@ -638,9 +596,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass pass = new(
             "BadKind",
             builder => handle = builder.DeclareOutputTexture(id, desc),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("BadKind");
                 try
                 {
                     context.Transition(cmd, handle, TextureUsageKind.Sampled);
@@ -649,7 +606,6 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 {
                     errors.Add(e);
                 }
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([pass]);
@@ -669,19 +625,17 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass write = new(
             "Write",
             builder => handle = builder.DeclareOutputTexture(id, desc),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer cmd = context.GetCommandBuffer("Write");
                 cmd.SetFramebuffer(context.GetRenderTexture(handle).Framebuffer);
                 cmd.ClearColorTarget(0, Color.Black);
-                context.SubmitCommandBuffer(cmd);
             });
 
         List<Exception> errors = new();
         LambdaPass thief = new(
             "Thief",
             builder => { },
-            context =>
+            (context, cmd) =>
             {
                 try
                 {
@@ -710,9 +664,9 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass pass = new(
             "FirstOrder",
             builder => builder.DeclareOutputTexture(id, desc),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer first = context.GetCommandBuffer("First");
+                CommandBuffer first = cmd;
                 CommandBuffer second = context.GetCommandBuffer("Second");
                 try
                 {
@@ -745,9 +699,9 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass load = new(
             "Load",
             builder => loadHandle = builder.DeclareOutputTexture(id, desc, ops: new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded)),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer first = context.GetCommandBuffer("LoadFirst");
+                CommandBuffer first = cmd;
                 CommandBuffer second = context.GetCommandBuffer("LoadSecond");
                 second.SetFramebuffer(context.GetRenderTexture(loadHandle).Framebuffer);
                 second.SetFullViewport();
@@ -773,7 +727,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         LambdaPass idle = new(
             "Idle",
             builder => builder.DeclareOutputTexture(id, desc),
-            context => { });
+            (context, cmd) => { });
 
         using RenderPipeline<BarrierView> pipeline = new([idle, BarrierPasses.Upload(id, desc, source), BarrierPasses.Readback(id, staging)]);
         GD.DispatchGraph(pipeline, new BarrierView[] { new(4, 1) });
@@ -795,15 +749,13 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "Implicit",
             builder => handle = builder.DeclareOutputTexture(id, desc,
                 usage: TextureUsageKind.Attachment | TextureUsageKind.TransferSrc, initial: TextureUsageKind.Attachment),
-            context =>
+            (context, cmd) =>
             {
                 RenderTexture target = context.GetRenderTexture(handle);
-                CommandBuffer cmd = context.GetCommandBuffer("Implicit");
                 cmd.SetFramebuffer(target.Framebuffer);
                 cmd.ClearColorTarget(0, Color.Green);
                 context.Transition(handle, TextureUsageKind.TransferSrc);
                 cmd.CopyTexture(target.ColorTextures[0], staging);
-                context.SubmitCommandBuffer(cmd);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([pass]);
@@ -825,9 +777,9 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             "Ambiguous",
             builder => handle = builder.DeclareOutputTexture(id, desc,
                 usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled, initial: TextureUsageKind.Attachment),
-            context =>
+            (context, cmd) =>
             {
-                CommandBuffer first = context.GetCommandBuffer("First");
+                CommandBuffer first = cmd;
                 CommandBuffer second = context.GetCommandBuffer("Second");
                 try
                 {

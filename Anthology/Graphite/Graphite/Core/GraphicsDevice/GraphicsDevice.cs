@@ -58,6 +58,11 @@ public abstract partial class GraphicsDevice : IDisposable
     internal virtual CommandBuffer RentGraphCommandBuffer() => ResourceFactory.CreateCommandBuffer();
 
     /// <summary>
+    /// Rents a transfer command buffer for a graph pass. Pooling backends hand out a recycled instance; default just makes a new one.
+    /// </summary>
+    internal virtual TransferCommandBuffer RentGraphTransferCommandBuffer() => ResourceFactory.CreateTransferCommandBuffer();
+
+    /// <summary>
     /// Main swapchain for this device, or null if none.
     /// </summary>
     public abstract Swapchain MainSwapchain { get; }

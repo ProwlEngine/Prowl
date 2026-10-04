@@ -23,6 +23,9 @@ public sealed class RenderGraph<TView> : IDisposable
 
         internal readonly ResourceAccess[] Accesses;
 
+        /// <summary>True if the pass writes the view target, so it only runs for views that have one.</summary>
+        public bool WritesViewTarget => Array.IndexOf(Outputs, GraphViewTargetResource.ViewTargetId) >= 0;
+
         internal PassNode(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, GraphResource[] declaredOutputs, ResourceAccess[] accesses)
         {
             Pass = pass;
@@ -39,8 +42,8 @@ public sealed class RenderGraph<TView> : IDisposable
     /// <summary>All declared resources by ID (first declaration wins).</summary>
     public IReadOnlyDictionary<RenderResourceID, GraphResource> Resources { get; }
 
-    /// <summary>True if any pass writes the backbuffer, so views of this graph present.</summary>
-    public bool WritesBackbuffer { get; }
+    /// <summary>True if any pass writes the view target, so views with a target draw and views with <see cref="IRenderView.TargetSwapchain"/> present.</summary>
+    public bool WritesViewTarget { get; }
 
     private RenderGraph(
         PassNode[] ordered,
@@ -48,7 +51,7 @@ public sealed class RenderGraph<TView> : IDisposable
     {
         OrderedPasses = ordered;
         Resources = resources;
-        WritesBackbuffer = resources.ContainsKey(GraphBackbufferResource.BackbufferId);
+        WritesViewTarget = resources.ContainsKey(GraphViewTargetResource.ViewTargetId);
     }
 
     /// <summary>Disposes physical resources owned by any history resource here.</summary>
@@ -124,10 +127,10 @@ public sealed class RenderGraph<TView> : IDisposable
     private static void ApplyStorageUsage(string passName, in ResourceAccess access, Dictionary<RenderResourceID, GraphResource> resources)
     {
         GraphResource resource = resources[access.Id];
-        if (resource is GraphBackbufferResource)
+        if (resource is GraphViewTargetResource)
         {
             if (!access.IsOutput)
-                throw new InvalidOperationException($"Pass '{passName}' reads the backbuffer; it can only be written.");
+                throw new InvalidOperationException($"Pass '{passName}' reads the view target; it can only be written.");
             return;
         }
 

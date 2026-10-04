@@ -9,6 +9,8 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct SwapchainView : IRenderView
 {
+    public bool TargetSwapchain => true;
+
     public SwapchainView(uint width, uint height)
     {
         PixelWidth = width;
@@ -24,13 +26,11 @@ file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
 {
     public override string Name => "ClearSwapchain";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
+    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(Color.Blue));
 
-    public override void Render(RenderContext<SwapchainView> context)
+    public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
     {
-        CommandBuffer cmd = context.GetCommandBuffer("ClearSwapchain");
         BindTarget(context, cmd);
-        context.SubmitCommandBuffer(cmd);
     }
 }
 
@@ -41,7 +41,7 @@ file sealed class OffscreenPass : IPass<SwapchainView>
     public void Setup(RenderContextBuilder builder)
         => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
 
-    public void Render(RenderContext<SwapchainView> context) { }
+    public void Render(RenderContext<SwapchainView> context, CommandBuffer cmd) { }
 }
 
 // Coverage for the main swapchain: the framebuffer it exposes, presentation, and resize. These

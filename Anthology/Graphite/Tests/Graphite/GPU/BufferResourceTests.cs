@@ -40,7 +40,7 @@ file sealed class BufferWriterPass : IPass<BufferView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
-    public void Render(RenderContext<BufferView> context) => Resolved = context.GetRenderBuffer(_handle);
+    public void Render(RenderContext<BufferView> context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
 }
 
 file sealed class BufferReaderPass : IPass<BufferView>
@@ -55,7 +55,7 @@ file sealed class BufferReaderPass : IPass<BufferView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareInputBuffer(_id);
 
-    public void Render(RenderContext<BufferView> context) => Resolved = context.GetRenderBuffer(_handle);
+    public void Render(RenderContext<BufferView> context, CommandBuffer cmd) => Resolved = context.GetRenderBuffer(_handle);
 }
 
 file sealed class ComputeWriteReadbackPass : IPass<BufferView>
@@ -84,7 +84,7 @@ file sealed class ComputeWriteReadbackPass : IPass<BufferView>
 
     public void Setup(RenderContextBuilder builder) => _handle = builder.DeclareOutputBuffer(_id, _desc);
 
-    public void Render(RenderContext<BufferView> context)
+    public void Render(RenderContext<BufferView> context, CommandBuffer cl)
     {
         DeviceBuffer destination = context.GetRenderBuffer(_handle);
 
@@ -94,12 +94,10 @@ file sealed class ComputeWriteReadbackPass : IPass<BufferView>
         props.SetBuffer("Source", _source, readOnly: false);
         props.SetBuffer("Destination", destination, readOnly: false);
 
-        CommandBuffer cl = context.GetCommandBuffer(Name);
         cl.SetComputeShader(_compute);
         cl.SetProperties(props);
         cl.Dispatch(1, 1, 1);
         cl.CopyBuffer(destination, 0, _readback, 0, destination.SizeInBytes);
-        context.SubmitCommandBuffer(cl);
     }
 }
 
@@ -124,15 +122,13 @@ file sealed class BufferHistoryPass : IPass<BufferView>
     public void Setup(RenderContextBuilder builder)
         => _handle = builder.DeclareOutputBuffer(_id, GraphBufferDesc.Structured(_sizeInBytes / 4, 4), history: 1);
 
-    public void Render(RenderContext<BufferView> context)
+    public void Render(RenderContext<BufferView> context, CommandBuffer cl)
     {
         DeviceBuffer current = context.GetRenderBuffer(_handle, 0);
         DeviceBuffer previous = context.GetRenderBuffer(_handle, 1);
 
-        CommandBuffer cl = context.GetCommandBuffer(Name);
         cl.CopyBuffer(_source, 0, current, 0, _sizeInBytes);
         cl.CopyBuffer(previous, 0, _readback, 0, _sizeInBytes);
-        context.SubmitCommandBuffer(cl);
     }
 }
 

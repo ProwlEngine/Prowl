@@ -27,7 +27,7 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 
 Rendering is built around a render graph: a `RenderPipeline` owns a list of `IPass`es, and a
 `GraphicsDevice` dispatches that pipeline against a list of views. The simplest possible pipeline is one
-pass that writes the default backbuffer, which presents the frame:
+pass that writes the view target, which presents the frame when the view sets `TargetSwapchain`:
 
 ```cs
 internal readonly struct SceneView : IRenderView
@@ -55,17 +55,15 @@ internal sealed class TrianglePass : RasterPass<SceneView>
 
     public override string Name => "Triangle";
 
-    public override void Setup(RenderContextBuilder builder) => SetBackbufferTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
+    public override void Setup(RenderContextBuilder builder) => SetViewTarget(builder, TargetLoadStoreOps.Clear(new Color(0.10f, 0.12f, 0.16f, 1.0f)));
 
-    public override void Render(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context, CommandBuffer cmd)
     {
-        CommandBuffer cmd = context.GetCommandBuffer("Triangle");
         BindTarget(context, cmd);
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
 
-        context.SubmitCommandBuffer(cmd);
     }
 }
 
@@ -105,7 +103,7 @@ TrianglePipeline pipeline = new(new TrianglePass(triangle, shader));
 SceneView[] views = { new SceneView(600, 600) };
 
 // Per-frame render loop: builds an ExecutionTask internally, runs the pipeline for every view, and
-// swaps buffers if any pass wrote the backbuffer.
+// swaps buffers if a swapchain view wrote the view target.
 device.DispatchGraph(pipeline, views);
 ```
 
@@ -314,15 +312,16 @@ declarative graph of passes over a `RenderPipeline<TView>`:
   first use) and declares the resources the pass reads and writes: `DeclareInputTexture(id)` /
   `DeclareInputBuffer(id)` reference a resource by ID only (the producer owns the description), while
   `DeclareOutputTexture(id, desc)` / `DeclareOutputBuffer(id, desc)` declare a resource this pass produces.
-  `Render(RenderContext<TView>)` runs every dispatch and records the pass's actual work.
+  `Render(RenderContext<TView>, CommandBuffer)` runs every dispatch and records the pass's actual work into the given buffer.
 - **`RasterPass<TView>`** - a convenience base for the common raster pass. Declare the render target in
   `Setup` with `SetTarget(builder, id, desc)` (or `SetTargets` for a multi-format MRT target), then in
-  `Render` rent a command buffer, call `BindTarget(context, cmd)` to bind the target and apply its
-  declared load/clear ops, record draws, and submit. Raw `IPass` remains the low-level escape hatch.
-- **The backbuffer** - `builder.DeclareBackbuffer()` (or `SetBackbufferTarget` in a `RasterPass`) declares a
-  write to the device's main swapchain image. It is an ordinary graph texture: the graph moves it in
-  and out of attachment layout, orders the writing pass after the passes it reads from, and presents
-  after dispatch if and only if some pass wrote it. A graph with no backbuffer writer stays offscreen.
+  `Render` call `BindTarget(context, cmd)` on the given buffer to bind the target and apply its
+  declared load/clear ops, then record draws. Raw `IPass` remains the low-level escape hatch.
+- **The view target** - `builder.DeclareViewTarget()` (or `SetViewTarget` in a `RasterPass`) declares a
+  write to the current view's target: `IRenderView.TargetFramebuffer`, or the main swapchain image when
+  `TargetSwapchain` is set. The graph moves it in and out of attachment layout and orders the writing pass
+  after the passes it reads from. Passes writing it are skipped for a view with no target, and only
+  swapchain views present after dispatch.
   Declaring it on a device with no main swapchain throws when the pass is reached.
 - **`RenderPipeline<TView>`** - subclass and override `InitializePasses()` to call `AddPass` for each
   `IPass`. It may also declare shared resources centrally with
@@ -331,10 +330,10 @@ declarative graph of passes over a `RenderPipeline<TView>`:
   `RenderGraph` the first time it runs: passes are topologically sorted so readers run after their
   writers. Every input ID must be produced by some pass output or a central declaration, otherwise
   build throws; a dependency cycle throws too.
-- **Command buffers** - obtained only from the context (`context.GetCommandBuffer(name)`), which begins
-  the buffer, and submitted only through the same context (`context.SubmitCommandBuffer(cmd)`), which
-  ends and queues it. Passes never call `Begin`/`End`. A buffer rented but never submitted is released
-  and logs a warning. Submitted buffers retire through the execution ring's fence; passes never block.
+- **Command buffers** - the graph begins one per pass, hands it to `Render` and submits it afterwards.
+  A pass needing more rents them from the context (`context.GetCommandBuffer(name)`) and submits them
+  with `context.SubmitCommandBuffer(cmd)`. Passes never call `Begin`/`End`. An extra buffer rented but
+  never submitted is released and logs a warning. Submitted buffers retire through the execution ring's fence; passes never block.
 - **`GraphTextureDesc`** - describes a graph texture: view-relative (`GraphTextureDesc.ViewSized`,
   scaled off `IRenderView.PixelWidth`/`PixelHeight`) or fixed-size (`GraphTextureDesc.Sized`), plus
   color formats and whether it has a depth attachment.
@@ -354,7 +353,7 @@ declarative graph of passes over a `RenderPipeline<TView>`:
 - **`TextureHandle` / `BufferHandle`** - the opaque handles a pass gets back from the builder during
   setup; resolve them to a real `RenderTexture` / `DeviceBuffer` during rendering via
   `context.GetRenderTexture(handle)` / `context.GetRenderBuffer(handle)`.
-- **`IRenderView`** - the minimal size contract (`PixelWidth`/`PixelHeight`) a pipeline's view type must
+- **`IRenderView`** - the size contract (`PixelWidth`/`PixelHeight`) and optional `TargetFramebuffer`/`TargetSwapchain` a pipeline's view type must
   implement so view-relative textures can be sized; add richer per-view data (matrices, frustum) on
   top in your own type. How a pass obtains and issues its draws is entirely up to the pass body; the
   graph does not model draw commands, culling, or sorting.
@@ -369,18 +368,18 @@ device.DispatchGraph(pipeline, views, profiler: null);
 ```
 
 This opens one `ExecutionTask`, runs `RenderPipeline.ExecuteView` (the ordered passes) for every view, completes
-the execution, and calls `SwapBuffers()` if any view's graph writes the backbuffer.
+the execution, and calls `SwapBuffers()` if any swapchain view's graph writes the view target.
 
 ## Samples
 
 Runnable samples live under [`Samples/`](Samples) and share common setup (windowing, shader and
 model loading) through the `Shared` project:
 
-- `HelloTriangle` - the minimal render loop: one pass writing the backbuffer, no offscreen passes.
+- `HelloTriangle` - the minimal render loop: one pass writing the view target, no offscreen passes.
 - `TexturedQuad` - texture and sampler binding.
 - `Cube` / `CubeGrid` - 3D transforms and instancing-style draws.
 - `PBRRenderer` - a multi-pass render graph: an offscreen "Scene" pass, a two-step bloom
-  (downsample/upsample), and a composite pass that writes Scene + bloom to the backbuffer. The
+  (downsample/upsample), and a composite pass that writes Scene + bloom to the view target. The
   graph orders the four passes from their declared texture reads/writes.
 
 Run one with, for example:

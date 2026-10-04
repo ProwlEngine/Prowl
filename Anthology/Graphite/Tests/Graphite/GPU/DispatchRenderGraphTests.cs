@@ -5,6 +5,8 @@ using System.Collections.Generic;
 
 using Prowl.Graphite.RenderGraph;
 
+using Prowl.Vector;
+
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
@@ -17,10 +19,15 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct DispatchView : IRenderView
 {
-    public DispatchView(uint width, uint height)
+    public bool TargetSwapchain { get; }
+    public Framebuffer? TargetFramebuffer { get; }
+
+    public DispatchView(uint width, uint height, bool swapchain = true, Framebuffer? framebuffer = null)
     {
         PixelWidth = width;
         PixelHeight = height;
+        TargetSwapchain = swapchain;
+        TargetFramebuffer = framebuffer;
     }
 
     public uint PixelWidth { get; }
@@ -46,7 +53,7 @@ file sealed class RecordingPass : IPass<DispatchView>
             _scratch = builder.DeclareOutputTexture("Scratch", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
     }
 
-    public void Render(RenderContext<DispatchView> context)
+    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
     {
         RenderCount++;
         ViewWidths.Add(context.View.PixelWidth);
@@ -62,7 +69,7 @@ file sealed class LeakingCommandBufferPass : IPass<DispatchView>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<DispatchView> context)
+    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
     {
         context.GetCommandBuffer("Leaked");
     }
@@ -74,15 +81,19 @@ file sealed class BackbufferPass : IPass<DispatchView>
 
     public int RenderCount { get; private set; }
     public bool SawFramebuffer { get; private set; }
+    public Framebuffer? Resolved { get; private set; }
 
     public string Name => "Backbuffer";
 
-    public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareBackbuffer();
+    public void Setup(RenderContextBuilder builder) => _backbuffer = builder.DeclareViewTarget();
 
-    public void Render(RenderContext<DispatchView> context)
+    public void Render(RenderContext<DispatchView> context, CommandBuffer cmd)
     {
         RenderCount++;
-        SawFramebuffer = context.GetRenderTexture(_backbuffer).Framebuffer != null;
+        Resolved = context.GetRenderTexture(_backbuffer).Framebuffer;
+        SawFramebuffer = Resolved != null;
+        cmd.SetFramebuffer(Resolved!);
+        cmd.ClearColorTarget(0, new Color(0.25f, 0.5f, 0.75f, 1f));
     }
 }
 
@@ -128,11 +139,56 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     [Fact]
-    public void Dispatch_BackbufferDeclaredWithoutMainSwapchain_Throws()
+    public void Dispatch_SwapchainViewWithoutMainSwapchain_SkipsViewTargetPass()
     {
+        BackbufferPass targetPass = new();
+        RecordingPass other = new();
+        using RenderPipeline<DispatchView> pipeline = new([other, targetPass]);
+
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
+        GD.WaitForIdle();
+
+        Assert.Equal(0, targetPass.RenderCount);
+        Assert.Equal(1, other.RenderCount);
+    }
+
+    [Fact]
+    public void Dispatch_ViewWithNoTarget_SkipsViewTargetPass()
+    {
+        BackbufferPass targetPass = new();
+        RecordingPass other = new();
+        using RenderPipeline<DispatchView> pipeline = new([other, targetPass]);
+
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, swapchain: false) });
+        GD.WaitForIdle();
+
+        Assert.Equal(0, targetPass.RenderCount);
+        Assert.Equal(1, other.RenderCount);
+    }
+
+    [Fact]
+    public void Dispatch_FramebufferTarget_PassDrawsIntoIt()
+    {
+        Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
+        Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
+        BackbufferPass pass = new();
+        using RenderPipeline<DispatchView> pipeline = new([pass]);
+
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, swapchain: false, framebuffer: target) });
+        GD.WaitForIdle();
+
+        Assert.Equal(1, pass.RenderCount);
+        Assert.Same(target, pass.Resolved);
+    }
+
+    [Fact]
+    public void Dispatch_FramebufferAndSwapchainBothSet_Throws()
+    {
+        Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
+        Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
         using RenderPipeline<DispatchView> pipeline = new([new BackbufferPass()]);
 
-        Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) }));
+        Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, swapchain: true, framebuffer: target) }));
         GD.WaitForIdle();
     }
 
@@ -194,7 +250,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
 public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void Dispatch_BackbufferPass_ResolvesSwapchainAndPresents()
+    public void Dispatch_ViewTargetPass_ResolvesSwapchainAndPresents()
     {
         BackbufferPass pass = new();
         using RenderPipeline<DispatchView> pipeline = new([new RecordingPass(), pass]);
@@ -208,7 +264,7 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
     }
 
     [Fact]
-    public void Dispatch_NoPassDeclaresBackbuffer_RunsWithoutPresenting()
+    public void Dispatch_NoPassDeclaresViewTarget_RunsWithoutPresenting()
     {
         RecordingPass pass = new();
         using RenderPipeline<DispatchView> pipeline = new([pass]);

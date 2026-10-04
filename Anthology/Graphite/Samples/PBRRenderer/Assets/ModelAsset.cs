@@ -331,7 +331,7 @@ public sealed class ModelAsset : IDisposable
 
         var desc = TextureDescription.Texture2D((uint)image.Width, (uint)image.Height, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
         Texture texture = device.ResourceFactory.CreateTexture(desc);
-        device.UpdateTexture(texture, color, 0, 0, 0, (uint)image.Width, (uint)image.Height, 1, 0, 0);
+        device.UpdateTexture(texture, color);
 
         var blob = new TextureBlob { Width = (int)image.Width, Height = (int)image.Height, RGBA = color };
         return (texture, blob);
@@ -360,7 +360,7 @@ public sealed class ModelAsset : IDisposable
         var desc = TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
         Texture texture = _device.ResourceFactory.CreateTexture(desc);
         byte[] pixel = { r, g, b, a };
-        _device.UpdateTexture(texture, pixel, 0, 0, 0, 1, 1, 1, 0, 0);
+        _device.UpdateTexture(texture, pixel);
         _ownedTextures.Add(texture);
         return texture;
     }

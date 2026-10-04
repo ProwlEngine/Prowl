@@ -430,7 +430,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         // Seed target2 with a known color that the texture pass samples and blits into target1.
         Color[] pink = new Color[target2.Width * target2.Height];
         Array.Fill(pink, Color.Pink);
-        GD.UpdateTexture(target2, pink, 0, 0, 0, target2.Width, target2.Height, 1, 0, 0);
+        GD.UpdateTexture(target2, pink);
 
         GraphicsProgram texProgram = CreateSampleTexture2DProgram();
         GraphicsProgram quadProgram = CreateVertexLayoutSinkProgram();
@@ -509,7 +509,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
         Color[] pink = new Color[sampled.Width * sampled.Height];
         Array.Fill(pink, Color.Pink);
-        GD.UpdateTexture(sampled, pink, 0, 0, 0, sampled.Width, sampled.Height, 1, 0, 0);
+        GD.UpdateTexture(sampled, pink);
 
         GraphicsProgram program = CreateSampleTexture2DProgram();
         PropertySet props = new();

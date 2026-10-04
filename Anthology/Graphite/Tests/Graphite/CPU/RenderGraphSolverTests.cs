@@ -228,19 +228,19 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void Build_PassDeclaresBackbuffer_WritesBackbufferIsTrue()
+    public void Build_PassDeclaresBackbuffer_WritesViewTargetIsTrue()
     {
         RenderGraph<TestView> graph = Build(new TestBackbufferPass());
 
-        Assert.True(graph.WritesBackbuffer);
+        Assert.True(graph.WritesViewTarget);
     }
 
     [Fact]
-    public void Build_NoPassDeclaresBackbuffer_WritesBackbufferIsFalse()
+    public void Build_NoPassDeclaresBackbuffer_WritesViewTargetIsFalse()
     {
         RenderGraph<TestView> graph = Build(new TestPass("Offscreen", outputs: new[] { ("bb_offscreen", Desc.Color()) }));
 
-        Assert.False(graph.WritesBackbuffer);
+        Assert.False(graph.WritesViewTarget);
     }
 
     [Fact]
