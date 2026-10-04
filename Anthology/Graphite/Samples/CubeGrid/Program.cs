@@ -7,10 +7,11 @@ namespace Prowl.Graphite.Samples.CubeGrid;
 
 internal readonly struct SceneView : IRenderView
 {
-    public bool TargetSwapchain => true;
+    public Swapchain TargetSwapchain { get; }
 
-    public SceneView(uint width, uint height)
+    public SceneView(uint width, uint height, Swapchain swapchain)
     {
+        TargetSwapchain = swapchain;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -74,7 +75,7 @@ public static class Program
 
         gridPass = new CubeGridPass();
         pipeline = new([gridPass]);
-        views = new[] { new SceneView(600, 600) };
+        views = new[] { new SceneView(600, 600, device.MainSwapchain) };
     }
 
 

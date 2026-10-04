@@ -9,10 +9,11 @@ namespace Prowl.Graphite.Samples.TexturedQuad;
 
 internal readonly struct SceneView : IRenderView
 {
-    public bool TargetSwapchain => true;
+    public Swapchain TargetSwapchain { get; }
 
-    public SceneView(uint width, uint height)
+    public SceneView(uint width, uint height, Swapchain swapchain)
     {
+        TargetSwapchain = swapchain;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -139,7 +140,7 @@ public static class Program
 
         pipeline = new([new TexturedQuadPass(
             shader, leftQuad, rightQuad, midQuad, leftProperties, rightProperties, midProperties)]);
-        views = new[] { new SceneView(600, 600) };
+        views = new[] { new SceneView(600, 600, device.MainSwapchain) };
     }
 
 
