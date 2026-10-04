@@ -57,21 +57,6 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Snapshot of in-flight executions, oldest first.
-    /// </summary>
-    public IReadOnlyList<ExecutionTask> ActiveExecutions
-    {
-        get
-        {
-            lock (_executionLock)
-            {
-                ReclaimCompletedExecutions_NoLock();
-                return _activeTasks.ToArray();
-            }
-        }
-    }
-
-    /// <summary>
     /// Starts a new execution, grabs a free ring slot, blocks on the oldest if all slots are busy.
     /// <para>
     /// Replaces the old BeginFrame/EndFrame pair. No "current" execution - the graph builds on this directly.
@@ -113,38 +98,26 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Whether the execution finished on the GPU. Bumps LastCompletedExecutionId as a side effect.
+    /// Whether the execution finished on the GPU. Polls in-flight fences once.
     /// </summary>
     /// <param name="task">Execution to check.</param>
     /// <returns>True if complete, false if still in flight.</returns>
     public bool IsExecutionComplete(ExecutionTask task)
     {
         ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(IsExecutionComplete));
-        bool complete = IsExecutionCompleteCore(task);
-        if (complete)
-            AdvanceLastCompletedExecutionId(task.Id);
-        return complete;
+        return IsExecutionIdComplete(task.Id);
     }
 
-    /// <summary>
-    /// Whether the execution id has finished. Used by the transient texture pool for reclaim checks. A never-started id counts as not complete.
-    /// </summary>
     internal bool IsExecutionIdComplete(ulong executionId)
     {
-        if (executionId == 0)
+        if (executionId <= LastCompletedExecutionId)
             return true;
 
         lock (_executionLock)
         {
-            foreach (ExecutionTask task in _activeTasks)
-            {
-                if (task.Id == executionId)
-                    return IsExecutionCompleteCore(task);
-            }
-
-            // Not in flight: either it started and was already reclaimed (complete), or it was never started.
-            return executionId <= _executionIdCounter;
+            ReclaimCompletedExecutions_NoLock();
         }
+        return executionId <= LastCompletedExecutionId;
     }
 
     /// <summary>
@@ -158,7 +131,12 @@ public abstract partial class GraphicsDevice
         ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(WaitForExecution));
         bool completed = WaitForExecutionCore(task, nanosecondTimeout);
         if (completed)
-            AdvanceLastCompletedExecutionId(task.Id);
+        {
+            lock (_executionLock)
+            {
+                ReclaimCompletedExecutions_NoLock();
+            }
+        }
         return completed;
     }
 
@@ -215,9 +193,6 @@ public abstract partial class GraphicsDevice
         InitializeFrameOptions_InitializeProfiling(options);
     }
 
-    private void AdvanceLastCompletedExecutionId(ulong executionId)
-        => Volatile.Write(ref _lastCompletedExecutionId, Math.Max(Volatile.Read(ref _lastCompletedExecutionId), executionId));
-
     private void ReclaimCompletedExecutions_NoLock()
     {
         for (int i = _activeTasks.Count - 1; i >= 0; i--)
@@ -228,8 +203,11 @@ public abstract partial class GraphicsDevice
 
             _activeTasks.RemoveAt(i);
             _freeSlots.Enqueue(task.RingSlot);
-            AdvanceLastCompletedExecutionId(task.Id);
         }
+
+        ulong completed = _activeTasks.Count == 0 ? _executionIdCounter : _activeTasks[0].Id - 1;
+        if (completed > _lastCompletedExecutionId)
+            Volatile.Write(ref _lastCompletedExecutionId, completed);
 
         FlushExecutionRetiredDisposables();
     }

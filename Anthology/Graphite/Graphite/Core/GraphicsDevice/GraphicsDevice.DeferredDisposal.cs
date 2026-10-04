@@ -59,24 +59,12 @@ public abstract partial class GraphicsDevice
             for (int i = _executionRetiredDisposables.Count - 1; i >= 0; i--)
             {
                 (ulong executionId, IDisposable disposable) = _executionRetiredDisposables[i];
-                if (!IsExecutionIdCompleteFromReclaim(executionId))
+                if (executionId > _lastCompletedExecutionId)
                     continue;
 
                 _executionRetiredDisposables.RemoveAt(i);
                 disposable.Dispose();
             }
         }
-    }
-
-    // Reclaim-time completeness check that does not take _executionLock (the caller already holds it):
-    // an id no longer among the active tasks has been reclaimed and is therefore complete.
-    private bool IsExecutionIdCompleteFromReclaim(ulong executionId)
-    {
-        foreach (ExecutionTask task in _activeTasks)
-        {
-            if (task.Id == executionId)
-                return false;
-        }
-        return true;
     }
 }

@@ -33,7 +33,6 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
             ExecutionTask task = GD.BeginExecution();
             Assert.True(task.Id > previousId);
             Assert.True(task.RingSlot < GD.MaxExecutingTasks);
-            Assert.Contains(task, GD.ActiveExecutions);
             previousId = task.Id;
 
             GD.CompleteExecution(task);
