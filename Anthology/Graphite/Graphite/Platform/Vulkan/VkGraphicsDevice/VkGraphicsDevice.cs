@@ -43,9 +43,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             Vk,
             Device,
             PhysicalDevice,
-            _physicalDeviceProperties.Limits.BufferImageGranularity,
-            GetBufferMemoryRequirements2,
-            GetImageMemoryRequirements2);
+            _physicalDeviceProperties.Limits.BufferImageGranularity);
 
         Features = new GraphicsDeviceFeatures(
             geometryShader: _physicalDeviceFeatures.GeometryShader,

@@ -1,6 +1,3 @@
-using System;
-using System.Runtime.InteropServices;
-
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
@@ -11,12 +8,10 @@ internal unsafe partial class VkGraphicsDevice
 {
     internal KhrSurface KhrSurface;
     internal KhrSwapchain KhrSwapchain;
-    internal vkGetBufferMemoryRequirements2_t? GetBufferMemoryRequirements2;
-    internal vkGetImageMemoryRequirements2_t? GetImageMemoryRequirements2;
+    internal ExtDebugUtils? DebugUtils;
 
     private ExtDebugReport _extDebugReport;
-    private vkGetPhysicalDeviceProperties2_t? _getPhysicalDeviceProperties2;
-    private vkGetPhysicalDeviceMemoryProperties2_t? _getPhysicalDeviceMemoryProperties2;
+    private bool _memoryBudgetSupported;
 
     public ExtensionProperties[] GetDeviceExtensionProperties()
     {
@@ -29,29 +24,4 @@ internal unsafe partial class VkGraphicsDevice
         }
         return props;
     }
-
-    private IntPtr GetInstanceProcAddr(string name)
-    {
-        byte* utf8Ptr = stackalloc byte[Utf8Stack.ByteCount(name)];
-        Utf8Stack.Write(name, utf8Ptr);
-
-        return (IntPtr)Vk.GetInstanceProcAddr(Instance, utf8Ptr);
-    }
-
-    private IntPtr GetDeviceProcAddr(string name)
-    {
-        byte* utf8Ptr = stackalloc byte[Utf8Stack.ByteCount(name)];
-        Utf8Stack.Write(name, utf8Ptr);
-
-        return (IntPtr)Vk.GetDeviceProcAddr(Device, utf8Ptr);
-    }
-
-    internal T? GetInstanceProcAddr<T>(string name) where T : Delegate => GetDelegate<T>(GetInstanceProcAddr(name));
-
-    private T? GetDeviceProcAddr<T>(string name) where T : Delegate => GetDelegate<T>(GetDeviceProcAddr(name));
-
-    private static T? GetDelegate<T>(IntPtr funcPtr) where T : Delegate
-        => funcPtr != IntPtr.Zero
-            ? Marshal.GetDelegateForFunctionPointer<T>(funcPtr)
-            : null;
 }

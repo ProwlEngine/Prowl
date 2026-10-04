@@ -11,14 +11,9 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice
 {
-    internal vkCmdBeginDebugUtilsLabelEXT_t MarkerBegin;
-    internal vkCmdEndDebugUtilsLabelEXT_t MarkerEnd;
-    internal vkCmdInsertDebugUtilsLabelEXT_t MarkerInsert;
-
     private DebugReportCallbackEXT _debugCallbackHandle;
     private PfnDebugReportCallbackEXT _debugCallbackFunc;
     private bool _debugUtilsEnabled;
-    private vkSetDebugUtilsObjectNameEXT_t _setObjectNameDelegate;
 
     // Stored validation error from the debug callback (cannot throw from unmanaged callback)
     private static volatile string? _lastValidationError;
@@ -138,7 +133,7 @@ internal unsafe partial class VkGraphicsDevice
 
     private void SetDebugUtilsName(ObjectType type, ulong target, string name)
     {
-        Debug.Assert(_setObjectNameDelegate != null);
+        Debug.Assert(DebugUtils != null);
 
         DebugUtilsObjectNameInfoEXT nameInfo = new(sType: StructureType.DebugUtilsObjectNameInfoExt);
         nameInfo.ObjectType = type;
@@ -148,18 +143,6 @@ internal unsafe partial class VkGraphicsDevice
         Utf8Stack.Write(name, utf8Ptr);
 
         nameInfo.PObjectName = utf8Ptr;
-        _setObjectNameDelegate(Device, &nameInfo).CheckResult();
-    }
-
-    private void LoadDebugUtilsFunctions()
-    {
-        _setObjectNameDelegate = Marshal.GetDelegateForFunctionPointer<vkSetDebugUtilsObjectNameEXT_t>(
-            GetInstanceProcAddr("vkSetDebugUtilsObjectNameEXT"));
-        MarkerBegin = Marshal.GetDelegateForFunctionPointer<vkCmdBeginDebugUtilsLabelEXT_t>(
-            GetInstanceProcAddr("vkCmdBeginDebugUtilsLabelEXT"));
-        MarkerEnd = Marshal.GetDelegateForFunctionPointer<vkCmdEndDebugUtilsLabelEXT_t>(
-            GetInstanceProcAddr("vkCmdEndDebugUtilsLabelEXT"));
-        MarkerInsert = Marshal.GetDelegateForFunctionPointer<vkCmdInsertDebugUtilsLabelEXT_t>(
-            GetInstanceProcAddr("vkCmdInsertDebugUtilsLabelEXT"));
+        DebugUtils!.SetDebugUtilsObjectName(Device, &nameInfo).CheckResult();
     }
 }

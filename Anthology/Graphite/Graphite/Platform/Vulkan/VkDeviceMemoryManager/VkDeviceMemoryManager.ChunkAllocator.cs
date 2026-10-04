@@ -21,7 +21,6 @@ internal unsafe partial class VkDeviceMemoryManager
         private readonly void* _mappedPtr;
 
         private ulong _totalMemorySize;
-        private ulong _totalAllocatedBytes = 0;
 
         public DeviceMemory Memory => _memory;
 
@@ -104,7 +103,6 @@ internal unsafe partial class VkDeviceMemoryManager
 #if DEBUG
                         CheckAllocatedBlock(block);
 #endif
-                        _totalAllocatedBytes += size;
                         return true;
                     }
                 }
@@ -116,7 +114,6 @@ internal unsafe partial class VkDeviceMemoryManager
 
         public void Free(VkMemoryBlock block)
         {
-            _totalAllocatedBytes -= block.Size;
             for (int i = 0; i < _freeBlocks.Count; i++)
             {
                 if (_freeBlocks[i].Offset > block.Offset)

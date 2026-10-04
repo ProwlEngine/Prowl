@@ -57,24 +57,16 @@ internal unsafe partial class VkTexture : Texture
 
         _gd.Vk.CreateImage(gd.Device, in imageCI, null, out _optimalImage).CheckResult();
 
-        MemoryRequirements memoryRequirements;
-        bool prefersDedicatedAllocation;
-        if (_gd.GetImageMemoryRequirements2 != null)
+        ImageMemoryRequirementsInfo2 memReqsInfo2 = new()
         {
-            ImageMemoryRequirementsInfo2KHR memReqsInfo2 = new() { SType = StructureType.ImageMemoryRequirementsInfo2Khr };
-            memReqsInfo2.Image = _optimalImage;
-            MemoryRequirements2KHR memReqs2 = new() { SType = StructureType.MemoryRequirements2Khr };
-            MemoryDedicatedRequirementsKHR dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirementsKhr };
-            memReqs2.PNext = &dedicatedReqs;
-            _gd.GetImageMemoryRequirements2(_gd.Device, &memReqsInfo2, &memReqs2);
-            memoryRequirements = memReqs2.MemoryRequirements;
-            prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
-        }
-        else
-        {
-            _gd.Vk.GetImageMemoryRequirements(gd.Device, _optimalImage, out memoryRequirements);
-            prefersDedicatedAllocation = false;
-        }
+            SType = StructureType.ImageMemoryRequirementsInfo2,
+            Image = _optimalImage
+        };
+        MemoryDedicatedRequirements dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirements };
+        MemoryRequirements2 memReqs2 = new() { SType = StructureType.MemoryRequirements2, PNext = &dedicatedReqs };
+        _gd.Vk.GetImageMemoryRequirements2(_gd.Device, &memReqsInfo2, &memReqs2);
+        MemoryRequirements memoryRequirements = memReqs2.MemoryRequirements;
+        bool prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
 
         _memoryBlock = gd.MemoryManager.Allocate(
             gd.PhysicalDeviceMemProperties,

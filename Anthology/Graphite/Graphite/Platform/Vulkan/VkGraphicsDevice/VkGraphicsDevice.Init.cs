@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
 
 using Silk.NET.Core;
 using Silk.NET.Vulkan;
@@ -66,10 +65,6 @@ internal unsafe partial class VkGraphicsDevice
                 instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_KHR_SURFACE_EXTENSION_NAMEUtf8;
         }
 
-        bool hasDeviceProperties2 = availableInstanceExtensions.Contains(CommonStrings.VK_KHR_get_physical_device_properties2);
-        if (hasDeviceProperties2)
-            instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_KHR_get_physical_device_properties2Utf8;
-
         string[] requestedInstanceExtensions = options.InstanceExtensions ?? Array.Empty<string>();
         List<IntPtr> tempStrings = [];
         try
@@ -124,12 +119,6 @@ internal unsafe partial class VkGraphicsDevice
             if (debug && debugReportExtensionAvailable)
             {
                 EnableDebugCallback();
-            }
-
-            if (hasDeviceProperties2)
-            {
-                _getPhysicalDeviceProperties2 = GetInstanceProcAddr<vkGetPhysicalDeviceProperties2_t>("vkGetPhysicalDeviceProperties2")
-                    ?? GetInstanceProcAddr<vkGetPhysicalDeviceProperties2_t>("vkGetPhysicalDeviceProperties2KHR");
             }
         }
         finally
@@ -208,10 +197,6 @@ internal unsafe partial class VkGraphicsDevice
         HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
 
         bool hasMaintenance1 = false;
-        bool hasMemReqs2 = false;
-        bool hasDedicatedAllocation = false;
-        bool hasDriverProperties = false;
-        bool hasMemoryBudget = false;
         IntPtr[] activeExtensions = new IntPtr[props.Length];
         uint activeExtensionCount = 0;
 
@@ -231,29 +216,11 @@ internal unsafe partial class VkGraphicsDevice
                     requiredInstanceExtensions.Remove(extensionName);
                     hasMaintenance1 = true;
                 }
-                else if (extensionName == "VK_KHR_get_memory_requirements2")
-                {
-                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
-                    requiredInstanceExtensions.Remove(extensionName);
-                    hasMemReqs2 = true;
-                }
-                else if (extensionName == "VK_KHR_dedicated_allocation")
-                {
-                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
-                    requiredInstanceExtensions.Remove(extensionName);
-                    hasDedicatedAllocation = true;
-                }
-                else if (extensionName == "VK_KHR_driver_properties")
-                {
-                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
-                    requiredInstanceExtensions.Remove(extensionName);
-                    hasDriverProperties = true;
-                }
                 else if (extensionName == "VK_EXT_memory_budget")
                 {
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
-                    hasMemoryBudget = true;
+                    _memoryBudgetSupported = true;
                 }
                 else if (extensionName == CommonStrings.VK_KHR_portability_subset)
                 {
@@ -323,39 +290,17 @@ internal unsafe partial class VkGraphicsDevice
 
         if (_debugUtilsEnabled)
         {
-            LoadDebugUtilsFunctions();
+            Vk.TryGetInstanceExtension(Instance, out DebugUtils);
         }
-        if (hasDedicatedAllocation && hasMemReqs2)
-        {
-            GetBufferMemoryRequirements2 = GetDeviceProcAddr<vkGetBufferMemoryRequirements2_t>("vkGetBufferMemoryRequirements2")
-                ?? GetDeviceProcAddr<vkGetBufferMemoryRequirements2_t>("vkGetBufferMemoryRequirements2KHR");
-            GetImageMemoryRequirements2 = GetDeviceProcAddr<vkGetImageMemoryRequirements2_t>("vkGetImageMemoryRequirements2")
-                ?? GetDeviceProcAddr<vkGetImageMemoryRequirements2_t>("vkGetImageMemoryRequirements2KHR");
-        }
-        if (_getPhysicalDeviceProperties2 != null && hasMemoryBudget)
-        {
-            _getPhysicalDeviceMemoryProperties2 = GetInstanceProcAddr<vkGetPhysicalDeviceMemoryProperties2_t>("vkGetPhysicalDeviceMemoryProperties2")
-                ?? GetInstanceProcAddr<vkGetPhysicalDeviceMemoryProperties2_t>("vkGetPhysicalDeviceMemoryProperties2KHR");
-        }
-        if (_getPhysicalDeviceProperties2 != null && hasDriverProperties)
-        {
-            PhysicalDeviceProperties2KHR deviceProps = new(sType: StructureType.PhysicalDeviceProperties2Khr);
-            VkPhysicalDeviceDriverProperties driverProps = VkPhysicalDeviceDriverProperties.New();
 
-            deviceProps.PNext = &driverProps;
-            _getPhysicalDeviceProperties2(PhysicalDevice, &deviceProps);
+        PhysicalDeviceVulkan12Properties driverProps = new(sType: StructureType.PhysicalDeviceVulkan12Properties);
+        PhysicalDeviceProperties2 deviceProps = new(sType: StructureType.PhysicalDeviceProperties2, pNext: &driverProps);
+        Vk.GetPhysicalDeviceProperties2(PhysicalDevice, &deviceProps);
 
-            string driverName = Encoding.UTF8.GetString(
-                driverProps.driverName, VkPhysicalDeviceDriverProperties.DriverNameLength).TrimEnd('\0');
-
-            string driverInfo = Encoding.UTF8.GetString(
-                driverProps.driverInfo, VkPhysicalDeviceDriverProperties.DriverInfoLength).TrimEnd('\0');
-
-            VkConformanceVersion conforming = driverProps.conformanceVersion;
-            _apiVersion = new GraphicsApiVersion(conforming.major, conforming.minor, conforming.subminor, conforming.patch);
-            DriverName = driverName;
-            DriverInfo = driverInfo;
-        }
+        ConformanceVersion conforming = driverProps.ConformanceVersion;
+        _apiVersion = new GraphicsApiVersion(conforming.Major, conforming.Minor, conforming.Subminor, conforming.Patch);
+        DriverName = Marshal.PtrToStringUTF8((nint)driverProps.DriverName) ?? string.Empty;
+        DriverInfo = Marshal.PtrToStringUTF8((nint)driverProps.DriverInfo) ?? string.Empty;
     }
 
     private void GetQueueFamilyIndices(SurfaceKHR surface)

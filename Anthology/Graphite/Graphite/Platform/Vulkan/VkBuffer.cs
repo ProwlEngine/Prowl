@@ -58,33 +58,16 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         };
         _gd.Vk.CreateBuffer(_gd.Device, in bufferCI, null, out _deviceBuffer).CheckResult();
 
-        MemoryRequirements bufferMemReqs;
-        bool prefersDedicatedAllocation;
-        if (_gd.GetBufferMemoryRequirements2 != null)
+        BufferMemoryRequirementsInfo2 memReqInfo2 = new()
         {
-            BufferMemoryRequirementsInfo2KHR memReqInfo2 = new()
-            {
-                SType = StructureType.BufferMemoryRequirementsInfo2Khr,
-                Buffer = _deviceBuffer
-            };
-            MemoryRequirements2KHR memReqs2 = new()
-            {
-                SType = StructureType.MemoryRequirements2Khr
-            };
-            MemoryDedicatedRequirementsKHR dedicatedReqs = new()
-            {
-                SType = StructureType.MemoryDedicatedRequirementsKhr
-            };
-            memReqs2.PNext = &dedicatedReqs;
-            _gd.GetBufferMemoryRequirements2(_gd.Device, &memReqInfo2, &memReqs2);
-            bufferMemReqs = memReqs2.MemoryRequirements;
-            prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
-        }
-        else
-        {
-            _gd.Vk.GetBufferMemoryRequirements(_gd.Device, _deviceBuffer, out bufferMemReqs);
-            prefersDedicatedAllocation = false;
-        }
+            SType = StructureType.BufferMemoryRequirementsInfo2,
+            Buffer = _deviceBuffer
+        };
+        MemoryDedicatedRequirements dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirements };
+        MemoryRequirements2 memReqs2 = new() { SType = StructureType.MemoryRequirements2, PNext = &dedicatedReqs };
+        _gd.Vk.GetBufferMemoryRequirements2(_gd.Device, &memReqInfo2, &memReqs2);
+        MemoryRequirements bufferMemReqs = memReqs2.MemoryRequirements;
+        bool prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
 
         bool isStaging = (Usage & BufferUsage.Staging) == BufferUsage.Staging;
         bool hostVisible = isStaging || (Usage & BufferUsage.Dynamic) == BufferUsage.Dynamic;
