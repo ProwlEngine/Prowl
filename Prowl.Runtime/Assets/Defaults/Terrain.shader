@@ -337,7 +337,7 @@ Pass "Terrain"
 
                 vec3 F0 = mix(vec3(0.04), baseColor, metallic);
                 float NdotV = max(dot(finalWorldNormal, viewDir), 0.0);
-                vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+                vec3 F = EnvBRDF(F0, roughness, NdotV);
                 float specOcclusion = 1.0 - roughness * roughness;
                 vec3 ambientSpecular = ambientLight * F * mix(specOcclusion, 1.0, 0.25);
 

@@ -58,11 +58,14 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * exp2(-9.28 * cosTheta);
 }
 
-// Fresnel with roughness for IBL/indirect specular (Lazarov Environmental BRDF)
-vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+// Analytic split sum environment BRDF (GGX, Smith Schlick) for indirect specular, replaces the BRDF LUT
+vec3 EnvBRDF(vec3 F0, float roughness, float NdotV)
 {
-    vec3 F90 = max(vec3(1.0 - roughness), F0);
-    return F0 + (F90 - F0) * exp2(-9.28 * cosTheta);
+    vec2 t = clamp(NdotV * (vec2(-1.443, -1.49143) + vec2(1.83297, 1.3451) * roughness) + (vec2(0.841227, 0.96635) + vec2(-0.12654, -0.705379) * roughness), 0.0, 1.0);
+    t *= t;
+    float scale = 1.01549 - 0.135605 * roughness + t.x * (0.558371 * roughness - 1.08784);
+    float bias = t.y * (0.805868 - 0.770431 * roughness);
+    return F0 * scale + bias;
 }
 
 // =============================================================

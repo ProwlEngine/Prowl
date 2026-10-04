@@ -23,8 +23,7 @@ namespace Prowl.Runtime.Rendering;
 /// ProwlMapDemo: the flipped orientation produces dark fringing along diagonals).
 ///
 /// Loaded raw rather than as PNG because <see cref="Texture2D.FromImage"/> forces
-/// sRGB + a vertical flip, which would corrupt these data textures - the same
-/// reason <see cref="BRDFLutGenerator"/> loads a raw .brdf.
+/// sRGB + a vertical flip, which would corrupt these data textures.
 /// </summary>
 public static class SMAALookupTextures
 {
