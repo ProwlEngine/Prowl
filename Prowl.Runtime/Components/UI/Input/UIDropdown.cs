@@ -102,6 +102,9 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
         if (_open) RebuildItems();
     }
 
+    /// <summary>Selects an option without firing <see cref="OnValueChanged"/> or the inspector calls.</summary>
+    public void SetValueWithoutNotify(int value) => SetValue(value, notify: false);
+
     private void SetValue(int v, bool notify)
     {
         if (_options.Count == 0) { _value = 0; UpdateCaption(); return; }

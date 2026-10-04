@@ -64,6 +64,9 @@ public class UISlider : Selectable, IDragHandler, IBeginDragHandler
     [SerializeField] private ProwlAction _onValueChanged = new();
     public ProwlAction ValueChangedAction => _onValueChanged;
 
+    /// <summary>Sets the value without firing <see cref="OnValueChanged"/> or the inspector calls.</summary>
+    public void SetValueWithoutNotify(float value) => SetValue(value, notify: false);
+
     private void SetValue(float input, bool notify)
     {
         float lo = Maths.Min(_minValue, _maxValue);
