@@ -91,6 +91,32 @@ public abstract class DefectRegressionTests<T> : GraphicsDeviceTestBase<T> where
         Assert.True(old.ColorTextures[0].IsDisposed);
     }
 
+    [Fact]
+    public void RenderTargetCreation_BatchesInitIntoOneSubmit_AndClearsToZero()
+    {
+        VkGraphicsDevice vk = (VkGraphicsDevice)GD;
+        GD.WaitForIdle();
+        int before = vk.GraphicsQueueSubmitCount;
+
+        Texture[] targets = new Texture[4];
+        for (int i = 0; i < targets.Length; i++)
+        {
+            targets[i] = RF.CreateTexture(TextureDescription.Texture2D(
+                4, 4, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        }
+
+        Assert.Equal(before, vk.GraphicsQueueSubmitCount);
+
+        GD.WaitForIdle();
+        Assert.Equal(before + 1, vk.GraphicsQueueSubmitCount);
+
+        Texture readback = GetReadback(targets[3]);
+        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        uint pixel = map[2, 2];
+        GD.Unmap(readback);
+
+        Assert.Equal(0u, pixel);
+    }
 }
 
 #if TEST_VULKAN

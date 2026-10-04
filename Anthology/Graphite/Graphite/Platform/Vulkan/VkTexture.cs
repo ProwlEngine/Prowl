@@ -163,9 +163,9 @@ internal unsafe partial class VkTexture : Texture
             allocatedSize = bufferMemReqs.Size;
         }
 
+        RefCount = new ResourceRefCount(DestroyNative);
         if (!isStaging)
             InitializeLayout();
-        RefCount = new ResourceRefCount(DestroyNative);
 
         Constructor_RecordAllocation((long)allocatedSize);
     }
@@ -193,8 +193,8 @@ internal unsafe partial class VkTexture : Texture
         _actualImageArrayLayers = arrayLayers;
         _isSwapchainTexture = true;
 
-        InitializeLayout();
         RefCount = new ResourceRefCount(DestroyNative);
+        InitializeLayout();
     }
 
     private void InitializeLayout()

@@ -166,6 +166,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
     private protected override void WaitForIdleCore()
     {
+        FlushPendingInitCommands();
         lock (_graphicsQueueLock)
         {
             Vk.QueueWaitIdle(GraphicsQueue);
