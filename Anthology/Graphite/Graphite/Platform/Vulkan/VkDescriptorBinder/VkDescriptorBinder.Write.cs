@@ -144,9 +144,6 @@ internal unsafe sealed partial class VkDescriptorBinder
 
     private void ReportMissing(in ResourceLayoutElementDescription elem, uint setIdx, ShaderProgram reportProgram)
     {
-        _gd.OnMissingProperty?.Invoke(
-            (GraphicsProgram)reportProgram,
-            null,
-            elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+        _gd.OnMissingProperty?.Invoke(reportProgram, elem.Name, elem.Kind, setIdx, elem.BindingIndex);
     }
 }

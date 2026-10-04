@@ -85,7 +85,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
         HashSet<PropertyID> missing = [];
         MissingPropertyHandler previous = GD.OnMissingProperty;
-        GD.OnMissingProperty = (shader, compute, name, kind, set, binding) => missing.Add(name);
+        GD.OnMissingProperty = (program, name, kind, set, binding) => missing.Add(name);
 
         try
         {

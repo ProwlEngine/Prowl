@@ -332,7 +332,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         uint reportedSet = uint.MaxValue;
         MissingPropertyHandler previous = GD.OnMissingProperty;
-        GD.OnMissingProperty = (shader, compute, name, kind, set, binding) =>
+        GD.OnMissingProperty = (program, name, kind, set, binding) =>
         {
             if (name == (PropertyID)"Input") reportedSet = set;
         };
