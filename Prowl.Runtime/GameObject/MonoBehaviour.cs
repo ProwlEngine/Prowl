@@ -141,6 +141,8 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// </summary>
     public GameObject GameObject => _go;
 
+    private protected override bool DestroyQueuedByOwner => _go.IsValid() && _go.IsDestroyQueued;
+
     /// <summary>
     /// Gets the Transform component of the GameObject this MonoBehaviour is attached to.
     /// </summary>

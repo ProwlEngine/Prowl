@@ -83,9 +83,22 @@ public abstract class EngineObject : IDisposable
         if (this is Asset { Registered: true })
             throw new InvalidOperationException($"'{Name}' ({GetType().Name}) belongs to the asset database. Use AssetDatabase.Unload to free its memory.");
 
-        if (IsDisposed) return;
+        if (IsDisposed || _destroyQueued) return;
+        _destroyQueued = true;
         lock (s_destroyQueue) s_destroyQueue.Add(this);
     }
+
+    private bool _destroyQueued;
+
+    /// <summary>
+    /// True from <see cref="Destroy"/> until the object is disposed at the end of the frame, including when it
+    /// will be torn down because an owner was destroyed (a child under a destroyed GameObject, a component on one).
+    /// The object is still valid while this is true, so check this to treat it as already gone.
+    /// </summary>
+    public bool IsDestroyQueued => !IsDisposed && (_destroyQueued || DestroyQueuedByOwner);
+
+    /// <summary>Whether an owner that will dispose this object is queued for destruction.</summary>
+    private protected virtual bool DestroyQueuedByOwner => false;
 
     /// <summary>
     /// Disposes everything <see cref="Destroy"/> queued. Driven once per frame by the game loop,

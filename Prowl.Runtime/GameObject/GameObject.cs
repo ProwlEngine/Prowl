@@ -108,6 +108,8 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? Parent => _parent;
 
+    private protected override bool DestroyQueuedByOwner => _parent.IsValid() && _parent.IsDestroyQueued;
+
     /// <summary> A List of all children of this GameObject </summary>
     public List<GameObject> Children = [];
 
