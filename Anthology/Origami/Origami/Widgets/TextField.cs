@@ -62,6 +62,7 @@ public sealed class TextFieldBuilder
 
     // Behaviour
     private bool _submitOnEnter;
+    private bool _autoFocus;
 
     // Filtering
     private Func<char, string, bool>? _charFilter;
@@ -115,6 +116,8 @@ public sealed class TextFieldBuilder
     public TextFieldBuilder SelectAllOnFocus(bool select = true) { _selectAllOnFocus = select; return this; }
     /// <summary>When true, pressing Enter in a single-line field commits the value and defocuses.</summary>
     public TextFieldBuilder SubmitOnEnter(bool submit = true) { _submitOnEnter = submit; return this; }
+    /// <summary>Focus the field on the first frame it appears, and again each time it reappears after not being drawn.</summary>
+    public TextFieldBuilder AutoFocus(bool autoFocus = true) { _autoFocus = autoFocus; return this; }
 
     // ── Modes ──────────────────────────────────────────────────────────
 
@@ -299,7 +302,14 @@ public sealed class TextFieldBuilder
             using (rowBuilder.Enter())
             {
                 rowHandle = _paper.CurrentParent;
-                
+
+                // Element storage is dropped when the row is not drawn, so this fires once per appearance.
+                if (_autoFocus && !_readOnly && !_paper.GetElementStorage(rowHandle, "af_done", false))
+                {
+                    _paper.SetFocus(rowHandle);
+                    _paper.SetElementStorage(rowHandle, "af_done", true);
+                }
+
                 // Leading slot ─────────────────────────────────────────
                 if (_isSearch)
                 {
