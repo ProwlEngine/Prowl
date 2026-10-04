@@ -6,7 +6,7 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.
 /// </summary>
-public sealed class RenderContext<TView> : IGraphStateSource
+public sealed class RenderContext<TView>
     where TView : IRenderView
 {
     private readonly GraphicsDevice _device;
@@ -17,12 +17,7 @@ public sealed class RenderContext<TView> : IGraphStateSource
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
     private readonly List<CommandBuffer> _pendingCommandBuffers = new();
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
-    private int _stateVersion;
-
-    int IGraphStateSource.StateVersion => _stateVersion;
-
-    TextureState IGraphStateSource.StateOf(Texture texture)
-        => _textureStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
+    private GraphTextureStates? _stateSnapshot;
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
     private readonly List<TextureBarrier> _barriers = new();
     private readonly HashSet<RenderResourceID> _enteredTransients = new();
@@ -126,7 +121,7 @@ public sealed class RenderContext<TView> : IGraphStateSource
         _textureStates.Clear();
         _discardedTextures.Clear();
         _enteredTransients.Clear();
-        _stateVersion++;
+        _stateSnapshot = null;
         RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
         FlushDeferredBarriers(scopeName);
     }
@@ -169,7 +164,7 @@ public sealed class RenderContext<TView> : IGraphStateSource
         foreach (TextureBarrier barrier in _barriers)
             _textureStates[barrier.Texture] = barrier.After;
         if (_barriers.Count > 0)
-            _stateVersion++;
+            _stateSnapshot = null;
         _barriers.Clear();
     }
 
@@ -266,7 +261,7 @@ public sealed class RenderContext<TView> : IGraphStateSource
             cb.Name = name;
 
         cb.Begin();
-        cb.GraphState = this;
+        cb.GraphStates = _textureStates.Count == 0 ? null : (_stateSnapshot ??= new GraphTextureStates(_textureStates));
         _pendingCommandBuffers.Add(cb);
 
         if (_deferredBarriers != null && _barrierHost == null)

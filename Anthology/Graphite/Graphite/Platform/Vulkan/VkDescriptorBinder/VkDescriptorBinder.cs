@@ -37,7 +37,7 @@ internal unsafe sealed partial class VkDescriptorBinder
         public PropertyEntry[] Entries = new PropertyEntry[16];
         public uint[] EntryVersions = new uint[16];
         public int EntryCount;
-        public int GraphStateVersion;
+        public GraphTextureStates? GraphStates;
 
         public void Track(PropertyEntry entry)
         {
@@ -135,7 +135,7 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         EnsureBindCacheFor(program, (int)setCount);
         ulong executionId = _cbOwner.ExecutionId;
-        int graphStateVersion = _cbOwner.GraphStateVersion;
+        GraphTextureStates? graphStates = _cbOwner.GraphStates;
 
         int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
@@ -144,7 +144,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             SetBindingMetadata meta = metadata[setIdx];
             SetBindState state = _setBindStates[setIdx];
 
-            if (!CanReuseSet(state, meta, graphStateVersion))
+            if (!CanReuseSet(state, meta, graphStates))
             {
                 state.EntryCount = 0;
                 _trackState = state;
@@ -153,7 +153,7 @@ internal unsafe sealed partial class VkDescriptorBinder
                 PrepareResolvedTextures(elements, isGraphics);
                 SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
                 GatherDynOffsets(meta, state);
-                state.GraphStateVersion = graphStateVersion;
+                state.GraphStates = graphStates;
             }
 
             if (firstChanged < 0 && SetDiffersFromBound(state))
@@ -183,11 +183,11 @@ internal unsafe sealed partial class VkDescriptorBinder
         return true;
     }
 
-    private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, int graphStateVersion)
+    private bool CanReuseSet(SetBindState state, SetBindingMetadata meta, GraphTextureStates? graphStates)
         => state.IdentityLen >= 0
             && !_cbOwner.AllPropertiesChanged
             && !meta.HasStorageTexture
-            && state.GraphStateVersion == graphStateVersion
+            && ReferenceEquals(state.GraphStates, graphStates)
             && !meta.ReadsAny(_cbOwner.ChangedPropertyKeys)
             && state.EntriesUnchanged();
 
