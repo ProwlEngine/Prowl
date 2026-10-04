@@ -49,10 +49,10 @@ file sealed class ClearingRasterPass : RasterPass<RasterView>
 file sealed class CopyReadbackPass : IPass<RasterView>
 {
     private readonly RenderResourceID _id;
-    private readonly Texture _readback;
+    private readonly DeviceBuffer _readback;
     private TextureHandle _handle;
 
-    public CopyReadbackPass(RenderResourceID id, Texture readback)
+    public CopyReadbackPass(RenderResourceID id, DeviceBuffer readback)
     {
         _id = id;
         _readback = readback;
@@ -65,7 +65,7 @@ file sealed class CopyReadbackPass : IPass<RasterView>
     public void Render(RenderContext<RasterView> context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
-        cmd.CopyTexture(target.ColorTextures[0], _readback);
+        cmd.CopyTextureToBuffer(target.ColorTextures[0], _readback, 0, TextureRegion.Whole(target.ColorTextures[0]));
     }
 }
 
@@ -77,8 +77,7 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         const uint size = 64;
         Color clear = new(0.2f, 0.4f, 0.6f, 1.0f);
 
-        Texture readback = RF.CreateTexture(TextureDescription.Texture2D(
-            size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
+        DeviceBuffer readback = CreateTexelReadbackBuffer<Color>(size, size);
 
         RenderResourceID id = RenderResourceID.Intern("raster_clear_target");
         ClearingRasterPass clearPass = new(id, clear);
@@ -88,10 +87,9 @@ public abstract class RasterPassTests<T> : GraphicsDeviceTestBase<T> where T : G
         GD.DispatchGraph(pipeline, new RasterView[] { new(size, size) });
         GD.WaitForIdle();
 
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexels<Color>(readback, size, size);
         Assert.Equal(clear, map[(int)size / 2, (int)size / 2], ColorFuzzyComparer.Instance);
         Assert.Equal(clear, map[0, 0], ColorFuzzyComparer.Instance);
-        GD.Unmap(readback);
     }
 }
 

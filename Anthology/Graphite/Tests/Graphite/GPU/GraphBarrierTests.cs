@@ -54,7 +54,7 @@ file static class BarrierPasses
             });
     }
 
-    public static LambdaPass Readback(RenderResourceID id, Texture staging)
+    public static LambdaPass Readback(RenderResourceID id, DeviceBuffer staging)
     {
         TextureHandle handle = default;
         return new LambdaPass(
@@ -62,7 +62,8 @@ file static class BarrierPasses
             builder => handle = builder.DeclareInputTexture(id, TextureUsageKind.TransferSrc),
             (context, cmd) =>
             {
-                cmd.CopyTexture(context.GetRenderTexture(handle).ColorTextures[0], staging);
+                Texture color = context.GetRenderTexture(handle).ColorTextures[0];
+                cmd.CopyTextureToBuffer(color, staging, 0, TextureRegion.Whole(color));
             });
     }
 }
@@ -79,8 +80,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         new(1f, 1f, 1f, 1f),
     ];
 
-    private Texture CreateStaging(uint width, uint height)
-        => RF.CreateTexture(TextureDescription.Texture2D(width, height, 1, 1, Format, TextureUsage.Staging));
+    private DeviceBuffer CreateStaging(uint width, uint height)
+        => CreateTexelReadbackBuffer<Color>(width, height);
 
     private Texture CreateSourceTexels()
     {
@@ -89,23 +90,24 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         return source;
     }
 
-    private void AssertTexels(Texture staging)
+    private void AssertTexels(DeviceBuffer staging) => AssertTexels(ReadTexels<Color>(staging, 4, 1));
+
+    private void AssertTexels(TexelData<Color> map)
     {
-        MappedResourceView<Color> map = GD.Map<Color>(staging, MapMode.Read);
         for (int x = 0; x < s_texels.Length; x++)
             Assert.Equal(s_texels[x], map[x, 0], ColorFuzzyComparer.Instance);
-        GD.Unmap(staging);
     }
 
-    private void AssertUniform(Texture staging, uint width, uint height, Color expected)
+    private void AssertUniform(DeviceBuffer staging, uint width, uint height, Color expected)
+        => AssertUniform(ReadTexels<Color>(staging, width, height), expected);
+
+    private void AssertUniform(TexelData<Color> map, Color expected)
     {
-        MappedResourceView<Color> map = GD.Map<Color>(staging, MapMode.Read);
-        for (int y = 0; y < height; y++)
+        for (int y = 0; y < map.Height; y++)
         {
-            for (int x = 0; x < width; x++)
+            for (int x = 0; x < map.Width; x++)
                 Assert.Equal(expected, map[x, y], ColorFuzzyComparer.Instance);
         }
-        GD.Unmap(staging);
     }
 
     private GraphicsProgram CreateSampleProgram()
@@ -170,14 +172,14 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         });
         GD.WaitForIdle();
 
-        AssertTexels(GetReadback(target));
+        AssertTexels(ReadTexture<Color>(target));
     }
 
     [Fact]
     public void GraphCopyIntoTarget_ThenLoadingAttachmentPass_KeepsTexels()
     {
         Texture source = CreateSourceTexels();
-        Texture staging = CreateStaging(4, 1);
+        DeviceBuffer staging = CreateStaging(4, 1);
         RenderResourceID id = RenderResourceID.Intern("barrier_copy_target");
         GraphTextureDesc desc = GraphTextureDesc.Sized(4, 1, false, Format);
 
@@ -226,14 +228,14 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         });
         GD.WaitForIdle();
 
-        AssertUniform(GetReadback(output), size, size, new Color(0f, 0f, 0f, 0f));
+        AssertUniform(ReadTexture<Color>(output), new Color(0f, 0f, 0f, 0f));
     }
 
     [Fact]
     public void HistoryTexture_IsSampledTheNextExecution()
     {
         const uint size = 8;
-        Texture staging = CreateStaging(size, size);
+        DeviceBuffer staging = CreateStaging(size, size);
         GraphicsProgram program = CreateSampleProgram();
         RenderResourceID historyId = RenderResourceID.Intern("barrier_history");
         RenderResourceID outputId = RenderResourceID.Intern("barrier_history_output");
@@ -291,7 +293,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
     public void ComputeStorageWrite_ThenFragmentSample_ReadsComputedTexels()
     {
 
-        Texture staging = CreateStaging(4, 1);
+        DeviceBuffer staging = CreateStaging(4, 1);
         GraphicsProgram program = CreateSampleProgram();
         ComputeProgram compute = CreateCompute("ComputeTextureGenerator.slang",
             new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0));
@@ -343,7 +345,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
 
         const uint size = 16;
         const uint stride = 32;
-        Texture staging = CreateStaging(size, size);
+        DeviceBuffer staging = CreateStaging(size, size);
         ComputeProgram compute = CreateCompute("ComputeColoredQuadGenerator.slang",
             new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0));
         ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
@@ -411,7 +413,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
     public void DepthReadOnly_SamplesDepthWhileRenderingColor()
     {
         const uint size = 8;
-        Texture staging = CreateStaging(size, size);
+        DeviceBuffer staging = CreateStaging(size, size);
         GraphicsProgram program = CreateSampleProgram();
         RenderResourceID id = RenderResourceID.Intern("barrier_depth_ro_scene");
         GraphTextureDesc desc = GraphTextureDesc.Sized((int)size, (int)size, true, Format);
@@ -453,13 +455,12 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         GD.DispatchGraph(pipeline, new BarrierView[] { new(size, size) });
         GD.WaitForIdle();
 
-        MappedResourceView<Color> map = GD.Map<Color>(staging, MapMode.Read);
+        TexelData<Color> map = ReadTexels<Color>(staging, size, size);
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
                 Assert.Equal(0.25f, map[x, y].R, 0.01f);
         }
-        GD.Unmap(staging);
     }
 
     [Fact]
@@ -559,7 +560,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
     public void LaterPass_SubmitsOutOfOrder_KeepsTexels()
     {
         Texture source = CreateSourceTexels();
-        Texture staging = CreateStaging(4, 1);
+        DeviceBuffer staging = CreateStaging(4, 1);
         RenderResourceID id = RenderResourceID.Intern("barrier_later_order");
         GraphTextureDesc desc = GraphTextureDesc.Sized(4, 1, false, Format);
 
@@ -588,7 +589,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
     public void FirstPass_WithoutCommandBuffers_StillRecordsItsBarriers()
     {
         Texture source = CreateSourceTexels();
-        Texture staging = CreateStaging(4, 1);
+        DeviceBuffer staging = CreateStaging(4, 1);
         RenderResourceID id = RenderResourceID.Intern("barrier_idle_first");
         GraphTextureDesc desc = GraphTextureDesc.Sized(4, 1, false, Format);
 

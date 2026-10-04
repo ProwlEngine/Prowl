@@ -57,19 +57,12 @@ public class BackendInfoVulkan
     /// <summary>Available Vulkan device extensions.</summary>
     public ReadOnlyCollection<ExtensionProperties> AvailableDeviceExtensions => _deviceExtensions.Value;
 
-    /// <summary>Gets the VkImage behind a Texture. Not usable on staging textures.</summary>
+    /// <summary>Gets the VkImage behind a Texture.</summary>
     /// <param name="texture">Texture to get the VkImage for.</param>
     /// <returns>The VkImage handle.</returns>
     public ulong GetVkImage(Texture texture)
     {
         VkTexture vkTexture = Util.AssertSubtype<Texture, VkTexture>(texture);
-        if ((vkTexture.Usage & TextureUsage.Staging) != 0)
-        {
-            throw new RenderException(
-                $"{nameof(GetVkImage)} cannot be used if the {nameof(Texture)} " +
-                $"has {nameof(TextureUsage)}.{nameof(TextureUsage.Staging)}.");
-        }
-
         return vkTexture.OptimalDeviceImage.Handle;
     }
 

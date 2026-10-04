@@ -129,7 +129,7 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
         });
         GD.WaitForIdle();
 
-        MappedResourceView<uint> map = GD.Map<uint>(staging, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(staging);
         uint first = map[0];
         uint second = map[1];
         GD.Unmap(staging);
@@ -140,8 +140,8 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
 
     private void WriteUInt(DeviceBufferRange range, uint value)
     {
-        MappedResource mapped = GD.Map(range.Buffer, MapMode.Write);
-        unsafe { *(uint*)((byte*)mapped.Data + range.Offset) = value; }
+        Span<byte> mapped = GD.Map(range.Buffer);
+        BitConverter.TryWriteBytes(mapped.Slice((int)range.Offset), value);
         GD.Unmap(range.Buffer);
     }
 

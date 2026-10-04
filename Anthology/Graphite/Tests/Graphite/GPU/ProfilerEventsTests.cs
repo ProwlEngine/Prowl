@@ -103,10 +103,10 @@ file sealed class ClearingRasterPass : RasterPass<ProfilerView>
 file sealed class ReadingCopyPass : IPass<ProfilerView>
 {
     private readonly RenderResourceID _id;
-    private readonly Texture _readback;
+    private readonly DeviceBuffer _readback;
     private TextureHandle _handle;
 
-    public ReadingCopyPass(RenderResourceID id, Texture readback)
+    public ReadingCopyPass(RenderResourceID id, DeviceBuffer readback)
     {
         _id = id;
         _readback = readback;
@@ -119,7 +119,7 @@ file sealed class ReadingCopyPass : IPass<ProfilerView>
     public void Render(RenderContext<ProfilerView> context, CommandBuffer cmd)
     {
         RenderTexture target = context.GetRenderTexture(_handle);
-        cmd.CopyTexture(target.ColorTextures[0], _readback);
+        cmd.CopyTextureToBuffer(target.ColorTextures[0], _readback, 0, TextureRegion.Whole(target.ColorTextures[0]));
     }
 }
 
@@ -226,8 +226,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         const uint size = 64;
-        Texture readback = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-            size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
+        DeviceBuffer readback = device.ResourceFactory.CreateBuffer(new BufferDescription(size * size * 16, BufferUsage.Staging));
 
         RenderResourceID id = RenderResourceID.Intern("profiler_pass_target");
         ClearingRasterPass clearPass = new(id);

@@ -291,21 +291,9 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         GD.WaitForIdle();
 
         Texture colorTarget = fb.ColorTargets[0].Target;
-        Texture staging = RF.CreateTexture(
-            TextureDescription.Texture2D(size, size, 1, 1, ColorFormat, TextureUsage.Staging));
-
-        GD.RunTestGraph(context =>
-        {
-            CommandBuffer copy = context.GetCommandBuffer();
-            copy.CopyTexture(colorTarget, staging);
-            context.SubmitCommandBuffer(copy);
-        });
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> view = GD.Map<Color>(staging, MapMode.Read);
-        for (int i = 0; i < view.Count; i++)
+        TexelData<Color> view = ReadTexture<Color>(colorTarget);
+        for (int i = 0; i < view.Length; i++)
             Assert.Equal(Color.Red, view[i]);
-        GD.Unmap(staging);
     }
 
     [Fact]

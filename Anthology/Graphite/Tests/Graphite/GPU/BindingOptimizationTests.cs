@@ -159,10 +159,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             context.SubmitCommandBuffer(cl);
         });
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(target);
         Color pixel = map[size / 2, size / 2];
-        GD.Unmap(readback);
 
         Assert.Equal(new Color(0.2f, 0.4f, 0.6f, 1f), pixel, ColorFuzzyComparer.Instance);
     }
@@ -203,11 +201,9 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             context.SubmitCommandBuffer(cl);
         });
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(target);
         Color pixelA = map[10, FlipY(10, size)];
         Color pixelB = map[40, FlipY(40, size)];
-        GD.Unmap(readback);
 
         Assert.Equal(new Color(1f, 0f, 0f, 1f), pixelA, ColorFuzzyComparer.Instance);
         Assert.Equal(new Color(0f, 1f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
@@ -248,10 +244,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             context.SubmitCommandBuffer(cl);
         });
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(target);
         Color pixelB = map[40, FlipY(40, size)];
-        GD.Unmap(readback);
 
         Assert.Equal(new Color(0f, 1f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
     }
@@ -292,11 +286,9 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             context.SubmitCommandBuffer(cl);
         });
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(target);
         Color pixelA = map[10, FlipY(10, size)];
         Color pixelB = map[40, FlipY(40, size)];
-        GD.Unmap(readback);
 
         Assert.Equal(new Color(1f, 0f, 0f, 1f), pixelA, ColorFuzzyComparer.Instance);
         Assert.Equal(new Color(0f, 0.5f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
@@ -335,10 +327,8 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             context.SubmitCommandBuffer(cl);
         });
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(target);
         Color pixel = map[size / 2, size / 2];
-        GD.Unmap(readback);
 
         Assert.Equal(new Color(0.1f, 0.5f, 0.9f, 1f), pixel, ColorFuzzyComparer.Instance);
     }
@@ -571,7 +561,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     private uint[] Read(DeviceBuffer output)
     {
         DeviceBuffer readback = GetReadback(output);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         uint[] result = [map[0], map[1]];
         GD.Unmap(readback);
         return result;

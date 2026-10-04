@@ -55,14 +55,13 @@ internal unsafe partial class VkGraphicsDevice
     {
         Format vkFormat = VkFormats.ToVkPixelFormat(format, (usage & TextureUsage.DepthStencil) != 0);
         ImageType vkType = VkFormats.ToVkTextureType(type);
-        ImageTiling tiling = usage == TextureUsage.Staging ? ImageTiling.Linear : ImageTiling.Optimal;
-        ImageUsageFlags vkUsage = VkFormats.ToVkTextureUsage(usage);
+                ImageUsageFlags vkUsage = VkFormats.ToVkTextureUsage(usage);
 
         Result result = Vk.GetPhysicalDeviceImageFormatProperties(
             PhysicalDevice,
             vkFormat,
             vkType,
-            tiling,
+            ImageTiling.Optimal,
             vkUsage,
             ImageCreateFlags.None,
             out ImageFormatProperties vkProps);

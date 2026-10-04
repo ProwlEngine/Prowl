@@ -187,7 +187,7 @@ internal static unsafe class VkBarriers
         uint baseArrayLayer,
         uint layerCount)
     {
-        if (texture.IsStaging || !NeedsBarrier(oldLayout, newLayout))
+        if (!NeedsBarrier(oldLayout, newLayout))
             return;
 
         PipelineStageFlags srcStages = PipelineStageFlags.None;
@@ -218,7 +218,7 @@ internal static unsafe class VkBarriers
             VkTexture texture = Util.AssertSubtype<Texture, VkTexture>(barrier.Texture);
             ImageLayout oldLayout = Layout(texture, barrier.Before);
             ImageLayout newLayout = Layout(texture, barrier.After);
-            if (texture.IsStaging || !NeedsBarrier(oldLayout, newLayout))
+            if (!NeedsBarrier(oldLayout, newLayout))
                 continue;
 
             images[imageCount++] = ImageBarrier(

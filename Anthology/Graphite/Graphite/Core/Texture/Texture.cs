@@ -48,15 +48,4 @@ public abstract class Texture : GraphicsResource
     /// Sample count (>1 for multisample).
     /// </summary>
     public TextureSampleCount SampleCount => _description.SampleCount;
-
-    /// <summary>
-    /// Get subresource index from mip and layer.
-    /// </summary>
-    /// <param name="mipLevel">Mip level.</param>
-    /// <param name="arrayLayer">Array layer.</param>
-    /// <returns>Subresource index.</returns>
-    public uint CalculateSubresource(uint mipLevel, uint arrayLayer)
-    {
-        return arrayLayer * MipLevels + mipLevel;
-    }
 }

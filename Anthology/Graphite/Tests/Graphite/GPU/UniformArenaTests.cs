@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
@@ -184,7 +185,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     private uint[] Read(DeviceBuffer output)
     {
         DeviceBuffer readback = GetReadback(output);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         uint[] result = [map[0], map[1]];
         GD.Unmap(readback);
         return result;

@@ -215,6 +215,21 @@ public abstract class CommandBufferBase : GraphicsResource
         uint width, uint height, uint depth,
         uint layerCount);
 
+    /// <summary>Copies a texture region into a buffer as tightly packed rows.</summary>
+    public void CopyTextureToBuffer(Texture source, DeviceBuffer destination, uint destinationOffset, in TextureRegion region)
+    {
+        ValidationHelpers.RequireNotNull(Device, source, nameof(source), nameof(CopyTextureToBuffer));
+        ValidationHelpers.RequireNotNull(Device, destination, nameof(destination), nameof(CopyTextureToBuffer));
+        Device.CopyTextureToBuffer_CheckParameters(source, destination, destinationOffset, region);
+        CopyTextureToBufferCore(source, destination, destinationOffset, region);
+    }
+
+    private protected abstract void CopyTextureToBufferCore(
+        Texture source,
+        DeviceBuffer destination,
+        uint destinationOffset,
+        in TextureRegion region);
+
     /// <summary>Generates lower mip levels from the largest mip. Needs the GenerateMipmaps usage flag.</summary>
     /// <param name="texture">Texture to mipmap.</param>
     public void GenerateMipmaps(Texture texture)

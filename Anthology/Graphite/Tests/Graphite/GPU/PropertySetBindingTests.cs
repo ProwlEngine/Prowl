@@ -73,7 +73,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
         // The writes landed in the user-provided buffer, not a transient one.
         DeviceBuffer readback = GetReadback(ubo);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         Assert.Equal(Side, map[0]);
         Assert.Equal(Side, map[1]);
         GD.Unmap(readback);
@@ -160,7 +160,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(destination);
-        MappedResourceView<float> map = GD.Map<float>(readback, MapMode.Read);
+        Span<float> map = GD.Map<float>(readback);
         float[] result = new float[Count];
         for (int i = 0; i < Count; i++) result[i] = map[i];
         GD.Unmap(readback);

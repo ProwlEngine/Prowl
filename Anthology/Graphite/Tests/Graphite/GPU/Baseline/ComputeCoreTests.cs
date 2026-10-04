@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
@@ -47,8 +48,8 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
         DeviceBuffer destReadback = GetReadback(destination);
         DeviceBuffer srcReadback = GetReadback(source);
 
-        MappedResourceView<float> dst = GD.Map<float>(destReadback, MapMode.Read);
-        MappedResourceView<float> src = GD.Map<float>(srcReadback, MapMode.Read);
+        Span<float> dst = GD.Map<float>(destReadback);
+        Span<float> src = GD.Map<float>(srcReadback);
         for (int i = 0; i < count; i++)
         {
             Assert.Equal(initial[i], dst[i]);

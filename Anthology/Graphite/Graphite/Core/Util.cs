@@ -89,12 +89,6 @@ internal static class Util
         return ((IStructuralEquatable)values).GetHashCode(EqualityComparer<T>.Default);
     }
 
-    internal static void GetMipLevelAndArrayLayer(Texture tex, uint subresource, out uint mipLevel, out uint arrayLayer)
-    {
-        arrayLayer = subresource / tex.MipLevels;
-        mipLevel = subresource - (arrayLayer * tex.MipLevels);
-    }
-
     internal static void GetMipDimensions(Texture tex, uint mipLevel, out uint width, out uint height, out uint depth)
     {
         width = GetDimension(tex.Width, mipLevel);
@@ -111,99 +105,6 @@ internal static class Util
         }
 
         return Math.Max(1, ret);
-    }
-
-    internal static ulong ComputeSubresourceOffset(Texture tex, uint mipLevel, uint arrayLayer)
-    {
-        Debug.Assert((tex.Usage & TextureUsage.Staging) == TextureUsage.Staging);
-        return ComputeArrayLayerOffset(tex, arrayLayer) + ComputeMipOffset(tex, mipLevel);
-    }
-
-    internal static uint ComputeMipOffset(Texture tex, uint mipLevel)
-    {
-        uint blockSize = FormatHelpers.IsCompressedFormat(tex.Format) ? 4u : 1u;
-        uint offset = 0;
-        for (uint level = 0; level < mipLevel; level++)
-        {
-            GetMipDimensions(tex, level, out uint mipWidth, out uint mipHeight, out uint mipDepth);
-            uint storageWidth = Math.Max(mipWidth, blockSize);
-            uint storageHeight = Math.Max(mipHeight, blockSize);
-            offset += FormatHelpers.GetRegionSize(storageWidth, storageHeight, mipDepth, tex.Format);
-        }
-
-        return offset;
-    }
-
-    internal static uint ComputeArrayLayerOffset(Texture tex, uint arrayLayer)
-    {
-        if (arrayLayer == 0)
-        {
-            return 0;
-        }
-
-        uint blockSize = FormatHelpers.IsCompressedFormat(tex.Format) ? 4u : 1u;
-        uint layerPitch = 0;
-        for (uint level = 0; level < tex.MipLevels; level++)
-        {
-            GetMipDimensions(tex, level, out uint mipWidth, out uint mipHeight, out uint mipDepth);
-            uint storageWidth = Math.Max(mipWidth, blockSize);
-            uint storageHeight = Math.Max(mipHeight, blockSize);
-            layerPitch += FormatHelpers.GetRegionSize(storageWidth, storageHeight, mipDepth, tex.Format);
-        }
-
-        return layerPitch * arrayLayer;
-    }
-
-    public static unsafe void CopyTextureRegion(
-        void* src,
-        uint srcX, uint srcY, uint srcZ,
-        uint srcRowPitch,
-        uint srcDepthPitch,
-        void* dst,
-        uint dstX, uint dstY, uint dstZ,
-        uint dstRowPitch,
-        uint dstDepthPitch,
-        uint width,
-        uint height,
-        uint depth,
-        PixelFormat format)
-    {
-        uint blockSize = FormatHelpers.IsCompressedFormat(format) ? 4u : 1u;
-        uint blockSizeInBytes = blockSize > 1 ? FormatHelpers.GetBlockSizeInBytes(format) : format.GetSizeInBytes();
-        uint compressedSrcX = srcX / blockSize;
-        uint compressedSrcY = srcY / blockSize;
-        uint compressedDstX = dstX / blockSize;
-        uint compressedDstY = dstY / blockSize;
-        uint numRows = FormatHelpers.GetNumRows(height, format);
-        uint rowSize = width / blockSize * blockSizeInBytes;
-
-        if (srcRowPitch == dstRowPitch && srcDepthPitch == dstDepthPitch)
-        {
-            uint totalCopySize = depth * srcDepthPitch;
-            Buffer.MemoryCopy(
-                src,
-                dst,
-                totalCopySize,
-                totalCopySize);
-        }
-        else
-        {
-            for (uint zz = 0; zz < depth; zz++)
-                for (uint yy = 0; yy < numRows; yy++)
-                {
-                    byte* rowCopyDst = (byte*)dst
-                        + dstDepthPitch * (zz + dstZ)
-                        + dstRowPitch * (yy + compressedDstY)
-                        + blockSizeInBytes * compressedDstX;
-
-                    byte* rowCopySrc = (byte*)src
-                        + srcDepthPitch * (zz + srcZ)
-                        + srcRowPitch * (yy + compressedSrcY)
-                        + blockSizeInBytes * compressedSrcX;
-
-                    Unsafe.CopyBlock(rowCopyDst, rowCopySrc, rowSize);
-                }
-        }
     }
 
     internal static T[] ShallowClone<T>(T[]? array) => array is null ? [] : (T[])array.Clone();

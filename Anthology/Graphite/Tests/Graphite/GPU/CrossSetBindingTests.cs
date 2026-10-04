@@ -1,3 +1,4 @@
+using System;
 using Prowl.Graphite.Vk;
 
 using Xunit;
@@ -104,7 +105,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     private uint[] Read(DeviceBuffer output)
     {
         DeviceBuffer readback = GetReadback(output);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         uint[] result = new uint[OutputCount];
         for (int i = 0; i < OutputCount; i++) result[i] = map[i];
         GD.Unmap(readback);

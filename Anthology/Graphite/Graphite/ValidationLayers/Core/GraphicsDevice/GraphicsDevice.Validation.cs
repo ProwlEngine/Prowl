@@ -23,39 +23,51 @@ public abstract partial class GraphicsDevice
         }
     }
 
-    private void Map_CheckResource(GraphicsResource resource, MapMode mode, uint subresource)
+    private void Map_CheckResource(DeviceBuffer buffer)
     {
         if (!ValidationEnabled)
             return;
 
-        if (resource is DeviceBuffer buffer)
+        if ((buffer.Usage & BufferUsage.Dynamic) != BufferUsage.Dynamic
+            && (buffer.Usage & BufferUsage.Staging) != BufferUsage.Staging)
         {
-            if ((buffer.Usage & BufferUsage.Dynamic) != BufferUsage.Dynamic
-                && (buffer.Usage & BufferUsage.Staging) != BufferUsage.Staging)
-            {
-                throw new RenderException("Buffers must have the Staging or Dynamic usage flag to be mapped.");
-            }
-            if (subresource != 0)
-            {
-                throw new RenderException("Subresource must be 0 for Buffer resources.");
-            }
-            if ((mode == MapMode.Read || mode == MapMode.ReadWrite) && (buffer.Usage & BufferUsage.Staging) == 0)
-            {
-                throw new RenderException(
-                    $"{nameof(MapMode)}.{nameof(MapMode.Read)} and {nameof(MapMode)}.{nameof(MapMode.ReadWrite)} can only be used on buffers created with {nameof(BufferUsage)}.{nameof(BufferUsage.Staging)}.");
-            }
+            throw new RenderException("Buffers must have the Staging or Dynamic usage flag to be mapped.");
         }
-        else if (resource is Texture tex)
+    }
+
+    internal void CopyTextureToBuffer_CheckParameters(
+        Texture texture,
+        DeviceBuffer buffer,
+        uint bufferOffset,
+        in TextureRegion region)
+    {
+        if (!ValidationEnabled)
+            return;
+
+        if (region.MipLevel >= texture.MipLevels)
         {
-            if ((tex.Usage & TextureUsage.Staging) == 0)
-            {
-                throw new RenderException("Texture must have the Staging usage flag to be mapped.");
-            }
-            if (subresource >= tex.ArrayLayers * tex.MipLevels)
-            {
-                throw new RenderException(
-                    "Subresource must be less than the number of subresources in the Texture being mapped.");
-            }
+            throw new RenderException(
+                $"MipLevel ({region.MipLevel}) must be less than the Texture's mip level count ({texture.MipLevels}).");
+        }
+
+        uint effectiveArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(texture);
+        if (region.ArrayLayer >= effectiveArrayLayers)
+        {
+            throw new RenderException(
+                $"ArrayLayer ({region.ArrayLayer}) must be less than the Texture's effective array layer count ({effectiveArrayLayers}).");
+        }
+
+        Util.GetMipDimensions(texture, region.MipLevel, out uint mipWidth, out uint mipHeight, out uint mipDepth);
+        if (region.X + region.Width > mipWidth || region.Y + region.Height > mipHeight || region.Z + region.Depth > mipDepth)
+        {
+            throw new RenderException("The given region does not fit into the Texture mip level.");
+        }
+
+        uint size = FormatHelpers.GetRegionSize(region.Width, region.Height, region.Depth, texture.Format);
+        if ((ulong)bufferOffset + size > buffer.SizeInBytes)
+        {
+            throw new RenderException(
+                $"The region needs {size} bytes at offset {bufferOffset}, but the buffer holds {buffer.SizeInBytes}.");
         }
     }
 

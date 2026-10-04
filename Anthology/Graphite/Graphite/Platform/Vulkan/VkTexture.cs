@@ -10,13 +10,11 @@ internal unsafe partial class VkTexture : Texture
     private readonly VkGraphicsDevice _gd;
     private readonly Image _optimalImage;
     private readonly VkMemoryBlock _memoryBlock;
-    private readonly Silk.NET.Vulkan.Buffer _stagingBuffer;
     private readonly uint _actualImageArrayLayers;
 
     public uint ActualArrayLayers => _actualImageArrayLayers;
 
     public Image OptimalDeviceImage => _optimalImage;
-    public Silk.NET.Vulkan.Buffer StagingBuffer => _stagingBuffer;
     public VkMemoryBlock Memory => _memoryBlock;
 
     public Format VkFormat { get; }
@@ -25,7 +23,6 @@ internal unsafe partial class VkTexture : Texture
     private readonly bool _isSwapchainTexture;
 
     public bool IsSwapchainTexture => _isSwapchainTexture;
-    public bool IsStaging => _stagingBuffer.Handle != 0;
 
     internal VkTexture(VkGraphicsDevice gd, in TextureDescription description)
         : base(description)
@@ -38,132 +35,61 @@ internal unsafe partial class VkTexture : Texture
         VkSampleCount = VkFormats.ToVkSampleCount(SampleCount);
         VkFormat = VkFormats.ToVkPixelFormat(Format, (description.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil);
 
-        bool isStaging = (Usage & TextureUsage.Staging) == TextureUsage.Staging;
+        ulong allocatedSize;
+        ImageCreateInfo imageCI = new() { SType = StructureType.ImageCreateInfo };
+        imageCI.MipLevels = MipLevels;
+        imageCI.ArrayLayers = _actualImageArrayLayers;
+        imageCI.ImageType = VkFormats.ToVkTextureType(Type);
+        imageCI.Extent.Width = Width;
+        imageCI.Extent.Height = Height;
+        imageCI.Extent.Depth = Depth;
+        imageCI.InitialLayout = ImageLayout.Undefined;
+        imageCI.Usage = VkFormats.ToVkTextureUsage(Usage);
+        imageCI.Tiling = ImageTiling.Optimal;
+        imageCI.Format = VkFormat;
+        imageCI.Flags = ImageCreateFlags.CreateMutableFormatBit;
 
-        ulong allocatedSize = 0;
-        if (!isStaging)
+        imageCI.Samples = VkSampleCount;
+        if (isCubemap)
         {
-            ImageCreateInfo imageCI = new() { SType = StructureType.ImageCreateInfo };
-            imageCI.MipLevels = MipLevels;
-            imageCI.ArrayLayers = _actualImageArrayLayers;
-            imageCI.ImageType = VkFormats.ToVkTextureType(Type);
-            imageCI.Extent.Width = Width;
-            imageCI.Extent.Height = Height;
-            imageCI.Extent.Depth = Depth;
-            imageCI.InitialLayout = ImageLayout.Undefined;
-            imageCI.Usage = VkFormats.ToVkTextureUsage(Usage);
-            imageCI.Tiling = ImageTiling.Optimal;
-            imageCI.Format = VkFormat;
-            imageCI.Flags = ImageCreateFlags.CreateMutableFormatBit;
-
-            imageCI.Samples = VkSampleCount;
-            if (isCubemap)
-            {
-                imageCI.Flags |= ImageCreateFlags.CreateCubeCompatibleBit;
-            }
-
-            _gd.Vk.CreateImage(gd.Device, in imageCI, null, out _optimalImage).CheckResult();
-
-            MemoryRequirements memoryRequirements;
-            bool prefersDedicatedAllocation;
-            if (_gd.GetImageMemoryRequirements2 != null)
-            {
-                ImageMemoryRequirementsInfo2KHR memReqsInfo2 = new() { SType = StructureType.ImageMemoryRequirementsInfo2Khr };
-                memReqsInfo2.Image = _optimalImage;
-                MemoryRequirements2KHR memReqs2 = new() { SType = StructureType.MemoryRequirements2Khr };
-                MemoryDedicatedRequirementsKHR dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirementsKhr };
-                memReqs2.PNext = &dedicatedReqs;
-                _gd.GetImageMemoryRequirements2(_gd.Device, &memReqsInfo2, &memReqs2);
-                memoryRequirements = memReqs2.MemoryRequirements;
-                prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
-            }
-            else
-            {
-                _gd.Vk.GetImageMemoryRequirements(gd.Device, _optimalImage, out memoryRequirements);
-                prefersDedicatedAllocation = false;
-            }
-
-            _memoryBlock = gd.MemoryManager.Allocate(
-                gd.PhysicalDeviceMemProperties,
-                memoryRequirements.MemoryTypeBits,
-                MemoryPropertyFlags.DeviceLocalBit,
-                false,
-                memoryRequirements.Size,
-                memoryRequirements.Alignment,
-                prefersDedicatedAllocation,
-                _optimalImage,
-                default);
-            _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
-            allocatedSize = memoryRequirements.Size;
-
-        }
-        else // isStaging
-        {
-            uint depthPitch = FormatHelpers.GetDepthPitch(
-                FormatHelpers.GetRowPitch(Width, Format),
-                Height,
-                Format);
-            uint stagingSize = depthPitch * Depth;
-            for (uint level = 1; level < MipLevels; level++)
-            {
-                Util.GetMipDimensions(this, level, out uint mipWidth, out uint mipHeight, out uint mipDepth);
-
-                depthPitch = FormatHelpers.GetDepthPitch(
-                    FormatHelpers.GetRowPitch(mipWidth, Format),
-                    mipHeight,
-                    Format);
-
-                stagingSize += depthPitch * mipDepth;
-            }
-            stagingSize *= ArrayLayers;
-
-            BufferCreateInfo bufferCI = new() { SType = StructureType.BufferCreateInfo };
-            bufferCI.Usage = BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit;
-            bufferCI.Size = stagingSize;
-            _gd.Vk.CreateBuffer(_gd.Device, in bufferCI, null, out _stagingBuffer).CheckResult();
-
-            MemoryRequirements bufferMemReqs;
-            bool prefersDedicatedAllocation;
-            if (_gd.GetBufferMemoryRequirements2 != null)
-            {
-                BufferMemoryRequirementsInfo2KHR memReqInfo2 = new() { SType = StructureType.BufferMemoryRequirementsInfo2Khr };
-                memReqInfo2.Buffer = _stagingBuffer;
-                MemoryRequirements2KHR memReqs2 = new() { SType = StructureType.MemoryRequirements2Khr };
-                MemoryDedicatedRequirementsKHR dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirementsKhr };
-                memReqs2.PNext = &dedicatedReqs;
-                _gd.GetBufferMemoryRequirements2(_gd.Device, &memReqInfo2, &memReqs2);
-                bufferMemReqs = memReqs2.MemoryRequirements;
-                prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
-            }
-            else
-            {
-                _gd.Vk.GetBufferMemoryRequirements(gd.Device, _stagingBuffer, out bufferMemReqs);
-                prefersDedicatedAllocation = false;
-            }
-
-            // Use "host cached" memory when available, for better performance of GPU -> CPU transfers
-            MemoryPropertyFlags propertyFlags = MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit | MemoryPropertyFlags.HostCachedBit;
-            if (!_gd.Vk.TryFindMemoryType(_gd.PhysicalDeviceMemProperties, bufferMemReqs.MemoryTypeBits, propertyFlags, out _))
-            {
-                propertyFlags ^= MemoryPropertyFlags.HostCachedBit;
-            }
-            _memoryBlock = _gd.MemoryManager.Allocate(
-                _gd.PhysicalDeviceMemProperties,
-                bufferMemReqs.MemoryTypeBits,
-                propertyFlags,
-                true,
-                bufferMemReqs.Size,
-                bufferMemReqs.Alignment,
-                prefersDedicatedAllocation,
-                default,
-                _stagingBuffer);
-
-            _gd.Vk.BindBufferMemory(_gd.Device, _stagingBuffer, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
-            allocatedSize = bufferMemReqs.Size;
+            imageCI.Flags |= ImageCreateFlags.CreateCubeCompatibleBit;
         }
 
-        if (!isStaging)
-            InitializeLayout();
+        _gd.Vk.CreateImage(gd.Device, in imageCI, null, out _optimalImage).CheckResult();
+
+        MemoryRequirements memoryRequirements;
+        bool prefersDedicatedAllocation;
+        if (_gd.GetImageMemoryRequirements2 != null)
+        {
+            ImageMemoryRequirementsInfo2KHR memReqsInfo2 = new() { SType = StructureType.ImageMemoryRequirementsInfo2Khr };
+            memReqsInfo2.Image = _optimalImage;
+            MemoryRequirements2KHR memReqs2 = new() { SType = StructureType.MemoryRequirements2Khr };
+            MemoryDedicatedRequirementsKHR dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirementsKhr };
+            memReqs2.PNext = &dedicatedReqs;
+            _gd.GetImageMemoryRequirements2(_gd.Device, &memReqsInfo2, &memReqs2);
+            memoryRequirements = memReqs2.MemoryRequirements;
+            prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
+        }
+        else
+        {
+            _gd.Vk.GetImageMemoryRequirements(gd.Device, _optimalImage, out memoryRequirements);
+            prefersDedicatedAllocation = false;
+        }
+
+        _memoryBlock = gd.MemoryManager.Allocate(
+            gd.PhysicalDeviceMemProperties,
+            memoryRequirements.MemoryTypeBits,
+            MemoryPropertyFlags.DeviceLocalBit,
+            false,
+            memoryRequirements.Size,
+            memoryRequirements.Alignment,
+            prefersDedicatedAllocation,
+            _optimalImage,
+            default);
+        _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
+        allocatedSize = memoryRequirements.Size;
+
+        InitializeLayout();
 
         Constructor_RecordAllocation((long)allocatedSize);
     }
@@ -204,45 +130,6 @@ internal unsafe partial class VkTexture : Texture
             _gd.TransitionFromUndefined(this, VkBarriers.RestingLayout(this));
     }
 
-    internal SubresourceLayout GetSubresourceLayout(uint subresource)
-    {
-        bool staging = _stagingBuffer.Handle != 0;
-        Util.GetMipLevelAndArrayLayer(this, subresource, out uint mipLevel, out uint arrayLayer);
-        if (!staging)
-        {
-            ImageAspectFlags aspect = (Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil
-              ? (ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit)
-              : ImageAspectFlags.ColorBit;
-            ImageSubresource imageSubresource = new()
-            {
-                ArrayLayer = arrayLayer,
-                MipLevel = mipLevel,
-                AspectMask = aspect,
-            };
-
-            _gd.Vk.GetImageSubresourceLayout(_gd.Device, _optimalImage, in imageSubresource, out SubresourceLayout layout);
-            return layout;
-        }
-        else
-        {
-            uint blockSize = FormatHelpers.IsCompressedFormat(Format) ? 4u : 1u;
-            Util.GetMipDimensions(this, mipLevel, out uint mipWidth, out uint mipHeight, out uint mipDepth);
-            uint rowPitch = FormatHelpers.GetRowPitch(mipWidth, Format);
-            uint depthPitch = FormatHelpers.GetDepthPitch(rowPitch, mipHeight, Format);
-
-            SubresourceLayout layout = new()
-            {
-                RowPitch = rowPitch,
-                DepthPitch = depthPitch,
-                ArrayPitch = depthPitch,
-                Size = depthPitch,
-            };
-            layout.Offset = Util.ComputeSubresourceOffset(this, mipLevel, arrayLayer);
-
-            return layout;
-        }
-    }
-
     internal ImageAspectFlags AspectMask
     {
         get
@@ -257,16 +144,6 @@ internal unsafe partial class VkTexture : Texture
     }
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
-
-    internal void SetStagingDimensions(uint width, uint height, uint depth, PixelFormat format)
-    {
-        Debug.Assert(_stagingBuffer.Handle != 0);
-        Debug.Assert(Usage == TextureUsage.Staging);
-        _description.Width = width;
-        _description.Height = height;
-        _description.Depth = depth;
-        _description.Format = format;
-    }
 
     private protected override void DisposeCore()
     {
@@ -283,15 +160,7 @@ internal unsafe partial class VkTexture : Texture
             return;
         }
 
-        bool isStaging = (Usage & TextureUsage.Staging) == TextureUsage.Staging;
-        if (isStaging)
-        {
-            _gd.Vk.DestroyBuffer(_gd.Device, _stagingBuffer, null);
-        }
-        else
-        {
-            _gd.Vk.DestroyImage(_gd.Device, _optimalImage, null);
-        }
+        _gd.Vk.DestroyImage(_gd.Device, _optimalImage, null);
 
         if (_memoryBlock.DeviceMemory.Handle != 0)
         {

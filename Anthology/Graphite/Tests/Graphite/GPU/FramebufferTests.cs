@@ -24,26 +24,11 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         });
         GD.WaitForIdle();
 
-        Texture staging = RF.CreateTexture(
-            TextureDescription.Texture2D(1024, 1024, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-
-        GD.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.CopyTexture(
-                colorTarget, 0, 0, 0, 0, 0,
-                staging, 0, 0, 0, 0, 0,
-                1024, 1024, 1, 1);
-            context.SubmitCommandBuffer(cl);
-        });
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> view = GD.Map<Color>(staging, MapMode.Read);
-        for (int i = 0; i < view.Count; i++)
+        TexelData<Color> view = ReadTexture<Color>(colorTarget);
+        for (int i = 0; i < view.Length; i++)
         {
             Assert.Equal(Color.Red, view[i]);
         }
-        GD.Unmap(staging);
     }
 
     [Fact]
@@ -121,28 +106,17 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         });
         GD.WaitForIdle();
 
-        Texture readback = RF.CreateTexture(
-            TextureDescription.Texture2D(1024, 1024, 11, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-        GD.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.CopyTexture(testTex, readback);
-            context.SubmitCommandBuffer(cl);
-        });
-        GD.WaitForIdle();
-
         uint mipWidth = 1024;
         uint mipHeight = 1024;
         for (uint level = 0; level < 11; level++)
         {
-            MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read, level);
+            TexelData<Color> readView = ReadTexture<Color>(testTex, level);
             for (uint y = 0; y < mipHeight; y++)
                 for (uint x = 0; x < mipWidth; x++)
                 {
                     Assert.Equal(new Color(level, level, level, 1), readView[x, y]);
                 }
 
-            GD.Unmap(readback, level);
             mipWidth = Math.Max(1, mipWidth / 2);
             mipHeight = Math.Max(1, mipHeight / 2);
         }

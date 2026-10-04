@@ -29,10 +29,6 @@ public enum TextureUsage : byte
     /// </summary>
     Cubemap = 1 << 4,
     /// <summary>
-    /// Staging for uploads; required for Map.
-    /// </summary>
-    Staging = 1 << 5,
-    /// <summary>
     /// Supports auto mipmap generation.
     /// </summary>
     GenerateMipmaps = 1 << 6,

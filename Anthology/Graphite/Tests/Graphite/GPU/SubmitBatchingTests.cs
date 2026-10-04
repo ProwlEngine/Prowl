@@ -1,3 +1,4 @@
+using System;
 using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Vk;
 
@@ -107,7 +108,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(destination);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         uint result = map[0];
         GD.Unmap(readback);
 
@@ -128,7 +129,7 @@ public abstract class SubmitBatchingTests<T> : GraphicsDeviceTestBase<T> where T
         GD.DispatchGraph(pipeline, new SubmitBatchingView[] { new() });
         GD.WaitForIdle();
 
-        MappedResourceView<uint> map = GD.Map<uint>(staging, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(staging);
         uint result = map[0];
         GD.Unmap(staging);
 

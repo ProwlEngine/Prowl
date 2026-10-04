@@ -190,14 +190,12 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.Draw((uint)pointCount);
         });
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(target);
         for (int i = 0; i < pointCount; i++)
         {
             (uint x, uint y) = pixelOf(i);
             Assert.Equal(expectedColor(i), map[x, FlipY(y, Size)], ColorFuzzyComparer.Instance);
         }
-        GD.Unmap(readback);
     }
 
     private GraphicsProgram CreateColorProgram(string module, VertexLayoutDescription layout)
@@ -276,8 +274,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.Draw(3);
         });
 
-        Texture readback = GetReadback(depthTarget);
-        MappedResourceView<float> map = GD.Map<float>(readback, MapMode.Read);
+        TexelData<float> map = ReadTexture<float>(depthTarget);
         for (uint y = 0; y < size; y++)
         {
             for (uint x = 0; x < size; x++)
@@ -286,7 +283,6 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 Assert.Equal(expected, map[x, y], 2.0f);
             }
         }
-        GD.Unmap(readback);
     }
 
     [Fact]
@@ -318,10 +314,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         DrawColoredQuad(fb, program, vb, Color.Black);
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(target);
         Assert.Equal(new Color(0.25f, 0.5f, 0.75f, 1), map[size / 2, size / 2], ColorFuzzyComparer.Instance);
-        GD.Unmap(readback);
     }
 
     [Fact]
@@ -354,14 +348,12 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             GraphicsProgram program = CreateColoredQuadProgram(blend);
             DrawColoredQuad(fb, program, vb, new Color(0.25f, 0.25f, 0.25f, 0.25f));
 
-            Texture readback = GetReadback(target);
-            MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+            TexelData<Color> map = ReadTexture<Color>(target);
             Color pixel = map[size / 2, size / 2];
             Assert.Equal(mask.HasFlag(ColorWriteMask.Red) ? 1 : 0.25f, pixel.R, 2);
             Assert.Equal(mask.HasFlag(ColorWriteMask.Green) ? 1 : 0.25f, pixel.G, 2);
             Assert.Equal(mask.HasFlag(ColorWriteMask.Blue) ? 1 : 0.25f, pixel.B, 2);
             Assert.Equal(mask.HasFlag(ColorWriteMask.Alpha) ? 1 : 0.25f, pixel.A, 2);
-            GD.Unmap(readback);
         }
     }
 
@@ -443,8 +435,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         texProps.SetTexture("Tex", target2, PointSampler);
         texProps.SetSampler("Smp", PointSampler);
 
-        Texture s1 = RF.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-        Texture s3 = RF.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
+        DeviceBuffer s1 = CreateTexelReadbackBuffer<Color>(Size, Size);
+        DeviceBuffer s3 = CreateTexelReadbackBuffer<Color>(Size, Size);
 
         Submit(cl =>
         {
@@ -457,7 +449,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(texProps);
             cl.Draw(3);
-            cl.CopyTexture(target1, s1);
+            cl.CopyTextureToBuffer(target1, s1, 0, TextureRegion.Whole(target1));
 
             // Pass 2: an unrelated shader that uses no textures, into target2.
             cl.SetFramebuffer(fb2);
@@ -474,7 +466,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.SetVertexSource(VertexSource.None);
             cl.SetProperties(texProps);
             cl.Draw(3);
-            cl.CopyTexture(target1, s3);
+            cl.CopyTextureToBuffer(target1, s3, 0, TextureRegion.Whole(target1));
 
         });
 
@@ -482,15 +474,13 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         // re-bound the same texture program and sampled target2 again - now blue. The binding
         // surviving the intervening pass is what produces a correct (blue) sample rather than
         // garbage / a stale texture.
-        MappedResourceView<Color> r1 = GD.Map<Color>(s1, MapMode.Read);
-        MappedResourceView<Color> r3 = GD.Map<Color>(s3, MapMode.Read);
+        TexelData<Color> r1 = ReadTexels<Color>(s1, Size, Size);
+        TexelData<Color> r3 = ReadTexels<Color>(s3, Size, Size);
         for (uint x = 0; x < Size; x++)
         {
             Assert.Equal(Color.Pink, r1[x, 0], ColorFuzzyComparer.Instance);
             Assert.Equal(Color.Blue, r3[x, 0], ColorFuzzyComparer.Instance);
         }
-        GD.Unmap(s1);
-        GD.Unmap(s3);
     }
 
     [Theory]
@@ -527,13 +517,11 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.Draw(3);
         });
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read, targetLayer);
+        TexelData<Color> map = ReadTexture<Color>(target, 0, targetLayer);
         for (uint x = 0; x < size; x++)
         {
             Assert.Equal(Color.Pink, map[x, 0], ColorFuzzyComparer.Instance);
         }
-        GD.Unmap(readback, targetLayer);
     }
 
     [StructLayout(LayoutKind.Sequential)]

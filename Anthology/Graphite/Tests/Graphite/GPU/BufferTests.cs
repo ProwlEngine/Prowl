@@ -45,48 +45,47 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
         GD.UpdateBuffer(buffer, 0, data);
 
-        MappedResourceView<int> view = GD.Map<int>(buffer, MapMode.Read);
-        for (int i = 0; i < view.Count; i++)
+        Span<int> view = GD.Map<int>(buffer);
+        for (int i = 0; i < view.Length; i++)
         {
             Assert.Equal(i * 2, view[i]);
         }
     }
 
     [Fact]
-    public unsafe void Staging_Map_WriteThenRead()
+    public void Staging_Map_WriteThenRead()
     {
         DeviceBuffer buffer = CreateBuffer(256, BufferUsage.Staging);
-        MappedResource map = GD.Map(buffer, MapMode.Write);
-        byte* dataPtr = (byte*)map.Data.ToPointer();
-        for (int i = 0; i < map.SizeInBytes; i++)
+        Span<byte> map = GD.Map(buffer);
+        for (int i = 0; i < map.Length; i++)
         {
-            dataPtr[i] = (byte)i;
+            map[i] = (byte)i;
         }
         GD.Unmap(buffer);
 
-        map = GD.Map(buffer, MapMode.Read);
-        dataPtr = (byte*)map.Data.ToPointer();
-        for (int i = 0; i < map.SizeInBytes; i++)
+        map = GD.Map(buffer);
+        for (int i = 0; i < map.Length; i++)
         {
-            Assert.Equal((byte)i, dataPtr[i]);
+            Assert.Equal((byte)i, map[i]);
         }
+        GD.Unmap(buffer);
     }
 
     [Fact]
     public void Staging_MapGeneric_WriteThenRead()
     {
         DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.Staging);
-        MappedResourceView<int> view = GD.Map<int>(buffer, MapMode.Write);
-        Assert.Equal(256, view.Count);
-        for (int i = 0; i < view.Count; i++)
+        Span<int> view = GD.Map<int>(buffer);
+        Assert.Equal(256, view.Length);
+        for (int i = 0; i < view.Length; i++)
         {
             view[i] = i * 10;
         }
         GD.Unmap(buffer);
 
-        view = GD.Map<int>(buffer, MapMode.Read);
-        Assert.Equal(256, view.Count);
-        for (int i = 0; i < view.Count; i++)
+        view = GD.Map<int>(buffer);
+        Assert.Equal(256, view.Length);
+        for (int i = 0; i < view.Length; i++)
         {
             view[i] = 1 * 10;
         }
@@ -94,21 +93,19 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     }
 
     [Fact]
-    public void MapGeneric_OutOfBounds_ThrowsIndexOutOfRange()
+    public void MapGeneric_Length_MatchesBufferSize()
     {
         DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.Staging);
-        MappedResourceView<byte> view = GD.Map<byte>(buffer, MapMode.ReadWrite);
-        Assert.Throws<IndexOutOfRangeException>(() => view[1024]);
-        Assert.Throws<IndexOutOfRangeException>(() => view[-1]);
+        Span<byte> view = GD.Map<byte>(buffer);
+        Assert.Equal(1024, view.Length);
+        GD.Unmap(buffer);
     }
 
     [Fact]
     public void Map_WrongFlags_Throws()
     {
         DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.VertexBuffer);
-        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.Read));
-        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.Write));
-        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.ReadWrite));
+        Assert.Throws<RenderException>(() => GD.Map(buffer));
     }
 
     [Fact]
@@ -129,8 +126,8 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.WaitForIdle();
         src.Dispose();
 
-        MappedResourceView<int> view = GD.Map<int>(dst, MapMode.Read);
-        for (int i = 0; i < view.Count; i++)
+        Span<int> view = GD.Map<int>(dst);
+        for (int i = 0; i < view.Length; i++)
         {
             Assert.Equal(i * 2, view[i]);
         }
@@ -164,8 +161,8 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
             });
             GD.WaitForIdle();
 
-            MappedResourceView<int> view = GD.Map<int>(finalDst, MapMode.Read);
-            for (int i = 0; i < view.Count; i++)
+            Span<int> view = GD.Map<int>(finalDst);
+            for (int i = 0; i < view.Length; i++)
             {
                 Assert.Equal(i * 2, view[i]);
             }
@@ -173,44 +170,28 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         }
     }
 
-    [SkippableFact]
-    public void MapThenUpdate_Fails()
+    [Fact]
+    public unsafe void Map_MultipleTimes_Succeeds()
     {
-        Skip.If(GD.BackendType == GraphicsBackend.Vulkan,
-            "Vulkan maps memory directly without map-state tracking, so it does not enforce this contract.");
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
-        MappedResourceView<int> view = GD.Map<int>(buffer, MapMode.ReadWrite);
-        int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
-        Assert.Throws<RenderException>(() => GD.UpdateBuffer(buffer, 0, data));
+        Span<byte> map = GD.Map(buffer);
+        fixed (byte* dataPtr = map)
+        {
+            byte* first = dataPtr;
+            map = GD.Map(buffer);
+            fixed (byte* second = map)
+                Assert.True(first == second);
+            map = GD.Map(buffer);
+            fixed (byte* third = map)
+                Assert.True(first == third);
+        }
+        GD.Unmap(buffer);
+        GD.Unmap(buffer);
+        GD.Unmap(buffer);
     }
 
     [Fact]
-    public void Map_MultipleTimes_Succeeds()
-    {
-        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
-        MappedResource map = GD.Map(buffer, MapMode.ReadWrite);
-        IntPtr dataPtr = map.Data;
-        map = GD.Map(buffer, MapMode.ReadWrite);
-        Assert.Equal(map.Data, dataPtr);
-        map = GD.Map(buffer, MapMode.ReadWrite);
-        Assert.Equal(map.Data, dataPtr);
-        GD.Unmap(buffer);
-        GD.Unmap(buffer);
-        GD.Unmap(buffer);
-    }
-
-    [SkippableFact]
-    public void Map_DifferentMode_Fails()
-    {
-        Skip.If(GD.BackendType == GraphicsBackend.Vulkan,
-            "Vulkan maps memory directly without map-state tracking, so it does not enforce this contract.");
-        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
-        MappedResource map = GD.Map(buffer, MapMode.Read);
-        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.Write));
-    }
-
-    [Fact]
-    public unsafe void UnusualSize()
+    public void UnusualSize()
     {
         DeviceBuffer src = RF.CreateBuffer(
             new BufferDescription(208, BufferUsage.UniformBuffer));
@@ -227,11 +208,12 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
-        MappedResource readMap = GD.Map(dst, MapMode.Read);
-        for (int i = 0; i < readMap.SizeInBytes; i++)
+        Span<byte> readMap = GD.Map(dst);
+        for (int i = 0; i < readMap.Length; i++)
         {
-            Assert.Equal((byte)(i * 150), ((byte*)readMap.Data)[i]);
+            Assert.Equal((byte)(i * 150), readMap[i]);
         }
+        GD.Unmap(dst);
     }
 
     [Fact]
@@ -263,25 +245,16 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         });
         GD.WaitForIdle();
 
-        MappedResourceView<byte> readView = GD.Map<byte>(dst, MapMode.Read);
+        Span<byte> readView = GD.Map<byte>(dst);
         for (uint i = 0; i < 512; i++)
         {
-            Assert.Equal((byte)i, readView[i]);
+            Assert.Equal((byte)i, readView[(int)i]);
         }
 
         for (uint i = 512; i < 1024; i++)
         {
-            Assert.Equal((byte)255, readView[i]);
+            Assert.Equal((byte)255, readView[(int)i]);
         }
-    }
-
-    [Fact]
-    public void Dynamic_MapRead_Fails()
-    {
-        DeviceBuffer dynamic = RF.CreateBuffer(
-            new BufferDescription(1024, BufferUsage.Dynamic | BufferUsage.UniformBuffer));
-        Assert.Throws<RenderException>(() => GD.Map(dynamic, MapMode.Read));
-        Assert.Throws<RenderException>(() => GD.Map(dynamic, MapMode.ReadWrite));
     }
 
     [Fact]
@@ -299,10 +272,10 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         });
         GD.WaitForIdle();
 
-        MappedResourceView<byte> readView = GD.Map<byte>(staging, MapMode.Read);
+        Span<byte> readView = GD.Map<byte>(staging);
         for (uint i = 0; i < staging.SizeInBytes; i++)
         {
-            Assert.Equal((byte)i, readView[i]);
+            Assert.Equal((byte)i, readView[(int)i]);
         }
     }
 
@@ -348,11 +321,11 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         DeviceBuffer readback = GetReadback(dst);
 
-        MappedResourceView<byte> readView = GD.Map<byte>(readback, MapMode.Read);
+        Span<byte> readView = GD.Map<byte>(readback);
         for (uint i = 0; i < copySize; i++)
         {
             byte expected = data[i + srcCopyOffset];
-            byte actual = readView[i + dstCopyOffset];
+            byte actual = readView[(int)(i + dstCopyOffset)];
             Assert.Equal(expected, actual);
         }
         GD.Unmap(readback);
@@ -374,11 +347,11 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(buffer);
-        MappedResourceView<byte> readView = GD.Map<byte>(readback, MapMode.Read);
+        Span<byte> readView = GD.Map<byte>(readback);
         for (uint i = 0; i < dataSize; i++)
         {
             byte expected = data[i];
-            byte actual = readView[i + offset];
+            byte actual = readView[(int)(i + offset)];
             Assert.Equal(expected, actual);
         }
         GD.Unmap(readback);
@@ -397,7 +370,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.UpdateBuffer(buffer, 64, mat2);
 
         DeviceBuffer readback = GetReadback(buffer);
-        MappedResourceView<Float4x4> readView = GD.Map<Float4x4>(readback, MapMode.Read);
+        Span<Float4x4> readView = GD.Map<Float4x4>(readback);
         Assert.Equal(mat1, readView[0]);
         Assert.Equal(mat2, readView[1]);
         GD.Unmap(readback);
@@ -422,7 +395,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(buffer);
-        MappedResourceView<Float4x4> readView = GD.Map<Float4x4>(readback, MapMode.Read);
+        Span<Float4x4> readView = GD.Map<Float4x4>(readback);
         Assert.Equal(mat1, readView[0]);
         Assert.Equal(mat2, readView[1]);
         GD.Unmap(readback);
@@ -491,7 +464,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         DeviceBuffer readback = GetReadback(dst);
 
-        MappedResourceView<byte> readMap = GD.Map<byte>(readback, MapMode.Read);
+        Span<byte> readMap = GD.Map<byte>(readback);
         for (int i = 0; i < 1024; i++)
         {
             Assert.Equal((byte)(i * 2), readMap[i]);
@@ -545,7 +518,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         DeviceBuffer readback = GetReadback(buffer);
 
-        MappedResourceView<byte> readMap = GD.Map<byte>(readback, MapMode.Read);
+        Span<byte> readMap = GD.Map<byte>(readback);
         for (int i = 0; i < 1024; i++)
         {
             Assert.Equal((byte)i, readMap[i]);

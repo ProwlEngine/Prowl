@@ -1,71 +1,25 @@
 using System;
 
-using Silk.NET.Vulkan;
-
 namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice
 {
-    protected override MappedResource MapCore(GraphicsResource resource, MapMode mode, uint subresource)
+    protected override IntPtr MapCore(DeviceBuffer buffer)
     {
-        VkMemoryBlock memoryBlock = default;
-        IntPtr mappedPtr = IntPtr.Zero;
-        uint sizeInBytes;
-        uint offset = 0;
-        uint rowPitch = 0;
-        uint depthPitch = 0;
-        if (resource is VkBuffer buffer)
+        VkMemoryBlock memoryBlock = Util.AssertSubtype<DeviceBuffer, VkBuffer>(buffer).Memory;
+        if (memoryBlock.DeviceMemory.Handle == 0)
         {
-            memoryBlock = buffer.Memory;
-            sizeInBytes = buffer.SizeInBytes;
-        }
-        else
-        {
-            VkTexture texture = Util.AssertSubtype<GraphicsResource, VkTexture>(resource);
-            SubresourceLayout layout = texture.GetSubresourceLayout(subresource);
-            memoryBlock = texture.Memory;
-            sizeInBytes = (uint)layout.Size;
-            offset = (uint)layout.Offset;
-            rowPitch = (uint)layout.RowPitch;
-            depthPitch = (uint)layout.DepthPitch;
+            return IntPtr.Zero;
         }
 
-        if (memoryBlock.DeviceMemory.Handle != 0)
-        {
-            if (memoryBlock.IsPersistentMapped)
-            {
-                mappedPtr = (IntPtr)memoryBlock.BlockMappedPointer;
-            }
-            else
-            {
-                mappedPtr = MemoryManager.Map(memoryBlock);
-            }
-        }
-
-        byte* dataPtr = (byte*)mappedPtr.ToPointer() + offset;
-        return new MappedResource(
-            resource,
-            mode,
-            (IntPtr)dataPtr,
-            sizeInBytes,
-            subresource,
-            rowPitch,
-            depthPitch);
+        return memoryBlock.IsPersistentMapped
+            ? (IntPtr)memoryBlock.BlockMappedPointer
+            : MemoryManager.Map(memoryBlock);
     }
 
-    protected override void UnmapCore(GraphicsResource resource, uint subresource)
+    protected override void UnmapCore(DeviceBuffer buffer)
     {
-        VkMemoryBlock memoryBlock = default;
-        if (resource is VkBuffer buffer)
-        {
-            memoryBlock = buffer.Memory;
-        }
-        else
-        {
-            VkTexture tex = Util.AssertSubtype<GraphicsResource, VkTexture>(resource);
-            memoryBlock = tex.Memory;
-        }
-
+        VkMemoryBlock memoryBlock = Util.AssertSubtype<DeviceBuffer, VkBuffer>(buffer).Memory;
         if (memoryBlock.DeviceMemory.Handle != 0 && !memoryBlock.IsPersistentMapped)
         {
             Vk.UnmapMemory(Device, memoryBlock.DeviceMemory);

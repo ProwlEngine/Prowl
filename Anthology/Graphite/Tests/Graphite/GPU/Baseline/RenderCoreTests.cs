@@ -67,12 +67,9 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
         });
         GD.WaitForIdle();
 
-        Texture readback = GetReadback(target);
-        MappedResourceView<Float4> map = GD.Map<Float4>(readback, MapMode.Read, 0);
-        uint rowStride = map.MappedResource.RowPitch / (uint)Unsafe.SizeOf<Float4>();
+        TexelData<Float4> map = ReadTexture<Float4>(target, 0, 0);
         uint row = !GD.IsUvOriginTopLeft ? height - 25 - 1 : 25;
-        Float4 pixel = map[(int)(row * rowStride + 25)];
-        GD.Unmap(readback);
+        Float4 pixel = map[25u, row];
 
         Assert.Equal(0.25f, pixel.X, 2);
         Assert.Equal(0.5f, pixel.Y, 2);

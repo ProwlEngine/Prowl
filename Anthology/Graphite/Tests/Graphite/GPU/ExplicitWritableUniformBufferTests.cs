@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
@@ -88,7 +89,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(ubo);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         uint width = map[0];
         uint height = map[1];
         GD.Unmap(readback);
@@ -133,7 +134,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         AssertCopiedSource(seed, destination);
 
         DeviceBuffer readback = GetReadback(ubo);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         Assert.Equal(Side, map[0]);
         Assert.Equal(Side, map[1]);
         Assert.Equal(sentinel, map[2]);
@@ -176,7 +177,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         AssertCopiedSource(seed, destination);
 
         DeviceBuffer readback = GetReadback(ubo);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         Assert.Equal(Side, map[0]);
         Assert.Equal(0u, map[1]);
         Assert.Equal(777u, map[2]);
@@ -189,7 +190,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     private void AssertCopiedSource(float[] seed, DeviceBuffer destination)
     {
         DeviceBuffer readback = GetReadback(destination);
-        MappedResourceView<float> map = GD.Map<float>(readback, MapMode.Read);
+        Span<float> map = GD.Map<float>(readback);
         for (int i = 0; i < seed.Length; i++)
             Assert.Equal(seed[i], map[i]);
         GD.Unmap(readback);

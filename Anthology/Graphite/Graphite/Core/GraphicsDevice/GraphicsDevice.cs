@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 
 namespace Prowl.Graphite;
 
@@ -124,61 +125,41 @@ public abstract partial class GraphicsDevice : IDisposable
     public abstract TextureSampleCount GetSampleCountLimit(PixelFormat format, bool depthFormat);
 
     /// <summary>
-    /// Maps a buffer or texture to CPU memory.
+    /// Maps a Dynamic or Staging buffer and returns its bytes. Call Unmap when done.
     /// </summary>
-    /// <param name="resource">Buffer or texture to map.</param>
-    /// <param name="mode">Map mode to use.</param>
-    /// <param name="subresource">Subresource index (mip then array layer). 0 for buffers.</param>
-    /// <returns>The mapped data region.</returns>
-    public MappedResource Map(GraphicsResource resource, MapMode mode, uint subresource = 0)
+    public unsafe Span<byte> Map(DeviceBuffer buffer)
     {
-        Map_CheckResource(resource, mode, subresource);
-
-        if ((mode == MapMode.Write || mode == MapMode.ReadWrite) && resource is DeviceBuffer mapBuffer)
-            mapBuffer.MarkContentChanged();
-
-        MappedResource mapped = MapCore(resource, mode, subresource);
-        Profiler?.Record(BufferOpBin.Map, mapped.SizeInBytes);
-        return mapped;
+        Map_CheckResource(buffer);
+        buffer.MarkContentChanged();
+        IntPtr data = MapCore(buffer);
+        Profiler?.Record(BufferOpBin.Map, buffer.SizeInBytes);
+        return new Span<byte>((void*)data, (int)buffer.SizeInBytes);
     }
 
     /// <summary>
-    /// Maps the resource. Backend-specific.
+    /// Maps a Dynamic or Staging buffer as a span of T. Call Unmap when done.
     /// </summary>
-    /// <param name="resource">Resource to map.</param>
-    /// <param name="mode">Map mode.</param>
-    /// <param name="subresource">Subresource index.</param>
-    /// <returns>The mapped data region.</returns>
-    protected abstract MappedResource MapCore(GraphicsResource resource, MapMode mode, uint subresource);
+    public Span<T> Map<T>(DeviceBuffer buffer) where T : unmanaged
+        => MemoryMarshal.Cast<byte, T>(Map(buffer));
 
     /// <summary>
-    /// Maps a buffer or texture as a struct type.
+    /// Unmaps a buffer mapped with Map.
     /// </summary>
-    /// <param name="resource">Buffer or texture to map.</param>
-    /// <param name="mode">Map mode to use.</param>
-    /// <param name="subresource">Subresource index (mip then array layer).</param>
-    /// <typeparam name="T">Blittable type to view the data as.</typeparam>
-    /// <returns>The mapped data region.</returns>
-    public MappedResourceView<T> Map<T>(GraphicsResource resource, MapMode mode, uint subresource = 0) where T : unmanaged
-        => new(Map(resource, mode, subresource));
-
-    /// <summary>
-    /// Unmaps a previously mapped buffer or texture.
-    /// </summary>
-    /// <param name="resource">Resource to unmap.</param>
-    /// <param name="subresource">Subresource index (mip then array layer). 0 for buffers.</param>
-    public void Unmap(GraphicsResource resource, uint subresource = 0)
+    public void Unmap(DeviceBuffer buffer)
     {
-        UnmapCore(resource, subresource);
+        UnmapCore(buffer);
         Profiler?.Record(BufferOpBin.Unmap, 0);
     }
 
     /// <summary>
-    /// Unmaps the resource. Backend-specific.
+    /// Maps the buffer. Backend-specific.
     /// </summary>
-    /// <param name="resource">Resource to unmap.</param>
-    /// <param name="subresource">Subresource index.</param>
-    protected abstract void UnmapCore(GraphicsResource resource, uint subresource);
+    protected abstract IntPtr MapCore(DeviceBuffer buffer);
+
+    /// <summary>
+    /// Unmaps the buffer. Backend-specific.
+    /// </summary>
+    protected abstract void UnmapCore(DeviceBuffer buffer);
 
     /// <summary>
     /// Whether this format/type/usage combo is supported, plus its device limits.

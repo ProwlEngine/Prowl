@@ -27,19 +27,22 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 
 Rendering is built around a render graph: a `RenderPipeline` owns a list of `IPass`es, and a
 `GraphicsDevice` dispatches that pipeline against a list of views. The simplest possible pipeline is one
-pass that writes the view target, which presents the frame when the view sets `TargetSwapchain`:
+pass that writes the view target, which presents the frame when the view sets its `TargetSwapchain`:
 
 ```cs
 internal readonly struct SceneView : IRenderView
 {
-    public SceneView(uint width, uint height)
+    public SceneView(uint width, uint height, Swapchain swapchain)
     {
         PixelWidth = width;
         PixelHeight = height;
+        TargetSwapchain = swapchain;
     }
 
     public uint PixelWidth { get; }
     public uint PixelHeight { get; }
+    public int ViewId => 0;
+    public Swapchain TargetSwapchain { get; }
 }
 
 internal sealed class TrianglePass : RasterPass<SceneView>
@@ -99,10 +102,10 @@ GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescriptio
 GraphicsProgram shader = /* load + create a ShaderProgram */;
 Mesh triangle = /* create vertex/index buffers */;
 TrianglePipeline pipeline = new(new TrianglePass(triangle, shader));
-SceneView[] views = { new SceneView(600, 600) };
+SceneView[] views = { new SceneView(600, 600, device.MainSwapchain) };
 
 // Per-frame render loop: builds an ExecutionTask internally, runs the pipeline for every view, and
-// swaps buffers if a swapchain view wrote the view target.
+// presents the swapchain of every view that wrote the view target.
 device.DispatchGraph(pipeline, views);
 ```
 

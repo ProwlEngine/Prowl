@@ -60,10 +60,8 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
             cl.Draw(4);
         });
 
-        Texture readback = GetReadback(output);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(output);
         Assert.Equal(Color.Red, map[size / 2, size / 2], ColorFuzzyComparer.Instance);
-        GD.Unmap(readback);
     }
 
     [SkippableFact]
@@ -91,13 +89,11 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         // The compute kernel writes pure RGBA into the 4 texels; read the storage texture back
         // directly. Explicit colors are used because the shader writes (0,1,0), which differs from
         // Prowl's named Color.Green (HTML green).
-        Texture readback = GetReadback(computeOutput);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(computeOutput);
         Assert.Equal(new Color(1f, 0f, 0f, 1f), map[0, 0], ColorFuzzyComparer.Instance);
         Assert.Equal(new Color(0f, 1f, 0f, 1f), map[1, 0], ColorFuzzyComparer.Instance);
         Assert.Equal(new Color(0f, 0f, 1f, 1f), map[2, 0], ColorFuzzyComparer.Instance);
         Assert.Equal(new Color(1f, 1f, 1f, 1f), map[3, 0], ColorFuzzyComparer.Instance);
-        GD.Unmap(readback);
     }
 
     [SkippableTheory]
@@ -125,19 +121,16 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
         // sideColorStep = floor(1 / layers) is 0 for layers >= 2, so every texel is written as 0.
         // The point of the test is that per-array-layer storage writes happen at all.
-        Texture readback = GetReadback(computeOutput);
         for (uint layer = 0; layer < layers; layer++)
         {
-            uint subresource = readback.CalculateSubresource(0, layer);
-            MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
+            TexelData<uint> map = ReadTexture<uint>(computeOutput, 0, layer);
             for (int y = 0; y < texSize; y++)
             {
                 for (int x = 0; x < texSize; x++)
                 {
-                    Assert.Equal(0, map[x, y]);
+                    Assert.Equal(0u, map[x, y]);
                 }
             }
-            GD.Unmap(readback, subresource);
         }
     }
 
@@ -168,15 +161,13 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
             cl.Dispatch(size / 16, size / 16, size);
         });
 
-        Texture readback = GetReadback(texture);
-        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        TexelData<Color> map = ReadTexture<Color>(texture);
         for (uint z = 0; z < size; z++)
         {
             float v = fill * (z + 1);
             Color expected = new(v, v, v, v);
             Assert.Equal(expected, map[(int)(size / 2), (int)(size / 2), (int)z], ColorFuzzyComparer.Instance);
         }
-        GD.Unmap(readback);
     }
 
     [SkippableFact]
@@ -222,7 +213,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         });
 
         DeviceBuffer readback = GetReadback(destination);
-        MappedResourceView<float> map = GD.Map<float>(readback, MapMode.Read);
+        Span<float> map = GD.Map<float>(readback);
         for (int i = 0; i < count; i++) Assert.Equal(i, map[i]);
         GD.Unmap(readback);
     }

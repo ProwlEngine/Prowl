@@ -7,7 +7,7 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// Updates a texture region from a pointer. Staged and submitted now; blocks only for Staging resources.
+    /// Updates a texture region from a pointer. Staged and submitted now.
     /// </summary>
     /// <param name="texture">Texture to update.</param>
     /// <param name="source">Pointer to packed pixel data for the region.</param>
@@ -19,9 +19,7 @@ public abstract partial class GraphicsDevice
             texture,
             sizeInBytes, region);
         TextureRegion copy = region;
-        GpuSubmission submission = Record(cb => cb.UpdateTexture(texture, source, sizeInBytes, copy), "UpdateTexture");
-        if ((texture.Usage & TextureUsage.Staging) != 0)
-            submission.Wait();
+        Record(cb => cb.UpdateTexture(texture, source, sizeInBytes, copy), "UpdateTexture");
     }
 
     /// <summary>

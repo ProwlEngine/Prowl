@@ -96,36 +96,6 @@ internal static class FormatHelpers
             || format == PixelFormat.ETC2_R8_G8_B8_A8_UNorm;
     }
 
-    internal static uint GetRowPitch(uint width, PixelFormat format)
-    {
-        switch (format)
-        {
-            case PixelFormat.BC1_Rgb_UNorm:
-            case PixelFormat.BC1_Rgb_UNorm_SRgb:
-            case PixelFormat.BC1_Rgba_UNorm:
-            case PixelFormat.BC1_Rgba_UNorm_SRgb:
-            case PixelFormat.BC2_UNorm:
-            case PixelFormat.BC2_UNorm_SRgb:
-            case PixelFormat.BC3_UNorm:
-            case PixelFormat.BC3_UNorm_SRgb:
-            case PixelFormat.BC4_UNorm:
-            case PixelFormat.BC4_SNorm:
-            case PixelFormat.BC5_UNorm:
-            case PixelFormat.BC5_SNorm:
-            case PixelFormat.BC7_UNorm:
-            case PixelFormat.BC7_UNorm_SRgb:
-            case PixelFormat.ETC2_R8_G8_B8_UNorm:
-            case PixelFormat.ETC2_R8_G8_B8_A1_UNorm:
-            case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
-                uint blocksPerRow = (width + 3) / 4;
-                uint blockSizeInBytes = GetBlockSizeInBytes(format);
-                return blocksPerRow * blockSizeInBytes;
-
-            default:
-                return width * format.GetSizeInBytes();
-        }
-    }
-
     public static uint GetBlockSizeInBytes(PixelFormat format)
     {
         switch (format)
@@ -192,39 +162,6 @@ internal static class FormatHelpers
             PixelFormat.BC7_UNorm_SRgb => PixelFormat.BC7_UNorm,
             _ => format,
         };
-    }
-
-    internal static uint GetNumRows(uint height, PixelFormat format)
-    {
-        switch (format)
-        {
-            case PixelFormat.BC1_Rgb_UNorm:
-            case PixelFormat.BC1_Rgb_UNorm_SRgb:
-            case PixelFormat.BC1_Rgba_UNorm:
-            case PixelFormat.BC1_Rgba_UNorm_SRgb:
-            case PixelFormat.BC2_UNorm:
-            case PixelFormat.BC2_UNorm_SRgb:
-            case PixelFormat.BC3_UNorm:
-            case PixelFormat.BC3_UNorm_SRgb:
-            case PixelFormat.BC4_UNorm:
-            case PixelFormat.BC4_SNorm:
-            case PixelFormat.BC5_UNorm:
-            case PixelFormat.BC5_SNorm:
-            case PixelFormat.BC7_UNorm:
-            case PixelFormat.BC7_UNorm_SRgb:
-            case PixelFormat.ETC2_R8_G8_B8_UNorm:
-            case PixelFormat.ETC2_R8_G8_B8_A1_UNorm:
-            case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
-                return (height + 3) / 4;
-
-            default:
-                return height;
-        }
-    }
-
-    internal static uint GetDepthPitch(uint rowPitch, uint height, PixelFormat format)
-    {
-        return rowPitch * GetNumRows(height, format);
     }
 
     internal static uint GetRegionSize(uint width, uint height, uint depth, PixelFormat format)

@@ -1,3 +1,4 @@
+using System;
 #nullable enable
 
 using Prowl.Graphite.RenderGraph;
@@ -196,7 +197,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
         GD.DispatchGraph(pipeline, new BufferView[] { new(64, 64) });
         GD.WaitForIdle();
 
-        MappedResourceView<float> map = GD.Map<float>(readback, MapMode.Read);
+        Span<float> map = GD.Map<float>(readback);
         for (int i = 0; i < count; i++)
             Assert.Equal(i, map[i]);
         GD.Unmap(readback);
@@ -226,7 +227,7 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
 
             if (previousValues != null)
             {
-                MappedResourceView<float> map = GD.Map<float>(readback, MapMode.Read);
+                Span<float> map = GD.Map<float>(readback);
                 for (int i = 0; i < floats; i++)
                     Assert.Equal(previousValues[i], map[i]);
                 GD.Unmap(readback);

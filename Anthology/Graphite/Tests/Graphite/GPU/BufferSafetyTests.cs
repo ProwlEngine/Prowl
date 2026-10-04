@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
@@ -131,7 +132,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     private uint ReadUInt(DeviceBuffer buffer, int index)
     {
         DeviceBuffer readback = GetReadback(buffer);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         uint value = map[index];
         GD.Unmap(readback);
         return value;

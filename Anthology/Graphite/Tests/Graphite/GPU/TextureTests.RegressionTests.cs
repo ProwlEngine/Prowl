@@ -48,34 +48,16 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         });
         GD.WaitForIdle();
 
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            width, height, 1, 1, PixelFormat.R32_G32_Float, TextureUsage.Staging));
-        GD.RunTestGraph(context =>
+        TexelData<Float2> view = ReadTexture<Float2>(target);
+        for (int y = 0; y < height; y++)
         {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
-            context.SubmitCommandBuffer(cl);
-        });
-        GD.WaitForIdle();
-
-        MappedResourceView<Float2> view = GD.Map<Float2>(staging, MapMode.Read);
-        try
-        {
-            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
             {
-                for (int x = 0; x < width; x++)
-                {
-                    Assert.Equal(new Float2(3f, 5f), view[x, y]);
-                }
+                Assert.Equal(new Float2(3f, 5f), view[x, y]);
             }
-        }
-        finally
-        {
-            GD.Unmap(staging);
         }
 
         fb.Dispose();
-        staging.Dispose();
         target.Dispose();
     }
 
@@ -104,35 +86,17 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         });
         GD.WaitForIdle();
 
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            width, height, 1, 1, PixelFormat.R16_G16_Float, TextureUsage.Staging));
-        GD.RunTestGraph(context =>
+        TexelData<HalfFloat2> view = ReadTexture<HalfFloat2>(target);
+        for (int y = 0; y < height; y++)
         {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
-            context.SubmitCommandBuffer(cl);
-        });
-        GD.WaitForIdle();
-
-        MappedResourceView<HalfFloat2> view = GD.Map<HalfFloat2>(staging, MapMode.Read);
-        try
-        {
-            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
             {
-                for (int x = 0; x < width; x++)
-                {
-                    Assert.Equal((Half)1f, view[x, y].X);
-                    Assert.Equal((Half)2f, view[x, y].Y);
-                }
+                Assert.Equal((Half)1f, view[x, y].X);
+                Assert.Equal((Half)2f, view[x, y].Y);
             }
-        }
-        finally
-        {
-            GD.Unmap(staging);
         }
 
         fb.Dispose();
-        staging.Dispose();
         target.Dispose();
     }
 

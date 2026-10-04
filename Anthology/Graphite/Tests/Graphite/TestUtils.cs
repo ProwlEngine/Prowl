@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Graphite.RenderGraph;
 
@@ -166,6 +167,31 @@ internal sealed class TrackingResourceFactory : ResourceFactory
         => Track(_inner.CreateSwapchain(description));
 }
 
+public sealed class TexelData<T> where T : unmanaged
+{
+    public readonly T[] Data;
+    public readonly uint Width;
+    public readonly uint Height;
+    public readonly uint Depth;
+
+    public TexelData(T[] data, uint width, uint height, uint depth)
+    {
+        Data = data;
+        Width = width;
+        Height = height;
+        Depth = depth;
+    }
+
+    public int Length => Data.Length;
+
+    public ref T this[int index] => ref Data[index];
+    public ref T this[uint index] => ref Data[index];
+    public ref T this[int x, int y] => ref Data[y * (int)Width + x];
+    public ref T this[uint x, uint y] => ref Data[y * Width + x];
+    public ref T this[int x, int y, int z] => ref Data[(z * (int)Height + y) * (int)Width + x];
+    public ref T this[uint x, uint y, uint z] => ref Data[(z * Height + y) * Width + x];
+}
+
 public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : GraphicsDeviceCreator
 {
     private readonly IWindow _window;
@@ -209,35 +235,36 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         return readback;
     }
 
-    protected Texture GetReadback(Texture texture)
+    protected unsafe TexelData<TTexel> ReadTexture<TTexel>(Texture texture, uint mipLevel = 0, uint arrayLayer = 0) where TTexel : unmanaged
+        => ReadTexture<TTexel>(texture, TextureRegion.Whole(texture, mipLevel, arrayLayer));
+
+    protected unsafe TexelData<TTexel> ReadTexture<TTexel>(Texture texture, in TextureRegion region) where TTexel : unmanaged
     {
-        if ((texture.Usage & TextureUsage.Staging) != 0)
-        {
-            return texture;
-        }
-        else
-        {
-            uint layers = texture.ArrayLayers;
-            if ((texture.Usage & TextureUsage.Cubemap) != 0)
-            {
-                layers *= 6;
-            }
-            TextureDescription desc = new(
-                texture.Width, texture.Height, texture.Depth,
-                texture.MipLevels, layers,
-                texture.Format,
-                TextureUsage.Staging, texture.Type);
-            Texture readback = RF.CreateTexture(desc);
-            GD.RunTestGraph(context =>
-            {
-                CommandBuffer cl = context.GetCommandBuffer();
-                cl.CopyTexture(texture, readback);
-                context.SubmitCommandBuffer(cl);
-            });
-            GD.WaitForIdle();
-            return readback;
-        }
+        byte[] bytes = ReadTextureBytes(texture, region, region.Width * region.Height * region.Depth * (uint)sizeof(TTexel));
+        TTexel[] data = new TTexel[region.Width * region.Height * region.Depth];
+        MemoryMarshal.Cast<byte, TTexel>(bytes).CopyTo(data);
+        return new TexelData<TTexel>(data, region.Width, region.Height, region.Depth);
     }
+
+    protected byte[] ReadTextureBytes(Texture texture, in TextureRegion region, uint sizeInBytes)
+    {
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(sizeInBytes, BufferUsage.Staging));
+        TextureRegion copy = region;
+        GD.Record(cmd => cmd.CopyTextureToBuffer(texture, buffer, 0, copy)).Wait();
+        byte[] bytes = GD.Map(buffer).Slice(0, (int)sizeInBytes).ToArray();
+        GD.Unmap(buffer);
+        return bytes;
+    }
+
+    protected TexelData<TTexel> ReadTexels<TTexel>(DeviceBuffer staging, uint width, uint height = 1, uint depth = 1) where TTexel : unmanaged
+    {
+        TTexel[] data = GD.Map<TTexel>(staging).Slice(0, (int)(width * height * depth)).ToArray();
+        GD.Unmap(staging);
+        return new TexelData<TTexel>(data, width, height, depth);
+    }
+
+    protected unsafe DeviceBuffer CreateTexelReadbackBuffer<TTexel>(uint width, uint height = 1, uint depth = 1) where TTexel : unmanaged
+        => RF.CreateBuffer(new BufferDescription(width * height * depth * (uint)sizeof(TTexel), BufferUsage.Staging));
 
     public void Dispose()
     {

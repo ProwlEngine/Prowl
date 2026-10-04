@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
@@ -32,7 +33,7 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(output);
-        MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
+        Span<uint> map = GD.Map<uint>(readback);
         uint valueA = map[0];
         uint valueB = map[1];
         GD.Unmap(readback);
