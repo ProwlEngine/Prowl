@@ -35,6 +35,9 @@ public struct GraphTextureDesc
     /// <summary>Has a depth attachment.</summary>
     public bool EnableDepth;
 
+    /// <summary>Explicit depth-stencil format, null for the device default. Needs EnableDepth.</summary>
+    public PixelFormat? DepthFormat;
+
     private static PixelFormat[] DefaultFormats(PixelFormat[] formats)
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 

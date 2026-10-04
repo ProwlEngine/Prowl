@@ -149,6 +149,86 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
     }
 
     [Fact]
+    public void RenderTexture_NameGetter_ReturnsNameAndPropagatesToAttachments()
+    {
+        RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, ColorFormat, depth: true));
+        try
+        {
+            target.Name = "Scene";
+            Assert.Equal("Scene", target.Name);
+            Assert.Equal("Scene Color[0]", target.ColorTextures[0].Name);
+            Assert.Equal("Scene Depth", target.DepthTexture!.Name);
+        }
+        finally
+        {
+            target.Dispose();
+        }
+    }
+
+    [Fact]
+    public void RenderTexture_Dispose_SetsIsDisposedAndFreesAttachments()
+    {
+        RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, ColorFormat, depth: true));
+        Assert.False(target.IsDisposed);
+
+        target.Dispose();
+        target.Dispose();
+
+        Assert.True(target.IsDisposed);
+        Assert.True(target.ColorTextures[0].IsDisposed);
+        Assert.True(target.DepthTexture!.IsDisposed);
+        Assert.True(target.Framebuffer.IsDisposed);
+    }
+
+    [Fact]
+    public void RenderTexture_ExplicitDepthFormat_IsUsedAndReportedInDesc()
+    {
+        PixelFormat[] colors = [ColorFormat];
+        RenderTexture target = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, colors, PixelFormat.D32_Float_S8_UInt));
+        try
+        {
+            Assert.Equal(PixelFormat.D32_Float_S8_UInt, target.DepthTexture!.Format);
+            Assert.Equal(PixelFormat.D32_Float_S8_UInt, target.Desc.DepthFormat);
+        }
+        finally
+        {
+            target.Dispose();
+        }
+    }
+
+    [Fact]
+    public void RenderTextureDescription_DepthFormat_DistinguishesDescs()
+    {
+        PixelFormat[] colors = [ColorFormat];
+        RenderTextureDescription deviceDefault = new(8, 8, colors, true);
+        RenderTextureDescription explicitFormat = new(8, 8, colors, PixelFormat.D32_Float_S8_UInt);
+
+        Assert.NotEqual(deviceDefault, explicitFormat);
+    }
+
+    [Fact]
+    public void RenderTexture_WrappingFramebuffer_DoesNotFreeAttachmentsOnDispose()
+    {
+        RenderTexture owner = RF.CreateRenderTexture(new RenderTextureDescription(8, 8, ColorFormat, depth: true));
+        try
+        {
+            RenderTexture wrapper = new(owner.Framebuffer);
+            Assert.Equal(PixelFormat.R32_G32_B32_A32_Float, wrapper.Desc.ColorFormats[0]);
+            Assert.Equal(owner.DepthTexture!.Format, wrapper.Desc.DepthFormat);
+
+            wrapper.Dispose();
+
+            Assert.True(wrapper.IsDisposed);
+            Assert.False(owner.ColorTextures[0].IsDisposed);
+            Assert.False(owner.Framebuffer.IsDisposed);
+        }
+        finally
+        {
+            owner.Dispose();
+        }
+    }
+
+    [Fact]
     public void RentFramebuffer_DepthOnlyBundle_Succeeds()
     {
         ExecutionTask task = GD.BeginExecution();

@@ -28,6 +28,11 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     public bool Depth { get; }
 
     /// <summary>
+    /// Explicit depth-stencil format, or null for the device default. Ignored without depth.
+    /// </summary>
+    public PixelFormat? DepthFormat { get; }
+
+    /// <summary>
     /// Sample count, all attachments.
     /// </summary>
     public TextureSampleCount SampleCount { get; }
@@ -58,6 +63,33 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
         Height = height;
         ColorFormats = colorFormats ?? Array.Empty<PixelFormat>();
         Depth = depth;
+        DepthFormat = null;
+        SampleCount = sampleCount;
+        Storage = storage;
+    }
+
+    /// <summary>
+    /// Desc with an explicit depth-stencil format.
+    /// </summary>
+    /// <param name="width">Width in texels.</param>
+    /// <param name="height">Height in texels.</param>
+    /// <param name="colorFormats">Color format per attachment. Null/empty = depth-only.</param>
+    /// <param name="depthFormat">Depth-stencil format.</param>
+    /// <param name="sampleCount">Sample count, all attachments.</param>
+    /// <param name="storage">Color attachments also get Storage usage.</param>
+    public RenderTextureDescription(
+        uint width,
+        uint height,
+        PixelFormat[] colorFormats,
+        PixelFormat depthFormat,
+        TextureSampleCount sampleCount = TextureSampleCount.Count1,
+        bool storage = false)
+    {
+        Width = width;
+        Height = height;
+        ColorFormats = colorFormats ?? Array.Empty<PixelFormat>();
+        Depth = true;
+        DepthFormat = depthFormat;
         SampleCount = sampleCount;
         Storage = storage;
     }
@@ -83,7 +115,7 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     }
 
     /// <summary>
-    /// Equal if dims, samples, depth and storage flags, and color formats all match.
+    /// Equal if dims, samples, depth, depth format and storage flags, and color formats all match.
     /// </summary>
     /// <param name="other">Other instance.</param>
     /// <returns>True if equal.</returns>
@@ -92,6 +124,7 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
         if (Width != other.Width
             || Height != other.Height
             || Depth != other.Depth
+            || DepthFormat != other.DepthFormat
             || SampleCount != other.SampleCount
             || Storage != other.Storage
             || ColorFormats.Length != other.ColorFormats.Length)
@@ -125,6 +158,7 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
         hash.Add(Width);
         hash.Add(Height);
         hash.Add(Depth);
+        hash.Add(DepthFormat);
         hash.Add(SampleCount);
         hash.Add(Storage);
         foreach (PixelFormat format in ColorFormats)

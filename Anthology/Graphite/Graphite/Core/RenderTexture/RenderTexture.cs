@@ -2,8 +2,9 @@ using System;
 
 namespace Prowl.Graphite;
 
-/// <summary>Color/depth attachments and framebuffer from RenderTextureDescription. Use Framebuffer to render or ColorTextures/DepthTexture to sample.</summary>
-public sealed class RenderTexture : IDisposable
+/// <summary>Color/depth attachments and framebuffer from RenderTextureDescription. Use Framebuffer to render or ColorTextures/DepthTexture to sample.
+/// Disposing frees the attachments unless this wraps an existing framebuffer.</summary>
+public sealed class RenderTexture : GraphicsResource
 {
     /// <summary>Description this was built from.</summary>
     public RenderTextureDescription Desc { get; }
@@ -33,7 +34,9 @@ public sealed class RenderTexture : IDisposable
         }
 
         DepthTexture = framebuffer.DepthTarget?.Target;
-        Desc = new RenderTextureDescription(framebuffer.Width, framebuffer.Height, formats, DepthTexture != null);
+        Desc = DepthTexture != null
+            ? new RenderTextureDescription(framebuffer.Width, framebuffer.Height, formats, DepthTexture.Format, DepthTexture.SampleCount)
+            : new RenderTextureDescription(framebuffer.Width, framebuffer.Height, formats, false);
     }
 
     internal RenderTexture(GraphicsDevice device, in RenderTextureDescription desc)
@@ -63,7 +66,7 @@ public sealed class RenderTexture : IDisposable
         {
             DepthTexture = factory.CreateTexture(TextureDescription.Texture2D(
                 desc.Width, desc.Height, 1, 1,
-                ResolveDepthFormat(device),
+                desc.DepthFormat ?? ResolveDepthFormat(device),
                 TextureUsage.DepthStencil | TextureUsage.Sampled,
                 desc.SampleCount));
         }
@@ -85,21 +88,16 @@ public sealed class RenderTexture : IDisposable
         return format;
     }
 
-    /// <summary>Sets debug name on framebuffer and textures.</summary>
-    public string Name
+    private protected override void NameChanged(string name)
     {
-        set
-        {
-            Framebuffer.Name = value;
-            for (int i = 0; i < ColorTextures.Length; i++)
-                ColorTextures[i].Name = $"{value} Color[{i}]";
-            if (DepthTexture != null)
-                DepthTexture.Name = $"{value} Depth";
-        }
+        Framebuffer.Name = name;
+        for (int i = 0; i < ColorTextures.Length; i++)
+            ColorTextures[i].Name = $"{name} Color[{i}]";
+        if (DepthTexture != null)
+            DepthTexture.Name = $"{name} Depth";
     }
 
-    /// <summary>Disposes framebuffer and textures.</summary>
-    public void Dispose()
+    private protected override void DisposeCore()
     {
         if (!_owned)
             return;
