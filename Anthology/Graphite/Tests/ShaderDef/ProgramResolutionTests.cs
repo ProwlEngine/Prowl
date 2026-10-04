@@ -49,11 +49,15 @@ public class ProgramResolutionTests : IDisposable
         ShaderDefinition definition = Parse.Shader(Source);
         _pass = definition.Passes![0];
 
-        SlangShaderCompiler compiler = new();
-        compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
-        compiler.BeginSession([new DirectoryInfo(AppContext.BaseDirectory)]);
-        ShaderDescription description = compiler.Compile(_pass, [], GraphicsBackend.Vulkan);
-        compiler.EndSession();
+        ShaderDescription description = Prowl.Graphite.ShaderDef.Compiler.Tests.SlangThread.Run(() =>
+        {
+            SlangShaderCompiler compiler = new();
+            compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
+            compiler.BeginSession([new DirectoryInfo(AppContext.BaseDirectory)]);
+            ShaderDescription result = compiler.Compile(_pass, [], GraphicsBackend.Vulkan);
+            compiler.EndSession();
+            return result;
+        });
 
         Variant variant = new([], [(GraphicsBackend.Vulkan, description)]);
         definition.Create(_device, new ShaderSnapshot { Passes = [new PassSnapshot { Axes = [], Variants = [variant] }] });

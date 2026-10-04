@@ -13,4 +13,8 @@
         <ProjectReference Include="..\..\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <Compile Include="..\ShaderDef.Compiler\SlangThread.cs" Link="SlangThread.cs" />
+    </ItemGroup>
+
 </Project>
