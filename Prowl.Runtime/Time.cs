@@ -23,8 +23,35 @@ public class TimeData
 
     public long FrameCount;
 
+    /// <summary>The base time scale. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
     public float TimeScale = 1f;
     public float TimeSmoothFactor = .25f;
+
+    private readonly List<TimeScaleModifier> _modifiers = new();
+
+    /// <summary>The scale time actually runs at: <see cref="TimeScale"/> times every active <see cref="TimeScaleModifier"/>.</summary>
+    public float EffectiveTimeScale
+    {
+        get
+        {
+            float scale = TimeScale;
+            foreach (TimeScaleModifier modifier in _modifiers) scale *= modifier.Scale;
+            return scale;
+        }
+    }
+
+    /// <summary>How many modifiers are active.</summary>
+    public int ModifierCount => _modifiers.Count;
+
+    /// <summary>Adds a modifier that multiplies the time scale until its owner removes it.</summary>
+    public TimeScaleModifier AddModifier(float scale)
+    {
+        var modifier = new TimeScaleModifier(this, scale);
+        _modifiers.Add(modifier);
+        return modifier;
+    }
+
+    internal void RemoveModifier(TimeScaleModifier modifier) => _modifiers.Remove(modifier);
 
     public void Update()
     {
@@ -37,13 +64,43 @@ public class TimeData
         UnscaledDeltaTime = dt;
         UnscaledTotalTime += UnscaledDeltaTime;
 
-        DeltaTime = dt * TimeScale;
+        float scale = EffectiveTimeScale;
+        DeltaTime = dt * scale;
         Time += DeltaTime;
 
         SmoothUnscaledDeltaTime += (dt - SmoothUnscaledDeltaTime) * TimeSmoothFactor;
-        SmoothDeltaTime = SmoothUnscaledDeltaTime * TimeScale;
+        SmoothDeltaTime = SmoothUnscaledDeltaTime * scale;
 
         _stopwatch.Restart();
+    }
+}
+
+/// <summary>
+/// A multiplier on the time scale, owned by whoever added it. Modifiers multiply together and each owner removes
+/// only its own, so overlapping slow motion and hit stops can never leave time stuck at another owner's value.
+/// </summary>
+public sealed class TimeScaleModifier
+{
+    private readonly TimeData _time;
+
+    /// <summary>The multiplier. Can be changed while active, for example to ease slow motion in and out.</summary>
+    public float Scale;
+
+    /// <summary>False once removed.</summary>
+    public bool IsActive { get; private set; } = true;
+
+    internal TimeScaleModifier(TimeData time, float scale)
+    {
+        _time = time;
+        Scale = scale;
+    }
+
+    /// <summary>Removes the modifier. Removing it again does nothing.</summary>
+    public void Remove()
+    {
+        if (!IsActive) return;
+        IsActive = false;
+        _time.RemoveModifier(this);
     }
 }
 
@@ -84,11 +141,22 @@ public static class Time
 
     public static long FrameCount => CurrentTime.FrameCount;
 
+    /// <summary>The base time scale. Time runs at <see cref="EffectiveTimeScale"/>, this times every active modifier.</summary>
     public static float TimeScale
     {
         get => CurrentTime.TimeScale;
         set => CurrentTime.TimeScale = value;
     }
+
+    /// <summary>The scale time actually runs at: <see cref="TimeScale"/> times every active <see cref="TimeScaleModifier"/>.</summary>
+    public static float EffectiveTimeScale => CurrentTime.EffectiveTimeScale;
+
+    /// <summary>
+    /// Multiplies the time scale until the returned modifier is removed. Use this rather than setting <see cref="TimeScale"/>
+    /// for temporary effects (slow motion, hit stop), since several can overlap and each removes only its own.
+    /// Modifiers belong to the current time context, so play mode's end with it.
+    /// </summary>
+    public static TimeScaleModifier AddTimeScaleModifier(float scale) => CurrentTime.AddModifier(scale);
 
     public static float TimeSmoothFactor
     {
