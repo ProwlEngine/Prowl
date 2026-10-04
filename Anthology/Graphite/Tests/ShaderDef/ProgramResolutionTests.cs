@@ -69,8 +69,8 @@ public class ProgramResolutionTests : IDisposable
     [Fact]
     public void SameState_ReusesProgram()
     {
-        GraphicsProgram first = _pass.ResolveProgram(s_blend, s_depth, s_raster);
-        GraphicsProgram second = _pass.ResolveProgram(s_blend, s_depth, s_raster);
+        GraphicsProgram first = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
+        GraphicsProgram second = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
 
         Assert.Same(first, second);
     }
@@ -79,20 +79,20 @@ public class ProgramResolutionTests : IDisposable
     [Fact]
     public void DifferentBaseState_ProducesDistinctProgram()
     {
-        GraphicsProgram lessEqual = _pass.ResolveProgram(s_blend, s_depth, s_raster);
-        GraphicsProgram disabled = _pass.ResolveProgram(s_blend, DepthStencilStateDescription.Disabled, s_raster);
+        GraphicsProgram lessEqual = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
+        GraphicsProgram disabled = _pass.ResolveProgram(0, s_blend, DepthStencilStateDescription.Disabled, s_raster);
 
         Assert.NotSame(lessEqual, disabled);
-        Assert.Same(lessEqual, _pass.ResolveProgram(s_blend, s_depth, s_raster));
+        Assert.Same(lessEqual, _pass.ResolveProgram(0, s_blend, s_depth, s_raster));
     }
 
 
     [Fact]
     public void CullOverride_ProducesDistinctProgram()
     {
-        GraphicsProgram cullBack = _pass.ResolveProgram(s_blend, s_depth, s_raster);
+        GraphicsProgram cullBack = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
         PassState cullOff = Parse.State("Cull Off").Apply(_pass.State);
-        GraphicsProgram overridden = _pass.ResolveProgram(cullOff, s_blend, s_depth, s_raster);
+        GraphicsProgram overridden = _pass.ResolveProgram(0, cullOff, s_blend, s_depth, s_raster);
 
         Assert.NotSame(cullBack, overridden);
     }
@@ -104,8 +104,8 @@ public class ProgramResolutionTests : IDisposable
         PassState first = Parse.State("Cull Off").Apply(_pass.State);
         PassState second = Parse.State("Cull Off").Apply(_pass.State);
 
-        GraphicsProgram a = _pass.ResolveProgram(first, s_blend, s_depth, s_raster);
-        GraphicsProgram b = _pass.ResolveProgram(second, s_blend, s_depth, s_raster);
+        GraphicsProgram a = _pass.ResolveProgram(0, first, s_blend, s_depth, s_raster);
+        GraphicsProgram b = _pass.ResolveProgram(0, second, s_blend, s_depth, s_raster);
 
         Assert.NotSame(first, second);
         Assert.Same(a, b);
@@ -115,8 +115,8 @@ public class ProgramResolutionTests : IDisposable
     [Fact]
     public void OverrideMatchingPassState_SharesProgramWithPlainResolve()
     {
-        GraphicsProgram plain = _pass.ResolveProgram(s_blend, s_depth, s_raster);
-        GraphicsProgram overridden = _pass.ResolveProgram(Parse.State("Cull Back").Apply(_pass.State), s_blend, s_depth, s_raster);
+        GraphicsProgram plain = _pass.ResolveProgram(0, s_blend, s_depth, s_raster);
+        GraphicsProgram overridden = _pass.ResolveProgram(0, Parse.State("Cull Back").Apply(_pass.State), s_blend, s_depth, s_raster);
 
         Assert.Same(plain, overridden);
     }

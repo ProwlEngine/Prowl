@@ -60,7 +60,7 @@ Axes are not declared in the ShaderDef markup itself - they come from the Slang 
 
 ### How a Pass Resolves Its Active Variant
 
-Each `ShaderPass` keeps a single `KeywordState` representing "what's currently selected" and an index into its `_variants` array for the currently active combination. Calling `SetKeyword`/`SetKeywords` (or the `Try*` variants, which don't throw on an unrecognized keyword name) updates that state and re-resolves. For per-draw composition, `ResetKeywords()` returns to the first combination and `ApplyKeywords(ReadOnlySpan<Keyword>)` sets every recognized name, skips the rest, and re-resolves once; `Axes` lists the pass's `VariantSpace`s for UI:
+A pass holds no keyword state. `ShaderPass.GetKey(ReadOnlySpan<Keyword>)` turns keywords into a mixed-radix variant index (unknown names skipped, unknown values throw), and `cmd.SetShader(pass, keywords)` or `cmd.SetShader(pass, key)` binds that variant, so passes sharing a `ShaderPass` never overwrite each other. `Axes` lists the pass's `VariantSpace`s for UI, and `GetVariant(key)` returns the variant.
 
 See [Keywords and variants](../docs/api/shader-programs.md#keywords-and-variants) for usage.
 
@@ -127,7 +127,7 @@ Each distinct combo gets its own uniquely-named specialization module (`__Varian
 
 See [Quick example](../docs/api/shaderdef.md#quick-example) for usage.
 
-This calls `ShaderPass.ResolveProgram`, which resolves the active variant (compiling on demand if needed and possible), overlays the pass's `PassState` onto the given base blend/depth/rasterizer descriptions, and creates (or reuses, via a per-pass `_programCache` keyed by active variant index) a `GraphicsProgram` from the device's `ResourceFactory`. The overload with no base-state arguments uses library defaults (`BlendStateDescription.SingleDisabled`, `DepthStencilStateDescription.DepthOnlyLessEqual`, back-face culling with clockwise front faces) - the same defaults `PassState`'s own null-coalescing falls back to when a `.shaderdef` file leaves a field unset.
+This calls `ShaderPass.ResolveProgram`, which resolves the variant for the key (compiling on demand if needed and possible), overlays the pass's `PassState` onto the given base blend/depth/rasterizer descriptions, and creates (or reuses, via a per-pass `_programCache` keyed by variant index) a `GraphicsProgram` from the device's `ResourceFactory`. The overload with no base-state arguments uses library defaults (`BlendStateDescription.SingleDisabled`, `DepthStencilStateDescription.DepthOnlyLessEqual`, back-face culling with clockwise front faces) - the same defaults `PassState`'s own null-coalescing falls back to when a `.shaderdef` file leaves a field unset.
 
 ## Graphite Integration
 

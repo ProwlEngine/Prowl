@@ -51,7 +51,7 @@ public class PassKeywordTests : IDisposable
     private static Keyword K(string name, string value) => new(name, value);
 
 
-    private string Active(string axis) => _pass.ActiveVariant.Keywords.First(k => k.Name == axis).Value;
+    private string KeyedAxis(int key, string axis) => _pass.GetVariant(key).Keywords.First(k => k.Name == axis).Value;
 
 
     [Fact]
@@ -73,107 +73,70 @@ public class PassKeywordTests : IDisposable
 
 
     [Fact]
-    public void ApplyKeywords_SetsKnownAndSkipsUnknown()
+    public void GetKey_SetsKnownAndSkipsUnknown()
     {
-        int applied = _pass.ApplyKeywords([K("SKINNED", "true"), K("NOT_AN_AXIS", "true"), K("ALPHA_MODE", "Cutout")]);
+        int key = _pass.GetKey([K("SKINNED", "true"), K("NOT_AN_AXIS", "true"), K("ALPHA_MODE", "Cutout")]);
 
-        Assert.Equal(2, applied);
-        Assert.Equal("true", Active("SKINNED"));
-        Assert.Equal("Cutout", Active("ALPHA_MODE"));
+        Assert.Equal("true", KeyedAxis(key, "SKINNED"));
+        Assert.Equal("Cutout", KeyedAxis(key, "ALPHA_MODE"));
     }
 
 
     [Fact]
-    public void ApplyKeywords_OnlyUnknown_LeavesStateUntouched()
+    public void GetKey_EmptyOrOnlyUnknown_IsZero()
     {
-        _pass.ApplyKeywords([K("SKINNED", "true")]);
-        int applied = _pass.ApplyKeywords([K("NOT_AN_AXIS", "true")]);
-
-        Assert.Equal(0, applied);
-        Assert.Equal("true", Active("SKINNED"));
+        Assert.Equal(0, _pass.GetKey(ReadOnlySpan<Keyword>.Empty));
+        Assert.Equal(0, _pass.GetKey([K("NOT_AN_AXIS", "true")]));
+        Assert.Equal("false", KeyedAxis(0, "SKINNED"));
+        Assert.Equal("Opaque", KeyedAxis(0, "ALPHA_MODE"));
     }
 
 
-    // An axis the compiler collapsed away is not in this pass's axis list at all, so a material
-    // carrying its keyword must be treated as unknown rather than throwing or losing the selection.
     [Fact]
-    public void ApplyKeywords_CollapsedAxisKeyword_IsSkippedAndVariantStaysValid()
+    public void GetKey_CollapsedAxisKeyword_IsSkipped()
     {
-        _pass.ApplyKeywords([K("ALPHA_MODE", "Cutout")]);
+        int key = _pass.GetKey([K("ANISOTROPIC", "true"), K("SKINNED", "true")]);
 
-        int applied = _pass.ApplyKeywords([K("ANISOTROPIC", "true"), K("SKINNED", "true")]);
-
-        Assert.Equal(1, applied);
         Assert.DoesNotContain(_pass.Axes, a => a.Name == "ANISOTROPIC");
-        Assert.NotNull(_pass.ActiveVariant);
-        Assert.Equal("true", Active("SKINNED"));
-        Assert.Equal("Cutout", Active("ALPHA_MODE"));
-        Assert.DoesNotContain(_pass.ActiveVariant.Keywords, k => k.Name == "ANISOTROPIC");
+        Assert.Equal("true", KeyedAxis(key, "SKINNED"));
+        Assert.Equal("Opaque", KeyedAxis(key, "ALPHA_MODE"));
+        Assert.DoesNotContain(_pass.GetVariant(key).Keywords, k => k.Name == "ANISOTROPIC");
     }
 
 
     [Fact]
-    public void ApplyKeywords_LaterEntryWinsWithinSpan()
+    public void GetKey_LaterEntryWinsWithinSpan()
     {
-        _pass.ApplyKeywords([K("ALPHA_MODE", "Cutout"), K("ALPHA_MODE", "Transparent")]);
+        int key = _pass.GetKey([K("ALPHA_MODE", "Cutout"), K("ALPHA_MODE", "Transparent")]);
 
-        Assert.Equal("Transparent", Active("ALPHA_MODE"));
+        Assert.Equal("Transparent", KeyedAxis(key, "ALPHA_MODE"));
     }
 
 
     [Fact]
-    public void ApplyKeywords_EmptySpan_IsNoOp()
+    public void GetKey_UnknownValue_Throws()
     {
-        _pass.ApplyKeywords([K("SKINNED", "true")]);
-        Assert.Equal(0, _pass.ApplyKeywords(ReadOnlySpan<Keyword>.Empty));
-        Assert.Equal("true", Active("SKINNED"));
+        Assert.Throws<ArgumentException>(() => _pass.GetKey([K("SKINNED", "True")]));
     }
 
 
     [Fact]
-    public void ResetKeywords_ReturnsToComboZero()
+    public void GetKey_DoesNotMutateOtherKeys()
     {
-        _pass.ApplyKeywords([K("SKINNED", "true"), K("ALPHA_MODE", "Transparent")]);
-        _pass.ResetKeywords();
+        int first = _pass.GetKey([K("SKINNED", "true")]);
+        int second = _pass.GetKey([K("ALPHA_MODE", "Cutout")]);
 
-        Assert.Equal("false", Active("SKINNED"));
-        Assert.Equal("Opaque", Active("ALPHA_MODE"));
+        Assert.Equal("true", KeyedAxis(first, "SKINNED"));
+        Assert.Equal("Opaque", KeyedAxis(first, "ALPHA_MODE"));
+        Assert.Equal("false", KeyedAxis(second, "SKINNED"));
+        Assert.Equal("Cutout", KeyedAxis(second, "ALPHA_MODE"));
     }
 
 
     [Fact]
-    public void ResetThenApply_DoesNotLeakPreviousKeywords()
+    public void GetVariant_OutOfRange_Throws()
     {
-        _pass.ApplyKeywords([K("SKINNED", "true"), K("ALPHA_MODE", "Transparent")]);
-        _pass.ResetKeywords();
-        _pass.ApplyKeywords([K("ALPHA_MODE", "Cutout")]);
-
-        Assert.Equal("false", Active("SKINNED"));
-        Assert.Equal("Cutout", Active("ALPHA_MODE"));
-    }
-
-
-    [Fact]
-    public void ResetKeywords_MatchesTrySetKeywordSelection()
-    {
-        _pass.ResetKeywords();
-        Variant fromReset = _pass.ActiveVariant;
-
-        _pass.ApplyKeywords([K("SKINNED", "true")]);
-        Assert.True(_pass.TrySetKeyword(K("SKINNED", "false")));
-
-        Assert.Same(fromReset, _pass.ActiveVariant);
-    }
-
-
-    [Fact]
-    public void SetKeyword_UnknownValue_ThrowsAndKeepsSelection()
-    {
-        _pass.SetKeyword(K("SKINNED", "true"));
-
-        Assert.Throws<ArgumentException>(() => _pass.SetKeyword(K("SKINNED", "True")));
-        Assert.False(_pass.TrySetKeyword(K("SKINNED", "True")));
-        Assert.Throws<ArgumentException>(() => _pass.ApplyKeywords([K("SKINNED", "True")]));
-        Assert.Equal("true", Active("SKINNED"));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _pass.GetVariant(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _pass.GetVariant(_pass.Count));
     }
 }

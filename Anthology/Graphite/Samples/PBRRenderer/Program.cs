@@ -106,12 +106,11 @@ internal sealed class BloomDownsamplePass : RasterPass<SceneView>
 
         BindTarget(context, cmd);
 
-        _bloomShader.SetKeyword(UpsampleOff);
         _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomHalf.Desc.Width, 0.5f / bloomHalf.Desc.Height));
         _properties.SetFloat("offset", 1f);
 
-        cmd.SetShader(_bloomShader);
+        cmd.SetShader(_bloomShader, [UpsampleOff]);
         cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
@@ -150,12 +149,11 @@ internal sealed class BloomUpsamplePass : RasterPass<SceneView>
 
         BindTarget(context, cmd);
 
-        _bloomShader.SetKeyword(UpsampleOn);
         _properties.SetTexture("sourceTexture", bloomHalf.ColorTextures[0], _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / bloomFull.Desc.Width, 0.5f / bloomFull.Desc.Height));
         _properties.SetFloat("offset", 1f);
 
-        cmd.SetShader(_bloomShader);
+        cmd.SetShader(_bloomShader, [UpsampleOn]);
         cmd.SetVertexSource(VertexSource.None);
         cmd.SetProperties(_properties);
         cmd.Draw(3);

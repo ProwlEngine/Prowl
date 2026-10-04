@@ -32,7 +32,7 @@ public static class ShaderDefLoader
         def.Create(device, compiler, new Variant());
 
         ShaderPass pass = def.Passes![passIndex];
-        pass.ActiveVariant.TryGetDescription(device.BackendType, out ShaderDescription description);
+        pass.GetVariant(0).TryGetDescription(device.BackendType, out ShaderDescription description);
 
         compiler.EndSession();
 

@@ -40,14 +40,17 @@ public sealed class ShaderPass
     private Dictionary<string, int> _axisByName = new();
     private Dictionary<string, int>[] _valueIndices = [];
     private int[] _strides = [];
-    private int[] _selection = [];
     private Variant?[] _variants = [];
-    private int _activeIndex;
     private Variant? _fallback;
 
     private Dictionary<ProgramKey, GraphicsProgram> _programCache = new();
     private Dictionary<ProgramKey, GraphicsProgram> _fallbackProgramCache = new();
     private bool _created;
+
+    private PassState? _defaultSnapshot;
+    private BlendStateDescription _defaultBlend;
+    private DepthStencilStateDescription _defaultDepth;
+    private RasterizerStateDescription _defaultRaster;
 
 
     /// <summary>
@@ -68,7 +71,6 @@ public sealed class ShaderPass
         _axisByName = new();
         _valueIndices = new Dictionary<string, int>[axes.Length];
         _strides = new int[axes.Length];
-        _selection = new int[axes.Length];
 
         int stride = 1;
         for (int i = axes.Length - 1; i >= 0; i--)
@@ -82,8 +84,6 @@ public sealed class ShaderPass
                 values[axes[i].Values[v]] = v;
             _valueIndices[i] = values;
         }
-
-        _activeIndex = 0;
 
         foreach (Variant variant in known)
         {
@@ -99,15 +99,15 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Current variant, compiled on demand if a compiler is attached. Only valid after create.
+    /// Variant for a key from GetKey, compiled on demand if a compiler is attached. Key 0 is every axis at its first value.
     /// </summary>
-    public Variant ActiveVariant
+    public Variant GetVariant(int key)
     {
-        get
-        {
-            EnsureCreated();
-            return Resolve(_activeIndex);
-        }
+        EnsureCreated();
+        if ((uint)key >= (uint)_combos.Length)
+            throw new ArgumentOutOfRangeException(nameof(key));
+
+        return Resolve(key);
     }
 
 
@@ -199,105 +199,31 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Restores every axis to its first value (combo 0) and makes that the active variant. No reselect needed.
+    /// Mixed-radix variant key for keywords, unlisted axes at their first value. Skips unknown names, throws on an unknown value for a known axis. Does not touch the pass.
     /// </summary>
-    public void ResetKeywords()
+    public int GetKey(ReadOnlySpan<Keyword> keywords)
     {
         EnsureCreated();
-        Array.Clear(_selection);
-        _activeIndex = 0;
-    }
+        if (keywords.IsEmpty)
+            return 0;
 
-
-    /// <summary>
-    /// Sets every keyword whose name is an axis here, silently skipping unknown names, then re-resolves once. Throws if a known axis gets an unknown value. Returns how many applied.
-    /// </summary>
-    public int ApplyKeywords(ReadOnlySpan<Keyword> keywords)
-    {
-        EnsureCreated();
+        Span<int> selection = _axes.Length <= 32 ? stackalloc int[_axes.Length] : new int[_axes.Length];
         for (int i = 0; i < keywords.Length; i++)
         {
-            if (_axisByName.TryGetValue(keywords[i].Name, out int slot) && !_valueIndices[slot].ContainsKey(keywords[i].Value))
+            if (!_axisByName.TryGetValue(keywords[i].Name, out int slot))
+                continue;
+
+            if (!_valueIndices[slot].TryGetValue(keywords[i].Value, out int value))
                 throw UnknownKeyword(keywords[i]);
+
+            selection[slot] = value;
         }
 
-        int applied = 0;
-        for (int i = 0; i < keywords.Length; i++)
-        {
-            if (TrySelect(keywords[i]))
-                applied++;
-        }
+        int key = 0;
+        for (int i = 0; i < selection.Length; i++)
+            key += selection[i] * _strides[i];
 
-        if (applied > 0)
-            Reselect();
-
-        return applied;
-    }
-
-
-    /// <summary>
-    /// Sets a keyword and re-resolves the active variant. Throws if the name isn't a variant axis here or the value isn't one of its values.
-    /// </summary>
-    public void SetKeyword(Keyword keyword)
-    {
-        EnsureCreated();
-        if (!TrySelect(keyword))
-            throw UnknownKeyword(keyword);
-
-        Reselect();
-    }
-
-
-    /// <summary>
-    /// Sets several keywords atomically and re-resolves the active variant. Validates all first, throws if any name or value is unknown here.
-    /// </summary>
-    public void SetKeywords(params Keyword[] keywords)
-    {
-        EnsureCreated();
-        for (int i = 0; i < keywords.Length; i++)
-        {
-            if (!IsKnown(keywords[i]))
-                throw UnknownKeyword(keywords[i]);
-        }
-
-        for (int i = 0; i < keywords.Length; i++)
-            TrySelect(keywords[i]);
-
-        Reselect();
-    }
-
-
-    /// <summary>
-    /// Sets a keyword if its name and value are known, re-resolves active variant. Returns false and does nothing if unknown.
-    /// </summary>
-    public bool TrySetKeyword(Keyword keyword)
-    {
-        EnsureCreated();
-        if (!TrySelect(keyword))
-            return false;
-
-        Reselect();
-        return true;
-    }
-
-
-    /// <summary>
-    /// Sets several keywords if all names and values are known, re-resolves active variant. Returns false and does nothing if any is unknown.
-    /// </summary>
-    public bool TrySetKeywords(params Keyword[] keywords)
-    {
-        EnsureCreated();
-        for (int i = 0; i < keywords.Length; i++)
-        {
-            if (!IsKnown(keywords[i]))
-                return false;
-        }
-
-        for (int i = 0; i < keywords.Length; i++)
-            TrySelect(keywords[i]);
-
-        Reselect();
-        return true;
+        return key;
     }
 
 
@@ -329,64 +255,59 @@ public sealed class ShaderPass
     }
 
 
-    internal GraphicsProgram ResolveProgram(BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
-        => ResolveProgram(State, baseBlend, baseDepth, baseRaster);
+    internal GraphicsProgram ResolveProgram(int key, BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
+        => ResolveProgram(key, State, baseBlend, baseDepth, baseRaster);
 
 
-    internal GraphicsProgram ResolveProgram(PassState state, BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
+    internal GraphicsProgram ResolveProgram(int key, PassState state, BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
     {
         EnsureCreated();
 
-        BlendStateDescription blend = state.ToBlendState(baseBlend);
-        DepthStencilStateDescription depth = state.ToDepthStencilState(baseDepth);
-        RasterizerStateDescription raster = state.ToRasterizerState(baseRaster);
-        ProgramKey key = new(_activeIndex, blend, depth, raster);
+        return GetOrCreateProgram(key, state.ToBlendState(baseBlend), state.ToDepthStencilState(baseDepth), state.ToRasterizerState(baseRaster));
+    }
 
-        if (_programCache.TryGetValue(key, out GraphicsProgram? cached))
+
+    internal GraphicsProgram ResolveDefaultProgram(int key)
+    {
+        EnsureCreated();
+
+        if (_defaultSnapshot == null || !_defaultSnapshot.Equals(State))
+        {
+            _defaultBlend = State.ToBlendState(CommandBufferExtensions.DefaultBlend);
+            _defaultDepth = State.ToDepthStencilState(CommandBufferExtensions.DefaultDepth);
+            _defaultRaster = State.ToRasterizerState(CommandBufferExtensions.DefaultRaster);
+            _defaultSnapshot = State.Apply(new PassState());
+        }
+
+        return GetOrCreateProgram(key, _defaultBlend, _defaultDepth, _defaultRaster);
+    }
+
+
+    private GraphicsProgram GetOrCreateProgram(int key, BlendStateDescription blend, DepthStencilStateDescription depth, RasterizerStateDescription raster)
+    {
+        ProgramKey programKey = new(key, blend, depth, raster);
+
+        if (_programCache.TryGetValue(programKey, out GraphicsProgram? cached))
             return cached;
 
-        Variant variant = Resolve(_activeIndex);
+        Variant variant = Resolve(key);
         bool isFallback = ReferenceEquals(variant, _fallback);
 
         // While degraded to the fallback, keep re-resolving (Resolve retries the real compile every
         // call) but reuse the fallback GraphicsProgram instead of rebuilding it every request.
-        if (isFallback && _fallbackProgramCache.TryGetValue(key, out GraphicsProgram? cachedFallback))
+        if (isFallback && _fallbackProgramCache.TryGetValue(programKey, out GraphicsProgram? cachedFallback))
             return cachedFallback;
 
         if (!variant.TryGetDescription(_backend, out ShaderDescription description))
-            throw new InvalidOperationException($"The active variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
+            throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
 
         description.BlendState = blend;
         description.DepthStencilState = depth;
         description.RasterizerState = raster;
 
         GraphicsProgram program = _device!.ResourceFactory.CreateGraphicsProgram(description);
-        (isFallback ? _fallbackProgramCache : _programCache)[key] = program;
+        (isFallback ? _fallbackProgramCache : _programCache)[programKey] = program;
         return program;
-    }
-
-
-    private void Reselect()
-    {
-        int index = 0;
-        for (int i = 0; i < _selection.Length; i++)
-            index += _selection[i] * _strides[i];
-
-        _activeIndex = index;
-    }
-
-
-    private bool IsKnown(Keyword keyword)
-        => _axisByName.TryGetValue(keyword.Name, out int slot) && _valueIndices[slot].ContainsKey(keyword.Value);
-
-
-    private bool TrySelect(Keyword keyword)
-    {
-        if (!_axisByName.TryGetValue(keyword.Name, out int slot) || !_valueIndices[slot].TryGetValue(keyword.Value, out int value))
-            return false;
-
-        _selection[slot] = value;
-        return true;
     }
 
 
@@ -434,7 +355,7 @@ public sealed class ShaderPass
         if (_fallback != null && _fallback.IsCompiledFor(_backend))
             return _fallback;
 
-        throw new InvalidOperationException($"The active variant of pass '{Name}' is not compiled for backend {_backend}, no compiler is attached (or the compile failed), and no fallback variant is available.");
+        throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend}, no compiler is attached (or the compile failed), and no fallback variant is available.");
     }
 
 

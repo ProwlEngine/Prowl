@@ -141,7 +141,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     // going through ShaderPass.ResolveProgram/SetShader(ShaderPass).
     private GraphicsProgram CreateCanvasProgram(ShaderPass pass)
     {
-        if (!pass.ActiveVariant.TryGetDescription(_gl.BackendType, out ShaderDescription description))
+        if (!pass.GetVariant(0).TryGetDescription(_gl.BackendType, out ShaderDescription description))
             throw new InvalidOperationException($"Canvas shader was not compiled for backend {_gl.BackendType}.");
 
         description.VertexLayouts =
@@ -430,13 +430,12 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             cmd.SetFramebuffer(_blurFB[dstLevel]);
 
-            _owner._blurPass.SetKeyword(upsample ? UpsampleOn : UpsampleOff);
 
             _properties.SetTexture("src", source, _owner._sampler);
             _properties.SetFloat2("halfpixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
             _properties.SetFloat("offset", offset);
 
-            cmd.SetShader(_owner._blurPass);
+            cmd.SetShader(_owner._blurPass, [upsample ? UpsampleOn : UpsampleOff]);
             cmd.SetVertexSource(VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
@@ -514,13 +513,12 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             CommandBuffer cmd = context.GetCommandBuffer(Name);
             BindTarget(context, cmd);
 
-            _owner._blurPass.SetKeyword(UpsampleOff);
 
             _properties.SetTexture("src", scene.ColorTextures[0], _owner._sampler);
             _properties.SetFloat2("halfpixel", new Float2(0f, 0f));
             _properties.SetFloat("offset", 0f);
 
-            cmd.SetShader(_owner._blurPass);
+            cmd.SetShader(_owner._blurPass, [UpsampleOff]);
             cmd.SetVertexSource(VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
