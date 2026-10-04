@@ -93,6 +93,40 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
     }
 
     [SkippableFact]
+    public void GraphicsPrograms_WithSameShader_ShareDescriptorCache()
+    {
+        Skip.IfNot(GD.BackendType == GraphicsBackend.Vulkan);
+
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.slang");
+        ShaderDescription description = new(stages)
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            VertexLayouts =
+            [
+                new VertexLayoutDescription(0, (uint)Unsafe.SizeOf<SinkVertex>(),
+                    new VertexElementDescription("POSITION", VertexElementFormat.Float3),
+                    new VertexElementDescription("COLOR0", VertexElementFormat.Float4),
+                    new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2),
+                    new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
+            ],
+        };
+
+        GraphicsProgram first = Inner.CreateGraphicsProgram(description);
+        description.BlendState = BlendStateDescription.SingleAlphaBlend;
+        GraphicsProgram second = Inner.CreateGraphicsProgram(description);
+
+        Vk.VkGraphicsProgram vkFirst = Assert.IsType<Vk.VkGraphicsProgram>(first);
+        Vk.VkGraphicsProgram vkSecond = Assert.IsType<Vk.VkGraphicsProgram>(second);
+        Assert.Same(vkFirst.DescriptorCache, vkSecond.DescriptorCache);
+        Assert.Equal(vkFirst.PipelineLayout, vkSecond.PipelineLayout);
+
+        first.Dispose();
+        second.Dispose();
+    }
+
+    [SkippableFact]
     public void Dispose_ComputeProgram()
     {
 

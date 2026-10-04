@@ -20,6 +20,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     private readonly BackendInfoVulkan _vulkanInfo;
     private readonly VkSwapchain _mainSwapchain;
     private readonly VkDescriptorSetCacheRegistry _descriptorSetCaches = new();
+    private VkShaderCache? _shaderCache;
     private readonly VkDefaultTextureViewCache _defaultTextureViews;
 
     public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc)
@@ -169,6 +170,8 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         PollSubmissions();
         FlushValidationErrors();
     }
+
+    internal VkShaderCache ShaderCache => System.Threading.LazyInitializer.EnsureInitialized(ref _shaderCache, () => new VkShaderCache(this));
 
     protected override void PlatformDispose()
     {
