@@ -77,10 +77,6 @@ internal unsafe sealed partial class VkDescriptorBinder
     private ShaderProgram _bindCacheProgram;
     private SetBindState? _trackState;
 
-    // Whole-draw fast path: the program + property epoch a graphics draw was last prepared for.
-    private ShaderProgram _lastPreparedProgram;
-    private uint _lastPreparedEpoch;
-
     // Set count and first-changed-set index from the most recent Prepare() call that returned true;
     // EmitBind() reads them back so callers don't have to re-derive them from the program.
     private uint _preparedSetCount;
@@ -97,8 +93,6 @@ internal unsafe sealed partial class VkDescriptorBinder
     internal void ClearForNewRecording()
     {
         _bindCacheProgram = null;
-        _lastPreparedProgram = null;
-        _lastPreparedEpoch = 0;
         for (int i = 0; i < _setBindStates.Length; i++)
         {
             _setBindStates[i].IdentityLen = -1;
@@ -107,23 +101,13 @@ internal unsafe sealed partial class VkDescriptorBinder
     }
 
     // Resolves sets, transitions textures, and prepares descriptors for binding. Returns true if binding needed, false otherwise
-    internal bool Prepare(ShaderProgram program, ShaderProgram reportProgram, bool isGraphics, bool renderPassActive)
+    internal bool Prepare(ShaderProgram program, ShaderProgram reportProgram, bool isGraphics)
     {
         IVkDescriptorProgram descProgram = (IVkDescriptorProgram)program;
         uint setCount = descProgram.ResourceSetCount;
         if (setCount == 0)
         {
             _cbOwner.ConsumePropertyChanges();
-            return false;
-        }
-
-        // No bind needed, everything is the same as last draw
-        if (isGraphics
-            && renderPassActive
-            && ReferenceEquals(program, _lastPreparedProgram)
-            && _cbOwner.ActivePropertiesEpoch == _lastPreparedEpoch
-            && TrackedEntriesUnchanged(setCount))
-        {
             return false;
         }
 
@@ -162,24 +146,11 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         _cbOwner.ConsumePropertyChanges();
 
-        _lastPreparedProgram = isGraphics ? program : null;
-        _lastPreparedEpoch = _cbOwner.ActivePropertiesEpoch;
         _preparedSetCount = setCount;
 
         if (firstChanged < 0) return false;
 
         _preparedFirstSet = (uint)firstChanged;
-        return true;
-    }
-
-    private bool TrackedEntriesUnchanged(uint setCount)
-    {
-        for (int i = 0; i < (int)setCount; i++)
-        {
-            if (!_setBindStates[i].EntriesUnchanged())
-                return false;
-        }
-
         return true;
     }
 

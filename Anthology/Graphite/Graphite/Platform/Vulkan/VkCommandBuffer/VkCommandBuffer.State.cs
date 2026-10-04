@@ -27,7 +27,6 @@ internal unsafe partial class VkCommandBuffer
     private readonly List<VkTexture> _temporaryStorageImages = [];
 
     internal PropertySet ActiveProperties => _activeProperties;
-    internal uint ActivePropertiesEpoch => _activePropertiesEpoch;
 
     internal bool IsTemporaryStorage(VkTexture tex) => _temporaryStorageImages.Contains(tex);
 

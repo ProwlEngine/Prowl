@@ -432,43 +432,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             Assert.Equal(128u, result[4]);
         }
     }
-
-    [Fact]
-    public void ReapplyingUnchangedActiveSet_KeepsThePropertyEpoch()
-    {
-        DeviceBuffer output = CreateOutput();
-        PropertySet frame = new();
-        frame.SetInt("valueB", 1);
-        PropertySet item = new();
-        item.SetInt("valueA", 2);
-        item.SetBuffer("Output", output);
-
-        uint afterItem = 0;
-        uint afterReapply = 0;
-        uint afterOverride = 0;
-        GD.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetProperties(frame);
-            cl.SetProperties(item);
-            afterItem = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
-
-            cl.SetProperties(frame);
-            afterReapply = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
-
-            PropertySet overriding = new();
-            overriding.SetInt("valueB", 3);
-            cl.SetProperties(overriding);
-            cl.SetProperties(frame);
-            afterOverride = ((VkCommandBuffer)cl).ActivePropertiesEpoch;
-
-            context.SubmitCommandBuffer(cl);
-        });
-        GD.WaitForIdle();
-
-        Assert.Equal(afterItem, afterReapply);
-        Assert.Equal(afterItem + 2, afterOverride);
-    }
 }
 
 #if TEST_VULKAN

@@ -24,9 +24,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
     /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
 
-    /// <summary>Bumps on every active property change. Backend uses it to skip redundant work.</summary>
-    private protected uint _activePropertiesEpoch;
-
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
@@ -60,7 +57,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _lastAppliedSourceVersion = 0;
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
-        unchecked { _activePropertiesEpoch++; }
     }
 
     /// <summary>Resets and starts recording. Context calls on rent, not passes.</summary>

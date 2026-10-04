@@ -71,7 +71,6 @@ public abstract partial class CommandBuffer
         _activeProperties.MergeFrom(properties, _changedPropertyKeys);
         _lastAppliedSource = properties;
         _lastAppliedSourceVersion = properties.Version;
-        unchecked { _activePropertiesEpoch++; }
         SetPropertiesCore(properties);
     }
 
@@ -89,7 +88,6 @@ public abstract partial class CommandBuffer
         _lastAppliedSourceVersion = 0;
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
-        unchecked { _activePropertiesEpoch++; }
         ClearPropertiesCore();
     }
 
