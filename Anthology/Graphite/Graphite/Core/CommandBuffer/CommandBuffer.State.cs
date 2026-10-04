@@ -1,3 +1,4 @@
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 namespace Prowl.Graphite;
@@ -121,6 +122,11 @@ public abstract partial class CommandBuffer
     /// <summary>Backend framebuffer set.</summary>
     /// <param name="fb">Framebuffer.</param>
     private protected abstract void SetFramebufferCore(Framebuffer fb);
+
+    internal void SetAttachmentOps(in TargetLoadStoreOps ops)
+        => SetAttachmentOpsCore(ops.Color.Load, ops.Color.Store, ops.Depth.Load, ops.Depth.Store);
+
+    private protected abstract void SetAttachmentOpsCore(LoadAction colorLoad, StoreAction colorStore, LoadAction depthLoad, StoreAction depthStore);
 
     /// <summary>Sets render texture's framebuffer as render target.</summary>
     /// <param name="renderTexture">Render texture.</param>

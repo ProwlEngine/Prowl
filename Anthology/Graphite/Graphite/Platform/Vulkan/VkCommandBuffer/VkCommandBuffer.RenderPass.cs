@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Silk.NET.Vulkan;
@@ -12,6 +13,24 @@ internal unsafe partial class VkCommandBuffer
     private ClearValue[] _clearValues = Array.Empty<ClearValue>();
     private bool[] _validColorClearValues = Array.Empty<bool>();
     private ClearValue? _depthClearValue;
+    private bool _discardColorLoad;
+    private bool _discardDepthLoad;
+    private bool _discardColorStore;
+    private bool _discardDepthStore;
+
+    private protected override void SetAttachmentOpsCore(LoadAction colorLoad, StoreAction colorStore, LoadAction depthLoad, StoreAction depthStore)
+    {
+        _discardColorLoad = colorLoad == LoadAction.DontCare;
+        _discardDepthLoad = depthLoad == LoadAction.DontCare;
+        _discardColorStore = colorStore == StoreAction.DontCare;
+        _discardDepthStore = depthStore == StoreAction.DontCare;
+    }
+
+    private RenderPassOps CurrentRenderPassOps(bool clear) => new(
+        clear ? AttachmentLoadOp.Clear : _discardColorLoad ? AttachmentLoadOp.DontCare : AttachmentLoadOp.Load,
+        clear ? AttachmentLoadOp.Clear : _discardDepthLoad ? AttachmentLoadOp.DontCare : AttachmentLoadOp.Load,
+        _discardColorStore ? AttachmentStoreOp.DontCare : AttachmentStoreOp.Store,
+        _discardDepthStore ? AttachmentStoreOp.DontCare : AttachmentStoreOp.Store);
 
     private protected override void ClearColorTargetCore(uint index, Color clearColor)
     {
@@ -106,6 +125,7 @@ internal unsafe partial class VkCommandBuffer
         _currentFramebuffer = vkFB;
         _currentFramebufferEverActive = false;
         _hasResolvedPipeline = false;
+        SetAttachmentOpsCore(LoadAction.Load, StoreAction.Store, LoadAction.Load, StoreAction.Store);
         Util.EnsureArrayMinimumSize(ref _scissorRects, Math.Max(1, (uint)vkFB.ColorTargets.Count));
         Util.EnsureArrayMinimumSize(ref _viewports, Math.Max(1, (uint)vkFB.ColorTargets.Count));
         uint clearValueCount = (uint)vkFB.ColorTargets.Count;
@@ -235,7 +255,7 @@ internal unsafe partial class VkCommandBuffer
     // queued are replayed as CmdClearAttachments once it is open.
     private void BeginRenderPassLoading(ref RenderPassBeginInfo renderPassBI, bool haveAnyClearValues)
     {
-        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, clear: false);
+        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, CurrentRenderPassOps(clear: false));
         _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
         _activeRenderPass = renderPassBI.RenderPass;
 
@@ -264,7 +284,7 @@ internal unsafe partial class VkCommandBuffer
     // Every attachment has a queued clear value, so the render pass itself can do the clearing.
     private void BeginRenderPassClearing(ref RenderPassBeginInfo renderPassBI)
     {
-        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, clear: true);
+        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, CurrentRenderPassOps(clear: true));
 
         fixed (ClearValue* clearValuesPtr = &_clearValues[0])
         {
