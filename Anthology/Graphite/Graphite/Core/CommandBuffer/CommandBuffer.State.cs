@@ -120,7 +120,7 @@ public abstract partial class CommandBuffer
             if (fb != null)
             {
                 SetViewport(new Viewport(0, 0, fb.Width, fb.Height, 0, 1));
-                SetScissorRect(0, 0, fb.Width, fb.Height);
+                SetScissor(0, 0, fb.Width, fb.Height);
             }
         }
     }
@@ -186,5 +186,5 @@ public abstract partial class CommandBuffer
     /// <param name="y">Rect Y.</param>
     /// <param name="width">Rect width.</param>
     /// <param name="height">Rect height.</param>
-    public abstract void SetScissorRect(uint x, uint y, uint width, uint height);
+    public abstract void SetScissor(uint x, uint y, uint width, uint height);
 }

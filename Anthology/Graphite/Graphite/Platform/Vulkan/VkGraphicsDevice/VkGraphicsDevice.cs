@@ -52,7 +52,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         Features = new GraphicsDeviceFeatures(
             geometryShader: _physicalDeviceFeatures.GeometryShader,
             tessellationShaders: _physicalDeviceFeatures.TessellationShader,
-            multipleViewports: _physicalDeviceFeatures.MultiViewport,
             drawIndirectBaseInstance: _physicalDeviceFeatures.DrawIndirectFirstInstance,
             samplerAnisotropy: _physicalDeviceFeatures.SamplerAnisotropy,
             depthClipDisable: _physicalDeviceFeatures.DepthClamp,
