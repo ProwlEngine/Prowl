@@ -289,6 +289,7 @@ public abstract class Game
 
         Application.IsPlaying = true;
         Application.IsHeadless = true;
+        Application.HeadlessQuit = RequestHeadlessQuit;
 
         Tasks.MainThreadContext.Install();
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
@@ -348,6 +349,7 @@ public abstract class Game
             Tasks.MainThreadContext.Uninstall();
             Application.TargetFrameRate = 0; // and with it the finer system timer a limit holds
             Application.IsHeadless = false;
+            Application.HeadlessQuit = null;
         }
     }
 
@@ -489,6 +491,7 @@ public abstract class Game
     protected void ResetFixedTimeAccumulator() => Time.FixedAccumulator = 0f;
 
 
+    /// <summary>Closes the window. In the editor this closes the editor itself, so gameplay code uses <see cref="Application.Quit"/>.</summary>
     public static void Quit()
     {
         Window.Stop();

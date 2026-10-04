@@ -99,6 +99,23 @@ public static class Application
     /// <summary>Blocks until the next frame is due. The run loops call this, once per frame.</summary>
     internal static void WaitForNextFrame() => s_limiter.Wait();
 
+    /// <summary>Replaces what <see cref="Quit"/> does. The editor sets this so quitting stops play mode instead of closing the editor.</summary>
+    public static System.Action? QuitHandler { get; set; }
+
+    /// <summary>Ends the running headless loop. Set by <see cref="Game.RunHeadless"/> for the duration of the run.</summary>
+    internal static System.Action? HeadlessQuit { get; set; }
+
+    /// <summary>
+    /// Quits the game. In the editor this stops play mode, in a headless run it ends the loop, and in a
+    /// standalone build it closes the window. Gameplay code should call this rather than <see cref="Game.Quit"/>.
+    /// </summary>
+    public static void Quit()
+    {
+        if (QuitHandler != null) QuitHandler();
+        else if (IsHeadless) HeadlessQuit?.Invoke();
+        else Game.Quit();
+    }
+
     /// <summary>
     /// Directory containing the running executable (standalone) or project root (editor).
     /// Used by PlayerAssetBackend to locate assets relative to the executable.
