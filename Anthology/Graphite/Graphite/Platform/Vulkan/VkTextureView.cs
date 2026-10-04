@@ -14,8 +14,8 @@ internal unsafe partial class VkTextureView : TextureView
 
     public ResourceRefCount RefCount { get; }
 
-    public VkTextureView(VkGraphicsDevice gd, ref TextureViewDescription description)
-        : base(ref description)
+    public VkTextureView(VkGraphicsDevice gd, in TextureViewDescription description)
+        : base(description)
     {
         _gd = gd;
         ImageViewCreateInfo imageViewCI = new()

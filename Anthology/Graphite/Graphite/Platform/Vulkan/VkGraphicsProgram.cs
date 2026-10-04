@@ -76,8 +76,8 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
 
     internal string GetEntryPoint(ShaderStages stage) => _entryPoints[stage];
 
-    public VkGraphicsProgram(VkGraphicsDevice gd, ref ShaderDescription description)
-        : base(ref description)
+    public VkGraphicsProgram(VkGraphicsDevice gd, in ShaderDescription description)
+        : base(description)
     {
         _gd = gd;
         RefCount = new ResourceRefCount(DestroyNative);

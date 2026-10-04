@@ -56,9 +56,9 @@ internal unsafe partial class VkSwapchain : Swapchain
     public uint PresentQueueIndex => _presentQueueIndex;
     public ResourceRefCount RefCount { get; }
 
-    public VkSwapchain(VkGraphicsDevice gd, ref SwapchainDescription description) : this(gd, ref description, default) { }
+    public VkSwapchain(VkGraphicsDevice gd, in SwapchainDescription description) : this(gd, description, default) { }
 
-    public VkSwapchain(VkGraphicsDevice gd, ref SwapchainDescription description, SurfaceKHR existingSurface)
+    public VkSwapchain(VkGraphicsDevice gd, in SwapchainDescription description, SurfaceKHR existingSurface)
     {
         _gd = gd;
         _syncToVBlank = description.SyncToVerticalBlank;

@@ -58,7 +58,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         {
             TransientWrites = transientWrites
         };
-        DeviceBuffer buffer = RF.CreateBuffer(ref description);
+        DeviceBuffer buffer = RF.CreateBuffer(description);
         buffer.Name = "OrphanSource";
         GD.UpdateBuffer(buffer, 0, new uint[] { OldValue, 0, 0, 0 });
         return buffer;
@@ -305,7 +305,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         // like UpdateBuffer. Mapping needs Dynamic, which cannot be combined with a read-write
         // structured usage, so the raced buffer here is the uniform block instead of Source.
         BufferDescription description = new(16, BufferUsage.UniformBuffer | BufferUsage.Dynamic);
-        DeviceBuffer paramsBuffer = RF.CreateBuffer(ref description);
+        DeviceBuffer paramsBuffer = RF.CreateBuffer(description);
         GD.UpdateBuffer(paramsBuffer, 0, new uint[] { SpinIterations, 0, 0, 0 });
 
         DeviceBuffer source = CreateSourceBuffer();

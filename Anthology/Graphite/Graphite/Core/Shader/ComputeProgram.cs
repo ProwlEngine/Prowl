@@ -8,7 +8,7 @@ public abstract class ComputeProgram : ShaderProgram
     private readonly uint _threadGroupSizeY;
     private readonly uint _threadGroupSizeZ;
 
-    internal ComputeProgram(ref ComputeDescription description)
+    internal ComputeProgram(in ComputeDescription description)
         : base(description.ResourceLayouts)
     {
         _threadGroupSizeX = description.ThreadGroupSizeX;

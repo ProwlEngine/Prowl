@@ -23,7 +23,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 
     public override uint AttachmentCount { get; }
 
-    public VkFramebuffer(VkGraphicsDevice gd, ref FramebufferDescription description)
+    public VkFramebuffer(VkGraphicsDevice gd, in FramebufferDescription description)
         : base(description.DepthTarget, description.ColorTargets)
     {
         _gd = gd;
@@ -31,7 +31,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         uint colorAttachmentCount = (uint)ColorTargets.Count;
         _colorAttachmentCount = colorAttachmentCount;
 
-        CreateDeviceFramebuffer(ref description, colorAttachmentCount, out _deviceFramebuffer);
+        CreateDeviceFramebuffer(description, colorAttachmentCount, out _deviceFramebuffer);
 
         AttachmentCount = (uint)ColorTargets.Count + (DepthTarget is not null ? 1u : 0u);
 
@@ -126,7 +126,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         return renderPass;
     }
 
-    private void CreateDeviceFramebuffer(ref FramebufferDescription description, uint colorAttachmentCount, out VkFramebufferHandle deviceFramebuffer)
+    private void CreateDeviceFramebuffer(in FramebufferDescription description, uint colorAttachmentCount, out VkFramebufferHandle deviceFramebuffer)
     {
         FramebufferCreateInfo fbCI = new()
         {

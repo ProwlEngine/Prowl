@@ -138,32 +138,32 @@ internal sealed class TrackingResourceFactory : ResourceFactory
         return resource;
     }
 
-    public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
-        => Track(_inner.CreateFramebuffer(ref description));
+    public override Framebuffer CreateFramebuffer(in FramebufferDescription description)
+        => Track(_inner.CreateFramebuffer(description));
 
-    protected override DeviceBuffer CreateBufferCore(ref BufferDescription description)
-        => Track(_inner.CreateBuffer(ref description));
+    protected override DeviceBuffer CreateBufferCore(in BufferDescription description)
+        => Track(_inner.CreateBuffer(description));
 
-    protected override GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description)
-        => Track(_inner.CreateGraphicsProgram(ref description));
+    protected override GraphicsProgram CreateGraphicsProgramCore(in ShaderDescription description)
+        => Track(_inner.CreateGraphicsProgram(description));
 
-    protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
-        => Track(_inner.CreateComputeProgram(ref description));
+    protected override ComputeProgram CreateComputeProgramCore(in ComputeDescription description)
+        => Track(_inner.CreateComputeProgram(description));
 
-    protected override Sampler CreateSamplerCore(ref SamplerDescription description)
-        => Track(_inner.CreateSampler(ref description));
+    protected override Sampler CreateSamplerCore(in SamplerDescription description)
+        => Track(_inner.CreateSampler(description));
 
-    protected override Texture CreateTextureCore(ref TextureDescription description)
-        => Track(_inner.CreateTexture(ref description));
+    protected override Texture CreateTextureCore(in TextureDescription description)
+        => Track(_inner.CreateTexture(description));
 
-    public override Texture CreateTexture(ulong nativeTexture, ref TextureDescription description)
-        => Track(_inner.CreateTexture(nativeTexture, ref description));
+    public override Texture CreateTexture(ulong nativeTexture, in TextureDescription description)
+        => Track(_inner.CreateTexture(nativeTexture, description));
 
-    protected override TextureView CreateTextureViewCore(ref TextureViewDescription description)
-        => Track(_inner.CreateTextureView(ref description));
+    protected override TextureView CreateTextureViewCore(in TextureViewDescription description)
+        => Track(_inner.CreateTextureView(description));
 
-    public override Swapchain CreateSwapchain(ref SwapchainDescription description)
-        => Track(_inner.CreateSwapchain(ref description));
+    public override Swapchain CreateSwapchain(in SwapchainDescription description)
+        => Track(_inner.CreateSwapchain(description));
 
     public override Fence CreateFence(bool signaled)
         => Track(_inner.CreateFence(signaled));
@@ -228,7 +228,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
                 texture.MipLevels, layers,
                 texture.Format,
                 TextureUsage.Staging, texture.Type);
-            Texture readback = RF.CreateTexture(ref desc);
+            Texture readback = RF.CreateTexture(desc);
             GD.RunTestGraph(context =>
             {
                 CommandBuffer cl = context.GetCommandBuffer();

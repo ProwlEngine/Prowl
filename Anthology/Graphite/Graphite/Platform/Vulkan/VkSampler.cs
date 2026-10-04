@@ -13,7 +13,7 @@ internal unsafe partial class VkSampler : Sampler
 
     public ResourceRefCount RefCount { get; }
 
-    public VkSampler(VkGraphicsDevice gd, ref SamplerDescription description)
+    public VkSampler(VkGraphicsDevice gd, in SamplerDescription description)
     {
         _gd = gd;
         VkFormats.GetFilterParams(description.Filter, out Filter minFilter, out Filter magFilter, out SamplerMipmapMode mipmapMode);

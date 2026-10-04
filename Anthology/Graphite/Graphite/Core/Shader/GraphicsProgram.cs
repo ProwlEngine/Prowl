@@ -14,7 +14,7 @@ public abstract class GraphicsProgram : ShaderProgram
     private readonly RasterizerStateDescription _rasterizerState;
     private readonly VertexLayoutDescription[] _vertexLayouts;
 
-    internal GraphicsProgram(ref ShaderDescription description)
+    internal GraphicsProgram(in ShaderDescription description)
         : base(description.ResourceLayouts)
     {
         ShaderStageDescription[] stageDescs = description.Stages ?? Array.Empty<ShaderStageDescription>();

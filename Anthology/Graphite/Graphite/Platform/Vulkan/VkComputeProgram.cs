@@ -35,8 +35,8 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
 
     private readonly DescriptorSetLayout _emptyDescriptorSetLayout;
 
-    public VkComputeProgram(VkGraphicsDevice gd, ref ComputeDescription description)
-        : base(ref description)
+    public VkComputeProgram(VkGraphicsDevice gd, in ComputeDescription description)
+        : base(description)
     {
         _gd = gd;
         RefCount = new ResourceRefCount(DestroyNative);

@@ -30,7 +30,7 @@ public abstract class TextureView : GraphicsResource
     /// </summary>
     public PixelFormat Format { get; }
 
-    internal TextureView(ref TextureViewDescription description)
+    internal TextureView(in TextureViewDescription description)
     {
         Target = description.Target;
         BaseMipLevel = description.BaseMipLevel;

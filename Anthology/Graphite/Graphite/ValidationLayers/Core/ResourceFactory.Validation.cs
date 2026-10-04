@@ -2,7 +2,7 @@ namespace Prowl.Graphite;
 
 public abstract partial class ResourceFactory
 {
-    private void CreateTexture_CheckDescription(ref TextureDescription description)
+    private void CreateTexture_CheckDescription(in TextureDescription description)
     {
         if (!GraphicsDevice.ValidationEnabled)
             return;
@@ -33,7 +33,7 @@ public abstract partial class ResourceFactory
         }
     }
 
-    private void CreateTextureView_CheckDescription(ref TextureViewDescription description)
+    private void CreateTextureView_CheckDescription(in TextureViewDescription description)
     {
         if (!GraphicsDevice.ValidationEnabled)
             return;
@@ -63,7 +63,7 @@ public abstract partial class ResourceFactory
         }
     }
 
-    private void CreateBuffer_CheckDescription(ref BufferDescription description)
+    private void CreateBuffer_CheckDescription(in BufferDescription description)
     {
         if (!GraphicsDevice.ValidationEnabled)
             return;
@@ -101,7 +101,7 @@ public abstract partial class ResourceFactory
         }
     }
 
-    private void CreateSampler_CheckDescription(ref SamplerDescription description)
+    private void CreateSampler_CheckDescription(in SamplerDescription description)
     {
         if (!GraphicsDevice.ValidationEnabled)
             return;
@@ -113,7 +113,7 @@ public abstract partial class ResourceFactory
         }
     }
 
-    private void CreateGraphicsProgram_CheckDescription(ref ShaderDescription description)
+    private void CreateGraphicsProgram_CheckDescription(in ShaderDescription description)
     {
         if (!GraphicsDevice.ValidationEnabled)
             return;
@@ -154,7 +154,7 @@ public abstract partial class ResourceFactory
                 $"{nameof(ShaderDescription)} must include a vertex stage.");
         }
 
-        CreateGraphicsProgram_ValidatePipelineStateArrays(ref description);
+        CreateGraphicsProgram_ValidatePipelineStateArrays(description);
 
         RasterizerStateDescription rasterizerState = description.RasterizerState;
         BlendStateDescription blendState = description.BlendState;
@@ -211,7 +211,7 @@ public abstract partial class ResourceFactory
         }
     }
 
-    private static void CreateGraphicsProgram_ValidatePipelineStateArrays(ref ShaderDescription description)
+    private static void CreateGraphicsProgram_ValidatePipelineStateArrays(in ShaderDescription description)
     {
         if (description.BlendState.AttachmentStates == null)
         {
@@ -220,7 +220,7 @@ public abstract partial class ResourceFactory
         }
     }
 
-    private void CreateComputeProgram_CheckDescription(ref ComputeDescription description)
+    private void CreateComputeProgram_CheckDescription(in ComputeDescription description)
     {
         if (!GraphicsDevice.ValidationEnabled)
             return;

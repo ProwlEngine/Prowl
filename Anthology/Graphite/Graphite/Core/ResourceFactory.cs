@@ -31,13 +31,7 @@ public abstract partial class ResourceFactory
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New framebuffer.</returns>
-    public Framebuffer CreateFramebuffer(FramebufferDescription description) => CreateFramebuffer(ref description);
-    /// <summary>
-    /// Makes a framebuffer.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New framebuffer.</returns>
-    public abstract Framebuffer CreateFramebuffer(ref FramebufferDescription description);
+    public abstract Framebuffer CreateFramebuffer(in FramebufferDescription description);
 
     /// <summary>
     /// Makes a render texture: attachments, maybe depth, plus the framebuffer wrapper.
@@ -51,16 +45,10 @@ public abstract partial class ResourceFactory
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New texture.</returns>
-    public Texture CreateTexture(TextureDescription description) => CreateTexture(ref description);
-    /// <summary>
-    /// Makes a texture.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New texture.</returns>
-    public Texture CreateTexture(ref TextureDescription description)
+    public Texture CreateTexture(in TextureDescription description)
     {
-        CreateTexture_CheckDescription(ref description);
-        return CreateTextureCore(ref description);
+        CreateTexture_CheckDescription(description);
+        return CreateTextureCore(description);
     }
 
     /// <summary>
@@ -72,9 +60,9 @@ public abstract partial class ResourceFactory
     /// <remarks>
     /// Handle format depends on backend. Vulkan wants a valid VkImage. Description must match reality.
     /// </remarks>
-    public abstract Texture CreateTexture(ulong nativeTexture, ref TextureDescription description);
+    public abstract Texture CreateTexture(ulong nativeTexture, in TextureDescription description);
 
-    protected abstract Texture CreateTextureCore(ref TextureDescription description);
+    protected abstract Texture CreateTextureCore(in TextureDescription description);
 
     /// <summary>
     /// Makes a texture view.
@@ -87,99 +75,69 @@ public abstract partial class ResourceFactory
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New texture view.</returns>
-    public TextureView CreateTextureView(TextureViewDescription description) => CreateTextureView(ref description);
-    /// <summary>
-    /// Makes a texture view.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New texture view.</returns>
-    public TextureView CreateTextureView(ref TextureViewDescription description)
+    public TextureView CreateTextureView(in TextureViewDescription description)
     {
-        CreateTextureView_CheckDescription(ref description);
+        CreateTextureView_CheckDescription(description);
 
-        return CreateTextureViewCore(ref description);
+        return CreateTextureViewCore(description);
     }
 
-    protected abstract TextureView CreateTextureViewCore(ref TextureViewDescription description);
+    protected abstract TextureView CreateTextureViewCore(in TextureViewDescription description);
 
     /// <summary>
     /// Makes a buffer.
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New buffer.</returns>
-    public DeviceBuffer CreateBuffer(BufferDescription description) => CreateBuffer(ref description);
-    /// <summary>
-    /// Makes a buffer.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New buffer.</returns>
-    public DeviceBuffer CreateBuffer(ref BufferDescription description)
+    public DeviceBuffer CreateBuffer(in BufferDescription description)
     {
-        CreateBuffer_CheckDescription(ref description);
-        return CreateBufferCore(ref description);
+        CreateBuffer_CheckDescription(description);
+        return CreateBufferCore(description);
     }
 
-    protected abstract DeviceBuffer CreateBufferCore(ref BufferDescription description);
+    protected abstract DeviceBuffer CreateBufferCore(in BufferDescription description);
 
     /// <summary>
     /// Makes a sampler.
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New sampler.</returns>
-    public Sampler CreateSampler(SamplerDescription description) => CreateSampler(ref description);
-    /// <summary>
-    /// Makes a sampler.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New sampler.</returns>
-    public Sampler CreateSampler(ref SamplerDescription description)
+    public Sampler CreateSampler(in SamplerDescription description)
     {
-        CreateSampler_CheckDescription(ref description);
+        CreateSampler_CheckDescription(description);
 
-        return CreateSamplerCore(ref description);
+        return CreateSamplerCore(description);
     }
 
-    protected abstract Sampler CreateSamplerCore(ref SamplerDescription description);
+    protected abstract Sampler CreateSamplerCore(in SamplerDescription description);
+
 
     /// <summary>
     /// Makes a graphics program.
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New graphics program.</returns>
-    public GraphicsProgram CreateGraphicsProgram(ShaderDescription description) => CreateGraphicsProgram(ref description);
-
-    /// <summary>
-    /// Makes a graphics program.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New graphics program.</returns>
-    public GraphicsProgram CreateGraphicsProgram(ref ShaderDescription description)
+    public GraphicsProgram CreateGraphicsProgram(in ShaderDescription description)
     {
-        CreateGraphicsProgram_CheckDescription(ref description);
-        return CreateGraphicsProgramCore(ref description);
+        CreateGraphicsProgram_CheckDescription(description);
+        return CreateGraphicsProgramCore(description);
     }
 
-    protected abstract GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description);
+    protected abstract GraphicsProgram CreateGraphicsProgramCore(in ShaderDescription description);
+
 
     /// <summary>
     /// Makes a compute program.
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New compute program.</returns>
-    public ComputeProgram CreateComputeProgram(ComputeDescription description) => CreateComputeProgram(ref description);
-
-    /// <summary>
-    /// Makes a compute program.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New compute program.</returns>
-    public ComputeProgram CreateComputeProgram(ref ComputeDescription description)
+    public ComputeProgram CreateComputeProgram(in ComputeDescription description)
     {
-        CreateComputeProgram_CheckDescription(ref description);
-        return CreateComputeProgramCore(ref description);
+        CreateComputeProgram_CheckDescription(description);
+        return CreateComputeProgramCore(description);
     }
 
-    protected abstract ComputeProgram CreateComputeProgramCore(ref ComputeDescription description);
+    protected abstract ComputeProgram CreateComputeProgramCore(in ComputeDescription description);
 
     /// <summary>
     /// Makes a fence.
@@ -193,11 +151,5 @@ public abstract partial class ResourceFactory
     /// </summary>
     /// <param name="description">Wanted props.</param>
     /// <returns>New swapchain.</returns>
-    public Swapchain CreateSwapchain(SwapchainDescription description) => CreateSwapchain(ref description);
-    /// <summary>
-    /// Makes a swapchain.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New swapchain.</returns>
-    public abstract Swapchain CreateSwapchain(ref SwapchainDescription description);
+    public abstract Swapchain CreateSwapchain(in SwapchainDescription description);
 }

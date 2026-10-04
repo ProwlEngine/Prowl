@@ -14,32 +14,32 @@ internal class VkResourceFactory : ResourceFactory
 
     public override GraphicsBackend BackendType => GraphicsBackend.Vulkan;
 
-    public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
+    public override Framebuffer CreateFramebuffer(in FramebufferDescription description)
     {
-        return new VkFramebuffer(_gd, ref description);
+        return new VkFramebuffer(_gd, description);
     }
 
-    protected override Sampler CreateSamplerCore(ref SamplerDescription description)
+    protected override Sampler CreateSamplerCore(in SamplerDescription description)
     {
-        return new VkSampler(_gd, ref description);
+        return new VkSampler(_gd, description);
     }
 
-    protected override GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description)
+    protected override GraphicsProgram CreateGraphicsProgramCore(in ShaderDescription description)
     {
-        return new VkGraphicsProgram(_gd, ref description);
+        return new VkGraphicsProgram(_gd, description);
     }
 
-    protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
+    protected override ComputeProgram CreateComputeProgramCore(in ComputeDescription description)
     {
-        return new VkComputeProgram(_gd, ref description);
+        return new VkComputeProgram(_gd, description);
     }
 
-    protected override Texture CreateTextureCore(ref TextureDescription description)
+    protected override Texture CreateTextureCore(in TextureDescription description)
     {
-        return new VkTexture(_gd, ref description);
+        return new VkTexture(_gd, description);
     }
 
-    public override Texture CreateTexture(ulong nativeTexture, ref TextureDescription description)
+    public override Texture CreateTexture(ulong nativeTexture, in TextureDescription description)
     {
         return new VkTexture(
             _gd,
@@ -51,12 +51,12 @@ internal class VkResourceFactory : ResourceFactory
             new Image(nativeTexture));
     }
 
-    protected override TextureView CreateTextureViewCore(ref TextureViewDescription description)
+    protected override TextureView CreateTextureViewCore(in TextureViewDescription description)
     {
-        return new VkTextureView(_gd, ref description);
+        return new VkTextureView(_gd, description);
     }
 
-    protected override DeviceBuffer CreateBufferCore(ref BufferDescription description)
+    protected override DeviceBuffer CreateBufferCore(in BufferDescription description)
     {
         return new VkBuffer(_gd, description);
     }
@@ -66,8 +66,8 @@ internal class VkResourceFactory : ResourceFactory
         return new VkFence(_gd, signaled);
     }
 
-    public override Swapchain CreateSwapchain(ref SwapchainDescription description)
+    public override Swapchain CreateSwapchain(in SwapchainDescription description)
     {
-        return new VkSwapchain(_gd, ref description);
+        return new VkSwapchain(_gd, description);
     }
 }

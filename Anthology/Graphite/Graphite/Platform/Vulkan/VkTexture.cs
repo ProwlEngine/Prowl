@@ -28,7 +28,7 @@ internal unsafe partial class VkTexture : Texture
     public bool IsSwapchainTexture => _isSwapchainTexture;
     public bool IsStaging => _stagingBuffer.Handle != 0;
 
-    internal VkTexture(VkGraphicsDevice gd, ref TextureDescription description)
+    internal VkTexture(VkGraphicsDevice gd, in TextureDescription description)
         : base(description)
     {
         _gd = gd;
