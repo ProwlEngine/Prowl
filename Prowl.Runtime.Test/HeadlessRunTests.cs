@@ -99,6 +99,26 @@ public class HeadlessRunTests
         Application.IsPlaying = false;
     }
 
+    [Fact]
+    public void ApplicationQuit_InHeadlessRun_StopsLoop()
+    {
+        var quitter = new QuittingGame();
+        quitter.RunHeadless(new HeadlessRunOptions { MaxFrames = 0, TargetFrameRate = 0 });
+
+        Assert.Equal(3, quitter.Frames);
+        Application.IsPlaying = false;
+    }
+
+    private sealed class QuittingGame : Game
+    {
+        public int Frames;
+        public override void OnUpdate(Scene? scene)
+        {
+            Frames++;
+            if (Frames >= 3) Application.Quit();
+        }
+    }
+
     private sealed class SelfStoppingGame : Game
     {
         public int Frames;

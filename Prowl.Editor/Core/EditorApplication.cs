@@ -48,6 +48,7 @@ public class EditorApplication : Game
     private bool _wasFocused = true;
     // A project's scene is queued here and opened by the frame loop once its scripts have been built.
     private bool _sceneLoadPending;
+    private bool _quitRequested;
     private IDisposable? _origamiScope;
 
     private string _curDefaultFont;
@@ -77,6 +78,8 @@ public class EditorApplication : Game
         Instance = this;
         Application.IsEditor = true;
         Application.IsPlaying = false;
+        // Gameplay asking to quit stops play mode. Deferred to the GUI phase so the play scene is not torn down mid Update.
+        Application.QuitHandler = () => _quitRequested = true;
 
         InitializeFont();
 
@@ -488,6 +491,12 @@ public class EditorApplication : Game
         _wasFocused = focused;
 
         ExternalAssetDrop.ProcessPending();
+
+        if (_quitRequested)
+        {
+            _quitRequested = false;
+            RequestExitPlayMode();
+        }
 
         // Process file changes optionally only when window is focused
         bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused || ExternalAssetDrop.ForceProcessActive;
