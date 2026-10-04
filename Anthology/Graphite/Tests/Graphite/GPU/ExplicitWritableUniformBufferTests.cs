@@ -2,12 +2,6 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Behavioral coverage for the dirty-tracking / write-coalescing path taken when loose uniform
-// fields are backed by a caller-provided writable buffer (PropertySet.SetBuffer(name, buf,
-// readOnly: false) on a block that also declares UniformFields). Distinct from
-// PropertySetBindingTests.WritableUniformBuffer_UsesProvidedBufferAsBackingStorage, which only
-// checks a single dispatch lands in the right buffer - these exercise repeat draws, value
-// changes, and byte-level preservation of bytes no declared field owns.
 public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private const uint Side = 16;
@@ -28,7 +22,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         float[][] seeds = new float[n][];
 
         PropertySet props = new();
-        props.SetBuffer("Params", ubo, readOnly: false);
+        props.SetUniformBuffer("Params", ubo);
         props.SetInt("Width", (int)Side);
         props.SetInt("Height", (int)Side);
 
@@ -72,7 +66,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         DeviceBuffer destination = RF.CreateBuffer(new BufferDescription(Count * sizeof(float), BufferUsage.StructuredBufferReadWrite, sizeof(float)));
 
         PropertySet props = new();
-        props.SetBuffer("Params", ubo, readOnly: false);
+        props.SetUniformBuffer("Params", ubo);
         props.SetBuffer("Source", source, readOnly: false);
         props.SetBuffer("Destination", destination, readOnly: false);
 
@@ -122,7 +116,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         GD.UpdateBuffer(source, 0, seed);
 
         PropertySet props = new();
-        props.SetBuffer("Params", ubo, readOnly: false);
+        props.SetUniformBuffer("Params", ubo);
         props.SetInt("Width", (int)Side);
         props.SetInt("Height", (int)Side);
         props.SetBuffer("Source", source, readOnly: false);
@@ -151,13 +145,10 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     }
 
     [SkippableFact]
-    public void NonContiguousSetFields_GapLeftIntact_BothRunsWritten()
+    public void NonContiguousSetFields_UnsetBytesZeroed_BlockWrittenWhole()
     {
         Skip.IfNot(GD.Features.ComputeShader);
 
-        // Width and Padding1 are set but Height, between them, is left unset - the packer must
-        // split this into two write runs (Width alone, Padding1 alone) rather than one write that
-        // would clobber Height's bytes.
         ComputeProgram program = CreateProgram(ThreeFields());
         DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         uint sentinel = 0xAAAAAAAA;
@@ -170,7 +161,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         GD.UpdateBuffer(source, 0, seed);
 
         PropertySet props = new();
-        props.SetBuffer("Params", ubo, readOnly: false);
+        props.SetUniformBuffer("Params", ubo);
         props.SetInt("Width", (int)Side);
         props.SetInt("Padding1", 777);
         props.SetBuffer("Source", source, readOnly: false);
@@ -191,7 +182,7 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         DeviceBuffer readback = GetReadback(ubo);
         MappedResourceView<uint> map = GD.Map<uint>(readback, MapMode.Read);
         Assert.Equal(Side, map[0]);
-        Assert.Equal(sentinel, map[1]);
+        Assert.Equal(0u, map[1]);
         Assert.Equal(777u, map[2]);
         Assert.Equal(sentinel, map[3]);
         GD.Unmap(readback);
