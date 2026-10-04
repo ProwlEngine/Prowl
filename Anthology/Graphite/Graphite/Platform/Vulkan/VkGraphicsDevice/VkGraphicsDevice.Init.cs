@@ -184,7 +184,23 @@ internal unsafe partial class VkGraphicsDevice
         _apiVersion = GraphicsApiVersion.Unknown;
         DriverInfo = "version:" + _physicalDeviceProperties.DriverVersion.ToString("x8");
 
-        Vk.GetPhysicalDeviceFeatures(PhysicalDevice, out _physicalDeviceFeatures);
+        Vk.GetPhysicalDeviceFeatures(PhysicalDevice, out PhysicalDeviceFeatures supported);
+        _physicalDeviceFeatures = new PhysicalDeviceFeatures
+        {
+            GeometryShader = supported.GeometryShader,
+            TessellationShader = supported.TessellationShader,
+            DrawIndirectFirstInstance = supported.DrawIndirectFirstInstance,
+            SamplerAnisotropy = supported.SamplerAnisotropy,
+            DepthClamp = supported.DepthClamp,
+            DepthBiasClamp = supported.DepthBiasClamp,
+            IndependentBlend = supported.IndependentBlend,
+            ShaderFloat64 = supported.ShaderFloat64,
+            PipelineStatisticsQuery = supported.PipelineStatisticsQuery,
+            TextureCompressionBC = supported.TextureCompressionBC,
+            TextureCompressionEtc2 = supported.TextureCompressionEtc2,
+            TextureCompressionAstcLdr = supported.TextureCompressionAstcLdr,
+            ImageCubeArray = supported.ImageCubeArray
+        };
 
         Vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, out PhysicalDeviceMemProperties);
     }
