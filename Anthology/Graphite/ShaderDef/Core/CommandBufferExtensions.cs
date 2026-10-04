@@ -53,5 +53,5 @@ public static class CommandBufferExtensions
 
     internal static BlendStateDescription DefaultBlend => BlendStateDescription.SingleDisabled;
     internal static DepthStencilStateDescription DefaultDepth => DepthStencilStateDescription.DepthOnlyLessEqual;
-    internal static RasterizerStateDescription DefaultRaster => new(FaceCullMode.Back, FrontFace.Clockwise, true, false);
+    internal static RasterizerStateDescription DefaultRaster => RasterizerStateDescription.Default;
 }
