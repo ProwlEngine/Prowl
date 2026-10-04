@@ -33,7 +33,7 @@ public class PropertySetTests
 
         set.SetFloat("f", 1.0f);
         set.SetInt("i", 2);
-        set.SetDouble("d", 3.0);
+        set.SetFloat("d", 3.0f);
 
         Assert.Equal(3, set.EntryCount);
     }

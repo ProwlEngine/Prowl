@@ -68,19 +68,8 @@ public sealed partial class PropertySet
     /// <summary>Sets int4 uniform.</summary>
     public void SetInt4(PropertyID name, Int4 v) => WriteUniform(name, v, UniformScalarType.Int4);
 
-    /// <summary>Sets double uniform.</summary>
-    public void SetDouble(PropertyID name, double v) => WriteUniform(name, v, UniformScalarType.Double1);
-    /// <summary>Sets double2 uniform.</summary>
-    public void SetDouble2(PropertyID name, Double2 v) => WriteUniform(name, v, UniformScalarType.Double2);
-    /// <summary>Sets double3 uniform.</summary>
-    public void SetDouble3(PropertyID name, Double3 v) => WriteUniform(name, v, UniformScalarType.Double3);
-    /// <summary>Sets double4 uniform.</summary>
-    public void SetDouble4(PropertyID name, Double4 v) => WriteUniform(name, v, UniformScalarType.Double4);
-
     /// <summary>Sets float4x4 matrix uniform.</summary>
     public void SetMatrix(PropertyID name, Float4x4 v) => WriteUniform(name, v, UniformScalarType.Float4x4);
-    /// <summary>Sets double4x4 matrix uniform.</summary>
-    public void SetDoubleMatrix(PropertyID name, Double4x4 v) => WriteUniform(name, v, UniformScalarType.Double4x4);
 
 
     /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange, bool)"/>
