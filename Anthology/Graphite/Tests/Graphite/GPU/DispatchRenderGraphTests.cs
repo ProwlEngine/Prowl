@@ -186,7 +186,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         RecordingPass pass = new(rentTransient: true);
         using RenderPipeline<DispatchView> pipeline = new([pass]);
-        DispatchView[] views = { new(64, 64) };
+        DispatchView[] views = { new(64, 64, GD.MainSwapchain) };
 
         uint iterations = GD.MaxExecutingTasks * 2 + 1;
         for (uint i = 0; i < iterations; i++)
@@ -223,7 +223,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     public void Dispatch_ManyTimes_NeverExceedsMaxExecutingGraphs()
     {
         using RenderPipeline<DispatchView> pipeline = new([new RecordingPass()]);
-        DispatchView[] views = { new(64, 64) };
+        DispatchView[] views = { new(64, 64, GD.MainSwapchain) };
 
         uint max = GD.MaxExecutingTasks;
         for (uint i = 0; i < max * 3 + 1; i++)
@@ -254,7 +254,7 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
     {
         BackbufferPass pass = new();
         using RenderPipeline<DispatchView> pipeline = new([new RecordingPass(), pass]);
-        DispatchView[] views = { new(64, 64) };
+        DispatchView[] views = { new(64, 64, GD.MainSwapchain) };
 
         GD.DispatchGraph(pipeline, views);
         GD.WaitForIdle();
