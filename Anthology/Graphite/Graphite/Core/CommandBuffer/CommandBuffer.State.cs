@@ -58,7 +58,7 @@ public abstract partial class CommandBuffer
 
     /// <summary>
     /// Merges properties into bind table, last write wins, sticks until ClearProperties or Begin.
-    /// <para>No-op when the set is unchanged and its entries are still the active ones.</para>
+    /// <para>No-op when the same set was applied last and is unchanged.</para>
     /// </summary>
     /// <param name="properties">Set to merge in.</param>
     public void SetProperties(PropertySet properties)
@@ -68,17 +68,7 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(properties, _lastAppliedSource) && properties.Version == _lastAppliedSourceVersion)
             return;
 
-        if (_mergedSourceVersions.TryGetValue(properties, out uint mergedVersion)
-            && mergedVersion == properties.Version
-            && properties.EntriesActiveIn(_activeProperties))
-        {
-            _lastAppliedSource = properties;
-            _lastAppliedSourceVersion = properties.Version;
-            return;
-        }
-
         _activeProperties.MergeFrom(properties, _changedPropertyKeys);
-        _mergedSourceVersions[properties] = properties.Version;
         _lastAppliedSource = properties;
         _lastAppliedSourceVersion = properties.Version;
         unchecked { _activePropertiesEpoch++; }
@@ -97,7 +87,6 @@ public abstract partial class CommandBuffer
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
-        _mergedSourceVersions.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
         unchecked { _activePropertiesEpoch++; }

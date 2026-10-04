@@ -30,7 +30,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
-    private readonly System.Collections.Generic.Dictionary<PropertySet, uint> _mergedSourceVersions = new();
     private readonly System.Collections.Generic.List<PropertyID> _changedPropertyKeys = new();
     private bool _allPropertiesChanged = true;
 
@@ -59,7 +58,6 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
-        _mergedSourceVersions.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
         unchecked { _activePropertiesEpoch++; }

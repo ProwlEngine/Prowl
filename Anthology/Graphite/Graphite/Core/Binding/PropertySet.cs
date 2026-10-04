@@ -151,16 +151,6 @@ public sealed partial class PropertySet
         unchecked { _version++; }
     }
 
-    internal bool EntriesActiveIn(PropertySet active)
-    {
-        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _entries)
-        {
-            if (!active._entries.TryGetValue(kv.Key, out PropertyEntry? current) || !ReferenceEquals(current, kv.Value))
-                return false;
-        }
-        return true;
-    }
-
 
     private void WriteUniform<T>(PropertyID key, T value, UniformScalarType type) where T : unmanaged
     {
