@@ -15,6 +15,8 @@ public sealed class BenchScene : IDisposable
     public const uint TargetHeight = 64;
 
     private readonly Texture _colorTarget;
+    private readonly Texture _whiteTexture;
+    private readonly Sampler _sampler;
 
     public GraphicsDevice Device { get; }
     public GraphicsProgram Program { get; }
@@ -31,6 +33,8 @@ public sealed class BenchScene : IDisposable
 
         _colorTarget = gd.ResourceFactory.CreateTexture(TextureDescription.Texture2D(
             TargetWidth, TargetHeight, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        _whiteTexture = gd.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        _sampler = gd.ResourceFactory.CreateSampler(SamplerDescription.Point);
         Framebuffer = gd.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _colorTarget));
 
         Float4x4 projection = Float4x4.CreatePerspectiveFov(1.0472f, 1f, 0.1f, 100f);
@@ -47,7 +51,7 @@ public sealed class BenchScene : IDisposable
         PropertySet props = new();
         props.SetMatrix("MatrixModel", Float4x4.Identity);
         props.SetFloat4("Color", color);
-        props.SetTexture("MainTexture", Device.NullTexture2D, Device.PointSampler);
+        props.SetTexture("MainTexture", _whiteTexture, _sampler);
         return props;
     }
 
@@ -59,6 +63,8 @@ public sealed class BenchScene : IDisposable
     {
         Framebuffer.Dispose();
         _colorTarget.Dispose();
+        _whiteTexture.Dispose();
+        _sampler.Dispose();
         Mesh.Dispose();
         Program.Dispose();
     }

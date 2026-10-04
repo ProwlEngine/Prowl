@@ -174,6 +174,8 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
 
     public GraphicsDevice GD => _gd;
     public ResourceFactory RF => _factory;
+    private Sampler? _pointSampler;
+    public Sampler PointSampler => _pointSampler ??= RF.CreateSampler(SamplerDescription.Point);
     public IWindow Window => _window;
 
     // Non-null for every device TestUtils builds - see HeadlessOptions/SwapchainOptions.

@@ -255,7 +255,7 @@ public static class Program
         albedo = material.AlbedoTexture ?? model.GetDefaultWhite();
 
         sceneProperties = new();
-        sceneProperties.SetTexture("AlbedoTexture", albedo, device.LinearSampler);
+        sceneProperties.SetTexture("AlbedoTexture", albedo, bloomSampler);
         sceneProperties.SetFloat4("BaseColor", new Float4(1, 1, 1, 1));
 
         bloomShader = LoadBloomShaderPass(device);

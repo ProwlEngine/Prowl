@@ -440,8 +440,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateBuffer(quadVb, 0, new SinkVertex[3]);
 
         PropertySet texProps = new();
-        texProps.SetTexture("Tex", target2, GD.PointSampler);
-        texProps.SetSampler("Smp", GD.PointSampler);
+        texProps.SetTexture("Tex", target2, PointSampler);
+        texProps.SetSampler("Smp", PointSampler);
 
         Texture s1 = RF.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
         Texture s3 = RF.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
@@ -513,8 +513,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         GraphicsProgram program = CreateSampleTexture2DProgram();
         PropertySet props = new();
-        props.SetTexture("Tex", sampled, GD.PointSampler);
-        props.SetSampler("Smp", GD.PointSampler);
+        props.SetTexture("Tex", sampled, PointSampler);
+        props.SetSampler("Smp", PointSampler);
 
         Submit(cl =>
         {

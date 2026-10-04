@@ -221,7 +221,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         GD.RunTestGraph(context =>
         {
             CommandBuffer cmd = context.GetCommandBuffer();
-            DrawSampled(cmd, program, fb, fresh, GD.PointSampler);
+            DrawSampled(cmd, program, fb, fresh, PointSampler);
             context.SubmitCommandBuffer(cmd);
         });
         GD.WaitForIdle();
@@ -265,7 +265,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 if (context.IsHistoryValid(historyHandle))
                 {
                     Texture previous = context.GetRenderTexture(historyHandle, 1).ColorTextures[0];
-                    DrawSampled(cmd, program, target, previous, GD.PointSampler);
+                    DrawSampled(cmd, program, target, previous, PointSampler);
                 }
                 else
                 {
@@ -327,7 +327,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                     cmd, program,
                     context.GetRenderTexture(outputHandle).Framebuffer,
                     context.GetRenderTexture(sampledHandle).ColorTextures[0],
-                    GD.PointSampler);
+                    PointSampler);
             });
 
         using RenderPipeline<BarrierView> pipeline = new([generate, sample, BarrierPasses.Readback(outputId, staging)]);
@@ -438,8 +438,8 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             {
                 RenderTexture scene = context.GetRenderTexture(fogHandle);
                 PropertySet props = new();
-                props.SetTexture("Tex", scene.DepthTexture!, GD.PointSampler);
-                props.SetSampler("Smp", GD.PointSampler);
+                props.SetTexture("Tex", scene.DepthTexture!, PointSampler);
+                props.SetSampler("Smp", PointSampler);
 
                 cmd.SetFramebuffer(scene.Framebuffer);
                 cmd.SetFullViewport();
