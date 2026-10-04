@@ -10,6 +10,9 @@ using Silk.NET.Windowing;
 
 namespace Prowl.Runtime;
 
+/// <summary>How the game window occupies the screen, see <see cref="Window.Mode"/>.</summary>
+public enum WindowMode { Windowed, Fullscreen, Borderless }
+
 public static class Window
 {
 
@@ -126,6 +129,64 @@ public static class Window
         set { InternalWindow.Size = value; }
     }
 
+    private static WindowMode s_mode = WindowMode.Windowed;
+    private static Vector2D<int> s_windowedPosition;
+    private static Vector2D<int> s_windowedSize;
+
+    /// <summary>
+    /// Windowed, exclusive fullscreen, or a borderless window covering its monitor. Leaving fullscreen or
+    /// borderless restores the last windowed position and size. Ignored without a window (headless), and
+    /// ignored with a warning during editor play mode, where the window belongs to the editor.
+    /// </summary>
+    public static WindowMode Mode
+    {
+        get => s_mode;
+        set
+        {
+            if (InternalWindow == null || s_mode == value) return;
+            if (Application.IsEditor && Application.IsPlaying)
+            {
+                Debug.LogWarningOnce("Window.Mode.Editor", "Window.Mode is ignored in editor play mode, the window belongs to the editor.");
+                return;
+            }
+
+            if (s_mode == WindowMode.Windowed)
+            {
+                s_windowedPosition = InternalWindow.Position;
+                s_windowedSize = InternalWindow.Size;
+            }
+            s_mode = value;
+
+            switch (value)
+            {
+                case WindowMode.Fullscreen:
+                    InternalWindow.WindowBorder = WindowBorder.Resizable;
+                    InternalWindow.WindowState = WindowState.Fullscreen;
+                    break;
+
+                case WindowMode.Borderless:
+                    InternalWindow.WindowState = WindowState.Normal;
+                    InternalWindow.WindowBorder = WindowBorder.Hidden;
+                    if (InternalWindow.Monitor is { } monitor)
+                    {
+                        InternalWindow.Position = monitor.Bounds.Origin;
+                        InternalWindow.Size = monitor.Bounds.Size;
+                    }
+                    break;
+
+                default:
+                    InternalWindow.WindowState = WindowState.Normal;
+                    InternalWindow.WindowBorder = WindowBorder.Resizable;
+                    if (s_windowedSize.X > 0 && s_windowedSize.Y > 0)
+                    {
+                        InternalWindow.Size = s_windowedSize;
+                        InternalWindow.Position = s_windowedPosition;
+                    }
+                    break;
+            }
+        }
+    }
+
     public static bool IsVisible
     {
         get { return InternalWindow.IsVisible; }
@@ -151,6 +212,7 @@ public static class Window
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
+        s_mode = startState == WindowState.Fullscreen ? WindowMode.Fullscreen : WindowMode.Windowed;
         options.VSync = vsync;
         Application.VSync = vsync;
         options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
