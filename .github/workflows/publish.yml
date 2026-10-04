@@ -1,0 +1,62 @@
+# Shares release.yml's `v*` trigger, so one tag ships both the Editor binaries and the package.
+#
+# Auth is Trusted Publishing (OIDC), as in Anthology's publish.yml - no API key secret to rotate.
+# Inert until ProwlEngine/Prowl is registered as a trusted publisher for Prowl.Runtime on nuget.org.
+
+name: Publish
+
+"on":
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Directory.Build.props only defines ProwlVersion when unset, so this wins. A manual
+      # workflow_dispatch run skips the step and falls back to the value in the props file.
+      - name: Resolve version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "ProwlVersion=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Prowl.sln
+
+      - name: Build
+        run: dotnet build Prowl.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Prowl.sln -c Release --no-build
+
+      # Produces exactly one package: only Prowl.Runtime opts in to IsPackable.
+      - name: Pack
+        run: dotnet pack Prowl.sln -c Release --no-build -o artifacts/nuget
+
+      - name: NuGet auth (trusted publishing)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: Wulferis
+
+      - name: Push to NuGet
+        run: >
+          dotnet nuget push "artifacts/nuget/*.nupkg"
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

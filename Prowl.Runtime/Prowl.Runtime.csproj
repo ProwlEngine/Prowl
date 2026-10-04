@@ -11,6 +11,13 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Prowl.Runtime</PackageId>
+    <Version>$(ProwlVersion)</Version>
+    <Description>The runtime half of the Prowl game engine - an open-source, MIT-licensed, Unity-like engine written in pure C#. Reference this package to build and ship a game as an ordinary .NET application, with no dependency on the Prowl Editor.</Description>
+  </PropertyGroup>
+
   <!-- Allow test project to access internal members -->
   <ItemGroup>
     <InternalsVisibleTo Include="Prowl.Runtime.Test" />
@@ -76,13 +83,18 @@
     <Copy SourceFiles="@(LibraryFiles)" DestinationFiles="@(LibraryFiles->'$(OutputPath)runtimes\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 
-  <!-- Collect runtime files for referencing projects -->
+  <!-- Collect runtime files for referencing projects. Libraries/ already follows NuGet's
+       runtimes/<rid>/native layout, so the same items serve both a ProjectReference (copied to
+       output) and a PackageReference (resolved per-RID by NuGet) with no second copy. -->
   <ItemGroup>
     <None Include="..\Libraries\**\*.*">
       <Link>runtimes\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
+      <Pack>true</Pack>
+      <PackagePath>runtimes\</PackagePath>
     </None>
+    <None Include="..\README.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
 </Project>
