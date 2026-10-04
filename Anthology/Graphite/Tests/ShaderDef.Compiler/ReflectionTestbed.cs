@@ -84,7 +84,6 @@ internal static class ReflectionTestbed
             + $"  kind:       expected {e.Kind},          actual {a.Kind}\n"
             + $"  binding:    expected {e.BindingIndex},  actual {a.BindingIndex}\n"
             + $"  stages:     expected {e.Stages},        actual {a.Stages}\n"
-            + $"  glName:     expected '{e.GLUniformName}', actual '{a.GLUniformName}'\n"
             + $"  fields:     expected [{Fields(e)}]\n"
             + $"              actual   [{Fields(a)}]";
 

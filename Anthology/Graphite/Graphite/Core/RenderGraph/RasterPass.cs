@@ -15,7 +15,7 @@ public abstract class RasterPass<TView> : IPass<TView>
     /// <summary>Pass name for debugging.</summary>
     public abstract string Name { get; }
 
-    /// <summary>Declare target and other reads/writes here. Call SetTarget/SetTargets.</summary>
+    /// <summary>Declare target and other reads/writes here. Call SetTarget.</summary>
     public abstract void Setup(RenderContextBuilder builder);
 
     /// <summary>Call BindTarget on cmd, then draw. The graph submits cmd.</summary>
@@ -40,19 +40,12 @@ public abstract class RasterPass<TView> : IPass<TView>
     }
 
     /// <summary>
-    /// Declares an MRT framebuffer: one resource, desc with several color formats, one framebuffer with
-    /// several color attachments. BindTarget applies load ops to every attachment.
-    /// </summary>
-    protected TextureHandle SetTargets(RenderContextBuilder builder, RenderResourceID id, GraphTextureDesc mrtDesc, int history = 0, TargetLoadStoreOps? ops = null)
-        => SetTarget(builder, id, mrtDesc, history, ops);
-
-    /// <summary>
     /// Binds the declared target and applies its load ops, clearing with the values the declaration carries.
     /// </summary>
     protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd)
     {
         if (!_hasTarget)
-            throw new InvalidOperationException($"RasterPass '{Name}' called BindTarget without declaring a target in Setup via SetTarget or SetTargets.");
+            throw new InvalidOperationException($"RasterPass '{Name}' called BindTarget without declaring a target in Setup via SetTarget.");
 
         RenderTexture target = context.GetRenderTexture(_target);
         TargetLoadStoreOps ops = context.GetTargetOps(_target.Id);

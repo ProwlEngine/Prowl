@@ -14,16 +14,16 @@ public class VulkanCompilationTests
 
 
     static ResourceLayoutElementDescription Ubo(string name, int binding, params UniformBlockField[] fields)
-        => new(name, ResourceKind.UniformBuffer, VF, binding, ResourceLayoutElementOptions.None, name, fields);
+        => new(name, ResourceKind.UniformBuffer, VF, binding, ResourceLayoutElementOptions.None, fields);
 
     static ResourceLayoutElementDescription Tex(string name, int binding)
-        => new(name, ResourceKind.TextureReadOnly, VF, binding, ResourceLayoutElementOptions.None, name, []);
+        => new(name, ResourceKind.TextureReadOnly, VF, binding, ResourceLayoutElementOptions.None, []);
 
     static ResourceLayoutElementDescription Samp(string name, int binding)
-        => new(name, ResourceKind.Sampler, VF, binding, ResourceLayoutElementOptions.None, name, []);
+        => new(name, ResourceKind.Sampler, VF, binding, ResourceLayoutElementOptions.None, []);
 
     static ResourceLayoutElementDescription CombinedTex(string name, int binding)
-        => new(name, ResourceKind.TextureReadOnly, VF, binding, ResourceLayoutElementOptions.CombinedImageSampler, name, []);
+        => new(name, ResourceKind.TextureReadOnly, VF, binding, ResourceLayoutElementOptions.CombinedImageSampler, []);
 
 
     [Fact]

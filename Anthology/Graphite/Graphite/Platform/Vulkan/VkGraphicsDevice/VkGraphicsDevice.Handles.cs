@@ -18,7 +18,6 @@ internal unsafe partial class VkGraphicsDevice
     internal string DriverName;
     internal string DriverInfo;
     internal VkDeviceMemoryManager MemoryManager;
-    internal VkDescriptorPoolManager DescriptorPoolManager;
 
     /// <summary>
     /// VkPipelineCache handle passed to every pipeline create call, speeds up compiles.
@@ -26,7 +25,6 @@ internal unsafe partial class VkGraphicsDevice
     internal PipelineCache DriverPipelineCache;
 
     private readonly object _graphicsQueueLock = new();
-    private CommandPool _graphicsCommandPool;
     private PhysicalDeviceProperties _physicalDeviceProperties;
     private PhysicalDeviceFeatures _physicalDeviceFeatures;
     private string _deviceName;

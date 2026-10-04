@@ -106,25 +106,6 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void Build_CentrallyDeclaredResource_SatisfiesInput()
-    {
-        var reader = new TestPass("Reader",
-            inputs: new[] { "central_shared" },
-            outputs: new[] { ("central_out", Desc.Color()) });
-
-        var central = new GraphResource[]
-        {
-            new GraphTextureResource(RenderResourceID.Intern("central_shared"), Desc.Color())
-        };
-
-        RenderGraph<TestView> graph = RenderGraph<TestView>.Build(
-            new IPass<TestView>[] { reader }, central);
-
-        Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("central_shared")));
-        Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Reader");
-    }
-
-    [Fact]
     public void Build_BufferProducerBeforeBufferReader()
     {
         var producer = new TestBufferPass("Compute",

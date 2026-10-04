@@ -53,14 +53,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
     }
 
     [Fact]
-    public void Dispose_CommandBuffer()
-    {
-        CommandBuffer cl = Inner.CreateCommandBuffer();
-        cl.Dispose();
-        Assert.True(cl.IsDisposed);
-    }
-
-    [Fact]
     public void Dispose_Sampler()
     {
         Sampler s = Inner.CreateSampler(SamplerDescription.Point);

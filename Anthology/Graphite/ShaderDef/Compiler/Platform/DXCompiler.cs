@@ -183,7 +183,6 @@ public class DXCompiler : CompilerModule
             stages,
             register,
             ResourceLayoutElementOptions.None,
-            PropertyID.ToString(name) ?? string.Empty,
             fields));
     }
 }

@@ -72,34 +72,6 @@ public class IdentifierTests
     }
 
     // ------------------------------------------------------------------
-    // ShaderID
-    // ------------------------------------------------------------------
-
-    [Fact]
-    public void ShaderID_Intern_SameName_SameId()
-    {
-        ShaderID a = ShaderID.Intern("ShaderID_same");
-        ShaderID b = "ShaderID_same";
-
-        Assert.Equal(a, b);
-        Assert.True(a == b);
-    }
-
-    [Fact]
-    public void ShaderID_Default_IsInvalid()
-    {
-        Assert.False(default(ShaderID).IsValid);
-    }
-
-    [Fact]
-    public void ShaderID_ReverseLookup_RoundTrips()
-    {
-        ShaderID id = ShaderID.Intern("ShaderID_reverse");
-
-        Assert.Equal("ShaderID_reverse", ShaderID.ToString(id));
-    }
-
-    // ------------------------------------------------------------------
     // VertexAttributeID
     // ------------------------------------------------------------------
 
@@ -136,14 +108,11 @@ public class IdentifierTests
         // Each ID struct owns a private interner, so the same string is free to map
         // to the same underlying counter value without colliding across types.
         PropertyID p = PropertyID.Intern("shared-name");
-        ShaderID s = ShaderID.Intern("shared-name");
         VertexAttributeID v = VertexAttributeID.Intern("shared-name");
 
         Assert.True(p.IsValid);
-        Assert.True(s.IsValid);
         Assert.True(v.IsValid);
         Assert.Equal("shared-name", PropertyID.ToString(p));
-        Assert.Equal("shared-name", ShaderID.ToString(s));
         Assert.Equal("shared-name", VertexAttributeID.ToString(v));
     }
 }

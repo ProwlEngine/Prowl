@@ -94,7 +94,6 @@ internal static class SlangReflector
         uint location;
         if (bindsBySemantic)
         {
-            element.HlslSemanticName = rawSemantic;
             location = semanticIndex;
         }
         else

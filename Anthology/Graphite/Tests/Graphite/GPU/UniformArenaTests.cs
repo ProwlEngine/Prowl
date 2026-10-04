@@ -202,12 +202,10 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
                 [
                     new ResourceLayoutElementDescription("BlockA", ResourceKind.UniformBuffer, ShaderStages.Compute, 0)
                     {
-                        GLUniformName = "block_BlockAData_0",
                         UniformFields = [new UniformBlockField("valueA", 0, sizeof(uint), UniformScalarType.Int1)]
                     },
                     new ResourceLayoutElementDescription("Output", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 1)
                     {
-                        GLUniformName = "StructuredBuffer_uint_t_0"
                     },
                 ]
             },
@@ -218,7 +216,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
                 [
                     new ResourceLayoutElementDescription("BlockB", ResourceKind.UniformBuffer, ShaderStages.Compute, 0)
                     {
-                        GLUniformName = "block_BlockBData_0",
                         UniformFields = [new UniformBlockField("valueB", 0, sizeof(uint), UniformScalarType.Int1)]
                     },
                 ]

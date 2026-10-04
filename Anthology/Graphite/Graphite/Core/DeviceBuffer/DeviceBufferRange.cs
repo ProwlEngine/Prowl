@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Slice of a buffer; bind via PropertySet to expose part to shaders.
 /// </summary>
-public struct DeviceBufferRange : BindableResource, IEquatable<DeviceBufferRange>
+public struct DeviceBufferRange : IEquatable<DeviceBufferRange>
 {
     /// <summary>
     /// Buffer this range points into.

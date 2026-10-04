@@ -10,7 +10,7 @@ public readonly struct MappedResource
     /// <summary>
     /// The mapped resource.
     /// </summary>
-    public readonly MappableResource Resource;
+    public readonly GraphicsResource Resource;
 
     /// <summary>
     /// Map mode used.
@@ -43,7 +43,7 @@ public readonly struct MappedResource
     public readonly uint DepthPitch;
 
     internal MappedResource(
-        MappableResource resource,
+        GraphicsResource resource,
         MapMode mode,
         IntPtr data,
         uint sizeInBytes,
@@ -60,7 +60,7 @@ public readonly struct MappedResource
         DepthPitch = depthPitch;
     }
 
-    internal MappedResource(MappableResource resource, MapMode mode, IntPtr data, uint sizeInBytes)
+    internal MappedResource(GraphicsResource resource, MapMode mode, IntPtr data, uint sizeInBytes)
     {
         Resource = resource;
         Mode = mode;

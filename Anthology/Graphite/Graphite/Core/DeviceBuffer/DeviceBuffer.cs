@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// GPU-side data buffer. Fixed size, no resizing.
 /// </summary>
-public abstract partial class DeviceBuffer : GraphicsResource, BindableResource, MappableResource
+public abstract partial class DeviceBuffer : GraphicsResource
 {
     private protected BufferDescription _description;
 

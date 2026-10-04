@@ -9,7 +9,6 @@ namespace Prowl.Graphite.ShaderDef;
 public class PassState : IEquatable<PassState>
 {
 #pragma warning disable CS1591
-    public bool? EnableCulling;
     public FaceCullMode? CullMode;
     public FrontFace? FrontFace;
 
@@ -143,7 +142,6 @@ public class PassState : IEquatable<PassState>
     {
         return new()
         {
-            EnableCulling = EnableCulling ?? other.EnableCulling,
             CullMode = CullMode ?? other.CullMode,
             FrontFace = FrontFace ?? other.FrontFace,
             EnablePolygonOffsetFill = EnablePolygonOffsetFill ?? other.EnablePolygonOffsetFill,
@@ -188,8 +186,7 @@ public class PassState : IEquatable<PassState>
         if (ReferenceEquals(this, other))
             return true;
 
-        return EnableCulling == other.EnableCulling
-            && CullMode == other.CullMode
+        return CullMode == other.CullMode
             && FrontFace == other.FrontFace
             && EnablePolygonOffsetFill == other.EnablePolygonOffsetFill
             && PolygonOffsetFactor == other.PolygonOffsetFactor
@@ -230,7 +227,6 @@ public class PassState : IEquatable<PassState>
     public override int GetHashCode()
     {
         HashCode hash = new();
-        hash.Add(EnableCulling);
         hash.Add(CullMode);
         hash.Add(FrontFace);
         hash.Add(EnablePolygonOffsetFill);

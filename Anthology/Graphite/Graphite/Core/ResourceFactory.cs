@@ -182,24 +182,6 @@ public abstract partial class ResourceFactory
     protected abstract ComputeProgram CreateComputeProgramCore(ref ComputeDescription description);
 
     /// <summary>
-    /// Makes a command buffer.
-    /// </summary>
-    /// <returns>New command buffer.</returns>
-    public CommandBuffer CreateCommandBuffer() => CreateCommandBuffer(new CommandBufferDescription());
-    /// <summary>
-    /// Makes a command buffer.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New command buffer.</returns>
-    public CommandBuffer CreateCommandBuffer(CommandBufferDescription description) => CreateCommandBuffer(ref description);
-    /// <summary>
-    /// Makes a command buffer.
-    /// </summary>
-    /// <param name="description">Wanted props.</param>
-    /// <returns>New command buffer.</returns>
-    public abstract CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description);
-
-    /// <summary>
     /// Makes a fence.
     /// </summary>
     /// <param name="signaled">Start signaled or not.</param>

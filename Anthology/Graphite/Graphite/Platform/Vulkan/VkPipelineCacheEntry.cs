@@ -22,20 +22,15 @@ internal readonly struct VkPipelineCacheEntry
     /// <summary>Descriptor set slot count in the layout.</summary>
     public readonly uint ResourceSetCount;
 
-    /// <summary>Total dynamic offsets across all sets.</summary>
-    public readonly int DynamicOffsetsCount;
-
     public VkPipelineCacheEntry(
         Silk.NET.Vulkan.Pipeline pipeline,
         Silk.NET.Vulkan.RenderPass compatRenderPass,
         Silk.NET.Vulkan.PipelineLayout pipelineLayout,
-        uint resourceSetCount,
-        int dynamicOffsetsCount)
+        uint resourceSetCount)
     {
         Pipeline = pipeline;
         CompatRenderPass = compatRenderPass;
         PipelineLayout = pipelineLayout;
         ResourceSetCount = resourceSetCount;
-        DynamicOffsetsCount = dynamicOffsetsCount;
     }
 }

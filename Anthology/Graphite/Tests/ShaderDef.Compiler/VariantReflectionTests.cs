@@ -52,12 +52,12 @@ public class VariantReflectionTests
             ReflectionTestbed.AssertResourceLayouts(description,
                 new ResourceLayoutDescription(0,
                     new ResourceLayoutElementDescription("Material", ResourceKind.UniformBuffer, VF, 0,
-                        ResourceLayoutElementOptions.None, "Material",
+                        ResourceLayoutElementOptions.None,
                         [new UniformBlockField("tint", 0, 16, UniformScalarType.Float4)]),
                     new ResourceLayoutElementDescription("albedo", ResourceKind.TextureReadOnly, VF, 1,
-                        ResourceLayoutElementOptions.None, "albedo", []),
+                        ResourceLayoutElementOptions.None, []),
                     new ResourceLayoutElementDescription("samp", ResourceKind.Sampler, VF, 2,
-                        ResourceLayoutElementOptions.None, "samp", [])));
+                        ResourceLayoutElementOptions.None, [])));
         }
     }
 

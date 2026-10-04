@@ -55,9 +55,9 @@ public abstract partial class GraphicsDevice : IDisposable
     public abstract ResourceFactory ResourceFactory { get; }
 
     /// <summary>
-    /// Rents a command buffer for a graph pass to record into. Pooling backends hand out a recycled reset instance; default just makes a new one.
+    /// Rents a command buffer for a graph pass to record into.
     /// </summary>
-    internal virtual CommandBuffer RentGraphCommandBuffer() => ResourceFactory.CreateCommandBuffer();
+    internal abstract CommandBuffer RentGraphCommandBuffer();
 
     /// <summary>
     /// Main swapchain for this device, or null if none.
@@ -169,7 +169,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <param name="mode">Map mode to use.</param>
     /// <param name="subresource">Subresource index (mip then array layer). 0 for buffers.</param>
     /// <returns>The mapped data region.</returns>
-    public MappedResource Map(MappableResource resource, MapMode mode, uint subresource = 0)
+    public MappedResource Map(GraphicsResource resource, MapMode mode, uint subresource = 0)
     {
         Map_CheckResource(resource, mode, subresource);
 
@@ -188,7 +188,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <param name="mode">Map mode.</param>
     /// <param name="subresource">Subresource index.</param>
     /// <returns>The mapped data region.</returns>
-    protected abstract MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource);
+    protected abstract MappedResource MapCore(GraphicsResource resource, MapMode mode, uint subresource);
 
     /// <summary>
     /// Maps a buffer or texture as a struct type.
@@ -198,7 +198,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <param name="subresource">Subresource index (mip then array layer).</param>
     /// <typeparam name="T">Blittable type to view the data as.</typeparam>
     /// <returns>The mapped data region.</returns>
-    public MappedResourceView<T> Map<T>(MappableResource resource, MapMode mode, uint subresource = 0) where T : unmanaged
+    public MappedResourceView<T> Map<T>(GraphicsResource resource, MapMode mode, uint subresource = 0) where T : unmanaged
         => new(Map(resource, mode, subresource));
 
     /// <summary>
@@ -206,7 +206,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     /// <param name="resource">Resource to unmap.</param>
     /// <param name="subresource">Subresource index (mip then array layer). 0 for buffers.</param>
-    public void Unmap(MappableResource resource, uint subresource = 0)
+    public void Unmap(GraphicsResource resource, uint subresource = 0)
     {
         UnmapCore(resource, subresource);
         Profiler?.Record(BufferOpBin.Unmap, 0);
@@ -217,7 +217,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     /// <param name="resource">Resource to unmap.</param>
     /// <param name="subresource">Subresource index.</param>
-    protected abstract void UnmapCore(MappableResource resource, uint subresource);
+    protected abstract void UnmapCore(GraphicsResource resource, uint subresource);
 
     /// <summary>
     /// Whether this format/type/usage combo is supported, plus its device limits.

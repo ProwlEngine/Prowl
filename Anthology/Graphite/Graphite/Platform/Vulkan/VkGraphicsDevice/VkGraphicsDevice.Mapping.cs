@@ -6,7 +6,7 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice
 {
-    protected override MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource)
+    protected override MappedResource MapCore(GraphicsResource resource, MapMode mode, uint subresource)
     {
         VkMemoryBlock memoryBlock = default;
         IntPtr mappedPtr = IntPtr.Zero;
@@ -21,7 +21,7 @@ internal unsafe partial class VkGraphicsDevice
         }
         else
         {
-            VkTexture texture = Util.AssertSubtype<MappableResource, VkTexture>(resource);
+            VkTexture texture = Util.AssertSubtype<GraphicsResource, VkTexture>(resource);
             SubresourceLayout layout = texture.GetSubresourceLayout(subresource);
             memoryBlock = texture.Memory;
             sizeInBytes = (uint)layout.Size;
@@ -53,7 +53,7 @@ internal unsafe partial class VkGraphicsDevice
             depthPitch);
     }
 
-    protected override void UnmapCore(MappableResource resource, uint subresource)
+    protected override void UnmapCore(GraphicsResource resource, uint subresource)
     {
         VkMemoryBlock memoryBlock = default;
         if (resource is VkBuffer buffer)
@@ -62,7 +62,7 @@ internal unsafe partial class VkGraphicsDevice
         }
         else
         {
-            VkTexture tex = Util.AssertSubtype<MappableResource, VkTexture>(resource);
+            VkTexture tex = Util.AssertSubtype<GraphicsResource, VkTexture>(resource);
             memoryBlock = tex.Memory;
         }
 

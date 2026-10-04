@@ -23,7 +23,7 @@ public abstract partial class GraphicsDevice
         }
     }
 
-    private static void Map_CheckResource(MappableResource resource, MapMode mode, uint subresource)
+    private static void Map_CheckResource(GraphicsResource resource, MapMode mode, uint subresource)
     {
         if (!ValidationEnabled)
             return;

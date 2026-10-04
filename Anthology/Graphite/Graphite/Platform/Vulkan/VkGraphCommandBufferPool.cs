@@ -33,8 +33,7 @@ internal sealed class VkGraphCommandBufferPool
                 return _free.Pop();
         }
 
-        CommandBufferDescription desc = new();
-        VkCommandBuffer cb = new(_gd, ref desc);
+        VkCommandBuffer cb = new(_gd);
         lock (_lock)
         {
             _all.Add(cb);

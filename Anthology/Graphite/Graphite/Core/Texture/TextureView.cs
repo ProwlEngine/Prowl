@@ -3,7 +3,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Shader-bindable sampled view into a texture.
 /// </summary>
-public abstract class TextureView : GraphicsResource, BindableResource
+public abstract class TextureView : GraphicsResource
 {
     /// <summary>
     /// Texture being sampled.

@@ -26,7 +26,6 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
     internal readonly PipelineLayout PipelineLayout;
     internal readonly VkPipelineHandle DevicePipeline;
     internal readonly uint ResourceSetCount;
-    internal readonly int TotalDynamicUboCount;
     internal readonly ResourceRefCount RefCount;
 
     /// <summary>
@@ -51,7 +50,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
             _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out _module).CheckResult();
         }
 
-        (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, TotalDynamicUboCount, _emptyDescriptorSetLayout)
+        (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
             = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray);
 
         ComputePipelineCreateInfo pipelineCI = new() { SType = StructureType.ComputePipelineCreateInfo };

@@ -3,11 +3,8 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Image data holder.
 /// </summary>
-public abstract class Texture : GraphicsResource, MappableResource, BindableResource
+public abstract class Texture : GraphicsResource
 {
-    private readonly object _fullTextureViewLock = new();
-    private TextureView _fullTextureView;
-
     private protected TextureDescription _description;
 
     private protected Texture(in TextureDescription description)
@@ -61,22 +58,5 @@ public abstract class Texture : GraphicsResource, MappableResource, BindableReso
     public uint CalculateSubresource(uint mipLevel, uint arrayLayer)
     {
         return arrayLayer * MipLevels + mipLevel;
-    }
-
-    internal TextureView GetFullTextureView(GraphicsDevice gd)
-    {
-        lock (_fullTextureViewLock)
-        {
-            _fullTextureView ??= gd.ResourceFactory.CreateTextureView(this);
-            return _fullTextureView;
-        }
-    }
-
-    private protected override void OnDisposing()
-    {
-        lock (_fullTextureViewLock)
-        {
-            _fullTextureView?.Dispose();
-        }
     }
 }

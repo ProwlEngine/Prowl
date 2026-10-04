@@ -20,10 +20,6 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     /// </summary>
     public bool DepthClipEnabled;
     /// <summary>
-    /// Scissor test on/off.
-    /// </summary>
-    public bool ScissorTestEnabled;
-    /// <summary>
     /// Depth bias on/off.
     /// </summary>
     public bool DepthBiasEnabled;
@@ -46,7 +42,6 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     /// <param name="cullMode">Face to cull.</param>
     /// <param name="frontFace">Front face winding.</param>
     /// <param name="depthClipEnabled">Depth clip on/off.</param>
-    /// <param name="scissorTestEnabled">Scissor test on/off.</param>
     /// <param name="depthBiasEnabled">Depth bias on/off.</param>
     /// <param name="depthBiasConstantFactor">Constant depth bias.</param>
     /// <param name="depthBiasSlopeFactor">Slope scaled depth bias.</param>
@@ -55,7 +50,6 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
         FaceCullMode cullMode,
         FrontFace frontFace,
         bool depthClipEnabled,
-        bool scissorTestEnabled,
         bool depthBiasEnabled = false,
         float depthBiasConstantFactor = 0f,
         float depthBiasSlopeFactor = 0f,
@@ -64,7 +58,6 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
         CullMode = cullMode;
         FrontFace = frontFace;
         DepthClipEnabled = depthClipEnabled;
-        ScissorTestEnabled = scissorTestEnabled;
         DepthBiasEnabled = depthBiasEnabled;
         DepthBiasConstantFactor = depthBiasConstantFactor;
         DepthBiasSlopeFactor = depthBiasSlopeFactor;
@@ -72,14 +65,13 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     }
 
     /// <summary>
-    /// Default: backface culling, clockwise front, depth clip on, scissor off.
+    /// Default: backface culling, clockwise front, depth clip on.
     /// </summary>
     public static readonly RasterizerStateDescription Default = new()
     {
         CullMode = FaceCullMode.Back,
         FrontFace = FrontFace.Clockwise,
         DepthClipEnabled = true,
-        ScissorTestEnabled = false,
         DepthBiasEnabled = false,
         DepthBiasConstantFactor = 0f,
         DepthBiasSlopeFactor = 0f,
@@ -87,14 +79,13 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     };
 
     /// <summary>
-    /// No culling, clockwise front, depth clip on, scissor off.
+    /// No culling, clockwise front, depth clip on.
     /// </summary>
     public static readonly RasterizerStateDescription CullNone = new()
     {
         CullMode = FaceCullMode.None,
         FrontFace = FrontFace.Clockwise,
         DepthClipEnabled = true,
-        ScissorTestEnabled = false,
         DepthBiasEnabled = false,
         DepthBiasConstantFactor = 0f,
         DepthBiasSlopeFactor = 0f,
@@ -111,7 +102,6 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
         return CullMode == other.CullMode
             && FrontFace == other.FrontFace
             && DepthClipEnabled.Equals(other.DepthClipEnabled)
-            && ScissorTestEnabled.Equals(other.ScissorTestEnabled)
             && DepthBiasEnabled.Equals(other.DepthBiasEnabled)
             && DepthBiasConstantFactor.Equals(other.DepthBiasConstantFactor)
             && DepthBiasSlopeFactor.Equals(other.DepthBiasSlopeFactor)
@@ -128,7 +118,6 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
             (int)CullMode,
             (int)FrontFace,
             DepthClipEnabled.GetHashCode(),
-            ScissorTestEnabled.GetHashCode(),
             DepthBiasEnabled.GetHashCode(),
             DepthBiasConstantFactor.GetHashCode(),
             DepthBiasSlopeFactor.GetHashCode(),

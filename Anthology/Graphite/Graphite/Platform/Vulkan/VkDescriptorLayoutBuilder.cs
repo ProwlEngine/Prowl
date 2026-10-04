@@ -17,7 +17,6 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         DescriptorResourceCounts[] PerSetCounts,
         PipelineLayout PipelineLayout,
         uint ResourceSetCount,
-        int TotalDynamicUboCount,
         DescriptorSetLayout EmptyDescriptorSetLayout)
         Build(VkGraphicsDevice gd, ResourceLayoutDescription[] descs)
     {
@@ -41,7 +40,6 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         }
 
         DescriptorSetLayout emptyDsl = default;
-        int dynamicTotal = 0;
         for (int i = 0; i < setCount; i++)
         {
             if (dsls[i].Handle == 0)
@@ -50,11 +48,10 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
                     emptyDsl = CreateEmptyDescriptorSetLayout(gd);
                 dsls[i] = emptyDsl;
             }
-            dynamicTotal += (int)counts[i].UniformBufferDynamic;
         }
 
         PipelineLayout pipelineLayout = BuildPipelineLayout(gd, dsls, setCount);
-        return (dsls, counts, pipelineLayout, setCount, dynamicTotal, emptyDsl);
+        return (dsls, counts, pipelineLayout, setCount, emptyDsl);
     }
 
     /// <summary>

@@ -36,7 +36,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     public ResourceRefCount RefCount { get; }
 
-    public VkCommandBuffer(VkGraphicsDevice gd, ref CommandBufferDescription description)
+    public VkCommandBuffer(VkGraphicsDevice gd)
         : base(gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
     {
         _gd = gd;

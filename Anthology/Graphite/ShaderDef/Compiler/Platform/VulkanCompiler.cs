@@ -140,7 +140,6 @@ public class VulkanCompiler : CompilerModule
             stages,
             binding,
             options,
-            PropertyID.ToString(name) ?? string.Empty,
             fields));
     }
 }

@@ -375,12 +375,4 @@ internal unsafe partial class VkGraphicsDevice
             }
         }
     }
-
-    private void CreateGraphicsCommandPool()
-    {
-        CommandPoolCreateInfo commandPoolCI = new(sType: StructureType.CommandPoolCreateInfo);
-        commandPoolCI.Flags = CommandPoolCreateFlags.ResetCommandBufferBit;
-        commandPoolCI.QueueFamilyIndex = GraphicsQueueIndex;
-        Vk.CreateCommandPool(Device, in commandPoolCI, null, out _graphicsCommandPool).CheckResult();
-    }
 }

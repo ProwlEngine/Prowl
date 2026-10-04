@@ -65,18 +65,11 @@ public sealed class RenderGraph<TView> : IDisposable
     /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Throws if an input has no producer, or on a dependency cycle.
     /// </summary>
     public static RenderGraph<TView> Build(
-        IReadOnlyList<IPass<TView>> passes,
-        IReadOnlyList<GraphResource>? centralResources = null)
+        IReadOnlyList<IPass<TView>> passes)
     {
         int count = passes.Count;
         var nodes = new PassNode[count];
         var resources = new Dictionary<RenderResourceID, GraphResource>();
-
-        if (centralResources != null)
-        {
-            foreach (GraphResource resource in centralResources)
-                resources.TryAdd(resource.Id, resource);
-        }
 
         var builder = new RenderContextBuilder();
         for (int i = 0; i < count; i++)

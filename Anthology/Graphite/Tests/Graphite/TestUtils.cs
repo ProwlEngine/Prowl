@@ -138,9 +138,6 @@ internal sealed class TrackingResourceFactory : ResourceFactory
         return resource;
     }
 
-    public override CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description)
-        => Track(_inner.CreateCommandBuffer(ref description));
-
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
         => Track(_inner.CreateFramebuffer(ref description));
 

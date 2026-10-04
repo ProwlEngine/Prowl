@@ -11,7 +11,6 @@ public class RenderPipeline<TView> : IDisposable
     where TView : IRenderView
 {
     private readonly List<IPass<TView>> _passes = new();
-    private readonly List<GraphResource> _centralResources = new();
     private readonly IPass<TView>[] _composedPasses;
     private RenderGraph<TView>? _graph;
     private bool _initialized;
@@ -49,29 +48,13 @@ public class RenderPipeline<TView> : IDisposable
     protected void AddPass(IPass<TView> pass)
         => _passes.Add(pass ?? throw new ArgumentNullException(nameof(pass)));
 
-    /// <summary>
-    /// Declares a texture resource centrally so passes can reference it by ID with no owner. Call from InitializePasses.
-    /// </summary>
-    /// <param name="id">ID passes reference.</param>
-    /// <param name="desc">Allocation description.</param>
-    protected void DeclareTexture(RenderResourceID id, GraphTextureDesc desc)
-        => _centralResources.Add(new GraphTextureResource(id, desc));
-
-    /// <summary>
-    /// Declares a buffer resource centrally so passes can reference it by ID with no owner. Call from InitializePasses.
-    /// </summary>
-    /// <param name="id">ID passes reference.</param>
-    /// <param name="desc">Allocation description.</param>
-    protected void DeclareBuffer(RenderResourceID id, GraphBufferDesc desc)
-        => _centralResources.Add(new GraphBufferResource(id, desc));
-
     /// <summary>The solved graph, built on first use from the added passes.</summary>
     public RenderGraph<TView> Graph
     {
         get
         {
             EnsureInitialized();
-            return _graph ??= RenderGraph<TView>.Build(_passes, _centralResources);
+            return _graph ??= RenderGraph<TView>.Build(_passes);
         }
     }
 
@@ -94,7 +77,6 @@ public class RenderPipeline<TView> : IDisposable
         _graph?.Dispose();
         _graph = null;
         _passes.Clear();
-        _centralResources.Clear();
         _initialized = false;
     }
 

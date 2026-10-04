@@ -29,9 +29,6 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
 
     internal readonly PipelineLayout PipelineLayout;
 
-    /// <summary>Total UNIFORM_BUFFER_DYNAMIC bindings across all sets.</summary>
-    internal readonly int TotalDynamicUboCount;
-
     /// <summary>Set slot count (max set index + 1).</summary>
     internal readonly uint ResourceSetCount;
 
@@ -103,7 +100,7 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
             }
         }
 
-        (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, TotalDynamicUboCount, _emptyDescriptorSetLayout)
+        (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
             = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray);
 
         DescriptorCache = new VkDescriptorSetCache(_gd);

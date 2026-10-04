@@ -74,9 +74,6 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             _mainSwapchain = new VkSwapchain(this, ref desc, surface);
         }
 
-        DescriptorPoolManager = new VkDescriptorPoolManager(this);
-        CreateGraphicsCommandPool();
-
         PipelineCacheCreateInfo pcCI = new()
         {
             SType = StructureType.PipelineCacheCreateInfo,
@@ -179,9 +176,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         _graphCommandBufferPool.Dispose();
         _recordCommandBufferPool.Dispose();
 
-        DescriptorPoolManager.DestroyAll();
         _defaultTextureViews.Dispose();
-        Vk.DestroyCommandPool(Device, _graphicsCommandPool, null);
 
         DisposeStagingResources();
 

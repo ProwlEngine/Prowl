@@ -281,7 +281,6 @@ internal static unsafe class VkPipelineCacheFactory
             pipeline,
             renderPass,
             pipelineLayout,
-            program.ResourceSetCount,
-            program.TotalDynamicUboCount);
+            program.ResourceSetCount);
     }
 }

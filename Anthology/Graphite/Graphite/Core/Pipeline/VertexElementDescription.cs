@@ -23,11 +23,6 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     public uint Offset;
 
     /// <summary>
-    /// Raw HLSL semantic name without index (e.g. UV); index from location, defaults to name.
-    /// </summary>
-    public string HlslSemanticName;
-
-    /// <summary>
     /// Makes a per-vertex element description.
     /// </summary>
     public VertexElementDescription(string name, VertexElementFormat format)
@@ -35,7 +30,6 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
         Name = name;
         Format = format;
         Offset = 0;
-        HlslSemanticName = name;
     }
 
     /// <summary>
@@ -46,7 +40,6 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
         Name = name;
         Format = format;
         Offset = offset;
-        HlslSemanticName = name;
     }
 
     /// <summary>
@@ -56,8 +49,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     {
         return Name == other.Name
             && Format == other.Format
-            && Offset == other.Offset
-            && string.Equals(HlslSemanticName, other.HlslSemanticName, StringComparison.Ordinal);
+            && Offset == other.Offset;
     }
 
     /// <summary>
@@ -68,7 +60,6 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
         return HashCode.Combine(
             Name,
             (int)Format,
-            (int)Offset,
-            HlslSemanticName != null ? StringComparer.Ordinal.GetHashCode(HlslSemanticName) : 0);
+            (int)Offset);
     }
 }
