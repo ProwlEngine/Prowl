@@ -2000,7 +2000,10 @@ public class Mesh : Asset, ISerializable
 /// treat as seams, so both sides of a split stay joined. Each face records its submesh.
 /// <para/>
 /// A triangle that reuses corners another triangle already took, like the back of a double sided card,
-/// goes onto its own copy of those vertices so each side stays a clean surface.
+/// goes onto its own copy of those vertices so each side stays a clean surface. A triangle whose corners
+/// share a position gets vertices of its own and is kept as it is.
+/// <para/>
+/// Skinning comes back in a canonical slot order: sorted by bone, unused slots on bone 0.
 /// </summary>
 public static class MeshGeometry
 {
@@ -2096,15 +2099,40 @@ public static class MeshGeometry
             }
         }
 
-        // Layer 0 holds every point. A triangle whose three points another triangle already used goes one
-        // layer up, onto copies of those points, so a back face never shares edges with its front face.
+        // Layer 0 holds every point. A triangle goes on the lowest layer where neither its three points nor
+        // any of its edges in the same direction are taken yet, onto copies of those points. A back face runs
+        // its edges against the front's, so it always lands a layer up whatever order the triangles come in,
+        // and each side stays a clean surface.
         var layers = new Dictionary<(int Point, int Layer), GeometryData.Vertex>();
-        var usedTriangles = new Dictionary<(int, int, int), int>();
+        var layerTriangles = new List<HashSet<(int, int, int)>>();
+        var layerEdges = new List<HashSet<long>>();
         GeometryData.Vertex VertexAt(int point, int layer)
         {
             if (!layers.TryGetValue((point, layer), out var vertex))
                 layers[(point, layer)] = vertex = geometry.AddVertex(basePoints[point]);
             return vertex;
+        }
+
+        int LayerFor(int a, int b, int c)
+        {
+            var key = Sorted(a, b, c);
+            long ab = Directed(a, b), bc = Directed(b, c), ca = Directed(c, a);
+            for (int layer = 0; ; layer++)
+            {
+                if (layer == layerTriangles.Count)
+                {
+                    layerTriangles.Add(new HashSet<(int, int, int)>());
+                    layerEdges.Add(new HashSet<long>());
+                }
+                var edges = layerEdges[layer];
+                if (layerTriangles[layer].Contains(key) || edges.Contains(ab) || edges.Contains(bc) || edges.Contains(ca)) continue;
+
+                layerTriangles[layer].Add(key);
+                edges.Add(ab);
+                edges.Add(bc);
+                edges.Add(ca);
+                return layer;
+            }
         }
 
         var corners = new GeometryData.Vertex[3];
@@ -2114,15 +2142,21 @@ public static class MeshGeometry
             for (int i = sub.IndexStart; i + 2 < sub.IndexStart + sub.IndexCount; i += 3)
             {
                 int a = weld[indices[i]], b = weld[indices[i + 1]], c = weld[indices[i + 2]];
-                if (a == b || b == c || a == c) continue;
-
-                var key = Sorted(a, b, c);
-                usedTriangles.TryGetValue(key, out int layer);
-                usedTriangles[key] = layer + 1;
-
-                corners[0] = VertexAt(a, layer);
-                corners[1] = VertexAt(b, layer);
-                corners[2] = VertexAt(c, layer);
+                if (a == b || b == c || a == c)
+                {
+                    // Corners sharing a position, like a card the shader spreads out from its pivot, get
+                    // vertices of their own so the triangle survives untouched
+                    corners[0] = geometry.AddVertex(basePoints[a]);
+                    corners[1] = geometry.AddVertex(basePoints[b]);
+                    corners[2] = geometry.AddVertex(basePoints[c]);
+                }
+                else
+                {
+                    int layer = LayerFor(a, b, c);
+                    corners[0] = VertexAt(a, layer);
+                    corners[1] = VertexAt(b, layer);
+                    corners[2] = VertexAt(c, layer);
+                }
                 var face = geometry.AddFace(corners);
                 if (face == null) continue;
                 face.Attributes[SubMesh] = new GeometryData.IntAttributeValue(s);
@@ -2138,13 +2172,7 @@ public static class MeshGeometry
                     if (colors.Length > 0) Set(attributes, VertexColor, colors[source]);
                     if (colors32.Length > 0) Set(attributes, VertexColor, colors32[source]);
                     if (hasSkin)
-                    {
-                        var ids = ((GeometryData.IntAttributeValue)attributes[BoneIndices]).Data;
-                        Float4 boneIndex = boneIndices[source];
-                        ids[0] = (int)MathF.Round(boneIndex.X); ids[1] = (int)MathF.Round(boneIndex.Y);
-                        ids[2] = (int)MathF.Round(boneIndex.Z); ids[3] = (int)MathF.Round(boneIndex.W);
-                        Set(attributes, BoneWeights, boneWeights[source]);
-                    }
+                        SetSkin(((GeometryData.IntAttributeValue)attributes[BoneIndices]).Data, Floats(attributes, BoneWeights), boneIndices[source], boneWeights[source]);
                     foreach (var (frame, names, hasNormals, hasTangents) in frames)
                     {
                         Set(attributes, names.Position, frame.DeltaVertices.Length == count ? frame.DeltaVertices[source] : Float3.Zero);
@@ -2279,6 +2307,16 @@ public static class MeshGeometry
         }
 
         var mesh = new Mesh { Name = source != null ? source.Name : "Mesh" };
+        if (source != null && source.BindPoses is { } bindPoses) mesh.BindPoses = (Float4x4[])bindPoses.Clone();
+        if (source != null && source.BoneNames is { } boneNames) mesh.BoneNames = (string[])boneNames.Clone();
+
+        // Nothing to draw: vertex streams cannot be assigned without vertices, so only the submesh slots stay
+        if (positions.Count == 0)
+        {
+            mesh.SetSubMeshCount(subMeshCount);
+            return mesh;
+        }
+
         mesh.Vertices = positions.ToArray();
         if (hasNormals) mesh.Normals = normals.ToArray();
         if (hasTangents) mesh.Tangents = tangents.ToArray();
@@ -2303,9 +2341,6 @@ public static class MeshGeometry
             mesh.BoneIndices = boneIndices.ToArray();
             mesh.BoneWeights = boneWeights.ToArray();
         }
-        if (source != null && source.BindPoses is { } bindPoses) mesh.BindPoses = (Float4x4[])bindPoses.Clone();
-        if (source != null && source.BoneNames is { } boneNames) mesh.BoneNames = (string[])boneNames.Clone();
-
         if (frameCounts.Count > 0)
         {
             var shapes = new BlendShape[frameCounts.Count];
@@ -2354,6 +2389,29 @@ public static class MeshGeometry
             Debug.LogWarning($"Mesh '{mesh.Name}' has {stream.Length} {what} for {count} vertices, so they were left out of its geometry.");
         return [];
     }
+
+    /// <summary>
+    /// Writes skinning in one canonical form: indices rounded, unused slots pointing at bone 0, slots sorted
+    /// by bone. It deforms the same, and the same bones always compare equal however they were ordered.
+    /// </summary>
+    private static void SetSkin(int[] ids, float[] weights, Float4 index, Float4 weight)
+    {
+        Span<(int Bone, float Weight)> slots =
+        [
+            (weight.X == 0 ? 0 : (int)MathF.Round(index.X), weight.X),
+            (weight.Y == 0 ? 0 : (int)MathF.Round(index.Y), weight.Y),
+            (weight.Z == 0 ? 0 : (int)MathF.Round(index.Z), weight.Z),
+            (weight.W == 0 ? 0 : (int)MathF.Round(index.W), weight.W),
+        ];
+        slots.Sort((x, y) => x.Bone != y.Bone ? x.Bone.CompareTo(y.Bone) : x.Weight.CompareTo(y.Weight));
+        for (int i = 0; i < 4; i++)
+        {
+            ids[i] = slots[i].Bone;
+            weights[i] = slots[i].Weight;
+        }
+    }
+
+    private static long Directed(int from, int to) => ((long)from << 32) | (uint)to;
 
     private static (int, int, int) Sorted(int a, int b, int c)
     {

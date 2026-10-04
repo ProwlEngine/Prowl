@@ -34,11 +34,14 @@ public sealed class MeshLODOptions
     /// <summary>How strongly vertex colors are protected. Wind and masks are often stored there.</summary>
     public float ColorWeight = 0.1f;
 
-    /// <summary>
-    /// How strongly skinning is protected. Weights cost like any attribute, and merging onto a corner driven
-    /// by different bones costs this much outright.
-    /// </summary>
+    /// <summary>How strongly skin weights are protected. They cost like any other attribute.</summary>
     public float SkinWeight = 0.5f;
+
+    /// <summary>
+    /// Cost of moving onto a corner driven by a different set of bones, in squared fractions of the mesh's
+    /// size. The default is about the same as moving the surface two percent of the way across the mesh.
+    /// </summary>
+    public float BoneSetPenalty = 0.0005f;
 
     /// <summary>How strongly blend shapes are protected, with offsets measured relative to the mesh's size.</summary>
     public float BlendShapeWeight = 0.5f;
@@ -110,17 +113,28 @@ public static class MeshLODGenerator
 
     private static SimplifyOptions CreateSimplifyOptions(GeometryData geometry, MeshLODOptions options)
     {
+        // Blend shape normals and tangents follow their positions, so they are not seams of their own. Leaving
+        // them out also keeps the per corner comparisons cheap on meshes with dozens of shapes.
+        var seams = new HashSet<string>();
+        foreach (var def in geometry.LoopAttributes)
+        {
+            bool shapeShading = def.Name.StartsWith(MeshGeometry.BlendShapePrefix, StringComparison.Ordinal)
+                && (def.Name.EndsWith("/normal", StringComparison.Ordinal) || def.Name.EndsWith("/tangent", StringComparison.Ordinal));
+            if (!shapeShading) seams.Add(def.Name);
+        }
+
         var simplify = new SimplifyOptions
         {
             LockBorders = options.LockBorders,
             MaxError = options.MaxError,
+            SeamAttributes = seams,
         };
 
         var weights = simplify.AttributeWeights;
         weights[MeshGeometry.Normal] = options.NormalWeight;
         weights[MeshGeometry.UV] = options.UVWeight;
         weights[MeshGeometry.VertexColor] = options.ColorWeight;
-        weights[MeshGeometry.BoneIndices] = options.SkinWeight;
+        weights[MeshGeometry.BoneIndices] = options.BoneSetPenalty;
         weights[MeshGeometry.BoneWeights] = options.SkinWeight;
 
         // The simplifier measures positions in units of the geometry's extent, so offsets are brought to the
