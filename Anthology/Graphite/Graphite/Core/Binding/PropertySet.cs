@@ -140,12 +140,29 @@ public sealed partial class PropertySet
     }
 
 
-    internal void MergeFrom(PropertySet other, System.Collections.Generic.List<PropertyID> changedKeys)
+    internal void MergeFrom(PropertySet other, List<PropertyID> changedKeys, HashSet<PropertyID> defaultKeys)
     {
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
         {
             _entries[kv.Key] = kv.Value;
             changedKeys.Add(kv.Key);
+            defaultKeys.Remove(kv.Key);
+        }
+
+        unchecked { _version++; }
+    }
+
+
+    internal void MergeDefaults(PropertySet defaults, List<PropertyID> changedKeys, HashSet<PropertyID> defaultKeys)
+    {
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in defaults.Entries)
+        {
+            if (_entries.ContainsKey(kv.Key) && !defaultKeys.Contains(kv.Key))
+                continue;
+
+            _entries[kv.Key] = kv.Value;
+            changedKeys.Add(kv.Key);
+            defaultKeys.Add(kv.Key);
         }
 
         unchecked { _version++; }

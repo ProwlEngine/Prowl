@@ -38,5 +38,6 @@
     <ItemGroup>
         <InternalsVisibleTo Include="Prowl.Graphite.Tests" />
         <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef" />
+        <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Tests" />
     </ItemGroup>
 </Project>

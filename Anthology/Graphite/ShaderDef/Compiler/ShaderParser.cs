@@ -593,7 +593,9 @@ public static class ShaderParser
 
             MatrixValue = value is Float4x4 m ? m : Float4x4.Zero,
 
-            TextureValue = value as string ?? ""
+            TextureValue = value as string ?? "",
+
+            HasDefault = value != null
         };
     }
 }

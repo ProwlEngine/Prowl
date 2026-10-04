@@ -27,6 +27,10 @@ public abstract partial class CommandBuffer : CommandBufferBase
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
+    private PropertySet? _lastAppliedDefaults;
+    private uint _lastAppliedDefaultsVersion;
+    private readonly System.Collections.Generic.HashSet<PropertyID> _defaultPropertyKeys = new();
+
     private readonly System.Collections.Generic.List<PropertyID> _changedPropertyKeys = new();
     private bool _allPropertiesChanged = true;
 
@@ -55,6 +59,9 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
+        _lastAppliedDefaults = null;
+        _lastAppliedDefaultsVersion = 0;
+        _defaultPropertyKeys.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
     }

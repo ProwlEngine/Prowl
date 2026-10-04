@@ -265,6 +265,19 @@ public sealed class ShaderPass
     }
 
 
+    internal ShaderDescription GetDescription(int key)
+    {
+        EnsureCreated();
+        if ((uint)key >= (uint)_combos.Length)
+            throw new ArgumentOutOfRangeException(nameof(key));
+
+        if (!Resolve(key).TryGetDescription(_backend, out ShaderDescription description))
+            throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
+
+        return description;
+    }
+
+
     internal GraphicsProgram ResolveProgram(int key, BlendStateDescription baseBlend, DepthStencilStateDescription baseDepth, RasterizerStateDescription baseRaster)
         => ResolveProgram(key, State, baseBlend, baseDepth, baseRaster);
 

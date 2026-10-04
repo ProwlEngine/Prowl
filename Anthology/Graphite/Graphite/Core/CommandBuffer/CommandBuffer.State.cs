@@ -68,10 +68,27 @@ public abstract partial class CommandBuffer
         if (ReferenceEquals(properties, _lastAppliedSource) && properties.Version == _lastAppliedSourceVersion)
             return;
 
-        _activeProperties.MergeFrom(properties, _changedPropertyKeys);
+        _activeProperties.MergeFrom(properties, _changedPropertyKeys, _defaultPropertyKeys);
         _lastAppliedSource = properties;
         _lastAppliedSourceVersion = properties.Version;
         SetPropertiesCore(properties);
+    }
+
+    /// <summary>
+    /// Merges defaults into the bind table without replacing any key already set through SetProperties.
+    /// <para>Later SetProperties calls replace defaults, and a new defaults set replaces earlier defaults only.</para>
+    /// </summary>
+    /// <param name="defaults">Default values to merge in.</param>
+    public void SetDefaultProperties(PropertySet defaults)
+    {
+        ValidationHelpers.RequireNotNull(Device, defaults, nameof(defaults), nameof(SetDefaultProperties));
+
+        if (ReferenceEquals(defaults, _lastAppliedDefaults) && defaults.Version == _lastAppliedDefaultsVersion)
+            return;
+
+        _activeProperties.MergeDefaults(defaults, _changedPropertyKeys, _defaultPropertyKeys);
+        _lastAppliedDefaults = defaults;
+        _lastAppliedDefaultsVersion = defaults.Version;
     }
 
     /// <summary>Backend work for a property merge. Base table already updated.</summary>
@@ -86,6 +103,9 @@ public abstract partial class CommandBuffer
         _activeProperties.Clear();
         _lastAppliedSource = null;
         _lastAppliedSourceVersion = 0;
+        _lastAppliedDefaults = null;
+        _lastAppliedDefaultsVersion = 0;
+        _defaultPropertyKeys.Clear();
         _changedPropertyKeys.Clear();
         _allPropertiesChanged = true;
         ClearPropertiesCore();
