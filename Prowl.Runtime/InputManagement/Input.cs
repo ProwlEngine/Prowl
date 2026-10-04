@@ -295,6 +295,46 @@ public static class Input
     /// </summary>
     public static bool AnyKey => Current.IsAnyKeyDown;
 
+    private static readonly KeyCode[] s_anyKeys = Enum.GetValues<KeyCode>().Distinct().Where(k => k != KeyCode.Unknown).ToArray();
+    private static readonly MouseButton[] s_anyMouseButtons = Enum.GetValues<MouseButton>().Where(b => b != MouseButton.Unknown).ToArray();
+    private static readonly GamepadButton[] s_anyGamepadButtons = Enum.GetValues<GamepadButton>();
+
+    /// <summary>
+    /// True only on the frame a keyboard key goes down. Unlike <see cref="AnyKey"/> it does not stay true
+    /// while the key is held, so a key held from before does not count.
+    /// </summary>
+    public static bool AnyKeyDown
+    {
+        get
+        {
+            var handler = Current;
+            foreach (var key in s_anyKeys)
+                if (handler.GetKeyDown(key)) return true;
+            return false;
+        }
+    }
+
+    /// <summary>True only on the frame a keyboard key, mouse button, or button on any connected gamepad goes down.</summary>
+    public static bool AnyButtonDown
+    {
+        get
+        {
+            if (AnyKeyDown) return true;
+
+            var handler = Current;
+            foreach (var button in s_anyMouseButtons)
+                if (handler.GetMouseButtonDown((int)button)) return true;
+
+            for (int pad = 0; pad < handler.GetGamepadSlotCount(); pad++)
+            {
+                if (!handler.IsGamepadConnected(pad)) continue;
+                foreach (var button in s_anyGamepadButtons)
+                    if (handler.GetGamepadButtonDown(pad, button)) return true;
+            }
+            return false;
+        }
+    }
+
     /// <summary>
     /// Checks if a specific key combination is pressed (e.g., Ctrl+S).
     /// </summary>
