@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Threading;
 
 namespace Prowl.Graphite;
 
@@ -19,21 +18,19 @@ public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormatt
     /// </summary>
     public bool IsValid => Value != 0;
 
-    private static int _counter;
-    private static readonly Interner<string, RenderResourceID> s_interner =
-        new(static _ => new RenderResourceID(Interlocked.Increment(ref _counter)));
+    private static readonly Interner s_interner = new();
 
     /// <summary>
     /// Gets or mints the ID for a name.
     /// </summary>
     public static RenderResourceID Intern(string name)
-        => s_interner.Intern(name);
+        => new RenderResourceID(s_interner.Intern(name));
 
     /// <summary>
     /// Slow reverse lookup. Null if never interned.
     /// </summary>
     public static string? ToString(RenderResourceID id)
-        => s_interner.TryGetKey(id, out string? key) ? key : null;
+        => s_interner.TryGetKey(id.Value, out string? key) ? key : null;
 
     /// <summary>
     /// String-to-ID conversion via Intern.

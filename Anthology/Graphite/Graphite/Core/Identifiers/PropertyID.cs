@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Threading;
 
 namespace Prowl.Graphite;
 
@@ -19,20 +18,18 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
     /// </summary>
     public bool IsValid => Value != 0;
 
-    private static int _counter;
-    private static readonly Interner<string, PropertyID> s_interner =
-        new(static _ => new PropertyID(Interlocked.Increment(ref _counter)));
+    private static readonly Interner s_interner = new();
 
     /// <summary>
     /// Gets or mints the ID for name.
     /// </summary>
-    public static PropertyID Intern(string name) => s_interner.Intern(name);
+    public static PropertyID Intern(string name) => new PropertyID(s_interner.Intern(name));
 
     /// <summary>
     /// Reverse lookup; null if not interned.
     /// </summary>
     public static string? ToString(PropertyID id)
-        => s_interner.TryGetKey(id, out string? key) ? key : null;
+        => s_interner.TryGetKey(id.Value, out string? key) ? key : null;
 
     /// <summary>
     /// String-to-ID conversion via Intern.

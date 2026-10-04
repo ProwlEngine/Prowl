@@ -9,7 +9,7 @@ namespace Prowl.Graphite.ShaderDef;
 /// </summary>
 public readonly struct Keyword : IEquatable<Keyword>
 {
-    private static Interner<string, int> s_keywordInterner = new((x) => x + 1);
+    private static readonly Interner s_keywordInterner = new();
 
     /// <summary>
     /// String key.
