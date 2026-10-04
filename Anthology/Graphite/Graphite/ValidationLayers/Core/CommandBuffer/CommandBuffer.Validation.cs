@@ -87,21 +87,6 @@ public abstract partial class CommandBuffer
             throw new RenderException($"Cannot use {name}. There is no Framebuffer bound.");
     }
 
-    private void DrawIndexed_CheckBaseVertexInstance(int vertexOffset, uint instanceStart)
-    {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
-        if (!_features.DrawBaseVertex && vertexOffset != 0)
-        {
-            throw new RenderException("Drawing with a non-zero base vertex is not supported on this device.");
-        }
-        if (!_features.DrawBaseInstance && instanceStart != 0)
-        {
-            throw new RenderException("Drawing with a non-zero base instance is not supported on this device.");
-        }
-    }
-
     private static void DrawIndirect_CheckOffset(uint offset)
     {
         if (!GraphicsDevice.ValidationEnabled)
@@ -110,17 +95,6 @@ public abstract partial class CommandBuffer
         if ((offset % 4) != 0)
         {
             throw new RenderException($"{nameof(offset)} must be a multiple of 4.");
-        }
-    }
-
-    private void DrawIndirect_CheckSupport()
-    {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
-        if (!_features.DrawIndirect)
-        {
-            throw new RenderException($"Indirect drawing is not supported by this device.");
         }
     }
 

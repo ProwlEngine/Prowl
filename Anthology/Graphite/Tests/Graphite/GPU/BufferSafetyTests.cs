@@ -101,7 +101,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void WriteToInFlightBuffer_OrphansTheNativeResource()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -124,7 +123,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void OrphanedBuffer_KeepsItsIdentityAndDescription()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -146,7 +144,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void OrphanedBuffer_GpuStillReadsTheOldContents()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -166,7 +163,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void OrphanedBuffer_LaterFramesSeeTheNewContents()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -189,7 +185,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void OrphanedBuffer_RetiredResourceIsFreedOnceTheRingCycles()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -214,7 +209,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void WriteToBufferInAnOpenFrame_Orphans()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -250,7 +244,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void WriteToBufferFromACompletedFrame_DoesNotOrphan()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -285,7 +278,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void TransientWritesBuffer_OptsOutOfOrphaning()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer(transientWrites: true);
         DeviceBuffer output = CreateOutputBuffer();
@@ -308,7 +300,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void MapWrite_OnInFlightBuffer_AlsoOrphans()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         // Map(Write) is the other entry point into EnsureWritable and must be guarded exactly
         // like UpdateBuffer. Mapping needs Dynamic, which cannot be combined with a read-write
@@ -352,7 +343,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void RepeatedOrphansWithinTheWarningWindow_Warn()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -386,7 +376,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void FirstOrphanOfABuffer_DoesNotWarn()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();

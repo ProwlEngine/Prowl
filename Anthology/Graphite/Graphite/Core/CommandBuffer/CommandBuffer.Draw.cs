@@ -35,7 +35,6 @@ public abstract partial class CommandBuffer
     {
         DrawIndexed_CheckIndexBuffer();
         Draw_PreDrawValidation();
-        DrawIndexed_CheckBaseVertexInstance(vertexOffset, instanceStart);
 
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
 
@@ -53,7 +52,6 @@ public abstract partial class CommandBuffer
     /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawArguments.</param>
     public unsafe void DrawIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
-        DrawIndirect_CheckSupport();
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawArguments));
@@ -81,7 +79,6 @@ public abstract partial class CommandBuffer
     /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawIndexedArguments.</param>
     public unsafe void DrawIndexedIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
-        DrawIndirect_CheckSupport();
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawIndexedArguments));

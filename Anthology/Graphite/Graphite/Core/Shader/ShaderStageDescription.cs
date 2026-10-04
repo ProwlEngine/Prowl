@@ -23,11 +23,6 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     public string EntryPoint;
 
     /// <summary>
-    /// Debug flag.
-    /// </summary>
-    public bool Debug;
-
-    /// <summary>
     /// New stage.
     /// </summary>
     /// <param name="stage">The stage.</param>
@@ -38,22 +33,6 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
         Stage = stage;
         ShaderBytes = shaderBytes;
         EntryPoint = entryPoint;
-        Debug = false;
-    }
-
-    /// <summary>
-    /// New stage.
-    /// </summary>
-    /// <param name="stage">The stage.</param>
-    /// <param name="shaderBytes">Raw shader bytes.</param>
-    /// <param name="entryPoint">Entry point function name.</param>
-    /// <param name="debug">Debug flag.</param>
-    public ShaderStageDescription(ShaderStages stage, byte[] shaderBytes, string entryPoint, bool debug)
-    {
-        Stage = stage;
-        ShaderBytes = shaderBytes;
-        EntryPoint = entryPoint;
-        Debug = debug;
     }
 
     /// <summary>
@@ -63,8 +42,7 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     {
         return Stage == other.Stage
             && ShaderBytes == other.ShaderBytes
-            && string.Equals(EntryPoint, other.EntryPoint)
-            && Debug == other.Debug;
+            && string.Equals(EntryPoint, other.EntryPoint);
     }
 
     /// <summary>
@@ -75,7 +53,6 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
         return HashCode.Combine(
             (int)Stage,
             ShaderBytes?.GetHashCode() ?? 0,
-            EntryPoint?.GetHashCode() ?? 0,
-            Debug);
+            EntryPoint?.GetHashCode() ?? 0);
     }
 }

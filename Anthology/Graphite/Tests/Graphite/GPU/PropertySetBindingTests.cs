@@ -19,7 +19,6 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     [SkippableFact]
     public void TransientUniforms_BackScalarWrites()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         float[] result = RunCompute((props, source, destination) =>
         {
@@ -35,7 +34,6 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     [SkippableFact]
     public void ReadOnlyUniformBuffer_FeedsContentsAndIgnoresScalarWrites()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         // The buffer already carries the correct dimensions. Read-only binding must feed those
         // contents to the kernel and ignore the conflicting scalar writes, so the copy succeeds.
@@ -57,7 +55,6 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     [SkippableFact]
     public void WritableUniformBuffer_UsesProvidedBufferAsBackingStorage()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         // The UBO starts zeroed; the SetInt calls must write the dimensions into this very buffer.
         DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
@@ -85,7 +82,6 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     [SkippableFact]
     public void ApplyOther_MergesEntriesFromBothSets()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         float[] result = RunCompute((props, source, destination) =>
         {
@@ -104,7 +100,6 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
     [SkippableFact]
     public void MissingProperty_InvokesHandler()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         HashSet<PropertyID> missing = [];
         MissingPropertyHandler previous = GD.OnMissingProperty;

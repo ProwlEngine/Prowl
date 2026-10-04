@@ -127,7 +127,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void ResourcesInEverySet_ResolveIndependently()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer input = CreateInput(555);
@@ -151,7 +150,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void StructuredBufferOutsideSetZero_ReadsItsOwnContents()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer input = CreateInput(4242);
@@ -166,7 +164,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void SwappingOneResourceInOneSet_LeavesTheOtherSetsIntact()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer firstInput = CreateInput(111);
@@ -190,7 +187,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void IdenticalBindings_ReusedAcrossFrames_StayCorrect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer input = CreateInput(777);
@@ -211,7 +207,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void AlternatingBindings_DoNotAliasInTheDescriptorCache()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer inputA = CreateInput(10);
@@ -243,7 +238,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void TwoDispatchesInOneCommandBuffer_SeeTheirOwnProperties()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer firstOutput = CreateOutput();
         DeviceBuffer secondOutput = CreateOutput();
@@ -272,7 +266,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void SubRangesOfOneBuffer_BindAsDistinctResources()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         Texture texture = CreateSolidTexture(0);
@@ -301,7 +294,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void ClearProperties_DropsPreviouslyBoundValues()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer input = CreateInput(1);
@@ -331,7 +323,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void MissingProperty_ReportsItsSetAndBinding()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer input = CreateInput(1);
@@ -367,7 +358,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void MissingTexture_SubstitutesADefaultRatherThanCrashing()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = CreateOutput();
         DeviceBuffer input = CreateInput(321);
@@ -391,7 +381,6 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     [SkippableFact]
     public void FrameAndItemSets_AlternatingInOneRecording_EachDispatchSeesItsValues()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 8;
         DeviceBuffer input = CreateInput(555);

@@ -10,7 +10,6 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
     [SkippableFact]
     public void TwoParameterBlocks_EachKeepTheirOwnScalarData()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         DeviceBuffer output = RF.CreateBuffer(new BufferDescription(
             2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));

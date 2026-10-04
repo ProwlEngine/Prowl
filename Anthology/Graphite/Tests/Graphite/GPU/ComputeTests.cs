@@ -24,7 +24,6 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
     [SkippableFact]
     public void ComputeGeneratedVertices_RenderAllRed()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const uint size = 64;
         Texture output = RF.CreateTexture(TextureDescription.Texture2D(
@@ -70,7 +69,6 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
     [SkippableFact]
     public void ComputeGeneratedTexture_BlitsExpectedTexels()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const uint width = 4;
         const uint height = 1;
@@ -107,7 +105,6 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
     [InlineData(6u)]
     public void ComputeWritesArrayLayers(uint layers)
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const uint texSize = 32;
         Texture computeOutput = RF.CreateTexture(TextureDescription.Texture2D(
@@ -147,7 +144,6 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
     [SkippableFact]
     public void ComputeFills3DTexture()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const float fill = 42.42f;
         const uint size = 32;
@@ -186,7 +182,6 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
     [SkippableFact]
     public void DispatchIndirect_RunsKernel()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const uint side = 16;
         const uint count = side * side;

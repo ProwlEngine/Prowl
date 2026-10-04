@@ -21,11 +21,11 @@ public enum BufferUsage : byte
     /// </summary>
     UniformBuffer = 1 << 2,
     /// <summary>
-    /// Compute shader writable; requires UseTypedHlslBinding false.
+    /// Compute shader writable.
     /// </summary>
     StructuredBufferReadOnly = 1 << 3,
     /// <summary>
-    /// Compute shader writable; requires UseTypedHlslBinding false.
+    /// Compute shader writable.
     /// </summary>
     StructuredBufferReadWrite = 1 << 4,
     /// <summary>

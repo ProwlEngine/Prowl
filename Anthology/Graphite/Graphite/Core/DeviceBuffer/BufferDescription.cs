@@ -20,11 +20,6 @@ public struct BufferDescription : IEquatable<BufferDescription>
     /// </summary>
     public uint StructureByteStride;
     /// <summary>
-    /// HLSL structured buffers only. True = typed binding, false = raw ByteAddressBuffer.
-    /// </summary>
-    public bool UseTypedHlslBinding;
-
-    /// <summary>
     /// Skips write-hazard tracking. Risks a torn frame for cheap in-place updates.
     /// </summary>
     public bool TransientWrites;
@@ -39,7 +34,6 @@ public struct BufferDescription : IEquatable<BufferDescription>
         SizeInBytes = sizeInBytes;
         Usage = usage;
         StructureByteStride = 0;
-        UseTypedHlslBinding = false;
         TransientWrites = false;
     }
 
@@ -54,23 +48,6 @@ public struct BufferDescription : IEquatable<BufferDescription>
         SizeInBytes = sizeInBytes;
         Usage = usage;
         StructureByteStride = structureByteStride;
-        UseTypedHlslBinding = false;
-        TransientWrites = false;
-    }
-
-    /// <summary>
-    /// Buffer description.
-    /// </summary>
-    /// <param name="sizeInBytes">Size in bytes.</param>
-    /// <param name="usage">Usage.</param>
-    /// <param name="structureByteStride">Element size for structured buffers, else zero.</param>
-    /// <param name="useTypedHlslBinding">HLSL structured buffers only. True = typed binding, false = raw.</param>
-    public BufferDescription(uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool useTypedHlslBinding)
-    {
-        SizeInBytes = sizeInBytes;
-        Usage = usage;
-        StructureByteStride = structureByteStride;
-        UseTypedHlslBinding = useTypedHlslBinding;
         TransientWrites = false;
     }
 
@@ -84,7 +61,6 @@ public struct BufferDescription : IEquatable<BufferDescription>
         return SizeInBytes.Equals(other.SizeInBytes)
             && Usage == other.Usage
             && StructureByteStride.Equals(other.StructureByteStride)
-            && UseTypedHlslBinding.Equals(other.UseTypedHlslBinding)
             && TransientWrites.Equals(other.TransientWrites);
     }
 
@@ -98,7 +74,6 @@ public struct BufferDescription : IEquatable<BufferDescription>
             SizeInBytes.GetHashCode(),
             (int)Usage,
             StructureByteStride.GetHashCode(),
-            UseTypedHlslBinding.GetHashCode(),
             TransientWrites.GetHashCode());
     }
 }

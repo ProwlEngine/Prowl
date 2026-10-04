@@ -153,7 +153,6 @@ public abstract class BufferResourceTests<T> : GraphicsDeviceTestBase<T> where T
     [SkippableFact]
     public void ComputePass_WritesGraphBuffer_CopiedBackWithExpectedValues()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const uint side = 16;
         const uint count = side * side;

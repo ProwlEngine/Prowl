@@ -20,7 +20,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     [SkippableFact]
     public void ManyDispatches_OneRecording_EachSeesItsOwnLooseUniforms()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 8;
         ComputeProgram program = CreateTwoBlockProgram();
@@ -57,7 +56,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     [SkippableFact]
     public void RepeatedIdenticalDispatches_OneRecording_AllCorrect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 6;
         ComputeProgram program = CreateTwoBlockProgram();
@@ -94,7 +92,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     [SkippableFact]
     public void AlternatingUniforms_OneRecording_EachDispatchCorrect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 8;
         ComputeProgram program = CreateTwoBlockProgram();
@@ -349,7 +346,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     [SkippableFact]
     public void LastSetOnlyChanges_OneRecording_EachDispatchCorrect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 8;
         ComputeProgram program = CreateLastSetVariesProgram();
@@ -387,7 +383,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     [SkippableFact]
     public void AlternatingPrograms_OneRecording_BothProduceCorrectResults()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 8;
         ComputeProgram programX = CreateTwoBlockProgram();

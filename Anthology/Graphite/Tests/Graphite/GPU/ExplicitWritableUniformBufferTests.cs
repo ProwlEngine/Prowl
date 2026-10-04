@@ -10,7 +10,6 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     [SkippableFact]
     public void RepeatedDispatches_UnchangedExplicitUniforms_AllCorrect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 5;
         ComputeProgram program = CreateProgram(TwoFields());
@@ -56,7 +55,6 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     [SkippableFact]
     public void ChangingUniform_BetweenDispatches_TakesEffect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         ComputeProgram program = CreateProgram(TwoFields());
         DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
@@ -102,7 +100,6 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     [SkippableFact]
     public void UnsetBytes_InExplicitBuffer_AreLeftIntact()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         ComputeProgram program = CreateProgram(TwoFields());
         DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
@@ -147,7 +144,6 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
     [SkippableFact]
     public void NonContiguousSetFields_UnsetBytesZeroed_BlockWrittenWhole()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         ComputeProgram program = CreateProgram(ThreeFields());
         DeviceBuffer ubo = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));

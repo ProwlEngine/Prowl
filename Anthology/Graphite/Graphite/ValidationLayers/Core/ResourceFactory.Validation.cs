@@ -22,10 +22,6 @@ public abstract partial class ResourceFactory
             throw new RenderException(
                 $"1D and 3D Textures must use {nameof(TextureSampleCount)}.{nameof(TextureSampleCount.Count1)}.");
         }
-        if (description.Type == TextureType.Texture1D && !Features.Texture1D)
-        {
-            throw new RenderException($"1D Textures are not supported by this device.");
-        }
         if ((description.Usage & TextureUsage.Staging) != 0 && description.Usage != TextureUsage.Staging)
         {
             throw new RenderException($"{nameof(TextureUsage)}.{nameof(TextureUsage.Staging)} cannot be combined with any other flags.");
@@ -55,12 +51,6 @@ public abstract partial class ResourceFactory
             throw new RenderException(
                 "To create a TextureView, the target texture must have either Sampled or Storage usage flags.");
         }
-        if (!Features.SubsetTextureView &&
-            (description.BaseMipLevel != 0 || description.MipLevels != description.Target.MipLevels
-            || description.BaseArrayLayer != 0 || description.ArrayLayers != description.Target.ArrayLayers))
-        {
-            throw new RenderException("GraphicsDevice does not support subset TextureViews.");
-        }
         if (description.Format != null && description.Format != description.Target.Format)
         {
             if (!FormatHelpers.IsFormatViewCompatible(description.Format.Value, description.Target.Format))
@@ -82,11 +72,6 @@ public abstract partial class ResourceFactory
         if ((usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
             || (usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
         {
-            if (!Features.StructuredBuffer)
-            {
-                throw new RenderException("GraphicsDevice does not support structured buffers.");
-            }
-
             if (description.StructureByteStride == 0)
             {
                 throw new RenderException("Structured Buffer objects must have a non-zero StructureByteStride.");
@@ -96,13 +81,6 @@ public abstract partial class ResourceFactory
             {
                 throw new RenderException(
                     $"Structured Buffer objects cannot specify {nameof(BufferUsage)}.{nameof(BufferUsage.UniformBuffer)}.");
-            }
-
-            if (description.UseTypedHlslBinding
-                    && (usage & (BufferUsage.VertexBuffer | BufferUsage.IndexBuffer | BufferUsage.IndirectBuffer)) != 0)
-            {
-                throw new RenderException(
-                    $"A structured buffer with {nameof(BufferDescription.UseTypedHlslBinding)} set cannot also specify {nameof(BufferUsage.VertexBuffer)}, {nameof(BufferUsage.IndexBuffer)}, or {nameof(BufferUsage.IndirectBuffer)}. Leave {nameof(BufferDescription.UseTypedHlslBinding)} false (the default) to fill a vertex, index, or indirect buffer from a compute shader.");
             }
         }
         else if (description.StructureByteStride != 0)
@@ -128,11 +106,6 @@ public abstract partial class ResourceFactory
         if (!GraphicsDevice.ValidationEnabled)
             return;
 
-        if (!Features.SamplerLodBias && description.LodBias != 0)
-        {
-            throw new RenderException(
-                "GraphicsDevice does not support Sampler LOD bias. SamplerDescription.LodBias must be 0.");
-        }
         if (!Features.SamplerAnisotropy && description.Filter == SamplerFilter.Anisotropic)
         {
             throw new RenderException(
@@ -163,10 +136,6 @@ public abstract partial class ResourceFactory
                     throw new RenderException(
                         $"{nameof(ShaderDescription)}.{nameof(ShaderDescription.Stages)} contains duplicate stage {stage}.");
                 }
-            }
-            if (!Features.ComputeShader && stage == ShaderStages.Compute)
-            {
-                throw new RenderException("GraphicsDevice does not support Compute Shaders.");
             }
             if (!Features.GeometryShader && stage == ShaderStages.Geometry)
             {
@@ -256,10 +225,6 @@ public abstract partial class ResourceFactory
         if (!GraphicsDevice.ValidationEnabled)
             return;
 
-        if (!Features.ComputeShader)
-        {
-            throw new RenderException("GraphicsDevice does not support Compute Shaders.");
-        }
         if (description.Stage.Stage != ShaderStages.Compute)
         {
             throw new RenderException(

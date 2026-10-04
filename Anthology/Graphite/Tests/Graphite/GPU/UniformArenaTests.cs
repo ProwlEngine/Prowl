@@ -9,7 +9,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void SharedPropertySet_AcrossSeparatePassesInOneExecution_EachPassCorrect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 4;
         ComputeProgram program = CreateTwoBlockProgram();
@@ -47,7 +46,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void TwoProgramsShareSetAndBinding_SecondPassDoesNotSeeFirstProgramsUniform()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         // Two separate program objects built from the same layout, so both declare their uniform
         // block at (set 0, binding 0). If the arena keyed a cached range only by (set, binding)
@@ -95,7 +93,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void ApplyOther_SwapsInSameValueViaDifferentEntryObject_StillDispatchesCorrectly()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         ComputeProgram program = CreateTwoBlockProgram();
         DeviceBuffer output1 = CreateOutput();
@@ -143,7 +140,6 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void AlternatingUniforms_SeparatePassesInOneExecution_EachPassCorrect()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const int n = 6;
         ComputeProgram program = CreateTwoBlockProgram();

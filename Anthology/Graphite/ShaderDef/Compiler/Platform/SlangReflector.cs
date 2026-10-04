@@ -33,7 +33,6 @@ internal static class SlangReflector
                 Stage = ToGraphiteStage(ep.Stage),
                 ShaderBytes = code.ToArray(),
                 EntryPoint = entryPointNameOverride ?? ep.Name,
-                Debug = false,
             };
 
             if (ep.Stage == ShaderStage.Vertex)

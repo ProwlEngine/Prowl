@@ -41,12 +41,12 @@ public abstract partial class GraphicsDevice
     /// <summary>
     /// 16-byte buffer, fallback for an unmatched structured read-only buffer slot.
     /// </summary>
-    public DeviceBuffer NullStructured => RequireFeature(_nullStructuredRead, Features.StructuredBuffer, nameof(NullStructured), nameof(GraphicsDeviceFeatures.StructuredBuffer));
+    public DeviceBuffer NullStructured => _nullStructuredRead;
 
     /// <summary>
     /// 16-byte buffer, fallback for an unmatched structured read-write buffer slot.
     /// </summary>
-    public DeviceBuffer NullStructuredRW => RequireFeature(_nullStructuredReadWrite, Features.StructuredBuffer, nameof(NullStructuredRW), nameof(GraphicsDeviceFeatures.StructuredBuffer));
+    public DeviceBuffer NullStructuredRW => _nullStructuredReadWrite;
 
     /// <summary>
     /// Creates and caches common device resources after creation.
@@ -64,11 +64,8 @@ public abstract partial class GraphicsDevice
             _aniso4xSampler = ResourceFactory.CreateSampler(SamplerDescription.Aniso4x);
         }
 
-        if (Features.StructuredBuffer)
-        {
-            _nullStructuredRead = ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly, 16));
-            _nullStructuredReadWrite = ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite, 16));
-        }
+        _nullStructuredRead = ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly, 16));
+        _nullStructuredReadWrite = ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite, 16));
     }
 
     private void DisposeDefaultResources()
@@ -79,8 +76,8 @@ public abstract partial class GraphicsDevice
         NullTextureRW2D.Dispose();
         NullUniform.Dispose();
         _aniso4xSampler?.Dispose();
-        _nullStructuredRead?.Dispose();
-        _nullStructuredReadWrite?.Dispose();
+        _nullStructuredRead.Dispose();
+        _nullStructuredReadWrite.Dispose();
     }
 
     private static T RequireFeature<T>(T resource, bool supported, string propertyName, string featureName) where T : class

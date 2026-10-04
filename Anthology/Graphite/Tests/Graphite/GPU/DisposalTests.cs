@@ -111,7 +111,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
     [SkippableFact]
     public void Dispose_ComputeProgram()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "ComputeColoredQuadGenerator.slang");
         ComputeProgram program = Inner.CreateComputeProgram(new ComputeDescription(stage,

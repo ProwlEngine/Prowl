@@ -51,23 +51,14 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             GetImageMemoryRequirements2);
 
         Features = new GraphicsDeviceFeatures(
-            computeShader: true,
             geometryShader: _physicalDeviceFeatures.GeometryShader,
             tessellationShaders: _physicalDeviceFeatures.TessellationShader,
             multipleViewports: _physicalDeviceFeatures.MultiViewport,
-            samplerLodBias: true,
-            drawBaseVertex: true,
-            drawBaseInstance: true,
-            drawIndirect: true,
             drawIndirectBaseInstance: _physicalDeviceFeatures.DrawIndirectFirstInstance,
             samplerAnisotropy: _physicalDeviceFeatures.SamplerAnisotropy,
             depthClipDisable: _physicalDeviceFeatures.DepthClamp,
-            texture1D: true,
             independentBlend: _physicalDeviceFeatures.IndependentBlend,
-            structuredBuffer: true,
-            subsetTextureView: true,
             commandBufferDebugMarkers: _debugMarkerEnabled,
-            bufferRangeBinding: true,
             shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
 
         ResourceFactory = new VkResourceFactory(this);

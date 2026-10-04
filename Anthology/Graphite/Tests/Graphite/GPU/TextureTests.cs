@@ -880,7 +880,6 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     [Fact]
     public unsafe void Update_ThenMapRead_1D()
     {
-        if (!GD.Features.Texture1D) { return; }
 
         Texture tex1D = RF.CreateTexture(
             TextureDescription.Texture1D(100, 1, 1, PixelFormat.R16_UNorm, TextureUsage.Staging));
@@ -901,7 +900,6 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     [Fact]
     public void MapWrite_ThenMapRead_1D()
     {
-        if (!GD.Features.Texture1D) { return; }
 
         Texture tex1D = RF.CreateTexture(
             TextureDescription.Texture1D(100, 1, 1, PixelFormat.R16_UNorm, TextureUsage.Staging));
@@ -924,7 +922,6 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     [Fact]
     public void Copy_1DTo2D()
     {
-        if (!GD.Features.Texture1D) { return; }
 
         Texture tex1D = RF.CreateTexture(
             TextureDescription.Texture1D(100, 1, 1, PixelFormat.R16_UNorm, TextureUsage.Staging));
@@ -960,7 +957,6 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     [Fact]
     public void Update_MultipleMips_1D()
     {
-        if (!GD.Features.Texture1D) { return; }
 
         Texture tex1D = RF.CreateTexture(TextureDescription.Texture1D(
             100, 5, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
@@ -989,7 +985,6 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     [Fact]
     public void Copy_DifferentMip_1DTo2D()
     {
-        if (!GD.Features.Texture1D) { return; }
 
         Texture tex1D = RF.CreateTexture(
             TextureDescription.Texture1D(200, 2, 1, PixelFormat.R16_UNorm, TextureUsage.Staging));

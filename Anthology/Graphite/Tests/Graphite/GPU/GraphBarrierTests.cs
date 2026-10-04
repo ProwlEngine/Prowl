@@ -290,7 +290,6 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void ComputeStorageWrite_ThenFragmentSample_ReadsComputedTexels()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         Texture staging = CreateStaging(4, 1);
         GraphicsProgram program = CreateSampleProgram();
@@ -341,7 +340,6 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void ComputeBufferWrite_ThenVertexRead_RendersGeneratedQuad()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         const uint size = 16;
         const uint stride = 32;

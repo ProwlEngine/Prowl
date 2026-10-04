@@ -149,7 +149,6 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
     [SkippableFact]
     public void ComputeProgram_CreateAndDispose_TracksDisposal()
     {
-        Skip.IfNot(GD.Features.ComputeShader);
 
         ShaderStageDescription stage = TestShaderLoader.LoadCompute(GD.BackendType, "BasicComputeTest.slang");
         ComputeDescription desc = new(stage,
