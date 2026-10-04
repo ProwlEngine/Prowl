@@ -11,7 +11,7 @@ public class UsageKindTests
     private static readonly GraphTextureDesc s_desc = GraphTextureDesc.Sized(4, 4, true, PixelFormat.R8_G8_B8_A8_UNorm);
 
     [Fact]
-    public void MultiKindOutput_WithoutInitial_Throws()
+    public void MultiKindOutput_Throws()
     {
         RenderContextBuilder builder = new();
         Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
@@ -19,23 +19,18 @@ public class UsageKindTests
     }
 
     [Fact]
-    public void Initial_OutsideDeclaredKinds_Throws()
+    public void MultiKindInput_Throws()
     {
         RenderContextBuilder builder = new();
-        Assert.Throws<ArgumentException>(() => builder.DeclareOutputTexture(
-            "usage_initial", s_desc,
-            usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled,
-            initial: TextureUsageKind.Storage));
+        Assert.Throws<ArgumentException>(() => builder.DeclareInputTexture(
+            "usage_multi_in", TextureUsageKind.Sampled | TextureUsageKind.TransferSrc));
     }
 
     [Fact]
-    public void MultiKindOutput_WithInitial_IsAccepted()
+    public void SingleKindOutput_IsAccepted()
     {
         RenderContextBuilder builder = new();
-        TextureHandle handle = builder.DeclareOutputTexture(
-            "usage_ok", s_desc,
-            usage: TextureUsageKind.Attachment | TextureUsageKind.Sampled,
-            initial: TextureUsageKind.Sampled);
+        TextureHandle handle = builder.DeclareOutputTexture("usage_ok", s_desc, usage: TextureUsageKind.Storage);
         Assert.True(handle.IsValid);
     }
 

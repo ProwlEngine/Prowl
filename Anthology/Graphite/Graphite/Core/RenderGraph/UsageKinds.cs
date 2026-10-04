@@ -2,7 +2,7 @@ using System;
 
 namespace Prowl.Graphite.RenderGraph;
 
-/// <summary>How a pass uses a declared texture. Combine flags when a pass switches kinds with RenderContext.Transition.</summary>
+/// <summary>How a pass uses a declared texture. A declaration names exactly one kind.</summary>
 [Flags]
 public enum TextureUsageKind
 {
@@ -69,7 +69,6 @@ internal readonly struct ResourceAccess
     public readonly bool IsTexture;
     public readonly bool IsOutput;
     public readonly TextureUsageKind TextureUsage;
-    public readonly TextureUsageKind TextureInitial;
     public readonly TextureUsageKind? DepthUsage;
     public readonly BufferUsageKind BufferUsage;
 
@@ -78,7 +77,6 @@ internal readonly struct ResourceAccess
         bool isTexture,
         bool isOutput,
         TextureUsageKind textureUsage,
-        TextureUsageKind textureInitial,
         TextureUsageKind? depthUsage,
         BufferUsageKind bufferUsage)
     {
@@ -86,7 +84,6 @@ internal readonly struct ResourceAccess
         IsTexture = isTexture;
         IsOutput = isOutput;
         TextureUsage = textureUsage;
-        TextureInitial = textureInitial;
         DepthUsage = depthUsage;
         BufferUsage = bufferUsage;
     }
@@ -94,33 +91,16 @@ internal readonly struct ResourceAccess
     public static ResourceAccess Texture(
         RenderResourceID id,
         TextureUsageKind usage,
-        TextureUsageKind? initial,
         TextureUsageKind? depthUsage,
         bool isOutput)
     {
         string role = isOutput ? "output" : "input";
-        if (usage == 0 || (usage & ~ColorKinds) != 0)
-            throw new ArgumentException($"Texture usage {usage} is not valid for color; DepthReadOnly belongs in depthUsage.", nameof(usage));
+        if (!IsSingleKind(usage) || (usage & ~ColorKinds) != 0)
+            throw new ArgumentException($"Texture usage {usage} is not valid for color, name exactly one kind; DepthReadOnly belongs in depthUsage.", nameof(usage));
         if (isOutput && (usage & TextureWrites) == 0)
             throw new ArgumentException($"Texture output usage {usage} must include Attachment, Storage or TransferDst.", nameof(usage));
         if (!isOutput && (usage & ~TextureReads) != 0)
             throw new ArgumentException($"Texture usage {usage} writes, declare it with DeclareOutputTexture.", nameof(usage));
-
-        TextureUsageKind start;
-        if (initial is TextureUsageKind explicitInitial)
-        {
-            if (!IsSingleKind(explicitInitial) || (usage & explicitInitial) == 0)
-                throw new ArgumentException($"Initial kind {explicitInitial} must be one of the declared kinds {usage}.", nameof(initial));
-            start = explicitInitial;
-        }
-        else if (IsSingleKind(usage))
-        {
-            start = usage;
-        }
-        else
-        {
-            throw new ArgumentException($"Texture {role} declares several kinds ({usage}); name the start state with initial.", nameof(initial));
-        }
 
         if (depthUsage is TextureUsageKind depth)
         {
@@ -131,7 +111,7 @@ internal readonly struct ResourceAccess
                 throw new ArgumentException($"Depth usage {depth} is not valid for a pass {role}.", nameof(depthUsage));
         }
 
-        return new ResourceAccess(id, true, isOutput, usage, start, depthUsage, 0);
+        return new ResourceAccess(id, true, isOutput, usage, depthUsage, 0);
     }
 
     public static ResourceAccess Buffer(RenderResourceID id, BufferUsageKind usage, bool isOutput)
@@ -144,7 +124,7 @@ internal readonly struct ResourceAccess
         if (isOutput && (usage & writes) == 0)
             throw new ArgumentException($"Buffer output usage {usage} must include Storage or TransferDst.", nameof(usage));
 
-        return new ResourceAccess(id, false, isOutput, 0, 0, null, usage);
+        return new ResourceAccess(id, false, isOutput, 0, null, usage);
     }
 
     private static bool IsSingleKind(TextureUsageKind kind) => kind != 0 && (kind & (kind - 1)) == 0;
