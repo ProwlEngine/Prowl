@@ -146,8 +146,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
         props.SetTexture("Tex", sampled, sampler);
         props.SetSampler("Smp", sampler);
 
-        cmd.SetFramebuffer(target);
-        cmd.ClearColorTarget(0, Color.Black);
+        cmd.SetFramebuffer(target, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
         cmd.SetFullViewport();
         cmd.SetShader(program);
         cmd.SetVertexSource(VertexSource.None);
@@ -248,8 +247,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             builder => writeHandle = builder.DeclareOutputTexture(historyId, desc, history: 1),
             (context, cmd) =>
             {
-                cmd.SetFramebuffer(context.GetRenderTexture(writeHandle).Framebuffer);
-                cmd.ClearColorTarget(0, frameColor);
+                cmd.SetFramebuffer(context.GetRenderTexture(writeHandle).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(frameColor), AttachmentOps.Loaded));
             });
 
         TextureHandle historyHandle = default;
@@ -271,8 +269,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
                 }
                 else
                 {
-                    cmd.SetFramebuffer(target);
-                    cmd.ClearColorTarget(0, Color.Black);
+                    cmd.SetFramebuffer(target, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
                 }
             });
 
@@ -393,8 +390,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             {
                 PropertySet props = new();
                 props.SetBuffer("InputVertices", context.GetRenderBuffer(readHandle), readOnly: true);
-                cmd.SetFramebuffer(context.GetRenderTexture(outputHandle).Framebuffer);
-                cmd.ClearColorTarget(0, Color.Black);
+                cmd.SetFramebuffer(context.GetRenderTexture(outputHandle).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
                 cmd.SetFullViewport();
                 cmd.SetShader(graphics);
                 cmd.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
@@ -424,9 +420,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             builder => depthHandle = builder.DeclareOutputTexture(id, desc),
             (context, cmd) =>
             {
-                cmd.SetFramebuffer(context.GetRenderTexture(depthHandle).Framebuffer);
-                cmd.ClearColorTarget(0, Color.Black);
-                cmd.ClearDepthStencil(0.25f, 0);
+                cmd.SetFramebuffer(context.GetRenderTexture(depthHandle).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Clear(0.25f)));
             });
 
         TextureHandle fogHandle = default;
@@ -496,8 +490,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             builder => handle = builder.DeclareOutputTexture(id, desc),
             (context, cmd) =>
             {
-                cmd.SetFramebuffer(context.GetRenderTexture(handle).Framebuffer);
-                cmd.ClearColorTarget(0, Color.Black);
+                cmd.SetFramebuffer(context.GetRenderTexture(handle).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             });
 
         List<Exception> errors = new();

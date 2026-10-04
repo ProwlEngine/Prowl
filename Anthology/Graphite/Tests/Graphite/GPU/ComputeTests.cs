@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Vector;
 
 using Xunit;
@@ -51,8 +52,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
             cl.SetProperties(computeProps);
             cl.Dispatch(1, 1, 1);
 
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(graphics);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));

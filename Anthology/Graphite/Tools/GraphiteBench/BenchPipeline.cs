@@ -41,9 +41,7 @@ public sealed class BenchPass : IPass<BenchView>
         long start = Stopwatch.GetTimestamp();
 
 
-        cmd.SetFramebuffer(_scene.Framebuffer);
-        if (_index == 0)
-            cmd.ClearColorTarget(0, Color.Black);
+        cmd.SetFramebuffer(_scene.Framebuffer, _index == 0 ? new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded) : null);
         cmd.SetFullViewport();
 
         _record(cmd, _index);

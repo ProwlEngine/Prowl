@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
+using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.Vk;
 
 using Prowl.Vector;
@@ -148,8 +149,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));
@@ -188,8 +188,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
@@ -232,8 +231,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
@@ -273,8 +271,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetProperties(props);
@@ -312,8 +309,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(fb);
-            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFramebuffer(fb, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
             cl.SetFullViewport();
             cl.SetShader(program);
             cl.SetVertexSource(new VertexSource(PrimitiveTopology.TriangleStrip));

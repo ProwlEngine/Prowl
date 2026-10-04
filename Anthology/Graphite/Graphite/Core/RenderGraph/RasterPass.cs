@@ -40,7 +40,7 @@ public abstract class RasterPass<TView> : IPass<TView>
     }
 
     /// <summary>
-    /// Binds the declared target and applies its load ops, clearing with the values the declaration carries.
+    /// Binds the declared target and applies its declared load/store ops through the render pass.
     /// </summary>
     protected void BindTarget(RenderContext<TView> context, CommandBuffer cmd)
     {
@@ -50,17 +50,6 @@ public abstract class RasterPass<TView> : IPass<TView>
         RenderTexture target = context.GetRenderTexture(_target);
         TargetLoadStoreOps ops = context.GetTargetOps(_target.Id);
 
-        cmd.SetFramebuffer(target.Framebuffer);
-        cmd.SetAttachmentOps(ops);
-
-        if (ops.Color.Load == LoadAction.Clear)
-        {
-            int colorCount = target.Framebuffer.ColorTargets.Count;
-            for (uint i = 0; i < colorCount; i++)
-                cmd.ClearColorTarget(i, ops.Color.ClearColor);
-        }
-
-        if (ops.Depth.Load == LoadAction.Clear && target.Framebuffer.DepthTarget != null)
-            cmd.ClearDepthStencil(ops.Depth.ClearDepth, ops.Depth.ClearStencil);
+        cmd.SetFramebuffer(target.Framebuffer, ops);
     }
 }

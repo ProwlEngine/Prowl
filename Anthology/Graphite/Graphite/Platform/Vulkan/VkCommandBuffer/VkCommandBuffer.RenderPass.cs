@@ -10,27 +10,19 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkCommandBuffer
 {
-    private ClearValue[] _clearValues = Array.Empty<ClearValue>();
-    private bool[] _validColorClearValues = Array.Empty<bool>();
-    private ClearValue? _depthClearValue;
-    private bool _discardColorLoad;
-    private bool _discardDepthLoad;
-    private bool _discardColorStore;
-    private bool _discardDepthStore;
+    private TargetLoadStoreOps _pendingOps = DefaultOps;
 
-    private protected override void SetAttachmentOpsCore(LoadAction colorLoad, StoreAction colorStore, LoadAction depthLoad, StoreAction depthStore)
+    private static TargetLoadStoreOps DefaultOps => new(AttachmentOps.Loaded, AttachmentOps.Loaded);
+
+    private static AttachmentLoadOp ToVk(LoadAction action) => action switch
     {
-        _discardColorLoad = colorLoad == LoadAction.DontCare;
-        _discardDepthLoad = depthLoad == LoadAction.DontCare;
-        _discardColorStore = colorStore == StoreAction.DontCare;
-        _discardDepthStore = depthStore == StoreAction.DontCare;
-    }
+        LoadAction.Clear => AttachmentLoadOp.Clear,
+        LoadAction.DontCare => AttachmentLoadOp.DontCare,
+        _ => AttachmentLoadOp.Load
+    };
 
-    private RenderPassOps CurrentRenderPassOps(bool clear) => new(
-        clear ? AttachmentLoadOp.Clear : _discardColorLoad ? AttachmentLoadOp.DontCare : AttachmentLoadOp.Load,
-        clear ? AttachmentLoadOp.Clear : _discardDepthLoad ? AttachmentLoadOp.DontCare : AttachmentLoadOp.Load,
-        _discardColorStore ? AttachmentStoreOp.DontCare : AttachmentStoreOp.Store,
-        _discardDepthStore ? AttachmentStoreOp.DontCare : AttachmentStoreOp.Store);
+    private static AttachmentStoreOp ToVk(StoreAction action)
+        => action == StoreAction.DontCare ? AttachmentStoreOp.DontCare : AttachmentStoreOp.Store;
 
     private protected override void ClearColorTargetCore(uint index, Color clearColor)
     {
@@ -39,7 +31,7 @@ internal unsafe partial class VkCommandBuffer
             Color = new ClearColorValue(clearColor.R, clearColor.G, clearColor.B, clearColor.A)
         };
 
-        if (_activeRenderPass.Handle != default)
+        EnsureRenderPassActive();
         {
             ClearAttachment clearAttachment = new()
             {
@@ -58,12 +50,6 @@ internal unsafe partial class VkCommandBuffer
 
             _gd.Vk.CmdClearAttachments(_cb, 1, in clearAttachment, 1, in clearRect);
         }
-        else
-        {
-            // Queue up the clear value for the next RenderPass.
-            _clearValues[index] = clearValue;
-            _validColorClearValues[index] = true;
-        }
     }
 
     private protected override void ClearDepthStencilCore(float depth, byte stencil)
@@ -73,7 +59,7 @@ internal unsafe partial class VkCommandBuffer
             DepthStencil = new ClearDepthStencilValue(depth, stencil)
         };
 
-        if (_activeRenderPass.Handle != default)
+        EnsureRenderPassActive();
         {
             if (_currentFramebufferMode == FramebufferMode.GraphDepthReadOnly)
                 throw new RenderException("Cannot clear a depth attachment the current pass declared DepthReadOnly.");
@@ -101,35 +87,18 @@ internal unsafe partial class VkCommandBuffer
                 _gd.Vk.CmdClearAttachments(_cb, 1, in clearAttachment, 1, in clearRect);
             }
         }
-        else
-        {
-            // Queue up the clear value for the next RenderPass.
-            _depthClearValue = clearValue;
-        }
     }
 
-    private protected override void SetFramebufferCore(Framebuffer fb)
+    private protected override void SetFramebufferCore(Framebuffer fb, in TargetLoadStoreOps ops)
     {
         if (_activeRenderPass.Handle != default)
-        {
             EndCurrentRenderPass();
-        }
-        else if (!_currentFramebufferEverActive && _currentFramebuffer != null)
-        {
-            // This forces any queued up texture clears to be emitted.
-            BeginCurrentRenderPass();
-            EndCurrentRenderPass();
-        }
 
         VkFramebufferBase vkFB = Util.AssertSubtype<Framebuffer, VkFramebufferBase>(fb);
         _currentFramebuffer = vkFB;
         _currentFramebufferEverActive = false;
         _hasResolvedPipeline = false;
-        SetAttachmentOpsCore(LoadAction.Load, StoreAction.Store, LoadAction.Load, StoreAction.Store);
-        uint clearValueCount = (uint)vkFB.ColorTargets.Count;
-        Util.EnsureArrayMinimumSize(ref _clearValues, clearValueCount + 1); // Leave an extra space for the depth value (tracked separately).
-        Util.ClearArray(_validColorClearValues);
-        Util.EnsureArrayMinimumSize(ref _validColorClearValues, clearValueCount);
+        _pendingOps = ops;
 
         if (fb is VkSwapchainFramebuffer scFB && !_usedSwapchains.Contains(scFB.Swapchain))
             _usedSwapchains.Add(scFB.Swapchain);
@@ -209,91 +178,43 @@ internal unsafe partial class VkCommandBuffer
         _currentFramebufferEverActive = true;
 
         _currentFramebufferMode = ResolveFramebufferMode(_currentFramebuffer);
-        if (_currentFramebufferMode == FramebufferMode.GraphDepthReadOnly && _depthClearValue.HasValue)
+        bool hasDepth = _currentFramebuffer.DepthTarget != null;
+        bool clearsDepth = hasDepth && _pendingOps.Depth.Load == LoadAction.Clear;
+        if (_currentFramebufferMode == FramebufferMode.GraphDepthReadOnly && clearsDepth)
             throw new RenderException("Cannot clear a depth attachment the current pass declared DepthReadOnly.");
 
-        bool haveAnyAttachments = _currentFramebuffer.ColorTargets.Count > 0 || _currentFramebuffer.DepthTarget != null;
-        SurveyQueuedClearValues(out bool haveAllClearValues, out bool haveAnyClearValues);
+        RenderPassOps passOps = new(
+            ToVk(_pendingOps.Color.Load),
+            ToVk(_pendingOps.Depth.Load),
+            ToVk(_pendingOps.Color.Store),
+            ToVk(_pendingOps.Depth.Store));
 
-        RenderPassBeginInfo renderPassBI = new()
+        int colorCount = _currentFramebuffer.ColorTargets.Count;
+        Span<ClearValue> clearValues = stackalloc ClearValue[(int)_currentFramebuffer.AttachmentCount + 1];
+        Color clearColor = _pendingOps.Color.ClearColor;
+        for (int i = 0; i < colorCount; i++)
+            clearValues[i].Color = new ClearColorValue(clearColor.R, clearColor.G, clearColor.B, clearColor.A);
+        if (hasDepth)
+            clearValues[colorCount].DepthStencil = new ClearDepthStencilValue(_pendingOps.Depth.ClearDepth, _pendingOps.Depth.ClearStencil);
+
+        fixed (ClearValue* clearValuesPtr = clearValues)
         {
-            SType = StructureType.RenderPassBeginInfo,
-            RenderArea = new Rect2D(new Offset2D(0, 0), new Extent2D(_currentFramebuffer.RenderableWidth, _currentFramebuffer.RenderableHeight)),
-            Framebuffer = _currentFramebuffer.CurrentFramebuffer
-        };
-
-        if (!haveAnyAttachments || !haveAllClearValues)
-        {
-            BeginRenderPassLoading(ref renderPassBI, haveAnyClearValues);
-        }
-        else
-        {
-            BeginRenderPassClearing(ref renderPassBI);
-        }
-    }
-
-    private void SurveyQueuedClearValues(out bool haveAll, out bool haveAny)
-    {
-        haveAll = _depthClearValue.HasValue || _currentFramebuffer.DepthTarget == null;
-        haveAny = _depthClearValue.HasValue;
-
-        for (int i = 0; i < _currentFramebuffer.ColorTargets.Count; i++)
-        {
-            if (_validColorClearValues[i])
-                haveAny = true;
-            else
-                haveAll = false;
-        }
-    }
-
-    // Not every attachment has a queued clear, so the pass loads instead and any clears that were
-    // queued are replayed as CmdClearAttachments once it is open.
-    private void BeginRenderPassLoading(ref RenderPassBeginInfo renderPassBI, bool haveAnyClearValues)
-    {
-        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, CurrentRenderPassOps(clear: false));
-        _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
-        _activeRenderPass = renderPassBI.RenderPass;
-
-        if (!haveAnyClearValues) return;
-
-        if (_depthClearValue.HasValue)
-        {
-            ClearDepthStencilCore(_depthClearValue.Value.DepthStencil.Depth, (byte)_depthClearValue.Value.DepthStencil.Stencil);
-            _depthClearValue = null;
-        }
-
-        for (uint i = 0; i < _currentFramebuffer.ColorTargets.Count; i++)
-        {
-            if (!_validColorClearValues[i]) continue;
-
-            _validColorClearValues[i] = false;
-            ClearColorValue vkClearColor = _clearValues[i].Color;
-            ClearColorTarget(i, new Color(
-                vkClearColor.Float32_0,
-                vkClearColor.Float32_1,
-                vkClearColor.Float32_2,
-                vkClearColor.Float32_3));
-        }
-    }
-
-    // Every attachment has a queued clear value, so the render pass itself can do the clearing.
-    private void BeginRenderPassClearing(ref RenderPassBeginInfo renderPassBI)
-    {
-        renderPassBI.RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, CurrentRenderPassOps(clear: true));
-
-        fixed (ClearValue* clearValuesPtr = &_clearValues[0])
-        {
-            renderPassBI.ClearValueCount = _currentFramebuffer.AttachmentCount;
-            renderPassBI.PClearValues = clearValuesPtr;
-            if (_depthClearValue.HasValue)
+            RenderPassBeginInfo renderPassBI = new()
             {
-                _clearValues[_currentFramebuffer.ColorTargets.Count] = _depthClearValue.Value;
-                _depthClearValue = null;
-            }
+                SType = StructureType.RenderPassBeginInfo,
+                RenderArea = new Rect2D(new Offset2D(0, 0), new Extent2D(_currentFramebuffer.RenderableWidth, _currentFramebuffer.RenderableHeight)),
+                Framebuffer = _currentFramebuffer.CurrentFramebuffer,
+                RenderPass = _currentFramebuffer.GetRenderPass(_currentFramebufferMode, passOps),
+                ClearValueCount = _currentFramebuffer.AttachmentCount,
+                PClearValues = clearValuesPtr
+            };
+
             _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
             _activeRenderPass = renderPassBI.RenderPass;
-            Util.ClearArray(_validColorClearValues);
         }
+
+        _pendingOps.Color.Load = LoadAction.Load;
+        _pendingOps.Depth.Load = LoadAction.Load;
     }
 
     private void EndCurrentRenderPass()
