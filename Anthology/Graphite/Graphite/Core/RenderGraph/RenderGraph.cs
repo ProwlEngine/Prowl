@@ -95,7 +95,9 @@ public sealed class RenderGraph<TView> : IDisposable
                 GraphResource output = builder.Outputs[w];
                 outputs[w] = output.Id;
                 declared[w] = output;
-                resources.TryAdd(output.Id, output);
+                if (!resources.TryAdd(output.Id, output) && !SameDeclaration(resources[output.Id], output))
+                    throw new InvalidOperationException(
+                        $"Pass '{pass.Name}' declares resource '{RenderResourceID.ToString(output.Id)}' with a different description than an earlier declaration.");
             }
 
             nodes[i] = new PassNode(pass, inputs, outputs, declared, builder.Accesses.ToArray());
@@ -112,6 +114,26 @@ public sealed class RenderGraph<TView> : IDisposable
 
         return new RenderGraph<TView>(orderedNodes, resources);
     }
+
+    private static bool SameDeclaration(GraphResource existing, GraphResource declared) => (existing, declared) switch
+    {
+        (GraphTextureResource a, GraphTextureResource b) => a.HistoryDepth == b.HistoryDepth && SameTextureDesc(a.Description, b.Description),
+        (GraphBufferResource a, GraphBufferResource b) => a.HistoryDepth == b.HistoryDepth
+            && a.Description.SizeInBytes == b.Description.SizeInBytes
+            && a.Description.Usage == b.Description.Usage
+            && a.Description.StructureByteStride == b.Description.StructureByteStride,
+        (GraphImportedTextureResource a, GraphImportedTextureResource b) => ReferenceEquals(a.Texture, b.Texture),
+        (GraphViewTargetResource, GraphViewTargetResource) => true,
+        _ => false,
+    };
+
+    private static bool SameTextureDesc(in GraphTextureDesc a, in GraphTextureDesc b)
+        => a.SizeMode == b.SizeMode
+            && a.Scale == b.Scale
+            && a.Width == b.Width
+            && a.Height == b.Height
+            && a.EnableDepth == b.EnableDepth
+            && (a.ColorFormats ?? []).AsSpan().SequenceEqual(b.ColorFormats ?? []);
 
     private static void ApplyStorageUsage(
         PassNode[] nodes,
