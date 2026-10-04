@@ -193,7 +193,7 @@ public abstract class SwapchainFramebufferTests<T> : GraphicsDeviceTestBase<T> w
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetFramebuffer(GD.SwapchainFramebuffer);
+            cl.SetFramebuffer(GD.MainSwapchain.Framebuffer);
             cl.ClearColorTarget(0, Color.Red);
             cl.ClearDepthStencil(1f);
             context.SubmitCommandBuffer(cl);

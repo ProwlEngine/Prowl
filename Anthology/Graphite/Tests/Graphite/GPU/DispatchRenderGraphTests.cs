@@ -19,10 +19,10 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct DispatchView : IRenderView
 {
-    public bool TargetSwapchain { get; }
+    public Swapchain? TargetSwapchain { get; }
     public Framebuffer? TargetFramebuffer { get; }
 
-    public DispatchView(uint width, uint height, bool swapchain = true, Framebuffer? framebuffer = null)
+    public DispatchView(uint width, uint height, Swapchain? swapchain = null, Framebuffer? framebuffer = null)
     {
         PixelWidth = width;
         PixelHeight = height;
@@ -119,7 +119,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
     {
         using RenderPipeline<DispatchView> pipeline = new([new RecordingPass()]);
 
-        ExecutionTask task = GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
+        ExecutionTask task = GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForExecution(task);
 
         Assert.True(GD.IsExecutionComplete(task));
@@ -145,7 +145,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         RecordingPass other = new();
         using RenderPipeline<DispatchView> pipeline = new([other, targetPass]);
 
-        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.Equal(0, targetPass.RenderCount);
@@ -159,7 +159,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         RecordingPass other = new();
         using RenderPipeline<DispatchView> pipeline = new([other, targetPass]);
 
-        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, swapchain: false) });
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
         GD.WaitForIdle();
 
         Assert.Equal(0, targetPass.RenderCount);
@@ -174,22 +174,11 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         BackbufferPass pass = new();
         using RenderPipeline<DispatchView> pipeline = new([pass]);
 
-        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, swapchain: false, framebuffer: target) });
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, framebuffer: target) });
         GD.WaitForIdle();
 
         Assert.Equal(1, pass.RenderCount);
         Assert.Same(target, pass.Resolved);
-    }
-
-    [Fact]
-    public void Dispatch_FramebufferAndSwapchainBothSet_Throws()
-    {
-        Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
-        Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
-        using RenderPipeline<DispatchView> pipeline = new([new BackbufferPass()]);
-
-        Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, swapchain: true, framebuffer: target) }));
-        GD.WaitForIdle();
     }
 
     [Fact]
@@ -218,7 +207,7 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         try
         {
             using RenderPipeline<DispatchView> pipeline = new([new LeakingCommandBufferPass()]);
-            GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
+            GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
             GD.WaitForIdle();
         }
         finally
@@ -250,6 +239,17 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
 public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
+    public void Dispatch_FramebufferAndSwapchainBothSet_Throws()
+    {
+        Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
+        Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
+        using RenderPipeline<DispatchView> pipeline = new([new BackbufferPass()]);
+
+        Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain, framebuffer: target) }));
+        GD.WaitForIdle();
+    }
+
+    [Fact]
     public void Dispatch_ViewTargetPass_ResolvesSwapchainAndPresents()
     {
         BackbufferPass pass = new();
@@ -269,7 +269,7 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
         RecordingPass pass = new();
         using RenderPipeline<DispatchView> pipeline = new([pass]);
 
-        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.Equal(1, pass.RenderCount);

@@ -9,10 +9,11 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct SwapchainView : IRenderView
 {
-    public bool TargetSwapchain => true;
+    public Swapchain TargetSwapchain { get; }
 
-    public SwapchainView(uint width, uint height)
+    public SwapchainView(uint width, uint height, Swapchain swapchain)
     {
+        TargetSwapchain = swapchain;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -74,7 +75,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     {
         ExecutionTask task = GD.BeginExecution();
         GD.CompleteExecution(task);
-        GD.SwapBuffers();
+        GD.SwapBuffers(GD.MainSwapchain);
         GD.WaitForIdle();
     }
 
@@ -83,7 +84,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     {
         using RenderPipeline<SwapchainView> presenting = new([new ClearSwapchainPass()]);
         using RenderPipeline<SwapchainView> offscreen = new([new OffscreenPass()]);
-        SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height)];
+        SwapchainView[] views = [new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain)];
 
         for (int frame = 0; frame < 12; frame++)
         {
@@ -91,7 +92,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
         }
 
         GD.ResizeMainWindow(128, 96);
-        views[0] = new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height);
+        views[0] = new SwapchainView(GD.MainSwapchain.Framebuffer.Width, GD.MainSwapchain.Framebuffer.Height, GD.MainSwapchain);
 
         for (int frame = 0; frame < 12; frame++)
         {
@@ -113,7 +114,7 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
 
         ExecutionTask task = GD.BeginExecution();
         GD.CompleteExecution(task);
-        GD.SwapBuffers();
+        GD.SwapBuffers(GD.MainSwapchain);
         GD.WaitForIdle();
     }
 }

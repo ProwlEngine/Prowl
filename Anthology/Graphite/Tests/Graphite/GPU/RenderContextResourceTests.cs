@@ -17,10 +17,11 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct ResourceView : IRenderView
 {
-    public bool TargetSwapchain => true;
+    public Swapchain? TargetSwapchain { get; }
 
-    public ResourceView(uint width, uint height)
+    public ResourceView(uint width, uint height, Swapchain? swapchain = null)
     {
+        TargetSwapchain = swapchain;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -251,7 +252,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_cache"), ColorDesc(), resolvesPerRender: 3);
         using RenderPipeline<ResourceView> pipeline = new([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.Equal(3, pass.Resolved.Count);
@@ -267,7 +268,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ResolvingPass reader = new("Reader", id, ColorDesc(), isOutput: false);
         using RenderPipeline<ResourceView> pipeline = new([writer, reader]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.Same(writer.Resolved[0], reader.Resolved[0]);
@@ -280,7 +281,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ResolvingPass b = new("B", RenderResourceID.Intern("resourcetest_distinct_b"), ColorDesc());
         using RenderPipeline<ResourceView> pipeline = new([a, b]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.NotSame(a.Resolved[0], b.Resolved[0]);
@@ -292,7 +293,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         using RenderPipeline<ResourceView> pipeline = new([new UndeclaredResolvePass()]);
 
         Assert.Throws<InvalidOperationException>(
-            () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) }));
+            () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) }));
     }
 
     [Fact]
@@ -301,7 +302,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         using RenderPipeline<ResourceView> pipeline = new([new DefaultHandleResolvePass()]);
 
         Assert.Throws<ArgumentException>(
-            () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) }));
+            () => GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) }));
     }
 
     [Fact]
@@ -309,7 +310,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     {
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_perview"), ColorDesc());
         using RenderPipeline<ResourceView> pipeline = new([pass]);
-        ResourceView[] views = { new(64, 48), new(128, 96) };
+        ResourceView[] views = { new(64, 48, GD.MainSwapchain), new(128, 96, GD.MainSwapchain) };
 
         GD.DispatchGraph(pipeline, views);
         GD.WaitForIdle();
@@ -328,7 +329,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_scale"), ColorDesc(0.5f));
         using RenderPipeline<ResourceView> pipeline = new([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 100) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 100, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.Equal(100u, pass.Resolved[0].Desc.Width);
@@ -343,7 +344,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
             GraphTextureDesc.Sized(37, 41, false, PixelFormat.R8_G8_B8_A8_UNorm));
         using RenderPipeline<ResourceView> pipeline = new([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 300) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(200, 300, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.Equal(37u, pass.Resolved[0].Desc.Width);
@@ -356,8 +357,8 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ResolvingPass pass = new("Pass", RenderResourceID.Intern("resourcetest_crossdispatch"), ColorDesc());
         using RenderPipeline<ResourceView> pipeline = new([pass]);
 
-        ExecutionTask task1 = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
-        ExecutionTask task2 = GD.DispatchGraph(pipeline, new ResourceView[] { new(128, 128) });
+        ExecutionTask task1 = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
+        ExecutionTask task2 = GD.DispatchGraph(pipeline, new ResourceView[] { new(128, 128, GD.MainSwapchain) });
         GD.WaitForExecution(task1);
         GD.WaitForExecution(task2);
 
@@ -397,7 +398,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
 
         for (int frame = 0; frame < 3; frame++)
         {
-            ExecutionTask task = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+            ExecutionTask task = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
             GD.WaitForExecution(task);
         }
 
@@ -416,7 +417,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ImportingPass pass = new(RenderResourceID.Intern("resourcetest_imported"), external);
         using RenderPipeline<ResourceView> pipeline = new([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.Same(external, pass.Resolved);
@@ -430,7 +431,7 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         ReadingPass reader = new(id);
         using RenderPipeline<ResourceView> pipeline = new([reader, writer]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.NotNull(reader.Resolved);
@@ -446,7 +447,7 @@ public abstract class RenderContextResourcePresentTests<T> : GraphicsDeviceTestB
         BackbufferResolvingPass pass = new();
         using RenderPipeline<ResourceView> pipeline = new([pass]);
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64, GD.MainSwapchain) });
         GD.WaitForIdle();
 
         Assert.True(pass.SawFramebuffer);
