@@ -95,7 +95,7 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
                     }
                 }
 
-                return new VkMemoryBlock(memory, 0, size, memoryTypeBits, mappedPtr, true);
+                return new VkMemoryBlock(memory, 0, size, memoryTypeIndex, mappedPtr, true);
             }
             else
             {
