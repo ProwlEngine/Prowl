@@ -22,7 +22,7 @@ public abstract partial class GraphicsDevice
         RenderGraph<T> graph = pipeline.Graph;
 
         ExecutionTask task = BeginExecution();
-        bool present = false;
+        List<Swapchain>? presents = null;
 
         int index = 0;
         foreach (T view in views)
@@ -36,13 +36,22 @@ public abstract partial class GraphicsDevice
             pipeline.ExecuteView(context);
             Profiler?.EndView(viewInfo);
 
-            present |= context.PresentRequested;
+            Swapchain? swapchain = context.PresentSwapchain;
+            if (swapchain != null)
+            {
+                presents ??= [];
+                if (!presents.Contains(swapchain))
+                    presents.Add(swapchain);
+            }
         }
 
         CompleteExecution(task);
 
-        if (present)
-            SwapBuffers();
+        if (presents != null)
+        {
+            foreach (Swapchain swapchain in presents)
+                SwapBuffers(swapchain);
+        }
 
         return task;
     }

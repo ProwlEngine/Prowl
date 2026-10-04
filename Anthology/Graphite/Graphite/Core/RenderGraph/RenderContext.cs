@@ -54,16 +54,16 @@ public sealed class RenderContext<TView> : IGraphStateSource
     /// <summary>Execution this context records into.</summary>
     public ExecutionTask Task => _task;
 
-    internal bool PresentRequested => _graph.WritesViewTarget && _view.TargetSwapchain && _device.SwapchainFramebuffer != null;
+    internal Swapchain? PresentSwapchain => _graph.WritesViewTarget ? _view.TargetSwapchain : null;
 
     internal bool HasViewTarget
     {
         get
         {
-            if (_view.TargetSwapchain && _view.TargetFramebuffer != null)
+            if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
                 throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
 
-            return _view.TargetSwapchain ? _device.SwapchainFramebuffer != null : _view.TargetFramebuffer != null;
+            return _view.TargetSwapchain != null || _view.TargetFramebuffer != null;
         }
     }
 
@@ -369,9 +369,9 @@ public sealed class RenderContext<TView> : IGraphStateSource
             case GraphViewTargetResource:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), "The view target has no history.");
-                if (_view.TargetSwapchain && _view.TargetFramebuffer != null)
+                if (_view.TargetSwapchain != null && _view.TargetFramebuffer != null)
                     throw new InvalidOperationException($"View '{_view.Name}' sets both TargetFramebuffer and TargetSwapchain.");
-                Framebuffer viewTarget = (_view.TargetSwapchain ? _device.SwapchainFramebuffer : _view.TargetFramebuffer)
+                Framebuffer viewTarget = (_view.TargetSwapchain?.Framebuffer ?? _view.TargetFramebuffer)
                     ?? throw new InvalidOperationException($"A pass resolved the view target, but view '{_view.Name}' has none.");
                 RenderTexture target = new(viewTarget);
                 _resolved[handle.Id] = target;

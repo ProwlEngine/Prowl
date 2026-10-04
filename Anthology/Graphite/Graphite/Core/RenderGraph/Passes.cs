@@ -27,9 +27,9 @@ public interface IRenderView
     Framebuffer? TargetFramebuffer => null;
 
     /// <summary>
-    /// True to draw into the device's main swapchain image and present after the dispatch. Needs a main swapchain.
+    /// Swapchain this view owns, or null. Passes that declare the view target draw into its image and the dispatch presents it.
     /// </summary>
-    bool TargetSwapchain => false;
+    Swapchain? TargetSwapchain => null;
 }
 
 /// <summary>

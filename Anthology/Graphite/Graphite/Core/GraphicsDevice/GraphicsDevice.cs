@@ -89,19 +89,6 @@ public abstract partial class GraphicsDevice : IDisposable
     internal abstract uint GetStructuredBufferMinOffsetAlignmentCore();
 
     /// <summary>
-    /// Swaps main swapchain buffers, presents to screen. Needs a main swapchain.
-    /// </summary>
-    public void SwapBuffers()
-    {
-        if (MainSwapchain == null)
-        {
-            throw new RenderException("This GraphicsDevice was created without a main Swapchain, so the requested operation cannot be performed.");
-        }
-
-        SwapBuffers(MainSwapchain);
-    }
-
-    /// <summary>
     /// Swaps the buffers of the given swapchain.
     /// </summary>
     /// <param name="swapchain">Swapchain to swap and present.</param>
@@ -112,11 +99,6 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     private protected abstract void SwapBuffersCore(Swapchain swapchain);
-
-    /// <summary>
-    /// Main swapchain's framebuffer, or null.
-    /// </summary>
-    public Framebuffer? SwapchainFramebuffer => MainSwapchain?.Framebuffer;
 
     /// <summary>
     /// Tells the device the main window resized; recreates the swapchain framebuffer. Needs a main swapchain.
