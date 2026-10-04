@@ -77,12 +77,14 @@ public abstract partial class GraphicsDevice
     internal static void UpdateTexture_CheckParameters(
         Texture texture,
         uint sizeInBytes,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer)
+        in TextureRegion region)
     {
         if (!ValidationEnabled)
             return;
+
+        uint x = region.X, y = region.Y, z = region.Z;
+        uint width = region.Width, height = region.Height, depth = region.Depth;
+        uint mipLevel = region.MipLevel, arrayLayer = region.ArrayLayer;
 
         if (FormatHelpers.IsCompressedFormat(texture.Format))
         {

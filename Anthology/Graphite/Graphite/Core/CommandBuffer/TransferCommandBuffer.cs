@@ -41,62 +41,28 @@ public abstract partial class TransferCommandBuffer : CommandBufferBase
     public abstract void End();
 
     /// <summary>
-    /// Updates part of a texture. T must be blittable.
-    /// </summary>
-    public unsafe void UpdateTexture<T>(
-        Texture texture,
-        ReadOnlySpan<T> source,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer) where T : unmanaged
-    {
-        uint sizeInBytes = (uint)(sizeof(T) * source.Length);
-        fixed (void* pin = &MemoryMarshal.GetReference(source))
-        {
-            UpdateTexture(texture, (IntPtr)pin, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-        }
-    }
-
-    /// <summary>
-    /// Updates part of a texture.
-    /// </summary>
-    public void UpdateTexture(
-        Texture texture,
-        IntPtr source,
-        uint sizeInBytes,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer)
-    {
-        GraphicsDevice.UpdateTexture_CheckParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-        UpdateTextureCore(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-    }
-
-    /// <summary>
     /// Updates a texture region from a pointer.
     /// </summary>
     public void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, in TextureRegion region)
     {
-        UpdateTexture(
+        GraphicsDevice.UpdateTexture_CheckParameters(
+            texture,
+            sizeInBytes, region);
+        UpdateTextureCore(
             texture,
             source,
-            sizeInBytes,
-            region.X, region.Y, region.Z,
-            region.Width, region.Height, region.Depth,
-            region.MipLevel, region.ArrayLayer);
+            sizeInBytes, region);
     }
 
     /// <summary>
     /// Updates a texture region from a span.
     /// </summary>
-    public void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source, in TextureRegion region) where T : unmanaged
+    public unsafe void UpdateTexture<T>(Texture texture, ReadOnlySpan<T> source, in TextureRegion region) where T : unmanaged
     {
-        UpdateTexture(
-            texture,
-            source,
-            region.X, region.Y, region.Z,
-            region.Width, region.Height, region.Depth,
-            region.MipLevel, region.ArrayLayer);
+        fixed (void* pin = &MemoryMarshal.GetReference(source))
+        {
+            UpdateTexture(texture, (IntPtr)pin, (uint)(sizeof(T) * source.Length), region);
+        }
     }
 
     /// <summary>
@@ -110,8 +76,5 @@ public abstract partial class TransferCommandBuffer : CommandBufferBase
     private protected abstract void UpdateTextureCore(
         Texture texture,
         IntPtr source,
-        uint sizeInBytes,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer);
+        uint sizeInBytes, in TextureRegion region);
 }

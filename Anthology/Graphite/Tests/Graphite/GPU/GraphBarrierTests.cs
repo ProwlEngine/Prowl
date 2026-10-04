@@ -85,7 +85,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
     private Texture CreateSourceTexels()
     {
         Texture source = RF.CreateTexture(TextureDescription.Texture2D(4, 1, 1, 1, Format, TextureUsage.Sampled));
-        GD.UpdateTexture(source, s_texels, 0, 0, 0, 4, 1, 1, 0, 0);
+        GD.UpdateTexture(source, s_texels, new TextureRegion(0, 0, 0, 4, 1, 1));
         return source;
     }
 

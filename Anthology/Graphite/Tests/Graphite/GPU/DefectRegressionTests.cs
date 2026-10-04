@@ -60,7 +60,7 @@ public abstract class DefectRegressionTests<T> : GraphicsDeviceTestBase<T> where
 
         TransferCommandBuffer transfer = RF.CreateTransferCommandBuffer();
         transfer.Begin();
-        transfer.UpdateTexture<uint>(staging, [0x11111111, 0x22222222, 0x33333333, 0x44444444], 1, 2, 0, 2, 2, 1, 0, 0);
+        transfer.UpdateTexture<uint>(staging, [0x11111111, 0x22222222, 0x33333333, 0x44444444], new TextureRegion(1, 2, 0, 2, 2, 1));
         transfer.End();
         GD.SubmitAndWait(transfer);
 

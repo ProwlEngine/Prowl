@@ -107,15 +107,11 @@ internal unsafe partial class VkGraphicsDevice
         Texture texture,
         IntPtr source,
         uint sizeInBytes,
-        uint x,
-        uint y,
-        uint z,
-        uint width,
-        uint height,
-        uint depth,
-        uint mipLevel,
-        uint arrayLayer)
+        in TextureRegion region)
     {
+        uint x = region.X, y = region.Y, z = region.Z;
+        uint width = region.Width, height = region.Height, depth = region.Depth;
+        uint mipLevel = region.MipLevel, arrayLayer = region.ArrayLayer;
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
         bool isStaging = (vkTex.Usage & TextureUsage.Staging) != 0;
         if (isStaging)
@@ -140,7 +136,7 @@ internal unsafe partial class VkGraphicsDevice
         else
         {
             VkTexture stagingTex = GetFreeStagingTexture(width, height, depth, texture.Format);
-            UpdateTexture(stagingTex, source, sizeInBytes, 0, 0, 0, width, height, depth, 0, 0);
+            UpdateTexture(stagingTex, source, sizeInBytes, new TextureRegion(0, 0, 0, width, height, depth));
             SharedCommandPool pool = GetFreeCommandPool();
             Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
             VkCommandBuffer.CopyTextureCore_VkCommandBuffer(

@@ -45,11 +45,11 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             if (useArrayOverload)
             {
-                GD.UpdateTexture(texture, data, 0, 0, 0, 1024, 1024, 1, 0, 0);
+                GD.UpdateTexture(texture, data, new TextureRegion(0, 0, 0, 1024, 1024, 1));
             }
             else
             {
-                GD.UpdateTexture(texture, (IntPtr)dataPtr, 1024 * 1024 * 4, 0, 0, 0, 1024, 1024, 1, 0, 0);
+                GD.UpdateTexture(texture, (IntPtr)dataPtr, 1024 * 1024 * 4, new TextureRegion(0, 0, 0, 1024, 1024, 1));
             }
         }
 
@@ -80,11 +80,11 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             if (useArrayOverload)
             {
-                GD.UpdateTexture(texture, data, 0, 0, 0, 256, 256, 1, 2, 0);
+                GD.UpdateTexture(texture, data, new TextureRegion(0, 0, 0, 256, 256, 1, 2, 0));
             }
             else
             {
-                GD.UpdateTexture(texture, (IntPtr)dataPtr, 256 * 256 * sizeof(ushort), 0, 0, 0, 256, 256, 1, 2, 0);
+                GD.UpdateTexture(texture, (IntPtr)dataPtr, 256 * 256 * sizeof(ushort), new TextureRegion(0, 0, 0, 256, 256, 1, 2, 0));
             }
         }
 
@@ -114,7 +114,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         fixed (ushort* dataPtr = data)
         {
-            GD.UpdateTexture(src, (IntPtr)dataPtr, 256 * 256 * sizeof(ushort), 0, 0, 0, 256, 256, 1, 2, 0);
+            GD.UpdateTexture(src, (IntPtr)dataPtr, 256 * 256 * sizeof(ushort), new TextureRegion(0, 0, 0, 256, 256, 1, 2, 0));
         }
 
         GD.RunTestGraph(context =>
@@ -157,7 +157,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             {
                 uint mipSize = TexSize >> (int)mip;
                 byte[] data = Enumerable.Repeat((layer + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
-                GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, layer);
+                GD.UpdateTexture(tex, data, new TextureRegion(0, 0, 0, mipSize, mipSize, 1, mip, layer));
             }
         }
 
@@ -181,7 +181,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             {
                 uint mipSize = TexSize >> (int)mip;
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
-                GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, face);
+                GD.UpdateTexture(tex, data, new TextureRegion(0, 0, 0, mipSize, mipSize, 1, mip, face));
             }
         }
 
@@ -225,7 +225,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             {
                 uint mipSize = TexSize >> (int)mip;
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
-                GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, face);
+                GD.UpdateTexture(tex, data, new TextureRegion(0, 0, 0, mipSize, mipSize, 1, mip, face));
             }
         }
 
@@ -249,7 +249,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint face = 0; face < 6; face++)
         {
             byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(TexSize * TexSize)).Select(n => (byte)n).ToArray();
-            GD.UpdateTexture(src, data, 0, 0, 0, TexSize, TexSize, 1, 0, face);
+            GD.UpdateTexture(src, data, new TextureRegion(0, 0, 0, TexSize, TexSize, 1, 0, face));
         }
 
         GD.RunTestGraph(context =>
@@ -298,7 +298,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint face = 0; face < 6; face++)
         {
             byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(TexSize * TexSize)).Select(n => (byte)n).ToArray();
-            GD.UpdateTexture(src, data, 0, 0, 0, TexSize, TexSize, 1, 0, face);
+            GD.UpdateTexture(src, data, new TextureRegion(0, 0, 0, TexSize, TexSize, 1, 0, face));
         }
 
         GD.RunTestGraph(context =>
@@ -354,7 +354,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             for (uint face = 0; face < 6; face++)
             {
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
-                GD.UpdateTexture(src, data, 0, 0, 0, mipSize, mipSize, 1, mip, face);
+                GD.UpdateTexture(src, data, new TextureRegion(0, 0, 0, mipSize, mipSize, 1, mip, face));
             }
         }
 
@@ -404,7 +404,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             for (uint face = 0; face < 6; face++)
             {
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
-                GD.UpdateTexture(src, data, 0, 0, 0, mipSize, mipSize, 1, mip, face);
+                GD.UpdateTexture(src, data, new TextureRegion(0, 0, 0, mipSize, mipSize, 1, mip, face));
             }
         }
 
@@ -458,7 +458,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             for (uint face = 0; face < 6; face++)
             {
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
-                GD.UpdateTexture(src, data, 0, 0, 0, mipSize, mipSize, 1, mip, face);
+                GD.UpdateTexture(src, data, new TextureRegion(0, 0, 0, mipSize, mipSize, 1, mip, face));
             }
         }
 
@@ -508,7 +508,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint face = 0; face < 6; face++)
         {
             byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(TexSize * TexSize)).Select(n => (byte)n).ToArray();
-            GD.UpdateTexture(tex, data, 0, 0, 0, TexSize, TexSize, 1, 0, face);
+            GD.UpdateTexture(tex, data, new TextureRegion(0, 0, 0, TexSize, TexSize, 1, 0, face));
         }
 
         Texture readback = GetReadback(tex);
@@ -579,7 +579,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint layer = 0; layer < ArrayLayers; layer++)
         {
             byte[] data = Enumerable.Repeat(layer * ArrayColorDelta, (int)(TexSize * TexSize)).Select(n => (byte)n).ToArray();
-            GD.UpdateTexture(tex, data, 0, 0, 0, TexSize, TexSize, 1, 0, layer);
+            GD.UpdateTexture(tex, data, new TextureRegion(0, 0, 0, TexSize, TexSize, 1, 0, layer));
         }
 
         for (uint layer = 0; layer < ArrayLayers; layer++)
@@ -610,7 +610,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint layer = 0; layer < ArrayLayers; layer++)
         {
             byte[] data = Enumerable.Repeat(layer * ArrayColorDelta, (int)(TexSize * TexSize)).Select(n => (byte)n).ToArray();
-            GD.UpdateTexture(tex, data, 0, 0, 0, TexSize, TexSize, 1, 0, layer);
+            GD.UpdateTexture(tex, data, new TextureRegion(0, 0, 0, TexSize, TexSize, 1, 0, layer));
         }
 
         for (uint layer = 0; layer < ArrayLayers; layer++)
@@ -647,7 +647,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             {
                 uint mipSize = MipLevels >> (int)mip;
                 byte[] data = Enumerable.Repeat(layer * ArrayColorDelta, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
-                GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, layer);
+                GD.UpdateTexture(tex, data, new TextureRegion(0, 0, 0, mipSize, mipSize, 1, mip, layer));
             }
         }
 
@@ -730,7 +730,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         }
         fixed (byte* dataPtr = data)
         {
-            GD.UpdateTexture(copySrc, (IntPtr)dataPtr, totalDataSize, srcX, srcY, 0, copyWidth, copyHeight, 1, 0, 0);
+            GD.UpdateTexture(copySrc, (IntPtr)dataPtr, totalDataSize, new TextureRegion(srcX, srcY, 0, copyWidth, copyHeight, 1));
         }
 
         GD.RunTestGraph(context =>
@@ -780,12 +780,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             int byteCount = 16 * 16;
             byte[] data = Enumerable.Range(0, byteCount).Select(i => (byte)(i + layer)).ToArray();
-            GD.UpdateTexture(
-                copySrc,
-                data,
-                0, 0, 0,
-                16, 16, 1,
-                0, layer);
+            GD.UpdateTexture(copySrc, data, new TextureRegion(0, 0, 0, 16, 16, 1, 0, layer));
         }
 
         GD.WaitForExecution(GD.RunTestGraph(context =>
@@ -844,10 +839,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         fixed (Color32* dataPtr = data)
         {
-            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<Color32>()),
-                0, 0, 0,
-                tex3D.Width, tex3D.Height, tex3D.Depth,
-                0, 0);
+            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<Color32>()), new TextureRegion(0, 0, 0, tex3D.Width, tex3D.Height, tex3D.Depth));
         }
 
         MappedResourceView<Color32> view = GD.Map<Color32>(tex3D, MapMode.Read, 0);
@@ -895,7 +887,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         ushort[] data = Enumerable.Range(0, (int)tex1D.Width).Select(i => (ushort)(i * 2)).ToArray();
         fixed (ushort* dataPtr = &data[0])
         {
-            GD.UpdateTexture(tex1D, (IntPtr)dataPtr, (uint)(data.Length * sizeof(ushort)), 0, 0, 0, tex1D.Width, 1, 1, 0, 0);
+            GD.UpdateTexture(tex1D, (IntPtr)dataPtr, (uint)(data.Length * sizeof(ushort)), new TextureRegion(0, 0, 0, tex1D.Width, 1, 1));
         }
 
         MappedResourceView<ushort> view = GD.Map<ushort>(tex1D, MapMode.Read);
@@ -1050,7 +1042,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 srcData[y * src.Width + x] = new Color32((byte)x, (byte)y, 0, 1);
             }
 
-        GD.UpdateTexture(src, srcData, 0, 0, 0, src.Width, src.Height, 1, 0, 0);
+        GD.UpdateTexture(src, srcData, new TextureRegion(0, 0, 0, src.Width, src.Height, 1));
 
         GD.RunTestGraph(context =>
         {
@@ -1155,11 +1147,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         fixed (Color32* dataPtr = &data[0])
         {
-            GD.UpdateTexture(
-                tex2D, (IntPtr)dataPtr, (uint)(data.Length * sizeof(Color32)),
-                50, 70, 0,
-                50, 30, 1,
-                0, 0);
+            GD.UpdateTexture(tex2D, (IntPtr)dataPtr, (uint)(data.Length * sizeof(Color32)), new TextureRegion(50, 70, 0, 50, 30, 1));
         }
 
         MappedResourceView<Color32> readView = GD.Map<Color32>(tex2D, MapMode.Read);
@@ -1180,11 +1168,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         fixed (byte* dataPtr = &data[0])
         {
-            GD.UpdateTexture(
-                tex2D, (IntPtr)dataPtr, (uint)data.Length,
-                0, 0, 0,
-                4, 4, 1,
-                0, 0);
+            GD.UpdateTexture(tex2D, (IntPtr)dataPtr, (uint)data.Length, new TextureRegion(0, 0, 0, 4, 4, 1));
         }
     }
 
@@ -1229,10 +1213,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         fixed (Color32* dataPtr = data)
         {
-            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<Color32>()),
-                0, 0, 0,
-                tex3D.Width, tex3D.Height, tex3D.Depth,
-                0, 0);
+            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<Color32>()), new TextureRegion(0, 0, 0, tex3D.Width, tex3D.Height, tex3D.Depth));
         }
 
         Texture staging = RF.CreateTexture(TextureDescription.Texture3D(
@@ -1264,10 +1245,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         byte[] data = Enumerable.Repeat((byte)255, (int)(src.Width * src.Height)).ToArray();
         fixed (byte* dataPtr = data)
         {
-            GD.UpdateTexture(src, (IntPtr)dataPtr, (uint)data.Length,
-                0, 0, 0,
-                src.Width, src.Height, 1,
-                0, 0);
+            GD.UpdateTexture(src, (IntPtr)dataPtr, (uint)data.Length, new TextureRegion(0, 0, 0, src.Width, src.Height, 1));
         }
 
         Texture dst = RF.CreateTexture(
@@ -1275,10 +1253,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         byte[] data2 = Enumerable.Repeat((byte)100, (int)(dst.Width * dst.Height)).ToArray();
         fixed (byte* dataPtr2 = data2)
         {
-            GD.UpdateTexture(dst, (IntPtr)dataPtr2, (uint)data2.Length,
-                0, 0, 0,
-                dst.Width, dst.Height, 1,
-                0, 0);
+            GD.UpdateTexture(dst, (IntPtr)dataPtr2, (uint)data2.Length, new TextureRegion(0, 0, 0, dst.Width, dst.Height, 1));
         }
 
         GD.RunTestGraph(context =>
@@ -1341,9 +1316,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 }
             }
 
-            GD.UpdateTexture(
-                srcTex, (IntPtr)dataPtr, (uint)dataArray.Length,
-                0, 0, 0, srcWidth, srcHeight, srcDepth, 0, 0);
+            GD.UpdateTexture(srcTex, (IntPtr)dataPtr, (uint)dataArray.Length, new TextureRegion(0, 0, 0, srcWidth, srcHeight, srcDepth));
         }
 
         Texture dstTex = RF.CreateTexture(new TextureDescription(
@@ -1422,7 +1395,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Color[] pixelData = Enumerable.Repeat(Color.Red, 1024 * 1024).ToArray();
         fixed (Color* pixelDataPtr = pixelData)
         {
-            GD.UpdateTexture(tex, (IntPtr)pixelDataPtr, 1024 * 1024 * 16, 0, 0, 0, 1024, 1024, 1, 0, 0);
+            GD.UpdateTexture(tex, (IntPtr)pixelDataPtr, 1024 * 1024 * 16, new TextureRegion(0, 0, 0, 1024, 1024, 1));
         }
 
         GD.RunTestGraph(context =>

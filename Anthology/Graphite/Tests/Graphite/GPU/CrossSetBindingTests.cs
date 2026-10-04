@@ -82,7 +82,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
     {
         Texture texture = RF.CreateTexture(TextureDescription.Texture2D(
             1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
-        GD.UpdateTexture(texture, new byte[] { red, 0, 0, 255 }, 0, 0, 0, 1, 1, 1, 0, 0);
+        GD.UpdateTexture(texture, new byte[] { red, 0, 0, 255 }, new TextureRegion(0, 0, 0, 1, 1, 1));
         return texture;
     }
 

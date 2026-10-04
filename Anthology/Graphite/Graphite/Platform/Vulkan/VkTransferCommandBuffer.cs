@@ -99,10 +99,11 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
         Texture texture,
         IntPtr source,
         uint sizeInBytes,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer)
+        in TextureRegion region)
     {
+        uint x = region.X, y = region.Y, z = region.Z;
+        uint width = region.Width, height = region.Height, depth = region.Depth;
+        uint mipLevel = region.MipLevel, arrayLayer = region.ArrayLayer;
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
         VkBuffer staging = RentStaging(source, sizeInBytes);
         if (vkTex.IsStaging)
@@ -116,7 +117,7 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
 
         VkBarriers.Transition(_gd, _cb, vkTex, layout, ImageLayout.TransferDstOptimal, mipLevel, 1, arrayLayer, 1);
 
-        BufferImageCopy region = new()
+        BufferImageCopy copy = new()
         {
             BufferOffset = 0,
             BufferRowLength = 0,
@@ -131,7 +132,7 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
             ImageOffset = new Offset3D { X = (int)x, Y = (int)y, Z = (int)z },
             ImageExtent = new Extent3D { Width = width, Height = height, Depth = depth }
         };
-        _gd.Vk.CmdCopyBufferToImage(_cb, staging.DeviceBuffer, vkTex.OptimalDeviceImage, ImageLayout.TransferDstOptimal, 1, in region);
+        _gd.Vk.CmdCopyBufferToImage(_cb, staging.DeviceBuffer, vkTex.OptimalDeviceImage, ImageLayout.TransferDstOptimal, 1, in copy);
 
         VkBarriers.Transition(_gd, _cb, vkTex, ImageLayout.TransferDstOptimal, layout, mipLevel, 1, arrayLayer, 1);
         _gd.Profiler?.Record(BufferOpBin.Update, sizeInBytes);
