@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Full graphics program: shader stages plus its pipeline state.
 /// </summary>
-public struct ShaderDescription : IEquatable<ShaderDescription>
+public struct ShaderDescription
 {
     /// <summary>
     /// Per-stage descs, unique stage each.
@@ -74,32 +74,5 @@ public struct ShaderDescription : IEquatable<ShaderDescription>
         RasterizerState = rasterizerState;
         VertexLayouts = vertexLayouts;
         ResourceLayouts = resourceLayouts;
-    }
-
-    /// <summary>
-    /// Elementwise equality.
-    /// </summary>
-    public bool Equals(ShaderDescription other)
-    {
-        return Util.ArrayEqualsEquatable(Stages, other.Stages)
-            && BlendState.Equals(other.BlendState)
-            && DepthStencilState.Equals(other.DepthStencilState)
-            && RasterizerState.Equals(other.RasterizerState)
-            && Util.ArrayEqualsEquatable(VertexLayouts, other.VertexLayouts)
-            && Util.ArrayEqualsEquatable(ResourceLayouts, other.ResourceLayouts);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            Stages.ArrayHash(),
-            BlendState,
-            DepthStencilState,
-            RasterizerState,
-            VertexLayouts.ArrayHash(),
-            ResourceLayouts.ArrayHash());
     }
 }

@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Rented render-texture bundle. Colors plus maybe depth, same size/samples. Equal descs share a free-list.
 /// </summary>
-public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescription>
+public readonly record struct RenderTextureDescription
 {
     /// <summary>
     /// Width in texels.
@@ -114,65 +114,17 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     {
     }
 
-    /// <summary>
-    /// Equal if dims, samples, depth, depth format and storage flags, and color formats all match.
-    /// </summary>
-    /// <param name="other">Other instance.</param>
-    /// <returns>True if equal.</returns>
+    /// <inheritdoc/>
     public bool Equals(RenderTextureDescription other)
-    {
-        if (Width != other.Width
-            || Height != other.Height
-            || Depth != other.Depth
-            || DepthFormat != other.DepthFormat
-            || SampleCount != other.SampleCount
-            || Storage != other.Storage
-            || ColorFormats.Length != other.ColorFormats.Length)
-        {
-            return false;
-        }
+        => Width == other.Width
+        && Height == other.Height
+        && Depth == other.Depth
+        && DepthFormat == other.DepthFormat
+        && SampleCount == other.SampleCount
+        && Storage == other.Storage
+        && ColorFormats.AsSpan().SequenceEqual(other.ColorFormats);
 
-        for (int i = 0; i < ColorFormats.Length; i++)
-        {
-            if (ColorFormats[i] != other.ColorFormats[i])
-                return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Equality vs boxed object.
-    /// </summary>
-    /// <param name="obj">Other instance.</param>
-    /// <returns>True if equal.</returns>
-    public override bool Equals(object? obj) => obj is RenderTextureDescription other && Equals(other);
-
-    /// <summary>
-    /// Hash of all fields.
-    /// </summary>
-    /// <returns>Hash code.</returns>
+    /// <inheritdoc/>
     public override int GetHashCode()
-    {
-        HashCode hash = new();
-        hash.Add(Width);
-        hash.Add(Height);
-        hash.Add(Depth);
-        hash.Add(DepthFormat);
-        hash.Add(SampleCount);
-        hash.Add(Storage);
-        foreach (PixelFormat format in ColorFormats)
-            hash.Add((int)format);
-        return hash.ToHashCode();
-    }
-
-    /// <summary>
-    /// Equal.
-    /// </summary>
-    public static bool operator ==(RenderTextureDescription left, RenderTextureDescription right) => left.Equals(right);
-
-    /// <summary>
-    /// Not equal.
-    /// </summary>
-    public static bool operator !=(RenderTextureDescription left, RenderTextureDescription right) => !left.Equals(right);
+        => HashCode.Combine(Width, Height, Depth, DepthFormat, SampleCount, Storage, ColorFormats.ArrayHash());
 }

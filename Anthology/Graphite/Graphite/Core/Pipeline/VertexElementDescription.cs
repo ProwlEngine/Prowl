@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Describes one vertex element.
 /// </summary>
-public struct VertexElementDescription : IEquatable<VertexElementDescription>
+public struct VertexElementDescription
 {
     /// <summary>
     /// Interned stable name; for reflected attributes this is semantic name + index (e.g. UV0).
@@ -40,26 +40,5 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
         Name = name;
         Format = format;
         Offset = offset;
-    }
-
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    public readonly bool Equals(VertexElementDescription other)
-    {
-        return Name == other.Name
-            && Format == other.Format
-            && Offset == other.Offset;
-    }
-
-    /// <summary>
-    /// Hash code for this instance.
-    /// </summary>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            Name,
-            (int)Format,
-            (int)Offset);
     }
 }

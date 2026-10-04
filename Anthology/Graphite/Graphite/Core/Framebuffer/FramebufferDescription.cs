@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Framebuffer descriptor for ResourceFactory.
 /// </summary>
-public struct FramebufferDescription : IEquatable<FramebufferDescription>
+public struct FramebufferDescription
 {
     /// <summary>
     /// Depth texture, needs DepthStencil flag. Null ok.
@@ -50,24 +50,5 @@ public struct FramebufferDescription : IEquatable<FramebufferDescription>
     {
         DepthTarget = depthTarget;
         ColorTargets = colorTargets;
-    }
-
-    /// <summary>
-    /// Element-wise equality check.
-    /// </summary>
-    /// <param name="other">Instance to compare.</param>
-    /// <returns>True if all match.</returns>
-    public readonly bool Equals(FramebufferDescription other)
-    {
-        return Nullable.Equals(DepthTarget, other.DepthTarget) && Util.ArrayEqualsEquatable(ColorTargets, other.ColorTargets);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>32-bit hash.</returns>
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(DepthTarget.GetHashCode(), ColorTargets.ArrayHash());
     }
 }

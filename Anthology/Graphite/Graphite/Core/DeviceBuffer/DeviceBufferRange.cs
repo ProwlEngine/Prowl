@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Slice of a buffer; bind via PropertySet to expose part to shaders.
 /// </summary>
-public struct DeviceBufferRange : IEquatable<DeviceBufferRange>
+public struct DeviceBufferRange
 {
     /// <summary>
     /// Buffer this range points into.
@@ -36,25 +36,5 @@ public struct DeviceBufferRange : IEquatable<DeviceBufferRange>
         Buffer = buffer;
         Offset = offset;
         SizeInBytes = sizeInBytes;
-    }
-
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if equal.</returns>
-    public readonly bool Equals(DeviceBufferRange other)
-    {
-        return Buffer == other.Buffer && Offset.Equals(other.Offset) && SizeInBytes.Equals(other.SizeInBytes);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override readonly int GetHashCode()
-    {
-        int bufferHash = Buffer?.GetHashCode() ?? 0;
-        return HashCode.Combine(bufferHash, Offset.GetHashCode(), SizeInBytes.GetHashCode());
     }
 }

@@ -9,7 +9,7 @@ namespace Prowl.Graphite.Vk;
 /// Program already owns blend, depth-stencil, rasterizer, layouts, and shader modules,
 /// so the key only needs per-draw varying state. Outputs and Topology compared by value.
 /// </remarks>
-internal readonly struct VkPipelineCacheKey : IEquatable<VkPipelineCacheKey>
+internal readonly record struct VkPipelineCacheKey
 {
     /// <summary>Render target output description.</summary>
     public readonly OutputDescription Outputs;
@@ -22,13 +22,4 @@ internal readonly struct VkPipelineCacheKey : IEquatable<VkPipelineCacheKey>
         Outputs = outputs;
         Topology = topology;
     }
-
-    public bool Equals(VkPipelineCacheKey other)
-        => Outputs.Equals(other.Outputs)
-        && Topology == other.Topology;
-
-    public override bool Equals(object? obj) => obj is VkPipelineCacheKey k && Equals(k);
-
-    public override int GetHashCode()
-        => HashCode.Combine(Outputs, (int)Topology);
 }

@@ -6,7 +6,7 @@ namespace Prowl.Graphite;
 /// Resolved vertex buffer binding for one layout slot, from ResolveSlot. Stride lives on the bound
 /// program's layout, not here.
 /// </summary>
-public readonly struct VertexBinding : IEquatable<VertexBinding>
+public readonly struct VertexBinding
 {
     /// <summary>
     /// Buffer to bind. Must be non-null, created with VertexBuffer usage.
@@ -28,22 +28,4 @@ public readonly struct VertexBinding : IEquatable<VertexBinding>
         Buffer = buffer;
         Offset = offset;
     }
-
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    public bool Equals(VertexBinding other)
-        => ReferenceEquals(Buffer, other.Buffer) && Offset == other.Offset;
-
-    /// <inheritdoc/>
-    public override bool Equals(object? obj) => obj is VertexBinding o && Equals(o);
-
-    /// <inheritdoc/>
-    public override int GetHashCode() => HashCode.Combine(Buffer, Offset);
-
-    /// <summary>Equality op.</summary>
-    public static bool operator ==(VertexBinding a, VertexBinding b) => a.Equals(b);
-
-    /// <summary>Inequality op.</summary>
-    public static bool operator !=(VertexBinding a, VertexBinding b) => !a.Equals(b);
 }

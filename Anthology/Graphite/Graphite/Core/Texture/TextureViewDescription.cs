@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// TextureView creation params.
 /// </summary>
-public struct TextureViewDescription : IEquatable<TextureViewDescription>
+public struct TextureViewDescription
 {
     /// <summary>
     /// Target texture.
@@ -49,35 +49,5 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
         BaseArrayLayer = baseArrayLayer ?? 0;
         ArrayLayers = arrayLayers ?? target.ArrayLayers;
         Format = format ?? target.Format;
-    }
-
-    /// <summary>
-    /// Field-by-field equality.
-    /// </summary>
-    /// <param name="other">Other instance.</param>
-    /// <returns>True if all fields match.</returns>
-    public readonly bool Equals(TextureViewDescription other)
-    {
-        return Target.Equals(other.Target)
-            && BaseMipLevel.Equals(other.BaseMipLevel)
-            && MipLevels.Equals(other.MipLevels)
-            && BaseArrayLayer.Equals(other.BaseArrayLayer)
-            && ArrayLayers.Equals(other.ArrayLayers)
-            && Format == other.Format;
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            Target.GetHashCode(),
-            BaseMipLevel.GetHashCode(),
-            MipLevels.GetHashCode(),
-            BaseArrayLayer.GetHashCode(),
-            ArrayLayers.GetHashCode(),
-            Format?.GetHashCode() ?? 0);
     }
 }

@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Texture creation params for ResourceFactory.
 /// </summary>
-public struct TextureDescription : IEquatable<TextureDescription>
+public struct TextureDescription
 {
     /// <summary>
     /// Width in texels.
@@ -228,42 +228,5 @@ public struct TextureDescription : IEquatable<TextureDescription>
             usage,
             TextureType.Texture3D,
             TextureSampleCount.Count1);
-    }
-
-    /// <summary>
-    /// Field-by-field equality.
-    /// </summary>
-    /// <param name="other">Instance to compare.</param>
-    /// <returns>True if all fields match.</returns>
-    public readonly bool Equals(TextureDescription other)
-    {
-        return Width.Equals(other.Width)
-            && Height.Equals(other.Height)
-            && Depth.Equals(other.Depth)
-            && MipLevels.Equals(other.MipLevels)
-            && ArrayLayers.Equals(other.ArrayLayers)
-            && Format == other.Format
-            && Usage == other.Usage
-            && Type == other.Type
-            && SampleCount == other.SampleCount;
-    }
-
-    /// <summary>
-    /// Hash of this instance.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            HashCode.Combine(
-                Width.GetHashCode(),
-                Height.GetHashCode(),
-                Depth.GetHashCode(),
-                MipLevels.GetHashCode(),
-                ArrayLayers.GetHashCode(),
-                (int)Format,
-                (int)Usage,
-                (int)Type),
-            (int)SampleCount);
     }
 }

@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// One attachment's blend behavior.
 /// </summary>
-public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription>
+public record struct BlendAttachmentDescription
 {
     /// <summary>
     /// Blend on/off.
@@ -156,36 +156,4 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
         DestinationAlphaFactor = BlendFactor.Zero,
         AlphaFunction = BlendFunction.Add,
     };
-
-    /// <summary>
-    /// Field equality.
-    /// </summary>
-    /// <param name="other">To compare against.</param>
-    /// <returns>True if fields match.</returns>
-    public bool Equals(BlendAttachmentDescription other)
-    {
-        return BlendEnabled.Equals(other.BlendEnabled)
-            && ColorWriteMask.Equals(other.ColorWriteMask)
-            && SourceColorFactor == other.SourceColorFactor
-            && DestinationColorFactor == other.DestinationColorFactor && ColorFunction == other.ColorFunction
-            && SourceAlphaFactor == other.SourceAlphaFactor && DestinationAlphaFactor == other.DestinationAlphaFactor
-            && AlphaFunction == other.AlphaFunction;
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>32-bit hash.</returns>
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(
-            BlendEnabled.GetHashCode(),
-            ColorWriteMask.GetHashCode(),
-            (int)SourceColorFactor,
-            (int)DestinationColorFactor,
-            (int)ColorFunction,
-            (int)SourceAlphaFactor,
-            (int)DestinationAlphaFactor,
-            (int)AlphaFunction);
-    }
 }

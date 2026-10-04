@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Sampler creation params.
 /// </summary>
-public struct SamplerDescription : IEquatable<SamplerDescription>
+public struct SamplerDescription
 {
     /// <summary>
     /// U address mode.
@@ -156,43 +156,4 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
         MaximumLod = uint.MaxValue,
         MaximumAnisotropy = 4,
     };
-
-    /// <summary>
-    /// Field-by-field equality.
-    /// </summary>
-    /// <param name="other">Other instance.</param>
-    /// <returns>True if all fields match.</returns>
-    public readonly bool Equals(SamplerDescription other)
-    {
-        return AddressModeU == other.AddressModeU
-            && AddressModeV == other.AddressModeV
-            && AddressModeW == other.AddressModeW
-            && Filter == other.Filter
-            && ComparisonKind.GetValueOrDefault() == other.ComparisonKind.GetValueOrDefault()
-            && MaximumAnisotropy == other.MaximumAnisotropy
-            && MinimumLod == other.MinimumLod
-            && MaximumLod == other.MaximumLod
-            && LodBias == other.LodBias
-            && BorderColor == other.BorderColor;
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(
-            HashCode.Combine(
-                (int)AddressModeU,
-                (int)AddressModeV,
-                (int)AddressModeW,
-                (int)Filter,
-                ComparisonKind.GetHashCode(),
-                MaximumAnisotropy.GetHashCode(),
-                MinimumLod.GetHashCode(),
-                MaximumLod.GetHashCode()),
-            LodBias.GetHashCode(),
-            (int)BorderColor);
-    }
 }

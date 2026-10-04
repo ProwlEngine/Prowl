@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Rasterizer state.
 /// </summary>
-public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription>
+public record struct RasterizerStateDescription
 {
     /// <summary>
     /// Face to cull.
@@ -91,36 +91,4 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
         DepthBiasSlopeFactor = 0f,
         DepthBiasClamp = 0f,
     };
-
-    /// <summary>
-    /// Field-by-field equality.
-    /// </summary>
-    /// <param name="other">Other instance.</param>
-    /// <returns>True if all fields match.</returns>
-    public readonly bool Equals(RasterizerStateDescription other)
-    {
-        return CullMode == other.CullMode
-            && FrontFace == other.FrontFace
-            && DepthClipEnabled.Equals(other.DepthClipEnabled)
-            && DepthBiasEnabled.Equals(other.DepthBiasEnabled)
-            && DepthBiasConstantFactor.Equals(other.DepthBiasConstantFactor)
-            && DepthBiasSlopeFactor.Equals(other.DepthBiasSlopeFactor)
-            && DepthBiasClamp.Equals(other.DepthBiasClamp);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash.</returns>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            (int)CullMode,
-            (int)FrontFace,
-            DepthClipEnabled.GetHashCode(),
-            DepthBiasEnabled.GetHashCode(),
-            DepthBiasConstantFactor.GetHashCode(),
-            DepthBiasSlopeFactor.GetHashCode(),
-            DepthBiasClamp.GetHashCode());
-    }
 }

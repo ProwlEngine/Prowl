@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Stencil test behavior for a program's depth-stencil state.
 /// </summary>
-public struct StencilBehaviorDescription : IEquatable<StencilBehaviorDescription>
+public record struct StencilBehaviorDescription
 {
     /// <summary>
     /// Op on stencil fail.
@@ -41,24 +41,5 @@ public struct StencilBehaviorDescription : IEquatable<StencilBehaviorDescription
         Pass = pass;
         DepthFail = depthFail;
         Comparison = comparison;
-    }
-
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if equal.</returns>
-    public readonly bool Equals(StencilBehaviorDescription other)
-    {
-        return Fail == other.Fail && Pass == other.Pass && DepthFail == other.DepthFail && Comparison == other.Comparison;
-    }
-
-    /// <summary>
-    /// Hash code for this instance.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine((int)Fail, (int)Pass, (int)DepthFail, (int)Comparison);
     }
 }

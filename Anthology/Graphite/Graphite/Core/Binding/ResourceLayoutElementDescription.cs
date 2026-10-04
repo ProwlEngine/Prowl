@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Resource element in a PropertySet.
 /// </summary>
-public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElementDescription>
+public record struct ResourceLayoutElementDescription
 {
     /// <summary>
     /// Element name (interned).
@@ -37,7 +37,6 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
     /// </summary>
     public UniformBlockField[] UniformFields;
 
-
     /// <summary>
     /// Name, kind, stages, binding index, plus optional GL uniform name and UBO metadata.
     /// </summary>
@@ -57,30 +56,18 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
         UniformFields = uniformFields ?? [];
     }
 
-
     /// <inheritdoc/>
     public readonly bool Equals(ResourceLayoutElementDescription other)
-    {
-        return Name == other.Name
-            && Kind == other.Kind
-            && Stages == other.Stages
-            && BindingIndex == other.BindingIndex
-            && Options == other.Options
-            && Util.ArrayEqualsEquatable(UniformFields, other.UniformFields);
-    }
-
+        => Name == other.Name
+        && Kind == other.Kind
+        && Stages == other.Stages
+        && BindingIndex == other.BindingIndex
+        && Options == other.Options
+        && Util.ArrayEqualsEquatable(UniformFields, other.UniformFields);
 
     /// <inheritdoc/>
     public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            Name,
-            (int)Kind,
-            (int)Stages,
-            BindingIndex,
-            (int)Options,
-            UniformFields != null ? UniformFields.ArrayHash() : 0);
-    }
+        => HashCode.Combine(Name, Kind, Stages, BindingIndex, Options, UniformFields?.ArrayHash() ?? 0);
 }
 
 

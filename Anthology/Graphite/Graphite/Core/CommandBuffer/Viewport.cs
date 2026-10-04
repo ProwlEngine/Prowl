@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// A 3D region.
 /// </summary>
-public struct Viewport : IEquatable<Viewport>
+public record struct Viewport
 {
     /// <summary>
     /// Min X.
@@ -49,32 +49,5 @@ public struct Viewport : IEquatable<Viewport>
         Height = height;
         MinDepth = minDepth;
         MaxDepth = maxDepth;
-    }
-
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if all fields match.</returns>
-    public readonly bool Equals(Viewport other)
-    {
-        return X.Equals(other.X) && Y.Equals(other.Y)
-            && Width.Equals(other.Width) && Height.Equals(other.Height)
-            && MinDepth.Equals(other.MinDepth) && MaxDepth.Equals(other.MaxDepth);
-    }
-
-    /// <summary>
-    /// Hash code for this instance.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            X.GetHashCode(),
-            Y.GetHashCode(),
-            Width.GetHashCode(),
-            Height.GetHashCode(),
-            MinDepth.GetHashCode(),
-            MaxDepth.GetHashCode());
     }
 }

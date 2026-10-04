@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Layout of vertex data in a vertex buffer.
 /// </summary>
-public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
+public struct VertexLayoutDescription
 {
     /// <summary>
     /// Shader attribute index; rest increment by 1 (Vulkan location).
@@ -68,24 +68,5 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
         }
 
         return computedStride;
-    }
-
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    public readonly bool Equals(VertexLayoutDescription other)
-    {
-        return Location.Equals(other.Location)
-            && Stride.Equals(other.Stride)
-            && Util.ArrayEqualsEquatable(Elements, other.Elements)
-            && InstanceStepRate.Equals(other.InstanceStepRate);
-    }
-
-    /// <summary>
-    /// Hash code for this instance.
-    /// </summary>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(Location.GetHashCode(), Stride.GetHashCode(), Elements.ArrayHash(), InstanceStepRate.GetHashCode());
     }
 }

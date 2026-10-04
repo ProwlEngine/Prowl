@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Depth stencil state for a program.
 /// </summary>
-public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescription>
+public record struct DepthStencilStateDescription
 {
     /// <summary>
     /// Depth test on/off.
@@ -149,41 +149,4 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
         DepthWriteEnabled = false,
         DepthComparison = ComparisonKind.LessEqual
     };
-
-    /// <summary>
-    /// Field-by-field equality check.
-    /// </summary>
-    /// <param name="other">Other instance.</param>
-    /// <returns>True if all fields match.</returns>
-    public bool Equals(DepthStencilStateDescription other)
-    {
-        return DepthTestEnabled.Equals(other.DepthTestEnabled)
-            && DepthWriteEnabled.Equals(other.DepthWriteEnabled)
-            && DepthComparison == other.DepthComparison
-            && StencilTestEnabled.Equals(other.StencilTestEnabled)
-            && StencilFront.Equals(other.StencilFront)
-            && StencilBack.Equals(other.StencilBack)
-            && StencilReadMask.Equals(other.StencilReadMask)
-            && StencilWriteMask.Equals(other.StencilWriteMask)
-            && StencilReference.Equals(other.StencilReference);
-    }
-
-    /// <summary>
-    /// Hash of all fields.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(
-            HashCode.Combine(
-                DepthTestEnabled.GetHashCode(),
-                DepthWriteEnabled.GetHashCode(),
-                (int)DepthComparison,
-                StencilTestEnabled.GetHashCode(),
-                StencilFront.GetHashCode(),
-                StencilBack.GetHashCode(),
-                StencilReadMask.GetHashCode(),
-                StencilWriteMask.GetHashCode()),
-            StencilReference.GetHashCode());
-    }
 }

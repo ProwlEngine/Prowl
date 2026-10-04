@@ -3,7 +3,7 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>A field in a uniform block, written by PropertySet via Offset and Type.</summary>
-public struct UniformBlockField : IEquatable<UniformBlockField>
+public record struct UniformBlockField
 {
     /// <summary>Interned field name, implicitly converts from string.</summary>
     public PropertyID Name;
@@ -31,24 +31,4 @@ public struct UniformBlockField : IEquatable<UniformBlockField>
         : this((PropertyID)name, offset, size, type)
     {
     }
-
-    /// <inheritdoc/>
-    public bool Equals(UniformBlockField other)
-        => Name == other.Name && Offset == other.Offset && Size == other.Size && Type == other.Type;
-
-    /// <inheritdoc/>
-    public override bool Equals(object? obj)
-        => obj is UniformBlockField o && Equals(o);
-
-    /// <inheritdoc/>
-    public override int GetHashCode()
-        => HashCode.Combine(Name, Offset, Size, (int)Type);
-
-    /// <inheritdoc/>
-    public static bool operator ==(UniformBlockField a, UniformBlockField b)
-        => a.Equals(b);
-
-    /// <inheritdoc/>
-    public static bool operator !=(UniformBlockField a, UniformBlockField b)
-        => !a.Equals(b);
 }

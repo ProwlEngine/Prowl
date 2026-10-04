@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Framebuffer attachment (color or depth).
 /// </summary>
-public partial struct FramebufferAttachmentDescription : IEquatable<FramebufferAttachmentDescription>
+public partial struct FramebufferAttachmentDescription
 {
     /// <summary>
     /// Render target (RenderTarget for color, DepthStencil for depth).
@@ -41,24 +41,5 @@ public partial struct FramebufferAttachmentDescription : IEquatable<FramebufferA
         Target = target;
         ArrayLayer = arrayLayer;
         MipLevel = mipLevel;
-    }
-
-    /// <summary>
-    /// Field-by-field equality.
-    /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if all fields match.</returns>
-    public readonly bool Equals(FramebufferAttachmentDescription other)
-    {
-        return Target.Equals(other.Target) && ArrayLayer.Equals(other.ArrayLayer) && MipLevel.Equals(other.MipLevel);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(Target.GetHashCode(), ArrayLayer.GetHashCode(), MipLevel.GetHashCode());
     }
 }

@@ -6,7 +6,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Output attachments and formats.
 /// </summary>
-public struct OutputDescription : IEquatable<OutputDescription>
+public record struct OutputDescription
 {
     /// <summary>
     /// Depth attachment or null.
@@ -68,27 +68,13 @@ public struct OutputDescription : IEquatable<OutputDescription>
         return new OutputDescription(depthAttachment, colorAttachments, sampleCount);
     }
 
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if everything matches.</returns>
+    /// <inheritdoc/>
     public readonly bool Equals(OutputDescription other)
-    {
-        return DepthAttachment.GetValueOrDefault().Equals(other.DepthAttachment.GetValueOrDefault())
-            && Util.ArrayEqualsEquatable(ColorAttachments, other.ColorAttachments)
-            && SampleCount == other.SampleCount;
-    }
+        => DepthAttachment == other.DepthAttachment
+        && SampleCount == other.SampleCount
+        && Util.ArrayEqualsEquatable(ColorAttachments, other.ColorAttachments);
 
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(
-            DepthAttachment.GetHashCode(),
-            ColorAttachments.ArrayHash(),
-            (int)SampleCount);
-    }
+    /// <inheritdoc/>
+    public override readonly int GetHashCode()
+        => HashCode.Combine(DepthAttachment, SampleCount, ColorAttachments.ArrayHash());
 }

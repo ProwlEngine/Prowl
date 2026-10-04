@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Resource layout for a GraphicsProgram.
 /// </summary>
-public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
+public struct ResourceLayoutDescription
 {
     /// <summary>
     /// Hard cap on <see cref="Elements"/> per set.
@@ -42,23 +42,4 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
         Set = set;
         Elements = elements;
     }
-
-    /// <summary>
-    /// Element-wise equality check.
-    /// </summary>
-    /// <param name="other">Instance to compare.</param>
-    /// <returns>True if all match.</returns>
-    public readonly bool Equals(ResourceLayoutDescription other)
-        => Set == other.Set && Util.ArrayEqualsEquatable(Elements, other.Elements);
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override readonly int GetHashCode()
-        => HashCode.Combine(Set, Elements.ArrayHash());
-
-    /// <inheritdoc/>
-    public override readonly bool Equals(object? obj)
-        => obj is ResourceLayoutDescription description && Equals(description);
 }

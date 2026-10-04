@@ -7,7 +7,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Blend settings for each target.
 /// </summary>
-public struct BlendStateDescription : IEquatable<BlendStateDescription>
+public record struct BlendStateDescription
 {
     /// <summary>
     /// Constant blend color.
@@ -90,34 +90,20 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
         AttachmentStates = Array.Empty<BlendAttachmentDescription>()
     };
 
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    /// <param name="other">Instance to compare to.</param>
-    /// <returns>True if equal.</returns>
-    public bool Equals(BlendStateDescription other)
-    {
-        return BlendFactor.Equals(other.BlendFactor)
-            && AlphaToCoverageEnabled.Equals(other.AlphaToCoverageEnabled)
-            && Util.ArrayEqualsEquatable(AttachmentStates, other.AttachmentStates);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash code.</returns>
-    public override int GetHashCode()
-    {
-        return HashCode.Combine(
-            BlendFactor.GetHashCode(),
-            AlphaToCoverageEnabled.GetHashCode(),
-            AttachmentStates.ArrayHash());
-    }
-
     internal readonly BlendStateDescription ShallowClone()
     {
         BlendStateDescription result = this;
         result.AttachmentStates = Util.ShallowClone(result.AttachmentStates);
         return result;
     }
+
+    /// <inheritdoc/>
+    public readonly bool Equals(BlendStateDescription other)
+        => BlendFactor.Equals(other.BlendFactor)
+        && AlphaToCoverageEnabled == other.AlphaToCoverageEnabled
+        && Util.ArrayEqualsEquatable(AttachmentStates, other.AttachmentStates);
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode()
+        => HashCode.Combine(BlendFactor, AlphaToCoverageEnabled, AttachmentStates.ArrayHash());
 }

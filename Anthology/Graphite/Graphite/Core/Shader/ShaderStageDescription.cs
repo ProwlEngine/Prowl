@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Compiled shader stage.
 /// </summary>
-public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
+public struct ShaderStageDescription
 {
     /// <summary>
     /// Which stage this is.
@@ -33,26 +33,5 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
         Stage = stage;
         ShaderBytes = shaderBytes;
         EntryPoint = entryPoint;
-    }
-
-    /// <summary>
-    /// Field-by-field equality.
-    /// </summary>
-    public readonly bool Equals(ShaderStageDescription other)
-    {
-        return Stage == other.Stage
-            && ShaderBytes == other.ShaderBytes
-            && string.Equals(EntryPoint, other.EntryPoint);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            (int)Stage,
-            ShaderBytes?.GetHashCode() ?? 0,
-            EntryPoint?.GetHashCode() ?? 0);
     }
 }

@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Buffer creation params.
 /// </summary>
-public struct BufferDescription : IEquatable<BufferDescription>
+public record struct BufferDescription
 {
     /// <summary>
     /// Size in bytes.
@@ -49,31 +49,5 @@ public struct BufferDescription : IEquatable<BufferDescription>
         Usage = usage;
         StructureByteStride = structureByteStride;
         TransientWrites = false;
-    }
-
-    /// <summary>
-    /// Field-by-field equality.
-    /// </summary>
-    /// <param name="other">Other instance.</param>
-    /// <returns>True if all fields match.</returns>
-    public readonly bool Equals(BufferDescription other)
-    {
-        return SizeInBytes.Equals(other.SizeInBytes)
-            && Usage == other.Usage
-            && StructureByteStride.Equals(other.StructureByteStride)
-            && TransientWrites.Equals(other.TransientWrites);
-    }
-
-    /// <summary>
-    /// Hash code.
-    /// </summary>
-    /// <returns>Hash.</returns>
-    public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(
-            SizeInBytes.GetHashCode(),
-            (int)Usage,
-            StructureByteStride.GetHashCode(),
-            TransientWrites.GetHashCode());
     }
 }
