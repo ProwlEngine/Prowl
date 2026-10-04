@@ -1,17 +1,10 @@
-using System.Collections.Generic;
-
 using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// The implicit-reallocation ("orphaning") path on DeviceBuffer. Writing a buffer the GPU may
-// still be reading from an earlier frame would be a data race, so the buffer transparently
-// retires its native resource, allocates a fresh one, and defers freeing the old one until the
-// in-flight frame completes. None of this had coverage.
-//
-// An orphan is observed through the profiler: one DeviceBuffer briefly backs two live native
-// buffers, so the live count for its role rises by one and falls back once the retiring frame's
-// ring slot is reused and the deferred-disposal queue drains.
+// CPU writes to a buffer the GPU may still be reading. UpdateBuffer stages the data and submits a
+// queue-ordered copy behind a full barrier, so work already submitted keeps seeing the old
+// contents and work submitted afterwards sees the new ones. There is no in-flight tracking.
 //
 // Getting a buffer genuinely in flight requires the GPU to still be busy when the CPU writes, so
 // these tests submit a deliberately slow dispatch and then verify the frame really is incomplete
@@ -24,11 +17,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
 
     private const uint OldValue = 0x11111111;
     private const uint NewValue = 0x22222222;
-
-    // Counts live native buffers carrying a given role. The all-buffers gauge is unusable here:
-    // UpdateBuffer allocates pooled staging buffers of its own, which would swamp the +1 an
-    // orphan contributes. Roles isolate the buffer under test from that traffic.
-    private long LiveBuffersOfRole(BufferRoleBin role) => Profiler.Memory(role);
 
     private ComputeProgram CreateProbeProgram()
     {
@@ -52,14 +40,10 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         return RF.CreateComputeProgram(new ComputeDescription(stage, layouts, 1, 1, 1));
     }
 
-    private DeviceBuffer CreateSourceBuffer(bool transientWrites = false)
+    private DeviceBuffer CreateSourceBuffer()
     {
-        BufferDescription description = new(sizeof(uint) * 4, BufferUsage.StructuredBufferReadWrite, sizeof(uint))
-        {
-            TransientWrites = transientWrites
-        };
-        DeviceBuffer buffer = RF.CreateBuffer(description);
-        buffer.Name = "OrphanSource";
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(sizeof(uint) * 4, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        buffer.Name = "WriteSource";
         GD.UpdateBuffer(buffer, 0, new uint[] { OldValue, 0, 0, 0 });
         return buffer;
     }
@@ -86,42 +70,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         });
     }
 
-    // Runs enough empty frames to cycle the ring back onto `frameId`'s slot, which is what drains
-    // the deferred-disposal queue holding the retired native buffer.
-    private void CycleRing()
-    {
-        for (uint i = 0; i < GD.MaxExecutingTasks + 1; i++)
-        {
-            ExecutionTask task = GD.BeginExecution();
-            GD.CompleteExecution(task);
-        }
-        GD.WaitForIdle();
-    }
-
     [SkippableFact]
-    public void WriteToInFlightBuffer_OrphansTheNativeResource()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-
-        long before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-        GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-        long after = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-
-        GD.WaitForIdle();
-
-        // The DeviceBuffer now backs a second native buffer: the retired one the GPU is reading,
-        // plus the fresh one that took the CPU's write.
-        Assert.Equal(before + 1, after);
-    }
-
-    [SkippableFact]
-    public void OrphanedBuffer_KeepsItsIdentityAndDescription()
+    public void WriteWhileInFlight_GpuStillReadsTheOldContents()
     {
 
         DeviceBuffer source = CreateSourceBuffer();
@@ -134,34 +84,13 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         GD.WaitForIdle();
 
-        // Orphaning swaps the native resource underneath a stable managed identity: callers
-        // holding this DeviceBuffer must not observe the swap.
-        Assert.False(source.IsDisposed);
-        Assert.Equal(sizeof(uint) * 4u, source.SizeInBytes);
-        Assert.Equal(BufferUsage.StructuredBufferReadWrite, source.Usage);
-    }
-
-    [SkippableFact]
-    public void OrphanedBuffer_GpuStillReadsTheOldContents()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-
-        GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-        GD.WaitForIdle();
-
-        // The in-flight dispatch reads the retired resource, so it must observe the value the
-        // buffer held at submit time, never the CPU's mid-flight write.
+        // The copy is queued behind the in-flight dispatch, so the dispatch must observe the value
+        // the buffer held when it was submitted.
         Assert.Equal(OldValue, ReadUInt(output, 0));
     }
 
     [SkippableFact]
-    public void OrphanedBuffer_LaterFramesSeeTheNewContents()
+    public void WriteWhileInFlight_LaterFramesSeeTheNewContents()
     {
 
         DeviceBuffer source = CreateSourceBuffer();
@@ -174,7 +103,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         GD.WaitForIdle();
 
-        // The write is not lost: a frame submitted after the orphan binds the fresh resource.
+        // The write is not lost: a frame submitted after the copy sees the new contents.
         DeviceBuffer secondOutput = CreateOutputBuffer();
         SubmitSlowExecutionReading(source, secondOutput, program);
         GD.WaitForIdle();
@@ -183,223 +112,20 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     }
 
     [SkippableFact]
-    public void OrphanedBuffer_RetiredResourceIsFreedOnceTheRingCycles()
+    public void WriteWhileInFlight_BumpsContentVersion()
     {
-
         DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        long baseline = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-
-        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-
-        GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-        Assert.Equal(baseline + 1, LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite));
-
-        GD.WaitForIdle();
-        CycleRing();
-
-        // BeginFrame drains the deferred-disposal queue when it reuses the retiring frame's slot,
-        // so the retired native buffer must be gone rather than leaked for the device's lifetime.
-        Assert.Equal(baseline, LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite));
-    }
-
-    [SkippableFact]
-    public void WriteToBufferInAnOpenFrame_Orphans()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        PropertySet props = new();
-        props.SetInt("Iterations", 1);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Output", output, readOnly: false);
-
-        long before = 0, after = 0;
-        GD.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetComputeShader(program);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-
-            // Recording marks the buffer in flight against this execution's id as soon as the
-            // dispatch binds it, independent of whether the command buffer has been submitted
-            // yet, so a write here must orphan just as it would after submission.
-            before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-            GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-            after = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-
-            context.SubmitCommandBuffer(cl);
-        });
-        GD.WaitForIdle();
-
-        Assert.Equal(before + 1, after);
-    }
-
-    [SkippableFact]
-    public void WriteToBufferFromACompletedFrame_DoesNotOrphan()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        SubmitSlowExecutionReading(source, output, program);
-        GD.WaitForIdle();
-
-        // The GPU is done with the buffer, so a write is safe in place.
-        long before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-        GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-        long after = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-
-        Assert.Equal(before, after);
-    }
-
-    [SkippableFact]
-    public void WriteToNeverBoundBuffer_DoesNotOrphan()
-    {
-
-        DeviceBuffer buffer = CreateSourceBuffer();
-
-        // Never bound, so it was never marked in flight and cannot be racing anything.
-        long before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-        for (int i = 0; i < 5; i++)
-            GD.UpdateBuffer(buffer, 0, new uint[] { NewValue, 0, 0, 0 });
-        long after = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-
-        Assert.Equal(before, after);
-    }
-
-    [SkippableFact]
-    public void TransientWritesBuffer_OptsOutOfOrphaning()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer(transientWrites: true);
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
 
         ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
         Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
-        // TransientWrites is the caller asserting they handle the hazard themselves, so the
-        // buffer is never marked in flight and the write goes straight through.
-        long before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
+        uint versionBefore = source.ContentVersion;
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-        long after = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
 
+        Assert.NotEqual(versionBefore, source.ContentVersion);
         GD.WaitForIdle();
-
-        Assert.Equal(before, after);
-    }
-
-    [SkippableFact]
-    public void MapWrite_OnInFlightBuffer_AlsoOrphans()
-    {
-
-        // Map(Write) is the other entry point into EnsureWritable and must be guarded exactly
-        // like UpdateBuffer. Mapping needs Dynamic, which cannot be combined with a read-write
-        // structured usage, so the raced buffer here is the uniform block instead of Source.
-        BufferDescription description = new(16, BufferUsage.UniformBuffer | BufferUsage.Dynamic);
-        DeviceBuffer paramsBuffer = RF.CreateBuffer(description);
-        GD.UpdateBuffer(paramsBuffer, 0, new uint[] { SpinIterations, 0, 0, 0 });
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        // Bound read-only so the buffer's own contents drive Iterations rather than a transient.
-        PropertySet props = new();
-        props.SetBuffer("Params", paramsBuffer, readOnly: true);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Output", output, readOnly: false);
-
-        ExecutionTask id = GD.RunTestGraph(context =>
-        {
-            CommandBuffer cl = context.GetCommandBuffer();
-            cl.SetComputeShader(program);
-            cl.SetProperties(props);
-            cl.Dispatch(1, 1, 1);
-            context.SubmitCommandBuffer(cl);
-        });
-
-        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-
-        long before = LiveBuffersOfRole(BufferRoleBin.Uniform);
-        MappedResource mapped = GD.Map(paramsBuffer, MapMode.Write);
-        unsafe { *(uint*)mapped.Data = 1; }
-        GD.Unmap(paramsBuffer);
-        long after = LiveBuffersOfRole(BufferRoleBin.Uniform);
-
-        GD.WaitForIdle();
-
-        Assert.Equal(before + 1, after);
-    }
-
-    [SkippableFact]
-    public void RepeatedOrphansWithinTheWarningWindow_Warn()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        List<string> warnings = [];
-        GraphicsDeviceWarningHandler previous = GD.OnWarning;
-        GD.OnWarning = message => warnings.Add(message);
-
-        try
-        {
-            // Rewriting an in-flight buffer every frame is the pathological pattern transient graph
-            // buffers exist to replace, so the second and later orphans inside the window must warn.
-            for (int i = 0; i < 3; i++)
-            {
-                ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-                Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-                GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-                GD.WaitForIdle();
-            }
-        }
-        finally
-        {
-            GD.OnWarning = previous;
-        }
-
-        Assert.NotEmpty(warnings);
-        Assert.Contains("transient graph buffer", warnings[0]);
-    }
-
-    [SkippableFact]
-    public void FirstOrphanOfABuffer_DoesNotWarn()
-    {
-
-        DeviceBuffer source = CreateSourceBuffer();
-        DeviceBuffer output = CreateOutputBuffer();
-        ComputeProgram program = CreateProbeProgram();
-
-        List<string> warnings = [];
-        GraphicsDeviceWarningHandler previous = GD.OnWarning;
-        GD.OnWarning = message => warnings.Add(message);
-
-        try
-        {
-            ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
-            Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
-            GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-            GD.WaitForIdle();
-        }
-        finally
-        {
-            GD.OnWarning = previous;
-        }
-
-        // A one-off reallocation is legitimate and must stay quiet; only a repeating pattern is
-        // worth complaining about.
-        Assert.Empty(warnings);
     }
 
     private uint ReadUInt(DeviceBuffer buffer, int index)
