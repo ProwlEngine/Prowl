@@ -13,10 +13,11 @@ namespace GraphiteExample;
 
 internal readonly struct CanvasView : IRenderView
 {
-    public bool TargetSwapchain => true;
+    public Swapchain TargetSwapchain { get; }
 
-    public CanvasView(uint width, uint height)
+    public CanvasView(uint width, uint height, Swapchain swapchain)
     {
+        TargetSwapchain = swapchain;
         PixelWidth = width;
         PixelHeight = height;
     }
@@ -175,7 +176,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         _fbWidth = width;
         _fbHeight = height;
         _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
-        _views = new[] { new CanvasView((uint)width, (uint)height) };
+        _views = new[] { new CanvasView((uint)width, (uint)height, _gl.MainSwapchain) };
     }
 
 
@@ -269,15 +270,13 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         public void Setup(RenderContextBuilder builder)
             => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.ViewSized(TargetFormat));
 
-        public void Render(RenderContext<CanvasView> context)
+        public void Render(RenderContext<CanvasView> context, CommandBuffer cmd)
         {
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
 
             _backdropDirty = true;
 
             bool hasGeometry = _drawCalls.Count > 0 && _canvas.VertexCount > 0 && _canvas.IndexCount > 0;
-
-            CommandBuffer cmd = context.GetCommandBuffer(Name);
 
             // Upload geometry before binding a framebuffer: buffer uploads must happen outside a render pass.
             if (hasGeometry)
@@ -298,8 +297,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
                     indexOffset += drawCall.ElementCount;
                 }
             }
-
-            context.SubmitCommandBuffer(cmd);
         }
 
 
@@ -506,11 +503,10 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             SetViewTarget(builder);
         }
 
-        public override void Render(RenderContext<CanvasView> context)
+        public override void Render(RenderContext<CanvasView> context, CommandBuffer cmd)
         {
             RenderTexture scene = context.GetRenderTexture(_sceneHandle);
 
-            CommandBuffer cmd = context.GetCommandBuffer(Name);
             BindTarget(context, cmd);
 
 
@@ -522,8 +518,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             cmd.SetVertexSource(VertexSource.None);
             cmd.SetProperties(_properties);
             cmd.Draw(3);
-
-            context.SubmitCommandBuffer(cmd);
         }
     }
 }
