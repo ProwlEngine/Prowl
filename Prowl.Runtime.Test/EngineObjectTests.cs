@@ -130,6 +130,40 @@ public class EngineObjectTests
     // ---- Destroy ----
 
     [Fact]
+    public void Destroy_FlagsQueued_UntilDisposed()
+    {
+        var obj = new TestEngineObject();
+        Assert.False(obj.IsDestroyQueued);
+
+        obj.Destroy();
+        Assert.True(obj.IsDestroyQueued);
+        Assert.True(obj.IsValid());
+
+        EngineObject.ProcessDestroyed();
+        Assert.False(obj.IsDestroyQueued);
+        Assert.True(obj.IsDisposed);
+    }
+
+    [Fact]
+    public void Destroy_FlagsChildrenAndComponentsOfTheDestroyedObject()
+    {
+        var parent = new GameObject("Parent");
+        var child = new GameObject("Child");
+        child.SetParent(parent);
+        var component = child.AddComponent<PlainComponent>();
+        var bystander = new GameObject("Bystander");
+
+        parent.Destroy();
+
+        Assert.True(child.IsDestroyQueued);
+        Assert.True(component.IsDestroyQueued);
+        Assert.False(bystander.IsDestroyQueued);
+
+        EngineObject.ProcessDestroyed();
+        bystander.Dispose();
+    }
+
+    [Fact]
     public void Destroy_KeepsObjectUsableUntilProcessed()
     {
         var obj = new TestEngineObject();

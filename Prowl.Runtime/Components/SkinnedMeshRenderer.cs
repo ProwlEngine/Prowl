@@ -21,8 +21,13 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Skinned Mesh Renderer")]
 [ComponentIcon("\uf1b3")] // Cubes
-public class SkinnedMeshRenderer : MonoBehaviour
+public class SkinnedMeshRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
 {
+    int IMaterialRenderer.MaterialSlotCount => Materials.Count;
+    Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(Materials, slot);
+    void IMaterialRenderer.SetMaterial(int slot, Material? material) => MaterialSlots.Set(Materials, slot, material);
+    Color IColorTint.Tint { get => MainColor; set => MainColor = value; }
+
     /// <summary>The mesh to render (may contain submeshes).</summary>
     public Mesh? SharedMesh;
 

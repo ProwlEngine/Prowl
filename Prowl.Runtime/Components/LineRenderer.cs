@@ -11,8 +11,12 @@ namespace Prowl.Runtime;
 
 [AddComponentMenu("Rendering/Line Renderer")]
 [ComponentIcon("\uf4d7")] // Route
-public class LineRenderer : MonoBehaviour, IRenderable
+public class LineRenderer : MonoBehaviour, IRenderable, IMaterialRenderer
 {
+    int IMaterialRenderer.MaterialSlotCount => 1;
+    Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
+    void IMaterialRenderer.SetMaterial(int slot, Material? material) { MaterialSlots.CheckSingle(slot); Material = material; }
+
     public Material? Material;
     public float StartWidth = 0.1f;
     public float EndWidth = 0.1f;

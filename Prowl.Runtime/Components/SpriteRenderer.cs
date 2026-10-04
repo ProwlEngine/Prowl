@@ -17,8 +17,13 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Sprite Renderer")]
 [ComponentIcon("")] // Image
-public class SpriteRenderer : MonoBehaviour
+public class SpriteRenderer : MonoBehaviour, IMaterialRenderer, IColorTint
 {
+    int IMaterialRenderer.MaterialSlotCount => 1;
+    Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
+    void IMaterialRenderer.SetMaterial(int slot, Material? material) { MaterialSlots.CheckSingle(slot); Material = material; }
+    Color IColorTint.Tint { get => Color; set => Color = value; }
+
     /// <summary>Sorting-order spacing along Z (world units) so higher orders sort in front for the transparent queue.</summary>
     private const float SortBias = 0.0001f;
 

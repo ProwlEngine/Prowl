@@ -17,8 +17,10 @@ namespace Prowl.Runtime.UI;
 /// <see cref="Selectable"/>) derive from <see cref="UIBehaviour"/> directly and are never raycast targets,
 /// so a bare layout panel no longer swallows clicks meant for what is behind it.
 /// </remarks>
-public abstract class Graphic : UIBehaviour
+public abstract class Graphic : UIBehaviour, IColorTint
 {
+    Color IColorTint.Tint { get => Color; set => Color = value; }
+
     /// <summary>
     /// Whether this element blocks pointer hit-testing. Affects input dispatch only, not rendering.
     /// </summary>

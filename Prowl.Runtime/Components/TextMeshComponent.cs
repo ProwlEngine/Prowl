@@ -27,8 +27,13 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Text Mesh")]
 [ComponentIcon("T")] // Text
-public class TextMeshComponent : MonoBehaviour
+public class TextMeshComponent : MonoBehaviour, IMaterialRenderer, IColorTint
 {
+    int IMaterialRenderer.MaterialSlotCount => 1;
+    Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
+    void IMaterialRenderer.SetMaterial(int slot, Material? material) { MaterialSlots.CheckSingle(slot); Material = material; }
+    Color IColorTint.Tint { get => TextColor; set => TextColor = value; }
+
     [SerializeField] private FontAsset? _font;
     public FontAsset? Font { get => _font; set => SetField(ref _font, value); }
 

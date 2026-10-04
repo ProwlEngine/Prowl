@@ -16,8 +16,12 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Mesh Renderer")]
 [ComponentIcon("\uf1b2")] // Cube
-public class MeshRenderer : MonoBehaviour
+public class MeshRenderer : MonoBehaviour, IMaterialRenderer
 {
+    int IMaterialRenderer.MaterialSlotCount => Materials.Count;
+    Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(Materials, slot);
+    void IMaterialRenderer.SetMaterial(int slot, Material? material) => MaterialSlots.Set(Materials, slot, material);
+
     public Mesh? Mesh;
 
     /// <summary>Materials array one per submesh. Legacy single-material meshes use index 0.</summary>

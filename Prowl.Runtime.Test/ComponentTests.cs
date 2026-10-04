@@ -3,6 +3,8 @@
 
 using System;
 
+using Prowl.Vector;
+
 
 using Xunit;
 
@@ -89,6 +91,47 @@ public sealed class ThrowsWhenArmed : MonoBehaviour
 /// </summary>
 public class ComponentTests : RuntimeTestBase
 {
+    // ---- Renderer interfaces ----
+
+    [Fact]
+    public void MaterialRenderer_ListSlots_GrowByOneAndRejectGaps()
+    {
+        IMaterialRenderer renderer = CreateGameObject().AddComponent<MeshRenderer>();
+
+        Assert.Equal(0, renderer.MaterialSlotCount);
+        renderer.SetMaterial(0, null);
+        renderer.SetMaterial(1, null);
+        Assert.Equal(2, renderer.MaterialSlotCount);
+        Assert.Throws<ArgumentOutOfRangeException>(() => renderer.SetMaterial(5, null));
+        Assert.Throws<ArgumentOutOfRangeException>(() => renderer.GetMaterial(2));
+    }
+
+    [Fact]
+    public void MaterialRenderer_SingleSlot_OnlyAcceptsSlotZero()
+    {
+        IMaterialRenderer renderer = CreateGameObject().AddComponent<SpriteRenderer>();
+
+        Assert.Equal(1, renderer.MaterialSlotCount);
+        Assert.Null(renderer.GetMaterial(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => renderer.SetMaterial(1, null));
+    }
+
+    [Fact]
+    public void ColorTint_WritesTheRendererColor()
+    {
+        var sprite = CreateGameObject().AddComponent<SpriteRenderer>();
+        var skinned = CreateGameObject().AddComponent<SkinnedMeshRenderer>();
+        var text = CreateGameObject().AddComponent<TextMeshComponent>();
+
+        ((IColorTint)sprite).Tint = Color.Red;
+        ((IColorTint)skinned).Tint = Color.Green;
+        ((IColorTint)text).Tint = Color.Blue;
+
+        Assert.Equal(Color.Red, sprite.Color);
+        Assert.Equal(Color.Green, skinned.MainColor);
+        Assert.Equal(Color.Blue, text.TextColor);
+    }
+
     // ---- Add ----
 
     /// <summary>
