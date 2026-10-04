@@ -79,6 +79,9 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
     private List<CompilerModule> _modules = [];
 
+    /// <inheritdoc/>
+    public int SessionVersion { get; private set; }
+
     private Session? _session;
 
     private DiagnosticHandler _handler = (x) =>
@@ -316,6 +319,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
     private void ResetSessionState()
     {
+        SessionVersion++;
         _prepared.Clear();
         _uvTopLeft = null;
         _uvBottomLeft = null;

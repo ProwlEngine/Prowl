@@ -9,6 +9,11 @@ namespace Prowl.Graphite.ShaderDef;
 /// </summary>
 public interface IShaderCompiler
 {
+    /// <summary>
+    /// Changes whenever the compiler session restarts, so passes know a failed compile may now succeed.
+    /// </summary>
+    int SessionVersion => 0;
+
     /// <summary>Variant axes for the given pass.</summary>
     IReadOnlyList<VariantSpace> GetAxes(ShaderPass pass);
 

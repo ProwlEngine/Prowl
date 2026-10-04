@@ -31,6 +31,12 @@ public sealed class ShaderPass
     public required string InlineSlang;
 
 
+    /// <summary>
+    /// Raised once per variant when its compile fails. Not raised again until the source or compiler session changes.
+    /// </summary>
+    public event Action<ShaderPass, Keyword[], Exception>? CompileFailed;
+
+
     private GraphicsDevice? _device;
     private GraphicsBackend _backend;
     private IShaderCompiler? _compiler;
@@ -42,6 +48,7 @@ public sealed class ShaderPass
     private int[] _strides = [];
     private Variant?[] _variants = [];
     private Variant? _fallback;
+    private CompileFailure?[] _failures = [];
 
     private Dictionary<ProgramKey, GraphicsProgram> _programCache = new();
     private Dictionary<ProgramKey, GraphicsProgram> _fallbackProgramCache = new();
@@ -65,6 +72,7 @@ public sealed class ShaderPass
         _axes = axes;
         _combos = VariantCombos.Generate(axes);
         _variants = new Variant?[_combos.Length];
+        _failures = new CompileFailure?[_combos.Length];
         _programCache = new();
         _fallbackProgramCache = new();
 
@@ -293,8 +301,6 @@ public sealed class ShaderPass
         Variant variant = Resolve(key);
         bool isFallback = ReferenceEquals(variant, _fallback);
 
-        // While degraded to the fallback, keep re-resolving (Resolve retries the real compile every
-        // call) but reuse the fallback GraphicsProgram instead of rebuilding it every request.
         if (isFallback && _fallbackProgramCache.TryGetValue(programKey, out GraphicsProgram? cachedFallback))
             return cachedFallback;
 
@@ -339,14 +345,24 @@ public sealed class ShaderPass
 
         if (_compiler != null)
         {
-            try
+            CompileFailure? failure = _failures[index];
+            if (failure == null || failure.SessionVersion != _compiler.SessionVersion || !string.Equals(failure.Source, InlineSlang, StringComparison.Ordinal))
             {
-                return Compile(index);
+                try
+                {
+                    Variant compiled = Compile(index);
+                    _failures[index] = null;
+                    return compiled;
+                }
+                catch (Exception exception)
+                {
+                    _failures[index] = failure = new CompileFailure(InlineSlang, _compiler.SessionVersion, exception);
+                    CompileFailed?.Invoke(this, _combos[index], exception);
+                }
             }
-            catch
-            {
-                // Fall through to the fallback below - a failed compile is not fatal on its own.
-            }
+
+            if (existing == null && !(_fallback != null && _fallback.IsCompiledFor(_backend)))
+                throw new InvalidOperationException($"The variant of pass '{Name}' failed to compile and no fallback variant is available.", failure!.Exception);
         }
 
         if (existing != null)
@@ -355,7 +371,7 @@ public sealed class ShaderPass
         if (_fallback != null && _fallback.IsCompiledFor(_backend))
             return _fallback;
 
-        throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend}, no compiler is attached (or the compile failed), and no fallback variant is available.");
+        throw new InvalidOperationException($"The variant of pass '{Name}' is not compiled for backend {_backend}, no compiler is attached, and no fallback variant is available.");
     }
 
 
@@ -390,6 +406,9 @@ public sealed class ShaderPass
 
     private ArgumentException UnknownKeyword(Keyword keyword)
         => new($"Keyword '{keyword.Name}={keyword.Value}' is not a known axis or value of pass '{Name}'.");
+
+
+    private sealed record CompileFailure(string Source, int SessionVersion, Exception Exception);
 
 
     private readonly record struct ProgramKey(int VariantIndex, BlendStateDescription Blend, DepthStencilStateDescription Depth, RasterizerStateDescription Raster);
