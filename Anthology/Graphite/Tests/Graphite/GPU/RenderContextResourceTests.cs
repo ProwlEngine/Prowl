@@ -245,7 +245,7 @@ file sealed class RecordingProfiler : IProfiler
 public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private static GraphTextureDesc ColorDesc(float scale = 1f)
-        => GraphTextureDesc.ViewSized(false, scale, PixelFormat.R8_G8_B8_A8_UNorm);
+        => GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, scale);
 
     [Fact]
     public void GetRenderTexture_SameHandleWithinContext_ReturnsCachedInstance()

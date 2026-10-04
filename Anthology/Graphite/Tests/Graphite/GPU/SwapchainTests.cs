@@ -39,7 +39,7 @@ file sealed class OffscreenPass : IPass<SwapchainView>
     public string Name => "Offscreen";
 
     public void Setup(RenderContextBuilder builder)
-        => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm));
+        => builder.DeclareOutputTexture("Offscreen", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm));
 
     public void Render(RenderContext<SwapchainView> context, CommandBuffer cmd) { }
 }

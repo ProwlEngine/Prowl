@@ -39,11 +39,11 @@ public struct GraphTextureDesc
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 
     /// <summary>Resource sized as a scale of the view.</summary>
-    public static GraphTextureDesc ViewSized(bool depth = false, float scale = 1f, params PixelFormat[] formats) => new()
+    public static GraphTextureDesc ViewSized(PixelFormat format, float scale = 1f, bool depth = false) => new()
     {
         SizeMode = TextureSizeMode.ViewRelative,
         Scale = scale,
-        ColorFormats = DefaultFormats(formats),
+        ColorFormats = new[] { format },
         EnableDepth = depth
     };
 

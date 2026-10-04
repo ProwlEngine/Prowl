@@ -89,7 +89,7 @@ file sealed class ViewBufferHistoryPass : IPass<HistoryView>
 public abstract class ViewHistoryTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private static GraphTextureDesc ColorDesc()
-        => GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm);
+        => GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm);
 
     private void Dispatch(RenderPipeline<HistoryView> pipeline, params HistoryView[] views)
     {

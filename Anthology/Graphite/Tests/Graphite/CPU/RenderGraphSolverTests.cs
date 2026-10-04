@@ -22,7 +22,7 @@ public class RenderGraphSolverTests
     public void Build_TwoWritersWithDifferentDescriptions_Throws()
     {
         var a = new TestPass("A", outputs: new[] { ("conflict_shared", Desc.Color()) });
-        var b = new TestPass("B", outputs: new[] { ("conflict_shared", GraphTextureDesc.ViewSized(true, 1f, PixelFormat.R8_G8_B8_A8_UNorm)) });
+        var b = new TestPass("B", outputs: new[] { ("conflict_shared", GraphTextureDesc.ViewSized(PixelFormat.R8_G8_B8_A8_UNorm, depth: true)) });
 
         Assert.Throws<InvalidOperationException>(() => Build(a, b));
     }
