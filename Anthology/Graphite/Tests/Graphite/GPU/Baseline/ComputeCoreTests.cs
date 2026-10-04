@@ -32,8 +32,8 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
         PropertySet props = new();
         props.SetInt("Width", (int)width);
         props.SetInt("Height", (int)height);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
 
         GD.RunTestGraph(context =>
         {

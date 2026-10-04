@@ -40,8 +40,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
                 seeds[i] = seed;
                 GD.UpdateBuffer(sources[i], 0, seed);
 
-                props.SetBuffer("Source", sources[i], readOnly: false);
-                props.SetBuffer("Destination", destinations[i], readOnly: false);
+                props.SetBuffer("Source", sources[i]);
+                props.SetBuffer("Destination", destinations[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
@@ -66,8 +66,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
 
         PropertySet props = new();
         props.SetUniformBuffer("Params", ubo);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
 
         GD.RunTestGraph(context =>
         {
@@ -117,8 +117,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         props.SetUniformBuffer("Params", ubo);
         props.SetInt("Width", (int)Side);
         props.SetInt("Height", (int)Side);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
 
         GD.RunTestGraph(context =>
         {
@@ -161,8 +161,8 @@ public abstract class ExplicitWritableUniformBufferTests<T> : GraphicsDeviceTest
         props.SetUniformBuffer("Params", ubo);
         props.SetInt("Width", (int)Side);
         props.SetInt("Padding1", 777);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
 
         GD.RunTestGraph(context =>
         {

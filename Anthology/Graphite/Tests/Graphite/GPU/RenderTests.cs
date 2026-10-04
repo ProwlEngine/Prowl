@@ -396,7 +396,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     private void DrawColoredQuad(Framebuffer fb, GraphicsProgram program, DeviceBuffer vertexStorage, Color clear)
     {
         PropertySet props = new();
-        props.SetBuffer("InputVertices", vertexStorage, readOnly: true);
+        props.SetBuffer("InputVertices", vertexStorage);
 
         Submit(cl =>
         {

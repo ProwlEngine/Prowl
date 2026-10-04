@@ -28,7 +28,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
             {
                 CommandBuffer cl = context.GetCommandBuffer($"Pass{i}");
                 cl.SetComputeShader(program);
-                shared.SetBuffer("Output", outputs[i], readOnly: false);
+                shared.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(shared);
                 cl.Dispatch(1, 1, 1);
                 context.SubmitCommandBuffer(cl);
@@ -60,12 +60,12 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
         PropertySet propsX = new();
         propsX.SetInt("valueA", 111);
         propsX.SetInt("valueB", 222);
-        propsX.SetBuffer("Output", outputX, readOnly: false);
+        propsX.SetBuffer("Output", outputX);
 
         PropertySet propsY = new();
         propsY.SetInt("valueA", 999);
         propsY.SetInt("valueB", 888);
-        propsY.SetBuffer("Output", outputY, readOnly: false);
+        propsY.SetBuffer("Output", outputY);
 
         GD.RunTestGraph(context =>
         {
@@ -102,12 +102,12 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
         PropertySet props = new();
         props.SetInt("valueA", 42);
         props.SetInt("valueB", 100);
-        props.SetBuffer("Output", output1, readOnly: false);
+        props.SetBuffer("Output", output1);
 
         PropertySet other = new();
         other.SetInt("valueA", 42);
         other.SetInt("valueB", 200);
-        other.SetBuffer("Output", output2, readOnly: false);
+        other.SetBuffer("Output", output2);
 
         GD.RunTestGraph(context =>
         {
@@ -156,7 +156,7 @@ public abstract class UniformArenaTests<T> : GraphicsDeviceTestBase<T> where T :
                 PropertySet props = new();
                 props.SetInt("valueA", even ? 1 : 9);
                 props.SetInt("valueB", even ? 2 : 8);
-                props.SetBuffer("Output", outputs[i], readOnly: false);
+                props.SetBuffer("Output", outputs[i]);
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
                 context.SubmitCommandBuffer(cl);

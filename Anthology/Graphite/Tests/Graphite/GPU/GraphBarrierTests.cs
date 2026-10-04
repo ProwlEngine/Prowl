@@ -371,7 +371,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             (context, cmd) =>
             {
                 PropertySet props = new();
-                props.SetBuffer("OutputVertices", context.GetRenderBuffer(writeHandle), readOnly: false);
+                props.SetBuffer("OutputVertices", context.GetRenderBuffer(writeHandle));
                 cmd.SetComputeShader(compute);
                 cmd.SetProperties(props);
                 cmd.Dispatch(1, 1, 1);
@@ -389,7 +389,7 @@ public abstract class GraphBarrierTests<T> : GraphicsDeviceTestBase<T> where T :
             (context, cmd) =>
             {
                 PropertySet props = new();
-                props.SetBuffer("InputVertices", context.GetRenderBuffer(readHandle), readOnly: true);
+                props.SetBuffer("InputVertices", context.GetRenderBuffer(readHandle));
                 cmd.SetFramebuffer(context.GetRenderTexture(outputHandle).Framebuffer, new TargetLoadStoreOps(AttachmentOps.Clear(Color.Black), AttachmentOps.Loaded));
                 cmd.SetFullViewport();
                 cmd.SetShader(graphics);

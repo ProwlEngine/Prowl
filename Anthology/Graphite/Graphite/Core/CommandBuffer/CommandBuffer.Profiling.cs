@@ -45,7 +45,7 @@ public abstract partial class CommandBuffer
     {
         _capturedVertexBuffers.Add(new BufferBindingInfo(
             binding.Buffer.Name, binding.Buffer, binding.Offset, binding.Buffer.SizeInBytes - binding.Offset,
-            binding.Buffer.ContentVersion, readOnly: true));
+            binding.Buffer.ContentVersion));
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public abstract partial class CommandBuffer
     internal void CaptureResolvedIndexBinding(DeviceBuffer buffer, IndexFormat format, uint indexCount)
     {
         uint indexSize = format == IndexFormat.UInt16 ? 2u : 4u;
-        _capturedIndexBuffer = new BufferBindingInfo(buffer.Name, buffer, offset: 0, indexSize * indexCount, buffer.ContentVersion, readOnly: true);
+        _capturedIndexBuffer = new BufferBindingInfo(buffer.Name, buffer, offset: 0, indexSize * indexCount, buffer.ContentVersion);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public abstract partial class CommandBuffer
             {
                 string name = PropertyID.ToString(kv.Key) ?? kv.Key.ToString();
                 boundBuffers.Add(new BufferBindingInfo(
-                    name, range.Buffer, range.Offset, range.SizeInBytes, range.Buffer.ContentVersion, kv.Value.ReadOnly));
+                    name, range.Buffer, range.Offset, range.SizeInBytes, range.Buffer.ContentVersion));
             }
         }
 

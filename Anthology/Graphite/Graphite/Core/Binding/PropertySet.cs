@@ -65,20 +65,20 @@ public sealed partial class PropertySet
     public void SetMatrix(PropertyID name, Float4x4 v) => WriteUniform(name, v, UniformScalarType.Float4x4);
 
 
-    /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange, bool)"/>
-    public void SetBuffer(PropertyID name, DeviceBuffer buffer, bool readOnly = true)
+    /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange)"/>
+    public void SetBuffer(PropertyID name, DeviceBuffer buffer)
     {
         ValidationHelpers.RequireNotNull(null, buffer, nameof(buffer), nameof(SetBuffer));
-        SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes), readOnly);
+        SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes));
     }
 
     /// <summary>
     /// Binds buffer to slot as is. On a uniform block it never receives loose uniforms; use SetUniformBuffer for that.
     /// </summary>
-    public void SetBuffer(PropertyID name, DeviceBufferRange range, bool readOnly = true)
+    public void SetBuffer(PropertyID name, DeviceBufferRange range)
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetBuffer));
-        GetOrCreate(name).SetBuffer(range, readOnly);
+        GetOrCreate(name).SetBuffer(range);
         unchecked { _version++; }
     }
 
@@ -96,7 +96,7 @@ public sealed partial class PropertySet
     public void SetUniformBuffer(PropertyID name, DeviceBufferRange range)
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetUniformBuffer));
-        GetOrCreate(name).SetBuffer(range, readOnly: false, backedBlock: true);
+        GetOrCreate(name).SetBuffer(range, backedBlock: true);
         unchecked { _version++; }
     }
 

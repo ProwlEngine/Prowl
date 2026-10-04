@@ -85,16 +85,14 @@ public readonly struct BufferBindingInfo
     public uint Offset { get; }
     public uint SizeInBytes { get; }
     public uint ContentVersion { get; }
-    public bool ReadOnly { get; }
 
-    public BufferBindingInfo(string name, DeviceBuffer buffer, uint offset, uint sizeInBytes, uint contentVersion, bool readOnly)
+    public BufferBindingInfo(string name, DeviceBuffer buffer, uint offset, uint sizeInBytes, uint contentVersion)
     {
         Name = name;
         Buffer = buffer;
         Offset = offset;
         SizeInBytes = sizeInBytes;
         ContentVersion = contentVersion;
-        ReadOnly = readOnly;
     }
 }
 

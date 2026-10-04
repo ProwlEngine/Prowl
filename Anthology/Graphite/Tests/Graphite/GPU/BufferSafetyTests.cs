@@ -58,8 +58,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     {
         PropertySet props = new();
         props.SetInt("Iterations", (int)SpinIterations);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Output", output, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Output", output);
 
         return GD.RunTestGraph(context =>
         {

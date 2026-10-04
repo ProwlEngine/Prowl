@@ -24,8 +24,8 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         {
             props.SetInt("Width", (int)Side);
             props.SetInt("Height", (int)Side);
-            props.SetBuffer("Source", source, readOnly: false);
-            props.SetBuffer("Destination", destination, readOnly: false);
+            props.SetBuffer("Source", source);
+            props.SetBuffer("Destination", destination);
         });
 
         AssertCopiedSource(result);
@@ -42,11 +42,11 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 
         float[] result = RunCompute((props, source, destination) =>
         {
-            props.SetBuffer("Params", ubo, readOnly: true);
+            props.SetBuffer("Params", ubo);
             props.SetInt("Width", 1);
             props.SetInt("Height", 1);
-            props.SetBuffer("Source", source, readOnly: false);
-            props.SetBuffer("Destination", destination, readOnly: false);
+            props.SetBuffer("Source", source);
+            props.SetBuffer("Destination", destination);
         });
 
         AssertCopiedSource(result);
@@ -65,8 +65,8 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
             props.SetUniformBuffer("Params", ubo);
             props.SetInt("Width", (int)Side);
             props.SetInt("Height", (int)Side);
-            props.SetBuffer("Source", source, readOnly: false);
-            props.SetBuffer("Destination", destination, readOnly: false);
+            props.SetBuffer("Source", source);
+            props.SetBuffer("Destination", destination);
         });
 
         AssertCopiedSource(result);
@@ -94,7 +94,7 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
             {
                 props.SetInt("Width", (int)Side);
                 props.SetInt("Height", (int)Side);
-                props.SetBuffer("Source", source, readOnly: false);
+                props.SetBuffer("Source", source);
             });
         }
         finally

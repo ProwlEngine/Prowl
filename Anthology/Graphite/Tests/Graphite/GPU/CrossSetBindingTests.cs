@@ -119,8 +119,8 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         props.SetInt("valueA", (int)valueA);
         props.SetInt("valueB", (int)valueB);
         props.SetInt("valueC", (int)valueC);
-        props.SetBuffer("Output", output, readOnly: false);
-        props.SetBuffer("Input", input, readOnly: true);
+        props.SetBuffer("Output", output);
+        props.SetBuffer("Input", input);
         props.SetTexture("Tex", texture, GD.LinearSampler);
         return props;
     }
@@ -284,11 +284,11 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         // Same buffer, different windows. The descriptor cache identity includes the range's
         // offset and size, so these must not collapse onto one cached set.
         PropertySet first = BuildProps(output, input, texture);
-        first.SetBuffer("Input", new DeviceBufferRange(input, 0, stride), readOnly: true);
+        first.SetBuffer("Input", new DeviceBufferRange(input, 0, stride));
         Assert.Equal(1234u, Run(first, output, program)[2]);
 
         PropertySet second = BuildProps(output, input, texture);
-        second.SetBuffer("Input", new DeviceBufferRange(input, stride, stride), readOnly: true);
+        second.SetBuffer("Input", new DeviceBufferRange(input, stride, stride));
         Assert.Equal(5678u, Run(second, output, program)[2]);
     }
 
@@ -344,7 +344,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             props.SetInt("valueA", 1);
             props.SetInt("valueB", 2);
             props.SetInt("valueC", 3);
-            props.SetBuffer("Output", output, readOnly: false);
+            props.SetBuffer("Output", output);
             props.SetTexture("Tex", texture, GD.LinearSampler);
             Run(props, output, program);
         }
@@ -370,8 +370,8 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         props.SetInt("valueA", 11);
         props.SetInt("valueB", 22);
         props.SetInt("valueC", 33);
-        props.SetBuffer("Output", output, readOnly: false);
-        props.SetBuffer("Input", input, readOnly: true);
+        props.SetBuffer("Output", output);
+        props.SetBuffer("Input", input);
 
         uint[] result = Run(props, output, program);
 
@@ -391,7 +391,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         PropertySet frame = new();
         frame.SetInt("valueB", 202);
         frame.SetInt("valueC", 303);
-        frame.SetBuffer("Input", input, readOnly: true);
+        frame.SetBuffer("Input", input);
         frame.SetTexture("Tex", texture, GD.LinearSampler);
 
         DeviceBuffer[] outputs = new DeviceBuffer[n];
@@ -401,7 +401,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
             outputs[i] = CreateOutput();
             items[i] = new PropertySet();
             items[i].SetInt("valueA", 10 + i);
-            items[i].SetBuffer("Output", outputs[i], readOnly: false);
+            items[i].SetBuffer("Output", outputs[i]);
         }
         items[2].SetInt("valueC", 999);
 
@@ -441,7 +441,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         frame.SetInt("valueB", 1);
         PropertySet item = new();
         item.SetInt("valueA", 2);
-        item.SetBuffer("Output", output, readOnly: false);
+        item.SetBuffer("Output", output);
 
         uint afterItem = 0;
         uint afterReapply = 0;

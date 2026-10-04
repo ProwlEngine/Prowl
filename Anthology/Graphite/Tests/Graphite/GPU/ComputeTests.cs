@@ -41,10 +41,10 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         GraphicsProgram graphics = CreateColoredQuadRenderer();
 
         PropertySet computeProps = new();
-        computeProps.SetBuffer("OutputVertices", vertices, readOnly: false);
+        computeProps.SetBuffer("OutputVertices", vertices);
 
         PropertySet graphicsProps = new();
-        graphicsProps.SetBuffer("InputVertices", vertices, readOnly: true);
+        graphicsProps.SetBuffer("InputVertices", vertices);
 
         Submit(cl =>
         {
@@ -202,8 +202,8 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         PropertySet props = new();
         props.SetInt("Width", (int)side);
         props.SetInt("Height", (int)side);
-        props.SetBuffer("Source", source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", source);
+        props.SetBuffer("Destination", destination);
 
         Submit(cl =>
         {

@@ -92,8 +92,8 @@ file sealed class ComputeWriteReadbackPass : IPass<BufferView>
         PropertySet props = new();
         props.SetInt("Width", (int)_side);
         props.SetInt("Height", (int)_side);
-        props.SetBuffer("Source", _source, readOnly: false);
-        props.SetBuffer("Destination", destination, readOnly: false);
+        props.SetBuffer("Source", _source);
+        props.SetBuffer("Destination", destination);
 
         cl.SetComputeShader(_compute);
         cl.SetProperties(props);

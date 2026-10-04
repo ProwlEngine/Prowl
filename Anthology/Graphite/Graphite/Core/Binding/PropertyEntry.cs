@@ -19,7 +19,6 @@ internal sealed class PropertyEntry
 {
     public PropertyEntryKind Kind;
     public UniformScalarType UniformType;
-    public bool ReadOnly;
     public bool BackedBlock;
 
 
@@ -52,10 +51,9 @@ internal sealed class PropertyEntry
     }
 
 
-    public void SetBuffer(DeviceBufferRange buffer, bool readOnly, bool backedBlock = false)
+    public void SetBuffer(DeviceBufferRange buffer, bool backedBlock = false)
     {
         Kind = PropertyEntryKind.Buffer;
-        ReadOnly = readOnly;
         BackedBlock = backedBlock;
         Buffer = buffer;
         Texture = null;
