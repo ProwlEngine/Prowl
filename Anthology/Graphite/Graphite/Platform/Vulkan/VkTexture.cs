@@ -278,6 +278,8 @@ internal unsafe partial class VkTexture : Texture
 
     private void DestroyNative()
     {
+        _gd.ReleaseDefaultView(this);
+
         // Swapchain images belong to the swapchain, not to this wrapper.
         if (_isSwapchainTexture)
         {

@@ -116,6 +116,8 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     /// </summary>
     internal VkTextureView GetOrCreateDefaultView(VkTexture texture) => _defaultTextureViews.GetOrCreate(texture);
 
+    internal void ReleaseDefaultView(VkTexture texture) => _defaultTextureViews.Remove(texture);
+
     internal override CommandBuffer RentGraphCommandBuffer() => _graphCommandBufferPool.Rent();
 
     internal override TransferCommandBuffer RentGraphTransferCommandBuffer() => _graphTransferCommandBufferPool.Rent();
