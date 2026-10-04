@@ -135,16 +135,16 @@ public abstract class DefectRegressionTests<T> : GraphicsDeviceTestBase<T> where
     public void TransientTexturePool_EvictsEntriesUnusedForRetentionWindow()
     {
         ExecutionTask first = GD.BeginExecution();
-        RenderTexture old = GD.RentTransientRenderTexture(first, new RenderTextureDescription(8, 8, PixelFormat.R8_G8_B8_A8_UNorm, false));
+        RenderTexture old = GD.RentGraphTransientRenderTexture(first, new RenderTextureDescription(8, 8, PixelFormat.R8_G8_B8_A8_UNorm, false));
         GD.CompleteExecution(first);
         GD.WaitForIdle();
 
-        for (ulong i = 0; i <= TransientTexturePool.RetentionExecutions; i++)
+        for (ulong i = 0; i <= ExecutionPool<RenderTextureDescription, RenderTexture>.RetentionExecutions; i++)
             GD.CompleteExecution(GD.BeginExecution());
         GD.WaitForIdle();
 
         ExecutionTask last = GD.BeginExecution();
-        GD.RentTransientRenderTexture(last, new RenderTextureDescription(16, 16, PixelFormat.R8_G8_B8_A8_UNorm, false));
+        GD.RentGraphTransientRenderTexture(last, new RenderTextureDescription(16, 16, PixelFormat.R8_G8_B8_A8_UNorm, false));
         GD.CompleteExecution(last);
         GD.WaitForIdle();
 

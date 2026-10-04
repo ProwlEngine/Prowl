@@ -42,7 +42,7 @@
     per-execution head reset, and the overflow spill path (growth rule, cumulative hard cap, the
     one-shot soft-cap warning).
   - `TransientTexturePoolTests` - the device-level transient render-texture pool
-    (`GraphicsDevice.RentTransientTexture`/`RentTransientFramebuffer`): desc-keyed reuse once an
+    (`GraphicsDevice.RentGraphTransientRenderTexture`): desc-keyed reuse once an
     execution's fence signals, no reuse while a bundle is still in flight, and leak-free disposal.
   - `BufferSafetyTests` - the implicit-reallocation ("orphaning") path: writing a buffer that is
     still in flight retires its native resource behind a stable managed identity, and the retired

@@ -8,9 +8,8 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// The device-level transient render-texture pool (GraphicsDevice.RentTransientTexture /
-// RentTransientFramebuffer). Covers the recycle model that mirrors the old
-// RenderTexture.GetTemporaryRT: desc-keyed reuse once a frame's fence signals, no reuse while a
+// The device-level transient render-texture pool (GraphicsDevice.RentGraphTransientRenderTexture).
+// Covers the recycle model that mirrors the old RenderTexture.GetTemporaryRT: desc-keyed reuse once a frame's fence signals, no reuse while a
 // bundle is still in flight, honoring of every desc field, real render-target usability, the
 // thread-safety of the shared physical free-list, and leak-free disposal.
 //
@@ -26,11 +25,17 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         _ => throw new NotSupportedException(),
     };
 
+    private static Texture RentColor(GraphicsDevice device, ExecutionTask task, in RenderTextureDescription desc)
+        => device.RentGraphTransientRenderTexture(task, desc).ColorTextures[0];
+
+    private static Framebuffer RentFramebuffer(GraphicsDevice device, ExecutionTask task, in RenderTextureDescription desc)
+        => device.RentGraphTransientRenderTexture(task, desc).Framebuffer;
+
     [Fact]
     public void Rent_WithNullExecution_Throws()
     {
         RenderTextureDescription desc = new(64, 64, ColorFormat, depth: false);
-        Assert.Throws<ArgumentNullException>(() => GD.RentTransientTexture(null, desc));
+        Assert.Throws<ArgumentNullException>(() => GD.RentGraphTransientRenderTexture(null, desc));
     }
 
     [Fact]
@@ -39,12 +44,12 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         RenderTextureDescription desc = new(128, 128, ColorFormat, depth: true);
 
         ExecutionTask f1 = GD.BeginExecution();
-        Texture first = GD.RentTransientTexture(f1, desc);
+        Texture first = RentColor(GD, f1, desc);
         GD.CompleteExecution(f1);
         GD.WaitForExecution(f1);
 
         ExecutionTask f2 = GD.BeginExecution();
-        Texture second = GD.RentTransientTexture(f2, desc);
+        Texture second = RentColor(GD, f2, desc);
         GD.CompleteExecution(f2);
         GD.WaitForIdle();
 
@@ -61,8 +66,8 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         ExecutionTask task = GD.BeginExecution();
         try
         {
-            Texture first = GD.RentTransientTexture(task, desc);
-            Texture second = GD.RentTransientTexture(task, desc);
+            Texture first = RentColor(GD, task, desc);
+            Texture second = RentColor(GD, task, desc);
 
             // The first bundle is still owned by the open frame, so it cannot be recycled; the
             // second rent must allocate a fresh bundle.
@@ -81,10 +86,10 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         ExecutionTask task = GD.BeginExecution();
         try
         {
-            Texture a = GD.RentTransientTexture(task, new RenderTextureDescription(64, 64, ColorFormat, depth: false));
-            Texture b = GD.RentTransientTexture(task, new RenderTextureDescription(128, 64, ColorFormat, depth: false));
-            Texture c = GD.RentTransientTexture(task, new RenderTextureDescription(64, 64, PixelFormat.R8_G8_B8_A8_UNorm, depth: false));
-            Texture d = GD.RentTransientTexture(task, new RenderTextureDescription(64, 64, ColorFormat, depth: true));
+            Texture a = RentColor(GD, task, new RenderTextureDescription(64, 64, ColorFormat, depth: false));
+            Texture b = RentColor(GD, task, new RenderTextureDescription(128, 64, ColorFormat, depth: false));
+            Texture c = RentColor(GD, task, new RenderTextureDescription(64, 64, PixelFormat.R8_G8_B8_A8_UNorm, depth: false));
+            Texture d = RentColor(GD, task, new RenderTextureDescription(64, 64, ColorFormat, depth: true));
 
             Assert.NotSame(a, b);
             Assert.NotSame(a, c);
@@ -107,7 +112,7 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         ExecutionTask task = GD.BeginExecution();
         try
         {
-            Texture tex = GD.RentTransientTexture(task, desc);
+            Texture tex = RentColor(GD, task, desc);
 
             Assert.Equal(200u, tex.Width);
             Assert.Equal(120u, tex.Height);
@@ -131,13 +136,13 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         ExecutionTask task = GD.BeginExecution();
         try
         {
-            Framebuffer withDepth = GD.RentTransientFramebuffer(task, new RenderTextureDescription(64, 64, twoColors, depth: true));
+            Framebuffer withDepth = RentFramebuffer(GD, task, new RenderTextureDescription(64, 64, twoColors, depth: true));
             Assert.Equal(2, withDepth.ColorTargets.Count);
             Assert.NotNull(withDepth.DepthTarget);
             Assert.Equal(ColorFormat, withDepth.ColorTargets[0].Target.Format);
             Assert.Equal(PixelFormat.R8_G8_B8_A8_UNorm, withDepth.ColorTargets[1].Target.Format);
 
-            Framebuffer noDepth = GD.RentTransientFramebuffer(task, new RenderTextureDescription(64, 64, ColorFormat, depth: false));
+            Framebuffer noDepth = RentFramebuffer(GD, task, new RenderTextureDescription(64, 64, ColorFormat, depth: false));
             Assert.Single(noDepth.ColorTargets);
             Assert.Null(noDepth.DepthTarget);
         }
@@ -234,12 +239,9 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         ExecutionTask task = GD.BeginExecution();
         try
         {
-            Framebuffer depthOnly = GD.RentTransientFramebuffer(task, new RenderTextureDescription(64, 64, Array.Empty<PixelFormat>(), depth: true));
+            Framebuffer depthOnly = RentFramebuffer(GD, task, new RenderTextureDescription(64, 64, Array.Empty<PixelFormat>(), depth: true));
             Assert.Empty(depthOnly.ColorTargets);
             Assert.NotNull(depthOnly.DepthTarget);
-
-            // The single-texture entry point cannot serve a color-less bundle.
-            Assert.Throws<RenderException>(() => GD.RentTransientTexture(task, new RenderTextureDescription(64, 64, Array.Empty<PixelFormat>(), depth: true)));
         }
         finally
         {
@@ -260,7 +262,7 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         ExecutionTask task = GD.BeginExecution();
         try
         {
-            Texture tex = GD.RentTransientTexture(task, desc);
+            Texture tex = RentColor(GD, task, desc);
             Assert.Equal(TextureSampleCount.Count2, tex.SampleCount);
         }
         finally
@@ -279,7 +281,7 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         Framebuffer fb = null;
         GD.RunTestGraph(context =>
         {
-            fb = GD.RentTransientFramebuffer(context.Task, desc);
+            fb = RentFramebuffer(GD, context.Task, desc);
 
             CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
@@ -322,7 +324,7 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
             {
                 Texture[] local = new Texture[perThread];
                 for (int i = 0; i < perThread; i++)
-                    local[i] = GD.RentTransientTexture(task, desc);
+                    local[i] = RentColor(GD, task, desc);
                 results[t] = local;
             });
 
@@ -356,8 +358,8 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         RenderTextureDescription desc = new(64, 64, ColorFormat, depth: true);
 
         ExecutionTask task = device.BeginExecution();
-        Texture rented = device.RentTransientTexture(task, desc);
-        Framebuffer framebuffer = device.RentTransientFramebuffer(task, desc);
+        Texture rented = RentColor(device, task, desc);
+        Framebuffer framebuffer = RentFramebuffer(device, task, desc);
         device.CompleteExecution(task);
         device.WaitForIdle();
 

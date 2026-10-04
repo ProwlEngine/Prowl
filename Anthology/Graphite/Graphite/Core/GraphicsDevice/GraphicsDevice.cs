@@ -12,8 +12,6 @@ public abstract partial class GraphicsDevice : IDisposable
 
     internal PixelFormat? ResolvedDepthFormat;
 
-    internal GraphicsDevice() { }
-
     /// <summary>
     /// Device name.
     /// </summary>
@@ -265,9 +263,8 @@ public abstract partial class GraphicsDevice : IDisposable
         _disposed = true;
 
         WaitForIdle();
-        _transientTexturePool?.Dispose();
-        _graphTransientTexturePool?.Dispose();
-        _transientBufferPool?.Dispose();
+        _transientTexturePool.Dispose();
+        _transientBufferPool.Dispose();
         DisposeDefaultResources();
         PlatformDispose();
     }
