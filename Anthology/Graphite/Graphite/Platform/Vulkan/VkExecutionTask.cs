@@ -16,7 +16,7 @@ internal sealed class VkExecutionTask : ExecutionTask
 
     public override ulong Id => _id;
     public override uint RingSlot => _ringSlot;
-    public override Fence CompletionFence => _slotFenceWrapper;
+    internal override Fence CompletionFence => _slotFenceWrapper;
     public override GraphicsDevice Device => _gd;
 
     internal VkExecutionTask(

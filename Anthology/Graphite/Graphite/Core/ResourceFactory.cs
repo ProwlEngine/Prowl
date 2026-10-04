@@ -140,13 +140,6 @@ public abstract partial class ResourceFactory
     protected abstract ComputeProgram CreateComputeProgramCore(in ComputeDescription description);
 
     /// <summary>
-    /// Makes a fence.
-    /// </summary>
-    /// <param name="signaled">Start signaled or not.</param>
-    /// <returns>New fence.</returns>
-    public abstract Fence CreateFence(bool signaled);
-
-    /// <summary>
     /// Makes a swapchain.
     /// </summary>
     /// <param name="description">Wanted props.</param>

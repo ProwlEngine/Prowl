@@ -164,9 +164,6 @@ internal sealed class TrackingResourceFactory : ResourceFactory
 
     public override Swapchain CreateSwapchain(in SwapchainDescription description)
         => Track(_inner.CreateSwapchain(description));
-
-    public override Fence CreateFence(bool signaled)
-        => Track(_inner.CreateFence(signaled));
 }
 
 public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : GraphicsDeviceCreator

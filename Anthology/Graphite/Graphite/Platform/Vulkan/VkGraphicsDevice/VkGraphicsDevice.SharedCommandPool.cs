@@ -47,7 +47,7 @@ internal sealed unsafe class SharedCommandPool
     public void EndAndSubmit(Silk.NET.Vulkan.CommandBuffer cb, bool waitAcquire = true)
     {
         _gd.Vk.EndCommandBuffer(cb).CheckResult();
-        _gd.SubmitCommandBuffer(null, cb, null, waitAcquire: waitAcquire);
+        _gd.SubmitCommandBuffer(null, cb, waitAcquire: waitAcquire);
         lock (_gd._stagingResourcesLock)
         {
             _gd._submittedSharedCommandPools.Add(cb, this);

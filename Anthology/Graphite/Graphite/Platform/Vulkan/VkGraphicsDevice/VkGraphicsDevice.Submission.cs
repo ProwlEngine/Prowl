@@ -101,19 +101,6 @@ internal unsafe partial class VkGraphicsDevice
             Vk.QueueWaitIdle(GraphicsQueue);
     }
 
-    public override void ResetFence(Fence fence)
-    {
-        VkFenceHandle vkFence = Util.AssertSubtype<Fence, VkFence>(fence).DeviceFence;
-        Vk.ResetFences(Device, 1, &vkFence);
-    }
-
-    public override bool WaitForFence(Fence fence, ulong nanosecondTimeout)
-    {
-        VkFenceHandle vkFence = Util.AssertSubtype<Fence, VkFence>(fence).DeviceFence;
-        Result result = Vk.WaitForFences(Device, 1, &vkFence, true, nanosecondTimeout);
-        return result == Result.Success;
-    }
-
     /// <summary>
     /// Submits an execution's queued command buffers as one vkQueueSubmit. A null slot fence takes a
     /// pooled one instead, for a mid-execution flush.
@@ -254,7 +241,6 @@ internal unsafe partial class VkGraphicsDevice
     internal void SubmitCommandBuffer(
         VkCommandBuffer? vkCL,
         Silk.NET.Vulkan.CommandBuffer vkCB,
-        Fence? fence,
         QueryPool? timingPool = null,
         QueryPool? statsPool = null,
         string bufferName = "",
@@ -266,26 +252,13 @@ internal unsafe partial class VkGraphicsDevice
         FlushPendingInitCommands();
         CheckSubmittedFences();
 
-        bool useExtraFence = fence != null;
-
         SubmitInfo si = new(sType: StructureType.SubmitInfo)
         {
             CommandBufferCount = 1,
             PCommandBuffers = &vkCB
         };
 
-        VkFenceHandle vkFence;
-        VkFenceHandle submissionFence;
-        if (useExtraFence)
-        {
-            vkFence = Util.AssertSubtype<Fence, VkFence>(fence!).DeviceFence;
-            submissionFence = GetFreeSubmissionFence();
-        }
-        else
-        {
-            vkFence = GetFreeSubmissionFence();
-            submissionFence = vkFence;
-        }
+        VkFenceHandle vkFence = GetFreeSubmissionFence();
 
         lock (_graphicsQueueLock)
         {
@@ -300,17 +273,11 @@ internal unsafe partial class VkGraphicsDevice
                 Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
             }
             FlushValidationErrors();
-
-            if (useExtraFence)
-            {
-                _graphicsQueueSubmitCount++;
-                Vk.QueueSubmit(GraphicsQueue, 0, (SubmitInfo*)null, submissionFence).CheckResult();
-            }
         }
 
         lock (_submittedFencesLock)
         {
-            _submittedFences.Add(new FenceSubmissionInfo(submissionFence, vkCL, vkCB, timingPool, statsPool, bufferName, isTransfer, pass, transferId));
+            _submittedFences.Add(new FenceSubmissionInfo(vkFence, vkCL, vkCB, timingPool, statsPool, bufferName, isTransfer, pass, transferId));
         }
     }
 

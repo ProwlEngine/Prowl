@@ -22,11 +22,6 @@ internal unsafe class VkFence : Fence
         _gd.Vk.CreateFence(_gd.Device, in fenceCI, null, out _fence).CheckResult();
     }
 
-    public override void Reset()
-    {
-        _gd.ResetFence(this);
-    }
-
     public override bool Signaled => _gd.Vk.GetFenceStatus(_gd.Device, _fence) == Result.Success;
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);

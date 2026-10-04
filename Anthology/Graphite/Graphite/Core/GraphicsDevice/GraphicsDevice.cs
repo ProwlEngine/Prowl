@@ -91,20 +91,6 @@ public abstract partial class GraphicsDevice : IDisposable
     internal abstract uint GetStructuredBufferMinOffsetAlignmentCore();
 
     /// <summary>
-    /// Blocks until the fence signals, or until timeout.
-    /// </summary>
-    /// <param name="fence">Fence to wait on.</param>
-    /// <param name="nanosecondTimeout">Max wait in nanoseconds. ulong.MaxValue = no timeout.</param>
-    /// <returns>True if signaled, false if timed out.</returns>
-    public abstract bool WaitForFence(Fence fence, ulong nanosecondTimeout = ulong.MaxValue);
-
-    /// <summary>
-    /// Resets the fence to unsignaled.
-    /// </summary>
-    /// <param name="fence">Fence to reset.</param>
-    public abstract void ResetFence(Fence fence);
-
-    /// <summary>
     /// Swaps main swapchain buffers, presents to screen. Needs a main swapchain.
     /// </summary>
     public void SwapBuffers()

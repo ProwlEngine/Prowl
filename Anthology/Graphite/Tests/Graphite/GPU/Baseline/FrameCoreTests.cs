@@ -35,16 +35,6 @@ public abstract class FrameCoreTests<T> : GraphicsDeviceTestBase<T> where T : Gr
     }
 
     [Fact]
-    public void Fence_ResetClearsSignaledState()
-    {
-        Fence fence = RF.CreateFence(signaled: true);
-        Assert.True(fence.Signaled);
-
-        GD.ResetFence(fence);
-        Assert.False(fence.Signaled);
-    }
-
-    [Fact]
     public void Dispose_MarksResourceDisposed()
     {
         // Created on the inner factory so the test base does not dispose it a second time.

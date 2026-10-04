@@ -61,11 +61,6 @@ internal class VkResourceFactory : ResourceFactory
         return new VkBuffer(_gd, description);
     }
 
-    public override Fence CreateFence(bool signaled)
-    {
-        return new VkFence(_gd, signaled);
-    }
-
     public override Swapchain CreateSwapchain(in SwapchainDescription description)
     {
         return new VkSwapchain(_gd, description);

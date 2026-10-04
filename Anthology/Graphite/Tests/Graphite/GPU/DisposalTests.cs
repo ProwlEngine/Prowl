@@ -60,14 +60,6 @@ public abstract class DisposalTests<T> : GraphicsDeviceTestBase<T> where T : Gra
         Assert.True(s.IsDisposed);
     }
 
-    [Fact]
-    public void Dispose_Fence()
-    {
-        Fence f = Inner.CreateFence(false);
-        f.Dispose();
-        Assert.True(f.IsDisposed);
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     private struct SinkVertex
     {

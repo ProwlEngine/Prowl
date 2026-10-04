@@ -57,7 +57,6 @@ internal unsafe partial class VkGraphicsDevice
         // so no fence wait is needed here; just recycle the slot's fence and transient memory.
         VkFenceHandle slotFence = slot.Fence;
         Vk.ResetFences(Device, 1, in slotFence).CheckResult();
-        slot.FenceWrapper.Reset();
 
         // Return overflow buffers to the free pool and reset transient head
         List<VkBuffer> overflow = slot.UniformArena.OverflowBuffers;

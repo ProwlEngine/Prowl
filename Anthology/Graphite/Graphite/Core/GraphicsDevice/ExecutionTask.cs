@@ -11,10 +11,8 @@ public abstract partial class ExecutionTask
     /// <summary>Slot index in the device ring.</summary>
     public abstract uint RingSlot { get; }
 
-    /// <summary>
-    /// Signals when this execution's GPU work is done. Owned by device, recycled on ring slot reuse. Just wait on it.
-    /// </summary>
-    public abstract Fence CompletionFence { get; }
+    /// <summary>Signals when this execution's GPU work is done. Recycled on ring slot reuse.</summary>
+    internal abstract Fence CompletionFence { get; }
 
     /// <summary>Owning device.</summary>
     public abstract GraphicsDevice Device { get; }

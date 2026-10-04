@@ -124,18 +124,6 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
     };
 
     [Fact]
-    public void Fence_CreateAndReset_TracksSignaledState()
-    {
-        Fence signaled = RF.CreateFence(signaled: true);
-        Assert.True(signaled.Signaled);
-        GD.ResetFence(signaled);
-        Assert.False(signaled.Signaled);
-
-        Fence unsignaled = RF.CreateFence(signaled: false);
-        Assert.False(unsignaled.Signaled);
-    }
-
-    [Fact]
     public void GraphicsProgram_CreateAndDispose_TracksDisposal()
     {
         GraphicsProgram program = GD.ResourceFactory.CreateGraphicsProgram(CreateSinkShaderDescription());
