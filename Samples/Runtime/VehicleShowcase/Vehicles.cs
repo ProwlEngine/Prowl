@@ -20,6 +20,7 @@ public sealed partial class VehicleShowcaseGame
     private static readonly WheelModel CarWheel = new("Models/Wheel", 0.42f, 0.32f);
     private static readonly WheelModel MonsterWheel = new("Models/Monster Wheel", 0.85f, 0.65f);
     private static readonly WheelModel BikeWheel = new("Models/Bike Wheel", 0.33f, 0.15f);
+    private static readonly WheelModel DualWheel = new("Models/Dual Wheel", 0.52f, 0.62f);
 
     private Material _trim = null!, _chrome = null!, _glass = null!, _tyre = null!, _headlight = null!, _helmet = null!;
 
@@ -41,6 +42,7 @@ public sealed partial class VehicleShowcaseGame
         Register(GoKart(OnTrailer(0.3f, -0.3f)));
         Register(ArmyTruck(new Float3(-25f, 1.6f, -2f)));
         Register(Motorcycle(new Float3(10f, 0.8f, -2f)));
+        Register(SemiTruck(new Float3(-45f, 1.2f, 14f)));
     }
 
     private Vehicle SportsCar(Float3 position)
@@ -228,6 +230,128 @@ public sealed partial class VehicleShowcaseGame
             Body = body, Bike = bike, Spawn = position, CameraDistance = 6f,
             BaseTorque = bike.Torque, BaseBrake = bike.Brake, BaseMass = body.Mass,
         };
+    }
+
+    private Vehicle SemiTruck(Float3 position)
+    {
+        GameObject chassis = Chassis("Semi Truck", position, 9000f, out Rigidbody3D body,
+            (new(1.7f, 0.95f, 2.1f), new(0f, 0.5f, 2.25f)), (new(2.44f, 2.45f, 2.7f), new(0f, 1.27f, -0.1f)),
+            (new(1.1f, 0.4f, 7.1f), new(0f, -0.23f, -0.2f)), (new(2.6f, 0.37f, 0.27f), new(0f, -0.16f, 3.48f)));
+        Material taillight = Taillight();
+        Dress(chassis, "Models/Semi Truck", Lit(new Color(0.5f, 0.06f, 0.02f, 1f), 0.6f, 0.3f), taillight);
+
+        var car = chassis.AddComponent<CarController>();
+        car.Torque = 45000f;
+        car.TopSpeed = 26f;
+        car.Brake = 18000f;
+        car.MaxSteer = 32f;
+        car.Downforce = 0f;
+        car.BrakeLights = taillight;
+        car.Headlights.AddRange(Lamps(chassis, new(-1.07f, 0.19f, 3.4f), new(1.07f, 0.19f, 3.4f)));
+
+        var front = new WheelSetup(0.52f, 0.32f, 0.3f, 1.5f, 0.6f, 2.4f);
+        var dual = new WheelSetup(0.52f, 0.62f, 0.3f, 1.5f, 0.6f, 2.4f);
+        car.Axles.Add(Axle(chassis, front, CarWheel, 1.05f, -0.3f, 2.4f, steer: 1f, driven: false, handbrake: false));
+        car.Axles.Add(Axle(chassis, dual, DualWheel, 0.95f, -0.3f, -1.75f, steer: 0f, driven: true, handbrake: true));
+        car.Axles.Add(Axle(chassis, dual, DualWheel, 0.95f, -0.3f, -3.05f, steer: 0f, driven: true, handbrake: true));
+
+        var vehicle = new Vehicle
+        {
+            Name = "Semi truck",
+            Description = "An eighteen wheeler pulling two flat deck trailers, the second on a converter dolly. The trailers brake with the truck, so the whole rig parks solid. Switch to another car and the ramps behind the last trailer come down: drive up them, along the deck and over the dolly onto the front trailer, then take the truck and haul everything away.",
+            Body = body, Car = car, Spawn = position, CameraDistance = 24f,
+            BaseTorque = car.Torque, BaseBrake = car.Brake, BaseMass = body.Mass,
+        };
+        Add(chassis);
+
+        // The front trailer rests its kingpin on the fifth wheel, over the tractor's drive axles.
+        Material trailerPaint = Lit(new Color(0.12f, 0.13f, 0.15f, 1f), 0.5f, 0.45f);
+        Float3 kingpin = new(0f, -0.1f, 5.25f);
+        Float3 fifthWheel = position + new Float3(0f, 0.04f, -2.4f);
+        Rigidbody3D first = SemiTrailer(vehicle, "Semi Trailer", fifthWheel - kingpin, trailerPaint, taillight, true);
+        Couple(first, kingpin, body);
+
+        // The dolly's drawbar hooks under the back of the front trailer, and its own fifth wheel carries the second.
+        Float3 eye = fifthWheel - kingpin + new Float3(0f, -0.375f, -6.5f);
+        Rigidbody3D dolly = Dolly(vehicle, eye - new Float3(0f, 0f, 2.3f), trailerPaint, dual with { Radius = 0.5f });
+        Couple(dolly, new Float3(0f, 0f, 2.3f), first);
+
+        Float3 secondAt = eye - new Float3(0f, 0f, 2.3f) + new Float3(0f, 0.3f, 0f) - kingpin;
+        Rigidbody3D second = SemiTrailer(vehicle, "Semi Trailer Open", secondAt, trailerPaint, taillight, false);
+        Couple(second, kingpin, dolly);
+
+        // Loading ramps from the back of the last deck down to the ground the truck stands on.
+        vehicle.Ramps = new GameObject("Ramps");
+        Part(second.GameObject, vehicle.Ramps, Float3.Zero);
+        float drop = secondAt.Y + 0.1f - (position.Y - 1.02f);
+        Float3 down = Float3.Normalize(new Float3(0f, -drop, -4.3f));
+        float length = Float3.Length(new Float3(0f, drop, 4.3f));
+        foreach (float x in new[] { -0.72f, 0.72f })
+        {
+            var ramp = new GameObject("Ramp");
+            Part(vehicle.Ramps, ramp, new Float3(x, 0.07f, -6.25f) + down * (length * 0.5f));
+            ramp.Transform.LocalRotation = Quaternion.FromToRotation(Float3.UnitZ, down);
+            ramp.AddComponent<BoxCollider>().Size = new Float3(1.1f, 0.06f, length);
+            Part(ramp, Model("Ramp Model", Mesh.CreateCube(new Float3(1.1f, 0.06f, length)), _chrome, Float3.Zero), Float3.Zero);
+        }
+
+        // Every towed axle brakes with the truck.
+        car.Axles.AddRange(_towedAxles);
+        _towedAxles.Clear();
+        return vehicle;
+    }
+
+    // Axles of the trailers being built, handed to the truck that brakes them once the rig is complete.
+    private readonly List<CarController.Axle> _towedAxles = new();
+
+    private Rigidbody3D SemiTrailer(Vehicle vehicle, string model, Float3 position, Material paint, Material taillight, bool headboard)
+    {
+        var trailer = new GameObject(model);
+        trailer.Transform.Position = position;
+        var body = trailer.AddComponent<Rigidbody3D>();
+        body.Mass = 4000f;
+        AddBox(trailer, new Float3(2.6f, 0.2f, 12.5f), Float3.Zero);
+        AddBox(trailer, new Float3(0.1f, 0.1f, 12.5f), new Float3(-1.27f, 0.15f, 0f));
+        AddBox(trailer, new Float3(0.1f, 0.1f, 12.5f), new Float3(1.27f, 0.15f, 0f));
+        if (headboard) AddBox(trailer, new Float3(2.6f, 1.2f, 0.15f), new Float3(0f, 0.7f, 6.175f));
+        Dress(trailer, $"Models/{model}", paint, taillight);
+
+        var wheels = new WheelSetup(0.5f, 0.62f, 0.3f, 1.5f, 0.6f, 2.4f);
+        TowedAxle(trailer, wheels, -0.44f, -4.3f);
+        TowedAxle(trailer, wheels, -0.44f, -5.6f);
+        Add(trailer);
+        vehicle.Towed.Add((body, position));
+        return body;
+    }
+
+    private Rigidbody3D Dolly(Vehicle vehicle, Float3 position, Material paint, WheelSetup wheels)
+    {
+        var dolly = new GameObject("Dolly");
+        dolly.Transform.Position = position;
+        var body = dolly.AddComponent<Rigidbody3D>();
+        body.Mass = 800f;
+        AddBox(dolly, new Float3(1f, 0.2f, 1.6f), new Float3(0f, -0.02f, 0f));
+        AddBox(dolly, new Float3(2.5f, 0.08f, 1.5f), new Float3(0f, 0.46f, 1.8f));
+        Dress(dolly, "Models/Dolly", paint, _trim);
+        TowedAxle(dolly, wheels, -0.045f, -0.15f);
+        Add(dolly);
+        vehicle.Towed.Add((body, position));
+        return body;
+    }
+
+    private void TowedAxle(GameObject body, WheelSetup wheels, float y, float z)
+    {
+        CarController.Axle axle = Axle(body, wheels, DualWheel, 0.95f, y, z, steer: 0f, driven: false, handbrake: true);
+        axle.Towed = true;
+        _towedAxles.Add(axle);
+    }
+
+    /// <summary>Pins a point of <paramref name="body"/> to wherever it touches <paramref name="to"/>, free to turn every way.</summary>
+    private static void Couple(Rigidbody3D body, Float3 anchor, Rigidbody3D to)
+    {
+        BallSocketConstraint joint = body.GameObject.AddComponent<BallSocketConstraint>();
+        joint.Anchor = anchor;
+        joint.ConnectedBody = to;
     }
 
     // ----------------------------------------------------------------

@@ -1,0 +1,8 @@
+newmtl Trim
+Kd 0.015 0.015 0.018
+
+newmtl Chrome
+Kd 0.6 0.6 0.62
+
+newmtl Body
+Kd 0.55 0.02 0.02

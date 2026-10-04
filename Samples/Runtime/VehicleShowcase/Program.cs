@@ -59,6 +59,12 @@ public sealed class Vehicle
     /// <summary>Where the trailer hitches on, in the vehicle's space, for vehicles that can tow.</summary>
     public Float3? Hitch;
 
+    /// <summary>Bodies coupled behind it for good, and where each was parked, so a reset puts the whole rig back.</summary>
+    public readonly List<(Rigidbody3D Body, Float3 Position)> Towed = new();
+
+    /// <summary>Loading ramps that lie down while another vehicle is driven, so it can drive aboard.</summary>
+    public GameObject? Ramps;
+
     public float BaseTorque, BaseBrake, BaseMass;
 
     public IEnumerable<WheelCollider> Wheels => Car.IsValid() ? Car!.Wheels : Bike!.Wheels;
@@ -165,7 +171,11 @@ public sealed partial class VehicleShowcaseGame : StationGame
         CameraObject.GetComponent<FlyCamera>()!.Enabled = false;
 
         _current = _vehicles[index];
-        foreach (Vehicle vehicle in _vehicles) vehicle.Controlled = vehicle == _current;
+        foreach (Vehicle vehicle in _vehicles)
+        {
+            vehicle.Controlled = vehicle == _current;
+            if (vehicle.Ramps.IsValid()) vehicle.Ramps!.Enabled = vehicle != _current;
+        }
 
         Transform target = _current.Body.Transform;
         Float3 forward = target.Forward;
@@ -194,10 +204,17 @@ public sealed partial class VehicleShowcaseGame : StationGame
             foreach (LapTimer timer in _lapTimers) timer.Stop();
         _skidmarks.Lift();
         if (_hitch.IsValid() && _hitch!.ConnectedBody == vehicle.Body) ToggleHitch();
-        vehicle.Body.MoveRotation(Quaternion.Identity);
-        vehicle.Body.MovePosition(vehicle.Spawn);
-        vehicle.Body.LinearVelocity = Float3.Zero;
-        vehicle.Body.AngularVelocity = Float3.Zero;
+        Park(vehicle.Body, vehicle.Spawn);
+        foreach ((Rigidbody3D body, Float3 position) in vehicle.Towed)
+            Park(body, position);
+    }
+
+    private static void Park(Rigidbody3D body, Float3 position)
+    {
+        body.MoveRotation(Quaternion.Identity);
+        body.MovePosition(position);
+        body.LinearVelocity = Float3.Zero;
+        body.AngularVelocity = Float3.Zero;
     }
 
     // ----------------------------------------------------------------

@@ -28,6 +28,9 @@ public sealed class CarController : MonoBehaviour
 
         /// <summary>The axle's sideways grip, which the handbrake lowers while it is held.</summary>
         public float Grip = 1.6f;
+
+        /// <summary>Wheels on a towed body, braked with the vehicle but left out of how it steers and holds the road.</summary>
+        public bool Towed;
     }
 
     public readonly List<Axle> Axles = new();
@@ -153,6 +156,7 @@ public sealed class CarController : MonoBehaviour
         float front = float.MinValue, rear = float.MaxValue, grip = float.MaxValue;
         foreach (Axle axle in Axles)
         {
+            if (axle.Towed) continue;
             grip = MathF.Min(grip, axle.Grip);
             foreach (WheelCollider wheel in axle.Wheels)
             {
@@ -196,7 +200,7 @@ public sealed class CarController : MonoBehaviour
     {
         Float3 ground = Float3.Zero;
         int touching = 0;
-        foreach (WheelCollider wheel in Wheels)
+        foreach (WheelCollider wheel in Axles.Where(axle => !axle.Towed).SelectMany(axle => axle.Wheels))
         {
             if (!wheel.GetGroundHit(out WheelHit hit)) continue;
             ground += hit.GroundVelocity;
@@ -253,10 +257,11 @@ public sealed class CarController : MonoBehaviour
         if (slide <= MaxSlideAngle) return;
 
         // The turn the steering asks for: front and rear axles each steer by their own share.
-        float steerFront = Axles.Max(axle => axle.Steer), steerRear = Axles.Min(axle => axle.Steer);
+        IEnumerable<Axle> own = Axles.Where(axle => !axle.Towed);
+        float steerFront = own.Max(axle => axle.Steer), steerRear = own.Min(axle => axle.Steer);
         float angle = _steer * MathF.PI / 180f;
         float turn = (MathF.Tan(angle * steerFront) - MathF.Tan(angle * steerRear)) / _wheelbase;
-        float grip = Axles.Min(axle => axle.Grip) * 9.81f;
+        float grip = own.Min(axle => axle.Grip) * 9.81f;
         float wanted = Math.Clamp(Float3.Dot(forward, velocity) * turn, -grip / speed, grip / speed);
         float yaw = Float3.Dot(_body.AngularVelocity, up);
         float strength = Math.Clamp((slide - MaxSlideAngle) / 10f, 0f, 1f);

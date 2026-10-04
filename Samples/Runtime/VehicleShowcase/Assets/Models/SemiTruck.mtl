@@ -1,0 +1,17 @@
+newmtl Trim
+Kd 0.015 0.015 0.018
+
+newmtl Body
+Kd 0.55 0.02 0.02
+
+newmtl Chrome
+Kd 0.6 0.6 0.62
+
+newmtl Headlights
+Kd 1 1 1
+
+newmtl Glass
+Kd 0.01 0.015 0.025
+
+newmtl Taillights
+Kd 0.3 0 0

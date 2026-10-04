@@ -109,15 +109,36 @@ public sealed partial class VehicleShowcaseGame
 
     /// <summary>
     /// A closed loop of road following <paramref name="path"/> from t = 0 to 2 pi, starting at t = 0, with a start
-    /// line and a TriggerVolume that times laps. Returns the road so a surface can be put on it.
+    /// line and a TriggerVolume that times laps. Returns the road so a surface can be put on it. A
+    /// <paramref name="shoulder"/> slopes each edge down to the ground over that distance instead of ending in a wall.
     /// </summary>
-    private GameObject Loop(string name, Func<float, Float3> path, float width, int segments, Material road, bool kerbs, Func<float, float>? bumps = null)
+    private GameObject Loop(string name, Func<float, Float3> path, float width, int segments, Material road, bool kerbs, Func<float, float>? bumps = null, float shoulder = 0f)
     {
         Float3 Side(float t)
         {
             Float3 tangent = path(t + 0.001f) - path(t - 0.001f);
             tangent.Y = 0f;
             return -Float3.Normalize(Float3.Cross(tangent, Float3.UnitY));
+        }
+
+        float lap = 0f;
+        for (int i = 0; i < segments; i++)
+            lap += Float3.Distance(path(i * MathF.PI * 2f / segments), path((i + 1) * MathF.PI * 2f / segments));
+
+        // The bumps blend from one lap's worth ahead back to the start, so the road meets itself at the same height.
+        float Bump(float along) => bumps == null ? 0f : bumps(along + lap) * (1f - along / lap) + bumps(along) * (along / lap);
+
+        // How far a shoulder reaches on one side, narrowed on the inside of a tight bend so it never folds over itself.
+        float Reach(float t, float side)
+        {
+            Float3 a = path(t - 0.01f), b = path(t), c = path(t + 0.01f);
+            a.Y = b.Y = c.Y = 0f;
+            Float3 bend = (a + c) * 0.5f - b;
+            float sag = Float3.Length(bend);
+            if (sag < 1e-5f || Float3.Dot(bend, Side(t) * side) <= 0f) return shoulder;
+            float half = Float3.Distance(a, c) * 0.5f;
+            float radius = (half * half + sag * sag) / (2f * sag);
+            return Math.Clamp(radius - width * 0.5f - 0.5f, 0.25f, shoulder);
         }
 
         var surface = new MeshBuilder();
@@ -134,15 +155,27 @@ public sealed partial class VehicleShowcaseGame
             Float3 p0 = path(t0), p1 = path(t1);
             Float3 s0 = Side(t0), s1 = Side(t1);
             float length = Float3.Distance(p0, p1);
-            Float3 b0 = new(0f, bumps?.Invoke(travelled) ?? 0f, 0f), b1 = new(0f, bumps?.Invoke(travelled + length) ?? 0f, 0f);
+            Float3 b0 = new(0f, Bump(travelled), 0f), b1 = new(0f, Bump(travelled + length), 0f);
 
             Float3 l0 = p0 - s0 * width * 0.5f + b0, r0 = p0 + s0 * width * 0.5f + b0;
             Float3 l1 = p1 - s1 * width * 0.5f + b1, r1 = p1 + s1 * width * 0.5f + b1;
             surface.Quad(l0, r0, r1, l1, new Float2(0f, travelled / width), new Float2(1f, travelled / width), new Float2(1f, (travelled + length) / width), new Float2(0f, (travelled + length) / width), Float3.UnitY);
             travelled += length;
 
-            skirt.Quad(l0, l1, new Float3(l1.X, -0.1f, l1.Z), new Float3(l0.X, -0.1f, l0.Z), default, default, default, default, -s0);
-            skirt.Quad(r0, r1, new Float3(r1.X, -0.1f, r1.Z), new Float3(r0.X, -0.1f, r0.Z), default, default, default, default, s0);
+            if (shoulder > 0f)
+            {
+                float v0 = (travelled - length) / width, v1 = travelled / width;
+                float left0 = Reach(t0, -1f), left1 = Reach(t1, -1f), right0 = Reach(t0, 1f), right1 = Reach(t1, 1f);
+                Float3 ol0 = Ground(l0 - s0 * left0), ol1 = Ground(l1 - s1 * left1);
+                Float3 or0 = Ground(r0 + s0 * right0), or1 = Ground(r1 + s1 * right1);
+                surface.Quad(ol0, l0, l1, ol1, new Float2(-left0 / width, v0), new Float2(0f, v0), new Float2(0f, v1), new Float2(-left1 / width, v1), Slope(l1 - l0, ol0 - l0));
+                surface.Quad(r0, or0, or1, r1, new Float2(1f, v0), new Float2(1f + right0 / width, v0), new Float2(1f + right1 / width, v1), new Float2(1f, v1), Slope(r1 - r0, or0 - r0));
+            }
+            else
+            {
+                skirt.Quad(l0, l1, new Float3(l1.X, -0.1f, l1.Z), new Float3(l0.X, -0.1f, l0.Z), default, default, default, default, -s0);
+                skirt.Quad(r0, r1, new Float3(r1.X, -0.1f, r1.Z), new Float3(r0.X, -0.1f, r0.Z), default, default, default, default, s0);
+            }
 
             if (!kerbs) continue;
             MeshBuilder kerb = (i / 2) % 2 == 0 ? red : white;
@@ -156,7 +189,8 @@ public sealed partial class VehicleShowcaseGame
         GameObject track = Model(name, roadMesh, road, Float3.Zero);
         track.AddComponent<MeshCollider>().Mesh = roadMesh;
         Add(track);
-        Add(Model(name + " Sides", skirt.Build(), _dark, Float3.Zero));
+        if (shoulder <= 0f)
+            Add(Model(name + " Sides", skirt.Build(), _dark, Float3.Zero));
         if (kerbs)
         {
             Material paint = Lit(new Color(0.7f, 0.7f, 0.7f, 1f), 0f, 0.6f);
@@ -167,7 +201,7 @@ public sealed partial class VehicleShowcaseGame
 
         // The start line, with a gantry over it and a gate that times each lap.
         const float LineT = 0.02f;
-        Float3 start = path(LineT) + new Float3(0f, bumps?.Invoke(0f) ?? 0f, 0f);
+        Float3 start = path(LineT) + new Float3(0f, Bump(0f), 0f);
         Quaternion lineRotation = Quaternion.LookRotation(Float3.Normalize(path(LineT + 0.01f) - path(LineT)), Float3.UnitY);
         GameObject line = Model("Start Line", Plane(width, 1.5f), Lit(Color.White, 0f, 0.7f).With("_MainTex", Load<Texture2D>("Textures/Checker")).Tiled(width * 0.5f, 1f), start + new Float3(0f, 0.03f, 0f));
         line.Transform.Rotation = lineRotation;
@@ -188,6 +222,16 @@ public sealed partial class VehicleShowcaseGame
         banner.Transform.Rotation = lineRotation;
         Add(banner);
         return track;
+    }
+
+    // A shoulder's outer edge, tucked just under the floor so the two meet without a seam.
+    private static Float3 Ground(Float3 p) => new(p.X, -0.02f, p.Z);
+
+    // The upward facing normal of a quad spanned by two edges.
+    private static Float3 Slope(Float3 along, Float3 across)
+    {
+        Float3 normal = Float3.Normalize(Float3.Cross(along, across));
+        return normal.Y < 0f ? -normal : normal;
     }
 
     // A long asphalt circuit around a wobbly ellipse, rising into a hill on the far side. The start is at its
@@ -226,7 +270,7 @@ public sealed partial class VehicleShowcaseGame
 
         float Bumps(float along) => (Noise(along / 7f, 0.5f, 4096) - 0.5f) * 0.7f + (Noise(along / 2.3f, 3.5f, 4096) - 0.5f) * 0.15f + 0.3f;
         Material dirt = Textured("Textures/Dirt", Color.White, 0.95f, 1f);
-        GameObject track = Loop("Dirt Track", t => center + Point(MathF.PI * 0.5f + t), 10f, 600, dirt, kerbs: false, Bumps);
+        GameObject track = Loop("Dirt Track", t => center + Point(MathF.PI * 0.5f + t), 10f, 600, dirt, kerbs: false, Bumps, shoulder: 3f);
         track.AddComponent<WheelSurface>().Grip = 0.8f;
         track.AddComponent<TyreSurface>().Spray = TyreSprayKind.Dust;
     }

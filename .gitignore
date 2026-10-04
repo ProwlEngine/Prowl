@@ -348,3 +348,6 @@ FodyWeavers.xsd
 
 # Rider IDE
 .idea/
+
+# Local tools and scratch work, kept out of the repo
+Wulferis_Local/
