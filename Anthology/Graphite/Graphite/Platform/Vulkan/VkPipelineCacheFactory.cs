@@ -44,11 +44,6 @@ internal static unsafe class VkPipelineCacheFactory
 
         blendStateCI.AttachmentCount = (uint)attachmentsCount;
         blendStateCI.PAttachments = attachmentsPtr;
-        Color blendFactor = programBlendState.BlendFactor;
-        blendStateCI.BlendConstants[0] = blendFactor.R;
-        blendStateCI.BlendConstants[1] = blendFactor.G;
-        blendStateCI.BlendConstants[2] = blendFactor.B;
-        blendStateCI.BlendConstants[3] = blendFactor.A;
 
         pipelineCI.PColorBlendState = &blendStateCI;
 
@@ -69,10 +64,12 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Dynamic State
         PipelineDynamicStateCreateInfo dynamicStateCI = new() { SType = StructureType.PipelineDynamicStateCreateInfo };
-        DynamicState* dynamicStates = stackalloc DynamicState[2];
+        DynamicState* dynamicStates = stackalloc DynamicState[4];
         dynamicStates[0] = DynamicState.Viewport;
         dynamicStates[1] = DynamicState.Scissor;
-        dynamicStateCI.DynamicStateCount = 2;
+        dynamicStates[2] = DynamicState.StencilReference;
+        dynamicStates[3] = DynamicState.BlendConstants;
+        dynamicStateCI.DynamicStateCount = 4;
         dynamicStateCI.PDynamicStates = dynamicStates;
 
         pipelineCI.PDynamicState = &dynamicStateCI;
@@ -91,7 +88,6 @@ internal static unsafe class VkPipelineCacheFactory
         dssCI.Front.CompareOp = VkFormats.ToVkCompareOp(vdDssDesc.StencilFront.Comparison);
         dssCI.Front.CompareMask = vdDssDesc.StencilReadMask;
         dssCI.Front.WriteMask = vdDssDesc.StencilWriteMask;
-        dssCI.Front.Reference = vdDssDesc.StencilReference;
 
         dssCI.Back.FailOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilBack.Fail);
         dssCI.Back.PassOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilBack.Pass);
@@ -99,7 +95,6 @@ internal static unsafe class VkPipelineCacheFactory
         dssCI.Back.CompareOp = VkFormats.ToVkCompareOp(vdDssDesc.StencilBack.Comparison);
         dssCI.Back.CompareMask = vdDssDesc.StencilReadMask;
         dssCI.Back.WriteMask = vdDssDesc.StencilWriteMask;
-        dssCI.Back.Reference = vdDssDesc.StencilReference;
 
         pipelineCI.PDepthStencilState = &dssCI;
 

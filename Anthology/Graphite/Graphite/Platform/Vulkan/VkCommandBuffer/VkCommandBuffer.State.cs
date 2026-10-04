@@ -23,6 +23,10 @@ internal unsafe partial class VkCommandBuffer
 
     private Rect2D _scissor;
     private Viewport _viewport;
+    private uint _stencilReference;
+    private Color _blendConstants;
+    private bool _stencilReferenceValid;
+    private bool _blendConstantsValid;
 
     private readonly List<VkTexture> _temporaryStorageImages = [];
 
@@ -55,6 +59,10 @@ internal unsafe partial class VkCommandBuffer
         _resolvedTopology = default;
         _scissor = default;
         _viewport = default;
+        _stencilReference = default;
+        _blendConstants = default;
+        _stencilReferenceValid = false;
+        _blendConstantsValid = false;
         _vbCacheSource = null;
         _vbCacheProgram = null;
         _vbCacheCount = 0;
@@ -70,6 +78,9 @@ internal unsafe partial class VkCommandBuffer
 
         _currentShaderProgram = sp;
         _hasResolvedPipeline = false;
+
+        SetStencilReference(sp.DepthStencilState.StencilReference);
+        SetBlendConstants(sp.BlendState.BlendFactor);
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)
@@ -111,5 +122,24 @@ internal unsafe partial class VkCommandBuffer
         };
 
         _gd.Vk.CmdSetViewport(_cb, 0, 1, in vkViewport);
+    }
+
+    public override void SetStencilReference(uint reference)
+    {
+        if (_stencilReferenceValid && reference == _stencilReference) return;
+
+        _stencilReferenceValid = true;
+        _stencilReference = reference;
+        _gd.Vk.CmdSetStencilReference(_cb, StencilFaceFlags.FaceFrontAndBack, reference);
+    }
+
+    public override void SetBlendConstants(Color constants)
+    {
+        if (_blendConstantsValid && constants.Equals(_blendConstants)) return;
+
+        _blendConstantsValid = true;
+        _blendConstants = constants;
+        float* values = stackalloc float[4] { constants.R, constants.G, constants.B, constants.A };
+        _gd.Vk.CmdSetBlendConstants(_cb, values);
     }
 }

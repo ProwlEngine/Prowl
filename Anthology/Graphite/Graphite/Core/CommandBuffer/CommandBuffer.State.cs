@@ -169,4 +169,12 @@ public abstract partial class CommandBuffer
     /// <param name="width">Rect width.</param>
     /// <param name="height">Rect height.</param>
     public abstract void SetScissor(uint x, uint y, uint width, uint height);
+
+    /// <summary>Sets stencil reference for subsequent draws. Applied from the program on SetShader.</summary>
+    /// <param name="reference">Stencil reference value.</param>
+    public abstract void SetStencilReference(uint reference);
+
+    /// <summary>Sets blend constants for subsequent draws. Applied from the program on SetShader.</summary>
+    /// <param name="constants">Blend constant color.</param>
+    public abstract void SetBlendConstants(Color constants);
 }
