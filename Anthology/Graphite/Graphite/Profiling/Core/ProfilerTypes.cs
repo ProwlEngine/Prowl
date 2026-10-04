@@ -154,7 +154,8 @@ public readonly struct CommandBufferInfo
 public enum BarrierBin { TextureTransition, BufferTransition, MemoryBarrier }
 
 /// <summary>
-/// GPU-reported vertex/primitive/fragment counts from a pipeline-statistics query (see VkGraphicsDevice.PipelineStats.cs). Real hardware numbers, not CPU estimates - includes indirect draws, and ClippingPrimitives shows what got culled before rasterization. FragmentShaderInvocations divided by the render target's pixel count gives an overdraw/depth-complexity estimate.
+/// GPU-reported vertex, primitive and fragment counts from a pipeline-statistics query.
+/// Hardware numbers including indirect draws; fragment invocations over target pixels estimates overdraw.
 /// </summary>
 public readonly struct GpuVertexStats
 {
