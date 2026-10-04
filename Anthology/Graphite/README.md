@@ -314,7 +314,7 @@ declarative graph of passes over a `RenderPipeline<TView>`:
   `DeclareOutputTexture(id, desc)` / `DeclareOutputBuffer(id, desc)` declare a resource this pass produces.
   `Render(RenderContext<TView>, CommandBuffer)` runs every dispatch and records the pass's actual work into the given buffer.
 - **`RasterPass<TView>`** - a convenience base for the common raster pass. Declare the render target in
-  `Setup` with `SetTarget(builder, id, desc)` (or `SetTargets` for a multi-format MRT target), then in
+  `Setup` with `SetTarget(builder, id, desc)`, then in
   `Render` call `BindTarget(context, cmd)` on the given buffer to bind the target and apply its
   declared load/clear ops, then record draws. Raw `IPass` remains the low-level escape hatch.
 - **The view target** - `builder.DeclareViewTarget()` (or `SetViewTarget` in a `RasterPass`) declares a
@@ -324,11 +324,9 @@ declarative graph of passes over a `RenderPipeline<TView>`:
   swapchain views present after dispatch.
   Declaring it on a device with no main swapchain throws when the pass is reached.
 - **`RenderPipeline<TView>`** - subclass and override `InitializePasses()` to call `AddPass` for each
-  `IPass`. It may also declare shared resources centrally with
-  `DeclareTexture(id, desc)` / `DeclareBuffer(id, desc)` so many passes can reference them by ID
-  without one owning the description. The pipeline lazily solves the declared passes into a
+  `IPass`. The pipeline lazily solves the declared passes into a
   `RenderGraph` the first time it runs: passes are topologically sorted so readers run after their
-  writers. Every input ID must be produced by some pass output or a central declaration, otherwise
+  writers. Every input ID must be produced by some pass output, otherwise
   build throws; a dependency cycle throws too.
 - **Command buffers** - the graph begins one per pass, hands it to `Render` and submits it afterwards.
   A pass needing more rents them from the context (`context.GetCommandBuffer(name)`) and submits them
