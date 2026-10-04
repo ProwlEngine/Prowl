@@ -217,7 +217,37 @@ public static class Input
     public static Float2 GetGamepadRightStick(int gamepadIndex = 0) => Current.GetGamepadAxis(gamepadIndex, 1);
     public static float GetGamepadLeftTrigger(int gamepadIndex = 0) => Current.GetGamepadTrigger(gamepadIndex, 0);
     public static float GetGamepadRightTrigger(int gamepadIndex = 0) => Current.GetGamepadTrigger(gamepadIndex, 1);
-    public static void SetGamepadVibration(float leftMotor, float rightMotor, int gamepadIndex = 0) => Current.SetGamepadVibration(gamepadIndex, leftMotor, rightMotor);
+    public static void SetGamepadVibration(float leftMotor, float rightMotor, int gamepadIndex = 0)
+    {
+        s_vibrationEnds.Remove(gamepadIndex);
+        Current.SetGamepadVibration(gamepadIndex, leftMotor, rightMotor);
+    }
+
+    private static readonly Dictionary<int, float> s_vibrationEnds = new();
+    private static readonly List<int> s_expiredVibrations = new();
+
+    /// <summary>
+    /// Vibrates a gamepad for <paramref name="seconds"/> of real time, then stops it. The stop happens even if
+    /// whatever started it is gone and even while the game is paused. A later call replaces the earlier one.
+    /// </summary>
+    public static void VibrateGamepad(float leftMotor, float rightMotor, float seconds, int gamepadIndex = 0)
+    {
+        Current.SetGamepadVibration(gamepadIndex, leftMotor, rightMotor);
+        s_vibrationEnds[gamepadIndex] = _currentTime + seconds;
+    }
+
+    private static void StopExpiredVibrations()
+    {
+        foreach (var (pad, end) in s_vibrationEnds)
+            if (_currentTime >= end) s_expiredVibrations.Add(pad);
+
+        foreach (int pad in s_expiredVibrations)
+        {
+            s_vibrationEnds.Remove(pad);
+            Current.SetGamepadVibration(pad, 0f, 0f);
+        }
+        s_expiredVibrations.Clear();
+    }
 
     #endregion
 
@@ -275,6 +305,8 @@ public static class Input
     internal static void UpdateActions(float deltaTime)
     {
         _currentTime += deltaTime;
+
+        if (s_vibrationEnds.Count > 0) StopExpiredVibrations();
 
         if (_handlers.Count == 0)
             return;
