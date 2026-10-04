@@ -5,6 +5,7 @@ namespace Prowl.Graphite;
 internal enum TextureState : byte
 {
     Resting,
+    Undefined,
     Sampled,
     Storage,
     Attachment,

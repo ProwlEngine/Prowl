@@ -19,6 +19,8 @@ public sealed class RenderContext<TView>
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
     private readonly List<TextureBarrier> _barriers = new();
+    private readonly HashSet<RenderResourceID> _enteredTransients = new();
+    private readonly HashSet<Texture> _discardedTextures = new();
 
     private PassInfo? _currentPass;
     private GraphResource[]? _currentPassOutputs;
@@ -90,10 +92,11 @@ public sealed class RenderContext<TView>
                     continue;
 
                 RenderTexture texture = GetRenderTexture(new TextureHandle(access.Id));
+                bool fromUndefined = IsTransient(access.Id) && _enteredTransients.Add(access.Id);
                 foreach (Texture color in texture.ColorTextures)
-                    AddTextureTransition(color, ResourceAccess.ToState(access.TextureUsage));
+                    AddTextureTransition(color, ResourceAccess.ToState(access.TextureUsage), fromUndefined);
                 if (texture.DepthTexture != null && access.DepthState(access.TextureUsage) is TextureState depthTarget)
-                    AddTextureTransition(texture.DepthTexture, depthTarget);
+                    AddTextureTransition(texture.DepthTexture, depthTarget, fromUndefined);
             }
             else
             {
@@ -110,11 +113,13 @@ public sealed class RenderContext<TView>
         _barriers.Clear();
         foreach ((Texture texture, TextureState state) in _textureStates)
         {
-            if (state != TextureState.Resting)
+            if (state != TextureState.Resting && !_discardedTextures.Contains(texture))
                 _barriers.Add(new TextureBarrier(texture, state, TextureState.Resting));
         }
 
         _textureStates.Clear();
+        _discardedTextures.Clear();
+        _enteredTransients.Clear();
         CommandBufferBase.BumpGraphStateVersion();
         RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
         FlushDeferredBarriers(scopeName);
@@ -130,9 +135,22 @@ public sealed class RenderContext<TView>
         return false;
     }
 
-    private void AddTextureTransition(Texture texture, TextureState target)
+    private bool IsTransient(RenderResourceID id)
+        => _graph.Resources.TryGetValue(id, out GraphResource? resource) && resource is GraphTextureResource { HistoryDepth: 0 };
+
+    private void AddTextureTransition(Texture texture, TextureState target, bool fromUndefined)
     {
-        TextureState current = _textureStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
+        TextureState current;
+        if (fromUndefined)
+        {
+            current = TextureState.Undefined;
+            _discardedTextures.Add(texture);
+        }
+        else
+        {
+            current = _textureStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
+        }
+
         bool writes = target is TextureState.Storage or TextureState.Attachment or TextureState.TransferDst;
         if (current == target && !writes)
             return;
@@ -392,7 +410,7 @@ public sealed class RenderContext<TView>
             case GraphTextureResource { HistoryDepth: 0 } textureResource:
                 if (framesAgo != 0)
                     throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Resource '{RenderResourceID.ToString(handle.Id)}' was not declared with history.");
-                RenderTexture rented = _device.RentTransientRenderTexture(_task, ToTransientDesc(textureResource));
+                RenderTexture rented = _device.RentGraphTransientRenderTexture(_task, ToTransientDesc(textureResource));
                 _resolved[handle.Id] = rented;
                 return rented;
 

@@ -3,7 +3,23 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     private TransientTexturePool _transientTexturePool;
+    private TransientTexturePool _graphTransientTexturePool;
     private readonly object _transientTexturePoolLock = new();
+
+    private TransientTexturePool GraphTransientTexturePool
+    {
+        get
+        {
+            if (_graphTransientTexturePool == null)
+            {
+                lock (_transientTexturePoolLock)
+                {
+                    _graphTransientTexturePool ??= new TransientTexturePool(this);
+                }
+            }
+            return _graphTransientTexturePool;
+        }
+    }
 
     private TransientTexturePool TransientTexturePool
     {
@@ -70,6 +86,12 @@ public abstract partial class GraphicsDevice
     public RenderTexture RentTransientRenderTexture(ExecutionTask task, in RenderTextureDescription desc)
     {
         return RentTransientBundle(task, desc).Texture;
+    }
+
+    internal RenderTexture RentGraphTransientRenderTexture(ExecutionTask task, in RenderTextureDescription desc)
+    {
+        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(RentGraphTransientRenderTexture));
+        return GraphTransientTexturePool.Rent(desc, task.Id).Texture;
     }
 
     private TransientTexturePool.PooledBundle RentTransientBundle(ExecutionTask task, in RenderTextureDescription desc)

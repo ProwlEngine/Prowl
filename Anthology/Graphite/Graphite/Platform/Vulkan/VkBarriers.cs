@@ -73,6 +73,7 @@ internal static unsafe class VkBarriers
 
     public static ImageLayout Layout(VkTexture texture, TextureState state) => state switch
     {
+        TextureState.Undefined => ImageLayout.Undefined,
         TextureState.Sampled => ImageLayout.ShaderReadOnlyOptimal,
         TextureState.Storage => ImageLayout.General,
         TextureState.Attachment => AttachmentLayout(texture),
