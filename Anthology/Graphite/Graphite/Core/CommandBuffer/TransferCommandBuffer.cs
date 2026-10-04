@@ -68,6 +68,7 @@ public abstract partial class TransferCommandBuffer : CommandBufferBase
         uint width, uint height, uint depth,
         uint mipLevel, uint arrayLayer)
     {
+        GraphicsDevice.UpdateTexture_CheckParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
         UpdateTextureCore(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
     }
 

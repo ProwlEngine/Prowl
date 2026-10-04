@@ -74,7 +74,7 @@ public abstract partial class GraphicsDevice
         }
     }
 
-    private static void UpdateTexture_CheckParameters(
+    internal static void UpdateTexture_CheckParameters(
         Texture texture,
         uint sizeInBytes,
         uint x, uint y, uint z,
