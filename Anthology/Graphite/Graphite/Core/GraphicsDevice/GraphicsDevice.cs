@@ -10,6 +10,8 @@ public abstract partial class GraphicsDevice : IDisposable
 {
     private bool _disposed;
 
+    internal PixelFormat? ResolvedDepthFormat;
+
     internal GraphicsDevice() { }
 
     /// <summary>
