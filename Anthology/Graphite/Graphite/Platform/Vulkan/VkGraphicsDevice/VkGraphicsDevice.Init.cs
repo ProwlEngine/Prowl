@@ -84,6 +84,12 @@ internal unsafe partial class VkGraphicsDevice
                 tempStrings.Add(utf8Str);
             }
 
+            if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+            {
+                instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8;
+                _debugUtilsEnabled = true;
+            }
+
             bool debugReportExtensionAvailable = false;
             if (debug)
             {
@@ -214,13 +220,7 @@ internal unsafe partial class VkGraphicsDevice
             for (int property = 0; property < props.Length; property++)
             {
                 string extensionName = Util.GetString(properties[property].ExtensionName);
-                if (extensionName == "VK_EXT_debug_marker")
-                {
-                    activeExtensions[activeExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_MARKER_EXTENSION_NAMEUtf8;
-                    requiredInstanceExtensions.Remove(extensionName);
-                    _debugMarkerEnabled = true;
-                }
-                else if (extensionName == "VK_KHR_swapchain")
+                if (extensionName == "VK_KHR_swapchain")
                 {
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
@@ -321,9 +321,9 @@ internal unsafe partial class VkGraphicsDevice
         Vk.TryGetInstanceExtension(Instance, out KhrSurface);
         Vk.TryGetDeviceExtension(Instance, Device, out KhrSwapchain);
 
-        if (_debugMarkerEnabled)
+        if (_debugUtilsEnabled)
         {
-            LoadDebugMarkerFunctions();
+            LoadDebugUtilsFunctions();
         }
         if (hasDedicatedAllocation && hasMemReqs2)
         {

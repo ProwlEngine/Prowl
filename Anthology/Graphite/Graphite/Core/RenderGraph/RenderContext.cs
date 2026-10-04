@@ -251,20 +251,6 @@ public sealed class RenderContext<TView> : IGraphStateSource
     }
 
     /// <summary>
-    /// True if profiler wants metadata via RecordPassMetadata. Check before building one, it's wasted work otherwise.
-    /// </summary>
-    public bool WantsMetadata => Profiler?.RequestMetadata ?? false;
-
-    /// <summary>
-    /// Attaches caller metadata to the open pass. Only valid mid-pass; no-op otherwise.
-    /// </summary>
-    public void RecordPassMetadata(object metadata)
-    {
-        if (_currentPass is { } pass)
-            Profiler?.RecordPassMetadata(pass, metadata);
-    }
-
-    /// <summary>
     /// Rents an extra command buffer, already begun, for passes that need more than the one Render receives. Submit via SubmitCommandBuffer. Do not begin or end it yourself.
     /// </summary>
     /// <param name="name">Optional debug name.</param>

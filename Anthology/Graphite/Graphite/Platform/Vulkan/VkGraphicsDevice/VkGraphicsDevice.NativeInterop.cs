@@ -3,10 +3,10 @@ using Silk.NET.Vulkan.Extensions.EXT;
 
 namespace Prowl.Graphite.Vk;
 
-internal unsafe delegate Result vkDebugMarkerSetObjectNameEXT_t(Device device, DebugMarkerObjectNameInfoEXT* pNameInfo);
-internal unsafe delegate void vkCmdDebugMarkerBeginEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer, DebugMarkerMarkerInfoEXT* pMarkerInfo);
-internal delegate void vkCmdDebugMarkerEndEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer);
-internal unsafe delegate void vkCmdDebugMarkerInsertEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer, DebugMarkerMarkerInfoEXT* pMarkerInfo);
+internal unsafe delegate Result vkSetDebugUtilsObjectNameEXT_t(Device device, DebugUtilsObjectNameInfoEXT* pNameInfo);
+internal unsafe delegate void vkCmdBeginDebugUtilsLabelEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer, DebugUtilsLabelEXT* pLabelInfo);
+internal delegate void vkCmdEndDebugUtilsLabelEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer);
+internal unsafe delegate void vkCmdInsertDebugUtilsLabelEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer, DebugUtilsLabelEXT* pLabelInfo);
 
 internal unsafe delegate void vkGetBufferMemoryRequirements2_t(Device device, BufferMemoryRequirementsInfo2KHR* pInfo, MemoryRequirements2KHR* pMemoryRequirements);
 internal unsafe delegate void vkGetImageMemoryRequirements2_t(Device device, ImageMemoryRequirementsInfo2KHR* pInfo, MemoryRequirements2KHR* pMemoryRequirements);

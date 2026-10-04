@@ -230,14 +230,13 @@ public abstract class CommandBufferBase : GraphicsResource
         uint destinationOffset,
         in TextureRegion region);
 
-    /// <summary>Generates lower mip levels from the largest mip. Needs the GenerateMipmaps usage flag.</summary>
+    /// <summary>Generates lower mip levels from the largest mip. Needs a texture with MipLevels above 1.</summary>
     /// <param name="texture">Texture to mipmap.</param>
     public void GenerateMipmaps(Texture texture)
     {
-        if ((texture.Usage & TextureUsage.GenerateMipmaps) == 0)
+        if ((texture.Usage & TextureUsage.DepthStencil) != 0)
         {
-            throw new RenderException(
-                $"{nameof(GenerateMipmaps)} requires a target Texture with {nameof(TextureUsage)}.{nameof(TextureUsage.GenerateMipmaps)}");
+            throw new RenderException($"{nameof(GenerateMipmaps)} cannot be used on a Texture with {nameof(TextureUsage)}.{nameof(TextureUsage.DepthStencil)}.");
         }
 
         if (texture.MipLevels > 1)

@@ -57,7 +57,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             samplerAnisotropy: _physicalDeviceFeatures.SamplerAnisotropy,
             depthClipDisable: _physicalDeviceFeatures.DepthClamp,
             independentBlend: _physicalDeviceFeatures.IndependentBlend,
-            commandBufferDebugMarkers: _debugMarkerEnabled,
+            commandBufferDebugMarkers: _debugUtilsEnabled,
             shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
 
         ResourceFactory = new VkResourceFactory(this);

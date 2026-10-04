@@ -11,14 +11,14 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice
 {
-    internal vkCmdDebugMarkerBeginEXT_t MarkerBegin;
-    internal vkCmdDebugMarkerEndEXT_t MarkerEnd;
-    internal vkCmdDebugMarkerInsertEXT_t MarkerInsert;
+    internal vkCmdBeginDebugUtilsLabelEXT_t MarkerBegin;
+    internal vkCmdEndDebugUtilsLabelEXT_t MarkerEnd;
+    internal vkCmdInsertDebugUtilsLabelEXT_t MarkerInsert;
 
     private DebugReportCallbackEXT _debugCallbackHandle;
     private PfnDebugReportCallbackEXT _debugCallbackFunc;
-    private bool _debugMarkerEnabled;
-    private vkDebugMarkerSetObjectNameEXT_t _setObjectNameDelegate;
+    private bool _debugUtilsEnabled;
+    private vkSetDebugUtilsObjectNameEXT_t _setObjectNameDelegate;
 
     // Stored validation error from the debug callback (cannot throw from unmanaged callback)
     private static volatile string? _lastValidationError;
@@ -86,63 +86,63 @@ internal unsafe partial class VkGraphicsDevice
 
     internal void SetResourceName(GraphicsResource resource, string name)
     {
-        if (!_debugMarkerEnabled)
+        if (!_debugUtilsEnabled)
             return;
 
         switch (resource)
         {
             case VkBuffer buffer:
-                SetDebugMarkerName(DebugReportObjectTypeEXT.BufferExt, buffer.DeviceBuffer.Handle, name);
+                SetDebugUtilsName(ObjectType.Buffer, buffer.DeviceBuffer.Handle, name);
                 break;
             case VkCommandBuffer CommandBuffer:
-                SetDebugMarkerName(
-                    DebugReportObjectTypeEXT.CommandBufferExt,
+                SetDebugUtilsName(
+                    ObjectType.CommandBuffer,
                     (ulong)CommandBuffer.CommandBuffer.Handle,
                     $"{name}_CommandBuffer");
-                SetDebugMarkerName(
-                    DebugReportObjectTypeEXT.CommandPoolExt,
+                SetDebugUtilsName(
+                    ObjectType.CommandPool,
                     CommandBuffer.CommandPool.Handle,
                     $"{name}_CommandPool");
                 break;
             case VkFramebuffer framebuffer:
-                SetDebugMarkerName(
-                    DebugReportObjectTypeEXT.FramebufferExt,
+                SetDebugUtilsName(
+                    ObjectType.Framebuffer,
                     framebuffer.CurrentFramebuffer.Handle,
                     name);
                 break;
             case VkSampler sampler:
-                SetDebugMarkerName(DebugReportObjectTypeEXT.SamplerExt, sampler.DeviceSampler.Handle, name);
+                SetDebugUtilsName(ObjectType.Sampler, sampler.DeviceSampler.Handle, name);
                 break;
             case VkGraphicsProgram shaderProgram:
                 foreach (ShaderModule module in shaderProgram.Modules.Values)
                 {
-                    SetDebugMarkerName(DebugReportObjectTypeEXT.ShaderModuleExt, module.Handle, name);
+                    SetDebugUtilsName(ObjectType.ShaderModule, module.Handle, name);
                 }
                 break;
             case VkComputeProgram computeProgram:
-                SetDebugMarkerName(DebugReportObjectTypeEXT.PipelineExt, computeProgram.DevicePipeline.Handle, name);
+                SetDebugUtilsName(ObjectType.Pipeline, computeProgram.DevicePipeline.Handle, name);
                 break;
             case VkTexture tex:
-                SetDebugMarkerName(DebugReportObjectTypeEXT.ImageExt, tex.OptimalDeviceImage.Handle, name);
+                SetDebugUtilsName(ObjectType.Image, tex.OptimalDeviceImage.Handle, name);
                 break;
             case VkTextureView texView:
-                SetDebugMarkerName(DebugReportObjectTypeEXT.ImageViewExt, texView.ImageView.Handle, name);
+                SetDebugUtilsName(ObjectType.ImageView, texView.ImageView.Handle, name);
                 break;
             case VkSwapchain sc:
-                SetDebugMarkerName(DebugReportObjectTypeEXT.SwapchainKhrExt, sc.DeviceSwapchain.Handle, name);
+                SetDebugUtilsName(ObjectType.SwapchainKhr, sc.DeviceSwapchain.Handle, name);
                 break;
             default:
                 break;
         }
     }
 
-    private void SetDebugMarkerName(DebugReportObjectTypeEXT type, ulong target, string name)
+    private void SetDebugUtilsName(ObjectType type, ulong target, string name)
     {
         Debug.Assert(_setObjectNameDelegate != null);
 
-        DebugMarkerObjectNameInfoEXT nameInfo = new(sType: StructureType.DebugMarkerObjectNameInfoExt);
+        DebugUtilsObjectNameInfoEXT nameInfo = new(sType: StructureType.DebugUtilsObjectNameInfoExt);
         nameInfo.ObjectType = type;
-        nameInfo.Object = target;
+        nameInfo.ObjectHandle = target;
 
         byte* utf8Ptr = stackalloc byte[Utf8Stack.ByteCount(name)];
         Utf8Stack.Write(name, utf8Ptr);
@@ -151,15 +151,15 @@ internal unsafe partial class VkGraphicsDevice
         _setObjectNameDelegate(Device, &nameInfo).CheckResult();
     }
 
-    private void LoadDebugMarkerFunctions()
+    private void LoadDebugUtilsFunctions()
     {
-        _setObjectNameDelegate = Marshal.GetDelegateForFunctionPointer<vkDebugMarkerSetObjectNameEXT_t>(
-            GetInstanceProcAddr("vkDebugMarkerSetObjectNameEXT"));
-        MarkerBegin = Marshal.GetDelegateForFunctionPointer<vkCmdDebugMarkerBeginEXT_t>(
-            GetInstanceProcAddr("vkCmdDebugMarkerBeginEXT"));
-        MarkerEnd = Marshal.GetDelegateForFunctionPointer<vkCmdDebugMarkerEndEXT_t>(
-            GetInstanceProcAddr("vkCmdDebugMarkerEndEXT"));
-        MarkerInsert = Marshal.GetDelegateForFunctionPointer<vkCmdDebugMarkerInsertEXT_t>(
-            GetInstanceProcAddr("vkCmdDebugMarkerInsertEXT"));
+        _setObjectNameDelegate = Marshal.GetDelegateForFunctionPointer<vkSetDebugUtilsObjectNameEXT_t>(
+            GetInstanceProcAddr("vkSetDebugUtilsObjectNameEXT"));
+        MarkerBegin = Marshal.GetDelegateForFunctionPointer<vkCmdBeginDebugUtilsLabelEXT_t>(
+            GetInstanceProcAddr("vkCmdBeginDebugUtilsLabelEXT"));
+        MarkerEnd = Marshal.GetDelegateForFunctionPointer<vkCmdEndDebugUtilsLabelEXT_t>(
+            GetInstanceProcAddr("vkCmdEndDebugUtilsLabelEXT"));
+        MarkerInsert = Marshal.GetDelegateForFunctionPointer<vkCmdInsertDebugUtilsLabelEXT_t>(
+            GetInstanceProcAddr("vkCmdInsertDebugUtilsLabelEXT"));
     }
 }

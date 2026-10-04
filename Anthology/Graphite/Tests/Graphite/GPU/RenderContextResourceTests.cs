@@ -228,10 +228,6 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
     public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
 
-    public bool RequestMetadata => false;
-    public void RecordPassMetadata(in PassInfo pass, object metadata) { }
-    public void RecordDrawMetadata(in CommandBufferInfo commandBuffer, object metadata) { }
-
     public void RecordResourceSetBind(uint setCount) { }
     public void RecordBarrier(BarrierBin kind, uint count) { }
     public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) { }

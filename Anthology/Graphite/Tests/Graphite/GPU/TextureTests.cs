@@ -456,7 +456,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     public void CubeMap_GenerateMipmaps(uint TexSize, uint MipLevels)
     {
         TextureDescription texDesc = TextureDescription.Texture2D(
-            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap | TextureUsage.GenerateMipmaps);
+            TexSize, TexSize, MipLevels, 1, PixelFormat.R8_UNorm, TextureUsage.Cubemap);
         Texture tex = RF.CreateTexture(texDesc);
 
         for (uint face = 0; face < 6; face++)
@@ -1229,10 +1229,10 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Theory]
-    [InlineData(TextureUsage.Sampled | TextureUsage.GenerateMipmaps)]
-    [InlineData(TextureUsage.RenderTarget | TextureUsage.GenerateMipmaps)]
-    [InlineData(TextureUsage.Storage | TextureUsage.GenerateMipmaps)]
-    [InlineData(TextureUsage.Sampled | TextureUsage.RenderTarget | TextureUsage.GenerateMipmaps)]
+    [InlineData(TextureUsage.Sampled)]
+    [InlineData(TextureUsage.RenderTarget)]
+    [InlineData(TextureUsage.Storage)]
+    [InlineData(TextureUsage.Sampled | TextureUsage.RenderTarget)]
     public unsafe void GenerateMipmaps(TextureUsage usage)
     {
         TextureDescription texDesc = TextureDescription.Texture2D(

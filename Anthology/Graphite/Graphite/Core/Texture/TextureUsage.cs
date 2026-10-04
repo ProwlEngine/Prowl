@@ -28,8 +28,4 @@ public enum TextureUsage : byte
     /// 2D cubemap.
     /// </summary>
     Cubemap = 1 << 4,
-    /// <summary>
-    /// Supports auto mipmap generation.
-    /// </summary>
-    GenerateMipmaps = 1 << 6,
 }

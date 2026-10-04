@@ -22,11 +22,6 @@ public abstract partial class ResourceFactory
             throw new RenderException(
                 $"1D and 3D Textures must use {nameof(TextureSampleCount)}.{nameof(TextureSampleCount.Count1)}.");
         }
-        if ((description.Usage & TextureUsage.DepthStencil) != 0 && (description.Usage & TextureUsage.GenerateMipmaps) != 0)
-        {
-            throw new RenderException(
-                $"{nameof(TextureUsage)}.{nameof(TextureUsage.DepthStencil)} and {nameof(TextureUsage)}.{nameof(TextureUsage.GenerateMipmaps)} cannot be combined.");
-        }
     }
 
     private void CreateTextureView_CheckDescription(in TextureViewDescription description)

@@ -41,11 +41,6 @@ public interface IProfiler
     // dispatches
     void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info);
 
-    // caller metadata hooks
-    bool RequestMetadata { get; }
-    void RecordPassMetadata(in PassInfo pass, object metadata);
-    void RecordDrawMetadata(in CommandBufferInfo commandBuffer, object metadata);
-
     // native GPU stats for GPU execution timing and true primitives/triangles drawn
     bool RequestGPUStatistics { get; }
     void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds);
