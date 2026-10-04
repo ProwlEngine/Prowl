@@ -279,8 +279,6 @@ internal static unsafe class VkPipelineCacheFactory
 
         return new VkPipelineCacheEntry(
             pipeline,
-            renderPass,
-            pipelineLayout,
-            program.ResourceSetCount);
+            renderPass);
     }
 }

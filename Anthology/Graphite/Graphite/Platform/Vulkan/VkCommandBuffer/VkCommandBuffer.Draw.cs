@@ -86,7 +86,7 @@ internal unsafe partial class VkCommandBuffer
         EnsureRenderPassActive();
 
         if (needBind)
-            _descriptorBinder.EmitBind(_currentResolvedPipeline.PipelineLayout, PipelineBindPoint.Graphics);
+            _descriptorBinder.EmitBind(_currentShaderProgram.PipelineLayout, PipelineBindPoint.Graphics);
     }
 
     private void PreDispatchCommand()
