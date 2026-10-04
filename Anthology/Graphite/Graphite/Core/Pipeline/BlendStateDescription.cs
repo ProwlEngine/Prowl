@@ -53,7 +53,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// <summary>
     /// Single color target, override blend.
     /// </summary>
-    public static readonly BlendStateDescription SingleOverrideBlend = new()
+    public static BlendStateDescription SingleOverrideBlend => new()
     {
         AttachmentStates = [BlendAttachmentDescription.OverrideBlend]
     };
@@ -61,7 +61,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// <summary>
     /// Single color target, alpha blend.
     /// </summary>
-    public static readonly BlendStateDescription SingleAlphaBlend = new()
+    public static BlendStateDescription SingleAlphaBlend => new()
     {
         AttachmentStates = [BlendAttachmentDescription.AlphaBlend]
     };
@@ -69,7 +69,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// <summary>
     /// Single color target, additive blend.
     /// </summary>
-    public static readonly BlendStateDescription SingleAdditiveBlend = new()
+    public static BlendStateDescription SingleAdditiveBlend => new()
     {
         AttachmentStates = [BlendAttachmentDescription.AdditiveBlend]
     };
@@ -77,7 +77,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// <summary>
     /// Single color target, blend disabled.
     /// </summary>
-    public static readonly BlendStateDescription SingleDisabled = new()
+    public static BlendStateDescription SingleDisabled => new()
     {
         AttachmentStates = [BlendAttachmentDescription.Disabled]
     };
@@ -85,7 +85,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// <summary>
     /// No color targets.
     /// </summary>
-    public static readonly BlendStateDescription Empty = new()
+    public static BlendStateDescription Empty => new()
     {
         AttachmentStates = Array.Empty<BlendAttachmentDescription>()
     };
