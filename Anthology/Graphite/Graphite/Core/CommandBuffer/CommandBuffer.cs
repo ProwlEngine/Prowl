@@ -10,8 +10,6 @@ namespace Prowl.Graphite;
 public abstract partial class CommandBuffer : CommandBufferBase
 {
     private readonly GraphicsDeviceFeatures _features;
-    private readonly uint _uniformBufferAlignment;
-    private readonly uint _structuredBufferAlignment;
 
     private protected Framebuffer? _framebuffer;
     private protected OutputDescription? _framebufferOutputs;
@@ -46,11 +44,9 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _allPropertiesChanged = false;
     }
 
-    internal CommandBuffer(GraphicsDeviceFeatures features, uint uniformAlignment, uint structuredAlignment)
+    internal CommandBuffer(GraphicsDeviceFeatures features)
     {
         _features = features;
-        _uniformBufferAlignment = uniformAlignment;
-        _structuredBufferAlignment = structuredAlignment;
     }
 
     internal void ClearCachedState()
