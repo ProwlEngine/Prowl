@@ -200,7 +200,7 @@ Float2 Shake(bool trigger, float intensity = 4f, float decay = 6f, float frequen
   jitter offset (`decay` ≈ 1/seconds-to-settle); add the result directly to a
   translate/position. Must be called every frame to keep animating.
 
-## Easing functions (`Easing` static class)
+## Easing functions (`Easing` static class, in `Prowl.Vector`)
 
 All are `static float F(float t)` matching the `Func<float,float>` shape
 `Transition`/`AnimateBool`/`OneShot` expect, so any static method, lambda, or

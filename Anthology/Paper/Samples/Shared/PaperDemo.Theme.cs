@@ -1,5 +1,6 @@
 using System.Drawing;
 using Prowl.PaperUI;
+using Easing = Prowl.Vector.Easing;
 
 // SHADCN discord theme colors
 // discovered through https://ui.jln.dev/
