@@ -48,6 +48,7 @@ public sealed class BenchProfiler : IProfiler
     public void BeginPass(in PassInfo pass) { }
     public void EndPass(in PassInfo pass) { }
     public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
+    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 
     public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }

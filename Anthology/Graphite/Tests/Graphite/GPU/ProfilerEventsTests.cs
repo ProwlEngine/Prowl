@@ -26,6 +26,7 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
+    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassWrites = new();
     public readonly List<(CommandBufferInfo info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
     public bool RequestGPUStatistics { get; set; }
@@ -45,6 +46,8 @@ file sealed class RecordingProfiler : IProfiler
     public void EndPass(in PassInfo pass) => PassesEnded.Add(pass);
     public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
         => PassReads.Add((pass, resource, texture, buffer));
+    public void RecordPassWrite(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
+        => PassWrites.Add((pass, resource, texture, buffer));
 
     public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer) { }
 
@@ -239,7 +242,8 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(new[] { "ProfilerClear", "ProfilerCopy" }, profiler.PassesBegun.ConvertAll(p => p.Name));
 
         // ClearingRasterPass declares the target as an output; ReadingCopyPass declares it as an input.
-        Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerClear" && r.Resource.Equals(id));
+        Assert.Contains(profiler.PassWrites, w => w.Pass.Name == "ProfilerClear" && w.Resource.Equals(id));
+        Assert.DoesNotContain(profiler.PassReads, r => r.Pass.Name == "ProfilerClear");
         Assert.Contains(profiler.PassReads, r => r.Pass.Name == "ProfilerCopy" && r.Resource.Equals(id));
 
         Assert.Equal(
