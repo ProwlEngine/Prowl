@@ -305,4 +305,69 @@ public class UITests : RuntimeTestBase
 
         Assert.Equal(0, clicks());
     }
+
+    [Fact]
+    public void Slider_SetValueWithoutNotify_ChangesValueSilently()
+    {
+        Scene scene = CreateScene(enable: true);
+        var slider = CreateUIObject("Slider", scene).AddComponent<UISlider>();
+        int changes = 0;
+        slider.OnValueChanged += _ => changes++;
+
+        slider.SetValueWithoutNotify(0.75f);
+        Assert.Equal(0.75f, slider.Value);
+        Assert.Equal(0, changes);
+
+        slider.Value = 0.25f;
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public void Dropdown_SetValueWithoutNotify_ChangesValueSilently()
+    {
+        Scene scene = CreateScene(enable: true);
+        var dropdown = CreateUIObject("Dropdown", scene).AddComponent<UIDropdown>();
+        dropdown.SetOptions(["A", "B", "C"]);
+        int changes = 0;
+        dropdown.OnValueChanged += _ => changes++;
+
+        dropdown.SetValueWithoutNotify(2);
+
+        Assert.Equal(2, dropdown.Value);
+        Assert.Equal(0, changes);
+    }
+
+    [Fact]
+    public void Toggle_Click_FlipsAndNotifies_AndDrivesTheCheckmark()
+    {
+        Scene scene = CreateScene(enable: true);
+        var go = CreateUIObject("Toggle", scene);
+        var toggle = go.AddComponent<UIToggle>();
+        var check = CreateUIObject("Checkmark", scene, go).AddComponent<UIImage>();
+        toggle.Checkmark = check;
+        bool? last = null;
+        toggle.OnValueChanged += v => last = v;
+
+        toggle.OnPointerClick(new PointerEventData { Button = MouseButton.Left });
+
+        Assert.True(toggle.IsOn);
+        Assert.True(last);
+        Assert.True(check.Enabled);
+
+        toggle.SetIsOnWithoutNotify(false);
+        Assert.False(check.Enabled);
+        Assert.True(last);
+    }
+
+    [Fact]
+    public void Toggle_NotInteractable_IgnoresClicks()
+    {
+        Scene scene = CreateScene(enable: true);
+        var toggle = CreateUIObject("Toggle", scene).AddComponent<UIToggle>();
+        toggle.Interactable = false;
+
+        toggle.OnPointerClick(new PointerEventData { Button = MouseButton.Left });
+
+        Assert.False(toggle.IsOn);
+    }
 }

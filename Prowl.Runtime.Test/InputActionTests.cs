@@ -88,4 +88,40 @@ public class InputActionTests
         Frame(false, 0.05f);
         Assert.Equal(1, performed);
     }
+
+    private sealed class VibrationRecorder : NullInputHandler, IInputHandler
+    {
+        public readonly List<(int Pad, float Left, float Right)> Calls = new();
+        void IInputHandler.SetGamepadVibration(int gamepadIndex, float leftMotor, float rightMotor) => Calls.Add((gamepadIndex, leftMotor, rightMotor));
+    }
+
+    [Fact]
+    public void VibrateGamepad_StopsAfterItsDuration()
+    {
+        var input = new VibrationRecorder();
+        WithInput(input, () =>
+        {
+            Input.VibrateGamepad(1f, 0.5f, 0.2f, gamepadIndex: 1);
+            Input.UpdateActions(0.1f);
+            Assert.Single(input.Calls);
+
+            Input.UpdateActions(0.15f);
+            Assert.Equal((1, 0f, 0f), input.Calls[^1]);
+            Assert.Equal(2, input.Calls.Count);
+        });
+    }
+
+    [Fact]
+    public void SetGamepadVibration_CancelsAPendingTimeout()
+    {
+        var input = new VibrationRecorder();
+        WithInput(input, () =>
+        {
+            Input.VibrateGamepad(1f, 1f, 0.1f);
+            Input.SetGamepadVibration(0.3f, 0.3f);
+            Input.UpdateActions(1f);
+
+            Assert.Equal((0, 0.3f, 0.3f), input.Calls[^1]);
+        });
+    }
 }

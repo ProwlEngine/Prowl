@@ -290,6 +290,30 @@ internal static class DefaultGameObjectCreators
         scroll.VerticalScrollbar = vBar;
     }
 
+    [MenuItem("GameObject/UI/Toggle", priority: 78, Icon = EditorIcons.SquareCheck)]
+    static void CreateUIToggle()
+    {
+        var go = NewUIElement("Toggle", MenuContext.ActiveGameObject);
+        go.RectTransform!.SizeDelta = new Float2(24f, 24f);
+        var box = go.AddComponent<UIImage>();
+        box.Color = new Color(0.20f, 0.20f, 0.24f, 1f);
+        var toggle = go.AddComponent<UIToggle>();
+
+        var checkGo = HierarchyPanel.CreateGameObject("Checkmark", go, select: false, beginRename: false);
+        checkGo.EnsureRectTransform();
+        var checkRt = checkGo.RectTransform!;
+        checkRt.AnchorMin = Float2.Zero;
+        checkRt.AnchorMax = Float2.One;
+        checkRt.SizeDelta = new Float2(-8f, -8f);
+        var check = checkGo.AddComponent<UIImage>();
+        check.Color = new Color(0.38f, 0.55f, 0.95f, 1f);
+        check.RaycastTarget = false;
+
+        toggle.TargetGraphic = box;
+        toggle.Checkmark = check;
+        toggle.IsOn = true;
+    }
+
     [MenuItem("GameObject/UI/Rect Mask", priority: 77, Icon = EditorIcons.Square)]
     static void CreateUIRectMask()
     {
