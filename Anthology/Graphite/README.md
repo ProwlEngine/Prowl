@@ -83,7 +83,6 @@ Creating a device and dispatching the pipeline each frame:
 GraphicsDeviceOptions options = new()
 {
     VulkanValidationLayers = false,
-    PreferStandardClipSpaceYDirection = true
 };
 
 SwapchainDescription swapchainDescription = new()
@@ -157,6 +156,11 @@ aren't needed. `EnableProfiling` stays off unless you're actively reading `GetPr
 ## API Differences
 
 These are the systems that intentionally diverge from upstream Veldrid/NeoVeldrid.
+
+### Clip space convention
+
+Clip space Y points up on every backend, and the backend corrects internally (Vulkan applies a negative-height viewport).
+Depth range and texture origin are still reported by `IsDepthRangeZeroToOne` and `IsUvOriginTopLeft`.
 
 ### Pipeline API
 

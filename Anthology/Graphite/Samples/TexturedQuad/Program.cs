@@ -100,7 +100,6 @@ public static class Program
         GraphicsDeviceOptions options = new()
         {
             VulkanValidationLayers = false,
-            PreferStandardClipSpaceYDirection = true
         };
 
         SwapchainDescription swapchain = new()

@@ -45,11 +45,6 @@ public abstract partial class GraphicsDevice : IDisposable
     public abstract bool IsDepthRangeZeroToOne { get; }
 
     /// <summary>
-    /// True = clip Y goes top(-1) to bottom(1), false = flipped.
-    /// </summary>
-    public abstract bool IsClipSpaceYInverted { get; }
-
-    /// <summary>
     /// This device's resource factory.
     /// </summary>
     public abstract ResourceFactory ResourceFactory { get; }

@@ -40,7 +40,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             surface = surfaceSource.GetSurface(Instance);
 
         CreatePhysicalDevice();
-        CreateLogicalDevice(surface, options.PreferStandardClipSpaceYDirection, vkOptions);
+        CreateLogicalDevice(surface, vkOptions);
 
         MemoryManager = new VkDeviceMemoryManager(
             Vk,

@@ -61,7 +61,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     }
 
     private uint FlipY(uint y, uint height)
-        => (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted) ? height - y - 1 : y;
+        => !GD.IsUvOriginTopLeft ? height - y - 1 : y;
 
     [Fact]
     public void Points_WithUIntColor_ProduceExpectedPixels()
@@ -367,7 +367,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
     private DeviceBuffer CreateFullScreenQuad()
     {
-        float y = GD.IsClipSpaceYInverted ? -1.0f : 1.0f;
+        const float y = 1.0f;
         ColoredVertex[] vertices =
         [
             new(new Float2(-1, 1 * y), Float4.One),

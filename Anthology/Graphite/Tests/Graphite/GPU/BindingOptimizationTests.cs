@@ -477,7 +477,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
     private DeviceBuffer CreateQuad(Float4 color)
     {
-        float y = GD.IsClipSpaceYInverted ? -1.0f : 1.0f;
+        const float y = 1.0f;
         ColoredVertex[] vertices =
         [
             new(new Float2(-1, 1 * y), color),
@@ -523,7 +523,7 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
     }
 
     private uint FlipY(uint y, uint height)
-        => (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted) ? height - y - 1 : y;
+        => !GD.IsUvOriginTopLeft ? height - y - 1 : y;
 
     private DeviceBuffer CreatePointVertexBuffer(UIntPointVertex vertex)
     {

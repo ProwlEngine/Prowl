@@ -105,9 +105,9 @@ internal unsafe partial class VkCommandBuffer
         Silk.NET.Vulkan.Viewport vkViewport = new()
         {
             X = viewport.X,
-            Y = _gd.IsClipSpaceYInverted ? viewport.Y : viewport.Height + viewport.Y,
+            Y = viewport.Height + viewport.Y,
             Width = viewport.Width,
-            Height = _gd.IsClipSpaceYInverted ? viewport.Height : -viewport.Height,
+            Height = -viewport.Height,
             MinDepth = viewport.MinDepth,
             MaxDepth = viewport.MaxDepth
         };

@@ -70,7 +70,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
         Texture readback = GetReadback(target);
         MappedResourceView<Float4> map = GD.Map<Float4>(readback, MapMode.Read, 0);
         uint rowStride = map.MappedResource.RowPitch / (uint)Unsafe.SizeOf<Float4>();
-        uint row = (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted) ? height - 25 - 1 : 25;
+        uint row = !GD.IsUvOriginTopLeft ? height - 25 - 1 : 25;
         Float4 pixel = map[(int)(row * rowStride + 25)];
         GD.Unmap(readback);
 

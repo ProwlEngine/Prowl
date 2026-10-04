@@ -13,10 +13,6 @@ public struct GraphicsDeviceOptions
     /// Prefer 0-to-1 depth range.
     /// </summary>
     public bool PreferDepthRangeZeroToOne;
-    /// <summary>
-    /// Prefer bottom-to-top clip space Y. Not default on Vulkan, not always available.
-    /// </summary>
-    public bool PreferStandardClipSpaceYDirection;
 
     /// <summary>
     /// Max frames in flight on GPU. Must be > 0; 0 means default 3.

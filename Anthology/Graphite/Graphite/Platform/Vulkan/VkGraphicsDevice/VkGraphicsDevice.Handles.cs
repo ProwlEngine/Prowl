@@ -30,7 +30,6 @@ internal unsafe partial class VkGraphicsDevice
     private string _deviceName;
     private string _vendorName;
     private GraphicsApiVersion _apiVersion;
-    private bool _standardClipYDirection;
 
     public override string DeviceName => _deviceName;
 
@@ -43,8 +42,6 @@ internal unsafe partial class VkGraphicsDevice
     public override bool IsUvOriginTopLeft => true;
 
     public override bool IsDepthRangeZeroToOne => true;
-
-    public override bool IsClipSpaceYInverted => !_standardClipYDirection;
 
     public override Swapchain MainSwapchain => _mainSwapchain;
 

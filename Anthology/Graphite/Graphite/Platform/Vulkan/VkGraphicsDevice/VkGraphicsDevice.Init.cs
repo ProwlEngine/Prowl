@@ -168,7 +168,7 @@ internal unsafe partial class VkGraphicsDevice
         Vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, out PhysicalDeviceMemProperties);
     }
 
-    private void CreateLogicalDevice(SurfaceKHR surface, bool preferStandardClipY, VulkanDeviceOptions options)
+    private void CreateLogicalDevice(SurfaceKHR surface, VulkanDeviceOptions options)
     {
         GetQueueFamilyIndices(surface);
 
@@ -194,6 +194,7 @@ internal unsafe partial class VkGraphicsDevice
 
         HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
 
+        bool hasMaintenance1 = false;
         bool hasMemReqs2 = false;
         bool hasDedicatedAllocation = false;
         bool hasDriverProperties = false;
@@ -217,11 +218,11 @@ internal unsafe partial class VkGraphicsDevice
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
                 }
-                else if (preferStandardClipY && extensionName == "VK_KHR_maintenance1")
+                else if (extensionName == "VK_KHR_maintenance1")
                 {
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
-                    _standardClipYDirection = true;
+                    hasMaintenance1 = true;
                 }
                 else if (extensionName == "VK_KHR_get_memory_requirements2")
                 {
@@ -257,6 +258,11 @@ internal unsafe partial class VkGraphicsDevice
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                 }
             }
+        }
+
+        if (!hasMaintenance1)
+        {
+            throw new RenderException("VK_KHR_maintenance1 is required for the fixed clip space Y direction.");
         }
 
         if (requiredInstanceExtensions.Count != 0)
