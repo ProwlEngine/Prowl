@@ -3,7 +3,7 @@ using Xunit;
 namespace Prowl.Graphite.Tests;
 
 // Covers the CPU-only surface of PropertySet: scalar uniform writes, entry de-duplication
-// by name, the resource-version counter, and Clear. Resource setters (buffer/texture/sampler)
+// by name, and Clear. Resource setters (buffer/texture/sampler)
 // require a live GraphicsDevice and are exercised by the GPU resource tests instead.
 public class PropertySetTests
 {
@@ -13,7 +13,6 @@ public class PropertySetTests
         PropertySet set = new();
 
         Assert.Equal(0, set.EntryCount);
-        Assert.Equal(0u, set.ResourceVersion);
     }
 
     [Fact]
@@ -50,19 +49,7 @@ public class PropertySetTests
     }
 
     [Fact]
-    public void UniformWrite_DoesNotBumpResourceVersion()
-    {
-        PropertySet set = new();
-
-        set.SetFloat("a", 1.0f);
-        set.SetInt("b", 2);
-
-        // Only resource (buffer/texture/sampler) writes advance the resource version.
-        Assert.Equal(0u, set.ResourceVersion);
-    }
-
-    [Fact]
-    public void Clear_RemovesEntries_AndBumpsResourceVersion()
+    public void Clear_RemovesEntries()
     {
         PropertySet set = new();
         set.SetFloat("a", 1.0f);
@@ -71,17 +58,6 @@ public class PropertySetTests
         set.Clear();
 
         Assert.Equal(0, set.EntryCount);
-        Assert.Equal(1u, set.ResourceVersion);
-    }
-
-    [Fact]
-    public void Clear_OnEmptySet_StillBumpsResourceVersion()
-    {
-        PropertySet set = new();
-
-        set.Clear();
-
-        Assert.Equal(1u, set.ResourceVersion);
     }
 
     [Fact]
@@ -116,6 +92,5 @@ public class PropertySetTests
         set.SetFloat("b", 2.0f);
 
         Assert.Equal(1, set.EntryCount);
-        Assert.Equal(1u, set.ResourceVersion);
     }
 }

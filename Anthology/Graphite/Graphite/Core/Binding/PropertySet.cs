@@ -14,7 +14,6 @@ public sealed partial class PropertySet
 {
     private readonly Dictionary<PropertyID, PropertyEntry> _entries;
 
-    private uint _resourceVersion;
     private uint _version;
 
 
@@ -32,12 +31,6 @@ public sealed partial class PropertySet
     {
         _entries = new(initialEntryCapacity);
     }
-
-
-    /// <summary>
-    /// Bumps on resource setter calls. Uniform writes don't bump it.
-    /// </summary>
-    public uint ResourceVersion => _resourceVersion;
 
 
     internal uint Version => _version;
@@ -86,7 +79,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetBuffer));
         GetOrCreate(name).SetBuffer(range, readOnly);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
 
@@ -104,7 +97,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetUniformBuffer));
         GetOrCreate(name).SetBuffer(range, readOnly: false, backedBlock: true);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
 
@@ -113,7 +106,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, texture, nameof(texture), nameof(SetTexture));
         GetOrCreate(name).SetTexture(texture, null, sampler);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
     /// <summary>
@@ -123,7 +116,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, view, nameof(view), nameof(SetTexture));
         GetOrCreate(name).SetTexture(null, view, sampler);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
     /// <summary>
@@ -143,33 +136,28 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(null, sampler, nameof(sampler), nameof(SetSampler));
         GetOrCreate(name).SetSampler(sampler);
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
 
     /// <summary>
-    /// Clears everything, bumps resource version.
+    /// Clears everything.
     /// </summary>
     public void Clear()
     {
         _entries.Clear();
-        unchecked { _resourceVersion++; _version++; }
+        unchecked { _version++; }
     }
 
 
     internal void MergeFrom(PropertySet other, System.Collections.Generic.List<PropertyID> changedKeys)
     {
-        bool dirtyResources = false;
-
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
         {
             _entries[kv.Key] = kv.Value;
             changedKeys.Add(kv.Key);
-            if (kv.Value.Kind != PropertyEntryKind.Uniform)
-                dirtyResources = true;
         }
 
-        if (dirtyResources) unchecked { _resourceVersion++; }
         unchecked { _version++; }
     }
 
