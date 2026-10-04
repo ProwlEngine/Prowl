@@ -34,10 +34,7 @@ public static class CommandBufferExtensions
     /// Binds the default variant over library-default base states, with overrideState applied on top of the pass state. Unset override fields defer to the pass.
     /// </summary>
     public static void SetShader(this CommandBuffer commandBuffer, ShaderPass pass, PassState overrideState)
-    {
-        GraphicsProgram program = pass.ResolveProgram(0, overrideState.Apply(pass.State), DefaultBlend, DefaultDepth, DefaultRaster);
-        commandBuffer.SetShader(program);
-    }
+        => commandBuffer.SetShader(pass.ResolveDefaultProgram(0, overrideState));
 
 
     /// <summary>
