@@ -37,7 +37,7 @@ internal static unsafe class VkPipelineCacheFactory
             attachmentState.SrcAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceAlphaFactor);
             attachmentState.DstAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationAlphaFactor);
             attachmentState.AlphaBlendOp = VkFormats.ToVkBlendOp(vdDesc.AlphaFunction);
-            attachmentState.ColorWriteMask = VkFormats.ToVkColorWriteMask(vdDesc.ColorWriteMask ?? ColorWriteMask.All);
+            attachmentState.ColorWriteMask = VkFormats.ToVkColorWriteMask(vdDesc.ColorWriteMask);
             attachmentState.BlendEnable = vdDesc.BlendEnabled;
             attachmentsPtr[i] = attachmentState;
         }

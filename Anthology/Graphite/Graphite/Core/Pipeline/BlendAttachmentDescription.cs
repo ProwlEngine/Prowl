@@ -12,9 +12,9 @@ public record struct BlendAttachmentDescription
     /// </summary>
     public bool BlendEnabled;
     /// <summary>
-    /// Which channels write. Null = all.
+    /// Which channels write. Default all.
     /// </summary>
-    public ColorWriteMask? ColorWriteMask;
+    public ColorWriteMask ColorWriteMask;
 
     /// <summary>
     /// Source color weight.
@@ -42,6 +42,14 @@ public record struct BlendAttachmentDescription
     public BlendFunction AlphaFunction;
 
     /// <summary>
+    /// New blend attachment desc writing all channels.
+    /// </summary>
+    public BlendAttachmentDescription()
+    {
+        ColorWriteMask = ColorWriteMask.All;
+    }
+
+    /// <summary>
     /// New blend attachment desc.
     /// </summary>
     /// <param name="blendEnabled">On/off.</param>
@@ -67,7 +75,7 @@ public record struct BlendAttachmentDescription
         SourceAlphaFactor = sourceAlphaFactor;
         DestinationAlphaFactor = destinationAlphaFactor;
         AlphaFunction = alphaFunction;
-        ColorWriteMask = null;
+        ColorWriteMask = ColorWriteMask.All;
     }
 
     /// <summary>
