@@ -20,8 +20,8 @@ public abstract class ResourceLayoutLimitTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void OversizedSet_IsRejected_WithValidationDisabled()
     {
-        bool previous = GraphicsDevice.ValidationEnabled;
-        GraphicsDevice.ValidationEnabled = false;
+        bool previous = GD.ValidationEnabled;
+        GD.ValidationEnabled = false;
         try
         {
             RenderException ex = Assert.Throws<RenderException>(() => CreateProgramWithElements(ResourceLayoutDescription.MaxElementsPerSet + 1));
@@ -29,7 +29,7 @@ public abstract class ResourceLayoutLimitTests<T> : GraphicsDeviceTestBase<T> wh
         }
         finally
         {
-            GraphicsDevice.ValidationEnabled = previous;
+            GD.ValidationEnabled = previous;
         }
     }
 

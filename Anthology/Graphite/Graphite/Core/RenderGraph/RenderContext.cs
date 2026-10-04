@@ -6,7 +6,7 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Per-view context for passes. Fresh each view. Holds command buffers, transient textures, resolved targets.
 /// </summary>
-public sealed class RenderContext<TView>
+public sealed class RenderContext<TView> : IGraphStateSource
     where TView : IRenderView
 {
     private readonly GraphicsDevice _device;
@@ -17,6 +17,12 @@ public sealed class RenderContext<TView>
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
     private readonly List<CommandBuffer> _pendingCommandBuffers = new();
     private readonly Dictionary<Texture, TextureState> _textureStates = new();
+    private int _stateVersion;
+
+    int IGraphStateSource.StateVersion => _stateVersion;
+
+    TextureState IGraphStateSource.StateOf(Texture texture)
+        => _textureStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
     private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
     private readonly List<TextureBarrier> _barriers = new();
     private readonly HashSet<RenderResourceID> _enteredTransients = new();
@@ -120,7 +126,7 @@ public sealed class RenderContext<TView>
         _textureStates.Clear();
         _discardedTextures.Clear();
         _enteredTransients.Clear();
-        CommandBufferBase.BumpGraphStateVersion();
+        _stateVersion++;
         RecordBarriers(scopeName, BufferAccess.None, BufferAccess.None);
         FlushDeferredBarriers(scopeName);
     }
@@ -163,7 +169,7 @@ public sealed class RenderContext<TView>
         foreach (TextureBarrier barrier in _barriers)
             _textureStates[barrier.Texture] = barrier.After;
         if (_barriers.Count > 0)
-            CommandBufferBase.BumpGraphStateVersion();
+            _stateVersion++;
         _barriers.Clear();
     }
 
@@ -274,7 +280,7 @@ public sealed class RenderContext<TView>
             cb.Name = name;
 
         cb.Begin();
-        cb.GraphStates = _textureStates;
+        cb.GraphState = this;
         _pendingCommandBuffers.Add(cb);
 
         if (_deferredBarriers != null && _barrierHost == null)

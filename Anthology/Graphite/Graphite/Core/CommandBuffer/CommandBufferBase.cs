@@ -13,16 +13,19 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <summary>True if End was called since last Begin.</summary>
     internal bool HasEnded { get; private protected set; }
 
-    internal System.Collections.Generic.Dictionary<Texture, TextureState>? GraphStates { get; set; }
+    internal GraphicsDevice Device { get; }
 
-    private static int s_graphStateVersion;
+    private protected CommandBufferBase(GraphicsDevice device)
+    {
+        Device = device;
+    }
 
-    internal static int GraphStateVersion => System.Threading.Volatile.Read(ref s_graphStateVersion);
+    internal IGraphStateSource? GraphState { get; set; }
 
-    internal static void BumpGraphStateVersion() => System.Threading.Interlocked.Increment(ref s_graphStateVersion);
+    internal int GraphStateVersion => GraphState?.StateVersion ?? 0;
 
     internal TextureState StateOf(Texture texture)
-        => GraphStates != null && GraphStates.TryGetValue(texture, out TextureState state) ? state : TextureState.Resting;
+        => GraphState != null ? GraphState.StateOf(texture) : TextureState.Resting;
 
     /// <summary>Updates buffer region with a single value. T must be blittable.</summary>
     /// <typeparam name="T">Upload type.</typeparam>
@@ -95,13 +98,13 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <param name="sizeInBytes">Bytes to copy.</param>
     public void CopyBuffer(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
     {
-        ValidationHelpers.RequireNotNull(source, nameof(source), nameof(CopyBuffer));
-        ValidationHelpers.RequireNotNull(destination, nameof(destination), nameof(CopyBuffer));
+        ValidationHelpers.RequireNotNull(Device, source, nameof(source), nameof(CopyBuffer));
+        ValidationHelpers.RequireNotNull(Device, destination, nameof(destination), nameof(CopyBuffer));
         if (sizeInBytes == 0)
         {
             return;
         }
-        ValidationHelpers.CopyBufferCheckRange(source, sourceOffset, destination, destinationOffset, sizeInBytes);
+        ValidationHelpers.CopyBufferCheckRange(Device, source, sourceOffset, destination, destinationOffset, sizeInBytes);
 
         CopyBufferCore(source, sourceOffset, destination, destinationOffset, sizeInBytes);
     }
@@ -113,9 +116,9 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <param name="destination">Destination texture.</param>
     public void CopyTexture(Texture source, Texture destination)
     {
-        ValidationHelpers.CopyTextureCheckNotNull(source, destination);
+        ValidationHelpers.CopyTextureCheckNotNull(Device, source, destination);
         uint effectiveSrcArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(source);
-        ValidationHelpers.CopyTextureCheckCompatibilityAll(source, destination, effectiveSrcArrayLayers);
+        ValidationHelpers.CopyTextureCheckCompatibilityAll(Device, source, destination, effectiveSrcArrayLayers);
 
         for (uint level = 0; level < source.MipLevels; level++)
         {
@@ -135,8 +138,8 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <param name="arrayLayer">Array layer.</param>
     public void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer)
     {
-        ValidationHelpers.CopyTextureCheckNotNull(source, destination);
-        ValidationHelpers.CopyTextureCheckCompatibilityForSubresource(source, destination, mipLevel, arrayLayer);
+        ValidationHelpers.CopyTextureCheckNotNull(Device, source, destination);
+        ValidationHelpers.CopyTextureCheckCompatibilityForSubresource(Device, source, destination, mipLevel, arrayLayer);
 
         Util.GetMipDimensions(source, mipLevel, out uint width, out uint height, out uint depth);
         CopyTexture(
@@ -175,8 +178,8 @@ public abstract class CommandBufferBase : GraphicsResource
         uint width, uint height, uint depth,
         uint layerCount)
     {
-        ValidationHelpers.CopyTextureCheckNotNull(source, destination);
-        ValidationHelpers.CopyTextureCheckRegion(
+        ValidationHelpers.CopyTextureCheckNotNull(Device, source, destination);
+        ValidationHelpers.CopyTextureCheckRegion(Device, 
             source,
             srcX, srcY, srcZ,
             srcMipLevel,
@@ -237,7 +240,7 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <param name="region">Region to write.</param>
     public void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, in TextureRegion region)
     {
-        GraphicsDevice.UpdateTexture_CheckParameters(texture, sizeInBytes, region);
+        Device.UpdateTexture_CheckParameters(texture, sizeInBytes, region);
         UpdateTextureCore(texture, source, sizeInBytes, region);
     }
 

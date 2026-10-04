@@ -44,9 +44,9 @@ public abstract partial class CommandBuffer : CommandBufferBase
         _allPropertiesChanged = false;
     }
 
-    internal CommandBuffer(GraphicsDeviceFeatures features)
+    internal CommandBuffer(GraphicsDevice device) : base(device)
     {
-        _features = features;
+        _features = device.Features;
     }
 
     internal void ClearCachedState()

@@ -176,7 +176,7 @@ internal unsafe sealed partial class VkDescriptorBinder
     private DeviceBufferRange GetOrBuildBackedUbo(
         PropertyID name, UniformBlockField[] fields, int blockSlot, uint blockSize, DeviceBufferRange target)
     {
-        if (GraphicsDevice.ValidationEnabled)
+        if (_gd.ValidationEnabled)
             ValidateBackedUbo(name, blockSize, target);
 
         VkUniformArena.Block block = CurrentExecution().UniformArena.GetBlock(blockSlot, fields, blockSize);

@@ -86,7 +86,7 @@ public sealed partial class PropertySet
     /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange, bool)"/>
     public void SetBuffer(PropertyID name, DeviceBuffer buffer, bool readOnly = true)
     {
-        ValidationHelpers.RequireNotNull(buffer, nameof(buffer), nameof(SetBuffer));
+        ValidationHelpers.RequireNotNull(null, buffer, nameof(buffer), nameof(SetBuffer));
         SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes), readOnly);
     }
 
@@ -95,7 +95,7 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBufferRange range, bool readOnly = true)
     {
-        ValidationHelpers.RequireNotNull(range.Buffer, nameof(range), nameof(SetBuffer));
+        ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetBuffer));
         GetOrCreate(name).SetBuffer(range, readOnly);
         unchecked { _resourceVersion++; _version++; }
     }
@@ -104,7 +104,7 @@ public sealed partial class PropertySet
     /// <inheritdoc cref="SetUniformBuffer(PropertyID, DeviceBufferRange)"/>
     public void SetUniformBuffer(PropertyID name, DeviceBuffer buffer, uint offset = 0)
     {
-        ValidationHelpers.RequireNotNull(buffer, nameof(buffer), nameof(SetUniformBuffer));
+        ValidationHelpers.RequireNotNull(null, buffer, nameof(buffer), nameof(SetUniformBuffer));
         SetUniformBuffer(name, new DeviceBufferRange(buffer, offset, buffer.SizeInBytes - offset));
     }
 
@@ -113,7 +113,7 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetUniformBuffer(PropertyID name, DeviceBufferRange range)
     {
-        ValidationHelpers.RequireNotNull(range.Buffer, nameof(range), nameof(SetUniformBuffer));
+        ValidationHelpers.RequireNotNull(null, range.Buffer, nameof(range), nameof(SetUniformBuffer));
         GetOrCreate(name).SetBuffer(range, readOnly: false, backedBlock: true);
         unchecked { _resourceVersion++; _version++; }
     }
@@ -122,7 +122,7 @@ public sealed partial class PropertySet
     /// <inheritdoc cref="SetTexture(PropertyID, TextureView, Sampler)"/>
     public void SetTexture(PropertyID name, Texture texture, Sampler? sampler = null)
     {
-        ValidationHelpers.RequireNotNull(texture, nameof(texture), nameof(SetTexture));
+        ValidationHelpers.RequireNotNull(null, texture, nameof(texture), nameof(SetTexture));
         GetOrCreate(name).SetTexture(texture, null, sampler);
         unchecked { _resourceVersion++; _version++; }
     }
@@ -132,7 +132,7 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetTexture(PropertyID name, TextureView view, Sampler? sampler = null)
     {
-        ValidationHelpers.RequireNotNull(view, nameof(view), nameof(SetTexture));
+        ValidationHelpers.RequireNotNull(null, view, nameof(view), nameof(SetTexture));
         GetOrCreate(name).SetTexture(null, view, sampler);
         unchecked { _resourceVersion++; _version++; }
     }
@@ -142,7 +142,7 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetTexture(PropertyID name, RenderTexture renderTexture, Sampler? sampler = null)
     {
-        ValidationHelpers.RequireNotNull(renderTexture, nameof(renderTexture), nameof(SetTexture));
+        ValidationHelpers.RequireNotNull(null, renderTexture, nameof(renderTexture), nameof(SetTexture));
         SetTexture(name, renderTexture.ColorTextures[0], sampler);
     }
 
@@ -152,7 +152,7 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetSampler(PropertyID name, Sampler sampler)
     {
-        ValidationHelpers.RequireNotNull(sampler, nameof(sampler), nameof(SetSampler));
+        ValidationHelpers.RequireNotNull(null, sampler, nameof(sampler), nameof(SetSampler));
         GetOrCreate(name).SetSampler(sampler);
         unchecked { _resourceVersion++; _version++; }
     }

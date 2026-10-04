@@ -4,7 +4,7 @@ public abstract partial class ResourceFactory
 {
     private void CreateTexture_CheckDescription(in TextureDescription description)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (description.Width == 0 || description.Height == 0 || description.Depth == 0)
@@ -35,7 +35,7 @@ public abstract partial class ResourceFactory
 
     private void CreateTextureView_CheckDescription(in TextureViewDescription description)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (description.MipLevels == 0 || description.ArrayLayers == 0
@@ -65,7 +65,7 @@ public abstract partial class ResourceFactory
 
     private void CreateBuffer_CheckDescription(in BufferDescription description)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         BufferUsage usage = description.Usage;
@@ -103,7 +103,7 @@ public abstract partial class ResourceFactory
 
     private void CreateSampler_CheckDescription(in SamplerDescription description)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (!Features.SamplerAnisotropy && description.Filter == SamplerFilter.Anisotropic)
@@ -115,7 +115,7 @@ public abstract partial class ResourceFactory
 
     private void CreateGraphicsProgram_CheckDescription(in ShaderDescription description)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         ShaderStageDescription[] stages = description.Stages;
@@ -222,7 +222,7 @@ public abstract partial class ResourceFactory
 
     private void CreateComputeProgram_CheckDescription(in ComputeDescription description)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (description.Stage.Stage != ShaderStages.Compute)

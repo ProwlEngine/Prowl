@@ -32,7 +32,7 @@ public abstract partial class GraphicsDevice
     /// <returns>The rented buffer.</returns>
     public DeviceBuffer RentTransientBuffer(ExecutionTask task, in BufferDescription desc)
     {
-        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(RentTransientBuffer));
+        ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(RentTransientBuffer));
         return TransientBufferPool.Rent(desc, task.Id);
     }
 }

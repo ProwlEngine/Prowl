@@ -37,7 +37,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     public ResourceRefCount RefCount { get; }
 
     public VkCommandBuffer(VkGraphicsDevice gd)
-        : base(gd.Features)
+        : base(gd)
     {
         _gd = gd;
         CommandPoolCreateInfo poolCI = new()

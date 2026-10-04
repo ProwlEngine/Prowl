@@ -4,9 +4,6 @@ public partial struct FramebufferAttachmentDescription
 {
     private static void FramebufferAttachmentDescription_CheckLayerAndMip(Texture target, uint arrayLayer, uint mipLevel)
     {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
         uint effectiveArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(target);
         if (arrayLayer >= effectiveArrayLayers)
         {

@@ -90,13 +90,13 @@ public abstract partial class GraphicsDevice
 
     internal RenderTexture RentGraphTransientRenderTexture(ExecutionTask task, in RenderTextureDescription desc)
     {
-        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(RentGraphTransientRenderTexture));
+        ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(RentGraphTransientRenderTexture));
         return GraphTransientTexturePool.Rent(desc, task.Id).Texture;
     }
 
     private TransientTexturePool.PooledBundle RentTransientBundle(ExecutionTask task, in RenderTextureDescription desc)
     {
-        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(RentTransientFramebuffer));
+        ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(RentTransientFramebuffer));
         return TransientTexturePool.Rent(desc, task.Id);
     }
 }

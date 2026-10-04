@@ -16,8 +16,8 @@ public abstract partial class GraphicsDevice
         IReadOnlyList<T> views)
         where T : IRenderView
     {
-        ValidationHelpers.RequireNotNull(pipeline, nameof(pipeline), nameof(DispatchGraph));
-        ValidationHelpers.RequireNotNull(views, nameof(views), nameof(DispatchGraph));
+        ValidationHelpers.RequireNotNull(this, pipeline, nameof(pipeline), nameof(DispatchGraph));
+        ValidationHelpers.RequireNotNull(this, views, nameof(views), nameof(DispatchGraph));
 
         RenderGraph<T> graph = pipeline.Graph;
 

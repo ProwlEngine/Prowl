@@ -107,7 +107,7 @@ public abstract partial class GraphicsDevice
     /// <exception cref="ArgumentNullException">Thrown if task is null.</exception>
     public void CompleteExecution(ExecutionTask task)
     {
-        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(CompleteExecution));
+        ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(CompleteExecution));
         task.CloseTail();
         CompleteExecutionCore(task);
     }
@@ -119,7 +119,7 @@ public abstract partial class GraphicsDevice
     /// <returns>True if complete, false if still in flight.</returns>
     public bool IsExecutionComplete(ExecutionTask task)
     {
-        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(IsExecutionComplete));
+        ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(IsExecutionComplete));
         bool complete = IsExecutionCompleteCore(task);
         if (complete)
             AdvanceLastCompletedExecutionId(task.Id);
@@ -155,7 +155,7 @@ public abstract partial class GraphicsDevice
     /// <returns>True if it finished before timeout, false otherwise.</returns>
     public bool WaitForExecution(ExecutionTask task, ulong nanosecondTimeout = ulong.MaxValue)
     {
-        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(WaitForExecution));
+        ValidationHelpers.RequireNotNull(this, task, nameof(task), nameof(WaitForExecution));
         bool completed = WaitForExecutionCore(task, nanosecondTimeout);
         if (completed)
             AdvanceLastCompletedExecutionId(task.Id);
@@ -188,7 +188,7 @@ public abstract partial class GraphicsDevice
     /// <returns>Handle that completes when the GPU is done.</returns>
     public GpuSubmission Record(System.Action<CommandBuffer> record, string name = "")
     {
-        ValidationHelpers.RequireNotNull(record, nameof(record), nameof(Record));
+        ValidationHelpers.RequireNotNull(this, record, nameof(record), nameof(Record));
         return RecordCore(record, name);
     }
 

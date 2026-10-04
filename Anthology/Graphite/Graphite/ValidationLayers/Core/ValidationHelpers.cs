@@ -4,9 +4,9 @@ namespace Prowl.Graphite;
 
 internal static class ValidationHelpers
 {
-    internal static void RequireNotNull(object value, string parameterName, string caller)
+    internal static void RequireNotNull(GraphicsDevice? device, object value, string parameterName, string caller)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
         if (value == null)
@@ -16,9 +16,9 @@ internal static class ValidationHelpers
         }
     }
 
-    internal static void RequireNotNullRender(object value, string typeName, string caller)
+    internal static void RequireNotNullRender(GraphicsDevice? device, object value, string typeName, string caller)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
         if (value == null)
@@ -33,18 +33,18 @@ internal static class ValidationHelpers
     internal static uint GetEffectiveArrayLayers(Texture texture)
         => (texture.Usage & TextureUsage.Cubemap) != 0 ? texture.ArrayLayers * 6 : texture.ArrayLayers;
 
-    internal static void CopyTextureCheckNotNull(Texture source, Texture destination)
+    internal static void CopyTextureCheckNotNull(GraphicsDevice? device, Texture source, Texture destination)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
-        RequireNotNull(source, nameof(source), "CopyTexture");
-        RequireNotNull(destination, nameof(destination), "CopyTexture");
+        RequireNotNull(device, source, nameof(source), "CopyTexture");
+        RequireNotNull(device, destination, nameof(destination), "CopyTexture");
     }
 
-    internal static void CopyTextureCheckDimensionsCompatible(Texture source, Texture destination)
+    internal static void CopyTextureCheckDimensionsCompatible(GraphicsDevice? device, Texture source, Texture destination)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
         if (source.SampleCount != destination.SampleCount || source.Width != destination.Width
@@ -55,9 +55,9 @@ internal static class ValidationHelpers
         }
     }
 
-    internal static void CopyTextureCheckCompatibilityAll(Texture source, Texture destination, uint effectiveSrcArrayLayers)
+    internal static void CopyTextureCheckCompatibilityAll(GraphicsDevice? device, Texture source, Texture destination, uint effectiveSrcArrayLayers)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
         uint effectiveDstArrayLayers = GetEffectiveArrayLayers(destination);
@@ -65,25 +65,24 @@ internal static class ValidationHelpers
         {
             throw new RenderException("Source and destination Textures are not compatible to be copied in CopyTexture.");
         }
-        CopyTextureCheckDimensionsCompatible(source, destination);
+        CopyTextureCheckDimensionsCompatible(device, source, destination);
     }
 
-    internal static void CopyTextureCheckCompatibilityForSubresource(Texture source, Texture destination, uint mipLevel, uint arrayLayer)
+    internal static void CopyTextureCheckCompatibilityForSubresource(GraphicsDevice? device, Texture source, Texture destination, uint mipLevel, uint arrayLayer)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
         uint effectiveSrcArrayLayers = GetEffectiveArrayLayers(source);
         uint effectiveDstArrayLayers = GetEffectiveArrayLayers(destination);
-        CopyTextureCheckDimensionsCompatible(source, destination);
+        CopyTextureCheckDimensionsCompatible(device, source, destination);
         if (mipLevel >= source.MipLevels || mipLevel >= destination.MipLevels || arrayLayer >= effectiveSrcArrayLayers || arrayLayer >= effectiveDstArrayLayers)
         {
             throw new RenderException("mipLevel and arrayLayer must be less than the given Textures' mip level count and array layer count.");
         }
     }
 
-    internal static void CopyTextureCheckRegion(
-        Texture source,
+    internal static void CopyTextureCheckRegion(GraphicsDevice? device, Texture source,
         uint srcX, uint srcY, uint srcZ,
         uint srcMipLevel,
         uint srcBaseArrayLayer,
@@ -94,7 +93,7 @@ internal static class ValidationHelpers
         uint width, uint height, uint depth,
         uint layerCount)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
         if (width == 0 || height == 0 || depth == 0)
@@ -141,12 +140,11 @@ internal static class ValidationHelpers
         }
     }
 
-    internal static void CopyBufferCheckRange(
-        DeviceBuffer source, uint sourceOffset,
+    internal static void CopyBufferCheckRange(GraphicsDevice? device, DeviceBuffer source, uint sourceOffset,
         DeviceBuffer destination, uint destinationOffset,
         uint sizeInBytes)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (device is { ValidationEnabled: false })
             return;
 
         if (sourceOffset + sizeInBytes > source.SizeInBytes)

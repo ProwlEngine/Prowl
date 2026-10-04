@@ -135,7 +135,7 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         EnsureBindCacheFor(program, (int)setCount);
         ulong executionId = _cbOwner.ExecutionId;
-        int graphStateVersion = CommandBufferBase.GraphStateVersion;
+        int graphStateVersion = _cbOwner.GraphStateVersion;
 
         int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)

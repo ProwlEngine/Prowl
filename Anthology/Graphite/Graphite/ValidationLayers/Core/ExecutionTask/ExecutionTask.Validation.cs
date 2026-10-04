@@ -2,9 +2,9 @@ namespace Prowl.Graphite;
 
 public abstract partial class ExecutionTask
 {
-    private protected static void SubmitCommands_CheckEnded(CommandBuffer commandList)
+    private protected static void SubmitCommands_CheckEnded(GraphicsDevice gd, CommandBuffer commandList)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!gd.ValidationEnabled)
             return;
 
         if (!commandList.HasEnded)
@@ -13,9 +13,9 @@ public abstract partial class ExecutionTask
         }
     }
 
-    private protected static void CheckCumulativeCaps_CheckHardCap(ulong cumulative, ulong hardCapBytes)
+    private protected static void CheckCumulativeCaps_CheckHardCap(GraphicsDevice gd, ulong cumulative, ulong hardCapBytes)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!gd.ValidationEnabled)
             return;
 
         if (cumulative > hardCapBytes)

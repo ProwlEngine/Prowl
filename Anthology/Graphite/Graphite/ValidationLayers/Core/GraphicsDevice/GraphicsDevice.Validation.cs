@@ -3,9 +3,9 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// True = validation layer runs its checks. Set once at device creation.
+    /// True = validation layer runs this device's checks. Set once at device creation.
     /// </summary>
-    internal static bool ValidationEnabled;
+    internal bool ValidationEnabled { get; set; }
 
     private void InitializeFrameOptions_SetValidationEnabled(in GraphicsDeviceOptions options)
     {
@@ -23,7 +23,7 @@ public abstract partial class GraphicsDevice
         }
     }
 
-    private static void Map_CheckResource(GraphicsResource resource, MapMode mode, uint subresource)
+    private void Map_CheckResource(GraphicsResource resource, MapMode mode, uint subresource)
     {
         if (!ValidationEnabled)
             return;
@@ -59,7 +59,7 @@ public abstract partial class GraphicsDevice
         }
     }
 
-    internal static void UpdateTexture_CheckParameters(
+    internal void UpdateTexture_CheckParameters(
         Texture texture,
         uint sizeInBytes,
         in TextureRegion region)

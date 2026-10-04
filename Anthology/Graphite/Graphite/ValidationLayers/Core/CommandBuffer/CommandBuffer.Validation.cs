@@ -5,9 +5,9 @@ namespace Prowl.Graphite;
 
 public abstract partial class CommandBuffer
 {
-    private static void SetVertexSource_CheckNonNull(IVertexSource source)
+    private void SetVertexSource_CheckNonNull(IVertexSource source)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (source == null)
@@ -19,7 +19,7 @@ public abstract partial class CommandBuffer
 
     private protected void CheckVertexBindingUsage(in VertexBinding binding, uint layoutSlot)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (binding.Buffer == null)
@@ -36,7 +36,7 @@ public abstract partial class CommandBuffer
 
     private protected void CheckIndexBufferUsage(DeviceBuffer buffer)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (buffer == null)
@@ -53,7 +53,7 @@ public abstract partial class CommandBuffer
 
     private void ClearColorTarget_CheckFramebuffer(uint index)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         CheckFramebuffer(nameof(ClearColorTarget));
@@ -66,7 +66,7 @@ public abstract partial class CommandBuffer
 
     private void ClearDepthStencil_CheckFramebuffer()
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         CheckFramebuffer(nameof(ClearDepthStencil));
@@ -80,16 +80,16 @@ public abstract partial class CommandBuffer
 
     private void CheckFramebuffer(string name)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (_framebuffer == null)
             throw new RenderException($"Cannot use {name}. There is no Framebuffer bound.");
     }
 
-    private static void DrawIndirect_CheckOffset(uint offset)
+    private void DrawIndirect_CheckOffset(uint offset)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if ((offset % 4) != 0)
@@ -98,9 +98,9 @@ public abstract partial class CommandBuffer
         }
     }
 
-    private static void DrawIndirect_CheckBuffer(DeviceBuffer indirectBuffer)
+    private void DrawIndirect_CheckBuffer(DeviceBuffer indirectBuffer)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if ((indirectBuffer.Usage & BufferUsage.IndirectBuffer) != BufferUsage.IndirectBuffer)
@@ -110,9 +110,9 @@ public abstract partial class CommandBuffer
         }
     }
 
-    private static void DrawIndirect_CheckStride(uint stride, int argumentSize)
+    private void DrawIndirect_CheckStride(uint stride, int argumentSize)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (stride < argumentSize || ((stride % 4) != 0))
@@ -122,9 +122,9 @@ public abstract partial class CommandBuffer
         }
     }
 
-    private static void ResolveTexture_CheckSampleCounts(Texture source, Texture destination)
+    private void ResolveTexture_CheckSampleCounts(Texture source, Texture destination)
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (source.SampleCount == TextureSampleCount.Count1)
@@ -147,7 +147,7 @@ public abstract partial class CommandBuffer
 
     private void DrawIndexed_CheckIndexBuffer()
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (_currentVertexSource == null)
@@ -172,7 +172,7 @@ public abstract partial class CommandBuffer
 
     private void DrawIndexedIndirect_CheckIndexBuffer()
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (_currentVertexSource != null
@@ -186,7 +186,7 @@ public abstract partial class CommandBuffer
 
     private void Draw_PreDrawValidation()
     {
-        if (!GraphicsDevice.ValidationEnabled)
+        if (!Device.ValidationEnabled)
             return;
 
         if (_shaderProgram == null)

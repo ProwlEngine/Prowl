@@ -50,7 +50,7 @@ internal sealed class VkExecutionTask : ExecutionTask
     /// <inheritdoc/>
     internal override void SubmitCommandsInternal(CommandBuffer commandList)
     {
-        SubmitCommands_CheckEnded(commandList);
+        SubmitCommands_CheckEnded(_gd, commandList);
         _queuedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandList));
     }
 
@@ -96,7 +96,7 @@ internal sealed class VkExecutionTask : ExecutionTask
     {
         ulong cumulative = _uniformArena.CumulativeBytes;
 
-        CheckCumulativeCaps_CheckHardCap(cumulative, _gd._transientHardCapBytes);
+        CheckCumulativeCaps_CheckHardCap(_gd, cumulative, _gd._transientHardCapBytes);
 
         if (!_gd._transientSoftCapWarned && cumulative > _gd._transientSoftCapBytes)
         {

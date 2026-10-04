@@ -12,7 +12,7 @@ public abstract partial class CommandBuffer
     public void SetShader(GraphicsProgram program)
     {
         RequireGraphExecution(nameof(SetShader));
-        ValidationHelpers.RequireNotNullRender(program, nameof(GraphicsProgram), nameof(SetShader));
+        ValidationHelpers.RequireNotNullRender(Device, program, nameof(GraphicsProgram), nameof(SetShader));
         bool changed = !ReferenceEquals(_shaderProgram, program);
         if (!changed) return;
 
@@ -36,7 +36,7 @@ public abstract partial class CommandBuffer
     public void SetComputeShader(ComputeProgram program)
     {
         RequireGraphExecution(nameof(SetComputeShader));
-        ValidationHelpers.RequireNotNullRender(program, nameof(ComputeProgram), nameof(SetComputeShader));
+        ValidationHelpers.RequireNotNullRender(Device, program, nameof(ComputeProgram), nameof(SetComputeShader));
         if (ReferenceEquals(_computeProgram, program)) return;
 
         SetComputeShaderCore(program);
@@ -63,7 +63,7 @@ public abstract partial class CommandBuffer
     /// <param name="properties">Set to merge in.</param>
     public void SetProperties(PropertySet properties)
     {
-        ValidationHelpers.RequireNotNull(properties, nameof(properties), nameof(SetProperties));
+        ValidationHelpers.RequireNotNull(Device, properties, nameof(properties), nameof(SetProperties));
 
         if (ReferenceEquals(properties, _lastAppliedSource) && properties.Version == _lastAppliedSourceVersion)
             return;
