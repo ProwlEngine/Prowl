@@ -15,10 +15,7 @@ public class PassStateTests
     {
         PassState s = Parse.State("");
 
-        Assert.Null(s.CullMode);
-        Assert.Null(s.DepthFunc);
-        Assert.Null(s.WriteMask);
-        Assert.Null(s.EnableBlend);
+        Assert.Equal(PassStateFields.None, s.Set);
     }
 
 
@@ -28,7 +25,7 @@ public class PassStateTests
     [InlineData("Off", FaceCullMode.None)]
     public void Cull_SetsCullMode(string value, FaceCullMode expected)
     {
-        Assert.Equal(expected, Parse.State($"Cull {value}").CullMode);
+        Assert.Equal(expected, Parse.State($"Cull {value}").Raster.CullMode);
     }
 
 
@@ -40,7 +37,7 @@ public class PassStateTests
     [InlineData("Always", ComparisonKind.Always)]
     public void ZTest_SetsDepthFunc(string value, ComparisonKind expected)
     {
-        Assert.Equal(expected, Parse.State($"ZTest {value}").DepthFunc);
+        Assert.Equal(expected, Parse.State($"ZTest {value}").DepthStencil.DepthComparison);
     }
 
 
@@ -49,16 +46,16 @@ public class PassStateTests
     [InlineData("Off", false)]
     public void ZWrite_SetsDepthWriteMask(string value, bool expected)
     {
-        Assert.Equal(expected, Parse.State($"ZWrite {value}").DepthWriteMask);
+        Assert.Equal(expected, Parse.State($"ZWrite {value}").DepthStencil.DepthWriteEnabled);
     }
 
 
     [Theory]
-    [InlineData("On", false)]   // ZClip On  -> depth clamping disabled
-    [InlineData("Off", true)]   // ZClip Off -> depth clamping enabled
-    public void ZClip_SetsDepthClampInverted(string value, bool expected)
+    [InlineData("On", true)]
+    [InlineData("Off", false)]
+    public void ZClip_SetsDepthClip(string value, bool expected)
     {
-        Assert.Equal(expected, Parse.State($"ZClip {value}").EnableDepthClamp);
+        Assert.Equal(expected, Parse.State($"ZClip {value}").Raster.DepthClipEnabled);
     }
 
 
@@ -67,10 +64,10 @@ public class PassStateTests
     {
         PassState s = Parse.State("Blend SourceAlpha InverseSourceAlpha");
 
-        Assert.Equal(BlendFactor.SourceAlpha, s.BlendSrcRgb);
-        Assert.Equal(BlendFactor.SourceAlpha, s.BlendSrcAlpha);
-        Assert.Equal(BlendFactor.InverseSourceAlpha, s.BlendDstRgb);
-        Assert.Equal(BlendFactor.InverseSourceAlpha, s.BlendDstAlpha);
+        Assert.Equal(BlendFactor.SourceAlpha, s.Blend.SourceColorFactor);
+        Assert.Equal(BlendFactor.SourceAlpha, s.Blend.SourceAlphaFactor);
+        Assert.Equal(BlendFactor.InverseSourceAlpha, s.Blend.DestinationColorFactor);
+        Assert.Equal(BlendFactor.InverseSourceAlpha, s.Blend.DestinationAlphaFactor);
     }
 
 
@@ -79,10 +76,10 @@ public class PassStateTests
     {
         PassState s = Parse.State("BlendRGB One Zero");
 
-        Assert.Equal(BlendFactor.One, s.BlendSrcRgb);
-        Assert.Equal(BlendFactor.Zero, s.BlendDstRgb);
-        Assert.Null(s.BlendSrcAlpha);
-        Assert.Null(s.BlendDstAlpha);
+        Assert.Equal(BlendFactor.One, s.Blend.SourceColorFactor);
+        Assert.Equal(BlendFactor.Zero, s.Blend.DestinationColorFactor);
+        Assert.False(s.Set.HasFlag(PassStateFields.SourceAlphaFactor));
+        Assert.False(s.Set.HasFlag(PassStateFields.DestinationAlphaFactor));
     }
 
 
@@ -91,10 +88,10 @@ public class PassStateTests
     {
         PassState s = Parse.State("BlendAlpha One Zero");
 
-        Assert.Equal(BlendFactor.One, s.BlendSrcAlpha);
-        Assert.Equal(BlendFactor.Zero, s.BlendDstAlpha);
-        Assert.Null(s.BlendSrcRgb);
-        Assert.Null(s.BlendDstRgb);
+        Assert.Equal(BlendFactor.One, s.Blend.SourceAlphaFactor);
+        Assert.Equal(BlendFactor.Zero, s.Blend.DestinationAlphaFactor);
+        Assert.False(s.Set.HasFlag(PassStateFields.SourceColorFactor));
+        Assert.False(s.Set.HasFlag(PassStateFields.DestinationColorFactor));
     }
 
 
@@ -106,8 +103,8 @@ public class PassStateTests
     {
         PassState s = Parse.State($"BlendOp {value}");
 
-        Assert.Equal(expected, s.BlendFunctionRgb);
-        Assert.Equal(expected, s.BlendFunctionAlpha);
+        Assert.Equal(expected, s.Blend.ColorFunction);
+        Assert.Equal(expected, s.Blend.AlphaFunction);
     }
 
 
@@ -126,7 +123,7 @@ public class PassStateTests
     [InlineData("RGBA", ColorWriteMask.All)]
     public void ColorMask_ParsesChannels(string mask, ColorWriteMask expected)
     {
-        Assert.Equal(expected, Parse.State($"ColorMask {mask}").WriteMask);
+        Assert.Equal(expected, Parse.State($"ColorMask {mask}").Blend.ColorWriteMask);
     }
 
 
@@ -142,7 +139,7 @@ public class PassStateTests
     [InlineData("Off", false)]
     public void AlphaToMask_Sets(string value, bool expected)
     {
-        Assert.Equal(expected, Parse.State($"AlphaToMask {value}").AlphaToMask);
+        Assert.Equal(expected, Parse.State($"AlphaToMask {value}").AlphaToCoverage);
     }
 
 
@@ -151,9 +148,9 @@ public class PassStateTests
     {
         PassState s = Parse.State("Offset -1 -2");
 
-        Assert.True(s.EnablePolygonOffsetFill);
-        Assert.Equal(-1f, s.PolygonOffsetFactor);
-        Assert.Equal(-2f, s.PolygonOffsetUnits);
+        Assert.True(s.Raster.DepthBiasEnabled);
+        Assert.Equal(-1f, s.Raster.DepthBiasSlopeFactor);
+        Assert.Equal(-2f, s.Raster.DepthBiasConstantFactor);
     }
 
 
@@ -189,9 +186,9 @@ public class PassStateTests
             ZTest Greater
             """);
 
-        Assert.Equal(FaceCullMode.Front, s.CullMode);
-        Assert.False(s.DepthWriteMask);
-        Assert.Equal(ComparisonKind.Greater, s.DepthFunc);
+        Assert.Equal(FaceCullMode.Front, s.Raster.CullMode);
+        Assert.False(s.DepthStencil.DepthWriteEnabled);
+        Assert.Equal(ComparisonKind.Greater, s.DepthStencil.DepthComparison);
     }
 
 
@@ -201,7 +198,7 @@ public class PassStateTests
         // "Banana" is not a render-state command, so parsing stops there and Cull is captured.
         PassState s = Parse.State("Cull Back Banana");
 
-        Assert.Equal(FaceCullMode.Back, s.CullMode);
+        Assert.Equal(FaceCullMode.Back, s.Raster.CullMode);
     }
 
 
@@ -267,17 +264,47 @@ public class PassStateTests
 
 
     [Fact]
-    public void Equals_EveryFieldParticipates()
+    public void Equals_IgnoresValuesOutsideTheSetMask()
     {
-        PassState reference = new();
-        foreach (FieldInfo field in typeof(PassState).GetFields(BindingFlags.Public | BindingFlags.Instance))
-        {
-            PassState changed = new();
-            field.SetValue(changed, NonDefaultValue(field.FieldType));
+        PassState a = new() { Set = PassStateFields.CullMode, Raster = new() { CullMode = FaceCullMode.Front, DepthBiasEnabled = true } };
+        PassState b = new() { Set = PassStateFields.CullMode, Raster = new() { CullMode = FaceCullMode.Front }, Blend = new() };
 
-            Assert.False(reference.Equals(changed), $"{field.Name} does not participate in Equals.");
-            Assert.NotEqual(reference.GetHashCode(), changed.GetHashCode());
+        Assert.Equal(a, b);
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+
+    [Fact]
+    public void EveryFlag_IsCopiedByApplyAndCompared()
+    {
+        PassState source = new()
+        {
+            Raster = (RasterizerStateDescription)Fill(typeof(RasterizerStateDescription)),
+            DepthStencil = (DepthStencilStateDescription)Fill(typeof(DepthStencilStateDescription)),
+            Blend = (BlendAttachmentDescription)Fill(typeof(BlendAttachmentDescription)),
+            AlphaToCoverage = true,
+        };
+
+        foreach (PassStateFields flag in Enum.GetValues<PassStateFields>())
+        {
+            if (flag == PassStateFields.None)
+                continue;
+
+            source.Set = flag;
+            PassState applied = new PassState().Apply(source);
+            PassState flagOnly = new() { Set = flag };
+
+            Assert.False(flagOnly.Equals(applied), $"{flag} is not copied by Apply or not compared by Equals.");
         }
+    }
+
+
+    [Fact]
+    public void Apply_SetsUnionOfBothMasks()
+    {
+        PassState combined = Parse.State("Cull Off").Apply(Parse.State("ZWrite Off"));
+
+        Assert.Equal(PassStateFields.CullMode | PassStateFields.DepthWrite, combined.Set);
     }
 
 
@@ -290,19 +317,31 @@ public class PassStateTests
     }
 
 
-    private static object NonDefaultValue(Type nullableType)
+    private static object Fill(Type type)
     {
-        Type type = Nullable.GetUnderlyingType(nullableType)!;
         if (type == typeof(bool))
             return true;
         if (type == typeof(float))
             return 1.5f;
-        if (type == typeof(int))
-            return 7;
+        if (type == typeof(byte))
+            return (byte)7;
         if (type == typeof(uint))
             return 7u;
         if (type.IsEnum)
-            return Enum.GetValues(type).GetValue(1)!;
+        {
+            foreach (object value in Enum.GetValues(type))
+            {
+                if (Convert.ToInt64(value) != 0)
+                    return value;
+            }
+        }
+        if (type.IsValueType && !type.IsEnum)
+        {
+            object instance = Activator.CreateInstance(type)!;
+            foreach (FieldInfo field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                field.SetValue(instance, Fill(field.FieldType));
+            return instance;
+        }
 
         throw new NotSupportedException(type.Name);
     }

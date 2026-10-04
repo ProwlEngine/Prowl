@@ -124,4 +124,17 @@ public class ProgramResolutionTests : IDisposable
 
         Assert.Same(plain, overridden);
     }
+
+
+    [Fact]
+    public void DefaultResolve_EqualOverrides_ReuseProgram()
+    {
+        GraphicsProgram first = _pass.ResolveDefaultProgram(0, Parse.State("Cull Off"));
+        GraphicsProgram second = _pass.ResolveDefaultProgram(0, Parse.State("Cull Off"));
+        GraphicsProgram plain = _pass.ResolveDefaultProgram(0);
+
+        Assert.Same(first, second);
+        Assert.NotSame(first, plain);
+        Assert.Same(plain, _pass.ResolveDefaultProgram(0, Parse.State("Cull Back")));
+    }
 }
