@@ -174,6 +174,7 @@ Origami.TextField(paper, "name", name, v => name = v)
 - `AutoComplete(items, onPick?, max?)` with an optional custom `AutoCompleteFilter(...)`
 - `CharFilter(...)` or the built-ins `IntFilter()`, `FloatFilter()`, `AlphaNumeric()`, `NoSpaces()`
 - `Validator(...)`, `Error(...)`, `HelperText(...)`, `SubmitOnEnter(...)`
+- `AutoFocus()` focuses the field on the frame it appears (also on `NumericField`)
 
 ## ColorField
 

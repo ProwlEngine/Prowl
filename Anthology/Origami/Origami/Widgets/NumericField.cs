@@ -43,6 +43,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private bool _readOnly;
     private string _placeholder = "";
     private bool _selectAllOnFocus = true; // default to true
+    private bool _autoFocus;
 
     private T? _min;
     private T? _max;
@@ -90,6 +91,8 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     public NumericFieldBuilder<T> ReadOnly(bool readOnly = true) { _readOnly = readOnly; return this; }
     public NumericFieldBuilder<T> Placeholder(string text) { _placeholder = text ?? string.Empty; return this; }
     public NumericFieldBuilder<T> SelectAllOnFocus(bool select = true) { _selectAllOnFocus = select; return this; }
+    /// <summary>Focus the field on the first frame it appears, and again each time it reappears.</summary>
+    public NumericFieldBuilder<T> AutoFocus(bool autoFocus = true) { _autoFocus = autoFocus; return this; }
 
     // ── Numeric range / step / format ───────────────────────────────
 
@@ -184,6 +187,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             .ReadOnly(_readOnly)
             .Placeholder(_placeholder)
             .SelectAllOnFocus(_selectAllOnFocus)
+            .AutoFocus(_autoFocus)
             .SubmitOnEnter()
             .Mono()
             .CharFilter(NumericCharFilter);
