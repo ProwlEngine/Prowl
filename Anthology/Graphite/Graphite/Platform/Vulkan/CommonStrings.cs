@@ -25,10 +25,6 @@ internal static unsafe class CommonStrings
     public const string KhronosValidationLayerName = "VK_LAYER_KHRONOS_validation";
     public static byte* KhronosValidationLayerNameUtf8 => Utf8("VK_LAYER_KHRONOS_validation"u8);
 
-    public const string main = "main";
-    public static byte* mainUtf8 => Utf8("main"u8);
-
-
     public const string VK_KHR_portability_subset = "VK_KHR_portability_subset";
     public static byte* VK_KHR_portability_subsetUtf8 => Utf8("VK_KHR_portability_subset"u8);
 
