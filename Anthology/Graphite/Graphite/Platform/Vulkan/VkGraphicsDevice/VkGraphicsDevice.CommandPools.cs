@@ -85,15 +85,7 @@ internal unsafe partial class VkGraphicsDevice
     private void EndAndSubmitImmediate(CommandPool pool, Silk.NET.Vulkan.CommandBuffer cb)
     {
         Vk.EndCommandBuffer(cb).CheckResult();
-
-        FlushPendingInitCommands();
-        PollSubmissions();
-
-        lock (_graphicsQueueLock)
-        {
-            ulong serial = SubmitSignalingTimeline_NoLock(&cb, 1, 0);
-            TagImmediatePool(pool, serial);
-        }
+        SubmitImmediate(cb, pool);
     }
 
     private VkCommandBuffer RentRecordCommandBuffer()
