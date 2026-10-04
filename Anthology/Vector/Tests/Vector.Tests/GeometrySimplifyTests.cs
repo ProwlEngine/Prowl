@@ -445,7 +445,10 @@ public class GeometrySimplifyTests
 
         var result = GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 1f });
 
-        Assert.Equal(16, result.TrianglesAfter);
+        // Counted in triangles either way, the mesh itself is left as quads
+        Assert.Equal(32, result.TrianglesBefore);
+        Assert.Equal(32, result.TrianglesAfter);
+        Assert.Equal(16, mesh.Faces.Count);
         Assert.All(mesh.Faces, f => Assert.Equal(4, f.VertCount));
     }
 
@@ -470,6 +473,104 @@ public class GeometrySimplifyTests
         GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0.5f });
 
         Assert.True(timer.Elapsed.TotalSeconds < 10, $"Took {timer.Elapsed.TotalSeconds:F1}s");
+    }
+
+    [Fact]
+    public void ATiltedFlatPlaneCollapsesUnderAZeroLimit()
+    {
+        // Float rounding leaves residuals off an axis aligned plane, which must not count as moving the surface
+        var mesh = Grid(8);
+        var rotation = Float4x4.FromAxisAngle(Float3.Normalize(new Float3(1, 2, 3)), 0.6f);
+        foreach (var v in mesh.Vertices) v.Point = Float4x4.TransformPoint(v.Point, rotation);
+
+        GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0f, MaxError = 0f });
+
+        Assert.Equal(2, mesh.Faces.Count);
+    }
+
+    [Fact]
+    public void BusyFanCentresStayFast()
+    {
+        // A disk fan with one centre touching every triangle, which every rim collapse comes back to
+        const int rim = 20000;
+        var mesh = new GeometryData();
+        var centre = mesh.AddVertex(0, 0, 0);
+        var ring = new GeometryData.Vertex[rim];
+        for (int i = 0; i < rim; i++)
+        {
+            float angle = i * MathF.PI * 2 / rim;
+            ring[i] = mesh.AddVertex(MathF.Cos(angle), 0, MathF.Sin(angle));
+        }
+        for (int i = 0; i < rim; i++) mesh.AddFace(centre, ring[(i + 1) % rim], ring[i]);
+
+        var timer = Stopwatch.StartNew();
+        var result = GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0.5f });
+
+        Assert.True(result.TrianglesAfter <= rim / 2);
+        Assert.True(timer.Elapsed.TotalSeconds < 10, $"Took {timer.Elapsed.TotalSeconds:F1}s");
+    }
+
+    [Fact]
+    public void MovedCornersTakeValuesFromTheirNewVertex()
+    {
+        // Normals are left out of the seams, so they may change, but only ever to a value the corner's new
+        // vertex already had at one of its own corners
+        var mesh = Grid(8);
+        mesh.AddLoopAttribute("normal", GeometryData.AttributeBaseType.Float, 3);
+        var original = new Dictionary<GeometryData.Vertex, HashSet<float>>();
+        int f = 0;
+        foreach (var face in mesh.Faces)
+        {
+            foreach (var loop in LoopsOf(face))
+            {
+                float value = f++ % 7;
+                loop.Attributes["normal"] = new GeometryData.FloatAttributeValue(value, 0, 0);
+                if (!original.TryGetValue(loop.Vert, out var set)) original[loop.Vert] = set = new HashSet<float>();
+                set.Add(value);
+            }
+        }
+
+        GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0.25f, SeamAttributes = new HashSet<string> { "uv" } });
+
+        foreach (var face in mesh.Faces)
+            foreach (var loop in LoopsOf(face))
+                Assert.Contains(((GeometryData.FloatAttributeValue)loop.Attributes["normal"]).Data[0], original[loop.Vert]);
+    }
+
+    [Fact]
+    public void QuadSeamsSurvive()
+    {
+        // The same UV seam as the triangle grid, authored on quads
+        const int n = 8;
+        var mesh = new GeometryData();
+        mesh.AddLoopAttribute("uv", GeometryData.AttributeBaseType.Float, 2);
+        var verts = new GeometryData.Vertex[n + 1, n + 1];
+        for (int z = 0; z <= n; z++)
+            for (int x = 0; x <= n; x++)
+                verts[z, x] = mesh.AddVertex(x * GridSize / n, 0, z * GridSize / n);
+        for (int z = 0; z < n; z++)
+        {
+            for (int x = 0; x < n; x++)
+            {
+                var corners = new[] { verts[z, x], verts[z + 1, x], verts[z + 1, x + 1], verts[z, x + 1] };
+                var face = mesh.AddFace(corners)!;
+                foreach (var v in corners)
+                {
+                    Float2 uv = UvOf(v.Point) + new Float2(x >= n / 2 ? 1f : 0f, 0f);
+                    face.GetLoop(v)!.Attributes["uv"] = new GeometryData.FloatAttributeValue(uv.X, uv.Y);
+                }
+            }
+        }
+
+        GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0f, MaxError = 1e-3f });
+
+        float seamX = GridSize / 2;
+        Assert.Equal(4, mesh.Faces.Count);
+        foreach (var face in mesh.Faces)
+        {
+            bool right = LoopsOf(face).Any(l => l.Vert.Point.X > seamX);
+            Assert.All(LoopsOf(face), l => Assert.Equal(UvOf(l.Vert.Point) + new Float2(right ? 1f : 0f, 0f), UvOf(l)));
+        }
     }
 
     [Fact]

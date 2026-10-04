@@ -16,7 +16,20 @@ internal static class SimplifyOp
 
     // Constraint planes along borders and seams, weighted so outlines survive long after the interior
     private const double BoundaryWeight = 10.0;
+
+    // Seam values match within this fraction of their magnitude, so float noise never splits a seam
     private const float SeamTolerance = 1e-6f;
+
+    // Squared error, in units of the mesh's extent, that still counts as keeping the surface in place
+    private const double ExactError = 1e-12;
+
+    // Valid collapses are nearly always among the cheapest few. Checking past this many for one vertex
+    // only burns time, most visibly at a busy fan centre where every option folds the fan.
+    private const int MaxValidityChecks = 32;
+
+    // A busy vertex with nothing valid is left alone until its fan halves, since checking it again after
+    // every nearby collapse is what makes a fan centre quadratic. Small fans are cheap to check every time.
+    private const int BusyValence = 64;
 
     internal static SimplifyResult Simplify(GeometryData mesh, SimplifyOptions options) => new Simplifier(mesh, options).Run();
 
@@ -42,15 +55,50 @@ internal static class SimplifyOp
         }
 
         /// <summary>Weighted sum of squared distances, before dividing by <see cref="W"/>.</summary>
-        public readonly double Sum(Float3 p)
+        public readonly double Sum(double x, double y, double z)
         {
-            double x = p.X, y = p.Y, z = p.Z;
             return A00 * x * x + 2 * A01 * x * y + 2 * A02 * x * z + A11 * y * y + 2 * A12 * y * z + A22 * z * z
                  + 2 * (B0 * x + B1 * y + B2 * z) + C;
         }
 
         /// <summary>Mean squared distance from the planes this quadric gathered.</summary>
-        public readonly double Error(Float3 p) => W > 0 ? Math.Max(Sum(p), 0) / W : 0;
+        public readonly double Error(Float3 p) => W > 0 ? Math.Max(Sum(p.X, p.Y, p.Z), 0) / W : 0;
+
+        /// <summary>The same quadric expressed around an origin moved by (x, y, z).</summary>
+        public readonly Quadric Shifted(double x, double y, double z)
+        {
+            // q(p + s) = p'Ap + 2(b + As).p + q(s)
+            var shifted = this;
+            shifted.B0 = B0 + A00 * x + A01 * y + A02 * z;
+            shifted.B1 = B1 + A01 * x + A11 * y + A12 * z;
+            shifted.B2 = B2 + A02 * x + A12 * y + A22 * z;
+            shifted.C = Sum(x, y, z);
+            return shifted;
+        }
+    }
+
+    private struct Candidate
+    {
+        public int Target;
+        public double Cost;
+        public double PositionError;
+        public int FromA, ToA, FromB, ToB;
+        public GeometryData.Loop? LoopA, LoopB;
+        public int Shared0, Shared1, SharedCount;
+        public float EdgeLength;
+        public int TargetValence;
+
+        /// <summary>
+        /// Cheaper first. Between equals, the target with fewer triangles and then the shorter edge, so equally
+        /// cheap collapses spread out instead of piling into one vertex.
+        /// </summary>
+        public readonly bool IsBetterThan(in Candidate other)
+        {
+            if (Cost != other.Cost) return Cost < other.Cost;
+            if (TargetValence != other.TargetValence) return TargetValence < other.TargetValence;
+            if (EdgeLength != other.EdgeLength) return EdgeLength < other.EdgeLength;
+            return Target < other.Target;
+        }
     }
 
     /// <summary>
@@ -144,30 +192,6 @@ internal static class SimplifyOp
         }
     }
 
-    private struct Candidate
-    {
-        public int Target;
-        public double Cost;
-        public double PositionError;
-        public int FromA, ToA, FromB, ToB;
-        public GeometryData.Loop? LoopA, LoopB;
-        public int Shared0, Shared1, SharedCount;
-        public float EdgeLength;
-        public int TargetValence;
-
-        /// <summary>
-        /// Cheaper first. Between equals, the target with fewer triangles and then the shorter edge, so equally
-        /// cheap collapses spread out instead of piling into one vertex.
-        /// </summary>
-        public readonly bool IsBetterThan(in Candidate other)
-        {
-            if (Cost != other.Cost) return Cost < other.Cost;
-            if (TargetValence != other.TargetValence) return TargetValence < other.TargetValence;
-            if (EdgeLength != other.EdgeLength) return EdgeLength < other.EdgeLength;
-            return Target < other.Target;
-        }
-    }
-
     private sealed class Simplifier
     {
         private readonly GeometryData _mesh;
@@ -179,9 +203,10 @@ internal static class SimplifyOp
         private readonly float _extent;
         private readonly Kind[] _kinds;
         private readonly bool[] _pinned;           // never moves: wire edges, the lock attribute, no faces
-        private readonly bool[] _faceless;
         private readonly Quadric[] _quadrics;
-        private readonly List<int>[] _adjacency;   // vertex to triangles, dead triangles pruned lazily
+        private readonly List<int>[] _adjacency;   // vertex to triangles, dead entries compacted once they pile up
+        private readonly int[] _valence;           // live triangles per vertex
+        private readonly int[] _deadEntries;       // dead triangles still listed in each adjacency list
         private readonly bool[] _dead;
         private readonly int[] _versions;
 
@@ -193,17 +218,24 @@ internal static class SimplifyOp
         private readonly int[] _triangleFace;
         private readonly GeometryData.Face[] _faces;
 
-        // Wedges are the seam classes at each vertex. Each carries an attribute quadric over the costed channels.
+        // Wedges are the seam classes at each vertex. Each carries an attribute quadric over the costed
+        // channels, kept around its own origin so steep attribute gradients do not cancel out in the sums.
         private readonly Channel[] _channels;
+        private readonly List<(string Name, bool IsInt)> _seamAttributes = new();
         private readonly List<string> _intAttributes = new();
         private readonly List<bool> _intOnLoop = new();
         private readonly List<double> _intWeights = new();
         private readonly List<GeometryData.Loop> _wedgeLoops = new();
-        private readonly List<double> _wedgeValues = new();   // channel values per wedge
+        private readonly List<Float3> _wedgeOrigins = new();
         private Quadric[] _wedgeQuadrics = Array.Empty<Quadric>();
         private double[] _wedgeGradients = Array.Empty<double>(); // four per channel per wedge: gradient and offset
 
         private readonly List<int> _neighbours = new();
+        private readonly List<int>[] _wedgesOf;    // each vertex's seam classes, kept by classification
+        private List<int> _uWedges = new();
+        private readonly Candidate[] _best;        // each vertex's cheapest collapse when it was last costed
+        private readonly bool[] _hasBest;
+        private readonly int[] _stuckValence;      // triangle count when a vertex last had no valid collapse, 0 when not stuck
         private readonly List<Candidate> _candidates = new();
         private readonly int[] _mark;
         private readonly int[] _slot;
@@ -236,26 +268,33 @@ internal static class SimplifyOp
             for (int i = 0; i < vertexCount; i++)
                 _positions[i] = (_vertices[i].Point - bounds.Min) / _extent;
 
+            // Float rounding leaves tiny residuals even on a perfectly flat surface, so zero means within that
             float maxError = options.MaxError;
             _limit = float.IsNaN(maxError) || float.IsPositiveInfinity(maxError)
                 ? double.PositiveInfinity
-                : Math.Pow(Math.Max(0, maxError) / _extent, 2);
+                : Math.Max(Math.Pow(Math.Max(0, maxError) / _extent, 2), ExactError);
 
             _kinds = new Kind[vertexCount];
             _pinned = new bool[vertexCount];
-            _faceless = new bool[vertexCount];
             _quadrics = new Quadric[vertexCount];
             _adjacency = new List<int>[vertexCount];
             for (int i = 0; i < vertexCount; i++) _adjacency[i] = new List<int>();
+            _valence = new int[vertexCount];
+            _deadEntries = new int[vertexCount];
             _dead = new bool[vertexCount];
             _versions = new int[vertexCount];
             _mark = new int[vertexCount];
             _slot = new int[vertexCount];
+            _wedgesOf = new List<int>[vertexCount];
+            for (int i = 0; i < vertexCount; i++) _wedgesOf[i] = new List<int>(2);
+            _best = new Candidate[vertexCount];
+            _hasBest = new bool[vertexCount];
+            _stuckValence = new int[vertexCount];
 
             // Faces with more corners are fanned into triangles here, the mesh itself is only rebuilt at the end
             int triangleCount = 0;
             foreach (var face in mesh.Faces)
-                if (face.VertCount >= 3) triangleCount += face.VertCount - 2;
+                if (Fannable(face)) triangleCount += face.VertCount - 2;
 
             _triangles = new int[triangleCount * 3];
             _cornerWedges = new int[triangleCount * 3];
@@ -270,10 +309,10 @@ internal static class SimplifyOp
             for (int f = 0; f < _faces.Length; f++)
             {
                 var face = _faces[f];
-                if (face.VertCount < 3 || face.Loop == null) continue;
+                if (!Fannable(face)) continue;
 
                 int region = RegionOf(face, regionIds);
-                var first = face.Loop;
+                var first = face.Loop!;
                 for (var loop = first.Next!; loop.Next != first; loop = loop.Next!, t++)
                 {
                     SetCorner(t * 3, first, vertexIndex);
@@ -287,8 +326,8 @@ internal static class SimplifyOp
 
             for (int v = 0; v < vertexCount; v++)
             {
-                _faceless[v] = _adjacency[v].Count == 0;
-                _pinned[v] = _faceless[v] || IsLockedByAttribute(_vertices[v]) || HasWireEdge(_vertices[v]);
+                _valence[v] = _adjacency[v].Count;
+                _pinned[v] = _valence[v] == 0 || IsLockedByAttribute(_vertices[v]) || HasWireEdge(_vertices[v]);
             }
 
             _channels = BuildChannels();
@@ -298,6 +337,9 @@ internal static class SimplifyOp
 
             for (int v = 0; v < vertexCount; v++) Classify(v);
         }
+
+        /// <summary>Whether a face becomes triangles here. The count and the fill must agree on this exactly.</summary>
+        private static bool Fannable(GeometryData.Face face) => face.VertCount >= 3 && face.Loop != null;
 
         private void SetCorner(int corner, GeometryData.Loop loop, Dictionary<GeometryData.Vertex, int> vertexIndex)
         {
@@ -326,7 +368,6 @@ internal static class SimplifyOp
         }
 
         private static unsafe int FloatBits(float value) => *(int*)&value;
-        private static unsafe float IntAsFloat(int value) => *(float*)&value;
 
         private bool IsLockedByAttribute(GeometryData.Vertex vertex)
         {
@@ -385,31 +426,10 @@ internal static class SimplifyOp
         /// <summary>Groups each vertex's corners into seam classes: corners whose seam attributes match.</summary>
         private void BuildWedges()
         {
-            var seamNames = new List<(string Name, bool IsInt, int Dimensions)>();
-            int width = 0;
             foreach (var def in _mesh.LoopAttributes)
             {
-                if (_options.SeamAttributes != null && !_options.SeamAttributes.Contains(def.Name)) continue;
-                seamNames.Add((def.Name, def.Type.BaseType == GeometryData.AttributeBaseType.Int, def.Type.Dimensions));
-                width += def.Type.Dimensions;
-            }
-
-            // One flat run of seam values per corner, ints kept as their bits so they compare exactly
-            var cornerKeys = new float[_cornerLoops.Length * width];
-            var exact = new bool[width];
-            for (int corner = 0; corner < _cornerLoops.Length; corner++)
-            {
-                int o = 0;
-                foreach (var (name, isInt, dimensions) in seamNames)
-                {
-                    _cornerLoops[corner].Attributes.TryGetValue(name, out var value);
-                    for (int c = 0; c < dimensions; c++, o++)
-                    {
-                        exact[o] = isInt;
-                        if (value is GeometryData.FloatAttributeValue f && c < f.Data.Length) cornerKeys[corner * width + o] = f.Data[c];
-                        else if (value is GeometryData.IntAttributeValue n && c < n.Data.Length) cornerKeys[corner * width + o] = IntAsFloat(n.Data[c]);
-                    }
-                }
+                if (_options.SeamAttributes == null || _options.SeamAttributes.Contains(def.Name))
+                    _seamAttributes.Add((def.Name, def.Type.BaseType == GeometryData.AttributeBaseType.Int));
             }
 
             var representatives = new List<int>();
@@ -424,7 +444,7 @@ internal static class SimplifyOp
                     int wedge = -1;
                     for (int r = 0; r < representatives.Count; r++)
                     {
-                        if (SameKey(cornerKeys, representatives[r] * width, corner * width, width, exact))
+                        if (SameSeamValues(_cornerLoops[representatives[r]], _cornerLoops[corner]))
                         {
                             wedge = representativeWedges[r];
                             break;
@@ -435,7 +455,7 @@ internal static class SimplifyOp
                     {
                         wedge = _wedgeLoops.Count;
                         _wedgeLoops.Add(_cornerLoops[corner]);
-                        foreach (var channel in _channels) _wedgeValues.Add(ChannelValue(_cornerLoops[corner], channel));
+                        _wedgeOrigins.Add(_positions[v]);
                         representatives.Add(corner);
                         representativeWedges.Add(wedge);
                     }
@@ -444,12 +464,33 @@ internal static class SimplifyOp
             }
         }
 
-        private static bool SameKey(float[] keys, int a, int b, int width, bool[] exact)
+        private bool SameSeamValues(GeometryData.Loop a, GeometryData.Loop b)
         {
-            for (int i = 0; i < width; i++)
+            foreach (var (name, isInt) in _seamAttributes)
             {
-                float x = keys[a + i], y = keys[b + i];
-                if (exact[i] ? FloatBits(x) != FloatBits(y) : Math.Abs(x - y) > SeamTolerance) return false;
+                a.Attributes.TryGetValue(name, out var va);
+                b.Attributes.TryGetValue(name, out var vb);
+                if (isInt)
+                {
+                    var ia = (va as GeometryData.IntAttributeValue)?.Data;
+                    var ib = (vb as GeometryData.IntAttributeValue)?.Data;
+                    if (ia == null || ib == null ? ia != ib : !ia.AsSpan().SequenceEqual(ib)) return false;
+                    continue;
+                }
+
+                var fa = (va as GeometryData.FloatAttributeValue)?.Data;
+                var fb = (vb as GeometryData.FloatAttributeValue)?.Data;
+                if (fa == null || fb == null)
+                {
+                    if (fa != fb) return false;
+                    continue;
+                }
+                if (fa.Length != fb.Length) return false;
+                for (int i = 0; i < fa.Length; i++)
+                {
+                    float x = fa[i], y = fb[i];
+                    if (Math.Abs(x - y) > SeamTolerance * Math.Max(1f, Math.Max(Math.Abs(x), Math.Abs(y)))) return false;
+                }
             }
             return true;
         }
@@ -564,20 +605,22 @@ internal static class SimplifyOp
                     double s = ((a1 - a0) * d11 - (a2 - a0) * d01) / denominator;
                     double r = ((a2 - a0) * d00 - (a1 - a0) * d01) / denominator;
                     double gx = e1.X * s + e2.X * r, gy = e1.Y * s + e2.Y * r, gz = e1.Z * s + e2.Z * r;
-                    double d = a0 - (gx * p0.X + gy * p0.Y + gz * p0.Z);
                     double w = area * channel.Weight;
-
-                    var q = new Quadric
-                    {
-                        A00 = w * gx * gx, A01 = w * gx * gy, A02 = w * gx * gz,
-                        A11 = w * gy * gy, A12 = w * gy * gz, A22 = w * gz * gz,
-                        B0 = w * gx * d, B1 = w * gy * d, B2 = w * gz * d, C = w * d * d,
-                    };
 
                     for (int k = 0; k < 3; k++)
                     {
+                        // The field's offset is taken around this wedge's own origin
                         int wedge = _cornerWedges[c0 + k];
-                        _wedgeQuadrics[wedge].Add(q);
+                        Float3 origin = _wedgeOrigins[wedge];
+                        double d = a0 - (gx * (p0.X - origin.X) + gy * (p0.Y - origin.Y) + gz * (p0.Z - origin.Z));
+
+                        _wedgeQuadrics[wedge].Add(new Quadric
+                        {
+                            A00 = w * gx * gx, A01 = w * gx * gy, A02 = w * gx * gz,
+                            A11 = w * gy * gy, A12 = w * gy * gz, A22 = w * gz * gz,
+                            B0 = w * gx * d, B1 = w * gy * d, B2 = w * gz * d, C = w * d * d,
+                        });
+
                         int g = (wedge * channelCount + ch) * 4;
                         _wedgeGradients[g] += w * gx;
                         _wedgeGradients[g + 1] += w * gy;
@@ -588,37 +631,53 @@ internal static class SimplifyOp
             }
         }
 
-        /// <summary>Error of giving wedge <paramref name="from"/>'s corners wedge <paramref name="to"/>'s values at position p.</summary>
-        private double AttributeError(int from, int to, Float3 p)
+        /// <summary>
+        /// Summed attribute error of giving wedge <paramref name="from"/>'s corners the values of
+        /// <paramref name="target"/> at position p, before dividing by the wedge's area.
+        /// </summary>
+        private double AttributeSum(int from, GeometryData.Loop target, Float3 p)
         {
             int channelCount = _channels.Length;
             ref readonly Quadric q = ref _wedgeQuadrics[from];
             if (channelCount == 0 || q.W <= 0) return 0;
 
+            Float3 origin = _wedgeOrigins[from];
+            double x = p.X - origin.X, y = p.Y - origin.Y, z = p.Z - origin.Z;
+
             // Sum over triangles of w (g.p + d - a)^2, expanded into the stored sums
-            double error = q.Sum(p);
+            double error = q.Sum(x, y, z);
             for (int ch = 0; ch < channelCount; ch++)
             {
-                double a = _wedgeValues[to * channelCount + ch];
+                double a = ChannelValue(target, _channels[ch]);
                 int g = (from * channelCount + ch) * 4;
-                double field = _wedgeGradients[g] * p.X + _wedgeGradients[g + 1] * p.Y + _wedgeGradients[g + 2] * p.Z + _wedgeGradients[g + 3];
+                double field = _wedgeGradients[g] * x + _wedgeGradients[g + 1] * y + _wedgeGradients[g + 2] * z + _wedgeGradients[g + 3];
                 error += -2 * a * field + _channels[ch].Weight * a * a * q.W;
             }
-            return Math.Max(error, 0) / q.W;
+            return Math.Max(error, 0);
         }
 
-        private double IntPenalty(int u, int v, int from, int to)
+        private bool IntsDiffer(Dictionary<string, GeometryData.AttributeValue> a, Dictionary<string, GeometryData.AttributeValue> b, string name)
+        {
+            a.TryGetValue(name, out var va);
+            b.TryGetValue(name, out var vb);
+            return !(va is GeometryData.IntAttributeValue ia && vb is GeometryData.IntAttributeValue ib && ia.Data.AsSpan().SequenceEqual(ib.Data));
+        }
+
+        /// <summary>
+        /// Cost of int attributes changing. Loop ints are judged per mapped class and the worst one counts,
+        /// vertex ints once per collapse, so a collapse along a seam does not pay twice.
+        /// </summary>
+        private double IntPenalty(int u, int v, in Candidate candidate)
         {
             double penalty = 0;
             for (int i = 0; i < _intAttributes.Count; i++)
             {
                 string name = _intAttributes[i];
-                var a = _intOnLoop[i] ? _wedgeLoops[from].Attributes : _vertices[u].Attributes;
-                var b = _intOnLoop[i] ? _wedgeLoops[to].Attributes : _vertices[v].Attributes;
-                a.TryGetValue(name, out var va);
-                b.TryGetValue(name, out var vb);
-                bool same = va is GeometryData.IntAttributeValue ia && vb is GeometryData.IntAttributeValue ib && ia.Data.AsSpan().SequenceEqual(ib.Data);
-                if (!same) penalty += _intWeights[i];
+                bool differs = _intOnLoop[i]
+                    ? IntsDiffer(_wedgeLoops[candidate.FromA].Attributes, candidate.LoopA!.Attributes, name)
+                      || (candidate.FromB >= 0 && IntsDiffer(_wedgeLoops[candidate.FromB].Attributes, candidate.LoopB!.Attributes, name))
+                    : IntsDiffer(_vertices[u].Attributes, _vertices[v].Attributes, name);
+                if (differs) penalty += _intWeights[i];
             }
             return penalty;
         }
@@ -638,14 +697,17 @@ internal static class SimplifyOp
         /// its border or its seam, or stay put. Rerun after every collapse nearby, since collapses change what
         /// a vertex touches.
         /// </summary>
-        private void Classify(int v)
+        /// <returns>Whether the vertex's kind changed.</returns>
+        private bool Classify(int v)
         {
+            Kind before = _kinds[v];
             _kinds[v] = ComputeKind(v);
+            return _kinds[v] != before;
         }
 
         private Kind ComputeKind(int v)
         {
-            if (_dead[v] || _pinned[v]) return Kind.Locked;
+            if (_dead[v] || _pinned[v] || _valence[v] == 0) return Kind.Locked;
 
             _edgeNeighbour.Clear();
             _edgeCount.Clear();
@@ -683,7 +745,8 @@ internal static class SimplifyOp
                 }
             }
 
-            if (_fan.Count == 0) return Kind.Locked;
+            _wedgesOf[v].Clear();
+            _wedgesOf[v].AddRange(_wedgeSet);
 
             int border = 0, seam = 0;
             for (int s = 0; s < _edgeNeighbour.Count; s++)
@@ -755,7 +818,7 @@ internal static class SimplifyOp
             var touched = new List<int>();
             while (aliveCount > target && heap.Count > 0)
             {
-                var (cost, length, u, version) = heap.Pop();
+                var (cost, _, u, version) = heap.Pop();
                 if (_dead[u] || version != _versions[u]) continue;
 
                 // Costs were taken optimistically, so the topology and flip checks run only now, on the
@@ -763,8 +826,13 @@ internal static class SimplifyOp
                 if (!TryPickValid(u, cost, out var candidate, out var requeue))
                 {
                     if (requeue.HasValue) heap.Push(requeue.Value, u, _versions[u]);
+                    else if (_valence[u] >= BusyValence) _stuckValence[u] = _valence[u];
                     continue;
                 }
+
+                // The far corners of the triangles that die lose a triangle too, and may not be next to v after
+                int opposite0 = ThirdVertex(candidate.Shared0, u, candidate.Target);
+                int opposite1 = candidate.SharedCount == 2 ? ThirdVertex(candidate.Shared1, u, candidate.Target) : -1;
 
                 aliveCount -= Collapse(u, candidate);
                 worst = Math.Max(worst, candidate.PositionError);
@@ -774,16 +842,24 @@ internal static class SimplifyOp
                 touched.Clear();
                 touched.Add(v);
                 CollectNeighbours(v, touched);
-                foreach (int n in touched) Classify(n);
+                if (!touched.Contains(opposite0)) touched.Add(opposite0);
+                if (opposite1 >= 0 && !touched.Contains(opposite1)) touched.Add(opposite1);
                 foreach (int n in touched)
                 {
                     _versions[n]++;
-                    if (TryFindCandidate(n, out var next))
+
+                    // A busy vertex that had nothing valid is left alone until its fan has really changed. Its kind
+                    // only matters when it is the one moving, so classifying it can wait too.
+                    if (_stuckValence[n] > 0 && _valence[n] * 2 > _stuckValence[n]) continue;
+                    _stuckValence[n] = 0;
+
+                    bool kindChanged = Classify(n);
+                    if (Recost(n, u, v, kindChanged, out var next))
                         heap.Push(next, n, _versions[n]);
                 }
             }
 
-            if (!collapsed) return new SimplifyResult(_mesh.Faces.Count, _mesh.Faces.Count, 0f);
+            if (!collapsed) return new SimplifyResult(before, before, 0f);
 
             Rebuild();
             return new SimplifyResult(before, aliveCount, (float)Math.Sqrt(worst) * _extent);
@@ -806,13 +882,35 @@ internal static class SimplifyOp
             }
         }
 
+        private void GatherWedgesOf(int u) => _uWedges = _wedgesOf[u];
+
+        /// <summary>
+        /// A vertex near a collapse of u onto v. Only its collapse onto v can have changed cost, since its own
+        /// planes and seam classes are untouched and validity is checked again when it comes off the heap. So
+        /// unless it is v itself, changed kind, or was heading for u or v, only that one candidate is costed again.
+        /// </summary>
+        private bool Recost(int n, int u, int v, bool kindChanged, out Candidate best)
+        {
+            if (n == v || kindChanged || !_hasBest[n] || _best[n].Target == u || _best[n].Target == v || _dead[_best[n].Target])
+                return TryFindCandidate(n, out best);
+
+            best = _best[n];
+            if (_kinds[n] == Kind.Locked) return _hasBest[n] = false;
+
+            GatherWedgesOf(n);
+            if (TryEvaluate(n, v, out var onto) && onto.IsBetterThan(best)) best = onto;
+            _best[n] = best;
+            return true;
+        }
+
         /// <summary>The cheapest collapse for u by cost alone, which is what the heap is ordered by.</summary>
         private bool TryFindCandidate(int u, out Candidate best)
         {
             best = default;
-            best.Cost = double.PositiveInfinity;
+            _hasBest[u] = false;
             if (_dead[u] || _kinds[u] == Kind.Locked) return false;
 
+            GatherWedgesOf(u);
             _neighbours.Clear();
             CollectNeighbours(u, _neighbours);
 
@@ -825,6 +923,8 @@ internal static class SimplifyOp
                     found = true;
                 }
             }
+            _best[u] = best;
+            _hasBest[u] = found;
             return found;
         }
 
@@ -839,6 +939,7 @@ internal static class SimplifyOp
             requeue = null;
             if (_dead[u] || _kinds[u] == Kind.Locked) return false;
 
+            GatherWedgesOf(u);
             _neighbours.Clear();
             CollectNeighbours(u, _neighbours);
             _candidates.Clear();
@@ -848,13 +949,16 @@ internal static class SimplifyOp
             }
             _candidates.Sort((a, b) => a.IsBetterThan(b) ? -1 : b.IsBetterThan(a) ? 1 : 0);
 
+            int checks = 0;
             foreach (var candidate in _candidates)
             {
-                if (candidate.Cost > queuedCost + 1e-12)
+                // Costs are deterministic, so anything dearer than the queued cost means the neighbourhood changed
+                if (candidate.Cost > queuedCost)
                 {
                     requeue = candidate;
                     return false;
                 }
+                if (++checks > MaxValidityChecks) return false;
                 if (!LinkConditionHolds(u, candidate)) continue;
                 if (FlipsAnyTriangle(u, candidate.Target)) continue;
 
@@ -864,19 +968,28 @@ internal static class SimplifyOp
             return false;
         }
 
+        /// <summary>Live triangles holding both a and b, found by walking whichever of the two has the smaller fan.</summary>
+        private int SharedTriangles(int a, int b, out int first, out int second)
+        {
+            first = second = -1;
+            int owner = _valence[a] <= _valence[b] ? a : b, other = owner == a ? b : a;
+            int count = 0;
+            foreach (int t in _adjacency[owner])
+            {
+                if (!_alive[t] || !Contains(t, other)) continue;
+                if (count == 0) first = t;
+                else if (count == 1) second = t;
+                count++;
+            }
+            return count;
+        }
+
         private bool TryEvaluate(int u, int v, out Candidate candidate)
         {
             candidate = default;
             candidate.Target = v;
 
-            int shared0 = -1, shared1 = -1, sharedCount = 0;
-            foreach (int t in _adjacency[u])
-            {
-                if (!_alive[t] || !Contains(t, v)) continue;
-                if (sharedCount == 0) shared0 = t;
-                else if (sharedCount == 1) shared1 = t;
-                sharedCount++;
-            }
+            int sharedCount = SharedTriangles(u, v, out int shared0, out int shared1);
             if (sharedCount == 0 || sharedCount > 2) return false;
 
             bool border = sharedCount == 1;
@@ -889,24 +1002,16 @@ internal static class SimplifyOp
             }
 
             // v must be left with some triangle, from either side, or a lone triangle would vanish entirely
-            int valence = 0;
-            foreach (int t in _adjacency[v]) if (_alive[t]) valence++;
-            int remaining = valence - 2 * sharedCount;
-            foreach (int t in _adjacency[u]) if (_alive[t]) remaining++;
-            if (remaining <= 0) return false;
-            candidate.TargetValence = valence;
+            if (_valence[v] + _valence[u] - 2 * sharedCount <= 0) return false;
+            candidate.TargetValence = _valence[v];
 
             // Each of u's seam classes carries over to the class v has in the same triangle, taking the
             // values of v's corner there
             candidate.FromA = candidate.FromB = -1;
             if (!AddMapping(ref candidate, shared0, u, v)) return false;
             if (sharedCount == 2 && !AddMapping(ref candidate, shared1, u, v)) return false;
-            foreach (int t in _adjacency[u])
-            {
-                if (!_alive[t]) continue;
-                int w = _cornerWedges[CornerOf(t, u)];
+            foreach (int w in _uWedges)
                 if (w != candidate.FromA && w != candidate.FromB) return false;
-            }
 
             candidate.Shared0 = shared0;
             candidate.Shared1 = shared1;
@@ -916,11 +1021,19 @@ internal static class SimplifyOp
             candidate.PositionError = _quadrics[u].Error(_positions[v]);
             if (candidate.PositionError > _limit) return false;
 
-            double attributes = AttributeError(candidate.FromA, candidate.ToA, _positions[v]) + IntPenalty(u, v, candidate.FromA, candidate.ToA);
+            // Both of a seam vertex's classes are measured together, weighted by their areas, so attributes
+            // shared by both sides (vertex attributes) are not counted twice
+            Float3 p = _positions[v];
+            double attributeSum = AttributeSum(candidate.FromA, candidate.LoopA!, p);
+            double attributeArea = _wedgeQuadrics[candidate.FromA].W;
             if (candidate.FromB >= 0)
-                attributes += AttributeError(candidate.FromB, candidate.ToB, _positions[v]) + IntPenalty(u, v, candidate.FromB, candidate.ToB);
+            {
+                attributeSum += AttributeSum(candidate.FromB, candidate.LoopB!, p);
+                attributeArea += _wedgeQuadrics[candidate.FromB].W;
+            }
+            double attributes = attributeArea > 0 ? attributeSum / attributeArea : 0;
 
-            candidate.Cost = candidate.PositionError + attributes;
+            candidate.Cost = candidate.PositionError + attributes + IntPenalty(u, v, candidate);
             candidate.EdgeLength = Float3.LengthSquared(_positions[u] - _positions[v]);
             return true;
         }
@@ -953,7 +1066,8 @@ internal static class SimplifyOp
         /// <summary>
         /// The neighbours u and v share must be exactly the far corners of the triangles on edge uv, and
         /// those far corners must not already be joined around both u and v, otherwise the collapse would
-        /// pinch the surface into a fold or flatten a closed part into two back to back triangles.
+        /// pinch the surface into a fold or flatten a closed part into two back to back triangles. Each test
+        /// walks the smaller fans, so a busy target like a cone apex does not make every check slow.
         /// </summary>
         private bool LinkConditionHolds(int u, in Candidate candidate)
         {
@@ -961,35 +1075,28 @@ internal static class SimplifyOp
             int opposite0 = ThirdVertex(candidate.Shared0, u, v);
             int opposite1 = candidate.SharedCount == 2 ? ThirdVertex(candidate.Shared1, u, v) : -1;
 
-            int stamp = NextStamp();
-            foreach (int t in _adjacency[u])
+            // The condition is symmetric, so walk whichever of the two has fewer neighbours
+            int small = _valence[u] <= _valence[v] ? u : v, large = small == u ? v : u;
+            _neighbours.Clear();
+            CollectNeighbours(small, _neighbours);
+            foreach (int n in _neighbours)
             {
-                if (!_alive[t]) continue;
-                for (int k = 0; k < 3; k++) _mark[_triangles[t * 3 + k]] = stamp;
+                if (n == u || n == v || n == opposite0 || n == opposite1) continue;
+                if (SharedTriangles(n, large, out _, out _) > 0) return false;
             }
 
-            foreach (int t in _adjacency[v])
-            {
-                if (!_alive[t]) continue;
-                for (int k = 0; k < 3; k++)
-                {
-                    int n = _triangles[t * 3 + k];
-                    if (n == u || n == v || _mark[n] != stamp) continue;
-                    if (n != opposite0 && n != opposite1) return false;
-                }
-            }
-
-            if (opposite1 >= 0 && HasTriangleWith(u, opposite0, opposite1, v) && HasTriangleWith(v, opposite0, opposite1, u))
+            if (opposite1 >= 0 && HasTriangle(opposite0, opposite1, u, v) && HasTriangle(opposite0, opposite1, v, u))
                 return false;
             return true;
         }
 
-        /// <summary>Whether some live triangle of <paramref name="owner"/> holds both a and b but not <paramref name="excluded"/>.</summary>
-        private bool HasTriangleWith(int owner, int a, int b, int excluded)
+        /// <summary>Whether a live triangle holds a, b and <paramref name="with"/> but not <paramref name="without"/>.</summary>
+        private bool HasTriangle(int a, int b, int with, int without)
         {
+            int owner = _valence[a] <= _valence[b] ? a : b;
             foreach (int t in _adjacency[owner])
             {
-                if (_alive[t] && Contains(t, a) && Contains(t, b) && !Contains(t, excluded)) return true;
+                if (_alive[t] && Contains(t, a) && Contains(t, b) && Contains(t, with) && !Contains(t, without)) return true;
             }
             return false;
         }
@@ -1040,6 +1147,12 @@ internal static class SimplifyOp
                 {
                     _alive[t] = false;
                     removed++;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        int n = _triangles[t * 3 + k];
+                        _valence[n]--;
+                        if (n != u) NoteDeadEntry(n);
+                    }
                     continue;
                 }
 
@@ -1049,6 +1162,7 @@ internal static class SimplifyOp
                 _cornerWedges[corner] = first ? candidate.ToA : candidate.ToB;
                 _cornerLoops[corner] = first ? candidate.LoopA! : candidate.LoopB!;
                 _adjacency[v].Add(t);
+                _valence[v]++;
             }
 
             _quadrics[v].Add(_quadrics[u]);
@@ -1056,17 +1170,35 @@ internal static class SimplifyOp
             if (candidate.FromB >= 0) MergeWedge(candidate.FromB, candidate.ToB);
 
             _dead[u] = true;
+            _valence[u] = 0;
             _adjacency[u].Clear();
-            _adjacency[v].RemoveAll(t => !_alive[t]);
             return removed;
+        }
+
+        /// <summary>Counts a dead triangle left in a vertex's list, and compacts the list once they outnumber the live ones.</summary>
+        private void NoteDeadEntry(int v)
+        {
+            if (++_deadEntries[v] <= _valence[v]) return;
+            _adjacency[v].RemoveAll(t => !_alive[t]);
+            _deadEntries[v] = 0;
         }
 
         private void MergeWedge(int from, int to)
         {
-            _wedgeQuadrics[to].Add(_wedgeQuadrics[from]);
-            int stride = _channels.Length * 4;
-            for (int i = 0; i < stride; i++)
-                _wedgeGradients[to * stride + i] += _wedgeGradients[from * stride + i];
+            // Bring the merged quadric to the target wedge's origin before adding it
+            Float3 a = _wedgeOrigins[from], b = _wedgeOrigins[to];
+            double x = b.X - a.X, y = b.Y - a.Y, z = b.Z - a.Z;
+            _wedgeQuadrics[to].Add(_wedgeQuadrics[from].Shifted(x, y, z));
+
+            int channelCount = _channels.Length;
+            for (int ch = 0; ch < channelCount; ch++)
+            {
+                int f = (from * channelCount + ch) * 4, g = (to * channelCount + ch) * 4;
+                _wedgeGradients[g] += _wedgeGradients[f];
+                _wedgeGradients[g + 1] += _wedgeGradients[f + 1];
+                _wedgeGradients[g + 2] += _wedgeGradients[f + 2];
+                _wedgeGradients[g + 3] += _wedgeGradients[f + 3] + _wedgeGradients[f] * x + _wedgeGradients[f + 1] * y + _wedgeGradients[f + 2] * z;
+            }
         }
 
         /// <summary>Writes the surviving triangles back into the mesh, keeping every surviving element's attributes.</summary>
@@ -1075,17 +1207,13 @@ internal static class SimplifyOp
             var vertexIndex = new Dictionary<GeometryData.Vertex, int>(_vertices.Length);
             for (int i = 0; i < _vertices.Length; i++) vertexIndex[_vertices[i]] = i;
 
-            Dictionary<long, Dictionary<string, GeometryData.AttributeValue>>? edgeAttributes = null;
-            if (_mesh.EdgeAttributes.Count > 0)
-            {
-                edgeAttributes = new Dictionary<long, Dictionary<string, GeometryData.AttributeValue>>(PairComparer.Instance);
-                foreach (var e in _mesh.Edges)
-                    edgeAttributes[PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2])] = e.Attributes;
-            }
-
+            var edgeData = new Dictionary<long, (int Id, Dictionary<string, GeometryData.AttributeValue> Attributes)>(_mesh.Edges.Count, PairComparer.Instance);
             var wireEdges = new List<GeometryData.Edge>();
             foreach (var e in _mesh.Edges)
+            {
                 if (e.Loop == null) wireEdges.Add(e);
+                else edgeData[PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2])] = (e.Id, e.Attributes);
+            }
 
             // Pinned vertices never collapse, so faceless and wire vertices are all still here
             var keep = new bool[_vertices.Length];
@@ -1139,13 +1267,11 @@ internal static class SimplifyOp
                 edge.Attributes = e.Attributes;
             }
 
-            if (edgeAttributes != null)
+            foreach (var e in _mesh.Edges)
             {
-                foreach (var e in _mesh.Edges)
-                {
-                    if (e.Loop != null && edgeAttributes.TryGetValue(PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2]), out var attributes))
-                        e.Attributes = CopyAttributes(attributes);
-                }
+                if (e.Loop == null || !edgeData.TryGetValue(PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2]), out var data)) continue;
+                e.Id = data.Id;
+                if (_mesh.EdgeAttributes.Count > 0) e.Attributes = CopyAttributes(data.Attributes);
             }
         }
 
