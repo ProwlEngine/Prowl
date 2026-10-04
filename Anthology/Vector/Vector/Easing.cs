@@ -1,9 +1,13 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Vector;
+namespace Prowl.Vector;
 
-namespace Prowl.PaperUI;
+/// <summary>An easing curve family, paired with an <see cref="EaseDirection"/> by <see cref="Easing.Evaluate"/>.</summary>
+public enum Ease { Linear, Sine, Quad, Cubic, Quart, Quint, Expo, Circ, Back, Elastic, Bounce }
+
+/// <summary>Which end of an easing curve is eased.</summary>
+public enum EaseDirection { In, Out, InOut }
 
 /// <summary>
 /// Provides a collection of easing functions for animations and transitions.
@@ -324,6 +328,34 @@ public static class Easing
             return 1.0f - envelope * (1.0f + angularFrequency * t);
         }
     }
+
+    #endregion
+
+    #region Evaluate
+
+    /// <summary>Evaluates a curve chosen by data, such as an easing picked in an inspector.</summary>
+    public static float Evaluate(Ease ease, EaseDirection direction, float t) => ease switch
+    {
+        Ease.Sine => Pick(direction, SineIn, SineOut, SineInOut, t),
+        Ease.Quad => Pick(direction, EaseIn, EaseOut, EaseInOut, t),
+        Ease.Cubic => Pick(direction, CubicIn, CubicOut, CubicInOut, t),
+        Ease.Quart => Pick(direction, QuartIn, QuartOut, QuartInOut, t),
+        Ease.Quint => Pick(direction, QuintIn, QuintOut, QuintInOut, t),
+        Ease.Expo => Pick(direction, ExpoIn, ExpoOut, ExpoInOut, t),
+        Ease.Circ => Pick(direction, CircIn, CircOut, CircInOut, t),
+        Ease.Back => Pick(direction, BackIn, BackOut, BackInOut, t),
+        Ease.Elastic => Pick(direction, ElasticIn, ElasticOut, ElasticInOut, t),
+        Ease.Bounce => Pick(direction, BounceIn, BounceOut, BounceInOut, t),
+        _ => t,
+    };
+
+    private static float Pick(EaseDirection direction, System.Func<float, float> easeIn, System.Func<float, float> easeOut, System.Func<float, float> easeInOut, float t)
+        => direction switch
+        {
+            EaseDirection.In => easeIn(t),
+            EaseDirection.Out => easeOut(t),
+            _ => easeInOut(t),
+        };
 
     #endregion
 }
