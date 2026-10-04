@@ -176,8 +176,7 @@ internal unsafe partial class VkGraphicsDevice
                     {
                         Serial = serial,
                         CommandBuffer = cb,
-                        TimingPool = cb.TakePendingTimingPool(),
-                        StatsPool = cb.TakePendingStatsPool(),
+                        Queries = cb.TakePendingQueries(),
                         IsTransfer = submission != null,
                         Submission = submission,
                     });
@@ -274,17 +273,7 @@ internal unsafe partial class VkGraphicsDevice
     {
         if (pending.CommandBuffer is { } cb)
         {
-            if (pending.TimingPool is { } timingPool)
-            {
-                double milliseconds = ResolveTiming(timingPool);
-                Profiler?.RecordExecutionTime(cb.ProfilerInfo, pending.IsTransfer, milliseconds);
-            }
-
-            if (pending.StatsPool is { } statsPool)
-            {
-                GpuVertexStats stats = ResolvePipelineStats(statsPool);
-                Profiler?.RecordGpuVertexStats(cb.ProfilerInfo, in stats);
-            }
+            ResolveQueries(in pending.Queries, cb.ProfilerInfo, pending.IsTransfer);
 
             if (pending.Submission != null)
                 ReturnRecordCommandBuffer(cb);
@@ -295,8 +284,7 @@ internal unsafe partial class VkGraphicsDevice
     {
         public ulong Serial;
         public VkCommandBuffer? CommandBuffer;
-        public QueryPool? TimingPool;
-        public QueryPool? StatsPool;
+        public GpuQueries Queries;
         public bool IsTransfer;
         public VkGpuSubmission? Submission;
     }

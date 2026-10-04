@@ -18,14 +18,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private readonly VkDescriptorBinder _descriptorBinder;
 
-    // Execution-timing query pool for the current recording, taken by the submission path once
-    // End() has written the closing timestamp. Never read back on this object after that point -
-    // a later Begin() may reuse this wrapper for a new recording while the old one is still in flight.
-    private QueryPool? _pendingTimingPool;
-
-    // GPU vertex/primitive-count query pool for the current recording - same lifecycle as
-    // _pendingTimingPool above, just a different query type.
-    private QueryPool? _pendingStatsPool;
+    private GpuQueries _pendingQueries;
 
     public CommandPool CommandPool => _pool;
     public Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
@@ -63,8 +56,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         };
         _gd.Vk.BeginCommandBuffer(_cb, in beginInfo);
         _commandBufferBegun = true;
-        _pendingTimingPool = _gd.BeginTiming(_cb);
-        _pendingStatsPool = _gd.BeginPipelineStats(_cb);
+        _pendingQueries = _gd.BeginQueries(_cb);
 
         ClearCachedState();
         ClearGraphicsState();
@@ -94,26 +86,15 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             EndCurrentRenderPass();
         }
 
-        _gd.EndTiming(_cb, _pendingTimingPool);
-        _gd.EndPipelineStats(_cb, _pendingStatsPool);
+        _gd.EndQueries(_cb, in _pendingQueries);
         _gd.Vk.EndCommandBuffer(_cb);
     }
 
-    // Reads and clears the timing pool End() wrote into, for the submission path to attach to
-    // this specific submission. Must be called before any later Begin() on this wrapper.
-    internal QueryPool? TakePendingTimingPool()
+    internal GpuQueries TakePendingQueries()
     {
-        QueryPool? pool = _pendingTimingPool;
-        _pendingTimingPool = null;
-        return pool;
-    }
-
-    // Same as TakePendingTimingPool, for the pipeline-statistics query pool.
-    internal QueryPool? TakePendingStatsPool()
-    {
-        QueryPool? pool = _pendingStatsPool;
-        _pendingStatsPool = null;
-        return pool;
+        GpuQueries queries = _pendingQueries;
+        _pendingQueries = default;
+        return queries;
     }
 
     internal void SetPool(CommandPool pool) => _pool = pool;
