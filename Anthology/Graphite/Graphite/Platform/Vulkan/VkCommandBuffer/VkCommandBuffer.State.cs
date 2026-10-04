@@ -88,23 +88,19 @@ internal unsafe partial class VkCommandBuffer
     // Sets are content-addressed in the cache, so clearing needs no invalidation here.
     private protected override void ClearPropertiesCore() { }
 
-    public override void SetScissorRect(uint index, uint x, uint y, uint width, uint height)
+    public override void SetScissorRect(uint x, uint y, uint width, uint height)
     {
-        if (index != 0 && !_gd.Features.MultipleViewports) return;
-
         Rect2D scissor = new(new Offset2D((int)x, (int)y), new Extent2D(width, height));
-        if (scissor.Equals(_scissorRects[index])) return;
+        if (scissor.Equals(_scissorRects[0])) return;
 
-        _scissorRects[index] = scissor;
-        _gd.Vk.CmdSetScissor(_cb, index, 1, in scissor);
+        _scissorRects[0] = scissor;
+        _gd.Vk.CmdSetScissor(_cb, 0, 1, in scissor);
     }
 
-    public override void SetViewport(uint index, ref Viewport viewport)
+    public override void SetViewport(Viewport viewport)
     {
-        if (index != 0 && !_gd.Features.MultipleViewports) return;
-
-        if (viewport.Equals(_viewports[index])) return;
-        _viewports[index] = viewport;
+        if (viewport.Equals(_viewports[0])) return;
+        _viewports[0] = viewport;
 
         Silk.NET.Vulkan.Viewport vkViewport = new()
         {
@@ -116,6 +112,6 @@ internal unsafe partial class VkCommandBuffer
             MaxDepth = viewport.MaxDepth
         };
 
-        _gd.Vk.CmdSetViewport(_cb, index, 1, in vkViewport);
+        _gd.Vk.CmdSetViewport(_cb, 0, 1, in vkViewport);
     }
 }

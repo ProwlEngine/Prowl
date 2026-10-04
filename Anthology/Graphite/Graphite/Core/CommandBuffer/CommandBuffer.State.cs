@@ -114,8 +114,11 @@ public abstract partial class CommandBuffer
             _framebuffer = fb;
             SetFramebufferCore(fb);
             _framebufferOutputs = fb != null ? fb.OutputDescription : default;
-            SetFullViewport();
-            SetFullScissorRect();
+            if (fb != null)
+            {
+                SetViewport(new Viewport(0, 0, fb.Width, fb.Height, 0, 1));
+                SetScissorRect(0, 0, fb.Width, fb.Height);
+            }
         }
     }
 
@@ -162,58 +165,21 @@ public abstract partial class CommandBuffer
 
     private protected abstract void ClearDepthStencilCore(float depth, byte stencil);
 
-    /// <summary>Sets viewport 0 to cover whole framebuffer.</summary>
-    public void SetFullViewport() => SetFullViewport(0);
-
-    /// <summary>Sets one viewport to cover whole framebuffer.</summary>
-    /// <param name="index">Viewport index.</param>
-    public void SetFullViewport(uint index)
+    /// <summary>Sets viewport to cover whole framebuffer.</summary>
+    public void SetFullViewport()
     {
         CheckFramebuffer(nameof(SetFullViewport));
-        SetViewport(index, new Viewport(0, 0, _framebuffer!.Width, _framebuffer.Height, 0, 1));
+        SetViewport(new Viewport(0, 0, _framebuffer!.Width, _framebuffer.Height, 0, 1));
     }
 
-    /// <summary>Sets viewport 0.</summary>
+    /// <summary>Sets viewport.</summary>
     /// <param name="viewport">New viewport.</param>
-    public void SetViewport(Viewport viewport) => SetViewport(0, ref viewport);
+    public abstract void SetViewport(Viewport viewport);
 
-    /// <summary>Sets viewport 0.</summary>
-    /// <param name="viewport">New viewport.</param>
-    public void SetViewport(ref Viewport viewport) => SetViewport(0, ref viewport);
-
-    /// <summary>Sets viewport at index. Indices above 0 need multi-viewport support.</summary>
-    /// <param name="index">Viewport index.</param>
-    /// <param name="viewport">New viewport.</param>
-    public void SetViewport(uint index, Viewport viewport) => SetViewport(index, ref viewport);
-
-    /// <summary>Sets viewport at index. Indices above 0 need multi-viewport support.</summary>
-    /// <param name="index">Viewport index.</param>
-    /// <param name="viewport">New viewport.</param>
-    public abstract void SetViewport(uint index, ref Viewport viewport);
-
-    /// <summary>Sets scissor rect 0 to cover whole framebuffer.</summary>
-    public void SetFullScissorRect() => SetFullScissorRect(0);
-
-    /// <summary>Sets one scissor rect to cover whole framebuffer.</summary>
-    /// <param name="index">Scissor index.</param>
-    public void SetFullScissorRect(uint index)
-    {
-        CheckFramebuffer(nameof(SetFullScissorRect));
-        SetScissorRect(index, 0, 0, _framebuffer!.Width, _framebuffer.Height);
-    }
-
-    /// <summary>Sets scissor rect 0.</summary>
+    /// <summary>Sets scissor rect.</summary>
     /// <param name="x">Rect X.</param>
     /// <param name="y">Rect Y.</param>
     /// <param name="width">Rect width.</param>
     /// <param name="height">Rect height.</param>
-    public void SetScissorRect(uint x, uint y, uint width, uint height) => SetScissorRect(0, x, y, width, height);
-
-    /// <summary>Sets scissor rect at index. Indices above 0 need multi-viewport support.</summary>
-    /// <param name="index">Scissor index.</param>
-    /// <param name="x">Rect X.</param>
-    /// <param name="y">Rect Y.</param>
-    /// <param name="width">Rect width.</param>
-    /// <param name="height">Rect height.</param>
-    public abstract void SetScissorRect(uint index, uint x, uint y, uint width, uint height);
+    public abstract void SetScissorRect(uint x, uint y, uint width, uint height);
 }
