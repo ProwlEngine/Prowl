@@ -12,7 +12,6 @@ internal unsafe partial class VkTextureView : TextureView
 
     public new VkTexture Target => (VkTexture)base.Target;
 
-    public ResourceRefCount RefCount { get; }
 
     public VkTextureView(VkGraphicsDevice gd, in TextureViewDescription description)
         : base(description)
@@ -63,7 +62,6 @@ internal unsafe partial class VkTextureView : TextureView
         }
 
         _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, out _imageView);
-        RefCount = new ResourceRefCount(DestroyNative);
 
         _gd.Profiler?.Allocate(AllocBin.TextureView, 0);
     }
@@ -72,7 +70,7 @@ internal unsafe partial class VkTextureView : TextureView
 
     private protected override void DisposeCore()
     {
-        RefCount.Decrement();
+        _gd.DisposeWhenRetired(DestroyNative);
     }
 
     private void DestroyNative()

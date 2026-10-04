@@ -148,8 +148,7 @@ public abstract partial class GraphicsDevice
             for (uint i = 0; i < _maxExecutingTasks; i++)
                 _freeSlots.Enqueue(i);
         }
-        FlushExecutionRetiredDisposables();
-        FlushDeferredDisposals();
+        FlushAllRetired();
     }
 
     /// <summary>
@@ -196,7 +195,7 @@ public abstract partial class GraphicsDevice
         if (completed > _lastCompletedExecutionId)
             Volatile.Write(ref _lastCompletedExecutionId, completed);
 
-        FlushExecutionRetiredDisposables();
+        FlushRetired(everything: false);
     }
 
     private protected abstract ExecutionTask BeginExecutionCore(ulong executionId, uint ringSlot);

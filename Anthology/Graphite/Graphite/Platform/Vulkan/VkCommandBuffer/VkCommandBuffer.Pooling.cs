@@ -41,12 +41,6 @@ internal unsafe partial class VkCommandBuffer
 
     public void CommandBufferSubmitted(Silk.NET.Vulkan.CommandBuffer cb)
     {
-        RefCount.Increment();
-        foreach (ResourceRefCount rrc in _currentStagingInfo.Resources)
-        {
-            rrc.Increment();
-        }
-
         lock (_stagingLock)
         {
             _submittedStagingInfos.Add(cb, _currentStagingInfo);
@@ -78,8 +72,6 @@ internal unsafe partial class VkCommandBuffer
                 RecycleStagingInfo(info);
             }
         }
-
-        RefCount.Decrement();
     }
 
     private VkBuffer GetStagingBuffer(uint size)
@@ -112,29 +104,11 @@ internal unsafe partial class VkCommandBuffer
     private class StagingResourceInfo
     {
         public List<VkBuffer> BuffersUsed { get; } = [];
-        public HashSet<ResourceRefCount> Resources { get; } = [];
-
-        /// <summary>Id of the recording using this; stamps retained resources.</summary>
-        public ulong RecordingId;
 
         public void Clear()
         {
             BuffersUsed.Clear();
-            Resources.Clear();
         }
-    }
-
-    private static ulong s_nextRecordingId = 1;
-
-    // Retains a resource for the current recording, but only once: a resource already stamped with this
-    // recording's id is known to be in the staging set, so the (hashed) set insertion is skipped.
-    private void AddStagingResource(ResourceRefCount rc)
-    {
-        ulong id = _currentStagingInfo.RecordingId;
-        if (rc.StagingMark == id)
-            return;
-        rc.StagingMark = id;
-        _currentStagingInfo.Resources.Add(rc);
     }
 
     private StagingResourceInfo GetStagingResourceInfo()
@@ -153,7 +127,6 @@ internal unsafe partial class VkCommandBuffer
                 ret = new StagingResourceInfo();
             }
 
-            ret.RecordingId = System.Threading.Interlocked.Increment(ref s_nextRecordingId);
             return ret;
         }
     }
@@ -165,11 +138,6 @@ internal unsafe partial class VkCommandBuffer
             foreach (VkBuffer buffer in info.BuffersUsed)
             {
                 _availableStagingBuffers.Add(buffer);
-            }
-
-            foreach (ResourceRefCount rrc in info.Resources)
-            {
-                rrc.Decrement();
             }
 
             info.Clear();

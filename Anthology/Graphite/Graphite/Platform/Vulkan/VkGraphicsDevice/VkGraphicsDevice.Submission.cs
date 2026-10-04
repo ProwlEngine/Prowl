@@ -117,6 +117,7 @@ internal unsafe partial class VkGraphicsDevice
         bool poolFence = slotFence == null;
         VkFenceHandle fence = slotFence ?? GetFreeSubmissionFence();
 
+        ulong serial = 0;
         Silk.NET.Vulkan.CommandBuffer[] handles = ArrayPool<Silk.NET.Vulkan.CommandBuffer>.Shared.Rent(count + 1);
         try
         {
@@ -146,6 +147,8 @@ internal unsafe partial class VkGraphicsDevice
                         si.PWaitSemaphores = waits;
                         si.PWaitDstStageMask = stages;
                         _graphicsQueueSubmitCount++;
+                        if (count > 0)
+                            serial = NextSubmitSerial();
                         Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
                     }
                     FlushValidationErrors();
@@ -160,7 +163,7 @@ internal unsafe partial class VkGraphicsDevice
                     _submittedFences.Add(new FenceSubmissionInfo(
                         fence, cb, handles[i], cb.TakePendingTimingPool(), cb.TakePendingStatsPool(),
                         cb.Name, isTransfer: false, cb.Pass, transferId: 0,
-                        ownsFence: poolFence && i == count - 1));
+                        ownsFence: poolFence && i == count - 1, serial: serial));
                 }
             }
         }
@@ -213,6 +216,7 @@ internal unsafe partial class VkGraphicsDevice
             PCommandBuffers = &handle
         };
 
+        ulong recordedSerial;
         lock (_graphicsQueueLock)
         {
             int waitCount = GatherAcquireWaits_NoLock();
@@ -223,6 +227,7 @@ internal unsafe partial class VkGraphicsDevice
                 si.PWaitSemaphores = waits;
                 si.PWaitDstStageMask = stages;
                 _graphicsQueueSubmitCount++;
+                recordedSerial = NextSubmitSerial();
                 Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
             }
             FlushValidationErrors();
@@ -232,7 +237,7 @@ internal unsafe partial class VkGraphicsDevice
         {
             _submittedFences.Add(new FenceSubmissionInfo(
                 fence, cb, handle, cb.TakePendingTimingPool(), cb.TakePendingStatsPool(),
-                cb.Name, isTransfer: true, pass: null, transferId: 0, submission: submission));
+                cb.Name, isTransfer: true, pass: null, transferId: 0, submission: submission, serial: recordedSerial));
         }
     }
 
@@ -260,6 +265,7 @@ internal unsafe partial class VkGraphicsDevice
 
         VkFenceHandle vkFence = GetFreeSubmissionFence();
 
+        ulong commandSerial;
         lock (_graphicsQueueLock)
         {
             int waitCount = waitAcquire ? GatherAcquireWaits_NoLock() : 0;
@@ -270,6 +276,7 @@ internal unsafe partial class VkGraphicsDevice
                 si.PWaitSemaphores = waits;
                 si.PWaitDstStageMask = stages;
                 _graphicsQueueSubmitCount++;
+                commandSerial = NextSubmitSerial();
                 Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
             }
             FlushValidationErrors();
@@ -277,12 +284,13 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_submittedFencesLock)
         {
-            _submittedFences.Add(new FenceSubmissionInfo(vkFence, vkCL, vkCB, timingPool, statsPool, bufferName, isTransfer, pass, transferId));
+            _submittedFences.Add(new FenceSubmissionInfo(vkFence, vkCL, vkCB, timingPool, statsPool, bufferName, isTransfer, pass, transferId, serial: commandSerial));
         }
     }
 
     private void CheckSubmittedFences()
     {
+        ulong retiredSerial = 0;
         lock (_submittedFencesLock)
         {
             for (int i = 0; i < _submittedFences.Count; i++)
@@ -291,6 +299,8 @@ internal unsafe partial class VkGraphicsDevice
                 if (Vk.GetFenceStatus(Device, fsi.Fence) == Result.Success)
                 {
                     CompleteFenceSubmission(fsi);
+                    if (fsi.Serial > retiredSerial)
+                        retiredSerial = fsi.Serial;
                     _submittedFences.RemoveAt(i);
                     i -= 1;
                 }
@@ -300,6 +310,9 @@ internal unsafe partial class VkGraphicsDevice
                 }
             }
         }
+
+        if (retiredSerial != 0)
+            RetireThrough(retiredSerial);
     }
 
     private void CompleteFenceSubmission(FenceSubmissionInfo fsi)
@@ -340,7 +353,6 @@ internal unsafe partial class VkGraphicsDevice
             ReturnSubmissionFence(fence);
         }
 
-        List<ResourceRefCount>? retained = null;
         lock (_stagingResourcesLock)
         {
             if (_submittedStagingTextures.TryGetValue(completedCB, out VkTexture? stagingTex))
@@ -363,8 +375,6 @@ internal unsafe partial class VkGraphicsDevice
             if (_submittedSharedCommandPools.TryGetValue(completedCB, out SharedCommandPool? sharedPool))
             {
                 _submittedSharedCommandPools.Remove(completedCB);
-                retained = sharedPool.Retained.Count > 0 ? [.. sharedPool.Retained] : null;
-                sharedPool.Retained.Clear();
                 lock (_graphicsCommandPoolLock)
                 {
                     if (sharedPool.IsCached)
@@ -377,11 +387,6 @@ internal unsafe partial class VkGraphicsDevice
                     }
                 }
             }
-        }
-        if (retained != null)
-        {
-            foreach (ResourceRefCount refCount in retained)
-                refCount.Decrement();
         }
     }
 
@@ -416,6 +421,7 @@ internal unsafe partial class VkGraphicsDevice
         public bool IsTransfer;
         public PassInfo? Pass;
         public ulong TransferId;
+        public ulong Serial;
         public VkGpuSubmission? Submission;
 
         /// <summary>False when the fence is a slot fence, or is shared with a later entry.</summary>
@@ -432,8 +438,10 @@ internal unsafe partial class VkGraphicsDevice
             PassInfo? pass,
             ulong transferId,
             bool ownsFence = true,
-            VkGpuSubmission? submission = null)
+            VkGpuSubmission? submission = null,
+            ulong serial = 0)
         {
+            Serial = serial;
             Submission = submission;
             OwnsFence = ownsFence;
             Fence = fence;

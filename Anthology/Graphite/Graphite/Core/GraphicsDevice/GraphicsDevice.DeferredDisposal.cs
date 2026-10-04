@@ -1,70 +1,90 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Prowl.Graphite;
 
 public abstract partial class GraphicsDevice
 {
-    private readonly object _deferredDisposalLock = new();
-    private readonly List<IDisposable> _disposables = [];
-    private readonly List<(ulong ExecutionId, IDisposable Disposable)> _executionRetiredDisposables = [];
+    private readonly object _retireLock = new();
+    private readonly List<(ulong Serial, ulong ExecutionId, Action Destroy)> _retired = [];
+    private ulong _submitSerial;
+    private ulong _completedSerial;
 
     /// <summary>
-    /// Queues object for disposal once the device goes idle. Use for stuff that might still be in use now.
+    /// Hands out the next queue submission serial. Call once per queue submit, in submit order.
     /// </summary>
-    /// <param name="disposable">Object to dispose once idle.</param>
-    public void DisposeWhenIdle(IDisposable disposable)
+    internal ulong NextSubmitSerial() => Interlocked.Increment(ref _submitSerial);
+
+    /// <summary>
+    /// Queues native destruction for after the next submission and the latest open execution have finished on the GPU.
+    /// </summary>
+    /// <param name="destroy">Frees the native object.</param>
+    internal void DisposeWhenRetired(Action destroy)
     {
-        lock (_deferredDisposalLock)
+        ulong serial = Volatile.Read(ref _submitSerial) + 1;
+        ulong executionId = Volatile.Read(ref _executionIdCounter);
+        if (executionId <= Volatile.Read(ref _lastCompletedExecutionId))
+            executionId = 0;
+
+        lock (_retireLock)
         {
-            _disposables.Add(disposable);
+            _retired.Add((serial, executionId, destroy));
         }
     }
 
     /// <summary>
-    /// Disposes the object once the execution finishes on the GPU. Freed on next reclaim (BeginExecution or WaitForIdle).
+    /// Records that every submission up to the serial finished, then frees whatever that unblocks.
     /// </summary>
-    /// <param name="executionId">Execution that gates the disposal.</param>
-    /// <param name="disposable">Object to dispose once done.</param>
-    internal void DisposeWhenFrameComplete(ulong executionId, IDisposable disposable)
+    /// <param name="serial">Highest finished submission serial.</param>
+    internal void RetireThrough(ulong serial)
     {
-        if (executionId == 0)
+        lock (_retireLock)
         {
-            disposable.Dispose();
-            return;
+            if (serial > _completedSerial)
+                _completedSerial = serial;
         }
+        FlushRetired(everything: false);
+    }
 
-        lock (_deferredDisposalLock)
+    private void FlushRetired(bool everything)
+    {
+        List<Action>? ready = null;
+        while (true)
         {
-            _executionRetiredDisposables.Add((executionId, disposable));
+            lock (_retireLock)
+            {
+                ulong completedExecution = Volatile.Read(ref _lastCompletedExecutionId);
+                for (int i = 0; i < _retired.Count; i++)
+                {
+                    (ulong serial, ulong executionId, Action destroy) = _retired[i];
+                    if (!everything && (serial > _completedSerial || executionId > completedExecution))
+                        continue;
+
+                    (ready ??= []).Add(destroy);
+                    _retired.RemoveAt(i);
+                    i--;
+                }
+            }
+
+            if (ready == null || ready.Count == 0)
+                return;
+
+            foreach (Action destroy in ready)
+                destroy();
+            ready.Clear();
         }
     }
 
-    private void FlushDeferredDisposals()
+    /// <summary>
+    /// Frees everything queued. Only valid when the GPU is idle.
+    /// </summary>
+    internal void FlushAllRetired()
     {
-        lock (_deferredDisposalLock)
+        lock (_retireLock)
         {
-            foreach (IDisposable disposable in _disposables)
-            {
-                disposable.Dispose();
-            }
-            _disposables.Clear();
+            _completedSerial = Volatile.Read(ref _submitSerial);
         }
-    }
-
-    private void FlushExecutionRetiredDisposables()
-    {
-        lock (_deferredDisposalLock)
-        {
-            for (int i = _executionRetiredDisposables.Count - 1; i >= 0; i--)
-            {
-                (ulong executionId, IDisposable disposable) = _executionRetiredDisposables[i];
-                if (executionId > _lastCompletedExecutionId)
-                    continue;
-
-                _executionRetiredDisposables.RemoveAt(i);
-                disposable.Dispose();
-            }
-        }
+        FlushRetired(everything: true);
     }
 }

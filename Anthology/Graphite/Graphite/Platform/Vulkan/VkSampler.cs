@@ -11,7 +11,6 @@ internal unsafe partial class VkSampler : Sampler
 
     public VkSamplerHandle DeviceSampler => _sampler;
 
-    public ResourceRefCount RefCount { get; }
 
     public VkSampler(VkGraphicsDevice gd, in SamplerDescription description)
     {
@@ -40,7 +39,6 @@ internal unsafe partial class VkSampler : Sampler
         };
 
         _gd.Vk.CreateSampler(_gd.Device, in samplerCI, null, out _sampler);
-        RefCount = new ResourceRefCount(DestroyNative);
 
         _gd.Profiler?.Allocate(AllocBin.Sampler, 0);
     }
@@ -49,7 +47,7 @@ internal unsafe partial class VkSampler : Sampler
 
     private protected override void DisposeCore()
     {
-        RefCount.Decrement();
+        _gd.DisposeWhenRetired(DestroyNative);
     }
 
     private void DestroyNative()

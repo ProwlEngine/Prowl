@@ -12,8 +12,6 @@ internal sealed unsafe class SharedCommandPool
 
     public bool IsCached { get; }
 
-    public List<ResourceRefCount> Retained { get; } = [];
-
     public SharedCommandPool(VkGraphicsDevice gd, bool isCached)
     {
         _gd = gd;

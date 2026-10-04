@@ -145,6 +145,8 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         }
     }
 
+    private protected override VkGraphicsDevice OwnerDevice => _gd;
+
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
     protected override void DestroyNative()

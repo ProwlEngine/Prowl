@@ -12,7 +12,6 @@ internal unsafe partial class VkBuffer : DeviceBuffer
     private readonly VkGraphicsDevice _gd;
     private VkBufferHandle _deviceBuffer;
     private VkMemoryBlock _memory;
-    public ResourceRefCount RefCount { get; }
 
     public VkBufferHandle DeviceBuffer => _deviceBuffer;
     public VkMemoryBlock Memory => _memory;
@@ -24,7 +23,6 @@ internal unsafe partial class VkBuffer : DeviceBuffer
 
         CreateNativeBuffer();
 
-        RefCount = new ResourceRefCount(DestroyNative);
     }
 
     private void CreateNativeBuffer()
@@ -124,15 +122,14 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         _gd.RecordBufferAllocation(Usage, SizeInBytes);
     }
 
-    protected internal override void OrphanCore(GraphicsDevice device, ulong inFlightFrameId)
+    protected internal override void OrphanCore()
     {
         VkBufferHandle retiredBuffer = _deviceBuffer;
         VkMemoryBlock retiredMemory = _memory;
 
         CreateNativeBuffer();
 
-        device.DisposeWhenFrameComplete(inFlightFrameId,
-            new RetiredNativeBuffer(_gd, retiredBuffer, retiredMemory, Usage, SizeInBytes));
+        _gd.DisposeWhenRetired(new RetiredNativeBuffer(_gd, retiredBuffer, retiredMemory, Usage, SizeInBytes).Dispose);
     }
 
     private sealed class RetiredNativeBuffer : IDisposable
@@ -165,7 +162,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
 
     private protected override void DisposeCore()
     {
-        RefCount.Decrement();
+        _gd.DisposeWhenRetired(DestroyNative);
     }
 
     private void DestroyNative()

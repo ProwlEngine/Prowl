@@ -24,7 +24,6 @@ internal unsafe partial class VkTexture : Texture
 
     private readonly bool _isSwapchainTexture;
 
-    public ResourceRefCount RefCount { get; }
     public bool IsSwapchainTexture => _isSwapchainTexture;
     public bool IsStaging => _stagingBuffer.Handle != 0;
 
@@ -163,7 +162,6 @@ internal unsafe partial class VkTexture : Texture
             allocatedSize = bufferMemReqs.Size;
         }
 
-        RefCount = new ResourceRefCount(DestroyNative);
         if (!isStaging)
             InitializeLayout();
 
@@ -193,7 +191,6 @@ internal unsafe partial class VkTexture : Texture
         _actualImageArrayLayers = arrayLayers;
         _isSwapchainTexture = true;
 
-        RefCount = new ResourceRefCount(DestroyNative);
         InitializeLayout();
     }
 
@@ -273,7 +270,7 @@ internal unsafe partial class VkTexture : Texture
 
     private protected override void DisposeCore()
     {
-        RefCount.Decrement();
+        _gd.DisposeWhenRetired(DestroyNative);
     }
 
     private void DestroyNative()

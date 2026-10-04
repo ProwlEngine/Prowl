@@ -26,7 +26,6 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
     internal readonly PipelineLayout PipelineLayout;
     internal readonly VkPipelineHandle DevicePipeline;
     internal readonly uint ResourceSetCount;
-    internal readonly ResourceRefCount RefCount;
 
     /// <summary>
     /// Cross-frame descriptor set cache for this program, keyed by bound resources.
@@ -39,7 +38,6 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
         : base(description)
     {
         _gd = gd;
-        RefCount = new ResourceRefCount(DestroyNative);
 
         ShaderStageDescription stage = description.Stage;
         ShaderModuleCreateInfo shaderModuleCI = new() { SType = StructureType.ShaderModuleCreateInfo };
@@ -72,7 +70,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    private protected override void DisposeCore() => RefCount.Decrement();
+    private protected override void DisposeCore() => _gd.DisposeWhenRetired(DestroyNative);
 
     private void DestroyNative()
     {

@@ -33,9 +33,7 @@ internal unsafe partial class VkCommandBuffer
         destination.MarkContentChanged();
 
         VkBuffer srcVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(source);
-        AddStagingResource(srcVkBuffer.RefCount);
         VkBuffer dstVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(destination);
-        AddStagingResource(dstVkBuffer.RefCount);
 
         BufferCopy region = new()
         {
@@ -75,7 +73,6 @@ internal unsafe partial class VkCommandBuffer
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
         VkBuffer staging = GetStagingBuffer(sizeInBytes);
         _gd.UpdateBuffer(staging, 0, source, sizeInBytes);
-        AddStagingResource(vkTex.RefCount);
 
         if (vkTex.IsStaging)
         {
@@ -204,8 +201,6 @@ internal unsafe partial class VkCommandBuffer
             VkBarriers.CurrentLayout(this, srcVkTexture),
             VkBarriers.CurrentLayout(this, dstVkTexture));
 
-        AddStagingResource(srcVkTexture.RefCount);
-        AddStagingResource(dstVkTexture.RefCount);
     }
 
     internal static void CopyTextureCore_VkCommandBuffer(
@@ -486,7 +481,6 @@ internal unsafe partial class VkCommandBuffer
     {
         EnsureNoRenderPass();
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
-        AddStagingResource(vkTex.RefCount);
 
         GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex, VkBarriers.CurrentLayout(this, vkTex));
     }
@@ -564,9 +558,7 @@ internal unsafe partial class VkCommandBuffer
         EnsureNoRenderPass();
 
         VkTexture vkSource = Util.AssertSubtype<Texture, VkTexture>(source);
-        AddStagingResource(vkSource.RefCount);
         VkTexture vkDestination = Util.AssertSubtype<Texture, VkTexture>(destination);
-        AddStagingResource(vkDestination.RefCount);
 
         ImageAspectFlags aspectFlags = ((source.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil)
             ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit

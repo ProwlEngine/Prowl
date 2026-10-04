@@ -14,7 +14,6 @@ internal unsafe partial class VkCommandBuffer
     private int _vbCacheCount;
     private uint _vbCacheVersion;
     private VertexBinding[] _vbCacheBindings = Array.Empty<VertexBinding>();
-    private ResourceRefCount[] _vbCacheRefCounts = Array.Empty<ResourceRefCount>();
 
     private VkBufferHandle _ibCacheBuffer;
     private IndexFormat _ibCacheFormat;
@@ -71,7 +70,6 @@ internal unsafe partial class VkCommandBuffer
     {
         indirectBuffer.MarkInFlight(_gd, ExecutionId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
-        AddStagingResource(vkBuffer.RefCount);
         return vkBuffer;
     }
 
@@ -149,7 +147,6 @@ internal unsafe partial class VkCommandBuffer
             {
                 VertexBinding binding = _vbCacheBindings[slot];
                 binding.Buffer.MarkInFlight(_gd, ExecutionId);
-                AddStagingResource(_vbCacheRefCounts[slot]);
 
                 if (captureForProfiler)
                     CaptureResolvedVertexBinding(in binding);
@@ -158,7 +155,6 @@ internal unsafe partial class VkCommandBuffer
         }
 
         Util.EnsureArrayMinimumSize(ref _vbCacheBindings, (uint)count);
-        Util.EnsureArrayMinimumSize(ref _vbCacheRefCounts, (uint)count);
 
         VkBufferHandle* buffers = stackalloc VkBufferHandle[count];
         ulong* offsets = stackalloc ulong[count];
@@ -177,10 +173,8 @@ internal unsafe partial class VkCommandBuffer
             buffers[slot] = vkBuffer.DeviceBuffer;
             offsets[slot] = binding.Offset;
 
-            AddStagingResource(vkBuffer.RefCount);
 
             _vbCacheBindings[slot] = binding;
-            _vbCacheRefCounts[slot] = vkBuffer.RefCount;
         }
 
         _gd.Vk.CmdBindVertexBuffers(_cb, 0u, (uint)count, buffers, offsets);
@@ -203,7 +197,6 @@ internal unsafe partial class VkCommandBuffer
             CaptureResolvedIndexBinding(ib, fmt, indexCount);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
-        AddStagingResource(vkBuffer.RefCount);
 
         VkBufferHandle nativeBuffer = vkBuffer.DeviceBuffer;
         if (_ibCacheValid && _ibCacheBuffer.Handle == nativeBuffer.Handle && _ibCacheFormat == fmt)

@@ -32,7 +32,6 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
     /// <summary>Set slot count (max set index + 1).</summary>
     internal readonly uint ResourceSetCount;
 
-    internal readonly ResourceRefCount RefCount;
 
     /// <summary>
     /// Cross-frame descriptor set cache, content-addressed by bound resources.
@@ -80,7 +79,6 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
         : base(description)
     {
         _gd = gd;
-        RefCount = new ResourceRefCount(DestroyNative);
 
         ShaderStageDescription[] stages = description.Stages;
         for (int i = 0; i < stages.Length; i++)
@@ -110,7 +108,7 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
 
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    private protected override void DisposeCore() => RefCount.Decrement();
+    private protected override void DisposeCore() => _gd.DisposeWhenRetired(DestroyNative);
 
     private void DestroyNative()
     {

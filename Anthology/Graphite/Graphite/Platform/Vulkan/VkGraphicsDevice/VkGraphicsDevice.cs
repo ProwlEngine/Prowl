@@ -180,6 +180,9 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         DisposeStagingResources();
 
+        WaitForGraphicsQueueIdle();
+        FlushAllRetired();
+
         Vk.DestroyPipelineCache(Device, DriverPipelineCache, null);
 
         MemoryManager.Dispose();

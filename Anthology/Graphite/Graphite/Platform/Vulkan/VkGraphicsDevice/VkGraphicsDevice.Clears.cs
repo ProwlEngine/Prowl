@@ -7,7 +7,6 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private readonly object _initLock = new();
-    private readonly List<ResourceRefCount> _initRetained = [];
     private SharedCommandPool? _initPool;
     private Silk.NET.Vulkan.CommandBuffer _initCb;
 
@@ -26,7 +25,7 @@ internal unsafe partial class VkGraphicsDevice
             VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, ImageLayout.TransferDstOptimal);
             Vk.CmdClearColorImage(cb, texture.OptimalDeviceImage, ImageLayout.TransferDstOptimal, &color, 1, &range);
             VkBarriers.Transition(this, cb, texture, ImageLayout.TransferDstOptimal, VkBarriers.RestingLayout(texture));
-            EndInitCommands(texture, cb, immediatePool);
+            EndInitCommands(cb, immediatePool);
         }
     }
 
@@ -51,7 +50,7 @@ internal unsafe partial class VkGraphicsDevice
                 1,
                 &range);
             VkBarriers.Transition(this, cb, texture, ImageLayout.TransferDstOptimal, VkBarriers.RestingLayout(texture));
-            EndInitCommands(texture, cb, immediatePool);
+            EndInitCommands(cb, immediatePool);
         }
     }
 
@@ -61,7 +60,7 @@ internal unsafe partial class VkGraphicsDevice
         {
             Silk.NET.Vulkan.CommandBuffer cb = BeginInitCommands(texture, out SharedCommandPool? immediatePool);
             VkBarriers.Transition(this, cb, texture, ImageLayout.Undefined, layout);
-            EndInitCommands(texture, cb, immediatePool);
+            EndInitCommands(cb, immediatePool);
         }
     }
 
@@ -73,8 +72,6 @@ internal unsafe partial class VkGraphicsDevice
                 return;
 
             _initPool = null;
-            pool.Retained.AddRange(_initRetained);
-            _initRetained.Clear();
             pool.EndAndSubmit(_initCb, waitAcquire: false);
         }
     }
@@ -97,15 +94,8 @@ internal unsafe partial class VkGraphicsDevice
         return _initCb;
     }
 
-    private void EndInitCommands(VkTexture texture, Silk.NET.Vulkan.CommandBuffer cb, SharedCommandPool? immediatePool)
+    private static void EndInitCommands(Silk.NET.Vulkan.CommandBuffer cb, SharedCommandPool? immediatePool)
     {
-        if (immediatePool != null)
-        {
-            immediatePool.EndAndSubmit(cb);
-            return;
-        }
-
-        texture.RefCount.Increment();
-        _initRetained.Add(texture.RefCount);
+        immediatePool?.EndAndSubmit(cb);
     }
 }

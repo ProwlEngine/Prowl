@@ -34,7 +34,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     public CommandPool CommandPool => _pool;
     public Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
 
-    public ResourceRefCount RefCount { get; }
 
     public VkCommandBuffer(VkGraphicsDevice gd)
         : base(gd)
@@ -49,7 +48,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _gd.Vk.CreateCommandPool(_gd.Device, in poolCI, null, out _pool).CheckResult();
 
         _cb = GetNextCommandBuffer();
-        RefCount = new ResourceRefCount(DestroyNative);
         _descriptorBinder = new VkDescriptorBinder(this, gd);
 
         Constructor_RecordAllocation();
@@ -141,7 +139,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private protected override void DisposeCore()
     {
-        RefCount.Decrement();
+        _gd.DisposeWhenRetired(DestroyNative);
     }
 
     private void DestroyNative()

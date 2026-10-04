@@ -77,12 +77,12 @@ public abstract partial class DeviceBuffer : GraphicsResource
                 "If this buffer is rewritten every execution, rent a transient graph buffer per execution instead.");
         }
 
-        OrphanCore(device, executionId);
+        OrphanCore();
 
         _lastOrphanExecutionId = executionId;
         _inFlightDevice = null;
         _inFlightExecutionId = 0;
     }
 
-    protected internal abstract void OrphanCore(GraphicsDevice device, ulong inFlightExecutionId);
+    protected internal abstract void OrphanCore();
 }

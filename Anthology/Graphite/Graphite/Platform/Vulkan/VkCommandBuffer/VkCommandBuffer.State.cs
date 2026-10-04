@@ -70,7 +70,6 @@ internal unsafe partial class VkCommandBuffer
 
         _currentShaderProgram = sp;
         _hasResolvedPipeline = false;
-        AddStagingResource(sp.RefCount);
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)
@@ -80,7 +79,6 @@ internal unsafe partial class VkCommandBuffer
 
         _currentComputeProgram = cp;
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, cp.DevicePipeline);
-        AddStagingResource(cp.RefCount);
     }
 
     private protected override void SetPropertiesCore(PropertySet properties) { }

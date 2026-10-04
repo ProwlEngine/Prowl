@@ -54,7 +54,6 @@ internal unsafe partial class VkSwapchain : Swapchain
     public SurfaceKHR Surface => _surface;
     public Queue PresentQueue => _presentQueue;
     public uint PresentQueueIndex => _presentQueueIndex;
-    public ResourceRefCount RefCount { get; }
 
     public VkSwapchain(VkGraphicsDevice gd, in SwapchainDescription description) : this(gd, description, default) { }
 
@@ -82,7 +81,6 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         _framebuffer = new VkSwapchainFramebuffer(gd, this, _surface, description.Width, description.Height, description.DepthFormat);
 
-        RefCount = new ResourceRefCount(DestroyNative);
         _gd.RegisterSwapchain(this);
 
         if (CreateSwapchain(description.Width, description.Height))
@@ -376,7 +374,7 @@ internal unsafe partial class VkSwapchain : Swapchain
 
     private protected override void DisposeCore()
     {
-        RefCount.Decrement();
+        _gd.DisposeWhenRetired(DestroyNative);
     }
 
     private void DestroyNative()

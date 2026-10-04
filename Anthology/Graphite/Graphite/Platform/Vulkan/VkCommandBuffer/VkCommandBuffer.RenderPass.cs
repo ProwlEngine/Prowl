@@ -132,11 +132,9 @@ internal unsafe partial class VkCommandBuffer
         Util.EnsureArrayMinimumSize(ref _clearValues, clearValueCount + 1); // Leave an extra space for the depth value (tracked separately).
         Util.ClearArray(_validColorClearValues);
         Util.EnsureArrayMinimumSize(ref _validColorClearValues, clearValueCount);
-        AddStagingResource(vkFB.RefCount);
 
         if (fb is VkSwapchainFramebuffer scFB)
         {
-            AddStagingResource(scFB.Swapchain.RefCount);
         }
     }
 

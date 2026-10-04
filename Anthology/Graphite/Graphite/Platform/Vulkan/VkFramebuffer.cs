@@ -217,6 +217,8 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out deviceFramebuffer).CheckResult();
     }
 
+    private protected override VkGraphicsDevice OwnerDevice => _gd;
+
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
     protected override void DestroyNative()
