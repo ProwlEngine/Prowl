@@ -201,10 +201,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             if (uEntry == null)
                 continue;
 
-            ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
-                ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
-                (int)field.Size);
-            src.CopyTo(scratch.Slice((int)field.Offset, (int)field.Size));
+            CopyUniform(uEntry, scratch.Slice((int)field.Offset, (int)field.Size));
         }
 
         // One write per byte-contiguous run of set fields, so gaps left by unset fields stay intact.
@@ -310,10 +307,26 @@ internal unsafe sealed partial class VkDescriptorBinder
             if (uEntry == null)
                 continue;
 
-            ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
-                ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
-                (int)field.Size);
-            src.CopyTo(dst.Slice((int)field.Offset, (int)field.Size));
+            CopyUniform(uEntry, dst.Slice((int)field.Offset, (int)field.Size));
         }
     }
+
+    private static void CopyUniform(PropertyEntry entry, Span<byte> dst)
+    {
+        int count = Math.Min(dst.Length, (int)UniformSize(entry.UniformType));
+        MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), count).CopyTo(dst);
+        dst.Slice(count).Clear();
+    }
+
+    private static uint UniformSize(UniformScalarType type) => type switch
+    {
+        UniformScalarType.Float1 or UniformScalarType.Int1 => 4,
+        UniformScalarType.Float2 or UniformScalarType.Int2 or UniformScalarType.Double1 => 8,
+        UniformScalarType.Float3 or UniformScalarType.Int3 => 12,
+        UniformScalarType.Float4 or UniformScalarType.Int4 or UniformScalarType.Double2 => 16,
+        UniformScalarType.Double3 => 24,
+        UniformScalarType.Double4 => 32,
+        UniformScalarType.Float4x4 => 64,
+        _ => 128,
+    };
 }
