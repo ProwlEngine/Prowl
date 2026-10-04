@@ -12,7 +12,6 @@ internal unsafe partial class VkGraphicsDevice
 {
     private const uint VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR = 0x00000001;
 
-    private bool _standardValidationSupported;
     private bool _khronosValidationSupported;
 
     private void CreateInstance(bool debug, VulkanDeviceOptions options, VkSurfaceSwapchainSource? surface)
@@ -38,7 +37,7 @@ internal unsafe partial class VkGraphicsDevice
         int maxInstanceExtensions = (options.InstanceExtensions?.Length ?? 0) + 16;
         IntPtr* instanceExtensions = stackalloc IntPtr[maxInstanceExtensions];
         uint instanceExtensionCount = 0;
-        IntPtr* instanceLayers = stackalloc IntPtr[2];
+        IntPtr* instanceLayers = stackalloc IntPtr[1];
         uint instanceLayerCount = 0;
 
         if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_portability_subset))
@@ -92,11 +91,6 @@ internal unsafe partial class VkGraphicsDevice
                 {
                     debugReportExtensionAvailable = true;
                     instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAMEUtf8;
-                }
-                if (availableInstanceLayers.Contains(CommonStrings.StandardValidationLayerName))
-                {
-                    _standardValidationSupported = true;
-                    instanceLayers[instanceLayerCount++] = (nint)CommonStrings.StandardValidationLayerNameUtf8;
                 }
                 if (availableInstanceLayers.Contains(CommonStrings.KhronosValidationLayerName))
                 {
@@ -295,12 +289,8 @@ internal unsafe partial class VkGraphicsDevice
 
         deviceCreateInfo.PEnabledFeatures = &deviceFeatures;
 
-        IntPtr* layerNames = stackalloc IntPtr[2];
+        IntPtr* layerNames = stackalloc IntPtr[1];
         uint layerNameCount = 0;
-        if (_standardValidationSupported)
-        {
-            layerNames[layerNameCount++] = (nint)CommonStrings.StandardValidationLayerNameUtf8;
-        }
         if (_khronosValidationSupported)
         {
             layerNames[layerNameCount++] = (nint)CommonStrings.KhronosValidationLayerNameUtf8;

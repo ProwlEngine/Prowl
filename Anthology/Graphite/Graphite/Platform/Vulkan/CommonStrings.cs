@@ -25,9 +25,6 @@ internal static unsafe class CommonStrings
     public const string VK_EXT_DEBUG_UTILS_EXTENSION_NAME = "VK_EXT_debug_utils";
     public static byte* VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8 => Utf8("VK_EXT_debug_utils"u8);
 
-    public const string StandardValidationLayerName = "VK_LAYER_LUNARG_standard_validation";
-    public static byte* StandardValidationLayerNameUtf8 => Utf8("VK_LAYER_LUNARG_standard_validation"u8);
-
     public const string KhronosValidationLayerName = "VK_LAYER_KHRONOS_validation";
     public static byte* KhronosValidationLayerNameUtf8 => Utf8("VK_LAYER_KHRONOS_validation"u8);
 
