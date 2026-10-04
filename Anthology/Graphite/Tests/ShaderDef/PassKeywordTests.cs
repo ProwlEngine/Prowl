@@ -164,4 +164,16 @@ public class PassKeywordTests : IDisposable
 
         Assert.Same(fromReset, _pass.ActiveVariant);
     }
+
+
+    [Fact]
+    public void SetKeyword_UnknownValue_ThrowsAndKeepsSelection()
+    {
+        _pass.SetKeyword(K("SKINNED", "true"));
+
+        Assert.Throws<ArgumentException>(() => _pass.SetKeyword(K("SKINNED", "True")));
+        Assert.False(_pass.TrySetKeyword(K("SKINNED", "True")));
+        Assert.Throws<ArgumentException>(() => _pass.ApplyKeywords([K("SKINNED", "True")]));
+        Assert.Equal("true", Active("SKINNED"));
+    }
 }

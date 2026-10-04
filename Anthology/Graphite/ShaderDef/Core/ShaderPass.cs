@@ -37,9 +37,10 @@ public sealed class ShaderPass
 
     private VariantSpace[] _axes = [];
     private Keyword[][] _combos = [];
-    private Dictionary<int, int> _nameIdToSlot = new();
-    private KeywordMap? _keywordMap;
-    private KeywordState _state;
+    private Dictionary<string, int> _axisByName = new();
+    private Dictionary<string, int>[] _valueIndices = [];
+    private int[] _strides = [];
+    private int[] _selection = [];
     private Variant?[] _variants = [];
     private int _activeIndex;
     private Variant? _fallback;
@@ -64,25 +65,29 @@ public sealed class ShaderPass
         _programCache = new();
         _fallbackProgramCache = new();
 
-        // The keyword name -> slot mapping is shared by every state; the first combination names every
-        // axis exactly once, so it seeds the slots the same way VariantSet does.
-        _nameIdToSlot = [];
-        Keyword[] baseCombo = _combos[0];
-        for (int i = 0; i < baseCombo.Length; i++)
-            _nameIdToSlot[baseCombo[i].NameId] = i;
+        _axisByName = new();
+        _valueIndices = new Dictionary<string, int>[axes.Length];
+        _strides = new int[axes.Length];
+        _selection = new int[axes.Length];
 
-        KeywordState[] states = new KeywordState[_combos.Length];
-        for (int i = 0; i < _combos.Length; i++)
-            states[i] = new KeywordState(_nameIdToSlot, _combos[i]);
+        int stride = 1;
+        for (int i = axes.Length - 1; i >= 0; i--)
+        {
+            _axisByName[axes[i].Name] = i;
+            _strides[i] = stride;
+            stride *= axes[i].Values.Count;
 
-        _keywordMap = new KeywordMap(states);
-        _state = new KeywordState(_nameIdToSlot, _combos[0]);
-        _activeIndex = _keywordMap.FindNearest(_state);
+            Dictionary<string, int> values = new();
+            for (int v = 0; v < axes[i].Values.Count; v++)
+                values[axes[i].Values[v]] = v;
+            _valueIndices[i] = values;
+        }
+
+        _activeIndex = 0;
 
         foreach (Variant variant in known)
         {
-            int index = _keywordMap.Find(new KeywordState(_nameIdToSlot, variant.Keywords));
-            if (index >= 0)
+            if (TryGetIndex(variant.Keywords, out int index))
                 _variants[index] = variant;
         }
 
@@ -199,21 +204,27 @@ public sealed class ShaderPass
     public void ResetKeywords()
     {
         EnsureCreated();
-        _state.Reset(_combos[0]);
+        Array.Clear(_selection);
         _activeIndex = 0;
     }
 
 
     /// <summary>
-    /// Sets every keyword whose name is an axis here, silently skipping the rest, then re-resolves once. Returns how many applied.
+    /// Sets every keyword whose name is an axis here, silently skipping unknown names, then re-resolves once. Throws if a known axis gets an unknown value. Returns how many applied.
     /// </summary>
     public int ApplyKeywords(ReadOnlySpan<Keyword> keywords)
     {
         EnsureCreated();
+        for (int i = 0; i < keywords.Length; i++)
+        {
+            if (_axisByName.TryGetValue(keywords[i].Name, out int slot) && !_valueIndices[slot].ContainsKey(keywords[i].Value))
+                throw UnknownKeyword(keywords[i]);
+        }
+
         int applied = 0;
         for (int i = 0; i < keywords.Length; i++)
         {
-            if (_state.SetKeyword(keywords[i]))
+            if (TrySelect(keywords[i]))
                 applied++;
         }
 
@@ -225,12 +236,12 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Sets a keyword and re-resolves the active variant. Throws if name isn't a variant axis here.
+    /// Sets a keyword and re-resolves the active variant. Throws if the name isn't a variant axis here or the value isn't one of its values.
     /// </summary>
     public void SetKeyword(Keyword keyword)
     {
         EnsureCreated();
-        if (!_state.SetKeyword(keyword))
+        if (!TrySelect(keyword))
             throw UnknownKeyword(keyword);
 
         Reselect();
@@ -238,31 +249,31 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Sets several keywords atomically and re-resolves the active variant. Validates all first, throws if any name isn't a variant axis here.
+    /// Sets several keywords atomically and re-resolves the active variant. Validates all first, throws if any name or value is unknown here.
     /// </summary>
     public void SetKeywords(params Keyword[] keywords)
     {
         EnsureCreated();
         for (int i = 0; i < keywords.Length; i++)
         {
-            if (!_nameIdToSlot.ContainsKey(keywords[i].NameId))
+            if (!IsKnown(keywords[i]))
                 throw UnknownKeyword(keywords[i]);
         }
 
         for (int i = 0; i < keywords.Length; i++)
-            _state.SetKeyword(keywords[i]);
+            TrySelect(keywords[i]);
 
         Reselect();
     }
 
 
     /// <summary>
-    /// Sets a keyword if its name is a known axis, re-resolves active variant. Returns false and does nothing if unknown.
+    /// Sets a keyword if its name and value are known, re-resolves active variant. Returns false and does nothing if unknown.
     /// </summary>
     public bool TrySetKeyword(Keyword keyword)
     {
         EnsureCreated();
-        if (!_state.SetKeyword(keyword))
+        if (!TrySelect(keyword))
             return false;
 
         Reselect();
@@ -271,19 +282,19 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Sets several keywords if all names are known axes, re-resolves active variant. Returns false and does nothing if any is unknown.
+    /// Sets several keywords if all names and values are known, re-resolves active variant. Returns false and does nothing if any is unknown.
     /// </summary>
     public bool TrySetKeywords(params Keyword[] keywords)
     {
         EnsureCreated();
         for (int i = 0; i < keywords.Length; i++)
         {
-            if (!_nameIdToSlot.ContainsKey(keywords[i].NameId))
+            if (!IsKnown(keywords[i]))
                 return false;
         }
 
         for (int i = 0; i < keywords.Length; i++)
-            _state.SetKeyword(keywords[i]);
+            TrySelect(keywords[i]);
 
         Reselect();
         return true;
@@ -357,7 +368,42 @@ public sealed class ShaderPass
 
     private void Reselect()
     {
-        _activeIndex = _keywordMap!.FindNearest(_state);
+        int index = 0;
+        for (int i = 0; i < _selection.Length; i++)
+            index += _selection[i] * _strides[i];
+
+        _activeIndex = index;
+    }
+
+
+    private bool IsKnown(Keyword keyword)
+        => _axisByName.TryGetValue(keyword.Name, out int slot) && _valueIndices[slot].ContainsKey(keyword.Value);
+
+
+    private bool TrySelect(Keyword keyword)
+    {
+        if (!_axisByName.TryGetValue(keyword.Name, out int slot) || !_valueIndices[slot].TryGetValue(keyword.Value, out int value))
+            return false;
+
+        _selection[slot] = value;
+        return true;
+    }
+
+
+    private bool TryGetIndex(Keyword[] keywords, out int index)
+    {
+        index = 0;
+        int seen = 0;
+        for (int i = 0; i < keywords.Length; i++)
+        {
+            if (!_axisByName.TryGetValue(keywords[i].Name, out int slot) || !_valueIndices[slot].TryGetValue(keywords[i].Value, out int value))
+                return false;
+
+            index += value * _strides[slot];
+            seen++;
+        }
+
+        return seen == _axes.Length;
     }
 
 
@@ -422,7 +468,7 @@ public sealed class ShaderPass
 
 
     private ArgumentException UnknownKeyword(Keyword keyword)
-        => new($"Keyword '{keyword.Name}={keyword.Value}' is not present in any variant axis of pass '{Name}'.");
+        => new($"Keyword '{keyword.Name}={keyword.Value}' is not a known axis or value of pass '{Name}'.");
 
 
     private readonly record struct ProgramKey(int VariantIndex, BlendStateDescription Blend, DepthStencilStateDescription Depth, RasterizerStateDescription Raster);
