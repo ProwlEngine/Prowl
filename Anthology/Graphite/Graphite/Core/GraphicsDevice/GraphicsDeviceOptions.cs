@@ -25,16 +25,6 @@ public struct GraphicsDeviceOptions
     public uint TransientBufferInitialSize;
 
     /// <summary>
-    /// Soft cap in bytes for total transient memory per frame. Over this logs a one-shot warning. 0 = default 64 MB.
-    /// </summary>
-    public uint TransientBufferSoftCapBytes;
-
-    /// <summary>
-    /// Hard cap in bytes for total transient memory per frame. Over this throws. 0 = default 256 MB.
-    /// </summary>
-    public uint TransientBufferHardCapBytes;
-
-    /// <summary>
     /// Run Graphite's own usage checks, which throw on misuse. Default true; process-wide, the last device created decides for all.
     /// </summary>
     public bool GraphiteValidation = true;

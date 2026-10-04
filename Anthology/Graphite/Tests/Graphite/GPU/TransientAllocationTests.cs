@@ -16,6 +16,7 @@ namespace Prowl.Graphite.Tests;
 public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     private const uint PrimarySize = 4096;
+    private const uint HardCap = 256 * 1024 * 1024;
 
     private GraphicsDevice CreateIsolatedDevice(GraphicsDeviceOptions options) => GD.BackendType switch
     {
@@ -24,12 +25,10 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     };
 
     // A device whose primary transient buffer is PrimarySize, so overflow is reachable in a test.
-    private GraphicsDevice CreateSmallTransientDevice(uint softCap, uint hardCap)
+    private GraphicsDevice CreateSmallTransientDevice()
         => CreateIsolatedDevice(new GraphicsDeviceOptions(true)
         {
             TransientBufferInitialSize = PrimarySize,
-            TransientBufferSoftCapBytes = softCap,
-            TransientBufferHardCapBytes = hardCap,
         });
 
     [Fact]
@@ -149,7 +148,7 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void AllocateTransient_PastPrimaryCapacity_SpillsToAnOverflowBuffer()
     {
-        using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
+        using GraphicsDevice device = CreateSmallTransientDevice();
 
         device.RunTestGraph(context =>
         {
@@ -169,7 +168,7 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void AllocateTransient_OverflowBuffer_GrowsToAtLeastDoubleThePrimary()
     {
-        using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
+        using GraphicsDevice device = CreateSmallTransientDevice();
 
         device.RunTestGraph(context =>
         {
@@ -186,7 +185,7 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void AllocateTransient_LargerThanPrimary_SucceedsUnderHardCap()
     {
-        using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
+        using GraphicsDevice device = CreateSmallTransientDevice();
 
         device.RunTestGraph(context =>
         {
@@ -202,7 +201,7 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void AllocateTransient_SubsequentSpillsReuseTheOverflowBuffer()
     {
-        using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
+        using GraphicsDevice device = CreateSmallTransientDevice();
 
         device.RunTestGraph(context =>
         {
@@ -221,61 +220,15 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     [Fact]
     public void AllocateTransient_CumulativeAcrossOverflows_TripsHardCap()
     {
-        // Hard cap sits above any single allocation here, so it can only be reached by the
-        // running total across several overflow buffers. Soft and hard are equal because the
-        // device raises the hard cap to meet the soft cap when the soft cap is the larger one.
-        using GraphicsDevice device = CreateSmallTransientDevice(16 * 1024, 16 * 1024);
+        using GraphicsDevice device = CreateSmallTransientDevice();
 
         Assert.Throws<RenderException>(() => device.RunTestGraph(context =>
         {
             context.AllocateTransient(PrimarySize);
-            context.AllocateTransient(PrimarySize * 2);
-            context.AllocateTransient(PrimarySize * 2);
+            context.AllocateTransient(HardCap / 2);
+            context.AllocateTransient(HardCap / 2);
         }));
         device.WaitForIdle();
-    }
-
-    [Fact]
-    public void AllocateTransient_SoftCap_WarnsExactlyOncePerDevice()
-    {
-        using GraphicsDevice device = CreateSmallTransientDevice(PrimarySize, 1024 * 1024);
-
-        List<string> warnings = [];
-        device.OnWarning = message => warnings.Add(message);
-
-        device.RunTestGraph(context =>
-        {
-            context.AllocateTransient(PrimarySize);
-            context.AllocateTransient(PrimarySize * 2);
-            context.AllocateTransient(PrimarySize * 2);
-            context.AllocateTransient(PrimarySize * 2);
-        });
-        device.WaitForIdle();
-
-        // The soft cap is advisory: it must warn, but latch so it cannot spam a frame loop.
-        Assert.Single(warnings);
-        Assert.Contains("soft cap", warnings[0]);
-    }
-
-    [Fact]
-    public void AllocateTransient_SoftCapWarning_DoesNotRepeatOnLaterFrames()
-    {
-        using GraphicsDevice device = CreateSmallTransientDevice(PrimarySize, 1024 * 1024);
-
-        List<string> warnings = [];
-        device.OnWarning = message => warnings.Add(message);
-
-        for (int i = 0; i < 3; i++)
-        {
-            device.RunTestGraph(context =>
-            {
-                context.AllocateTransient(PrimarySize);
-                context.AllocateTransient(PrimarySize * 2);
-            });
-            device.WaitForIdle();
-        }
-
-        Assert.Single(warnings);
     }
 }
 

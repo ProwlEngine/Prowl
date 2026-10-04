@@ -237,7 +237,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public MissingPropertyHandler? OnMissingProperty { get; set; }
 
     /// <summary>
-    /// Fires on non-fatal warnings, like implicit buffer reallocation or hitting the transient soft cap. Writes to Console.Error by default; set null to silence, or replace to reroute.
+    /// Fires on non-fatal warnings, like implicit buffer reallocation. Writes to Console.Error by default; set null to silence, or replace to reroute.
     /// </summary>
     public GraphicsDeviceWarningHandler? OnWarning { get; set; } = message => Console.Error.WriteLine(message);
 

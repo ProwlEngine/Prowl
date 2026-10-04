@@ -12,14 +12,8 @@ public abstract partial class GraphicsDevice
     /// <summary>Start size of each slot's transient bump-allocator buffer, bytes.</summary>
     protected internal uint _transientInitialSize;
 
-    /// <summary>Soft cap on per-execution transient usage, bytes.</summary>
-    protected internal uint _transientSoftCapBytes;
-
-    /// <summary>Hard cap on per-execution transient usage, bytes.</summary>
-    protected internal uint _transientHardCapBytes;
-
-    /// <summary>True once the soft cap warning has fired.</summary>
-    protected internal bool _transientSoftCapWarned;
+    /// <summary>Fixed cap on per-execution transient usage, bytes. Over this throws.</summary>
+    protected internal const uint TransientHardCapBytes = 256 * 1024 * 1024;
 
     /// <summary>Ever-up execution counter. 0 = nothing started yet.</summary>
     protected ulong _executionIdCounter;
@@ -181,13 +175,6 @@ public abstract partial class GraphicsDevice
         for (uint i = 0; i < _maxExecutingTasks; i++)
             _freeSlots.Enqueue(i);
         _transientInitialSize = options.TransientBufferInitialSize == 0 ? 4 * 1024 * 1024 : options.TransientBufferInitialSize;
-        _transientSoftCapBytes = options.TransientBufferSoftCapBytes == 0 ? 64 * 1024 * 1024 : options.TransientBufferSoftCapBytes;
-        _transientHardCapBytes = options.TransientBufferHardCapBytes == 0 ? 256 * 1024 * 1024 : options.TransientBufferHardCapBytes;
-
-        if (_transientSoftCapBytes < _transientInitialSize)
-            _transientSoftCapBytes = _transientInitialSize;
-        if (_transientHardCapBytes < _transientSoftCapBytes)
-            _transientHardCapBytes = _transientSoftCapBytes;
 
         InitializeFrameOptions_SetValidationEnabled(options);
         InitializeFrameOptions_InitializeProfiling(options);

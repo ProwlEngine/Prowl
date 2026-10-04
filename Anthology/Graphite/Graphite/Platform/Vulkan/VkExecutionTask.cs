@@ -96,12 +96,6 @@ internal sealed class VkExecutionTask : ExecutionTask
     {
         ulong cumulative = _uniformArena.CumulativeBytes;
 
-        CheckCumulativeCaps_CheckHardCap(_gd, cumulative, _gd._transientHardCapBytes);
-
-        if (!_gd._transientSoftCapWarned && cumulative > _gd._transientSoftCapBytes)
-        {
-            _gd._transientSoftCapWarned = true;
-            _gd.OnWarning?.Invoke($"[Graphite] Warning: Transient buffer soft cap of {_gd._transientSoftCapBytes} bytes exceeded in execution {_id}.");
-        }
+        CheckCumulativeCaps_CheckHardCap(_gd, cumulative, GraphicsDevice.TransientHardCapBytes);
     }
 }

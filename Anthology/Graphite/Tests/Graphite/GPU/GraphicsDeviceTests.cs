@@ -104,14 +104,12 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
         GraphicsDeviceOptions options = new(true)
         {
             TransientBufferInitialSize = 4096,
-            TransientBufferSoftCapBytes = 4096,
-            TransientBufferHardCapBytes = 8192,
         };
 
         using GraphicsDevice device = CreateIsolatedDevice(options);
 
         Assert.Throws<RenderException>(() =>
-            device.RunTestGraph(context => context.AllocateTransient(options.TransientBufferHardCapBytes + 1)));
+            device.RunTestGraph(context => context.AllocateTransient(256u * 1024 * 1024 + 1)));
 
         device.WaitForIdle();
     }
