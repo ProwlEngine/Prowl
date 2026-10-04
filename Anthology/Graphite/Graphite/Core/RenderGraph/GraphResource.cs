@@ -220,9 +220,7 @@ public sealed class GraphBufferResource : GraphResource
 
         protected override DeviceBuffer Create(GraphicsDevice device, in BufferDescription desc, int viewId, int index)
         {
-            DeviceBuffer buffer = device.ResourceFactory.CreateBuffer(desc);
-            buffer.SetTransientWrites(true);
-            return buffer;
+            return device.ResourceFactory.CreateBuffer(desc);
         }
     }
 }

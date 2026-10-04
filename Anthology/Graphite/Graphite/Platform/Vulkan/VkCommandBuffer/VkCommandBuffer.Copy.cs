@@ -13,10 +13,8 @@ internal unsafe partial class VkCommandBuffer
 {
     private protected override void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)
     {
-        VkBuffer stagingBuffer = GetStagingBuffer(sizeInBytes);
-        _gd.UpdateBuffer(stagingBuffer, 0, source, sizeInBytes);
+        VkBuffer stagingBuffer = GetFilledStagingBuffer(source, sizeInBytes);
         CopyBuffer(stagingBuffer, 0, buffer, bufferOffsetInBytes, sizeInBytes);
-        buffer.MarkInFlight(_gd, ExecutionId);
     }
 
     private protected override void CopyBufferCore(
@@ -28,8 +26,6 @@ internal unsafe partial class VkCommandBuffer
     {
         EnsureNoRenderPass();
 
-        source.MarkInFlight(_gd, ExecutionId);
-        destination.MarkInFlight(_gd, ExecutionId);
         destination.MarkContentChanged();
 
         VkBuffer srcVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(source);
@@ -71,8 +67,7 @@ internal unsafe partial class VkCommandBuffer
         uint width = region.Width, height = region.Height, depth = region.Depth;
         uint mipLevel = region.MipLevel, arrayLayer = region.ArrayLayer;
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
-        VkBuffer staging = GetStagingBuffer(sizeInBytes);
-        _gd.UpdateBuffer(staging, 0, source, sizeInBytes);
+        VkBuffer staging = GetFilledStagingBuffer(source, sizeInBytes);
 
         if (vkTex.IsStaging)
         {

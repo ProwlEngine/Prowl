@@ -135,7 +135,7 @@ public abstract partial class GraphicsDevice : IDisposable
         Map_CheckResource(resource, mode, subresource);
 
         if ((mode == MapMode.Write || mode == MapMode.ReadWrite) && resource is DeviceBuffer mapBuffer)
-            mapBuffer.EnsureWritable();
+            mapBuffer.MarkContentChanged();
 
         MappedResource mapped = MapCore(resource, mode, subresource);
         Profiler?.Record(BufferOpBin.Map, mapped.SizeInBytes);

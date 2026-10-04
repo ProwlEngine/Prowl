@@ -122,42 +122,6 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         _gd.RecordBufferAllocation(Usage, SizeInBytes);
     }
 
-    protected internal override void OrphanCore()
-    {
-        VkBufferHandle retiredBuffer = _deviceBuffer;
-        VkMemoryBlock retiredMemory = _memory;
-
-        CreateNativeBuffer();
-
-        _gd.DisposeWhenRetired(new RetiredNativeBuffer(_gd, retiredBuffer, retiredMemory, Usage, SizeInBytes).Dispose);
-    }
-
-    private sealed class RetiredNativeBuffer : IDisposable
-    {
-        private readonly VkGraphicsDevice _gd;
-        private readonly VkBufferHandle _buffer;
-        private readonly VkMemoryBlock _memory;
-        private readonly BufferUsage _usage;
-        private readonly uint _sizeInBytes;
-
-        public RetiredNativeBuffer(
-            VkGraphicsDevice gd, VkBufferHandle buffer, VkMemoryBlock memory, BufferUsage usage, uint sizeInBytes)
-        {
-            _gd = gd;
-            _buffer = buffer;
-            _memory = memory;
-            _usage = usage;
-            _sizeInBytes = sizeInBytes;
-        }
-
-        public void Dispose()
-        {
-            _gd.Vk.DestroyBuffer(_gd.Device, _buffer, null);
-            _gd.MemoryManager.Free(_memory);
-            _gd.RecordBufferFree(_usage, _sizeInBytes);
-        }
-    }
-
     private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
     private protected override void DisposeCore()

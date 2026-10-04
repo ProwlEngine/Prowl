@@ -37,8 +37,6 @@ public abstract partial class GraphicsDevice
 
     private DeviceBuffer CreateTransientBuffer(BufferDescription desc)
     {
-        DeviceBuffer buffer = ResourceFactory.CreateBuffer(desc);
-        buffer.SetTransientWrites(true);
-        return buffer;
+        return ResourceFactory.CreateBuffer(desc);
     }
 }

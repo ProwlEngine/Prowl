@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using Silk.NET.Vulkan;
 
@@ -99,6 +101,13 @@ internal unsafe partial class VkCommandBuffer
             _currentStagingInfo.BuffersUsed.Add(staging);
             return staging;
         }
+    }
+
+    private VkBuffer GetFilledStagingBuffer(IntPtr source, uint sizeInBytes)
+    {
+        VkBuffer staging = GetStagingBuffer(sizeInBytes);
+        Unsafe.CopyBlock((byte*)staging.Memory.BlockMappedPointer, source.ToPointer(), sizeInBytes);
+        return staging;
     }
 
     private class StagingResourceInfo

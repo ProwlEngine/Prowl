@@ -43,7 +43,6 @@ internal unsafe sealed partial class VkDescriptorBinder
                 case ResourceKind.UniformBuffer:
                     {
                         DeviceBufferRange range = ResolveUboRange(in elem, meta, i, out r.Missing);
-                        range.Buffer.MarkInFlight(_gd, executionId);
                         r.Buffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         r.DescRange = range.SizeInBytes;
                         r.DynOffset = range.Offset;
@@ -54,7 +53,6 @@ internal unsafe sealed partial class VkDescriptorBinder
                 case ResourceKind.StructuredBufferReadWrite:
                     {
                         DeviceBufferRange range = ResolveStructuredRange(in elem, out r.Missing);
-                        range.Buffer.MarkInFlight(_gd, executionId);
                         r.Buffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         r.DescOffset = range.Offset;
                         r.DescRange = range.SizeInBytes;

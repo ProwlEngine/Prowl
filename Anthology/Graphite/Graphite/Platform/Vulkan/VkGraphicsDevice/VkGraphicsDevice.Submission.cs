@@ -359,23 +359,6 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_stagingResourcesLock)
         {
-            if (_submittedStagingTextures.TryGetValue(completedCB, out VkTexture? stagingTex))
-            {
-                _submittedStagingTextures.Remove(completedCB);
-                _availableStagingTextures.Add(stagingTex);
-            }
-            if (_submittedStagingBuffers.TryGetValue(completedCB, out VkBuffer? stagingBuffer))
-            {
-                _submittedStagingBuffers.Remove(completedCB);
-                if (stagingBuffer.SizeInBytes <= MaxStagingBufferSize)
-                {
-                    _availableStagingBuffers.Add(stagingBuffer);
-                }
-                else
-                {
-                    stagingBuffer.Dispose();
-                }
-            }
             if (_submittedSharedCommandPools.TryGetValue(completedCB, out SharedCommandPool? sharedPool))
             {
                 _submittedSharedCommandPools.Remove(completedCB);

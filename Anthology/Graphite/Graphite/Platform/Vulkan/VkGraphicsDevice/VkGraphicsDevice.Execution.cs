@@ -31,7 +31,7 @@ internal unsafe partial class VkGraphicsDevice
             VkFence slotWrapper = new(this, false);
 
             VkBuffer primary = new(this, new BufferDescription(_transientInitialSize,
-                BufferUsage.Dynamic | BufferUsage.UniformBuffer) { TransientWrites = true });
+                BufferUsage.Dynamic | BufferUsage.UniformBuffer));
             primary.Name = $"TransientPrimary[{i}]";
 
             _slots[i] = new SlotState
@@ -132,7 +132,7 @@ internal unsafe partial class VkGraphicsDevice
         }
 
         VkBuffer overflow = new(this, new BufferDescription(sizeInBytes,
-            BufferUsage.Dynamic | BufferUsage.UniformBuffer) { TransientWrites = true });
+            BufferUsage.Dynamic | BufferUsage.UniformBuffer));
         overflow.Name = "TransientOverflow";
         return overflow;
     }

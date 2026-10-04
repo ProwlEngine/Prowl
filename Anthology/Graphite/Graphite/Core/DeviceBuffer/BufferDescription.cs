@@ -19,10 +19,6 @@ public record struct BufferDescription
     /// Element size for structured buffers, else zero.
     /// </summary>
     public uint StructureByteStride;
-    /// <summary>
-    /// Skips write-hazard tracking. Risks a torn frame for cheap in-place updates.
-    /// </summary>
-    public bool TransientWrites;
 
     /// <summary>
     /// Non-dynamic buffer description.
@@ -34,7 +30,6 @@ public record struct BufferDescription
         SizeInBytes = sizeInBytes;
         Usage = usage;
         StructureByteStride = 0;
-        TransientWrites = false;
     }
 
     /// <summary>
@@ -48,6 +43,5 @@ public record struct BufferDescription
         SizeInBytes = sizeInBytes;
         Usage = usage;
         StructureByteStride = structureByteStride;
-        TransientWrites = false;
     }
 }

@@ -68,7 +68,6 @@ internal unsafe partial class VkCommandBuffer
 
     private VkBuffer ResolveIndirectBuffer(DeviceBuffer indirectBuffer)
     {
-        indirectBuffer.MarkInFlight(_gd, ExecutionId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         return vkBuffer;
     }
@@ -146,7 +145,6 @@ internal unsafe partial class VkCommandBuffer
             for (int slot = 0; slot < count; slot++)
             {
                 VertexBinding binding = _vbCacheBindings[slot];
-                binding.Buffer.MarkInFlight(_gd, ExecutionId);
 
                 if (captureForProfiler)
                     CaptureResolvedVertexBinding(in binding);
@@ -164,7 +162,6 @@ internal unsafe partial class VkCommandBuffer
             VertexLayoutDescription layout = layouts[slot];
             source.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
-            binding.Buffer.MarkInFlight(_gd, ExecutionId);
 
             if (captureForProfiler)
                 CaptureResolvedVertexBinding(in binding);
@@ -191,7 +188,6 @@ internal unsafe partial class VkCommandBuffer
         _currentIndexCount = indexCount;
         DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
-        ib.MarkInFlight(_gd, ExecutionId);
 
         if (WantsDrawBufferCapture)
             CaptureResolvedIndexBinding(ib, fmt, indexCount);

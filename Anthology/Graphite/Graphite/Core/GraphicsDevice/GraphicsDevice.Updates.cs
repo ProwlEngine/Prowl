@@ -7,7 +7,7 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// Updates a texture region from a pointer.
+    /// Updates a texture region from a pointer. Staged and submitted now; blocks only for Staging resources.
     /// </summary>
     /// <param name="texture">Texture to update.</param>
     /// <param name="source">Pointer to packed pixel data for the region.</param>
@@ -18,11 +18,10 @@ public abstract partial class GraphicsDevice
         UpdateTexture_CheckParameters(
             texture,
             sizeInBytes, region);
-        UpdateTextureCore(
-            texture,
-            source,
-            sizeInBytes, region);
-        Profiler?.Record(BufferOpBin.Update, sizeInBytes);
+        TextureRegion copy = region;
+        GpuSubmission submission = Record(cb => cb.UpdateTexture(texture, source, sizeInBytes, copy), "UpdateTexture");
+        if ((texture.Usage & TextureUsage.Staging) != 0)
+            submission.Wait();
     }
 
     /// <summary>
@@ -45,7 +44,7 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Updates a buffer region with new data.
+    /// Updates a buffer region with new data. Staged and submitted now; blocks only for Staging resources.
     /// </summary>
     /// <param name="buffer">Buffer to update.</param>
     /// <param name="bufferOffsetInBytes">Byte offset to write at.</param>
@@ -66,8 +65,10 @@ public abstract partial class GraphicsDevice
         {
             return;
         }
-        buffer.EnsureWritable();
-        UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
+        buffer.MarkContentChanged();
+        GpuSubmission submission = Record(cb => cb.UpdateBuffer(buffer, bufferOffsetInBytes, source, sizeInBytes), "UpdateBuffer");
+        if ((buffer.Usage & BufferUsage.Staging) != 0)
+            submission.Wait();
         Profiler?.Record(BufferOpBin.Update, sizeInBytes);
     }
 
@@ -106,11 +107,4 @@ public abstract partial class GraphicsDevice
             UpdateBuffer(buffer, bufferOffsetInBytes, (IntPtr)pin, (uint)(sizeof(T) * source.Length));
         }
     }
-
-    private protected abstract void UpdateTextureCore(
-        Texture texture,
-        IntPtr source,
-        uint sizeInBytes, in TextureRegion region);
-
-    private protected abstract void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);
 }
