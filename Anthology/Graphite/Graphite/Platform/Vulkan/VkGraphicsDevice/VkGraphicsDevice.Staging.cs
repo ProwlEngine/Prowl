@@ -10,7 +10,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private const uint MinStagingBufferSize = 64;
-    private const uint MaxStagingBufferSize = 512;
+    private const uint MaxStagingBufferSize = 16 * 1024 * 1024;
 
     private const int SharedCommandPoolCount = 4;
     private readonly Stack<SharedCommandPool> _sharedGraphicsCommandPools = new();
@@ -200,7 +200,9 @@ internal unsafe partial class VkGraphicsDevice
             }
         }
 
-        uint newBufferSize = Math.Max(MinStagingBufferSize, size);
+        uint newBufferSize = size <= MaxStagingBufferSize
+            ? Math.Max(MinStagingBufferSize, System.Numerics.BitOperations.RoundUpToPowerOf2(size))
+            : size;
         VkBuffer newBuffer = (VkBuffer)ResourceFactory.CreateBuffer(
             new BufferDescription(newBufferSize, BufferUsage.Staging));
         return newBuffer;
