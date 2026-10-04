@@ -11,58 +11,54 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice
 {
-    private DebugReportCallbackEXT _debugCallbackHandle;
-    private PfnDebugReportCallbackEXT _debugCallbackFunc;
+    private DebugUtilsMessengerEXT _debugMessenger;
     private bool _debugUtilsEnabled;
 
     // Stored validation error from the debug callback (cannot throw from unmanaged callback)
     private static volatile string? _lastValidationError;
 
-    public void EnableDebugCallback(DebugReportFlagsEXT flags = DebugReportFlagsEXT.WarningBitExt | DebugReportFlagsEXT.ErrorBitExt)
+    public void EnableDebugCallback(
+        DebugUtilsMessageSeverityFlagsEXT severity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt)
     {
-        Debug.WriteLine("Enabling Vulkan Debug callbacks.");
-        _debugCallbackFunc = new PfnDebugReportCallbackEXT(&DebugCallback);
-        DebugReportCallbackCreateInfoEXT debugCallbackCI = new(sType: StructureType.DebugReportCallbackCreateInfoExt);
-        debugCallbackCI.Flags = flags;
-        debugCallbackCI.PfnCallback = _debugCallbackFunc;
+        if (DebugUtils == null)
+            return;
 
-        if (Vk.TryGetInstanceExtension(Instance, out _extDebugReport))
+        Debug.WriteLine("Enabling Vulkan Debug callbacks.");
+        DebugUtilsMessengerCreateInfoEXT createInfo = new(sType: StructureType.DebugUtilsMessengerCreateInfoExt)
         {
-            _extDebugReport.CreateDebugReportCallback(Instance, in debugCallbackCI, null, out _debugCallbackHandle).CheckResult();
-        }
+            MessageSeverity = severity,
+            MessageType = DebugUtilsMessageTypeFlagsEXT.GeneralBitExt
+                | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt
+                | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt,
+            PfnUserCallback = new PfnDebugUtilsMessengerCallbackEXT(&DebugCallback)
+        };
+
+        DebugUtils.CreateDebugUtilsMessenger(Instance, in createInfo, null, out _debugMessenger).CheckResult();
     }
 
     private void DestroyDebugCallback()
     {
-        if (_debugCallbackFunc.Handle != default)
+        if (_debugMessenger.Handle != 0)
         {
-            _extDebugReport?.DestroyDebugReportCallback(Instance, _debugCallbackHandle, null);
+            DebugUtils!.DestroyDebugUtilsMessenger(Instance, _debugMessenger, null);
+            _debugMessenger = default;
         }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static Bool32 DebugCallback(
-        DebugReportFlagsEXT flags,
-        DebugReportObjectTypeEXT objectType,
-        ulong @object,
-        nuint location,
-        int messageCode,
-        byte* pLayerPrefix,
-        byte* pMessage,
+        DebugUtilsMessageSeverityFlagsEXT severity,
+        DebugUtilsMessageTypeFlagsEXT types,
+        DebugUtilsMessengerCallbackDataEXT* pCallbackData,
         void* pUserData)
     {
-        string message = Util.GetString(pMessage);
-        DebugReportFlagsEXT debugReportFlags = flags;
+        string fullMessage = $"[{severity}] ({types}) {Util.GetString(pCallbackData->PMessage)}";
 
-        string fullMessage = $"[{debugReportFlags}] ({objectType}) {message}";
-
-        if (debugReportFlags == DebugReportFlagsEXT.ErrorBitExt)
-        {
+        if ((severity & DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt) != 0)
             _lastValidationError = fullMessage;
-            return true;
-        }
+        else
+            Console.WriteLine(fullMessage);
 
-        Console.WriteLine(fullMessage);
         return false;
     }
 

@@ -10,7 +10,6 @@ internal unsafe partial class VkGraphicsDevice
     internal KhrSwapchain KhrSwapchain;
     internal ExtDebugUtils? DebugUtils;
 
-    private ExtDebugReport _extDebugReport;
     private bool _memoryBudgetSupported;
 
     public ExtensionProperties[] GetDeviceExtensionProperties()

@@ -19,9 +19,6 @@ internal static unsafe class CommonStrings
 
     public const string VK_MVK_IOS_SURFACE_EXTENSION_NAME = "VK_MVK_ios_surface";
 
-    public const string VK_EXT_DEBUG_REPORT_EXTENSION_NAME = "VK_EXT_debug_report";
-    public static byte* VK_EXT_DEBUG_REPORT_EXTENSION_NAMEUtf8 => Utf8("VK_EXT_debug_report"u8);
-
     public const string VK_EXT_DEBUG_UTILS_EXTENSION_NAME = "VK_EXT_debug_utils";
     public static byte* VK_EXT_DEBUG_UTILS_EXTENSION_NAMEUtf8 => Utf8("VK_EXT_debug_utils"u8);
 

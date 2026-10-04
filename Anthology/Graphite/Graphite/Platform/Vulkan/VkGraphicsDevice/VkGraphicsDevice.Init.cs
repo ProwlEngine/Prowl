@@ -33,7 +33,7 @@ internal unsafe partial class VkGraphicsDevice
 
         // Capacity = the caller's requested extensions plus the fixed ones added below. The
         // fixed set is at most 8 (portability_enumeration + up to 5 platform surface extensions
-        // + properties2 + debug_report); 16 leaves headroom so adding one can't overflow silently.
+        // + properties2); 16 leaves headroom so adding one can't overflow silently.
         int maxInstanceExtensions = (options.InstanceExtensions?.Length ?? 0) + 16;
         IntPtr* instanceExtensions = stackalloc IntPtr[maxInstanceExtensions];
         uint instanceExtensionCount = 0;
@@ -84,19 +84,10 @@ internal unsafe partial class VkGraphicsDevice
                 _debugUtilsEnabled = true;
             }
 
-            bool debugReportExtensionAvailable = false;
-            if (debug)
+            if (debug && availableInstanceLayers.Contains(CommonStrings.KhronosValidationLayerName))
             {
-                if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
-                {
-                    debugReportExtensionAvailable = true;
-                    instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAMEUtf8;
-                }
-                if (availableInstanceLayers.Contains(CommonStrings.KhronosValidationLayerName))
-                {
-                    _khronosValidationSupported = true;
-                    instanceLayers[instanceLayerCount++] = (nint)CommonStrings.KhronosValidationLayerNameUtf8;
-                }
+                _khronosValidationSupported = true;
+                instanceLayers[instanceLayerCount++] = (nint)CommonStrings.KhronosValidationLayerNameUtf8;
             }
 
             instanceCI.EnabledExtensionCount = instanceExtensionCount;
@@ -110,9 +101,11 @@ internal unsafe partial class VkGraphicsDevice
 
             Vk.CreateInstance(in instanceCI, null, out Instance).CheckResult();
 
-            if (debug && debugReportExtensionAvailable)
+            if (_debugUtilsEnabled)
             {
-                EnableDebugCallback();
+                Vk.TryGetInstanceExtension(Instance, out DebugUtils);
+                if (debug)
+                    EnableDebugCallback();
             }
         }
         finally
@@ -312,11 +305,6 @@ internal unsafe partial class VkGraphicsDevice
 
         Vk.TryGetInstanceExtension(Instance, out KhrSurface);
         Vk.TryGetDeviceExtension(Instance, Device, out KhrSwapchain);
-
-        if (_debugUtilsEnabled)
-        {
-            Vk.TryGetInstanceExtension(Instance, out DebugUtils);
-        }
 
         PhysicalDeviceVulkan12Properties driverProps = new(sType: StructureType.PhysicalDeviceVulkan12Properties);
         PhysicalDeviceProperties2 deviceProps = new(sType: StructureType.PhysicalDeviceProperties2, pNext: &driverProps);
