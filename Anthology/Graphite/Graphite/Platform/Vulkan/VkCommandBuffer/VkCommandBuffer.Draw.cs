@@ -12,6 +12,7 @@ internal unsafe partial class VkCommandBuffer
     private IVertexSource _vbCacheSource;
     private VkGraphicsProgram _vbCacheProgram;
     private int _vbCacheCount;
+    private uint _vbCacheVersion;
     private VertexBinding[] _vbCacheBindings = Array.Empty<VertexBinding>();
     private ResourceRefCount[] _vbCacheRefCounts = Array.Empty<ResourceRefCount>();
 
@@ -141,7 +142,8 @@ internal unsafe partial class VkCommandBuffer
         IVertexSource source = _currentVertexSource!;
 
         // Same source + program as last draw: reuse the resolved bindings, skip re-resolving and rebinding.
-        if (_vbCacheSource == source && _vbCacheProgram == program && _vbCacheCount == count)
+        uint sourceVersion = source is VertexSource versioned ? versioned.Version : 0;
+        if (_vbCacheSource == source && _vbCacheProgram == program && _vbCacheCount == count && _vbCacheVersion == sourceVersion)
         {
             for (int slot = 0; slot < count; slot++)
             {
@@ -186,6 +188,7 @@ internal unsafe partial class VkCommandBuffer
         _vbCacheSource = source;
         _vbCacheProgram = program;
         _vbCacheCount = count;
+        _vbCacheVersion = sourceVersion;
     }
 
     private void BindIndexBufferFromSource()

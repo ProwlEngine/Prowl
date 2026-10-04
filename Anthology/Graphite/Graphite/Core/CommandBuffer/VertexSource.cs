@@ -15,6 +15,8 @@ public sealed class VertexSource : IVertexSource
     public static readonly VertexSource None = new(PrimitiveTopology.TriangleList, frozen: true);
 
     private readonly bool _frozen;
+
+    internal uint Version { get; private set; }
     private readonly List<VertexAttributeID> _names = [];
     private readonly List<VertexBinding> _bindings = [];
     private DeviceBuffer? _indexBuffer;
@@ -61,6 +63,8 @@ public sealed class VertexSource : IVertexSource
             _names.Add(semantic);
             _bindings.Add(binding);
         }
+
+        unchecked { Version++; }
         return this;
     }
 
@@ -77,6 +81,7 @@ public sealed class VertexSource : IVertexSource
         _indexBuffer = buffer;
         _indexFormat = format;
         _indexCount = indexCount;
+        unchecked { Version++; }
         return this;
     }
 
