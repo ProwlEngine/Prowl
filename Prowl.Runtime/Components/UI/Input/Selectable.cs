@@ -23,6 +23,7 @@ public enum SelectionState
 /// across the four states, fires SFX through <see cref="UISounds"/>, and exposes
 /// per-instance overrides for both the colors and the audio.
 /// </summary>
+[AddComponentMenu("UI/Selectable")]
 [RequireComponent(typeof(RectTransform))]
 public class Selectable : UIBehaviour,
     IPointerEnterHandler, IPointerExitHandler,

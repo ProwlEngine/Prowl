@@ -48,6 +48,7 @@ public enum FillMethod
 /// The image fills the rect computed by the <see cref="RectTransform"/>.
 /// Alpha from the parent <see cref="CanvasGroup"/> is multiplied into <see cref="Color"/>.
 /// </remarks>
+[AddComponentMenu("UI/Image")]
 public class UIImage : Graphic
 {
     [SerializeIgnore] private static Texture2D _defaultTexture;

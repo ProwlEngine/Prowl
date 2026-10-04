@@ -5,6 +5,7 @@ using Prowl.Echo;
 
 namespace Prowl.Runtime.UI;
 
+[AddComponentMenu("UI/Canvas Group")]
 public class CanvasGroup : UIBehaviour
 {
     /// <summary>Opacity multiplier applied to all child elements (0 = transparent, 1 = opaque).</summary>

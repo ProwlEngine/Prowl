@@ -34,6 +34,7 @@ namespace Prowl.Vector;
 /// (1,1) is top-right, (0.5, 0.5) is center.
 /// </para>
 /// </remarks>
+[AddComponentMenu("UI/Rect Transform")]
 public sealed class RectTransform : MonoBehaviour
 {
     /// <summary>
