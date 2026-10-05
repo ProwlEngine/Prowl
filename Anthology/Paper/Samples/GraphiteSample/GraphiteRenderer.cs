@@ -13,11 +13,11 @@ namespace GraphiteSample;
 
 internal readonly struct CanvasView : IRenderView
 {
-    public Swapchain TargetSwapchain { get; }
+    public Framebuffer Target { get; }
 
     public CanvasView(uint width, uint height, Swapchain swapchain)
     {
-        TargetSwapchain = swapchain;
+        Target = swapchain.Framebuffer;
         PixelWidth = width;
         PixelHeight = height;
     }
