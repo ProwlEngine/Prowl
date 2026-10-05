@@ -253,7 +253,7 @@ internal static class UIRaycaster
     /// <summary>
     /// True when the GameObject carries an enabled <see cref="Graphic"/> that opts into hit-testing.
     /// Behaviours that draw nothing (layout groups, fitters, scroll rects, <see cref="Selectable"/>) are
-    /// deliberately not targets on their own - a widget needs a graphic to be clickable, as in Unity.
+    /// deliberately not targets on their own - a widget needs a graphic to be clickable.
     /// </summary>
     private static bool IsRaycastTarget(GameObject go)
     {

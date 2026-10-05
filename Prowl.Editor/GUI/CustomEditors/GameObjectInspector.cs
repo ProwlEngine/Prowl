@@ -758,7 +758,7 @@ public static class GameObjectInspector
     }
 
     /// <summary>
-    /// Position row. Each axis is contextual (Unity-style): a fixed axis shows Pos X / Pos Y, a
+    /// Position row. Each axis is contextual: a fixed axis shows Pos X / Pos Y, a
     /// stretched axis shows the edge inset (Left / Top) instead. Z always comes from Transform.LocalPosition.
     /// </summary>
     private static void DrawPositionRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt, Transform t)
@@ -1451,7 +1451,7 @@ public static class GameObjectInspector
     /// <summary>
     /// Change a RectTransform's anchors while keeping its on-screen rect fixed: the anchor reference
     /// shifts and <see cref="RectTransform.AnchoredPosition"/> / <see cref="RectTransform.SizeDelta"/>
-    /// are back-solved against the parent rect so the element does not move (Unity-style).
+    /// are back-solved against the parent rect so the element does not move.
     /// </summary>
     private static void SetAnchorsPreservingRect(RectTransform rt, Float2 newMin, Float2 newMax)
     {

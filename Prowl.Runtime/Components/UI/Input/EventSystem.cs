@@ -12,7 +12,7 @@ using Prowl.Vector.Geometry;
 namespace Prowl.Runtime.UI;
 
 /// <summary>
-/// Drives GameObject-UI input, Unity-style. A scene needs exactly one enabled <see cref="EventSystem"/>
+/// Drives GameObject-UI input. A scene needs exactly one enabled <see cref="EventSystem"/>
 /// for its <see cref="GameCanvas"/>es to receive pointer and keyboard events. Each frame it hit-tests the
 /// pointer against the scene's canvases (via <see cref="UIRaycaster"/>) and dispatches enter/exit, press,
 /// drag, click, scroll, submit/cancel and selection events to the components under it.

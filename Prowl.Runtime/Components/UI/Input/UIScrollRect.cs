@@ -290,8 +290,8 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
     /// <summary>
     /// Shows/hides each scrollbar based on whether its axis needs to scroll, and (for
     /// <see cref="ScrollbarVisibilityMode.AutoHideAndExpandViewport"/>) drives the viewport rect and the
-    /// scrollbar lengths so the viewport expands into the room a hidden bar would have taken. Mirrors
-    /// Unity's ScrollRect: the viewport and both scrollbars must be children of this root.
+    /// scrollbar lengths so the viewport expands into the room a hidden bar would have taken. The viewport
+    /// and both scrollbars must be children of this root.
     /// </summary>
     private void UpdateScrollbarVisibility()
     {

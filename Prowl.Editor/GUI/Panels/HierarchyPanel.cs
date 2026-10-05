@@ -984,7 +984,7 @@ public class HierarchyPanel : DockPanel
     }
 
     /// <summary>
-    /// Wraps the current selection in a new empty GameObject, Unity's "Create Empty Parent". The new
+    /// Wraps the current selection in a new empty GameObject, as Create Empty Parent. The new
     /// parent takes over the first selected object's slot - same parent, same sibling index - and
     /// sits at the centre of the selection so the group's pivot lands among the objects rather than
     /// at the world origin. Children keep their world transforms.

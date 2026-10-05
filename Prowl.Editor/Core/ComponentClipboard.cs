@@ -27,7 +27,7 @@ namespace Prowl.Editor.Core;
 /// is handed to Echo as the context's external-reference resolver, so Echo emits a stable key for
 /// them instead of deep-cloning the target into an orphan, and resolves that key back to the live
 /// instance on paste. References that can't be resolved (different scene, deleted object) become
-/// null, which mirrors Unity.
+/// null.
 /// </summary>
 public static class ComponentClipboard
 {
