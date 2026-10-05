@@ -9,6 +9,11 @@ internal static class ValidationHelpers
         if (device is { ValidationEnabled: false })
             return;
 
+        RequireNotNull(value, parameterName, caller);
+    }
+
+    private static void RequireNotNull(object value, string parameterName, string caller)
+    {
         if (value == null)
         {
             throw new ArgumentNullException(parameterName,
@@ -38,8 +43,8 @@ internal static class ValidationHelpers
         if (device is { ValidationEnabled: false })
             return;
 
-        RequireNotNull(device, source, nameof(source), "CopyTexture");
-        RequireNotNull(device, destination, nameof(destination), "CopyTexture");
+        RequireNotNull(source, nameof(source), "CopyTexture");
+        RequireNotNull(destination, nameof(destination), "CopyTexture");
     }
 
     internal static void CopyTextureCheckDimensionsCompatible(GraphicsDevice? device, Texture source, Texture destination)
@@ -47,6 +52,11 @@ internal static class ValidationHelpers
         if (device is { ValidationEnabled: false })
             return;
 
+        CopyTextureCheckDimensionsCompatible(source, destination);
+    }
+
+    private static void CopyTextureCheckDimensionsCompatible(Texture source, Texture destination)
+    {
         if (source.SampleCount != destination.SampleCount || source.Width != destination.Width
             || source.Height != destination.Height || source.Depth != destination.Depth
             || source.Format != destination.Format)
@@ -65,7 +75,7 @@ internal static class ValidationHelpers
         {
             throw new RenderException("Source and destination Textures are not compatible to be copied in CopyTexture.");
         }
-        CopyTextureCheckDimensionsCompatible(device, source, destination);
+        CopyTextureCheckDimensionsCompatible(source, destination);
     }
 
     internal static void CopyTextureCheckCompatibilityForSubresource(GraphicsDevice? device, Texture source, Texture destination, uint mipLevel, uint arrayLayer)
@@ -75,7 +85,7 @@ internal static class ValidationHelpers
 
         uint effectiveSrcArrayLayers = GetEffectiveArrayLayers(source);
         uint effectiveDstArrayLayers = GetEffectiveArrayLayers(destination);
-        CopyTextureCheckDimensionsCompatible(device, source, destination);
+        CopyTextureCheckDimensionsCompatible(source, destination);
         if (mipLevel >= source.MipLevels || mipLevel >= destination.MipLevels || arrayLayer >= effectiveSrcArrayLayers || arrayLayer >= effectiveDstArrayLayers)
         {
             throw new RenderException("mipLevel and arrayLayer must be less than the given Textures' mip level count and array layer count.");
