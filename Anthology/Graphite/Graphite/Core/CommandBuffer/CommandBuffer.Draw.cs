@@ -82,6 +82,7 @@ public abstract partial class CommandBuffer
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawIndexedArguments));
+        DrawIndexedIndirect_CheckIndexBuffer();
         Draw_PreDrawValidation();
 
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
