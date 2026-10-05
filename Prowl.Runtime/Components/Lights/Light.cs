@@ -36,8 +36,13 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public Color Color = Color.White;
     public float Intensity = 1.0f;
     public float ShadowStrength = 1.0f;
-    public float ShadowBias = 0.001f;
-    public float ShadowNormalBias = 0.0f;
+
+    /// <summary>How far receivers are pushed toward the light before the shadow test, in shadow map texels.</summary>
+    public float DepthBias = 1.0f;
+
+    /// <summary>How far receivers are pushed out along their surface normal before the shadow test, in shadow map texels.</summary>
+    public float NormalBias = 1.0f;
+
     public bool CastShadows = true;
     public ShadowQuality ShadowQuality = ShadowQuality.Soft;
 
@@ -54,6 +59,11 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     /// Owned and populated by <see cref="Rendering.SceneLightSystem"/> during reconcile.
     /// </summary>
     public int ShadowSlot { get; internal set; } = -1;
+
+    /// <summary>Hardware depth offset applied while drawing casters, scaled by each polygon's depth slope,
+    /// so surfaces at a grazing angle to the light do not shadow themselves.</summary>
+    protected const float CasterSlopeBias = 1f;
+    protected const float CasterConstantBias = 1f;
 
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)

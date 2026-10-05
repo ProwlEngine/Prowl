@@ -29,11 +29,12 @@ public class DirectionalLight : Light
     public Resolution ShadowResolution = Resolution._2048;
     public CascadeCount Cascades = CascadeCount.Two;
 
-    public float ShadowDistance = 70f;
+    /// <summary>How far from the shadow focus point shadows reach, in world units. They fade out over the last tenth.</summary>
+    public float ShadowDistance = 50f;
 
     // Cascade data (max 4 cascades)
     private Float4x4[] _cascadeShadowMatrices = new Float4x4[4];
-    private Float4[] _cascadeAtlasParams = new Float4[4]; // xy = atlas pos, z = atlas size, w = split distance
+    private Float4[] _cascadeAtlasParams = new Float4[4]; // xy = atlas pos, z = atlas size, w = cascade radius
     private int _activeCascades = 0;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
@@ -79,16 +80,18 @@ public class DirectionalLight : Light
 
     public override LightType GetLightType() => LightType.Directional;
 
-    internal void GetShadowMatrix(Float3 focusPosition, int shadowResolution, float cascadeDistance, out Float4x4 view, out Float4x4 projection)
+    /// <summary>
+    /// The cascade's view and projection: a box around the snapped focus point that holds every receiver
+    /// within <paramref name="cascadeRadius"/> of it. Casters further toward the light than the box are
+    /// kept by the depth clamp in the caster pass, see <see cref="GetCasterFrustum"/>.
+    /// </summary>
+    internal void GetShadowMatrix(Float3 focusPosition, int shadowResolution, float cascadeRadius, out Float4x4 view, out Float4x4 projection)
     {
         Float3 forward = Transform.Forward;
-        // Depth range is a fixed +/- cascadeDistance * 0.5 slab around the (snapped) focus point, not a
-        // fit to the scene's casters. Occluders further toward the light than half a cascade get clipped
-        // out of the map and stop casting into it.
-        projection = Float4x4.CreateOrtho(cascadeDistance, cascadeDistance, -cascadeDistance * 0.5f, cascadeDistance * 0.5f);
+        float width = cascadeRadius * 2f;
+        projection = Float4x4.CreateOrtho(width, width, -cascadeRadius, cascadeRadius);
 
-        // Calculate texel size in world units
-        float texelSize = (cascadeDistance * 2.0f) / shadowResolution;
+        float texelSize = width / shadowResolution;
 
         // Build orthonormal basis for light space
         Float3 lightUp = Float3.Normalize(Transform.Up);
@@ -111,6 +114,15 @@ public class DirectionalLight : Light
         view = Float4x4.CreateLookTo(snappedPosition, forward, Transform.Up);
     }
 
+    /// <summary>The volume casters are culled against: the cascade box with no near plane, since the depth
+    /// clamp flattens casters any distance toward the light onto the near plane instead of clipping them.</summary>
+    internal static Frustum GetCasterFrustum(Float4x4 view, Float4x4 projection)
+    {
+        Frustum frustum = Frustum.FromMatrix(projection * view);
+        frustum.Planes[0].D = float.NegativeInfinity;
+        return frustum;
+    }
+
     public override void RenderShadows(RenderPipeline pipeline, Float3 shadowFocusPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
     {
         if (!DoCastShadows())
@@ -124,8 +136,7 @@ public class DirectionalLight : Light
         int numCascades = (int)Cascades;
         _activeCascades = numCascades;
 
-        // Calculate linear split distances
-        float cascadeInterval = ShadowDistance / numCascades;
+        float cascadeInterval = Maths.Max(ShadowDistance, 0.01f) / numCascades;
 
 
         // Light direction vectors
@@ -136,8 +147,7 @@ public class DirectionalLight : Light
         // Render each cascade
         for (int cascadeIndex = 0; cascadeIndex < numCascades; cascadeIndex++)
         {
-            // Calculate this cascade's distance (linear split)
-            float cascadeDistance = cascadeInterval * (cascadeIndex + 1);
+            float cascadeRadius = cascadeInterval * (cascadeIndex + 1);
 
             // Get shadow resolution per cascade
             int res = (int)ShadowResolution;
@@ -154,11 +164,9 @@ public class DirectionalLight : Light
                 int atlasX = slot.Value.X;
                 int atlasY = slot.Value.Y;
 
-                GetShadowMatrix(shadowFocusPosition, res, cascadeDistance, out Float4x4 view, out Float4x4 proj);
+                GetShadowMatrix(shadowFocusPosition, res, cascadeRadius, out Float4x4 view, out Float4x4 proj);
 
-                Frustum frustum = Frustum.FromMatrix(proj * view);
-
-                bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
+                bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, GetCasterFrustum(view, proj), LayerMask.Everything);
 
                 // Upload this cascade's matrices BEFORE its CB encodes draws. Each
                 // cascade is its own submitted CB so all four don't get batched and
@@ -168,17 +176,21 @@ public class DirectionalLight : Light
                 using var cmd = Graphics.GetCommandBuffer($"DirectionalLightCascade{cascadeIndex}");
                 cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
                 cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
+                cmd.SetDepthBias(CasterSlopeBias, CasterConstantBias);
+                cmd.SetDepthClamp(true);
                 pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
+                cmd.SetDepthClamp(false);
+                cmd.SetDepthBias(0f, 0f);
                 Graphics.Submit(cmd);
 
                 // Store cascade data for shader
                 _cascadeShadowMatrices[cascadeIndex] = proj * view;
-                _cascadeAtlasParams[cascadeIndex] = new Float4(atlasX, atlasY, res, cascadeDistance);
+                _cascadeAtlasParams[cascadeIndex] = new Float4(atlasX, atlasY, res, cascadeRadius);
             }
             else
             {
                 // Failed to reserve atlas space for this cascade
-                _cascadeAtlasParams[cascadeIndex] = new Float4(-1, -1, 0, cascadeDistance);
+                _cascadeAtlasParams[cascadeIndex] = new Float4(-1, -1, 0, cascadeRadius);
             }
         }
     }
@@ -198,12 +210,13 @@ public class DirectionalLight : Light
             InnerSpotAngle = 0,
 
             ShadowEnabled = CastShadows && _activeCascades > 0,
-            ShadowBias = ShadowBias,
-            ShadowNormalBias = ShadowNormalBias,
+            ShadowDepthBias = DepthBias,
+            ShadowNormalBias = NormalBias,
             ShadowStrength = ShadowStrength,
             ShadowQuality = (float)ShadowQuality,
 
             CascadeCount = _activeCascades,
+            ShadowDistance = Maths.Max(ShadowDistance, 0.01f),
             CascadeShadowMatrices = _cascadeShadowMatrices,
             CascadeAtlasParams = _cascadeAtlasParams,
         };

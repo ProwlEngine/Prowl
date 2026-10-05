@@ -375,8 +375,9 @@ public sealed class SceneLightSystem : IDisposable
         cmd.SetGlobalVector("_DirectionalLightColor", data.Color);
         cmd.SetGlobalFloat("_DirectionalLightIntensity", data.Intensity);
         cmd.SetGlobalInt("_DirectionalLightShadowEnabled", data.ShadowEnabled ? 1 : 0);
-        cmd.SetGlobalFloat("_DirectionalLightShadowBias", data.ShadowBias);
+        cmd.SetGlobalFloat("_DirectionalLightShadowDepthBias", data.ShadowDepthBias);
         cmd.SetGlobalFloat("_DirectionalLightShadowNormalBias", data.ShadowNormalBias);
+        cmd.SetGlobalFloat("_DirectionalLightShadowDistance", data.ShadowDistance);
         cmd.SetGlobalFloat("_DirectionalLightShadowStrength", data.ShadowStrength);
         cmd.SetGlobalFloat("_DirectionalLightShadowQuality", data.ShadowQuality);
 

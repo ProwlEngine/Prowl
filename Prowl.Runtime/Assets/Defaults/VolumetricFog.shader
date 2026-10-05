@@ -128,96 +128,6 @@ Pass "FogMarch"
             return distance(worldPos.xyz, ReconstructRayOrigin(uv));
         }
 
-        // ── Volumetric shadow sampling (no slope bias, no normal bias) ──
-        float VolDirShadow(vec3 worldPos)
-        {
-            if (_CascadeCount == 0) return 0.0;
-
-            float worldDistance = distance(worldPos, _ShadowFocusPos) * 2.0;
-            mat4 cascadeMatrix;
-            vec4 cascadeParams;
-
-            if (_CascadeCount >= 1 && worldDistance <= _CascadeAtlasParams0.w) {
-                cascadeMatrix = _CascadeShadowMatrix0;
-                cascadeParams = _CascadeAtlasParams0;
-            } else if (_CascadeCount >= 2 && worldDistance <= _CascadeAtlasParams1.w) {
-                cascadeMatrix = _CascadeShadowMatrix1;
-                cascadeParams = _CascadeAtlasParams1;
-            } else if (_CascadeCount >= 3 && worldDistance <= _CascadeAtlasParams2.w) {
-                cascadeMatrix = _CascadeShadowMatrix2;
-                cascadeParams = _CascadeAtlasParams2;
-            } else if (_CascadeCount >= 4 && worldDistance <= _CascadeAtlasParams3.w) {
-                cascadeMatrix = _CascadeShadowMatrix3;
-                cascadeParams = _CascadeAtlasParams3;
-            } else {
-                if (_CascadeCount == 1)      { cascadeMatrix = _CascadeShadowMatrix0; cascadeParams = _CascadeAtlasParams0; }
-                else if (_CascadeCount == 2) { cascadeMatrix = _CascadeShadowMatrix1; cascadeParams = _CascadeAtlasParams1; }
-                else if (_CascadeCount == 3) { cascadeMatrix = _CascadeShadowMatrix2; cascadeParams = _CascadeAtlasParams2; }
-                else                         { cascadeMatrix = _CascadeShadowMatrix3; cascadeParams = _CascadeAtlasParams3; }
-            }
-
-            if (cascadeParams.z <= 0.0) return 0.0;
-
-            vec4 lightSpacePos = cascadeMatrix * vec4(worldPos, 1.0);
-            vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-            projCoords = projCoords * 0.5 + 0.5;
-            if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-                return 0.0;
-
-            vec2 atlasCoords, shadowMin, shadowMax;
-            GetAtlasCoordinates(projCoords, cascadeParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
-
-            float currentDepth = projCoords.z - max(_DirectionalLightShadowBias, 0.0005);
-            float lit = texture(_ShadowAtlas, vec3(atlasCoords, currentDepth));
-            return (1.0 - lit) * _DirectionalLightShadowStrength;
-        }
-
-        float VolPointShadow(LightSample L, int shadowSlot, vec3 worldPos)
-        {
-            vec3 lightToFrag = worldPos - L.Position;
-            vec3 absDir = abs(lightToFrag);
-            int faceIndex = 0;
-            if (absDir.x >= absDir.y && absDir.x >= absDir.z)      faceIndex = lightToFrag.x > 0.0 ? 0 : 1;
-            else if (absDir.y >= absDir.x && absDir.y >= absDir.z) faceIndex = lightToFrag.y > 0.0 ? 2 : 3;
-            else                                                   faceIndex = lightToFrag.z > 0.0 ? 4 : 5;
-
-            int idx = shadowSlot * 6 + faceIndex;
-            mat4 shadowMatrix = _PointShadowMatrices[idx];
-            vec4 faceParams = _PointShadowFaceParams[idx];
-
-            vec4 lightSpacePos = shadowMatrix * vec4(worldPos, 1.0);
-            vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-            projCoords = projCoords * 0.5 + 0.5;
-            if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-                return 0.0;
-
-            vec2 atlasCoords, shadowMin, shadowMax;
-            GetAtlasCoordinates(projCoords, faceParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
-
-            float currentDepth = projCoords.z - max(L.ShadowBias, 0.0005);
-            float lit = texture(_ShadowAtlas, vec3(atlasCoords, currentDepth));
-            return (1.0 - lit) * L.ShadowStrength;
-        }
-
-        float VolSpotShadow(LightSample L, int shadowSlot, vec3 worldPos)
-        {
-            vec4 atlasParams = _SpotShadowAtlasParams[shadowSlot];
-            if (atlasParams.z <= 0.0) return 0.0;
-
-            vec4 lightSpacePos = _SpotShadowMatrices[shadowSlot] * vec4(worldPos, 1.0);
-            vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-            projCoords = projCoords * 0.5 + 0.5;
-            if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-                return 0.0;
-
-            vec2 atlasCoords, shadowMin, shadowMax;
-            GetAtlasCoordinates(projCoords, atlasParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
-
-            float currentDepth = projCoords.z - max(L.ShadowBias, 0.0005);
-            float lit = texture(_ShadowAtlas, vec3(atlasCoords, currentDepth));
-            return (1.0 - lit) * L.ShadowStrength;
-        }
-
         float SpotAttenuation(LightSample L, vec3 lightDir)
         {
             // Cosines come pre-baked into the leaf data so we skip per-step trig here.
@@ -339,8 +249,8 @@ Pass "FogMarch"
             vec3 contrib = L.Color * (L.Intensity * 8.0) * phase * att;
 
             if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0 && enableShadow != 0) {
-                if (isPoint) contrib *= (1.0 - VolPointShadow(L, L.ShadowSlot, worldPos));
-                else         contrib *= (1.0 - VolSpotShadow(L, L.ShadowSlot, worldPos));
+                if (isPoint) contrib *= (1.0 - PointShadow(L, worldPos, vec3(0.0), 0.0, 0.0));
+                else         contrib *= (1.0 - SpotShadow(L, worldPos, vec3(0.0), 0.0, 0.0));
             }
 
             return contrib * volColor;
@@ -357,7 +267,7 @@ Pass "FogMarch"
                 float phase = HenyeyGreenstein(dot(viewDir, toLight), _FogScattering);
                 vec3 contrib = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0) * phase;
                 if (_DirectionalLightShadowEnabled != 0 && _FogEnableDirectionalShadows != 0)
-                    contrib *= (1.0 - VolDirShadow(worldPos));
+                    contrib *= (1.0 - DirectionalShadow(worldPos, vec3(0.0), 0.0, 0.0));
                 scatter += contrib * volColor;
             }
 

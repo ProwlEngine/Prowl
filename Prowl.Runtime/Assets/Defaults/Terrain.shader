@@ -328,7 +328,7 @@ Pass "Terrain"
 
                 // Forward lighting
                 vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
-                vec3 lighting = CalculateForwardLighting(worldPos, finalWorldNormal, viewDir,
+                vec3 lighting = CalculateForwardLighting(worldPos, finalWorldNormal, N, viewDir,
                                                          baseColor, metallic, roughness, 1.0);
                 // Ambient with specular approximation for metallic surfaces
                 vec3 ambientLight = CalculateAmbient(finalWorldNormal) * _AmbientStrength;
@@ -408,7 +408,6 @@ Pass "TerrainShadow"
             {
                 if (_HasHoles > 0 && texture(_HolesMap, texCoord0).r < 0.5)
                     discard;
-                gl_FragDepth = gl_FragCoord.z;
             }
         }
     ENDGLSL

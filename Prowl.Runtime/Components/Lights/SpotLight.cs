@@ -26,7 +26,10 @@ public class SpotLight : Light
     public float InnerSpotAngle = 30.0f; // Inner cone angle in degrees for smooth falloff
 
     private Float4x4 _shadowMatrix;
-    private Float4 _shadowAtlasParams; // xy = atlas pos, z = atlas size, w = 1.0
+    private Float4 _shadowAtlasParams; // xy = atlas pos, z = atlas size, w = texel size one unit along the axis
+
+    // The shadow projection needs a field of view under 180 degrees, wider cones keep shadows only inside it
+    private const float MaxShadowHalfAngle = 85f;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
@@ -69,14 +72,13 @@ public class SpotLight : Light
 
     public override LightType GetLightType() => LightType.Spot;
 
-    private void GetShadowMatrix(out Float4x4 view, out Float4x4 projection)
+    internal void GetShadowMatrix(out Float4x4 view, out Float4x4 projection)
     {
         Float3 forward = Transform.Forward;
         Float3 position = Transform.Position;
 
-        // Use perspective projection for spot light
-        float fov = SpotAngle * 2.0f; // Full cone angle
-        projection = Float4x4.CreatePerspectiveFov(fov * Maths.Deg2Rad, 1.0f, 0.1f, Range);
+        float halfAngle = Maths.Clamp(SpotAngle, 1f, MaxShadowHalfAngle);
+        projection = Float4x4.CreatePerspectiveFov(halfAngle * 2f * Maths.Deg2Rad, 1.0f, 0.1f, Maths.Max(Range, 0.2f));
 
         view = Float4x4.CreateLookTo(position, forward, Transform.Up);
     }
@@ -111,12 +113,15 @@ public class SpotLight : Light
             using var cmd = Graphics.GetCommandBuffer("SpotLightShadow");
             cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
             cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
+            cmd.SetDepthBias(CasterSlopeBias, CasterConstantBias);
             pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
+            cmd.SetDepthBias(0f, 0f);
             Graphics.Submit(cmd);
 
             // Store shadow data for shader
             _shadowMatrix = proj * view;
-            _shadowAtlasParams = new Float4(atlasX, atlasY, res, 1.0f);
+            float halfAngle = Maths.Clamp(SpotAngle, 1f, MaxShadowHalfAngle) * Maths.Deg2Rad;
+            _shadowAtlasParams = new Float4(atlasX, atlasY, res, 2f * Maths.Tan(halfAngle) / res);
         }
         else
         {
@@ -138,9 +143,9 @@ public class SpotLight : Light
             SpotAngle = SpotAngle,
             InnerSpotAngle = InnerSpotAngle,
 
-            ShadowEnabled = CastShadows && _shadowAtlasParams.Z > 0,
-            ShadowBias = ShadowBias,
-            ShadowNormalBias = ShadowNormalBias,
+            ShadowEnabled = CastShadows,
+            ShadowDepthBias = DepthBias,
+            ShadowNormalBias = NormalBias,
             ShadowStrength = ShadowStrength,
             ShadowQuality = (float)ShadowQuality,
 

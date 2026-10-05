@@ -175,7 +175,7 @@ public sealed class LightBVHTextures : IDisposable
     //     +1 : Color.rgb,    Intensity
     //     +2 : Direction.xyz, TypeAndFlags   (low 2 bits: type 0=Dir,1=Point,2=Spot;
     //                                          bit 2: ShadowEnabled)
-    //     +3 : SpotCos, InnerSpotCos, ShadowBias, ShadowNormalBias
+    //     +3 : SpotCos, InnerSpotCos, ShadowDepthBias, ShadowNormalBias
     //          (only fetched when type==Spot OR ShadowEnabled, otherwise not read)
     //     +4 : ShadowStrength, ShadowQuality, ShadowSlotAsFloat, padding
     //          (only fetched when ShadowEnabled, otherwise not read)
@@ -221,7 +221,7 @@ public sealed class LightBVHTextures : IDisposable
         float innerCos = s.Type == LightType.Spot ? MathF.Cos(s.InnerSpotAngle * MathF.PI / 180f) : 1f;
         _lightStaging[o + 12] = spotCos;
         _lightStaging[o + 13] = innerCos;
-        _lightStaging[o + 14] = s.ShadowBias;
+        _lightStaging[o + 14] = s.ShadowDepthBias;
         _lightStaging[o + 15] = s.ShadowNormalBias;
         // Texel 4 (.w now padding; ShadowEnabled is packed into texel 2 above and read first
         // so the shader can decide whether this texel is even worth fetching).

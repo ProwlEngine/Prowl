@@ -23,8 +23,9 @@ uniform vec3  _DirectionalLightDirection;
 uniform vec3  _DirectionalLightColor;
 uniform float _DirectionalLightIntensity;
 uniform int   _DirectionalLightShadowEnabled;
-uniform float _DirectionalLightShadowBias;
-uniform float _DirectionalLightShadowNormalBias;
+uniform float _DirectionalLightShadowDepthBias;    // shadow texels
+uniform float _DirectionalLightShadowNormalBias;   // shadow texels
+uniform float _DirectionalLightShadowDistance;     // radius around _ShadowFocusPos, equals the last cascade radius
 uniform float _DirectionalLightShadowStrength;
 uniform float _DirectionalLightShadowQuality;
 
@@ -58,7 +59,7 @@ uniform mat4 _CascadeShadowMatrix3;
 uniform vec4 _CascadeAtlasParams0;
 uniform vec4 _CascadeAtlasParams1;
 uniform vec4 _CascadeAtlasParams2;
-uniform vec4 _CascadeAtlasParams3;
+uniform vec4 _CascadeAtlasParams3;   // xy: atlasPos, z: tileSize, w: cascade radius
 
 // World-space point this frame's cascades were centered on (the camera position, or the
 // camera's shadow focus target when set). Cascade selection must measure distance from the
@@ -67,11 +68,11 @@ uniform vec3 _ShadowFocusPos;
 
 // Point shadows (6 faces per light). A point light occupying slot s uses indices [s*6 .. s*6+5].
 uniform mat4 _PointShadowMatrices[MAX_SHADOW_CASTERS * 6];
-uniform vec4 _PointShadowFaceParams[MAX_SHADOW_CASTERS * 6]; // xy: atlasPos, z: faceSize, w: farPlane
+uniform vec4 _PointShadowFaceParams[MAX_SHADOW_CASTERS * 6]; // xy: atlasPos, z: faceSize, w: texel size one unit from the light
 
 // Spot shadows (1 matrix per light, indexed by slot directly).
 uniform mat4 _SpotShadowMatrices[MAX_SHADOW_CASTERS];
-uniform vec4 _SpotShadowAtlasParams[MAX_SHADOW_CASTERS]; // xy: atlasPos, z: atlasSize, w: unused
+uniform vec4 _SpotShadowAtlasParams[MAX_SHADOW_CASTERS]; // xy: atlasPos, z: atlasSize, w: texel size one unit along the axis
 
 // ============================================================
 //  Fog uniforms
@@ -114,135 +115,115 @@ vec3 GetTangentViewDir(vec3 worldPos, vec3 worldNormal, vec3 worldTangent, vec3 
 //  Shadow sampling
 // ============================================================
 
-float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
+// Each returns the fraction of light blocked, 0 to 1. geomNormal is the interpolated surface normal
+// before normal mapping (zero for points in the air), quality 0 is hard and 1 soft.
+
+float DirectionalShadow(vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
     if (_CascadeCount == 0) return 0.0;
 
-    // Compare squared distance against squared cascade splits to avoid the per-fragment sqrt.
-    // worldDistance was distance(...) * 2.0, so the squared form is dot(d,d) * 4.0.
     vec3 toFocus = worldPos - _ShadowFocusPos;
-    float worldDistSq = dot(toFocus, toFocus) * 4.0;
+    float distSq = dot(toFocus, toFocus);
+    if (distSq > _DirectionalLightShadowDistance * _DirectionalLightShadowDistance) return 0.0;
 
     mat4 cascadeMatrix;
     vec4 cascadeParams;
-
-    if (_CascadeCount >= 1 && worldDistSq <= _CascadeAtlasParams0.w * _CascadeAtlasParams0.w) {
+    if (_CascadeCount == 1 || distSq <= _CascadeAtlasParams0.w * _CascadeAtlasParams0.w) {
         cascadeMatrix = _CascadeShadowMatrix0;
         cascadeParams = _CascadeAtlasParams0;
-    } else if (_CascadeCount >= 2 && worldDistSq <= _CascadeAtlasParams1.w * _CascadeAtlasParams1.w) {
+    } else if (_CascadeCount == 2 || distSq <= _CascadeAtlasParams1.w * _CascadeAtlasParams1.w) {
         cascadeMatrix = _CascadeShadowMatrix1;
         cascadeParams = _CascadeAtlasParams1;
-    } else if (_CascadeCount >= 3 && worldDistSq <= _CascadeAtlasParams2.w * _CascadeAtlasParams2.w) {
+    } else if (_CascadeCount == 3 || distSq <= _CascadeAtlasParams2.w * _CascadeAtlasParams2.w) {
         cascadeMatrix = _CascadeShadowMatrix2;
         cascadeParams = _CascadeAtlasParams2;
-    } else if (_CascadeCount >= 4 && worldDistSq <= _CascadeAtlasParams3.w * _CascadeAtlasParams3.w) {
+    } else {
         cascadeMatrix = _CascadeShadowMatrix3;
         cascadeParams = _CascadeAtlasParams3;
-    } else {
-        // Beyond all cascades: clamp to last available.
-        if      (_CascadeCount == 1) { cascadeMatrix = _CascadeShadowMatrix0; cascadeParams = _CascadeAtlasParams0; }
-        else if (_CascadeCount == 2) { cascadeMatrix = _CascadeShadowMatrix1; cascadeParams = _CascadeAtlasParams1; }
-        else if (_CascadeCount == 3) { cascadeMatrix = _CascadeShadowMatrix2; cascadeParams = _CascadeAtlasParams2; }
-        else                         { cascadeMatrix = _CascadeShadowMatrix3; cascadeParams = _CascadeAtlasParams3; }
     }
 
     if (cascadeParams.z <= 0.0) return 0.0;
 
-    vec3 worldPosBiased = worldPos + normalize(worldNormal) * _DirectionalLightShadowNormalBias;
-    vec4 lightSpacePos = cascadeMatrix * vec4(worldPosBiased, 1.0);
-    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-    projCoords = projCoords * 0.5 + 0.5;
+    float texelWorld = 2.0 * cascadeParams.w / cascadeParams.z;
+    vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, normalize(_DirectionalLightDirection), texelWorld,
+                                     _DirectionalLightShadowDepthBias, normalBias);
+    vec3 projCoords = ProjectToShadowMap(cascadeMatrix, biasedPos);
+    if (projCoords.z > 1.0) return 0.0;
 
-    if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-        return 0.0;
+    // Holds the penumbra roughly constant in world units, so the softness does not jump at each cascade split
+    const float shadowPenumbraWorld = 0.04;
+    float pcfRadius = clamp(shadowPenumbraWorld / texelWorld, 0.75, 4.0);
 
-    float atlasSize = _ShadowAtlasSize.x;
-    vec2 atlasCoords, shadowMin, shadowMax;
-    GetAtlasCoordinates(projCoords, cascadeParams, atlasSize, atlasCoords, shadowMin, shadowMax);
+    float shadow = SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, cascadeParams, quality, pcfRadius);
 
-    float slopeBias = CalculateSlopeBias(worldNormal, _DirectionalLightDirection, _DirectionalLightShadowBias);
-    float texelWorldSize = ((cascadeParams.w * 4.0) / (cascadeParams.z * atlasSize)) * 8.0;
-    float currentDepth = projCoords.z - (slopeBias + texelWorldSize);
-
-    // World-normalized PCF radius: a fixed texel kernel blurs far more world space in the coarse far
-    // cascades than the fine near ones, so the softness (and the shadow) visibly jumps at each split.
-    // Scale the kernel to hold the penumbra roughly constant in world units. cascadeParams.w = world
-    // span, .z = tile resolution. Clamped so near cascades don't over-spread the 8 taps and far cascades
-    // don't collapse below the hardware tap.
-    const float shadowPenumbraWorld = 0.04; // target penumbra in world units (Tunable)
-    float worldPerTexel = cascadeParams.w / max(cascadeParams.z, 1.0);
-    float pcfRadius = clamp(shadowPenumbraWorld / worldPerTexel, 0.75, 4.0);
-
-    return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, _DirectionalLightShadowQuality, _DirectionalLightShadowStrength, pcfRadius);
+    // Fades out over the last tenth of the shadow distance
+    float fade = smoothstep(_DirectionalLightShadowDistance * 0.9, _DirectionalLightShadowDistance, sqrt(distSq));
+    return shadow * _DirectionalLightShadowStrength * (1.0 - fade);
 }
 
-float SamplePointShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldNormal)
+float PointShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
     vec3 lightToFrag = worldPos - L.Position;
+    float dist = length(lightToFrag);
     vec3 absDir = abs(lightToFrag);
+    float axisDist = max(absDir.x, max(absDir.y, absDir.z));
 
-    int faceIndex = 0;
-    if (absDir.x >= absDir.y && absDir.x >= absDir.z)
-        faceIndex = lightToFrag.x > 0.0 ? 0 : 1;
-    else if (absDir.y >= absDir.x && absDir.y >= absDir.z)
-        faceIndex = lightToFrag.y > 0.0 ? 2 : 3;
+    float texelWorld = _PointShadowFaceParams[L.ShadowSlot * 6].w * axisDist;
+    vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), texelWorld,
+                                     L.ShadowDepthBias, normalBias);
+
+    // The face is picked from the biased position, so the offset can never push it off its face
+    vec3 dir = biasedPos - L.Position;
+    vec3 absBiased = abs(dir);
+    int faceIndex;
+    if (absBiased.x >= absBiased.y && absBiased.x >= absBiased.z)
+        faceIndex = dir.x > 0.0 ? 0 : 1;
+    else if (absBiased.y >= absBiased.z)
+        faceIndex = dir.y > 0.0 ? 2 : 3;
     else
-        faceIndex = lightToFrag.z > 0.0 ? 4 : 5;
+        faceIndex = dir.z > 0.0 ? 4 : 5;
 
-    int idx = shadowSlot * 6 + faceIndex;
-    mat4 shadowMatrix = _PointShadowMatrices[idx];
+    int idx = L.ShadowSlot * 6 + faceIndex;
     vec4 faceParams = _PointShadowFaceParams[idx];
     if (faceParams.z <= 0.0) return 0.0;
 
-    vec3 worldPosBiased = worldPos + normalize(worldNormal) * L.ShadowNormalBias;
-    vec4 lightSpacePos = shadowMatrix * vec4(worldPosBiased, 1.0);
-    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-    projCoords = projCoords * 0.5 + 0.5;
+    vec3 projCoords = ProjectToShadowMap(_PointShadowMatrices[idx], biasedPos);
+    if (projCoords.z > 1.0) return 0.0;
 
-    if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-        return 0.0;
-
-    float atlasSize = _ShadowAtlasSize.x;
-    vec2 atlasCoords, shadowMin, shadowMax;
-    GetAtlasCoordinates(projCoords, faceParams, atlasSize, atlasCoords, shadowMin, shadowMax);
-
-    float finalBias = CalculateSlopeBias(worldNormal, normalize(lightToFrag), L.ShadowBias);
-    float currentDepth = projCoords.z - finalBias;
-
-    return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, L.ShadowQuality, L.ShadowStrength, 1.5);
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, faceParams, quality, 1.5) * L.ShadowStrength;
 }
 
-float SampleSpotShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldNormal)
+float SpotShadow(LightSample L, vec3 worldPos, vec3 geomNormal, float normalBias, float quality)
 {
-    vec4 atlasParams = _SpotShadowAtlasParams[shadowSlot];
+    vec4 atlasParams = _SpotShadowAtlasParams[L.ShadowSlot];
     if (atlasParams.z <= 0.0) return 0.0;
 
-    vec3 worldPosBiased = worldPos + normalize(worldNormal) * L.ShadowNormalBias;
-    vec4 lightSpacePos = _SpotShadowMatrices[shadowSlot] * vec4(worldPosBiased, 1.0);
-    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-    projCoords = projCoords * 0.5 + 0.5;
+    vec3 lightToFrag = worldPos - L.Position;
+    float dist = length(lightToFrag);
+    float axisDist = max(dot(lightToFrag, normalize(L.Direction)), 0.0);
 
+    vec3 biasedPos = ApplyShadowBias(worldPos, geomNormal, -lightToFrag / max(dist, 1e-6), atlasParams.w * axisDist,
+                                     L.ShadowDepthBias, normalBias);
+    vec3 projCoords = ProjectToShadowMap(_SpotShadowMatrices[L.ShadowSlot], biasedPos);
     if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
         return 0.0;
 
-    float atlasSize = _ShadowAtlasSize.x;
-    vec2 atlasCoords, shadowMin, shadowMax;
-    GetAtlasCoordinates(projCoords, atlasParams, atlasSize, atlasCoords, shadowMin, shadowMax);
+    return SampleShadowPCF(_ShadowAtlas, _ShadowAtlasSize.x, projCoords, atlasParams, quality, 1.5) * L.ShadowStrength;
+}
 
-    float finalBias = CalculateSlopeBias(worldNormal, L.Direction, L.ShadowBias);
-    float currentDepth = projCoords.z - finalBias;
-
-    return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, L.ShadowQuality, L.ShadowStrength, 1.5);
+float LocalLightShadow(LightSample L, vec3 worldPos, vec3 geomNormal)
+{
+    if (L.ShadowEnabled == 0 || L.ShadowSlot < 0) return 0.0;
+    return L.Type == 1
+        ? PointShadow(L, worldPos, geomNormal, L.ShadowNormalBias, L.ShadowQuality)
+        : SpotShadow(L, worldPos, geomNormal, L.ShadowNormalBias, L.ShadowQuality);
 }
 
 // ============================================================
 //  Per-light evaluation (BVH leaf -> radiance)
 // ============================================================
 
-vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                         vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
     // BVH only emits point + spot leaves; directional has its own path. The leaf-level sphere
@@ -310,20 +291,13 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 vie
 #ifdef SG_NO_SHADOWS
     shadowFactor = 1.0;
 #else
-    float shadow = 0.0;
-    if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
-        if (L.Type == 1)
-            shadow = SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal);
-        else
-            shadow = SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
-    }
-    shadowFactor = 1.0 - shadow;
+    shadowFactor = 1.0 - LocalLightShadow(L, worldPos, geomNormal);
 #endif
 
     return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
 }
 
-vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                               vec3 worldTangent, vec3 worldBitangent,
                               vec3 albedo, float metallic, float mt, float mb,
                               float perceptualRoughness, float ao, vec3 F0)
@@ -383,14 +357,7 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
 #ifdef SG_NO_SHADOWS
     shadowFactor = 1.0;
 #else
-    float shadow = 0.0;
-    if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
-        if (L.Type == 1)
-            shadow = SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal);
-        else
-            shadow = SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
-    }
-    shadowFactor = 1.0 - shadow;
+    shadowFactor = 1.0 - LocalLightShadow(L, worldPos, geomNormal);
 #endif
 
     vec3 lightColor = L.Color * (L.Intensity * 8.0) * attenuation * shadowFactor;
@@ -405,13 +372,13 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
 // shaders is -Forward: it points FROM the surface TO the light, so it already IS the
 // surface-to-light "L" vector. Don't negate it.
 
-float MainDirectionalShadowFactor(vec3 worldPos, vec3 worldNormal)
+float MainDirectionalShadowFactor(vec3 worldPos, vec3 geomNormal)
 {
 #ifdef SG_NO_SHADOWS
     return 1.0;
 #else
     float shadow = (_DirectionalLightShadowEnabled != 0)
-        ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
+        ? DirectionalShadow(worldPos, geomNormal, _DirectionalLightShadowNormalBias, _DirectionalLightShadowQuality) : 0.0;
     return 1.0 - shadow;
 #endif
 }
@@ -444,13 +411,13 @@ vec3 ShadeDirectional(vec3 lightDir, vec3 lightColor, float shadowFactor, vec3 w
     return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
 }
 
-vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                          vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
     vec3 total = vec3(0.0);
     if (_DirectionalLightEnabled != 0)
         total += ShadeDirectional(normalize(_DirectionalLightDirection), _DirectionalLightColor * _DirectionalLightIntensity,
-                                  MainDirectionalShadowFactor(worldPos, worldNormal),
+                                  MainDirectionalShadowFactor(worldPos, geomNormal),
                                   worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
 
     int extraCount = min(_ExtraDirectionalLightCount, MAX_EXTRA_DIRECTIONAL_LIGHTS);
@@ -491,7 +458,7 @@ vec3 ShadeDirectionalAniso(vec3 lightDir, vec3 lightColor, float shadowFactor, v
     return (kD * albedo * diffuseTerm + specularTerm * F) * radiance * ao;
 }
 
-vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                               vec3 worldTangent, vec3 worldBitangent,
                               vec3 albedo, float metallic, float mt, float mb,
                               float perceptualRoughness, float ao, vec3 F0)
@@ -499,7 +466,7 @@ vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     vec3 total = vec3(0.0);
     if (_DirectionalLightEnabled != 0)
         total += ShadeDirectionalAniso(normalize(_DirectionalLightDirection), _DirectionalLightColor * _DirectionalLightIntensity,
-                                       MainDirectionalShadowFactor(worldPos, worldNormal), worldNormal, viewDir,
+                                       MainDirectionalShadowFactor(worldPos, geomNormal), worldNormal, viewDir,
                                        worldTangent, worldBitangent, albedo, metallic, mt, mb, perceptualRoughness, ao, F0);
 
     int extraCount = min(_ExtraDirectionalLightCount, MAX_EXTRA_DIRECTIONAL_LIGHTS);
@@ -514,13 +481,14 @@ vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
 //  Forward lighting entry points (BVH-driven)
 // ============================================================
 
-vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+// geomNormal is the interpolated surface normal before normal mapping, used to offset shadow lookups
+vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                               vec3 albedo, float metallic, float roughness, float ao)
 {
     roughness = ApplySpecularAA(roughness, worldNormal);
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    vec3 totalLight = EvaluateDirectional(worldPos, worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
+    vec3 totalLight = EvaluateDirectional(worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
 
     // Static tree.
     if (_StaticLightRoot >= 0) {
@@ -529,7 +497,7 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
         int slot;
         while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
             LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
+            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
         }
     }
 
@@ -540,14 +508,14 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
         int slot;
         while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
             LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
-            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
+            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, geomNormal, viewDir, albedo, metallic, roughness, ao, F0);
         }
     }
 
     return totalLight;
 }
 
-vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                                     vec3 worldTangent, vec3 worldBitangent,
                                     vec3 albedo, float metallic,
                                     float roughness, float anisotropy, float ao)
@@ -560,7 +528,7 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir
 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    vec3 totalLight = EvaluateDirectionalAniso(worldPos, worldNormal, viewDir, worldTangent, worldBitangent,
+    vec3 totalLight = EvaluateDirectionalAniso(worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
                                                 albedo, metallic, mt, mb, roughness, ao, F0);
 
     if (_StaticLightRoot >= 0) {
@@ -569,7 +537,7 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir
         int slot;
         while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
             LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, viewDir, worldTangent, worldBitangent,
+            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
                                                    albedo, metallic, mt, mb, roughness, ao, F0);
         }
     }
@@ -580,7 +548,7 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir
         int slot;
         while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
             LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
-            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, viewDir, worldTangent, worldBitangent,
+            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, geomNormal, viewDir, worldTangent, worldBitangent,
                                                    albedo, metallic, mt, mb, roughness, ao, F0);
         }
     }
@@ -592,7 +560,7 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir
 //  Local light with translucency (shared attenuation + shadow)
 // ============================================================
 
-vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                                     vec3 albedo, float metallic, float roughness, float ao, vec3 F0,
                                     float translucency, float scatterPower, float scatterDist, float scatterScale)
 {
@@ -628,12 +596,8 @@ vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNorma
     // full PCF tap set entirely.
     float shadowFactor = 1.0;
 #ifndef SG_NO_SHADOWS
-    if ((NdotL > 0.0 || translucency > 0.0) && L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
-        float shadow = (L.Type == 1)
-            ? SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal)
-            : SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
-        shadowFactor = 1.0 - shadow;
-    }
+    if (NdotL > 0.0 || translucency > 0.0)
+        shadowFactor = 1.0 - LocalLightShadow(L, worldPos, geomNormal);
 #endif
 
     vec3 radiance = L.Color * (L.Intensity * 8.0) * attenuation;
@@ -703,7 +667,7 @@ vec3 ShadeDirectionalTranslucent(vec3 lightDir, vec3 lightColor, float shadowFac
 //  PBR + translucency share the same attenuation and shadow.
 // ============================================================
 
-vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 geomNormal, vec3 viewDir,
                               vec3 albedo, float metallic, float roughness, float ao,
                               float translucency, float scatterPower,
                               float scatterDist, float scatterScale)
@@ -716,7 +680,7 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     // ---- Directional lights ----
     if (_DirectionalLightEnabled != 0)
         totalLight += ShadeDirectionalTranslucent(normalize(_DirectionalLightDirection),
-                          _DirectionalLightColor * _DirectionalLightIntensity, MainDirectionalShadowFactor(worldPos, worldNormal),
+                          _DirectionalLightColor * _DirectionalLightIntensity, MainDirectionalShadowFactor(worldPos, geomNormal),
                           worldNormal, viewDir, albedo, metallic, roughness, ao, F0,
                           translucency, scatterPower, scatterDist, scatterScale);
 
@@ -733,7 +697,7 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
         int slot;
         while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
             LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
-            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, viewDir,
+            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, geomNormal, viewDir,
                               albedo, metallic, roughness, ao, F0,
                               translucency, scatterPower, scatterDist, scatterScale);
         }
@@ -746,13 +710,38 @@ vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
         int slot;
         while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
             LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
-            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, viewDir,
+            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, geomNormal, viewDir,
                               albedo, metallic, roughness, ao, F0,
                               translucency, scatterPower, scatterDist, scatterScale);
         }
     }
 
     return totalLight;
+}
+
+// Shading normal doubles as the shadow normal, for surfaces without a separate geometric normal
+vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                              vec3 albedo, float metallic, float roughness, float ao)
+{
+    return CalculateForwardLighting(worldPos, worldNormal, worldNormal, viewDir, albedo, metallic, roughness, ao);
+}
+
+vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                                    vec3 worldTangent, vec3 worldBitangent,
+                                    vec3 albedo, float metallic,
+                                    float roughness, float anisotropy, float ao)
+{
+    return CalculateForwardLightingAniso(worldPos, worldNormal, worldNormal, viewDir, worldTangent, worldBitangent,
+                                         albedo, metallic, roughness, anisotropy, ao);
+}
+
+vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                              vec3 albedo, float metallic, float roughness, float ao,
+                              float translucency, float scatterPower,
+                              float scatterDist, float scatterScale)
+{
+    return CalculateForwardLighting(worldPos, worldNormal, worldNormal, viewDir, albedo, metallic, roughness, ao,
+                                    translucency, scatterPower, scatterDist, scatterScale);
 }
 
 // ============================================================

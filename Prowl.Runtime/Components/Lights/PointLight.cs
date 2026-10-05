@@ -24,9 +24,8 @@ public class PointLight : Light
     public float Range = 10.0f;
 
     // Shadow cubemap data - 6 faces stored in a 3x2 grid in the shadow atlas
-    private Float4[] _shadowFaceParams = new Float4[6]; // xy = atlas pos, z = face size, w = far plane
+    private Float4[] _shadowFaceParams = new Float4[6]; // xy = atlas pos, z = face size, w = texel size one unit from the light
     private Float4x4[] _shadowMatrices = new Float4x4[6]; // View-projection for each face
-    private bool _shadowsValid = false;
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
@@ -50,7 +49,7 @@ public class PointLight : Light
     {
         if (!DoCastShadows())
         {
-            _shadowsValid = false;
+            System.Array.Clear(_shadowFaceParams);
             return;
         }
 
@@ -66,7 +65,7 @@ public class PointLight : Light
 
         if (slot == null)
         {
-            _shadowsValid = false;
+            System.Array.Clear(_shadowFaceParams);
             return;
         }
 
@@ -86,7 +85,7 @@ public class PointLight : Light
         };
 
         // Create perspective projection for all faces (90 degree FOV for cubemap)
-        Float4x4 projection = Float4x4.CreatePerspectiveFov(Maths.PI / 2.0f, 1.0f, 0.1f, Range);
+        Float4x4 projection = Float4x4.CreatePerspectiveFov(Maths.PI / 2.0f, 1.0f, 0.1f, Maths.Max(Range, 0.2f));
 
         // Every face sits inside the light's range, so each face only tests what the range kept.
         bool[] outsideRange = pipeline.CullOutsideSphere(renderables, lightPos, Range);
@@ -118,15 +117,15 @@ public class PointLight : Light
             using var cmd = Graphics.GetCommandBuffer($"PointLightFace{faceIndex}");
             cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
             cmd.SetViewport(viewportX, viewportY, (uint)res, (uint)res);
+            cmd.SetDepthBias(CasterSlopeBias, CasterConstantBias);
             pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices, false);
+            cmd.SetDepthBias(0f, 0f);
             Graphics.Submit(cmd);
 
             // Store face data for shader
             _shadowMatrices[faceIndex] = projection * view;
-            _shadowFaceParams[faceIndex] = new Float4(viewportX, viewportY, res, Range);
+            _shadowFaceParams[faceIndex] = new Float4(viewportX, viewportY, res, 2f / res);
         }
-
-        _shadowsValid = true;
     }
 
     public override ForwardLightData GetForwardLightData()
@@ -142,9 +141,9 @@ public class PointLight : Light
             SpotAngle = 0,
             InnerSpotAngle = 0,
 
-            ShadowEnabled = CastShadows && _shadowsValid,
-            ShadowBias = ShadowBias,
-            ShadowNormalBias = ShadowNormalBias,
+            ShadowEnabled = CastShadows,
+            ShadowDepthBias = DepthBias,
+            ShadowNormalBias = NormalBias,
             ShadowStrength = ShadowStrength,
             ShadowQuality = (float)ShadowQuality,
 

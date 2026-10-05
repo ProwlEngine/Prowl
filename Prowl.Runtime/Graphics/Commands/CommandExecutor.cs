@@ -98,7 +98,8 @@ internal sealed class CommandExecutor
         foreach (CommandOpcode op in (ReadOnlySpan<CommandOpcode>)[
             CommandOpcode.SetRenderTarget, CommandOpcode.SetRenderTargets, CommandOpcode.SetViewport,
             CommandOpcode.SetScissor, CommandOpcode.DisableScissor, CommandOpcode.ClearRenderTarget,
-            CommandOpcode.SetRasterState, CommandOpcode.SetShader, CommandOpcode.SetProperties,
+            CommandOpcode.SetRasterState, CommandOpcode.SetShader, CommandOpcode.SetDepthBias,
+            CommandOpcode.SetDepthClamp, CommandOpcode.SetProperties,
             CommandOpcode.SetMaterialProperties, CommandOpcode.ClearProperties,
             CommandOpcode.SetInstanceProperties, CommandOpcode.ClearInstanceProperties,
             CommandOpcode.SetUniformFloat, CommandOpcode.SetUniformInt, CommandOpcode.SetUniformVec2,
@@ -215,6 +216,27 @@ internal sealed class CommandExecutor
                     RasterStateApply.Apply(in next);
                     _raster = next;
                     _rasterInitialized = true;
+                    break;
+                }
+                case CommandOpcode.SetDepthBias:
+                {
+                    float slopeScale = ReadF32(stream, ref pos);
+                    float constant = ReadF32(stream, ref pos);
+                    if (slopeScale == 0f && constant == 0f)
+                    {
+                        Graphics.GL.Disable(EnableCap.PolygonOffsetFill);
+                    }
+                    else
+                    {
+                        Graphics.GL.Enable(EnableCap.PolygonOffsetFill);
+                        Graphics.GL.PolygonOffset(slopeScale, constant);
+                    }
+                    break;
+                }
+                case CommandOpcode.SetDepthClamp:
+                {
+                    if (ReadU8(stream, ref pos) != 0) Graphics.GL.Enable(EnableCap.DepthClamp);
+                    else Graphics.GL.Disable(EnableCap.DepthClamp);
                     break;
                 }
                 case CommandOpcode.SetShader:

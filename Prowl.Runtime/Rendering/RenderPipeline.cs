@@ -116,13 +116,14 @@ public struct ForwardLightData
 
     // Shadow
     public bool ShadowEnabled;
-    public float ShadowBias;
-    public float ShadowNormalBias;
+    public float ShadowDepthBias;   // shadow texels
+    public float ShadowNormalBias;  // shadow texels
     public float ShadowStrength;
     public float ShadowQuality;   // 0 = Hard, 1 = Soft
 
     // Directional cascade data (only for LightType.Directional)
     public int CascadeCount;
+    public float ShadowDistance;
     public Float4x4[] CascadeShadowMatrices; // [4]
     public Float4[] CascadeAtlasParams;      // [4]
 

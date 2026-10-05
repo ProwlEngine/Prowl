@@ -357,11 +357,11 @@ void ProwlFragment()
             anisoTangent = normalize(T * anisoDir.x + B * anisoDir.y);
             anisoBitangent = normalize(cross(worldNormal, anisoTangent));
         }
-        vec3 lighting = CalculateForwardLightingAniso(vWorldPos, worldNormal, viewDir,
+        vec3 lighting = CalculateForwardLightingAniso(vWorldPos, worldNormal, N, viewDir,
                                                       anisoTangent, anisoBitangent,
                                                       baseColor, metallic, roughness, _Anisotropy, ao);
     #else
-        vec3 lighting = CalculateForwardLighting(vWorldPos, worldNormal, viewDir,
+        vec3 lighting = CalculateForwardLighting(vWorldPos, worldNormal, N, viewDir,
                                                  baseColor, metallic, roughness, ao,
                                                  translucency, _ScatteringPower,
                                                  _ScatteringDistortion, _ScatteringScale);
@@ -447,7 +447,6 @@ void ProwlFragment()
     if (texture(_MainTex, ProwlSlotUV(_MainTexUV, vUV, vUV1 * _Tiling + _Offset)).a * _MainColor.a < _AlphaCutoff)
         discard;
 #endif
-    gl_FragDepth = gl_FragCoord.z;
 }
 
 #endif // PROWL_PASS_SHADOW

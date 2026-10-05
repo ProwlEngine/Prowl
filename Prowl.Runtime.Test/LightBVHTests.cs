@@ -41,7 +41,7 @@ public class LightBVHTests
             Intensity = 1f,
             Range = range,
             ShadowEnabled = false,
-            ShadowBias = 0.001f,
+            ShadowDepthBias = 1f,
             ShadowNormalBias = 0f,
             ShadowStrength = 1f,
             ShadowQuality = 1f,

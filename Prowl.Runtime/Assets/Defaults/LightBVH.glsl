@@ -9,7 +9,7 @@
 //     +0 : Position.xyz, Range
 //     +1 : Color.rgb,    Intensity
 //     +2 : Direction.xyz, TypeAndFlags   (low 2 bits: type, bit 2: ShadowEnabled)
-//     +3 : SpotCos, InnerSpotCos, ShadowBias, ShadowNormalBias
+//     +3 : SpotCos, InnerSpotCos, ShadowDepthBias, ShadowNormalBias
 //          (only fetched when type==Spot OR ShadowEnabled)
 //     +4 : ShadowStrength, ShadowQuality, ShadowSlotAsFloat, padding
 //          (only fetched when ShadowEnabled)
@@ -62,7 +62,7 @@ struct LightSample
     int   Type;            // 0 directional, 1 point, 2 spot
     float SpotCos;         // cos(outer)
     float InnerSpotCos;    // cos(inner)
-    float ShadowBias;
+    float ShadowDepthBias;
     float ShadowNormalBias;
     float ShadowStrength;
     float ShadowQuality;
@@ -109,7 +109,7 @@ LightSample LBVH_FetchLight(sampler2D tex, int dim, int shift, int slot)
         vec4 t3 = texelFetch(tex, LBVH_Coord(base + 3, dim, shift), 0);
         L.SpotCos          = t3.x;
         L.InnerSpotCos     = t3.y;
-        L.ShadowBias       = t3.z;
+        L.ShadowDepthBias  = t3.z;
         L.ShadowNormalBias = t3.w;
     }
     else
@@ -118,7 +118,7 @@ LightSample LBVH_FetchLight(sampler2D tex, int dim, int shift, int slot)
         // harmless if some downstream code reads them anyway.
         L.SpotCos          = -1.0;
         L.InnerSpotCos     =  1.0;
-        L.ShadowBias       =  0.0;
+        L.ShadowDepthBias  =  0.0;
         L.ShadowNormalBias =  0.0;
     }
 

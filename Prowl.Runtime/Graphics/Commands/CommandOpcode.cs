@@ -29,6 +29,8 @@ internal enum CommandOpcode : ushort
     // Pipeline state
     SetRasterState,
     SetShader,
+    SetDepthBias,
+    SetDepthClamp,
 
     // Property binding (sticky on the executor)
     SetProperties,

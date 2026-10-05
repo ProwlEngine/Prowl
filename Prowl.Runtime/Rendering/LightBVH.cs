@@ -47,7 +47,7 @@ public sealed class LightBVH
         public float SpotAngle;
         public float InnerSpotAngle;
         public bool ShadowEnabled;
-        public float ShadowBias;
+        public float ShadowDepthBias;
         public float ShadowNormalBias;
         public float ShadowStrength;
         public float ShadowQuality;
@@ -327,7 +327,7 @@ public sealed class LightBVH
         s.SpotAngle = data.SpotAngle;
         s.InnerSpotAngle = data.InnerSpotAngle;
         s.ShadowEnabled = data.ShadowEnabled;
-        s.ShadowBias = data.ShadowBias;
+        s.ShadowDepthBias = data.ShadowDepthBias;
         s.ShadowNormalBias = data.ShadowNormalBias;
         s.ShadowStrength = data.ShadowStrength;
         s.ShadowQuality = data.ShadowQuality;
@@ -360,7 +360,7 @@ public sealed class LightBVH
             && s.SpotAngle == data.SpotAngle
             && s.InnerSpotAngle == data.InnerSpotAngle
             && s.ShadowEnabled == data.ShadowEnabled
-            && s.ShadowBias == data.ShadowBias
+            && s.ShadowDepthBias == data.ShadowDepthBias
             && s.ShadowNormalBias == data.ShadowNormalBias
             && s.ShadowStrength == data.ShadowStrength
             && s.ShadowQuality == data.ShadowQuality;

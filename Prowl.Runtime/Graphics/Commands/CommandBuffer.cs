@@ -197,6 +197,24 @@ public sealed class CommandBuffer : IDisposable
         Write(PushObject(program));
     }
 
+    /// <summary>Offsets the depth of following draws by slopeScale times the polygon's depth slope plus
+    /// constant depth units. Both zero turns the offset off. Not part of the raster state, so passes
+    /// keep it until it is set again.</summary>
+    public void SetDepthBias(float slopeScale, float constant)
+    {
+        WriteHeader(CommandOpcode.SetDepthBias);
+        Write(slopeScale);
+        Write(constant);
+    }
+
+    /// <summary>Clamps depth into the depth range instead of clipping at the near and far planes. Not part
+    /// of the raster state, so passes keep it until it is set again.</summary>
+    public void SetDepthClamp(bool enabled)
+    {
+        WriteHeader(CommandOpcode.SetDepthClamp);
+        Write((byte)(enabled ? 1 : 0));
+    }
+
     // ─────────────────────── Property binding ───────────────────────
 
     /// <summary>Bind a PropertyState as the active material property set. Snapshotted
