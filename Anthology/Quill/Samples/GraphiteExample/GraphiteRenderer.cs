@@ -68,7 +68,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     private int _fbHeight;
 
     private readonly ScenePass _scenePass;
-    private readonly RenderPipeline<CanvasView> _pipeline;
+    private readonly RenderPipeline _pipeline;
     private CanvasView[] _views;
 
 
@@ -236,7 +236,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     // needed mid-draw. The blur mip chain is scratch state private to this pass: its iteration count
     // varies per draw call at render time, so it can't be expressed as fixed graph resources declared
     // once in Setup.
-    private sealed class ScenePass : IPass<CanvasView>
+    private sealed class ScenePass : IPass
     {
         private readonly GraphiteRenderer _owner;
 
@@ -272,7 +272,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         public void Setup(RenderContextBuilder builder)
             => _sceneHandle = builder.DeclareOutputTexture("Scene", GraphTextureDesc.ViewSized(TargetFormat));
 
-        public void Render(RenderContext<CanvasView> context, CommandBuffer cmd)
+        public void Render(RenderContext context, CommandBuffer cmd)
         {
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
 
@@ -314,7 +314,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         }
 
 
-        private void ProcessDrawCall(CommandBuffer cmd, RenderContext<CanvasView> context, RenderTexture scene, DrawCall drawCall, int indexOffset, float dpiScale)
+        private void ProcessDrawCall(CommandBuffer cmd, RenderContext context, RenderTexture scene, DrawCall drawCall, int indexOffset, float dpiScale)
         {
             Brush brush = drawCall.Brush;
             float blur = brush.BackdropBlur;
@@ -485,7 +485,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     // Blits the graph's "Scene" texture to the swapchain, reusing the blur shader at zero offset as a
     // plain fullscreen copy. Depends on Scene through the declared texture handle: the graph runs
     // ScenePass first because this pass reads what that one writes.
-    private sealed class PresentPass : RasterPass<CanvasView>
+    private sealed class PresentPass : RasterPass
     {
         private readonly GraphiteRenderer _owner;
         private readonly PropertySet _properties = new();
@@ -504,7 +504,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             SetViewTarget(builder, depthFormat: PixelFormat.D24_UNorm_S8_UInt);
         }
 
-        public override void Render(RenderContext<CanvasView> context, CommandBuffer cmd)
+        public override void Render(RenderContext context, CommandBuffer cmd)
         {
             RenderTexture scene = context.GetRenderTexture(_sceneHandle);
 
