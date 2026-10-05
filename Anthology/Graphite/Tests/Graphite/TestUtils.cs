@@ -103,7 +103,7 @@ public static class TestUtils
                 SwapchainDescription vkDescription = swapchain;
                 vkDescription.Width = (uint)window.Size.X;
                 vkDescription.Height = (uint)window.Size.Y;
-                vkDescription.Source = new SwapchainSource(window.VkSurface!);
+                vkDescription.Source = SwapchainSource.CreateVulkan(window.VkSurface!);
 
                 return GraphicsDevice.CreateVulkan(options, vkDescription, vkOptions);
         }
