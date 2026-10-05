@@ -136,8 +136,6 @@ public abstract partial class ResourceFactory
                 $"{nameof(ShaderDescription)} must include a vertex stage.");
         }
 
-        CreateGraphicsProgram_ValidatePipelineStateArrays(description);
-
         RasterizerStateDescription rasterizerState = description.RasterizerState;
         BlendStateDescription blendState = description.BlendState;
         if (!rasterizerState.DepthClipEnabled && !Features.DepthClipDisable)
@@ -190,15 +188,6 @@ public abstract partial class ResourceFactory
                         $"The vertex layout's stride ({layoutDesc.Stride}) is less than the full size of the vertex ({minOffset})");
                 }
             }
-        }
-    }
-
-    private static void CreateGraphicsProgram_ValidatePipelineStateArrays(in ShaderDescription description)
-    {
-        if (description.BlendState.AttachmentStates == null)
-        {
-            throw new RenderException(
-                $"{nameof(ShaderDescription)}.{nameof(ShaderDescription.BlendState)}.{nameof(BlendStateDescription.AttachmentStates)} must not be null. Use an empty array if the program has no color attachments.");
         }
     }
 

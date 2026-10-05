@@ -15,9 +15,8 @@ public abstract partial class GraphicsDevice
     /// <param name="region">Region to write.</param>
     public void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, in TextureRegion region)
     {
-        UpdateTexture_CheckParameters(
-            texture,
-            sizeInBytes, region);
+        UpdateTexture_CheckParameters(texture, region);
+        BoundsChecks.UpdateTexture(texture, sizeInBytes, region);
         TextureRegion copy = region;
         Record(cb => cb.UpdateTexture(texture, source, sizeInBytes, copy), "UpdateTexture");
     }

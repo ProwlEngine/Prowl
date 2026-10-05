@@ -102,7 +102,7 @@ public abstract class CommandBufferBase : GraphicsResource
         {
             return;
         }
-        ValidationHelpers.CopyBufferCheckRange(Device, source, sourceOffset, destination, destinationOffset, sizeInBytes);
+        BoundsChecks.CopyBuffer(source, sourceOffset, destination, destinationOffset, sizeInBytes);
 
         CopyBufferCore(source, sourceOffset, destination, destinationOffset, sizeInBytes);
     }
@@ -177,7 +177,8 @@ public abstract class CommandBufferBase : GraphicsResource
         uint layerCount)
     {
         ValidationHelpers.CopyTextureCheckNotNull(Device, source, destination);
-        ValidationHelpers.CopyTextureCheckRegion(Device, 
+        ValidationHelpers.CopyTextureCheckRegion(Device, width, height, depth, layerCount);
+        BoundsChecks.CopyTexture(
             source,
             srcX, srcY, srcZ,
             srcMipLevel,
@@ -218,7 +219,7 @@ public abstract class CommandBufferBase : GraphicsResource
     {
         ValidationHelpers.RequireNotNull(Device, source, nameof(source), nameof(CopyTextureToBuffer));
         ValidationHelpers.RequireNotNull(Device, destination, nameof(destination), nameof(CopyTextureToBuffer));
-        Device.CopyTextureToBuffer_CheckParameters(source, destination, destinationOffset, region);
+        BoundsChecks.CopyTextureToBuffer(source, destination, destinationOffset, region);
         CopyTextureToBufferCore(source, destination, destinationOffset, region);
     }
 
@@ -252,7 +253,8 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <param name="region">Region to write.</param>
     public void UpdateTexture(Texture texture, IntPtr source, uint sizeInBytes, in TextureRegion region)
     {
-        Device.UpdateTexture_CheckParameters(texture, sizeInBytes, region);
+        Device.UpdateTexture_CheckParameters(texture, region);
+        BoundsChecks.UpdateTexture(texture, sizeInBytes, region);
         UpdateTextureCore(texture, source, sizeInBytes, region);
     }
 
