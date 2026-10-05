@@ -41,18 +41,15 @@ public sealed class DesktopPlayer : Game, IDisposable
 
         string settingsDir = Path.Combine(Application.DataPath, "Content", "Settings");
 
-        // Before anything loads, since they set how long unused assets stay loaded.
-        PlayerSettingsLoader.ApplyAssetConfig(settingsDir);
-        PlayerSettingsLoader.ApplyNavigation(settingsDir);
+        // Before anything loads, so the scene wakes up with the project's settings and XR already running. Physics
+        // settings reach the scene as it loads.
+        PlayerSettingsLoader.Apply(settingsDir);
 
         // Blocks until the scene and everything it uses is loaded, so the first frame shows all of it.
         if (AssetDatabase.Get<SceneAsset>(_manifest.DefaultSceneGuid) is { IsMissing: false } scene)
             Scene.Load(scene);
         else
             Debug.LogError($"[Player] Failed to load the default scene {_manifest.DefaultSceneGuid}.");
-
-        // After the scene, because physics settings apply to a loaded scene.
-        PlayerSettingsLoader.Apply(settingsDir);
     }
 
     private void LoadGameAssemblies()

@@ -528,7 +528,7 @@ public class InputAction
                 2 => inputHandler.MouseWheelDelta,
                 _ => 0.0f
             },
-            InputBindingType.XRButton => binding.IsPressed(inputHandler) ? 1.0f : 0.0f,
+            InputBindingType.XRButton or InputBindingType.XRTouch => binding.IsPressed(inputHandler) ? 1.0f : 0.0f,
             // A button reads a trigger or grip as pressed past halfway, the same point composites use.
             InputBindingType.XRAxis => ActionType == InputActionType.Button ? (binding.IsPressed(inputHandler) ? 1.0f : 0.0f) : binding.ReadXRAxis(),
             InputBindingType.XRStick => XRInput.GetThumbstick(binding.XRHand ?? XRHand.Right),

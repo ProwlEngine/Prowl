@@ -25,6 +25,9 @@ public struct RenderingData
 
     public bool SkipUI;
 
+    /// <summary>Draw only into the headset's eyes, without mirroring them anywhere.</summary>
+    public bool EyesOnly;
+
     /// <summary>Copy the scene's depth into the target as well as its colour, for a target with a depth attachment. Headset eyes use it.</summary>
     public bool CopyDepthToTarget;
 

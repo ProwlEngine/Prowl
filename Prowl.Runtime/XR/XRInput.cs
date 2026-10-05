@@ -38,6 +38,51 @@ public enum XRAxis
     Grip,
 }
 
+/// <summary>A sensor that feels a finger resting on a control without pressing it. Controllers without one read as untouched.</summary>
+public enum XRTouch
+{
+    Trigger,
+    /// <summary>The thumbstick, or the touchpad on controllers that have one instead.</summary>
+    Thumbstick,
+    /// <summary>A on the right hand, X on the left.</summary>
+    Primary,
+    /// <summary>B on the right hand, Y on the left.</summary>
+    Secondary,
+    /// <summary>The rest beside the thumbstick that some controllers have.</summary>
+    Thumbrest,
+}
+
+/// <summary>The joints of a tracked hand, in the order OpenXR reports them.</summary>
+public enum XRHandJoint
+{
+    Palm,
+    Wrist,
+    ThumbMetacarpal,
+    ThumbProximal,
+    ThumbDistal,
+    ThumbTip,
+    IndexMetacarpal,
+    IndexProximal,
+    IndexIntermediate,
+    IndexDistal,
+    IndexTip,
+    MiddleMetacarpal,
+    MiddleProximal,
+    MiddleIntermediate,
+    MiddleDistal,
+    MiddleTip,
+    RingMetacarpal,
+    RingProximal,
+    RingIntermediate,
+    RingDistal,
+    RingTip,
+    LittleMetacarpal,
+    LittleProximal,
+    LittleIntermediate,
+    LittleDistal,
+    LittleTip,
+}
+
 /// <summary>
 /// Headset controller input while <see cref="XR"/> is running. Everything reads as released, zero and untracked
 /// when it is not, or when the application does not have input focus in the headset.

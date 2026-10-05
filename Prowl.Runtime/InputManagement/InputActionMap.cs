@@ -231,6 +231,7 @@ public class InputActionMap : Asset, ISerializable
         if (binding.XRHand.HasValue) tag["xrHand"] = new EchoObject((int)binding.XRHand.Value);
         if (binding.XRButton.HasValue) tag["xrButton"] = new EchoObject((int)binding.XRButton.Value);
         if (binding.XRAxis.HasValue) tag["xrAxis"] = new EchoObject((int)binding.XRAxis.Value);
+        if (binding.XRTouch.HasValue) tag["xrTouch"] = new EchoObject((int)binding.XRTouch.Value);
 
         // Interaction parameters
         tag["holdDuration"] = new EchoObject(binding.HoldDuration);
@@ -266,6 +267,7 @@ public class InputActionMap : Asset, ISerializable
         if (tag.TryGet("xrHand", out var xh)) binding.XRHand = (XRHand)xh.IntValue;
         if (tag.TryGet("xrButton", out var xb)) binding.XRButton = (XRButton)xb.IntValue;
         if (tag.TryGet("xrAxis", out var xa)) binding.XRAxis = (XRAxis)xa.IntValue;
+        if (tag.TryGet("xrTouch", out var xt)) binding.XRTouch = (XRTouch)xt.IntValue;
 
         if (tag.TryGet("holdDuration", out var hd)) binding.HoldDuration = hd.FloatValue;
         if (tag.TryGet("tapCount", out var tc)) binding.TapCount = tc.IntValue;

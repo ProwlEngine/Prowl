@@ -34,6 +34,8 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     private const string OpenGLExtension = "XR_KHR_opengl_enable";
     private const string LocalFloorExtension = "XR_EXT_local_floor";
     private const string DepthExtension = "XR_KHR_composition_layer_depth";
+    private const string HandTrackingExtension = "XR_EXT_hand_tracking";
+    private const string EyeGazeExtension = "XR_EXT_eye_gaze_interaction";
 
     // Prowl's projections put depth in 0 to 1 and GL maps that onto window depth 0.5 to 1, which is what a
     // standard GL projection with the same planes would land in a glDepthRange(0.5, 1) viewport.
@@ -47,6 +49,11 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     private Session _session;
     private Space _appSpace;
     private Space _viewSpace;
+    private ReferenceSpaceType _appSpaceType;
+    private Posef _appSpaceOffset = new() { Orientation = new Quaternionf(0, 0, 0, 1) };
+    private bool _recenterRequested;
+    private bool _handTrackingExtension, _eyeGazeExtension;
+    private bool _handTrackingSupported, _eyeGazeSupported;
 
     private readonly Swapchain[] _swapchains = new Swapchain[2];
     private readonly uint[][] _swapchainImages = new uint[2][];
@@ -64,6 +71,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     private readonly View[] _headViews = new View[2];
     private readonly XRView[] _eyeViews = new XRView[2];
     private readonly bool[] _eyeRendered = new bool[2];
+    private readonly bool[] _eyeDepthWritten = new bool[2];
+    private readonly Posef[] _renderedPoses = new Posef[2];
+    private readonly HashSet<Camera> _stereoCameras = [];
     private XRPose _headPose;
 
     private FrameState _frameState;
@@ -80,8 +90,8 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     public int EyeWidth { get; private set; }
     public int EyeHeight { get; private set; }
 
-    /// <summary>Seconds between the frames the headset displays, 0 until the first frame has been waited for.</summary>
-    public float DisplayPeriod => _frameState.PredictedDisplayPeriod / 1e9f;
+    /// <summary>Seconds between the frames the headset displays, 0 until the first frame has been waited for and while the session is not running.</summary>
+    public float DisplayPeriod => _sessionRunning ? _frameState.PredictedDisplayPeriod / 1e9f : 0f;
 
     /// <summary>True once the runtime wants frames from us, so <c>xrWaitFrame</c> paces the loop.</summary>
     public bool IsPacingFrames => _pacing;
@@ -134,6 +144,10 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         if (localFloor) extensions.Add(LocalFloorExtension);
         _depthExtension = available.Contains(DepthExtension);
         if (_depthExtension) extensions.Add(DepthExtension);
+        _handTrackingExtension = available.Contains(HandTrackingExtension);
+        if (_handTrackingExtension) extensions.Add(HandTrackingExtension);
+        _eyeGazeExtension = available.Contains(EyeGazeExtension);
+        if (_eyeGazeExtension) extensions.Add(EyeGazeExtension);
 
         CreateInstance(extensions);
         GetSystem();
@@ -152,9 +166,10 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             _ = _eyeTextures[i].frameBuffer;
         }
 
-        Input = new OpenXRInput(_xr, _instance, _session, _appSpace);
+        Input = new OpenXRInput(_xr, _instance, _session, _appSpace, _handTrackingSupported, _eyeGazeSupported);
 
-        Debug.Log($"XR started on {SystemName} through {RuntimeName}, {EyeWidth}x{EyeHeight} per eye, tracking from the {TrackingOrigin.ToString().ToLowerInvariant()}{(_submitDepth ? ", submitting depth" : "")}.");
+        string extras = (_submitDepth ? ", submitting depth" : "") + (_handTrackingSupported ? ", hand tracking" : "") + (_eyeGazeSupported ? ", eye tracking" : "");
+        Debug.Log($"XR started on {SystemName} through {RuntimeName}, {EyeWidth}x{EyeHeight} per eye, tracking from the {TrackingOrigin.ToString().ToLowerInvariant()}{extras}.");
     }
 
     private List<string> GetAvailableExtensions()
@@ -217,9 +232,25 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         Check(result, "xrGetSystem");
         _systemId = systemId;
 
+        // An extension being there only says the runtime knows it, the headset itself says whether it can do it.
+        var hands = new SystemHandTrackingPropertiesEXT { Type = StructureType.SystemHandTrackingPropertiesExt };
+        var eyes = new SystemEyeGazeInteractionPropertiesEXT { Type = StructureType.SystemEyeGazeInteractionPropertiesExt };
         var properties = new SystemProperties { Type = StructureType.SystemProperties };
-        if (_xr.GetSystemProperties(_instance, _systemId, &properties) == Result.Success)
-            SystemName = ReadString(properties.SystemName);
+        if (_handTrackingExtension)
+        {
+            hands.Next = properties.Next;
+            properties.Next = &hands;
+        }
+        if (_eyeGazeExtension)
+        {
+            eyes.Next = properties.Next;
+            properties.Next = &eyes;
+        }
+
+        if (_xr.GetSystemProperties(_instance, _systemId, &properties) != Result.Success) return;
+        SystemName = ReadString(properties.SystemName);
+        _handTrackingSupported = _handTrackingExtension && hands.SupportsHandTracking != 0;
+        _eyeGazeSupported = _eyeGazeExtension && eyes.SupportsEyeGazeInteraction != 0;
     }
 
     // The spec requires this call before xrCreateSession, and the runtime tells us which GL versions it works with.
@@ -359,8 +390,9 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             else Debug.LogWarning("The headset has no floor level tracking space, so tracking starts from the head instead.");
         }
 
-        _appSpace = CreateReferenceSpace(appType);
-        _viewSpace = CreateReferenceSpace(ReferenceSpaceType.View);
+        _appSpaceType = appType;
+        _appSpace = CreateReferenceSpace(appType, _appSpaceOffset);
+        _viewSpace = CreateReferenceSpace(ReferenceSpaceType.View, new Posef { Orientation = new Quaternionf(0, 0, 0, 1) });
     }
 
     private List<ReferenceSpaceType> GetReferenceSpaces()
@@ -373,13 +405,13 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         return new List<ReferenceSpaceType>(spaces);
     }
 
-    private Space CreateReferenceSpace(ReferenceSpaceType type)
+    private Space CreateReferenceSpace(ReferenceSpaceType type, Posef pose)
     {
         var createInfo = new ReferenceSpaceCreateInfo
         {
             Type = StructureType.ReferenceSpaceCreateInfo,
             ReferenceSpaceType = type,
-            PoseInReferenceSpace = new Posef { Orientation = new Quaternionf(0, 0, 0, 1) },
+            PoseInReferenceSpace = pose,
         };
         Space space;
         Check(_xr.CreateReferenceSpace(_session, &createInfo, &space), "xrCreateReferenceSpace");
@@ -408,12 +440,72 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         Graphics.SubmitRenderThreadCallback(BeginFrameOnRenderThread);
         _frameBegun = true;
         _eyeRendered[0] = _eyeRendered[1] = false;
+        _eyeDepthWritten[0] = _eyeDepthWritten[1] = false;
+        _stereoCameras.Clear();
         _depthCamera = null;
 
         long time = _frameState.PredictedDisplayTime;
+        if (_recenterRequested) Recenter(time);
         _shouldRender = _frameState.ShouldRender != 0 && LocateViews(time);
         _headPose = LocatePose(_viewSpace, _appSpace, time);
         Input.Update(time, IsFocused);
+    }
+
+    public void RequestRecenter() => _recenterRequested = true;
+
+    /// <summary>
+    /// Moves tracking space so the head is at its centre, facing along it. Only the turn about the vertical is taken,
+    /// so the floor stays level, and floor tracking keeps the floor's height. The old space is destroyed on the render
+    /// thread, after the frames already queued that still use it.
+    /// </summary>
+    private void Recenter(long time)
+    {
+        _recenterRequested = false;
+        var location = new SpaceLocation { Type = StructureType.SpaceLocation };
+        if (_xr.LocateSpace(_viewSpace, _appSpace, time, &location) != Result.Success) return;
+        const SpaceLocationFlags valid = SpaceLocationFlags.PositionValidBit | SpaceLocationFlags.OrientationValidBit;
+        if ((location.LocationFlags & valid) != valid) return;
+
+        _appSpaceOffset = RecenteredOffset(_appSpaceOffset, location.Pose, keepFloor: TrackingOrigin == XRTrackingOrigin.Floor);
+        Space old = _appSpace;
+        _appSpace = CreateReferenceSpace(_appSpaceType, _appSpaceOffset);
+        Input.SetAppSpace(_appSpace);
+        Graphics.SubmitRenderThreadCallback(() => _xr.DestroySpace(old));
+        XR.RaiseRecentered();
+    }
+
+    /// <summary>
+    /// The app space's pose in its reference space after recentring on <paramref name="head"/>, which is the head's
+    /// pose in the current app space. The new space sits under the head, turned only by the head's yaw so it stays
+    /// level, at floor height when <paramref name="keepFloor"/>. Worked in OpenXR's own axes.
+    /// </summary>
+    internal static Posef RecenteredOffset(Posef offset, Posef head, bool keepFloor)
+    {
+        float twist = MathF.Sqrt(head.Orientation.Y * head.Orientation.Y + head.Orientation.W * head.Orientation.W);
+        Quaternion yaw = twist > 1e-4f ? new Quaternion(0f, head.Orientation.Y / twist, 0f, head.Orientation.W / twist) : Quaternion.Identity;
+        var centre = new Float3(head.Position.X, keepFloor ? 0f : head.Position.Y, head.Position.Z);
+
+        var rotation = new Quaternion(offset.Orientation.X, offset.Orientation.Y, offset.Orientation.Z, offset.Orientation.W);
+        Float3 position = new Float3(offset.Position.X, offset.Position.Y, offset.Position.Z) + rotation * centre;
+        Quaternion orientation = Quaternion.Normalize(rotation * yaw);
+        return new Posef
+        {
+            Position = new Vector3f(position.X, position.Y, position.Z),
+            Orientation = new Quaternionf(orientation.X, orientation.Y, orientation.Z, orientation.W),
+        };
+    }
+
+    /// <summary>The play area's width and depth in metres, when the headset has one and reports it.</summary>
+    public bool TryGetPlayAreaSize(out Float2 size)
+    {
+        Extent2Df bounds;
+        if (_xr.GetReferenceSpaceBoundsRect(_session, ReferenceSpaceType.Stage, &bounds) == Result.Success && bounds.Width > 0f && bounds.Height > 0f)
+        {
+            size = new Float2(bounds.Width, bounds.Height);
+            return true;
+        }
+        size = Float2.Zero;
+        return false;
     }
 
     private void BeginFrameOnRenderThread()
@@ -438,23 +530,48 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         bool left = _eyeRendered[0], right = _eyeRendered[1];
         bool submit = _shouldRender && (left || right);
 
-        // A camera drawing a single eye still has to fill both views, so the other one shows the same image.
+        // A camera drawing a single eye still has to fill both views, so the other one shows the same image, from
+        // the same place. Each view is sent with the pose its image was actually drawn from, so the runtime
+        // reprojects it correctly even when the camera did not follow the head this frame.
         int leftSource = left ? 0 : 1;
         int rightSource = right ? 1 : 0;
-        var views = new View[2] { _appViews[0], _appViews[1] };
-        long displayTime = _frameState.PredictedDisplayTime;
-        float nearZ = _nearZ, farZ = _farZ;
-        Graphics.SubmitRenderThreadCallback(() => EndFrameOnRenderThread(submit, leftSource, rightSource, views, displayTime, nearZ, farZ));
+        var frame = new SubmittedFrame
+        {
+            LeftSource = leftSource,
+            RightSource = rightSource,
+            LeftPose = _renderedPoses[leftSource],
+            RightPose = _renderedPoses[rightSource],
+            LeftFov = _appViews[leftSource].Fov,
+            RightFov = _appViews[rightSource].Fov,
+            LeftDepth = _eyeDepthWritten[leftSource],
+            RightDepth = _eyeDepthWritten[rightSource],
+            DisplayTime = _frameState.PredictedDisplayTime,
+            NearZ = _nearZ,
+            FarZ = _farZ,
+            Space = _appSpace,
+        };
+        Graphics.SubmitRenderThreadCallback(() => EndFrameOnRenderThread(submit, frame));
     }
 
-    private void EndFrameOnRenderThread(bool submit, int leftSource, int rightSource, View[] views, long displayTime, float nearZ, float farZ)
+    private struct SubmittedFrame
+    {
+        public int LeftSource, RightSource;
+        public Posef LeftPose, RightPose;
+        public Fovf LeftFov, RightFov;
+        public bool LeftDepth, RightDepth;
+        public long DisplayTime;
+        public float NearZ, FarZ;
+        public Space Space;
+    }
+
+    private void EndFrameOnRenderThread(bool submit, SubmittedFrame frame)
     {
         var projectionViews = stackalloc CompositionLayerProjectionView[2];
         var depthInfos = stackalloc CompositionLayerDepthInfoKHR[2];
         var layer = new CompositionLayerProjection
         {
             Type = StructureType.CompositionLayerProjection,
-            Space = _appSpace,
+            Space = frame.Space,
             ViewCount = 2,
             Views = projectionViews,
         };
@@ -466,24 +583,27 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             {
                 for (int eye = 0; eye < 2; eye++)
                 {
-                    CopyEyeToSwapchain(eye, eye == 0 ? leftSource : rightSource);
+                    bool leftEye = eye == 0;
+                    // Depth goes with an eye only when the depth camera drew that eye, anything else is stale.
+                    bool depth = _submitDepth && (leftEye ? frame.LeftDepth : frame.RightDepth);
+                    CopyEyeToSwapchain(eye, leftEye ? frame.LeftSource : frame.RightSource, depth);
                     projectionViews[eye] = new CompositionLayerProjectionView
                     {
                         Type = StructureType.CompositionLayerProjectionView,
-                        Pose = views[eye].Pose,
-                        Fov = views[eye].Fov,
+                        Pose = leftEye ? frame.LeftPose : frame.RightPose,
+                        Fov = leftEye ? frame.LeftFov : frame.RightFov,
                         SubImage = SubImage(_swapchains[eye]),
                     };
 
-                    if (!_submitDepth) continue;
+                    if (!depth) continue;
                     depthInfos[eye] = new CompositionLayerDepthInfoKHR
                     {
                         Type = StructureType.CompositionLayerDepthInfoKhr,
                         SubImage = SubImage(_depthSwapchains[eye]),
                         MinDepth = MinWindowDepth,
                         MaxDepth = MaxWindowDepth,
-                        NearZ = nearZ,
-                        FarZ = farZ,
+                        NearZ = frame.NearZ,
+                        FarZ = frame.FarZ,
                     };
                     projectionViews[eye].Next = &depthInfos[eye];
                 }
@@ -500,7 +620,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         var endInfo = new FrameEndInfo
         {
             Type = StructureType.FrameEndInfo,
-            DisplayTime = displayTime,
+            DisplayTime = frame.DisplayTime,
             EnvironmentBlendMode = EnvironmentBlendMode.Opaque,
             LayerCount = submit ? 1u : 0u,
             Layers = submit ? layers : null,
@@ -516,11 +636,11 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         ImageRect = new Rect2Di { Offset = new Offset2Di(0, 0), Extent = new Extent2Di(EyeWidth, EyeHeight) },
     };
 
-    private void CopyEyeToSwapchain(int eye, int sourceEye)
+    private void CopyEyeToSwapchain(int eye, int sourceEye, bool depth)
     {
         uint source = _eyeTextures[sourceEye].frameBuffer.Handle;
         CopyToSwapchain(_swapchains[eye], _swapchainImages[eye], source, GLEnum.ColorAttachment0, GLEnum.ColorBufferBit);
-        if (_submitDepth)
+        if (depth)
             CopyToSwapchain(_depthSwapchains[eye], _depthSwapchainImages[eye], source, GLEnum.DepthAttachment, GLEnum.DepthBufferBit);
     }
 
@@ -530,11 +650,14 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         uint index;
         Check(_xr.AcquireSwapchainImage(swapchain, &acquireInfo, &index), "xrAcquireSwapchainImage");
 
-        // An acquired image has to go back whatever happens, or every later acquire on this swapchain fails.
+        // A waited image has to go back whatever happens, or every later acquire on this swapchain fails. One whose
+        // wait failed cannot be released, since the runtime only takes back images that were waited on.
+        bool waited = false;
         try
         {
             var waitInfo = new SwapchainImageWaitInfo { Type = StructureType.SwapchainImageWaitInfo, Timeout = InfiniteDuration };
             Check(_xr.WaitSwapchainImage(swapchain, &waitInfo), "xrWaitSwapchainImage");
+            waited = true;
 
             var gl = Graphics.GL;
             gl.BindFramebuffer(GLEnum.ReadFramebuffer, sourceFramebuffer);
@@ -548,8 +671,11 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         }
         finally
         {
-            var releaseInfo = new SwapchainImageReleaseInfo { Type = StructureType.SwapchainImageReleaseInfo };
-            _xr.ReleaseSwapchainImage(swapchain, &releaseInfo);
+            if (waited)
+            {
+                var releaseInfo = new SwapchainImageReleaseInfo { Type = StructureType.SwapchainImageReleaseInfo };
+                _xr.ReleaseSwapchainImage(swapchain, &releaseInfo);
+            }
         }
     }
 
@@ -596,12 +722,22 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         return count == 2 && (viewState.ViewStateFlags & ViewStateFlags.OrientationValidBit) != 0;
     }
 
-    public XRPose LocatePose(Space space, Space baseSpace, long time)
+    public XRPose LocatePose(Space space, Space baseSpace, long time) => Locate(_xr, space, baseSpace, time);
+
+    /// <summary>Where a space is at <paramref name="time"/> in <paramref name="baseSpace"/>, with how fast it moves and turns.</summary>
+    internal static XRPose Locate(XrApi xr, Space space, Space baseSpace, long time)
     {
-        var location = new SpaceLocation { Type = StructureType.SpaceLocation };
-        if (_xr.LocateSpace(space, baseSpace, time, &location) != Result.Success)
+        var velocity = new SpaceVelocity { Type = StructureType.SpaceVelocity };
+        var location = new SpaceLocation { Type = StructureType.SpaceLocation, Next = &velocity };
+        if (xr.LocateSpace(space, baseSpace, time, &location) != Result.Success)
             return default;
-        return ToProwl(location);
+
+        XRPose pose = ToProwl(location);
+        pose.HasLinearVelocity = (velocity.VelocityFlags & SpaceVelocityFlags.LinearValidBit) != 0;
+        pose.HasAngularVelocity = (velocity.VelocityFlags & SpaceVelocityFlags.AngularValidBit) != 0;
+        if (pose.HasLinearVelocity) pose.LinearVelocity = ToProwl(velocity.LinearVelocity);
+        if (pose.HasAngularVelocity) pose.AngularVelocity = ToProwlAngular(velocity.AngularVelocity);
+        return pose;
     }
 
     private void PollEvents()
@@ -616,6 +752,14 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
                     break;
                 case StructureType.EventDataInstanceLossPending:
                     IsLost = true;
+                    break;
+                case StructureType.EventDataInteractionProfileChanged:
+                    Input.RefreshControllers();
+                    break;
+                case StructureType.EventDataReferenceSpaceChangePending:
+                    // The runtime recentred or the play area was redrawn, which moves the space our poses are in.
+                    if (Unsafe.As<EventDataBuffer, EventDataReferenceSpaceChangePending>(ref buffer).ReferenceSpaceType == _appSpaceType)
+                        XR.RaiseRecentered();
                     break;
             }
             buffer = new EventDataBuffer { Type = StructureType.EventDataBuffer };
@@ -664,16 +808,54 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     public RenderTexture GetEyeTexture(StereoEye eye, Camera camera, out bool writesDepth)
     {
         int index = EyeIndex(eye);
+        if (!_eyeRendered[index]) _renderedPoses[index] = RenderedPose(camera, index);
         _eyeRendered[index] = true;
+        _stereoCameras.Add(camera);
 
+        // The clip planes are in world units, the runtime reads depth in tracking space metres.
         if (_depthCamera.IsNotValid())
         {
             _depthCamera = camera;
-            _nearZ = camera.NearClipPlane;
-            _farZ = camera.FarClipPlane;
+            float scale = PlayAreaScale(camera.Transform);
+            _nearZ = camera.NearClipPlane / scale;
+            _farZ = camera.FarClipPlane / scale;
         }
         writesDepth = _depthCamera == camera;
+        if (writesDepth) _eyeDepthWritten[index] = true;
         return _eyeTextures[index];
+    }
+
+    /// <summary>The eye texture <paramref name="camera"/> drew this frame, if it has already drawn into the headset.</summary>
+    public bool HasRenderedStereo(Camera camera) => _stereoCameras.Contains(camera);
+
+    /// <summary>Whether anything was drawn into either eye this frame.</summary>
+    public bool AnyEyeRendered => _eyeRendered[0] || _eyeRendered[1];
+
+    public RenderTexture EyeTexture(StereoEye eye) => _eyeTextures[EyeIndex(eye)];
+
+    /// <summary>
+    /// Where the camera draws the eye from, in tracking space. The camera's parent stands for the play area, so the
+    /// eye's place relative to it is its place in tracking space, measured in tracking space metres.
+    /// </summary>
+    private Posef RenderedPose(Camera camera, int index)
+    {
+        Transform head = camera.Transform;
+        XRView view = _eyeViews[index];
+        Float3 position = head.TransformPoint(view.Position);
+        Quaternion rotation = head.Rotation * view.Rotation;
+        if (head.Parent != null)
+        {
+            position = head.Parent.InverseTransformPoint(position);
+            rotation = Quaternion.Inverse(head.Parent.Rotation) * rotation;
+        }
+        return new Posef { Position = ToXr(position), Orientation = ToXr(Quaternion.Normalize(rotation)) };
+    }
+
+    private static float PlayAreaScale(Transform head)
+    {
+        if (head.Parent == null) return 1f;
+        float scale = MathF.Abs(head.Parent.LossyScale.X);
+        return scale > 1e-6f ? scale : 1f;
     }
 
     public XRView GetEyeView(StereoEye eye) => _eyeViews[EyeIndex(eye)];
@@ -729,6 +911,10 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
     // OpenXR is right handed with -Z forward, Prowl is left handed with +Z forward, so poses mirror across Z.
     internal static Float3 ToProwl(Vector3f v) => new(v.X, v.Y, -v.Z);
     internal static Quaternion ToProwl(Quaternionf q) => new(-q.X, -q.Y, q.Z, q.W);
+    // A turn is an axis, which mirrors the other way to a position, as the axis part of a rotation does.
+    internal static Float3 ToProwlAngular(Vector3f v) => new(-v.X, -v.Y, v.Z);
+    internal static Vector3f ToXr(Float3 v) => new(v.X, v.Y, -v.Z);
+    internal static Quaternionf ToXr(Quaternion q) => new(-q.X, -q.Y, q.Z, q.W);
 
     internal static XRPose ToProwl(in SpaceLocation location)
     {
@@ -750,8 +936,10 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
 
     internal static string ReadString(byte* text) => Marshal.PtrToStringUTF8((nint)text) ?? "";
 
+    /// <summary>Writes <paramref name="value"/> as a terminated UTF-8 string, cut short to fit the buffer.</summary>
     internal static void WriteString(byte* destination, int capacity, string value)
     {
+        while (Encoding.UTF8.GetByteCount(value) > capacity - 1) value = value[..^1];
         int length = Encoding.UTF8.GetBytes(value, new Span<byte>(destination, capacity - 1));
         destination[length] = 0;
     }

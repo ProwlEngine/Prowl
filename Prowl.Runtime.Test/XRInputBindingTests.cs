@@ -74,4 +74,26 @@ public class XRInputBindingTests
         Assert.Equal(Float2.Zero, move.ReadValue<Float2>());
         Assert.Equal(0f, turn.ReadValue<float>());
     }
+
+    [Fact]
+    public void TouchBindings_SurviveSaveAndLoad_AndReadReleasedWithoutAHeadset()
+    {
+        var map = new InputActionMap("XR");
+        InputAction rest = map.AddAction("Rest");
+        rest.AddBinding(InputBinding.CreateXRTouchBinding(XRHand.Left, XRTouch.Thumbrest));
+
+        EchoObject saved = EchoObject.NewCompound();
+        map.Serialize(ref saved, new SerializationContext());
+        var loaded = new InputActionMap("Loaded");
+        loaded.Deserialize(saved, new SerializationContext());
+
+        InputBinding touch = loaded.GetAction("Rest").Bindings[0];
+        Assert.Equal(InputBindingType.XRTouch, touch.BindingType);
+        Assert.Equal(XRHand.Left, touch.XRHand);
+        Assert.Equal(XRTouch.Thumbrest, touch.XRTouch);
+
+        loaded.Enable();
+        loaded.UpdateActions(new NullInputHandler(), 0f);
+        Assert.False(loaded.GetAction("Rest").IsPressed());
+    }
 }

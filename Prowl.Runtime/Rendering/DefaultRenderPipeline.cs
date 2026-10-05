@@ -144,6 +144,25 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         camera.SetRenderingStereo(true);
 
+        // A second view of the same camera in one frame, like a second Game View, shows the eyes already drawn.
+        RenderTexture? mirror = XR.HasRenderedStereo(camera)
+            ? XR.EyeTexture((camera.StereoTargetEye & StereoTargetEyeMask.Left) != 0 ? StereoEye.Left : StereoEye.Right)
+            : RenderEyes(camera, data);
+
+        if (mirror.IsNotValid() || data.EyesOnly) return;
+        MirrorEye(mirror, data.FallbackTarget);
+
+        if (!data.SkipUI && !data.IsSceneView)
+        {
+            camera.UpdateRenderData(data.FallbackTarget);
+            RenderUIQueue(new CameraSnapshot(camera), data.FallbackTarget, UISurface.Overlay, data);
+            ResetToBackbuffer();
+        }
+    }
+
+    /// <summary>Renders the camera into each headset eye it targets, returning the first eye drawn.</summary>
+    private RenderTexture? RenderEyes(Camera camera, in RenderingData data)
+    {
         RenderTexture? mirror = null;
         foreach (var (eye, mask) in s_eyes)
         {
@@ -168,16 +187,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
             if (mirror.IsNotValid()) mirror = eyeData.FallbackTarget;
         }
-
-        if (mirror.IsNotValid()) return;
-        MirrorEye(mirror, data.FallbackTarget);
-
-        if (!data.SkipUI && !data.IsSceneView)
-        {
-            camera.UpdateRenderData(data.FallbackTarget);
-            RenderUIQueue(new CameraSnapshot(camera), data.FallbackTarget, UISurface.Overlay, data);
-            ResetToBackbuffer();
-        }
+        return mirror;
     }
 
     /// <summary>Copies an eye texture into the target, cropped to the target's aspect so it fills it without stretching.</summary>

@@ -191,6 +191,7 @@ public abstract class Game
                 _paper.EndFrame();
 
                 // After the GUI, since the editor renders its Game View, and with it the eyes, from there.
+                XR.RenderMissedEyes(currentScene);
                 XR.EndFrame();
 
                 // Give presentation hosts a point after all scene and Paper commands have been

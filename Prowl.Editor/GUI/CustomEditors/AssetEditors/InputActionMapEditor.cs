@@ -409,6 +409,7 @@ public class InputActionMapEditor : AssetImporterEditor
                         case InputBindingType.XRButton: binding.XRHand = XRHand.Right; binding.XRButton = XRButton.Primary; break;
                         case InputBindingType.XRAxis: binding.XRHand = XRHand.Right; binding.XRAxis = XRAxis.Trigger; break;
                         case InputBindingType.XRStick: binding.XRHand = XRHand.Right; break;
+                        case InputBindingType.XRTouch: binding.XRHand = XRHand.Right; binding.XRTouch = XRTouch.Trigger; break;
                     }
                 }).Show());
 
@@ -587,6 +588,13 @@ public class InputActionMapEditor : AssetImporterEditor
             case InputBindingType.XRStick:
                 DrawXRHandField(paper, $"{id}_xsh", binding);
                 break;
+
+            case InputBindingType.XRTouch:
+                DrawXRHandField(paper, $"{id}_xth", binding);
+                EditorGUI.Row(paper, $"{id}_xt", "Touch", () =>
+                    Origami.EnumDropdown(paper, $"{id}_xt_v", binding.XRTouch ?? XRTouch.Trigger,
+                        v => { binding.XRTouch = v; }).Show());
+                break;
         }
     }
 
@@ -757,6 +765,7 @@ public class InputActionMapEditor : AssetImporterEditor
             InputBindingType.XRButton => $"XR {binding.XRHand} {binding.XRButton}",
             InputBindingType.XRAxis => $"XR {binding.XRHand} {binding.XRAxis}",
             InputBindingType.XRStick => $"XR {binding.XRHand} Stick",
+            InputBindingType.XRTouch => $"XR {binding.XRHand} {binding.XRTouch} Touch",
             _ => binding.BindingType.ToString()
         };
     }

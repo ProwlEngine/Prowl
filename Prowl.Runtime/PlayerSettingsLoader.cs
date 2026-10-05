@@ -15,7 +15,11 @@ public static class PlayerSettingsLoader
 {
     private static string? _settingsDir;
 
-    /// <summary>Apply all project settings and register for scene load events.</summary>
+    /// <summary>
+    /// Applies every project setting and starts XR if the project asks for it. Runs before the first scene loads, so the
+    /// scene wakes up with them: assets resolved in OnEnable see the budget, navmesh worlds read their settings as their
+    /// surfaces register, and components can see XR running. Physics settings reach each scene as it loads.
+    /// </summary>
     public static void Apply(string settingsDir)
     {
         _settingsDir = settingsDir;
@@ -27,6 +31,7 @@ public static class PlayerSettingsLoader
         }
 
         ApplyAssetConfig(settingsDir);
+        ApplyNavigation(settingsDir);
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
@@ -44,12 +49,8 @@ public static class PlayerSettingsLoader
         ApplyXR(settingsDir);
     }
 
-    /// <summary>
-    /// Apply the async-asset-loading toggle. Exposed separately so the player can set it
-    /// BEFORE the default scene loads (component OnEnable may resolve AssetRefs), not just
-    /// during the bulk <see cref="Apply"/> that runs after scene load.
-    /// </summary>
-    public static void ApplyAssetConfig(string dir)
+    /// <summary>How long unused assets stay loaded, and how much memory they may use.</summary>
+    private static void ApplyAssetConfig(string dir)
     {
         var settings = Read(dir, PlayerSettingsFiles.Assets);
         if (settings == null) return;
@@ -203,12 +204,8 @@ public static class PlayerSettingsLoader
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
     }
 
-    /// <summary>
-    /// Apply the navigation tables and world settings. Exposed separately so the player can run it
-    /// BEFORE the default scene loads: a navmesh world reads its obstacle capacity and crowd radius
-    /// when its surfaces and agents register, which happens during the load.
-    /// </summary>
-    public static void ApplyNavigation(string dir)
+    /// <summary>The navigation tables and world settings, which a navmesh world reads as its surfaces and agents register.</summary>
+    private static void ApplyNavigation(string dir)
     {
         var settings = Read(dir, PlayerSettingsFiles.Navigation);
         if (settings == null) return;

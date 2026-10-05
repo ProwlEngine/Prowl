@@ -1383,11 +1383,11 @@ public class EditorApplication : Game
     /// </summary>
     public bool IsPanelOpen(Type panelType) => FindOpenPanel(panelType) != null;
 
-    /// <summary>Prompt for a scene file path and save the current scene there.</summary>
-    private void PromptSaveAs()
+    /// <summary>Prompt for a scene file path and save the current scene there. <paramref name="onSaved"/> runs only if the save succeeds.</summary>
+    public static void PromptSaveAs(Action? onSaved = null)
     {
         if (Project.Current == null) return;
-        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
+        OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (path == null || Project.Current == null) return;
             string rel = EditorAssetBackend.NormalizePath(
@@ -1395,8 +1395,11 @@ public class EditorApplication : Game
             if (!rel.EndsWith(".scene")) rel += ".scene";
 
             if (EditorSceneManager.SaveAs(rel))
+            {
                 Toasts.Success(Loc.Get("save.saved"),
                     Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" }));
+                onSaved?.Invoke();
+            }
         }, Project.Current.AssetsPath,
            new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
     }
@@ -1774,6 +1777,11 @@ public class EditorApplication : Game
         // in a fresh one.
         Runtime.Resources.Scene.EndSessionOnSwap = true;
 
+        // Before the scene loads, so components choosing between a headset and a desktop setup in Awake or OnEnable see it running.
+        XRSettings xr = EditorRegistries.GetSettings<XRSettings>();
+        xr.Apply();
+        if (xr.StartInPlayMode) XR.Start(xr.TrackingOrigin);
+
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
         Undo.Clear();
@@ -1789,10 +1797,6 @@ public class EditorApplication : Game
         Application.VSync = false;
         Application.TargetFrameRate = 0;
 
-        XRSettings xr = EditorRegistries.GetSettings<XRSettings>();
-        xr.Apply();
-        if (xr.StartInPlayMode) XR.Start(xr.TrackingOrigin);
-
         Runtime.Debug.Log("Entered play mode.");
     }
 
@@ -1805,8 +1809,10 @@ public class EditorApplication : Game
         Application.IsPaused = false;
         Application.StepRequested = false;
 
-        // A session the game started belongs to play mode, just like everything else it set up.
+        // A session the game started belongs to play mode, just like everything else it set up, and so do the
+        // handlers its code added, which would otherwise fire into the next play session.
         XR.Stop();
+        XR.ForgetHandlers();
 
         // Clear selection (play scene references)
         Selection.Clear();

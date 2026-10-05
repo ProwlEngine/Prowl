@@ -36,6 +36,8 @@ public enum InputBindingType
     XRAxis,
     /// <summary>A headset controller's thumbstick, or touchpad on controllers without one.</summary>
     XRStick,
+    /// <summary>A finger resting on a headset controller's control, read through <see cref="XRInput.GetTouch"/>.</summary>
+    XRTouch,
 }
 
 /// <summary>
@@ -77,6 +79,9 @@ public class InputBinding
 
     /// <summary>The controller axis for an <see cref="InputBindingType.XRAxis"/> binding.</summary>
     public XRAxis? XRAxis { get; set; }
+
+    /// <summary>The control a finger rests on for an <see cref="InputBindingType.XRTouch"/> binding.</summary>
+    public XRTouch? XRTouch { get; set; }
 
     /// <summary>
     /// Optional interaction that determines how this binding triggers the action.
@@ -227,6 +232,17 @@ public class InputBinding
         };
     }
 
+    public static InputBinding CreateXRTouchBinding(XRHand hand, XRTouch touch, InputInteractionType interaction = InputInteractionType.Default)
+    {
+        return new InputBinding
+        {
+            BindingType = InputBindingType.XRTouch,
+            XRHand = hand,
+            XRTouch = touch,
+            Interaction = interaction
+        };
+    }
+
     public static InputBinding CreateXRStickBinding(XRHand hand)
     {
         return new InputBinding
@@ -244,6 +260,7 @@ public class InputBinding
         InputBindingType.GamepadButton => GamepadButton.HasValue && inputHandler.GetGamepadButton(RequiredDeviceIndex ?? 0, GamepadButton.Value),
         InputBindingType.XRButton => XRButton.HasValue && XRInput.GetButton(XRHand ?? Runtime.XRHand.Right, XRButton.Value),
         InputBindingType.XRAxis => ReadXRAxis() > 0.5f,
+        InputBindingType.XRTouch => XRTouch.HasValue && XRInput.GetTouch(XRHand ?? Runtime.XRHand.Right, XRTouch.Value),
         _ => false
     };
 
