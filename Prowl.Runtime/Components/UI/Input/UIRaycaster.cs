@@ -92,9 +92,27 @@ internal static class UIRaycaster
     {
         Camera? cam = ResolveMainCamera(scene);
         if (cam == null) return;
+        PickWorld(scene, cam.ScreenPointToRay(screenPos, windowSize), ref bestGO, ref bestCanvas, ref bestDesign, out _);
+    }
 
-        Ray ray = cam.ScreenPointToRay(screenPos, windowSize);
-        float bestT = float.MaxValue;
+    /// <summary>Picks the nearest world space canvas element under a world space ray, such as a laser from a VR controller.</summary>
+    public static bool TryPickRay(Scene? scene, Ray ray, out Hit hit, out float distance)
+    {
+        hit = default;
+        GameObject? go = null;
+        GameCanvas? canvas = null;
+        Float2 design = Float2.Zero;
+        distance = 0f;
+        if (scene == null) return false;
+        PickWorld(scene, ray, ref go, ref canvas, ref design, out distance);
+        if (go == null || canvas == null) return false;
+        hit = new Hit(go, canvas, design);
+        return true;
+    }
+
+    private static void PickWorld(Scene scene, Ray ray, ref GameObject? bestGO, ref GameCanvas? bestCanvas, ref Float2 bestDesign, out float bestT)
+    {
+        bestT = float.MaxValue;
 
         foreach (GameObject go in scene.ActiveObjects)
         {
@@ -167,6 +185,9 @@ internal static class UIRaycaster
     /// (otherwise the hit-test yields no design position and sliders/scrollbars snap to the origin).
     /// Returns false when the projection is undefined (degenerate scale, no camera, or a parallel ray).
     /// </summary>
+    internal static bool TryProjectRay(GameCanvas canvas, Ray ray, out Float2 designPt)
+        => WorldRayToDesign(canvas, ray, out designPt, out _);
+
     internal static bool TryProjectPointer(GameCanvas canvas, Float2 screenPos, Float2 windowSize, out Float2 designPt)
     {
         if (canvas.RenderMode == RenderMode.WorldSpace)

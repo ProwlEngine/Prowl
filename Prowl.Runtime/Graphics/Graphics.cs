@@ -56,7 +56,7 @@ public static unsafe class Graphics
     //   main: EndFrameAndWait -> push frame-end sentinel, block on frameDone
     //   render: hits sentinel, SwapBuffers, signal frameDone
 
-    private readonly record struct RenderJob(CommandBuffer? Cmd, WaitedJob? Waited = null, bool IsFrameEnd = false);
+    private readonly record struct RenderJob(CommandBuffer? Cmd, WaitedJob? Waited = null, bool IsFrameEnd = false, System.Action? Callback = null);
 
     // A job whose submitter blocks until it has run, and sees any exception it threw.
     private sealed class WaitedJob
@@ -138,6 +138,8 @@ public static unsafe class Graphics
     public static void SubmitAndWait(CommandBuffer cmd)
     {
         if (cmd == null) return;
+        if (IsRenderThread)
+            throw new InvalidOperationException("SubmitAndWait was called on the render thread, which would wait on itself forever.");
         if (cmd._submitted || cmd._inPool)
             throw new System.InvalidOperationException("CommandBuffer has already been submitted.");
         cmd._submitted = true;
@@ -150,6 +152,29 @@ public static unsafe class Graphics
         }
         var waited = new WaitedJob();
         Enqueue(new RenderJob(cmd, waited));
+        waited.Done.Wait();
+        waited.Done.Dispose();
+        waited.Error?.Throw();
+    }
+
+    /// <summary>Runs <paramref name="callback"/> on the render thread, in order with the command buffers submitted around it.</summary>
+    internal static void SubmitRenderThreadCallback(System.Action callback)
+    {
+        if (IsHeadless) return;
+        Enqueue(new RenderJob(null, Callback: callback));
+    }
+
+    /// <summary>Runs <paramref name="callback"/> on the render thread and blocks until it has run. Its exceptions rethrow here.</summary>
+    internal static void SubmitRenderThreadCallbackAndWait(System.Action callback)
+    {
+        if (IsHeadless) return;
+        if (IsRenderThread)
+        {
+            callback();
+            return;
+        }
+        var waited = new WaitedJob();
+        Enqueue(new RenderJob(null, waited, Callback: callback));
         waited.Done.Wait();
         waited.Done.Dispose();
         waited.Error?.Throw();
@@ -252,7 +277,8 @@ public static unsafe class Graphics
 
     private static void ApplyPendingSwapInterval()
     {
-        int wanted = System.Threading.Volatile.Read(ref s_wantedSwapInterval);
+        // The headset paces frames while XR runs, so the mirror window never waits on its own display.
+        int wanted = XR.IsPacingFrames ? 0 : System.Threading.Volatile.Read(ref s_wantedSwapInterval);
         if (wanted < 0 || wanted == s_appliedSwapInterval) return;
 
         // Recorded either way, so a driver that refuses it is reported once per change rather than
@@ -292,6 +318,17 @@ public static unsafe class Graphics
                     try { Window.InternalWindow.GLContext!.SwapBuffers(); }
                     catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
                     finally { s_renderFrameDone.Set(); }
+                    continue;
+                }
+                if (job.Callback != null)
+                {
+                    try { job.Callback(); }
+                    catch (Exception ex)
+                    {
+                        if (job.Waited != null) job.Waited.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                        else Debug.LogError($"Render thread callback failed: {ex}");
+                    }
+                    finally { job.Waited?.Done.Set(); }
                     continue;
                 }
                 if (job.Cmd == null) { job.Waited?.Done.Set(); continue; }

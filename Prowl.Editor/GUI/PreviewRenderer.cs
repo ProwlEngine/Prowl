@@ -79,6 +79,7 @@ public class PreviewRenderer : IDisposable
         _camera.NearClipPlane = 0.01f;
         _camera.FarClipPlane = 100f;
         _camera.ClearFlags = CameraClearFlags.Skybox;
+        _camera.StereoTargetEye = StereoTargetEyeMask.None;
         _scene.Add(_cameraGo);
 
         // Light

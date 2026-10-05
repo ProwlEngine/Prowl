@@ -7,6 +7,7 @@ using System.Linq;
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.UI;
 
@@ -66,6 +67,29 @@ public sealed class EventSystem : MonoBehaviour
     /// OS window. A host that stops being active sets <see cref="HostViewport.ReceivesInput"/> to false.
     /// </summary>
     public HostViewport? Viewport { get; set; }
+
+    /// <summary>A pointer cast into world space canvases as a ray, such as a laser from a VR controller.</summary>
+    public struct RayPointer
+    {
+        public Ray Ray;
+        public bool Pressed;
+    }
+
+    /// <summary>While set, this ray drives the pointer instead of the mouse, and only world space canvases are hit.</summary>
+    public RayPointer? WorldPointer { get; set; }
+
+    /// <summary>How far along <see cref="WorldPointer"/> the element under it is, or null when the ray hits nothing.</summary>
+    public float? WorldPointerDistance { get; private set; }
+
+    [SerializeIgnore] private bool _rayWasPressed;
+
+    /// <summary>The nearest world space canvas element under <paramref name="ray"/>, and how far along the ray it is.</summary>
+    public static bool RaycastWorld(Ray ray, out GameObject? hit, out float distance)
+    {
+        bool found = UIRaycaster.TryPickRay(Scene.Current, ray, out UIRaycaster.Hit result, out distance);
+        hit = found ? result.GameObject : null;
+        return found;
+    }
 
     // ============================================================
     // State
@@ -275,6 +299,14 @@ public sealed class EventSystem : MonoBehaviour
         Scene? scene = Scene.Current;
 
         // Source the pointer from the active host viewport when present; otherwise the OS window + mouse.
+        if (WorldPointer is { } ray)
+        {
+            TickRay(GameObject.Scene.IsValid() ? GameObject.Scene : scene, ray, currentTime);
+            return;
+        }
+        WorldPointerDistance = null;
+        _rayWasPressed = false;
+
         Float2 winSize;
         Float2 pos;
         bool gated; // when true, suppress all hits this frame (panel not focused)
@@ -319,22 +351,7 @@ public sealed class EventSystem : MonoBehaviour
         GameCanvas? hoveredCanvas = hadHit ? hit.Canvas : null;
         Float2 designPos = hadHit ? hit.DesignPosition : Float2.Zero;
 
-        _hovered = hovered;
-
-        // 2) Hover transitions - Exit on the old chain, Enter on the new, each stopping at the lowest
-        //    common ancestor so a shared parent panel doesn't flicker as the pointer moves between children.
-        if (!ReferenceEquals(hovered, _lastHovered))
-        {
-            GameObject? oldHover = _lastHovered is { IsDisposed: false } ? _lastHovered : null;
-            FillCommon(_left, hovered, hoveredCanvas, pos, delta, designPos);
-
-            for (GameObject? n = oldHover; n != null && !IsAncestorOrSelf(n, hovered); n = n.Parent)
-                DispatchNode<IPointerExitHandler>(n, _left, static (h, e) => h.OnPointerExit(e));
-            for (GameObject? n = hovered; n != null && !IsAncestorOrSelf(n, oldHover); n = n.Parent)
-                DispatchNode<IPointerEnterHandler>(n, _left, static (h, e) => h.OnPointerEnter(e));
-
-            _lastHovered = hovered;
-        }
+        UpdateHover(hovered, hoveredCanvas, pos, delta, designPos);
 
         // 3) Per-button presses, releases, clicks, drags.
         UpdateButton(_left, MouseButton.Left, Input.GetMouseButtonDown(0), Input.GetMouseButtonUp(0), Input.GetMouseButton(0), hovered, hoveredCanvas, pos, delta, designPos, winSize, currentTime);
@@ -369,6 +386,51 @@ public sealed class EventSystem : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Hover transitions: Exit on the old chain, Enter on the new, each stopping at the lowest common ancestor so a
+    /// shared parent panel doesn't flicker as the pointer moves between children.
+    /// </summary>
+    private void UpdateHover(GameObject? hovered, GameCanvas? hoveredCanvas, Float2 pos, Float2 delta, Float2 designPos)
+    {
+        _hovered = hovered;
+        if (ReferenceEquals(hovered, _lastHovered)) return;
+
+        GameObject? oldHover = _lastHovered is { IsDisposed: false } ? _lastHovered : null;
+        FillCommon(_left, hovered, hoveredCanvas, pos, delta, designPos);
+
+        for (GameObject? n = oldHover; n != null && !IsAncestorOrSelf(n, hovered); n = n.Parent)
+            DispatchNode<IPointerExitHandler>(n, _left, static (h, e) => h.OnPointerExit(e));
+        for (GameObject? n = hovered; n != null && !IsAncestorOrSelf(n, oldHover); n = n.Parent)
+            DispatchNode<IPointerEnterHandler>(n, _left, static (h, e) => h.OnPointerEnter(e));
+
+        _lastHovered = hovered;
+    }
+
+    /// <summary>
+    /// The frame for a <see cref="WorldPointer"/>: the ray is hit tested against world space canvases and its press
+    /// acts as the left button. The pointer's position is its place on the hit canvas, in design pixels.
+    /// </summary>
+    private void TickRay(Scene? scene, RayPointer ray, float currentTime)
+    {
+        bool hadHit = UIRaycaster.TryPickRay(scene, ray.Ray, out UIRaycaster.Hit hit, out float distance);
+        WorldPointerDistance = hadHit ? distance : null;
+        GameObject? hovered = hadHit ? hit.GameObject : null;
+        GameCanvas? hoveredCanvas = hadHit ? hit.Canvas : null;
+        Float2 designPos = hadHit ? hit.DesignPosition : Float2.Zero;
+
+        Float2 pos = hadHit ? designPos : _lastPointerPos;
+        Float2 delta = pos - _lastPointerPos;
+        _lastPointerPos = pos;
+        _pointerPosition = pos;
+
+        UpdateHover(hovered, hoveredCanvas, pos, delta, designPos);
+
+        bool down = ray.Pressed && !_rayWasPressed;
+        bool up = !ray.Pressed && _rayWasPressed;
+        _rayWasPressed = ray.Pressed;
+        UpdateButton(_left, MouseButton.Left, down, up, ray.Pressed, hovered, hoveredCanvas, pos, delta, designPos, Float2.Zero, currentTime);
+    }
+
     private void DispatchMove(MoveDirection dir)
     {
         if (_selected == null) return;
@@ -398,8 +460,13 @@ public sealed class EventSystem : MonoBehaviour
         {
             GameObject? tracked = e.Dragging.IsValid() ? e.Dragging : e.PressedOn;
             GameCanvas? canvas = tracked.IsValid() ? tracked.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
-            if (canvas != null && UIRaycaster.TryProjectPointer(canvas, pos, winSize, out Float2 dp))
-                e.DesignPosition = dp;
+            bool projected = false;
+            Float2 dp = Float2.Zero;
+            if (canvas != null)
+                projected = WorldPointer is { } ray
+                    ? UIRaycaster.TryProjectRay(canvas, ray.Ray, out dp)
+                    : UIRaycaster.TryProjectPointer(canvas, pos, winSize, out dp);
+            if (projected) e.DesignPosition = dp;
         }
 
         // ---- Press ----

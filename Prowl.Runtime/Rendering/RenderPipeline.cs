@@ -25,6 +25,9 @@ public struct RenderingData
 
     public bool SkipUI;
 
+    /// <summary>Copy the scene's depth into the target as well as its colour, for a target with a depth attachment. Headset eyes use it.</summary>
+    public bool CopyDepthToTarget;
+
     /// <summary>
     /// Where this render goes when the camera has no <see cref="Camera.Target"/> asset of its own.
     /// Null means the backbuffer. Set by whoever is presenting the camera - the Game View, the scene
@@ -164,15 +167,15 @@ public abstract class RenderPipeline : EngineObject
     {
         public Scene Scene = camera.Scene;
 
-        public Float3 CameraPosition = camera.Transform.Position;
+        public Float3 CameraPosition = camera.ViewPosition;
 
         /// <summary>World-space center for directional shadow cascades this render: the camera's
         /// <see cref="Camera.ShadowFocus"/> position when set, otherwise <see cref="CameraPosition"/>.</summary>
         public Float3 ShadowFocusPosition = camera.GetShadowFocusPosition();
 
-        public Float3 CameraRight = camera.Transform.Right;
-        public Float3 CameraUp = camera.Transform.Up;
-        public Float3 CameraForward = camera.Transform.Forward;
+        public Float3 CameraRight = camera.ViewRotation * Float3.UnitX;
+        public Float3 CameraUp = Quaternion.Up(camera.ViewRotation);
+        public Float3 CameraForward = Quaternion.Forward(camera.ViewRotation);
         public LayerMask CullingMask = camera.CullingMask;
         public CameraClearFlags ClearFlags = camera.ClearFlags;
         public float NearClipPlane = camera.NearClipPlane;
@@ -189,21 +192,34 @@ public abstract class RenderPipeline : EngineObject
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
     }
 
-    // Model matrices for motion vectors, per camera: last render's to read and this render's to fill.
+    // Model matrices for motion vectors, per camera and eye: last render's to read and this render's to fill.
     private sealed class MotionHistory
     {
         public Dictionary<long, Float4x4> Previous = [];
         public Dictionary<long, Float4x4> Current = [];
     }
 
-    private readonly ConditionalWeakTable<Camera, MotionHistory> _motionHistories = new();
+    private readonly ConditionalWeakTable<Camera, MotionHistory[]> _motionHistories = new();
     private MotionHistory? _motion;
 
     /// <summary>
-    /// Starts motion vector tracking for <paramref name="camera"/>. Call at the start of a render;
-    /// <see cref="Render"/> ends it.
+    /// Starts motion vector tracking for <paramref name="camera"/> and its active eye. Call at the start of a
+    /// render; <see cref="EndMotionTracking"/> ends it.
     /// </summary>
-    protected void BeginMotionTracking(Camera camera) => _motion = _motionHistories.GetValue(camera, _ => new MotionHistory());
+    protected void BeginMotionTracking(Camera camera)
+    {
+        MotionHistory[] perEye = _motionHistories.GetValue(camera, _ => new MotionHistory[3]);
+        _motion = perEye[(int)camera.ActiveEye] ??= new MotionHistory();
+    }
+
+    protected void EndMotionTracking()
+    {
+        if (_motion == null) return;
+
+        (_motion.Previous, _motion.Current) = (_motion.Current, _motion.Previous);
+        _motion.Current.Clear();
+        _motion = null;
+    }
 
     /// <summary>
     /// Records a renderable's model matrix for this render and returns the one from the camera's last
@@ -234,14 +250,7 @@ public abstract class RenderPipeline : EngineObject
         return (renderables, lights);
     }
 
-    public virtual void Render(Camera camera, in RenderingData data)
-    {
-        if (_motion == null) return;
-
-        (_motion.Previous, _motion.Current) = (_motion.Current, _motion.Previous);
-        _motion.Current.Clear();
-        _motion = null;
-    }
+    public virtual void Render(Camera camera, in RenderingData data) => EndMotionTracking();
 
     /// <summary>
     /// Returns a per-index "culled" mask (true == culled, skip this renderable) aligned to

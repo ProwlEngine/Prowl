@@ -545,11 +545,13 @@ public sealed class CommandBuffer : IDisposable
     /// <summary>Encode a single mesh draw. Sets the mesh-attribute keywords on
     /// <paramref name="material"/>, fetches the variant program, binds shader +
     /// raster state + properties, then issues the draw. The mesh must already be
-    /// uploaded (call <c>mesh.Upload()</c> first; CB-friendly).</summary>
+    /// uploaded (call <c>mesh.Upload()</c> first; CB-friendly). <paramref name="depthTest"/> overrides whether the pass tests depth, for
+    /// a pass shared by two surfaces that need different answers.</summary>
     public void DrawMesh(Mesh mesh, Material material, int passIndex = 0,
                          in Float4x4 model = default,
                          PropertyState? instanceProperties = null,
-                         int subMeshIndex = -1)
+                         int subMeshIndex = -1,
+                         bool? depthTest = null)
     {
         if (mesh == null) throw new ArgumentNullException(nameof(mesh));
         if (material == null) throw new ArgumentNullException(nameof(material));
@@ -574,7 +576,13 @@ public sealed class CommandBuffer : IDisposable
             return;
 
         SetShader(variant);
-        SetRasterState(pass.State);
+        RasterizerState state = pass.State;
+        if (depthTest.HasValue)
+        {
+            state.DepthTest = depthTest.Value;
+            state.Depth = RasterizerState.DepthMode.Lequal;
+        }
+        SetRasterState(state);
         SetMaterialProperties(material);
 
         if (instanceProperties != null)

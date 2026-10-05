@@ -111,6 +111,10 @@ public abstract class Game
         {
             try
             {
+                // First, so the wait for the headset's frame lands before this frame's time is measured and
+                // everything that updates sees the poses for when the frame is displayed.
+                XR.BeginFrame();
+
                 UpdatePaperInput();
 
                 AudioContext.Update();
@@ -186,6 +190,9 @@ public abstract class Game
 
                 _paper.EndFrame();
 
+                // After the GUI, since the editor renders its Game View, and with it the eyes, from there.
+                XR.EndFrame();
+
                 // Give presentation hosts a point after all scene and Paper commands have been
                 // submitted but before the backbuffer is swapped. Development screenshot capture
                 // uses this hook to read the actual rendered client on the render thread.
@@ -248,6 +255,8 @@ public abstract class Game
         Window.Closing += () =>
         {
             Closing();
+
+            XR.Stop();
 
             // Before anything shuts down, so work blocked on the main thread runs while it still can and
             // worker loops watching the session token stop. Workers asking for the main thread from here

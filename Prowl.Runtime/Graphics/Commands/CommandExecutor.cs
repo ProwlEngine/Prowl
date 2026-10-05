@@ -46,6 +46,13 @@ internal sealed class CommandExecutor
     /// it forces VAO 0 to safely manipulate ELEMENT_ARRAY_BUFFER state.</summary>
     internal void InvalidateBoundVAO() => _lastBoundVAO = 0;
 
+    /// <summary>Records framebuffer 0 as bound, for render thread code that binds framebuffers with raw GL and binds 0 back after.</summary>
+    internal void ResetFramebufferBindings()
+    {
+        _lastDrawFb = 0;
+        _lastReadFb = 0;
+    }
+
     private RasterizerState _raster;
     private bool _rasterInitialized;
 

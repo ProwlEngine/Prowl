@@ -40,6 +40,8 @@ public static class PlayerSettingsLoader
             if (_settingsDir != null)
                 ApplyPhysics(_settingsDir);
         };
+
+        ApplyXR(settingsDir);
     }
 
     /// <summary>
@@ -146,6 +148,22 @@ public static class PlayerSettingsLoader
             Debug.Log("[PlayerSettings] Audio applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply audio: {ex.Message}"); }
+    }
+
+    /// <summary>Sets the XR render scale and starts XR when the project asks a built player to, which needs the window up.</summary>
+    private static void ApplyXR(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.XR);
+        if (settings == null) return;
+
+        try
+        {
+            if (settings.TryGet("RenderScale", out var scale)) XR.RenderScale = scale!.FloatValue;
+            bool start = settings.TryGet("StartInPlayer", out var sp) && sp!.BoolValue;
+            var origin = settings.TryGet("TrackingOrigin", out var to) ? (XRTrackingOrigin)to!.LongValue : XRTrackingOrigin.Floor;
+            if (start) XR.Start(origin);
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply XR: {ex.Message}"); }
     }
 
     private static void ApplyTime(string dir)

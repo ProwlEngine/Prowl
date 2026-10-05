@@ -50,6 +50,25 @@ public abstract class ImageEffect
     /// materials, persistent RenderTextures, or shader-program handles.
     /// </summary>
     public virtual void OnDisable() { }
+
+    private readonly object?[] _eyeStates = new object?[3];
+
+    /// <summary>
+    /// State kept apart for each eye the camera renders, so temporal history from one eye never feeds the other.
+    /// A mono camera only ever uses one.
+    /// </summary>
+    protected T GetEyeState<T>(Camera camera) where T : class, new()
+        => (T)(_eyeStates[(int)camera.ActiveEye] ??= new T());
+
+    /// <summary>Hands every eye state created so far to <paramref name="release"/>, then forgets them.</summary>
+    protected void ReleaseEyeStates<T>(Action<T> release) where T : class
+    {
+        for (int i = 0; i < _eyeStates.Length; i++)
+        {
+            if (_eyeStates[i] is T state) release(state);
+            _eyeStates[i] = null;
+        }
+    }
 }
 
 public enum CameraClearFlags
@@ -58,6 +77,24 @@ public enum CameraClearFlags
     SolidColor,
     Depth,
     Skybox,
+}
+
+/// <summary>The view a camera is currently rendering. Mono is a normal render, Left and Right are headset eyes.</summary>
+public enum StereoEye
+{
+    Mono,
+    Left,
+    Right,
+}
+
+/// <summary>Which headset eyes a camera renders to while XR is running.</summary>
+[Flags]
+public enum StereoTargetEyeMask
+{
+    None = 0,
+    Left = 1,
+    Right = 2,
+    Both = Left | Right,
 }
 
 [AddComponentMenu("Rendering/Camera")]
@@ -128,6 +165,31 @@ public class Camera : MonoBehaviour
     /// </summary>
     public Transform? ShadowFocus;
 
+    /// <summary>
+    /// The headset eyes this camera renders while XR is running. A perspective camera with no <see cref="Target"/>
+    /// renders once per eye from its transform, which stands for the head, into the headset, and mirrors the
+    /// left eye to wherever it would normally draw.
+    /// </summary>
+    public StereoTargetEyeMask StereoTargetEye = StereoTargetEyeMask.Both;
+
+    /// <summary>The eye being rendered right now. Mono outside a stereo render.</summary>
+    public StereoEye ActiveEye { get; private set; }
+
+    /// <summary>World position the current view is rendered from: the active eye in stereo, otherwise the transform.</summary>
+    public Float3 ViewPosition => ActiveEye != StereoEye.Mono ? _eyePosition : Transform.Position;
+
+    /// <summary>World rotation the current view is rendered with: the active eye in stereo, otherwise the transform.</summary>
+    public Quaternion ViewRotation => ActiveEye != StereoEye.Mono ? _eyeRotation : Transform.Rotation;
+
+    private XRView _eyeView;
+    private Float3 _eyePosition;
+    private Quaternion _eyeRotation;
+    private bool _renderedStereo;
+
+    // A projection the user set by hand, kept aside while the eyes' own projections are in use.
+    private Float4x4 _monoProjection, _monoNonJitteredProjection;
+    private bool _monoCustomProjection, _monoCustomNonJitteredProjection;
+
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
 
     private float _aspect;
@@ -142,9 +204,11 @@ public class Camera : MonoBehaviour
     private Float4x4 _nonJitteredProjectionMatrix;
     private bool _customNonJitteredProjectionMatrix;
 
-    // Previous frame state, written by the render pipeline at end of frame.
-    private Float4x4 _previousViewProjectionMatrix;
-    private bool _hasPreviousViewProjectionMatrix;
+    // Previous frame state per eye, written by the render pipeline at end of frame.
+    [SerializeIgnore]
+    private readonly Float4x4[] _previousViewProjectionMatrix = new Float4x4[3];
+    [SerializeIgnore]
+    private readonly bool[] _hasPreviousViewProjectionMatrix = new bool[3];
 
     // Image effects that were considered active on the previous render tick for this
     // camera. Compared against the current list each frame to fire OnDisable() on
@@ -210,16 +274,55 @@ public class Camera : MonoBehaviour
     /// Set by the render pipeline at the end of each frame. Used for motion vectors
     /// and temporal reprojection. Returns identity on the first frame.
     /// </summary>
-    public Float4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix;
+    public Float4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix[(int)ActiveEye];
 
     /// <summary>
     /// Whether a valid previous view-projection matrix exists (false on the first frame).
     /// </summary>
-    public bool HasPreviousViewProjectionMatrix => _hasPreviousViewProjectionMatrix;
+    public bool HasPreviousViewProjectionMatrix => _hasPreviousViewProjectionMatrix[(int)ActiveEye];
 
     public override void OnEnable()
     {
-        _hasPreviousViewProjectionMatrix = false;
+        ResetMotionHistory();
+    }
+
+    /// <summary>
+    /// Renders the following views as <paramref name="eye"/>, posed and projected by <paramref name="view"/>,
+    /// until <see cref="EndStereoEye"/>. Called by render pipelines around each eye of a stereo render.
+    /// </summary>
+    public void BeginStereoEye(StereoEye eye, in XRView view)
+    {
+        if (ActiveEye == StereoEye.Mono)
+        {
+            _monoProjection = _projectionMatrix;
+            _monoNonJitteredProjection = _nonJitteredProjectionMatrix;
+            _monoCustomProjection = _customProjectionMatrix;
+            _monoCustomNonJitteredProjection = _customNonJitteredProjectionMatrix;
+        }
+
+        ActiveEye = eye;
+        _eyeView = view;
+    }
+
+    public void EndStereoEye()
+    {
+        if (ActiveEye == StereoEye.Mono) return;
+        ActiveEye = StereoEye.Mono;
+        _projectionMatrix = _monoProjection;
+        _nonJitteredProjectionMatrix = _monoNonJitteredProjection;
+        _customProjectionMatrix = _monoCustomProjection;
+        _customNonJitteredProjectionMatrix = _monoCustomNonJitteredProjection;
+    }
+
+    /// <summary>
+    /// Tells the camera whether this render is stereo. Switching between mono and stereo forgets the motion history,
+    /// since the last frame of the other kind was rendered from a different view, possibly long ago.
+    /// </summary>
+    public void SetRenderingStereo(bool stereo)
+    {
+        if (stereo == _renderedStereo) return;
+        _renderedStereo = stereo;
+        ResetMotionHistory();
     }
 
     /// <summary>
@@ -318,20 +421,46 @@ public class Camera : MonoBehaviour
         PixelWidth = (uint)Maths.Max(1, (int)(width * renderScale));
         PixelHeight = (uint)Maths.Max(1, (int)(height * renderScale));
 
-        if (!_customAspect)
-            _aspect = PixelWidth / (float)PixelHeight;
+        if (ActiveEye != StereoEye.Mono)
+        {
+            // An eye's frustum is fixed by the headset, so it replaces the projection for this render. The eye's
+            // offset goes through the transform, so a scaled play area scales the distance between the eyes too.
+            _eyePosition = Transform.TransformPoint(_eyeView.Position);
+            _eyeRotation = Transform.Rotation * _eyeView.Rotation;
+            _projectionMatrix = CreateEyeProjection(_eyeView, NearClipPlane, FarClipPlane);
+            _nonJitteredProjectionMatrix = _projectionMatrix;
+        }
+        else
+        {
+            if (!_customAspect)
+                _aspect = PixelWidth / (float)PixelHeight;
 
-        // Recompute the base projection unless the user set it manually
-        if (!_customProjectionMatrix)
-            _projectionMatrix = GetProjectionMatrix(_aspect);
+            // Recompute the base projection unless the user set it manually
+            if (!_customProjectionMatrix)
+                _projectionMatrix = GetProjectionMatrix(_aspect);
 
-        // Keep the non-jittered projection in sync unless explicitly overridden
-        if (!_customNonJitteredProjectionMatrix)
-            _nonJitteredProjectionMatrix = GetProjectionMatrix(_aspect);
+            // Keep the non-jittered projection in sync unless explicitly overridden
+            if (!_customNonJitteredProjectionMatrix)
+                _nonJitteredProjectionMatrix = GetProjectionMatrix(_aspect);
+        }
 
-        ViewMatrix = Float4x4.CreateLookTo(Transform.Position, Transform.Forward, Transform.Up);
+        ViewMatrix = Float4x4.CreateLookTo(ViewPosition, Quaternion.Forward(ViewRotation), Quaternion.Up(ViewRotation));
 
         return camTarget;
+    }
+
+    /// <summary>An off center perspective projection from an eye's frustum, in the same depth convention as <see cref="Float4x4.CreatePerspectiveFov"/>.</summary>
+    private static Float4x4 CreateEyeProjection(in XRView view, float nearPlane, float farPlane)
+    {
+        float width = view.TanRight - view.TanLeft;
+        float height = view.TanUp - view.TanDown;
+        float range = farPlane / (farPlane - nearPlane);
+
+        return new Float4x4(
+            new Float4(2f / width, 0, 0, 0),
+            new Float4(0, 2f / height, 0, 0),
+            new Float4(-(view.TanRight + view.TanLeft) / width, -(view.TanUp + view.TanDown) / height, range, 1f),
+            new Float4(0, 0, -range * nearPlane, 0));
     }
 
     /// <summary>
@@ -340,8 +469,8 @@ public class Camera : MonoBehaviour
     /// </summary>
     public void SavePreviousViewProjectionMatrix()
     {
-        _previousViewProjectionMatrix = _nonJitteredProjectionMatrix * ViewMatrix;
-        _hasPreviousViewProjectionMatrix = true;
+        _previousViewProjectionMatrix[(int)ActiveEye] = _nonJitteredProjectionMatrix * ViewMatrix;
+        _hasPreviousViewProjectionMatrix[(int)ActiveEye] = true;
     }
 
     public void ResetAspect()
@@ -377,7 +506,7 @@ public class Camera : MonoBehaviour
     /// </summary>
     public void ResetMotionHistory()
     {
-        _hasPreviousViewProjectionMatrix = false;
+        Array.Clear(_hasPreviousViewProjectionMatrix);
     }
 
     public Ray ScreenPointToRay(Float2 screenPoint, Float2 screenSize)

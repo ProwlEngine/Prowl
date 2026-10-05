@@ -6,6 +6,7 @@ using System;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 using Xunit;
 
@@ -369,5 +370,55 @@ public class UITests : RuntimeTestBase
         toggle.OnPointerClick(new PointerEventData { Button = MouseButton.Left });
 
         Assert.False(toggle.IsOn);
+    }
+    // A laser from a VR controller drives world space UI: pressing and letting go on a button clicks it.
+    [Fact]
+    public void WorldPointer_ClicksAWorldSpaceButtonAlongItsRay()
+    {
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        GameCanvas.ScreenSizeOverride = new Float2(1000f, 1000f);
+        try
+        {
+            Scene scene = CreateScene(enable: true);
+            var canvasGo = CreateGameObject("Canvas");
+            canvasGo.Transform.Position = new Float3(0f, 0f, 2f);
+            canvasGo.Transform.LocalScale = new Float3(0.01f);
+            scene.Add(canvasGo);
+            var canvas = canvasGo.AddComponent<GameCanvas>();
+            canvas.RenderMode = RenderMode.WorldSpace;
+            canvas.ReferenceResolution = new Float2(200f, 100f);
+
+            var button = CreateUIObject("Button", scene, canvasGo);
+            RectTransform rect = button.RectTransform!;
+            rect.AnchorMin = rect.AnchorMax = rect.Pivot = Float2.Zero;
+            rect.AnchoredPosition = new Float2(50f, 25f);
+            rect.SizeDelta = new Float2(100f, 50f);
+            button.AddComponent<Box>();
+            var counter = button.AddComponent<ClickCounter>();
+
+            var systemGo = CreateGameObject("Event System");
+            scene.Add(systemGo);
+            var system = systemGo.AddComponent<EventSystem>();
+
+            void Point(Float3 from, bool pressed)
+            {
+                system.WorldPointer = new EventSystem.RayPointer { Ray = new Ray(from, Float3.UnitZ), Pressed = pressed };
+                system.Update();
+            }
+
+            // Beside the button the canvas has nothing to hit.
+            Point(new Float3(0.1f, 0.5f, 0f), false);
+            Assert.Null(system.WorldPointerDistance);
+
+            Point(new Float3(1f, 0.5f, 0f), false);
+            Point(new Float3(1f, 0.5f, 0f), true);
+            Point(new Float3(1f, 0.5f, 0f), false);
+
+            Assert.Equal(1, counter.Presses);
+            Assert.Equal(1, counter.Clicks);
+            Assert.Same(button, system.Hovered);
+            Assert.Equal(2f, system.WorldPointerDistance!.Value, 3);
+        }
+        finally { GameCanvas.ScreenSizeOverride = prevOverride; }
     }
 }

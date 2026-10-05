@@ -97,7 +97,12 @@ public static class Application
     }
 
     /// <summary>Blocks until the next frame is due. The run loops call this, once per frame.</summary>
-    internal static void WaitForNextFrame() => s_limiter.Wait();
+    internal static void WaitForNextFrame()
+    {
+        // A running XR session paces the loop through the headset's own frame timing.
+        if (XR.IsPacingFrames) return;
+        s_limiter.Wait();
+    }
 
     /// <summary>Replaces what <see cref="Quit"/> does. The editor sets this so quitting stops play mode instead of closing the editor.</summary>
     public static System.Action? QuitHandler { get; set; }

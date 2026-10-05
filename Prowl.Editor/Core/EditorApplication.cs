@@ -1789,6 +1789,10 @@ public class EditorApplication : Game
         Application.VSync = false;
         Application.TargetFrameRate = 0;
 
+        XRSettings xr = EditorRegistries.GetSettings<XRSettings>();
+        xr.Apply();
+        if (xr.StartInPlayMode) XR.Start(xr.TrackingOrigin);
+
         Runtime.Debug.Log("Entered play mode.");
     }
 
@@ -1800,6 +1804,9 @@ public class EditorApplication : Game
         Application.IsPlaying = false;
         Application.IsPaused = false;
         Application.StepRequested = false;
+
+        // A session the game started belongs to play mode, just like everything else it set up.
+        XR.Stop();
 
         // Clear selection (play scene references)
         Selection.Clear();

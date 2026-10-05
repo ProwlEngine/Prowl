@@ -110,6 +110,14 @@ public class DefaultRenderPipeline : RenderPipeline
     public override void Render(Camera camera, in RenderingData data)
     {
         ValidateDefaults();
+
+        if (XR.ShouldRenderStereo(camera, data))
+        {
+            RenderStereo(camera, data);
+            return;
+        }
+
+        camera.SetRenderingStereo(false);
         BeginMotionTracking(camera);
 
         // Main rendering with correct order of operations. The CommandExecutor
@@ -119,6 +127,79 @@ public class DefaultRenderPipeline : RenderPipeline
         Internal_Render(camera, data);
 
         base.Render(camera, in data);
+    }
+
+    private static readonly (StereoEye Eye, StereoTargetEyeMask Mask)[] s_eyes =
+    [
+        (StereoEye.Left, StereoTargetEyeMask.Left),
+        (StereoEye.Right, StereoTargetEyeMask.Right),
+    ];
+
+    /// <summary>
+    /// Renders the camera once per headset eye into the XR eye textures, then mirrors the first eye to where
+    /// the camera would normally draw, with the screen space UI on top. Screen space UI has no place in a
+    /// headset, so the eyes skip it.
+    /// </summary>
+    private void RenderStereo(Camera camera, in RenderingData data)
+    {
+        camera.SetRenderingStereo(true);
+
+        RenderTexture? mirror = null;
+        foreach (var (eye, mask) in s_eyes)
+        {
+            if ((camera.StereoTargetEye & mask) == 0) continue;
+
+            RenderingData eyeData = data;
+            eyeData.FallbackTarget = XR.GetEyeTexture(eye, camera, out bool writesDepth);
+            eyeData.SkipUI = true;
+            eyeData.CopyDepthToTarget = writesDepth;
+
+            camera.BeginStereoEye(eye, XR.GetEyeView(eye));
+            try
+            {
+                BeginMotionTracking(camera);
+                Internal_Render(camera, eyeData, secondEye: mirror.IsValid());
+                EndMotionTracking();
+            }
+            finally
+            {
+                camera.EndStereoEye();
+            }
+
+            if (mirror.IsNotValid()) mirror = eyeData.FallbackTarget;
+        }
+
+        if (mirror.IsNotValid()) return;
+        MirrorEye(mirror, data.FallbackTarget);
+
+        if (!data.SkipUI && !data.IsSceneView)
+        {
+            camera.UpdateRenderData(data.FallbackTarget);
+            RenderUIQueue(new CameraSnapshot(camera), data.FallbackTarget, UISurface.Overlay, data);
+            ResetToBackbuffer();
+        }
+    }
+
+    /// <summary>Copies an eye texture into the target, cropped to the target's aspect so it fills it without stretching.</summary>
+    private static void MirrorEye(RenderTexture eye, RenderTexture? target)
+    {
+        bool hasTarget = target.IsValid();
+        int dstWidth = hasTarget ? target.Width : Window.InternalWindow.FramebufferSize.X;
+        int dstHeight = hasTarget ? target.Height : Window.InternalWindow.FramebufferSize.Y;
+        if (dstWidth <= 0 || dstHeight <= 0) return;
+
+        float dstAspect = dstWidth / (float)dstHeight;
+        int srcWidth = eye.Width, srcHeight = eye.Height;
+        if (dstAspect > srcWidth / (float)srcHeight) srcHeight = (int)(srcWidth / dstAspect);
+        else srcWidth = (int)(srcHeight * dstAspect);
+        int srcX = (eye.Width - srcWidth) / 2;
+        int srcY = (eye.Height - srcHeight) / 2;
+
+        using var cmd = Graphics.GetCommandBuffer("XRMirror");
+        cmd.SetRenderTargets(hasTarget ? target.frameBuffer : null, eye.frameBuffer);
+        cmd.BlitFramebuffer(srcX, srcY, srcX + srcWidth, srcY + srcHeight, 0, 0, dstWidth, dstHeight, ClearFlags.Color, BlitFilter.Linear);
+        cmd.SetRenderTarget(null);
+        Graphics.Submit(cmd);
     }
 
     private Dictionary<RenderStage, List<ImageEffect>> GatherImageEffects(Camera camera)
@@ -163,7 +244,12 @@ public class DefaultRenderPipeline : RenderPipeline
 
     #region Scene Rendering
 
-    private void Internal_Render(Camera camera, in RenderingData data)
+    /// <summary>
+    /// Renders one view of the camera. The light selection and the shadow atlas only depend on the camera's
+    /// transform, which both eyes of a headset share, so the <paramref name="secondEye"/> reuses what the first
+    /// one built. Renderables are gathered for each eye, since particles cull and face their billboards per view.
+    /// </summary>
+    private void Internal_Render(Camera camera, in RenderingData data, bool secondEye = false)
     {
         // =======================================================
         // 0. Setup
@@ -193,7 +279,6 @@ public class DefaultRenderPipeline : RenderPipeline
         // =======================================================
         // 3. Collect and Cull Renderables
         var (renderables, lights) = CollectRenderables(camera.GameObject.Scene, camera);
-        //lights.Clear();
 
         // Inject editor grid
         if (data.DisplayGrid)
@@ -237,37 +322,40 @@ public class DefaultRenderPipeline : RenderPipeline
         // is rendered for only the directional and the closest-N point/spot, and finally the
         // BVH textures + directional + shadow uniforms are pushed to the GPU.
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
-        lightSystem.Reconcile(lights, css.ShadowFocusPosition, css.CullingMask);
-
-        // ─── Shadow atlas setup (clear) ───
-        // Done in its own CB and submitted before the lights start so the depth/stencil
-        // clear is in place before any face/cascade draws into the atlas. Each face
-        // then submits its own CB (necessary because each face uploads different
-        // view/proj matrices and they can't share a CB see Light.RenderShadows).
+        if (!secondEye)
         {
-            ShadowAtlas.TryInitialize();
-            ShadowAtlas.Clear();
+            lightSystem.Reconcile(lights, css.ShadowFocusPosition, css.CullingMask);
 
-            using var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
-            shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-            shadowSetup.ClearRenderTarget(ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
-            Graphics.Submit(shadowSetup);
+            // ─── Shadow atlas setup (clear) ───
+            // Done in its own CB and submitted before the lights start so the depth/stencil
+            // clear is in place before any face/cascade draws into the atlas. Each face
+            // then submits its own CB (necessary because each face uploads different
+            // view/proj matrices and they can't share a CB see Light.RenderShadows).
+            {
+                ShadowAtlas.TryInitialize();
+                ShadowAtlas.Clear();
+
+                using var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
+                shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
+                shadowSetup.ClearRenderTarget(ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
+                Graphics.Submit(shadowSetup);
+            }
+
+            // Anything the camera's culling mask hides casts no shadow in its view either.
+            IReadOnlyList<IRenderable> shadowCasters = renderables;
+            if (css.CullingMask != LayerMask.Everything)
+            {
+                s_shadowCasters.Clear();
+                foreach (IRenderable renderable in renderables)
+                    if (css.CullingMask.HasLayer(renderable.GetLayer()))
+                        s_shadowCasters.Add(renderable);
+                shadowCasters = s_shadowCasters;
+            }
+
+            RenderStats.BeginShadowPass();
+            lightSystem.RenderShadows(this, css.ShadowFocusPosition, shadowCasters);
+            RenderStats.EndShadowPass();
         }
-
-        // Anything the camera's culling mask hides casts no shadow in its view either.
-        IReadOnlyList<IRenderable> shadowCasters = renderables;
-        if (css.CullingMask != LayerMask.Everything)
-        {
-            s_shadowCasters.Clear();
-            foreach (IRenderable renderable in renderables)
-                if (css.CullingMask.HasLayer(renderable.GetLayer()))
-                    s_shadowCasters.Add(renderable);
-            shadowCasters = s_shadowCasters;
-        }
-
-        RenderStats.BeginShadowPass();
-        lightSystem.RenderShadows(this, css.ShadowFocusPosition, shadowCasters);
-        RenderStats.EndShadowPass();
 
         AssignCameraMatrices(css.View, css.Projection);
         lightSystem.UploadGlobalUniforms(css.ShadowFocusPosition);
@@ -379,6 +467,10 @@ public class DefaultRenderPipeline : RenderPipeline
             }
             RenderStats.EndPostFx();
 
+            // World-space UI canvases, into the scene color and tested against the opaque depth, so solid things in
+            // front hide them and transparents like a pointer's laser still draw over them.
+            RenderUIQueue(css, colorRT, UISurface.World, data);
+
             // ─── Transparents CB ───
             using var transparentCmd = Graphics.GetCommandBuffer("Transparents");
             transparentCmd.SetRenderTarget(colorRT.frameBuffer);
@@ -404,9 +496,6 @@ public class DefaultRenderPipeline : RenderPipeline
                 ExecuteImageEffects(transparentContext, effectsByStage[RenderStage.AfterTransparents]);
                 RenderStats.EndPostFx();
             }
-
-            // World-space UI canvases (drawn with the camera matrices, into the scene color).
-            RenderUIQueue(css, colorRT, UISurface.World, data);
 
             RenderStats.EndColorPass();
 
@@ -447,6 +536,11 @@ public class DefaultRenderPipeline : RenderPipeline
             }
 
             finalCmd.Blit(colorRT, target, null, 0, false, false);
+            if (data.CopyDepthToTarget && target.IsValid() && target.InternalDepth != null)
+            {
+                finalCmd.SetRenderTargets(target.frameBuffer, prepass.frameBuffer);
+                finalCmd.BlitFramebuffer(0, 0, prepass.Width, prepass.Height, 0, 0, target.Width, target.Height, ClearFlags.Depth, BlitFilter.Nearest);
+            }
             Graphics.Submit(finalCmd);
 
             // ─── Screen-space UI (Overlay surface) on top of the final image (into target) ───
@@ -460,14 +554,7 @@ public class DefaultRenderPipeline : RenderPipeline
             // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.). MUST run after the
             // overlay pass, which binds `target` - otherwise the editor's UI draws into the game RT and the
             // window goes black.
-            using var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
-            resetCmd.SetRenderTarget(null);
-            resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-            // These point at this render's pooled targets; every other global stays set for the next render.
-            resetCmd.ClearGlobalTexture("_CameraDepthTexture");
-            resetCmd.ClearGlobalTexture("_CameraNormalsTexture");
-            resetCmd.ClearGlobalTexture("_CameraMotionVectorsTexture");
-            Graphics.Submit(resetCmd);
+            ResetToBackbuffer(clearCameraTextures: true);
 
             // Runs even after a failed render, since effects like TAA undo their camera changes here.
             foreach (ImageEffect effect in allEffects)
@@ -477,6 +564,22 @@ public class DefaultRenderPipeline : RenderPipeline
             RenderTexture.ReleaseTemporaryRT(prepass);
             RenderTexture.ReleaseTemporaryRT(colorRT);
         }
+    }
+
+    /// <summary>Binds the backbuffer again for whatever draws after the pipeline, such as Paper UI.</summary>
+    private static void ResetToBackbuffer(bool clearCameraTextures = false)
+    {
+        using var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
+        resetCmd.SetRenderTarget(null);
+        resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+        if (clearCameraTextures)
+        {
+            // These point at this render's pooled targets; every other global stays set for the next render.
+            resetCmd.ClearGlobalTexture("_CameraDepthTexture");
+            resetCmd.ClearGlobalTexture("_CameraNormalsTexture");
+            resetCmd.ClearGlobalTexture("_CameraMotionVectorsTexture");
+        }
+        Graphics.Submit(resetCmd);
     }
 
     private static void UploadFogUniforms(Scene scene)
@@ -601,7 +704,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 cmd.SetRenderTarget(targetRT.frameBuffer);
                 cmd.SetViewport(0, 0, (uint)targetRT.Width, (uint)targetRT.Height);
             }
-            DrawUIItems(cmd, s_uiTmp, new ViewerData(css));
+            DrawUIItems(cmd, s_uiTmp, new ViewerData(css), depthTest: !data.IsSceneView);
             Graphics.Submit(cmd);
         }
         finally
@@ -610,7 +713,7 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private void DrawUIItems(CommandBuffer cmd, List<IRenderable> items, ViewerData viewer)
+    private void DrawUIItems(CommandBuffer cmd, List<IRenderable> items, ViewerData viewer, bool depthTest = false)
     {
         // GetPassesWithTag allocates a fresh list per call, and UI items are drawn back-to-back with the
         // same shared material - so memoize the resolved pass index for the last shader seen instead of
@@ -642,7 +745,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
             // Clipping (RectMask) is done per-fragment in the shader via the item's clip uniforms, so
             // no GPU scissor here - that lets the clip follow rotation/scale and round its corners.
-            cmd.DrawMesh(mesh, material, uiPass, model, properties);
+            cmd.DrawMesh(mesh, material, uiPass, model, properties, depthTest: depthTest ? true : null);
         }
 
         // Leave the scissor test off so the next command buffer isn't clipped.
