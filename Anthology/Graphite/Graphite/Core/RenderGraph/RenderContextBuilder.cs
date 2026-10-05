@@ -9,14 +9,10 @@ namespace Prowl.Graphite.RenderGraph;
 /// </summary>
 public sealed class RenderContextBuilder
 {
-    internal readonly List<RenderResourceID> Inputs = new();
-    internal readonly List<GraphResource> Outputs = new();
     internal readonly List<ResourceAccess> Accesses = new();
 
     internal void Reset()
     {
-        Inputs.Clear();
-        Outputs.Clear();
         Accesses.Clear();
     }
 
@@ -27,7 +23,6 @@ public sealed class RenderContextBuilder
         TextureState? depthUsage = null)
     {
         Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: false));
-        Inputs.Add(id);
         return new TextureHandle(id);
     }
 
@@ -43,8 +38,7 @@ public sealed class RenderContextBuilder
         TextureState usage = TextureState.Attachment,
         TextureState? depthUsage = null)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true));
-        Outputs.Add(new GraphTextureResource(id, desc, history, ops));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true, new GraphTextureResource(id, desc, history, ops)));
         return new TextureHandle(id);
     }
 
@@ -57,8 +51,7 @@ public sealed class RenderContextBuilder
         TextureState usage = TextureState.Attachment,
         TextureState? depthUsage = null)
     {
-        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true));
-        Outputs.Add(new GraphImportedTextureResource(id, existing));
+        Accesses.Add(ResourceAccess.Texture(id, usage, depthUsage, isOutput: true, new GraphImportedTextureResource(id, existing)));
         return new TextureHandle(id);
     }
 
@@ -66,7 +59,6 @@ public sealed class RenderContextBuilder
     public BufferHandle DeclareInputBuffer(RenderResourceID id, BufferAccess usage = BufferAccess.AllReads)
     {
         Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: false));
-        Inputs.Add(id);
         return new BufferHandle(id);
     }
 
@@ -76,8 +68,7 @@ public sealed class RenderContextBuilder
     /// </summary>
     public BufferHandle DeclareOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0, BufferAccess usage = BufferAccess.ShaderRead | BufferAccess.ShaderWrite)
     {
-        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true));
-        Outputs.Add(new GraphBufferResource(id, desc, history));
+        Accesses.Add(ResourceAccess.Buffer(id, usage, isOutput: true, new GraphBufferResource(id, desc, history)));
         return new BufferHandle(id);
     }
 
@@ -95,8 +86,7 @@ public sealed class RenderContextBuilder
         if (usage is not (TextureState.Attachment or TextureState.TransferDst))
             throw new ArgumentException($"The view target only supports Attachment and TransferDst, not {usage}.", nameof(usage));
 
-        Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, null, isOutput: true));
-        Outputs.Add(new GraphViewTargetResource(ops, depthFormat));
+        Accesses.Add(ResourceAccess.Texture(GraphViewTargetResource.ViewTargetId, usage, null, isOutput: true, new GraphViewTargetResource(ops, depthFormat)));
         return new TextureHandle(GraphViewTargetResource.ViewTargetId);
     }
 }

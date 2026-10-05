@@ -24,7 +24,6 @@ public sealed class RenderContext<TView>
     private readonly HashSet<Texture> _discardedTextures = new();
 
     private PassInfo? _currentPass;
-    private GraphResource[]? _currentPassOutputs;
     private ResourceAccess[]? _currentAccesses;
     private string? _currentScopeName;
     private TextureBarrier[]? _deferredBarriers;
@@ -68,12 +67,11 @@ public sealed class RenderContext<TView>
     /// <summary>Device's profiler, null if none.</summary>
     public IProfiler? Profiler => _device.Profiler;
 
-    internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null, null);
+    internal void SetCurrentPass(in PassInfo? pass) => SetCurrentPass(pass, null, null);
 
-    internal void SetCurrentPass(in PassInfo? pass, GraphResource[]? declaredOutputs, ResourceAccess[]? accesses, string? scopeName)
+    internal void SetCurrentPass(in PassInfo? pass, ResourceAccess[]? accesses, string? scopeName)
     {
         _currentPass = pass;
-        _currentPassOutputs = declaredOutputs;
         _currentAccesses = accesses;
         _currentScopeName = scopeName;
     }
@@ -453,11 +451,11 @@ public sealed class RenderContext<TView>
 
     internal TargetLoadStoreOps GetTargetOps(RenderResourceID id)
     {
-        if (_currentPassOutputs != null)
+        if (_currentAccesses != null)
         {
-            foreach (GraphResource declared in _currentPassOutputs)
+            foreach (ResourceAccess access in _currentAccesses)
             {
-                if (declared.Id != id)
+                if (access.Id != id || access.Description is not { } declared)
                     continue;
 
                 switch (declared)

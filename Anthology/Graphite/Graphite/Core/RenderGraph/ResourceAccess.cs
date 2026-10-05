@@ -10,6 +10,7 @@ internal readonly struct ResourceAccess
     public readonly TextureState TextureUsage;
     public readonly TextureState? DepthUsage;
     public readonly BufferAccess BufferUsage;
+    public readonly GraphResource? Description;
 
     private ResourceAccess(
         RenderResourceID id,
@@ -17,7 +18,8 @@ internal readonly struct ResourceAccess
         bool isOutput,
         TextureState textureUsage,
         TextureState? depthUsage,
-        BufferAccess bufferUsage)
+        BufferAccess bufferUsage,
+        GraphResource? description)
     {
         Id = id;
         IsTexture = isTexture;
@@ -25,13 +27,15 @@ internal readonly struct ResourceAccess
         TextureUsage = textureUsage;
         DepthUsage = depthUsage;
         BufferUsage = bufferUsage;
+        Description = description;
     }
 
     public static ResourceAccess Texture(
         RenderResourceID id,
         TextureState usage,
         TextureState? depthUsage,
-        bool isOutput)
+        bool isOutput,
+        GraphResource? description = null)
     {
         string role = isOutput ? "output" : "input";
         if (!Enum.IsDefined(usage) || usage == TextureState.DepthReadOnly)
@@ -50,10 +54,10 @@ internal readonly struct ResourceAccess
                 throw new ArgumentException($"Depth usage {depth} is not valid for a pass {role}.", nameof(depthUsage));
         }
 
-        return new ResourceAccess(id, true, isOutput, usage, depthUsage, BufferAccess.None);
+        return new ResourceAccess(id, true, isOutput, usage, depthUsage, BufferAccess.None, description);
     }
 
-    public static ResourceAccess Buffer(RenderResourceID id, BufferAccess usage, bool isOutput)
+    public static ResourceAccess Buffer(RenderResourceID id, BufferAccess usage, bool isOutput, GraphResource? description = null)
     {
         if (usage == BufferAccess.None)
             throw new ArgumentException("Buffer usage must name at least one access.", nameof(usage));
@@ -64,7 +68,7 @@ internal readonly struct ResourceAccess
         if (isOutput && (usage & BufferAccess.AllWrites) == 0)
             throw new ArgumentException($"Buffer output usage {usage} must include ShaderWrite or TransferWrite.", nameof(usage));
 
-        return new ResourceAccess(id, false, isOutput, default, null, usage);
+        return new ResourceAccess(id, false, isOutput, default, null, usage, description);
     }
 
     private static bool IsWrite(TextureState state)
