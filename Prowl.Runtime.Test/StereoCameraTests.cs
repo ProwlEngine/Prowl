@@ -260,4 +260,50 @@ public class StereoCameraTests : RuntimeTestBase
         Float3 actual = OpenXRSession.ToProwl(xrRotation) * OpenXRSession.ToProwl(xrPoint);
         AssertClose(expected, actual);
     }
+
+    // The pose each eye was drawn from goes back to the runtime, so converting there and back must change nothing.
+    [Theory]
+    [InlineData(0.3f, 0.5f, -0.2f, 0.78f)]
+    [InlineData(-0.6f, 0.1f, 0.4f, 0.68f)]
+    public void ProwlPose_ConvertsBackToTheSameOpenXRPose(float x, float y, float z, float w)
+    {
+        float length = MathF.Sqrt(x * x + y * y + z * z + w * w);
+        var rotation = new Quaternionf(x / length, y / length, z / length, w / length);
+        var position = new Vector3f(0.25f, 1.6f, -0.4f);
+
+        Quaternionf rotationBack = OpenXRSession.ToXr(OpenXRSession.ToProwl(rotation));
+        Vector3f positionBack = OpenXRSession.ToXr(OpenXRSession.ToProwl(position));
+
+        Assert.Equal(rotation, rotationBack);
+        Assert.Equal(position, positionBack);
+    }
+
+    // The application name a runtime is given has a fixed size, and a long one is cut short rather than failing XR.
+    [Fact]
+    public unsafe void LongNames_AreCutShortToFitTheirBuffer()
+    {
+        byte* buffer = stackalloc byte[128];
+        string name = new string('é', 200);
+
+        OpenXRSession.WriteString(buffer, 128, name);
+
+        string written = OpenXRSession.ReadString(buffer);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(written) <= 127);
+        Assert.StartsWith(written, name);
+    }
+
+    // Without a session, asking for an eye fails with a clear reason, and nothing has been drawn into the headset.
+    [Fact]
+    public void WithoutXR_EyeRequestsFailClearlyAndNothingWasDrawn()
+    {
+        Scene scene = CreateScene(enable: true);
+        var camera = CreateGameObject("Camera").AddComponent<Camera>();
+        scene.Add(camera.GameObject);
+
+        Assert.Throws<InvalidOperationException>(() => XR.GetEyeView(StereoEye.Left));
+        Assert.Throws<InvalidOperationException>(() => XR.GetEyeTexture(StereoEye.Left, camera, out _));
+        Assert.False(XR.HasRenderedStereo(camera));
+        Assert.False(XR.IsReconnecting);
+        Assert.Equal(0f, XR.DisplayRefreshRate);
+    }
 }
