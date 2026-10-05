@@ -39,7 +39,7 @@ internal unsafe partial class VkTexture : Texture
         : base(description)
     {
         _gd = gd;
-        bool isCubemap = ((description.Usage) & TextureUsage.Cubemap) == TextureUsage.Cubemap;
+        bool isCubemap = description.Type == TextureType.TextureCube;
         _actualImageArrayLayers = isCubemap
             ? 6 * ArrayLayers
             : ArrayLayers;

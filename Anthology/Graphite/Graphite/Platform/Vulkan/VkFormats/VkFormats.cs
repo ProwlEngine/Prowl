@@ -116,6 +116,7 @@ internal static partial class VkFormats
             case TextureType.Texture1D:
                 return ImageType.Type1D;
             case TextureType.Texture2D:
+            case TextureType.TextureCube:
                 return ImageType.Type2D;
             case TextureType.Texture3D:
                 return ImageType.Type3D;

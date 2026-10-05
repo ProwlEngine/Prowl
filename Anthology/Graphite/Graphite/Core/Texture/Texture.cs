@@ -33,7 +33,7 @@ public abstract class Texture : GraphicsResource
     /// </summary>
     public uint MipLevels => _description.MipLevels;
     /// <summary>
-    /// Array layer count.
+    /// Array layer count. For cube textures, the number of cubes; each has 6 faces.
     /// </summary>
     public uint ArrayLayers => _description.ArrayLayers;
     /// <summary>
