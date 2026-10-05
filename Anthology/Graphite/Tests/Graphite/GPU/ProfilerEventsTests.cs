@@ -92,7 +92,6 @@ file sealed class ClearingRasterPass : RasterPass<ProfilerView>
 
     public override void Render(RenderContext<ProfilerView> context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
     }
 }
 

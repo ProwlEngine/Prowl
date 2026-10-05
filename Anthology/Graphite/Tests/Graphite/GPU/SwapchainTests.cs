@@ -31,7 +31,6 @@ file sealed class ClearSwapchainPass : RasterPass<SwapchainView>
 
     public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
     }
 }
 
@@ -48,7 +47,6 @@ file sealed class DepthSwapchainPass : RasterPass<SwapchainView>
 
     public override void Render(RenderContext<SwapchainView> context, CommandBuffer cmd)
     {
-        BindTarget(context, cmd);
     }
 }
 
