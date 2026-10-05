@@ -34,15 +34,15 @@ public struct SamplerDescription
     /// <summary>
     /// Min LOD.
     /// </summary>
-    public uint MinimumLod;
+    public float MinimumLod;
     /// <summary>
     /// Max LOD.
     /// </summary>
-    public uint MaximumLod;
+    public float MaximumLod;
     /// <summary>
     /// LOD bias.
     /// </summary>
-    public int LodBias;
+    public float LodBias;
     /// <summary>
     /// Border color, Border mode only.
     /// </summary>
@@ -68,9 +68,9 @@ public struct SamplerDescription
         SamplerFilter filter,
         ComparisonKind? comparisonKind,
         uint maximumAnisotropy,
-        uint minimumLod,
-        uint maximumLod,
-        int lodBias,
+        float minimumLod,
+        float maximumLod,
+        float lodBias,
         SamplerBorderColor borderColor)
     {
         AddressModeU = addressModeU;
@@ -94,7 +94,7 @@ public struct SamplerDescription
     ///     Filter = SamplerFilter.MinPoint_MagPoint_MipPoint
     ///     LodBias = 0
     ///     MinimumLod = 0
-    ///     MaximumLod = uint.MaxValue
+    ///     MaximumLod = 1000f
     ///     MaximumAnisotropy = 0
     /// </summary>
     public static readonly SamplerDescription Point = new()
@@ -105,7 +105,7 @@ public struct SamplerDescription
         Filter = SamplerFilter.MinPoint_MagPoint_MipPoint,
         LodBias = 0,
         MinimumLod = 0,
-        MaximumLod = uint.MaxValue,
+        MaximumLod = 1000f,
         MaximumAnisotropy = 0,
     };
 
@@ -118,7 +118,7 @@ public struct SamplerDescription
     ///     Filter = SamplerFilter.MinLinear_MagLinear_MipLinear
     ///     LodBias = 0
     ///     MinimumLod = 0
-    ///     MaximumLod = uint.MaxValue
+    ///     MaximumLod = 1000f
     ///     MaximumAnisotropy = 0
     /// </summary>
     public static readonly SamplerDescription Linear = new()
@@ -129,7 +129,7 @@ public struct SamplerDescription
         Filter = SamplerFilter.MinLinear_MagLinear_MipLinear,
         LodBias = 0,
         MinimumLod = 0,
-        MaximumLod = uint.MaxValue,
+        MaximumLod = 1000f,
         MaximumAnisotropy = 0,
     };
 
@@ -142,7 +142,7 @@ public struct SamplerDescription
     ///     Filter = SamplerFilter.Anisotropic
     ///     LodBias = 0
     ///     MinimumLod = 0
-    ///     MaximumLod = uint.MaxValue
+    ///     MaximumLod = 1000f
     ///     MaximumAnisotropy = 4
     /// </summary>
     public static readonly SamplerDescription Aniso4x = new()
@@ -153,7 +153,7 @@ public struct SamplerDescription
         Filter = SamplerFilter.Anisotropic,
         LodBias = 0,
         MinimumLod = 0,
-        MaximumLod = uint.MaxValue,
+        MaximumLod = 1000f,
         MaximumAnisotropy = 4,
     };
 }
