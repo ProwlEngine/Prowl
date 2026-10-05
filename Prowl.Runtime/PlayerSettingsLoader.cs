@@ -174,25 +174,11 @@ public static class PlayerSettingsLoader
 
         try
         {
-            // Tags is a List<string> (serializes as a list directly).
-            if (settings.TryGet("Tags", out var tagsProp) && tagsProp!.TagType == EchoType.List)
-            {
-                TagLayerManager.tags.Clear();
-                foreach (var tag in tagsProp.List)
-                    TagLayerManager.tags.Add(tag.StringValue);
-            }
+            if (settings.TryGet("Tags", out var tagsProp) && Serializer.Deserialize<List<string>>(tagsProp) is { Count: > 0 } tags)
+                TagLayerManager.tags = tags;
 
-            // Layers is a string[] (serializes as a compound holding an "array" list).
-            if (settings.TryGet("Layers", out var layersProp) && layersProp!.TryGet("array", out var layers)
-                && layers!.TagType == EchoType.List)
-            {
-                int i = 0;
-                foreach (var layer in layers.List)
-                {
-                    if (i >= TagLayerManager.layers.Length) break;
-                    TagLayerManager.layers[i++] = layer.StringValue;
-                }
-            }
+            if (settings.TryGet("Layers", out var layersProp) && Serializer.Deserialize<string[]>(layersProp) is { } layers)
+                Array.Copy(layers, TagLayerManager.layers, Math.Min(layers.Length, TagLayerManager.layers.Length));
 
             Debug.Log("[PlayerSettings] Tags & Layers applied.");
         }

@@ -1981,6 +1981,29 @@ public class BuildSystemTests : IDisposable
         Assert.NotEqual(tags.Name, tags.Type.Name);
     }
 
+    [Fact]
+    public void CustomTagsAndLayers_ReachThePlayer()
+    {
+        var settings = new TagsAndLayersSettings();
+        settings.Tags.Add("Enemy");
+        settings.Layers[10] = "Ground";
+
+        string dir = Path.Combine(_root, "Settings");
+        Directory.CreateDirectory(dir);
+        var echo = Prowl.Echo.Serializer.Serialize(typeof(TagsAndLayersSettings), settings, Prowl.Echo.TypeMode.None);
+        File.WriteAllText(Path.Combine(dir, PlayerSettingsFiles.TagsAndLayers + ".yaml"), echo.WriteToYaml());
+
+        TagLayerManager.ResetDefault();
+        try
+        {
+            PlayerSettingsLoader.Apply(dir);
+
+            Assert.Equal("Enemy", TagLayerManager.GetTag(settings.Tags.Count - 1));
+            Assert.Equal("Ground", TagLayerManager.GetLayer(10));
+        }
+        finally { TagLayerManager.ResetDefault(); }
+    }
+
     // ---------------------------------------------------------------- BuildTargetProviderScanTests
 
     public const string Family = "test-only";
