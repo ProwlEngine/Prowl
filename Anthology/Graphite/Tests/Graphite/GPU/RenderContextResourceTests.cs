@@ -11,11 +11,11 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct ResourceView : IRenderView
 {
-    public Swapchain? TargetSwapchain { get; }
+    public Framebuffer? Target { get; }
 
     public ResourceView(uint width, uint height, Swapchain? swapchain = null)
     {
-        TargetSwapchain = swapchain;
+        Target = swapchain?.Framebuffer;
         PixelWidth = width;
         PixelHeight = height;
     }

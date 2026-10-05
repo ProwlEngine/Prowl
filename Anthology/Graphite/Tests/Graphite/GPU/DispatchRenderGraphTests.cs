@@ -13,15 +13,13 @@ namespace Prowl.Graphite.Tests;
 
 file readonly struct DispatchView : IRenderView
 {
-    public Swapchain? TargetSwapchain { get; }
-    public Framebuffer? TargetFramebuffer { get; }
+    public Framebuffer? Target { get; }
 
     public DispatchView(uint width, uint height, Swapchain? swapchain = null, Framebuffer? framebuffer = null)
     {
         PixelWidth = width;
         PixelHeight = height;
-        TargetSwapchain = swapchain;
-        TargetFramebuffer = framebuffer;
+        Target = framebuffer ?? swapchain?.Framebuffer;
     }
 
     public uint PixelWidth { get; }
@@ -111,17 +109,6 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
 
 public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    [Fact]
-    public void Dispatch_FramebufferAndSwapchainBothSet_Throws()
-    {
-        Texture color = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.RenderTarget));
-        Framebuffer target = RF.CreateFramebuffer(new FramebufferDescription(null, color));
-        using RenderPipeline<DispatchView> pipeline = new([new BackbufferPass()]);
-
-        Assert.Throws<InvalidOperationException>(() => GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64, GD.MainSwapchain, framebuffer: target) }));
-        GD.WaitForIdle();
-    }
-
     [Fact]
     public void Dispatch_ViewTargetPass_ResolvesSwapchainAndPresents()
     {
