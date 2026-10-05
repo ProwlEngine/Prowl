@@ -101,9 +101,6 @@ public class DefaultRenderPipeline : RenderPipeline
             var skyImport = new AssetImporting.ModelImporter().Import(stream, "Cube.obj");
             s_skyCube = skyImport.Meshes.Count > 0 ? skyImport.Meshes[0] : new Resources.Mesh { Name = "SkyCube" };
         }
-
-        // Pre-compute and upload BRDF integration LUT for PBR
-        BRDFLutGenerator.UploadGlobal();
     }
 
     #endregion
